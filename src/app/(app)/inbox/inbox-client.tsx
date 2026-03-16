@@ -157,10 +157,10 @@ export function InboxClient({
     <Card
       key={notification.id}
       className={cn(
-        "p-4 cursor-pointer rounded-xl transition-all duration-200 hover:shadow-sm group border-neutral-200",
+        "p-4 cursor-pointer rounded-xl transition-all duration-200 hover:shadow-sm group",
         !notification.read
-          ? "bg-blue-50/50 border-blue-100"
-          : "hover:bg-neutral-50"
+          ? "bg-muted/50 border-muted-foreground/10"
+          : "hover:bg-muted/30"
       )}
       onClick={() => {
         if (!notification.read) markRead(notification.id)
@@ -234,8 +234,8 @@ export function InboxClient({
     <div className="p-6 max-w-3xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900">Inbox</h1>
-          <p className="text-sm text-neutral-500 mt-1">
+          <h1 className="text-2xl font-bold">Inbox</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             {unreadCount > 0 ? `${unreadCount} unread notification${unreadCount !== 1 ? "s" : ""}` : "All caught up"}
           </p>
         </div>
@@ -268,8 +268,8 @@ export function InboxClient({
             className={cn(
               "px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200",
               viewTab === tab.key
-                ? "bg-neutral-900 text-white shadow-sm"
-                : "bg-neutral-100 text-neutral-500 hover:text-neutral-700 hover:bg-neutral-200"
+                ? "bg-foreground text-background shadow-sm"
+                : "bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80"
             )}
           >
             {tab.label}

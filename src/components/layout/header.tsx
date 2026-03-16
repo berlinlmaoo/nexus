@@ -39,13 +39,13 @@ export function Header({ title, breadcrumbs, user, children }: HeaderProps) {
   const { resolvedTheme, setTheme } = useTheme()
 
   return (
-    <header className="flex h-12 items-center justify-between border-b border-neutral-200 bg-white px-4 shrink-0">
+    <header className="flex h-11 items-center justify-between border-b bg-white dark:bg-zinc-950 px-4 shrink-0">
       {/* Left: hamburger + breadcrumb */}
       <div className="flex items-center gap-2 min-w-0">
         <button
           onClick={toggleSidebar}
           className={cn(
-            "rounded p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 transition-all duration-150",
+            "rounded p-1 text-muted-foreground hover:bg-muted transition-all duration-150",
             sidebarOpen ? "md:hidden" : ""
           )}
         >
@@ -57,15 +57,15 @@ export function Header({ title, breadcrumbs, user, children }: HeaderProps) {
             {breadcrumbs.map((crumb, i) => (
               <span key={crumb.href} className="flex items-center gap-1 min-w-0">
                 {i > 0 && (
-                  <ChevronRight className="h-3 w-3 text-neutral-400 shrink-0" />
+                  <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
                 )}
                 <Link
                   href={crumb.href}
                   className={cn(
                     "transition-colors duration-150 truncate",
                     i === breadcrumbs.length - 1
-                      ? "font-semibold text-neutral-900"
-                      : "text-neutral-500 hover:text-neutral-900"
+                      ? "font-semibold text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
                   )}
                 >
                   {crumb.label}
@@ -74,41 +74,44 @@ export function Header({ title, breadcrumbs, user, children }: HeaderProps) {
             ))}
           </nav>
         ) : title ? (
-          <h1 className="text-sm font-semibold text-neutral-900 truncate">{title}</h1>
+          <h1 className="text-sm font-semibold text-foreground truncate">{title}</h1>
         ) : null}
+
+        {/* Star/favorite button */}
+        {(breadcrumbs || title) && (
+          <button className="rounded p-1 text-muted-foreground/50 hover:text-yellow-500 transition-colors shrink-0">
+            <Star className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
-      {/* Center: search bar */}
-      <div className="hidden md:flex items-center justify-center flex-1 max-w-md mx-4">
-        <button
-          onClick={() => {
-            window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))
-          }}
-          className="flex items-center gap-2 h-8 w-full max-w-xs rounded-lg border border-neutral-200 bg-neutral-50 px-3 text-sm text-neutral-400 hover:bg-neutral-100 hover:border-neutral-300 transition-all duration-150"
-        >
-          <Search className="h-3.5 w-3.5" />
-          <span className="flex-1 text-left text-xs">Search...</span>
-          <kbd className="hidden lg:inline-flex h-5 items-center gap-0.5 rounded border border-neutral-200 bg-white px-1.5 text-[10px] font-mono text-neutral-400">
-            <span className="text-[10px]">&#8984;</span>K
-          </kbd>
-        </button>
-      </div>
-
-      {/* Center: injected content (view tabs) — only when no search shown */}
+      {/* Center: injected content (view tabs) */}
       {children && (
         <div className="hidden md:flex items-center">
           {children}
         </div>
       )}
 
-      {/* Right: actions + user */}
+      {/* Right: search + actions + user */}
       <div className="flex items-center gap-1">
-        {/* Mobile search */}
+        {/* Search trigger */}
         <button
           onClick={() => {
             window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))
           }}
-          className="md:hidden rounded p-1.5 text-neutral-400 hover:bg-neutral-100 transition-all duration-150"
+          className="hidden sm:flex items-center gap-2 h-7 w-48 rounded border bg-muted/50 px-2.5 text-xs text-muted-foreground hover:bg-muted transition-all duration-150"
+        >
+          <Search className="h-3.5 w-3.5" />
+          <span className="flex-1 text-left">Search</span>
+          <kbd className="hidden lg:inline-flex h-4 items-center gap-0.5 rounded border bg-background px-1 text-[10px] font-mono text-muted-foreground">
+            <span className="text-[10px]">&#8984;</span>K
+          </kbd>
+        </button>
+        <button
+          onClick={() => {
+            window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))
+          }}
+          className="sm:hidden rounded p-1.5 text-muted-foreground hover:bg-muted transition-all duration-150"
         >
           <Search className="h-4 w-4" />
         </button>
@@ -116,7 +119,7 @@ export function Header({ title, breadcrumbs, user, children }: HeaderProps) {
         {/* Dark mode toggle */}
         <button
           onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-          className="rounded p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 transition-all duration-150"
+          className="rounded p-1.5 text-muted-foreground hover:bg-muted transition-all duration-150"
           title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
         >
           {resolvedTheme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
@@ -129,7 +132,7 @@ export function Header({ title, breadcrumbs, user, children }: HeaderProps) {
         {user && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="ml-0.5 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1 transition-transform duration-150 hover:scale-105">
+              <button className="ml-0.5 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-1 transition-transform duration-150 hover:scale-105">
                 <UserAvatar
                   user={{ name: user.name, image: user.image }}
                   size="sm"
@@ -139,7 +142,7 @@ export function Header({ title, breadcrumbs, user, children }: HeaderProps) {
             <DropdownMenuContent align="end" className="w-48">
               <div className="px-2 py-1.5">
                 <p className="text-sm font-medium">{user.name}</p>
-                <p className="text-xs text-neutral-500">{user.email}</p>
+                <p className="text-xs text-muted-foreground">{user.email}</p>
               </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem

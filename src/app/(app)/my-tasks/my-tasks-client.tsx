@@ -204,11 +204,11 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: Task[]; project
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2 text-neutral-900">
-            <CheckSquare className="h-6 w-6 text-neutral-700" />
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <CheckSquare className="h-6 w-6 text-foreground/80" />
             My Tasks
           </h1>
-          <p className="text-sm text-neutral-500 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             {visibleTasks.length} task{visibleTasks.length !== 1 ? "s" : ""} assigned to you
           </p>
         </div>
@@ -275,7 +275,7 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: Task[]; project
                       return (
                         <div
                           key={task.id}
-                          className="flex items-center gap-3 py-2.5 px-3 rounded-lg border border-neutral-200 hover:shadow-sm hover:border-neutral-300 transition-all duration-200 cursor-pointer group"
+                          className="flex items-center gap-3 py-2.5 px-3 rounded-lg border hover:shadow-sm hover:border-border transition-all duration-200 cursor-pointer group"
                           onClick={() => handleTaskClick(task)}
                         >
                           {/* Quick complete checkbox */}

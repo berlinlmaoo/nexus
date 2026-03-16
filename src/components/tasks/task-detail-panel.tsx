@@ -358,9 +358,9 @@ export function TaskDetailPanel({
   ]
 
   return (
-    <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[45%] sm:min-w-[440px] sm:max-w-[680px] bg-white border-l border-neutral-200 shadow-2xl animate-slide-in-right flex flex-col">
+    <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[45%] sm:min-w-[440px] sm:max-w-[680px] bg-background border-l shadow-2xl animate-slide-in-right flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-neutral-200 px-6 h-12 shrink-0">
+      <div className="flex items-center justify-between border-b px-6 h-12 shrink-0">
         <div className="flex items-center gap-3">
           {/* Mark complete button */}
           <button
@@ -368,8 +368,8 @@ export function TaskDetailPanel({
             className={cn(
               "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
               isDone
-                ? "border-green-200 bg-green-50 text-green-700"
-                : "border-neutral-200 hover:bg-neutral-50 text-neutral-600"
+                ? "border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-400"
+                : "border-border hover:bg-muted"
             )}
           >
             {isDone ? (
@@ -771,7 +771,7 @@ export function TaskDetailPanel({
 
         {/* Tabs */}
         <div className="px-6 pt-2">
-          <div className="flex border-b border-neutral-200 overflow-x-auto">
+          <div className="flex border-b overflow-x-auto">
             {tabs.map((tab) => {
               const Icon = tab.icon
               return (
@@ -780,8 +780,8 @@ export function TaskDetailPanel({
                   className={cn(
                     "flex items-center gap-1 px-3 py-2 text-xs font-medium border-b-2 transition-all duration-200 whitespace-nowrap",
                     activeTab === tab.key
-                      ? "border-neutral-800 text-neutral-900"
-                      : "border-transparent text-neutral-500 hover:text-neutral-700"
+                      ? "border-foreground text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
                   )}
                   onClick={() => setActiveTab(tab.key)}
                 >
@@ -898,17 +898,17 @@ export function TaskDetailPanel({
       </div>
 
       {/* Footer with save */}
-      <div className="border-t border-neutral-200 px-6 py-3 flex justify-end gap-2 shrink-0 bg-white">
+      <div className="border-t px-6 py-3 flex justify-end gap-2 shrink-0">
         <button
           onClick={onClose}
-          className="h-8 rounded-lg border border-neutral-200 px-4 text-xs font-medium text-neutral-600 hover:bg-neutral-50 transition-all duration-200 active:scale-95"
+          className="h-8 rounded-lg border px-4 text-xs font-medium hover:bg-muted transition-all duration-200 active:scale-95"
         >
           Cancel
         </button>
         <button
           onClick={handleSave}
           disabled={saving}
-          className="h-8 rounded-lg bg-blue-600 px-4 text-xs font-medium text-white hover:bg-blue-700 transition-all duration-200 disabled:opacity-50 active:scale-95 shadow-sm flex items-center gap-1.5"
+          className="h-8 rounded-lg bg-foreground px-4 text-xs font-medium text-background hover:bg-foreground/90 transition-all duration-200 disabled:opacity-50 active:scale-95 shadow-sm flex items-center gap-1.5"
         >
           {saving && <Loader2 className="h-3 w-3 animate-spin" />}
           Save

@@ -111,16 +111,16 @@ function SortableTaskRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "group flex items-center gap-0 h-10 mx-2 px-2 rounded-md cursor-pointer transition-colors text-sm",
-        isDragging && "z-50 shadow-lg bg-white",
-        isRowSelected ? "bg-blue-50" : "hover:bg-slate-50"
+        "group grid grid-cols-[20px_20px_24px_1fr_100px_90px_90px_72px] gap-0 items-center border-b border-border/50 h-9 cursor-pointer transition-colors text-[13px]",
+        isDragging && "z-50 shadow-lg bg-background",
+        isRowSelected ? "bg-muted/60" : "hover:bg-muted/30"
       )}
       onClick={() => onTaskClick(task)}
     >
       {/* Drag handle */}
-      <div className="flex items-center justify-center w-5 shrink-0">
+      <div className="flex items-center justify-center h-full">
         <button
-          className="opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing touch-none text-neutral-300 hover:text-neutral-500 transition-opacity"
+          className="opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing touch-none text-muted-foreground/40 hover:text-muted-foreground transition-opacity"
           onClick={(e) => e.stopPropagation()}
           {...attributes}
           {...listeners}
@@ -130,7 +130,7 @@ function SortableTaskRow({
       </div>
 
       {/* Select checkbox */}
-      <div className="flex items-center justify-center w-5 shrink-0">
+      <div className="flex items-center justify-center h-full">
         <button
           className="opacity-0 group-hover:opacity-100 transition-opacity"
           onClick={(e) => {
@@ -142,8 +142,8 @@ function SortableTaskRow({
             className={cn(
               "h-3.5 w-3.5 rounded-sm border transition-colors",
               isRowSelected
-                ? "bg-blue-600 border-blue-600"
-                : "border-neutral-300"
+                ? "bg-foreground border-foreground"
+                : "border-border"
             )}
           >
             {isRowSelected && (
@@ -155,8 +155,8 @@ function SortableTaskRow({
         </button>
       </div>
 
-      {/* Status circle */}
-      <div className="flex items-center justify-center w-6 shrink-0">
+      {/* Status checkbox */}
+      <div className="flex items-center justify-center h-full">
         <button
           onClick={(e) => {
             e.stopPropagation()
@@ -164,80 +164,83 @@ function SortableTaskRow({
           }}
         >
           {isDone ? (
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
+            <CheckCircle2 className="h-4 w-4 text-green-600" />
           ) : (
-            <Circle className="h-4 w-4 text-neutral-300 group-hover:text-neutral-400 transition-colors" />
+            <Circle className="h-4 w-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
           )}
         </button>
       </div>
 
-      {/* Task ID / index placeholder */}
-      <div className="w-16 shrink-0 text-xs text-neutral-400 font-mono px-1">
-        {task.taskListId?.slice(-4)?.toUpperCase() || "TASK"}
-      </div>
-
-      {/* Title */}
-      <div className="flex-1 min-w-0 px-1">
+      {/* Title + tags */}
+      <div className="flex items-center gap-2 min-w-0 px-2 h-full border-r border-border/30">
         <span
           className={cn(
-            "text-sm truncate block",
-            isDone ? "line-through text-neutral-400" : "text-neutral-700"
+            "text-[13px] truncate",
+            isDone ? "line-through text-muted-foreground" : "text-foreground"
           )}
         >
           {task.title}
         </span>
-      </div>
-
-      {/* Right side: assignees | labels | due date */}
-      <div className="flex items-center gap-3 shrink-0">
-        {/* Assignees */}
-        {task.assignees.length > 0 && (
-          <div className="flex -space-x-1.5">
-            {task.assignees.slice(0, 2).map((a) => (
-              <UserAvatar
-                key={a.id}
-                user={{ name: a.name, avatar: a.avatar }}
-                size="xs"
-                className="h-6 w-6 border-2 border-white"
-              />
-            ))}
-            {task.assignees.length > 2 && (
-              <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-neutral-100 text-[8px] font-medium text-neutral-500">
-                +{task.assignees.length - 2}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Label pills */}
         {task.tags.length > 0 && (
-          <div className="hidden lg:flex gap-1">
+          <div className="hidden lg:flex gap-1 shrink-0">
             {task.tags.slice(0, 2).map((tag) => (
               <span
                 key={tag}
-                className="inline-flex items-center gap-1 border border-neutral-200 rounded-full px-2 py-0.5 text-xs text-neutral-600"
+                className="inline-flex items-center rounded bg-muted px-1.5 py-0 text-[10px] font-medium text-muted-foreground"
               >
-                <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
                 {tag}
               </span>
             ))}
           </div>
         )}
+      </div>
 
-        {/* Due date */}
-        {task.dueDate && (
+      {/* Assignees */}
+      <div className="flex items-center px-2 h-full border-r border-border/30">
+        {task.assignees.length > 0 ? (
+          <div className="flex -space-x-1">
+            {task.assignees.slice(0, 2).map((a) => (
+              <UserAvatar
+                key={a.id}
+                user={{ name: a.name, avatar: a.avatar }}
+                size="xs"
+                className="h-5 w-5 border border-background"
+              />
+            ))}
+            {task.assignees.length > 2 && (
+              <div className="flex h-5 w-5 items-center justify-center rounded-full border border-background bg-muted text-[8px] font-medium text-muted-foreground">
+                +{task.assignees.length - 2}
+              </div>
+            )}
+          </div>
+        ) : (
+          <span className="text-muted-foreground/30 text-xs">—</span>
+        )}
+      </div>
+
+      {/* Due date */}
+      <div className="flex items-center px-2 h-full border-r border-border/30">
+        {task.dueDate ? (
           <span
             className={cn(
-              "flex items-center gap-1 text-xs",
-              isOverdue ? "text-red-600 font-medium" : "text-neutral-500"
+              "text-xs",
+              isOverdue ? "text-red-600 font-medium" : "text-muted-foreground"
             )}
           >
-            <Calendar className="h-3 w-3" />
-            {format(new Date(task.dueDate), "dd MMM")}
+            {format(new Date(task.dueDate), "MMM d")}
           </span>
+        ) : (
+          <span className="text-muted-foreground/30 text-xs">—</span>
         )}
+      </div>
 
-        {/* Priority indicator */}
+      {/* Status */}
+      <div className="flex items-center px-2 h-full border-r border-border/30">
+        <StatusBadge status={task.status} />
+      </div>
+
+      {/* Priority */}
+      <div className="flex items-center px-2 h-full">
         <PriorityBadge priority={task.priority} />
       </div>
     </div>
@@ -655,12 +658,26 @@ export function TaskListView({
       onDragEnd={handleDragEnd}
     >
       <div>
-        {/* Minimal sort controls — Plane style has no heavy column headers */}
-        <div className="flex items-center gap-2 px-4 py-1.5 sticky top-0 z-10 bg-white">
-          <SortHeader label="Name" field="title" />
-          <SortHeader label="Due" field="dueDate" />
-          <SortHeader label="Status" field="status" />
-          <SortHeader label="Priority" field="priority" />
+        {/* Table column headers */}
+        <div className="grid grid-cols-[20px_20px_24px_1fr_100px_90px_90px_72px] gap-0 items-center border-b-2 border-border h-8 bg-muted/30 sticky top-0 z-10">
+          <div />
+          <div />
+          <div />
+          <div className="px-2">
+            <SortHeader label="Task name" field="title" />
+          </div>
+          <div className="px-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Assignee</span>
+          </div>
+          <div className="px-2">
+            <SortHeader label="Due date" field="dueDate" />
+          </div>
+          <div className="px-2">
+            <SortHeader label="Status" field="status" />
+          </div>
+          <div className="px-2">
+            <SortHeader label="Priority" field="priority" />
+          </div>
         </div>
 
         {sections.map((section, sectionIndex) => {
@@ -670,9 +687,9 @@ export function TaskListView({
 
           return (
             <div key={section.id}>
-              {/* Section header row — Plane style: status circle + name, no background */}
+              {/* Section header row */}
               <div
-                className="group/section flex w-full items-center gap-2 h-9 px-3 hover:bg-slate-50 rounded-md mx-1 transition-colors"
+                className="group/section flex w-full items-center gap-2 h-9 px-2 bg-muted/20 border-b border-border/50 hover:bg-muted/40 transition-colors"
               >
                 {/* Drag handle for section reorder */}
                 {projectId && sections.length > 1 && (
@@ -725,9 +742,8 @@ export function TaskListView({
                   />
                 ) : (
                   <button onClick={() => toggleCollapse(section.id)} className="flex items-center gap-2">
-                    <Circle className="h-3 w-3 text-neutral-400" />
-                    <span className="font-medium text-sm text-neutral-800">{section.name}</span>
-                    <span className="text-xs text-neutral-400 tabular-nums">
+                    <span className="font-semibold text-[13px] text-foreground">{section.name}</span>
+                    <span className="text-[11px] text-muted-foreground tabular-nums">
                       {section.tasks.length}
                     </span>
                   </button>
@@ -792,38 +808,44 @@ export function TaskListView({
 
                   {/* Inline quick-add row */}
                   {addingTo === section.id ? (
-                    <div className="flex items-center gap-2 h-10 mx-2 px-2 rounded-md bg-slate-50">
-                      <Plus className="h-3.5 w-3.5 text-neutral-400 shrink-0" />
-                      <input
-                        ref={inputRef}
-                        type="text"
-                        placeholder="Write a task name, press Enter to save"
-                        value={newTitle}
-                        onChange={(e) => setNewTitle(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && newTitle.trim()) {
-                            handleInlineCreate(section.id)
-                          }
-                          if (e.key === "Escape") {
-                            setAddingTo(null)
-                            setNewTitle("")
-                          }
-                        }}
-                        onBlur={() => {
-                          if (!newTitle.trim()) {
-                            setAddingTo(null)
-                          }
-                        }}
-                        disabled={creating}
-                        className="flex-1 text-sm bg-transparent outline-none placeholder:text-neutral-400"
-                      />
-                      {creating && (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin text-neutral-400" />
-                      )}
+                    <div className="grid grid-cols-[20px_20px_24px_1fr] gap-0 items-center h-9 border-b border-border/50 bg-muted/10">
+                      <div />
+                      <div />
+                      <div className="flex items-center justify-center">
+                        <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
+                      <div className="flex items-center gap-2 px-2">
+                        <input
+                          ref={inputRef}
+                          type="text"
+                          placeholder="Write a task name, press Enter to save"
+                          value={newTitle}
+                          onChange={(e) => setNewTitle(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && newTitle.trim()) {
+                              handleInlineCreate(section.id)
+                            }
+                            if (e.key === "Escape") {
+                              setAddingTo(null)
+                              setNewTitle("")
+                            }
+                          }}
+                          onBlur={() => {
+                            if (!newTitle.trim()) {
+                              setAddingTo(null)
+                            }
+                          }}
+                          disabled={creating}
+                          className="flex-1 text-[13px] bg-transparent outline-none placeholder:text-muted-foreground/50"
+                        />
+                        {creating && (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                        )}
+                      </div>
                     </div>
                   ) : (
                     <button
-                      className="flex items-center gap-2 w-full h-8 mx-2 px-2 text-sm text-neutral-400 hover:text-neutral-600 hover:bg-slate-50 rounded-md transition-colors"
+                      className="flex items-center gap-2 w-full h-8 px-2 text-[13px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/20 transition-colors border-b border-border/30"
                       onClick={() => {
                         if (projectId) {
                           startAdding(section.id)
@@ -832,6 +854,8 @@ export function TaskListView({
                         }
                       }}
                     >
+                      <div className="w-[20px]" />
+                      <div className="w-[20px]" />
                       <Plus className="h-3.5 w-3.5" />
                       <span>Add task...</span>
                     </button>

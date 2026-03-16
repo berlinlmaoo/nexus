@@ -175,17 +175,17 @@ export function DashboardContent({ userName }: { userName: string }) {
       {/* Greeting + Quick Create */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900">
+          <h1 className="text-2xl font-bold">
             {greeting}, {userName}
           </h1>
-          <p className="text-neutral-500 mt-1">
+          <p className="text-muted-foreground mt-1">
             Here&apos;s what&apos;s happening with your projects today.
           </p>
         </div>
         <Button
           onClick={openQuickCreate}
           size="sm"
-          className="bg-blue-600 hover:bg-blue-700 text-white"
+          className="bg-[#18181B] hover:bg-[#27272A]"
         >
           <Plus className="h-4 w-4 mr-1" />
           Quick Task
@@ -267,7 +267,7 @@ export function DashboardContent({ userName }: { userName: string }) {
             <Button
               onClick={createTask}
               disabled={creating || !taskTitle.trim() || !selectedTaskList}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              className="w-full bg-[#18181B] hover:bg-[#27272A]"
             >
               {creating ? "Creating..." : "Create Task"}
             </Button>
