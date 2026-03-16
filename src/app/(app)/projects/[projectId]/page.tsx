@@ -101,7 +101,7 @@ export default async function ProjectDetailPage({
   }
 
   return (
-    <div className="h-full">
+    <div className="-m-3 sm:-m-6 h-[calc(100%+1.5rem)] sm:h-[calc(100%+3rem)]">
       <ProjectDetailClient
         project={projectData}
         currentUser={{ id: session.user.id!, name: session.user.name || "User", avatar: session.user.image || null }}

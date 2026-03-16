@@ -202,7 +202,7 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
   const hasUploadedIcon = isUploadedIcon(selectedIcon)
 
   return (
-    <div className="space-y-4 animate-fade-in">
+    <div className="space-y-4 animate-fade-in px-4 pt-4 overflow-hidden">
       {/* Cover gradient */}
       <div className={cn("relative h-32 rounded-xl bg-gradient-to-r overflow-hidden transition-all duration-500", coverGradient)}>
         <button

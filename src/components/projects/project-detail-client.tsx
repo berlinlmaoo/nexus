@@ -385,7 +385,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
   ]
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-hidden">
       {/* Project Header */}
       <ProjectHeader project={project} />
 
