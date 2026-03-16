@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { notifyMention } from "@/lib/notification-service"
+import { executeAutomations } from "@/lib/automation-engine"
+import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 
 export async function GET(
   _request: NextRequest,
@@ -13,11 +15,26 @@ export async function GET(
 
     const comments = await prisma.comment.findMany({
       where: { taskId: params.taskId },
-      include: { user: true },
+      include: {
+        user: true,
+        replies: {
+          include: {
+            user: true,
+            replies: {
+              include: { user: true },
+              orderBy: { createdAt: "asc" },
+            },
+          },
+          orderBy: { createdAt: "asc" },
+        },
+      },
       orderBy: { createdAt: "asc" },
     })
 
-    return NextResponse.json(comments)
+    // Return only top-level comments with nested replies
+    const topLevel = comments.filter(c => !c.parentId)
+
+    return NextResponse.json({ comments: topLevel, currentUserId: session.user.id })
   } catch (error) {
     console.error("Error fetching comments:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -33,7 +50,7 @@ export async function POST(
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const body = await request.json()
-    const { content } = body
+    const { content, parentId } = body
 
     if (!content) {
       return NextResponse.json({ error: "Content is required" }, { status: 400 })
@@ -48,11 +65,22 @@ export async function POST(
       return NextResponse.json({ error: "Task not found" }, { status: 404 })
     }
 
+    // Validate parentId if provided
+    if (parentId) {
+      const parentComment = await prisma.comment.findUnique({
+        where: { id: parentId, taskId: params.taskId },
+      })
+      if (!parentComment) {
+        return NextResponse.json({ error: "Parent comment not found" }, { status: 404 })
+      }
+    }
+
     const comment = await prisma.comment.create({
       data: {
         content,
         taskId: params.taskId,
         userId: session.user.id!,
+        ...(parentId && { parentId }),
       },
       include: { user: true },
     })
@@ -66,6 +94,23 @@ export async function POST(
         projectId: task.taskList.projectId,
       },
     })
+
+    // Fire automations for comment_added
+    executeAutomations(task.taskList.projectId, "comment_added", {
+      taskId: params.taskId,
+      userId: session.user.id!,
+      projectId: task.taskList.projectId,
+      commentId: comment.id,
+    }).catch(() => {})
+
+    // Webhook: comment.created
+    dispatchWebhookEvent("comment.created", {
+      commentId: comment.id,
+      taskId: params.taskId,
+      taskTitle: task.title,
+      content: content.slice(0, 500),
+      authorId: session.user.id!,
+    }, task.taskList.projectId).catch(() => {})
 
     // Detect @mentions and notify mentioned users
     const mentionRegex = /@(\S+)/g

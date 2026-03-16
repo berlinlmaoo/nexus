@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
+import { checkProjectAccess } from "@/lib/rbac"
+import { executeAutomations } from "@/lib/automation-engine"
+import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 
 export async function GET(
   _request: NextRequest,
@@ -62,6 +65,11 @@ export async function PATCH(
       return NextResponse.json({ error: "Task not found" }, { status: 404 })
     }
 
+    const { allowed } = await checkProjectAccess(session.user.id!, existing.taskList.projectId, ["MEMBER"])
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden: MEMBER role or higher required to update tasks" }, { status: 403 })
+    }
+
     const task = await prisma.task.update({
       where: { id: params.taskId },
       data: {
@@ -101,6 +109,38 @@ export async function PATCH(
       userId: session.user.id!, request,
       metadata: { changes: body },
     })
+
+    // Fire automations for status changes
+    if (status !== undefined && status !== existing.status) {
+      executeAutomations(existing.taskList.projectId, "task_status_changed", {
+        taskId: params.taskId,
+        userId: session.user.id!,
+        projectId: existing.taskList.projectId,
+        oldStatus: existing.status,
+        newStatus: status,
+      }).catch(() => {})
+    }
+
+    // Fire automations for assignee changes
+    if (assigneeIds !== undefined) {
+      executeAutomations(existing.taskList.projectId, "task_assigned", {
+        taskId: params.taskId,
+        userId: session.user.id!,
+        projectId: existing.taskList.projectId,
+        assigneeIds,
+      }).catch(() => {})
+    }
+
+    // Webhook: task.updated (or task.completed if status → DONE)
+    const webhookEvent = (status === "DONE" && existing.status !== "DONE") ? "task.completed" : "task.updated"
+    dispatchWebhookEvent(webhookEvent, {
+      taskId: params.taskId,
+      title: task.title,
+      status: task.status,
+      priority: task.priority,
+      changes: body,
+      previousStatus: existing.status,
+    }, existing.taskList.projectId).catch(() => {})
 
     if (assigneeIds !== undefined) {
       await prisma.taskAssignee.deleteMany({
@@ -153,6 +193,11 @@ export async function DELETE(
 
     if (!existing) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 })
+    }
+
+    const { allowed } = await checkProjectAccess(session.user.id!, existing.taskList.projectId, ["LEAD"])
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden: LEAD role required to delete tasks" }, { status: 403 })
     }
 
     await prisma.activityLog.create({

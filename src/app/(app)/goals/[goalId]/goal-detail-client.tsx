@@ -9,13 +9,29 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
-import { ArrowLeft, Plus, Trash2, Loader2, Target, Calendar } from "lucide-react"
+import { ArrowLeft, Plus, Trash2, Loader2, Target, Calendar, FolderKanban, CheckSquare, X, Search, Link2 } from "lucide-react"
 
 interface Milestone {
   id: string
   title: string
   completed: boolean
   dueDate: string | null
+}
+
+interface LinkedProject {
+  id: string
+  name: string
+  color: string
+  status: string
+}
+
+interface LinkedTask {
+  id: string
+  title: string
+  status: string
+  priority: string
+  dueDate: string | null
+  project: { id: string; name: string; color: string } | null
 }
 
 interface Goal {
@@ -27,6 +43,22 @@ interface Goal {
   dueDate: string | null
   owner: { id: string; name: string | null; avatar: string | null }
   milestones: Milestone[]
+  linkedProjects: LinkedProject[]
+  linkedTasks: LinkedTask[]
+  taskStats: { total: number; completed: number }
+}
+
+interface WorkspaceProject {
+  id: string
+  name: string
+  color: string
+}
+
+interface WorkspaceTask {
+  id: string
+  title: string
+  status: string
+  project: { id: string; name: string; color: string } | null
 }
 
 const STATUSES = [
@@ -36,7 +68,23 @@ const STATUSES = [
   { value: "COMPLETED", label: "Completed", color: "bg-blue-500" },
 ]
 
-export function GoalDetailClient({ goal: initialGoal }: { goal: Goal }) {
+const STATUS_COLORS: Record<string, string> = {
+  TODO: "bg-gray-400",
+  IN_PROGRESS: "bg-blue-500",
+  IN_REVIEW: "bg-yellow-500",
+  DONE: "bg-green-500",
+  CANCELLED: "bg-red-400",
+}
+
+export function GoalDetailClient({
+  goal: initialGoal,
+  workspaceProjects = [],
+  workspaceTasks = [],
+}: {
+  goal: Goal
+  workspaceProjects?: WorkspaceProject[]
+  workspaceTasks?: WorkspaceTask[]
+}) {
   const router = useRouter()
   const [goal, setGoal] = useState<Goal>(initialGoal)
   const [saving, setSaving] = useState(false)
@@ -44,6 +92,10 @@ export function GoalDetailClient({ goal: initialGoal }: { goal: Goal }) {
   const [newMilestoneTitle, setNewMilestoneTitle] = useState("")
   const [newMilestoneDue, setNewMilestoneDue] = useState("")
   const [addingMilestone, setAddingMilestone] = useState(false)
+  const [showProjectPicker, setShowProjectPicker] = useState(false)
+  const [showTaskPicker, setShowTaskPicker] = useState(false)
+  const [projectSearch, setProjectSearch] = useState("")
+  const [taskSearch, setTaskSearch] = useState("")
 
   const update = async (data: Record<string, any>) => {
     setSaving(true)
@@ -89,7 +141,36 @@ export function GoalDetailClient({ goal: initialGoal }: { goal: Goal }) {
     }
   }
 
+  const linkProject = async (projectId: string) => {
+    await update({ linkProject: projectId })
+    setShowProjectPicker(false)
+    setProjectSearch("")
+  }
+
+  const unlinkProject = async (projectId: string) => {
+    await update({ unlinkProject: projectId })
+  }
+
+  const linkTask = async (taskId: string) => {
+    await update({ linkTask: taskId })
+    setShowTaskPicker(false)
+    setTaskSearch("")
+  }
+
+  const unlinkTask = async (taskId: string) => {
+    await update({ unlinkTask: taskId })
+  }
+
   const completedMilestones = goal.milestones.filter(m => m.completed).length
+  const linkedProjectIds = new Set(goal.linkedProjects.map(p => p.id))
+  const linkedTaskIds = new Set(goal.linkedTasks.map(t => t.id))
+
+  const filteredProjects = workspaceProjects.filter(
+    p => !linkedProjectIds.has(p.id) && p.name.toLowerCase().includes(projectSearch.toLowerCase())
+  )
+  const filteredTasks = workspaceTasks.filter(
+    t => !linkedTaskIds.has(t.id) && t.title.toLowerCase().includes(taskSearch.toLowerCase())
+  )
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
@@ -163,6 +244,11 @@ export function GoalDetailClient({ goal: initialGoal }: { goal: Goal }) {
           <div className="space-y-2">
             <Label className="text-xs text-muted-foreground uppercase tracking-wider">
               Progress - {goal.progress}%
+              {goal.taskStats.total > 0 && (
+                <span className="ml-2 text-muted-foreground font-normal">
+                  ({goal.taskStats.completed}/{goal.taskStats.total} tasks done)
+                </span>
+              )}
             </Label>
             <div className="flex items-center gap-3">
               <input
@@ -181,6 +267,175 @@ export function GoalDetailClient({ goal: initialGoal }: { goal: Goal }) {
         </div>
       </Card>
 
+      {/* Linked Projects */}
+      <Card className="p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <FolderKanban className="h-4 w-4 text-muted-foreground" />
+            <h3 className="font-semibold text-sm">Linked Projects</h3>
+            <span className="text-xs text-muted-foreground">{goal.linkedProjects.length}</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => setShowProjectPicker(!showProjectPicker)}
+          >
+            <Plus className="h-3 w-3 mr-1" /> Add Project
+          </Button>
+        </div>
+
+        {showProjectPicker && (
+          <div className="mb-4 border rounded-lg p-3 bg-muted/30">
+            <div className="relative mb-2">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Search projects..."
+                value={projectSearch}
+                onChange={e => setProjectSearch(e.target.value)}
+                className="h-8 pl-8 text-sm"
+                autoFocus
+              />
+            </div>
+            <div className="max-h-40 overflow-y-auto space-y-1">
+              {filteredProjects.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-2">No projects found</p>
+              ) : (
+                filteredProjects.map(project => (
+                  <button
+                    key={project.id}
+                    onClick={() => linkProject(project.id)}
+                    className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-sm hover:bg-muted transition-colors"
+                  >
+                    <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: project.color }} />
+                    {project.name}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-1.5">
+          {goal.linkedProjects.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-3">No linked projects</p>
+          ) : (
+            goal.linkedProjects.map(project => (
+              <div key={project.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: project.color }} />
+                  <span className="text-sm font-medium">{project.name}</span>
+                  <Badge variant="outline" className="text-[10px] h-5">{project.status}</Badge>
+                </div>
+                <button
+                  onClick={() => unlinkProject(project.id)}
+                  className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </Card>
+
+      {/* Linked Tasks */}
+      <Card className="p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <CheckSquare className="h-4 w-4 text-muted-foreground" />
+            <h3 className="font-semibold text-sm">Linked Tasks</h3>
+            <span className="text-xs text-muted-foreground">
+              {goal.taskStats.completed}/{goal.taskStats.total} done
+            </span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => setShowTaskPicker(!showTaskPicker)}
+          >
+            <Plus className="h-3 w-3 mr-1" /> Add Task
+          </Button>
+        </div>
+
+        {goal.taskStats.total > 0 && (
+          <div className="w-full h-1.5 bg-muted rounded-full mb-4">
+            <div
+              className="h-full rounded-full bg-[#18181B] transition-all"
+              style={{ width: `${(goal.taskStats.completed / goal.taskStats.total) * 100}%` }}
+            />
+          </div>
+        )}
+
+        {showTaskPicker && (
+          <div className="mb-4 border rounded-lg p-3 bg-muted/30">
+            <div className="relative mb-2">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Search tasks..."
+                value={taskSearch}
+                onChange={e => setTaskSearch(e.target.value)}
+                className="h-8 pl-8 text-sm"
+                autoFocus
+              />
+            </div>
+            <div className="max-h-48 overflow-y-auto space-y-1">
+              {filteredTasks.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-2">No tasks found</p>
+              ) : (
+                filteredTasks.slice(0, 50).map(task => (
+                  <button
+                    key={task.id}
+                    onClick={() => linkTask(task.id)}
+                    className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-sm hover:bg-muted transition-colors text-left"
+                  >
+                    <span className="truncate flex-1">{task.title}</span>
+                    {task.project && (
+                      <span className="text-xs text-muted-foreground flex items-center gap-1 shrink-0">
+                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: task.project.color }} />
+                        {task.project.name}
+                      </span>
+                    )}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-1.5">
+          {goal.linkedTasks.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-3">No linked tasks</p>
+          ) : (
+            goal.linkedTasks.map(task => (
+              <div key={task.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className={`h-2 w-2 rounded-full shrink-0 ${STATUS_COLORS[task.status] || "bg-gray-400"}`} />
+                  <span className="text-sm truncate">{task.title}</span>
+                  {task.project && (
+                    <span className="text-xs text-muted-foreground flex items-center gap-1 shrink-0">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: task.project.color }} />
+                      {task.project.name}
+                    </span>
+                  )}
+                  <Badge variant="outline" className="text-[10px] h-5 shrink-0">
+                    {task.status.replace("_", " ")}
+                  </Badge>
+                </div>
+                <button
+                  onClick={() => unlinkTask(task.id)}
+                  className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded shrink-0"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </Card>
+
+      {/* Milestones */}
       <Card className="p-6 mb-6">
         <div className="flex items-center justify-between mb-4">
           <div>

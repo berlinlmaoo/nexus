@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
+import { checkProjectAccess } from "@/lib/rbac"
+import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 
 export async function GET(
   _request: NextRequest,
@@ -61,6 +63,11 @@ export async function PATCH(
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
     }
 
+    const { allowed } = await checkProjectAccess(session.user.id!, params.projectId, ["LEAD"])
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden: LEAD role required to update projects" }, { status: 403 })
+    }
+
     const project = await prisma.project.update({
       where: { id: params.projectId },
       data: {
@@ -80,6 +87,13 @@ export async function PATCH(
       action: "update", entityType: "project", entityId: params.projectId, entityName: project.name,
       userId: session.user.id!, request, metadata: { changes: body },
     })
+
+    // Webhook: project.updated
+    dispatchWebhookEvent("project.updated", {
+      projectId: params.projectId,
+      name: project.name,
+      changes: body,
+    }, params.projectId).catch(() => {})
 
     return NextResponse.json(project)
   } catch (error) {
@@ -102,6 +116,11 @@ export async function DELETE(
 
     if (!existing) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
+    }
+
+    const { allowed } = await checkProjectAccess(session.user.id!, params.projectId, ["LEAD"])
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden: LEAD role required to delete projects" }, { status: 403 })
     }
 
     logAudit({
