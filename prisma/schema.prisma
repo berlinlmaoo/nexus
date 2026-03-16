@@ -1,0 +1,717 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id             String            @id @default(cuid())
+  name           String
+  email          String            @unique
+  password       String?
+  avatar         String?
+  role           SystemRole        @default(MEMBER)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  workspaceMembers WorkspaceMember[]
+  projectMembers   ProjectMember[]
+  taskAssignees    TaskAssignee[]
+  comments         Comment[]
+  activityLogs     ActivityLog[]
+  tasksCreated     Task[]           @relation("TaskCreator")
+  timeEntries      TimeEntry[]
+  notifications    Notification[]
+  teamMembers      TeamMember[]
+  goalsOwned       Goal[]
+  docsAuthored     Doc[]
+  docsOwned        Doc[]            @relation("DocOwner")
+  attachments      Attachment[]
+  statusUpdates    StatusUpdate[]
+  favorites        Favorite[]
+  notificationPref NotificationPreference?
+  auditLogs        AuditLog[]
+  accounts         Account[]
+  webhooks         Webhook[]
+  inviteTokens     InviteToken[]
+}
+
+model Workspace {
+  id          String            @id @default(cuid())
+  name        String
+  slug        String            @unique
+  description String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  members  WorkspaceMember[]
+  projects Project[]
+  goals    Goal[]
+  teams    Team[]
+}
+
+model WorkspaceMember {
+  id          String        @id @default(cuid())
+  role        WorkspaceRole @default(MEMBER)
+  joinedAt    DateTime      @default(now())
+
+  userId      String
+  workspaceId String
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  color       String   @default("#7B2FBE")
+  icon        String   @default("folder")
+  status      ProjectStatus @default(ACTIVE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  members        ProjectMember[]
+  taskLists      TaskList[]
+  activityLogs   ActivityLog[]
+  sprints        Sprint[]
+  automations    Automation[]
+  customFields   CustomField[]
+  docs           Doc[]
+  forms          Form[]
+  statusUpdates  StatusUpdate[]
+  pages          ProjectPage[]
+  webhooks       Webhook[]
+}
+
+model ProjectMember {
+  id        String      @id @default(cuid())
+  role      ProjectRole @default(MEMBER)
+  joinedAt  DateTime    @default(now())
+
+  userId    String
+  projectId String
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+}
+
+model TaskList {
+  id        String   @id @default(cuid())
+  name      String
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  tasks Task[]
+}
+
+model Task {
+  id             String       @id @default(cuid())
+  title          String
+  description    String?
+  status         TaskStatus   @default(TODO)
+  priority       TaskPriority @default(MEDIUM)
+  position       Int          @default(0)
+  dueDate        DateTime?
+  tags           String[]     @default([])
+  estimatedHours Float?
+  actualHours    Float?
+  taskType       TaskType     @default(TASK)
+  startDate      DateTime?
+  isRecurring    Boolean      @default(false)
+  recurPattern   Json?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  taskListId  String
+  taskList    TaskList @relation(fields: [taskListId], references: [id], onDelete: Cascade)
+
+  creatorId   String
+  creator     User     @relation("TaskCreator", fields: [creatorId], references: [id])
+
+  parentId    String?
+  parent      Task?    @relation("Subtasks", fields: [parentId], references: [id], onDelete: Cascade)
+  subtasks    Task[]   @relation("Subtasks")
+
+  assignees         TaskAssignee[]
+  comments          Comment[]
+  activityLogs      ActivityLog[]
+  timeEntries       TimeEntry[]
+  customFieldValues CustomFieldValue[]
+  sprintTasks       SprintTask[]
+  dependencies      TaskDependency[] @relation("TaskDependencies")
+  dependedOnBy      TaskDependency[] @relation("TaskDependedOnBy")
+  notifications     Notification[]
+  attachments       Attachment[]
+  formSubmission    FormSubmission?
+  relationsFrom     TaskRelation[]   @relation("TaskRelationSource")
+  relationsTo       TaskRelation[]   @relation("TaskRelationTarget")
+}
+
+model TaskAssignee {
+  id         String   @id @default(cuid())
+  assignedAt DateTime @default(now())
+
+  taskId String
+  userId String
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  taskId String
+  userId String
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  action    String
+  details   String?
+  createdAt DateTime @default(now())
+
+  userId    String
+  taskId    String?
+  projectId String?
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task    Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+}
+
+// ─── NEW MODELS ────────────────────────────────────────────────
+
+model Goal {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  status      GoalStatus @default(ON_TRACK)
+  progress    Int        @default(0)
+  dueDate     DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  milestones GoalMilestone[]
+}
+
+model GoalMilestone {
+  id        String    @id @default(cuid())
+  title     String
+  completed Boolean   @default(false)
+  dueDate   DateTime?
+
+  goalId String
+  goal   Goal   @relation(fields: [goalId], references: [id], onDelete: Cascade)
+}
+
+model Doc {
+  id        String   @id @default(cuid())
+  title     String
+  content   Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Wiki fields
+  parentId           String?
+  parent             Doc?     @relation("DocChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  children           Doc[]    @relation("DocChildren")
+  position           Int      @default(0)
+  icon               String?
+  coverImage         String?
+  verifiedAt         DateTime?
+  verificationStatus String?  @default("NEEDS_REVIEW")
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  ownerId  String?
+  owner    User?  @relation("DocOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+}
+
+model TimeEntry {
+  id          String    @id @default(cuid())
+  startTime   DateTime
+  endTime     DateTime?
+  duration    Int?
+  description String?
+
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Sprint {
+  id        String       @id @default(cuid())
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  status    SprintStatus @default(PLANNING)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  tasks SprintTask[]
+}
+
+model SprintTask {
+  id String @id @default(cuid())
+
+  sprintId String
+  sprint   Sprint @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([sprintId, taskId])
+}
+
+model Automation {
+  id      String  @id @default(cuid())
+  name    String
+  trigger Json
+  action  Json
+  enabled Boolean @default(true)
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model CustomField {
+  id      String          @id @default(cuid())
+  name    String
+  type    CustomFieldType @default(TEXT)
+  options Json?
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  values CustomFieldValue[]
+}
+
+model CustomFieldValue {
+  id    String @id @default(cuid())
+  value String
+
+  customFieldId String
+  customField   CustomField @relation(fields: [customFieldId], references: [id], onDelete: Cascade)
+
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([customFieldId, taskId])
+}
+
+model TaskDependency {
+  id   String         @id @default(cuid())
+  type DependencyType @default(BLOCKING)
+
+  taskId        String
+  task          Task   @relation("TaskDependencies", fields: [taskId], references: [id], onDelete: Cascade)
+
+  dependsOnTaskId String
+  dependsOnTask   Task   @relation("TaskDependedOnBy", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnTaskId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  type      String
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  taskId    String?
+  task      Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  projectId String?
+}
+
+model Team {
+  id    String  @id @default(cuid())
+  name  String
+  color String  @default("#7B2FBE")
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  members TeamMember[]
+}
+
+model TeamMember {
+  id String @id @default(cuid())
+
+  teamId String
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+}
+
+model ProjectPage {
+  id          String   @id @default(cuid())
+  name        String
+  icon        String   @default("📄")
+  pageType    String   @default("custom")
+  content     Json?
+  position    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  parentId    String?
+  parent      ProjectPage? @relation("SubPages", fields: [parentId], references: [id], onDelete: Cascade)
+  children    ProjectPage[] @relation("SubPages")
+}
+
+// ─── ENUMS ─────────────────────────────────────────────────────
+
+enum SystemRole {
+  ADMIN
+  MEMBER
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum ProjectRole {
+  LEAD
+  MEMBER
+  VIEWER
+  GUEST
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+  COMPLETED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+  CANCELLED
+}
+
+enum TaskPriority {
+  URGENT
+  HIGH
+  MEDIUM
+  LOW
+  NONE
+}
+
+enum GoalStatus {
+  ON_TRACK
+  AT_RISK
+  BEHIND
+  COMPLETED
+}
+
+enum SprintStatus {
+  PLANNING
+  ACTIVE
+  COMPLETED
+}
+
+enum CustomFieldType {
+  TEXT
+  NUMBER
+  DATE
+  DROPDOWN
+  PEOPLE
+  CHECKBOX
+  RATING
+}
+
+enum DependencyType {
+  BLOCKING
+  WAITING_ON
+}
+
+enum TaskType {
+  TASK
+  MILESTONE
+  APPROVAL
+}
+
+enum ProjectHealth {
+  ON_TRACK
+  AT_RISK
+  OFF_TRACK
+  ON_HOLD
+  COMPLETE
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  CHANGES_REQUESTED
+  REJECTED
+}
+
+// ─── PHASE 1A MODELS ─────────────────────────────────────────
+
+model Attachment {
+  id        String   @id @default(cuid())
+  filename  String
+  url       String
+  mimeType  String
+  size      Int
+  createdAt DateTime @default(now())
+
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  uploaderId String
+  uploader   User   @relation(fields: [uploaderId], references: [id])
+}
+
+model Form {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  fields      Json
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  submissions FormSubmission[]
+}
+
+model FormSubmission {
+  id        String   @id @default(cuid())
+  data      Json
+  createdAt DateTime @default(now())
+
+  formId    String
+  form      Form     @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  taskId    String?  @unique
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  submitterId String?
+}
+
+model StatusUpdate {
+  id        String        @id @default(cuid())
+  status    ProjectHealth @default(ON_TRACK)
+  text      String
+  createdAt DateTime      @default(now())
+
+  projectId String
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  authorId  String
+  author    User          @relation(fields: [authorId], references: [id])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  type      String
+  targetId  String
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type, targetId])
+}
+
+// ─── WAVE 2 MODELS ──────────────────────────────────────────
+
+model TaskRelation {
+  id           String @id @default(cuid())
+  type         String // RELATED_TO, BLOCKS, BLOCKED_BY, DUPLICATES, PARENT_OF
+  createdAt    DateTime @default(now())
+
+  sourceTaskId String
+  sourceTask   Task   @relation("TaskRelationSource", fields: [sourceTaskId], references: [id], onDelete: Cascade)
+
+  targetTaskId String
+  targetTask   Task   @relation("TaskRelationTarget", fields: [targetTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceTaskId, targetTaskId, type])
+}
+
+model SyncedBlock {
+  id        String   @id @default(cuid())
+  content   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model NotificationPreference {
+  id                String   @id @default(cuid())
+  emailEnabled      Boolean  @default(true)
+  waEnabled         Boolean  @default(false)
+  slackEnabled      Boolean  @default(false)
+  waPhone           String?
+  slackWebhook      String?
+  taskAssigned      Boolean  @default(true)
+  taskDueSoon       Boolean  @default(true)
+  commentMention    Boolean  @default(true)
+  projectInvite     Boolean  @default(true)
+  statusUpdate      Boolean  @default(true)
+
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── BATCH C MODELS ──────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String   // "create" | "update" | "delete" | "login" | "export" | "invite"
+  entityType String   // "task" | "project" | "doc" | "user" | "comment" | "webhook"
+  entityId   String?
+  entityName String?
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  metadata   Json?    // old values, new values, diff
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([entityType])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+// ─── BATCH B MODELS ──────────────────────────────────────────
+
+model Webhook {
+  id        String   @id @default(cuid())
+  url       String
+  events    String[] // ["task.created", "task.updated", "task.completed", "comment.created", "project.updated"]
+  secret    String   @default(cuid()) // for HMAC signing
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  deliveries WebhookDelivery[]
+}
+
+model WebhookDelivery {
+  id         String   @id @default(cuid())
+  event      String
+  payload    Json
+  statusCode Int?
+  response   String?
+  success    Boolean  @default(false)
+  attempts   Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  webhookId  String
+  webhook    Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+}
+
+model InviteToken {
+  id        String      @id @default(cuid())
+  email     String
+  token     String      @unique
+  role      ProjectRole @default(GUEST)
+  expiresAt DateTime
+  accepted  Boolean     @default(false)
+  createdAt DateTime    @default(now())
+
+  projectId String
+  inviterId String
+  inviter   User        @relation(fields: [inviterId], references: [id])
+
+  @@index([token])
+  @@index([email])
+}
+
+model ImportJob {
+  id        String   @id @default(cuid())
+  source    String   // "asana" | "notion"
+  status    String   @default("pending") // "pending" | "running" | "completed" | "failed"
+  progress  Int      @default(0)
+  total     Int      @default(0)
+  details   Json?    // import details and errors
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId    String
+}

@@ -1,0 +1,141 @@
+import { NextRequest, NextResponse } from "next/server"
+import prisma from "@/lib/prisma"
+import { auth } from "@/lib/auth"
+import { notifyTaskAssigned } from "@/lib/notification-service"
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { taskId: string } }
+) {
+  try {
+    const session = await auth()
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    const body = await request.json()
+    const { userId } = body
+
+    if (!userId) {
+      return NextResponse.json({ error: "userId is required" }, { status: 400 })
+    }
+
+    const task = await prisma.task.findUnique({
+      where: { id: params.taskId },
+      include: { taskList: { include: { project: true } } },
+    })
+
+    if (!task) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 })
+    }
+
+    const existing = await prisma.taskAssignee.findUnique({
+      where: {
+        taskId_userId: {
+          taskId: params.taskId,
+          userId,
+        },
+      },
+    })
+
+    if (existing) {
+      return NextResponse.json({ error: "User is already assigned" }, { status: 400 })
+    }
+
+    const assignee = await prisma.taskAssignee.create({
+      data: {
+        taskId: params.taskId,
+        userId,
+      },
+      include: { user: true },
+    })
+
+    await prisma.activityLog.create({
+      data: {
+        action: "added assignee",
+        details: `Added assignee to "${task.title}"`,
+        userId: session.user.id!,
+        taskId: params.taskId,
+        projectId: task.taskList.projectId,
+      },
+    })
+
+    // Send notification to the assignee (don't block the response)
+    if (userId !== session.user.id) {
+      notifyTaskAssigned({
+        assigneeId: userId,
+        taskId: params.taskId,
+        taskTitle: task.title,
+        projectName: task.taskList.project.name,
+        projectId: task.taskList.projectId,
+        assignedByName: session.user.name || "Someone",
+      }).catch((err) => console.error("Notification error:", err))
+    }
+
+    return NextResponse.json(assignee, { status: 201 })
+  } catch (error) {
+    console.error("Error adding assignee:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { taskId: string } }
+) {
+  try {
+    const session = await auth()
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    const body = await request.json()
+    const { userId } = body
+
+    if (!userId) {
+      return NextResponse.json({ error: "userId is required" }, { status: 400 })
+    }
+
+    const task = await prisma.task.findUnique({
+      where: { id: params.taskId },
+      include: { taskList: true },
+    })
+
+    if (!task) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 })
+    }
+
+    const existing = await prisma.taskAssignee.findUnique({
+      where: {
+        taskId_userId: {
+          taskId: params.taskId,
+          userId,
+        },
+      },
+    })
+
+    if (!existing) {
+      return NextResponse.json({ error: "Assignee not found" }, { status: 404 })
+    }
+
+    await prisma.taskAssignee.delete({
+      where: {
+        taskId_userId: {
+          taskId: params.taskId,
+          userId,
+        },
+      },
+    })
+
+    await prisma.activityLog.create({
+      data: {
+        action: "removed assignee",
+        details: `Removed assignee from "${task.title}"`,
+        userId: session.user.id!,
+        taskId: params.taskId,
+        projectId: task.taskList.projectId,
+      },
+    })
+
+    return NextResponse.json({ message: "Assignee removed" })
+  } catch (error) {
+    console.error("Error removing assignee:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}

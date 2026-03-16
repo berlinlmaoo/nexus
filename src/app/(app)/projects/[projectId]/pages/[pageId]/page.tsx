@@ -1,0 +1,122 @@
+import { redirect, notFound } from "next/navigation"
+import { auth } from "@/lib/auth"
+import prisma from "@/lib/prisma"
+import { PageViewClient } from "@/components/projects/page-view-client"
+import type { TaskCardData } from "@/components/tasks/task-card"
+
+interface PageViewProps {
+  params: { projectId: string; pageId: string }
+}
+
+export default async function ProjectPageView({ params }: PageViewProps) {
+  const session = await auth()
+  if (!session?.user?.id) redirect("/login")
+
+  const page = await prisma.projectPage.findUnique({
+    where: { id: params.pageId },
+    include: {
+      children: {
+        include: { children: true },
+        orderBy: { position: "asc" },
+      },
+      parent: {
+        select: { id: true, name: true, icon: true },
+      },
+      project: {
+        select: {
+          id: true,
+          name: true,
+          icon: true,
+          color: true,
+          members: {
+            include: {
+              user: { select: { id: true, name: true, avatar: true } },
+            },
+          },
+          taskLists: {
+            orderBy: { position: "asc" },
+            include: {
+              tasks: {
+                where: { parentId: null },
+                orderBy: { position: "asc" },
+                include: {
+                  assignees: {
+                    include: {
+                      user: { select: { id: true, name: true, avatar: true } },
+                    },
+                  },
+                  subtasks: { select: { id: true, status: true } },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+
+  if (!page || page.projectId !== params.projectId) notFound()
+
+  // Verify membership
+  const isMember = page.project.members.some((m) => m.user.id === session.user!.id)
+  if (!isMember) redirect("/projects")
+
+  const tasks: TaskCardData[] = page.project.taskLists.flatMap((tl) =>
+    tl.tasks.map((t) => ({
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      status: t.status,
+      priority: t.priority,
+      dueDate: t.dueDate?.toISOString() || null,
+      tags: t.tags,
+      position: t.position,
+      taskListId: t.taskListId,
+      taskListName: tl.name,
+      assignees: t.assignees.map((a) => ({
+        id: a.user.id,
+        name: a.user.name,
+        avatar: a.user.avatar,
+      })),
+      subtaskCount: t.subtasks.length,
+      subtaskDoneCount: t.subtasks.filter((s) => s.status === "DONE").length,
+    }))
+  )
+
+  const pageData = {
+    id: page.id,
+    name: page.name,
+    icon: page.icon,
+    pageType: page.pageType,
+    content: page.content as Record<string, unknown> | null,
+    parent: page.parent,
+    children: page.children.map((c) => ({
+      id: c.id,
+      name: c.name,
+      icon: c.icon,
+      pageType: c.pageType,
+    })),
+    project: {
+      id: page.project.id,
+      name: page.project.name,
+      icon: page.project.icon,
+      color: page.project.color,
+      members: page.project.members.map((m) => ({
+        id: m.user.id,
+        name: m.user.name,
+        avatar: m.user.avatar,
+        role: m.role,
+      })),
+      taskLists: page.project.taskLists.map((tl) => ({
+        id: tl.id,
+        name: tl.name,
+      })),
+    },
+  }
+
+  return (
+    <div className="p-6">
+      <PageViewClient page={pageData} tasks={tasks} />
+    </div>
+  )
+}
