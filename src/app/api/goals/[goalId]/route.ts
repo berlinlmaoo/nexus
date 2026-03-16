@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
+import { logAudit } from '@/lib/audit'
 
 const goalInclude = {
   owner: { select: { id: true, name: true, avatar: true } },
@@ -45,32 +46,38 @@ async function recalculateProgress(goalId: string) {
 }
 
 export async function GET(req: NextRequest, { params }: { params: { goalId: string } }) {
-  const session = await auth()
-  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const goal = await prisma.goal.findUnique({
-    where: { id: params.goalId },
-    include: goalInclude,
-  })
-  if (!goal) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  try {
+    const session = await auth()
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const goal = await prisma.goal.findUnique({
+      where: { id: params.goalId },
+      include: goalInclude,
+    })
+    if (!goal) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  // Compute task completion stats
-  const totalTasks = goal.goalTasks.length
-  const completedTasks = goal.goalTasks.filter(gt => gt.task.status === 'DONE').length
+    // Compute task completion stats
+    const totalTasks = goal.goalTasks.length
+    const completedTasks = goal.goalTasks.filter(gt => gt.task.status === 'DONE').length
 
-  return NextResponse.json({
-    goal: {
-      ...goal,
-      linkedProjects: goal.goalProjects.map(gp => gp.project),
-      linkedTasks: goal.goalTasks.map(gt => ({
-        ...gt.task,
-        project: gt.task.taskList?.project || null,
-      })),
-      taskStats: { total: totalTasks, completed: completedTasks },
-    },
-  })
+    return NextResponse.json({
+      goal: {
+        ...goal,
+        linkedProjects: goal.goalProjects.map(gp => gp.project),
+        linkedTasks: goal.goalTasks.map(gt => ({
+          ...gt.task,
+          project: gt.task.taskList?.project || null,
+        })),
+        taskStats: { total: totalTasks, completed: completedTasks },
+      },
+    })
+  } catch (error) {
+    console.error('Error fetching goal:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { goalId: string } }) {
+  try {
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
@@ -120,8 +127,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { goalId: st
     }
   }
 
-  const { title, description, status, progress, dueDate } = body
-  if (title !== undefined || description !== undefined || status !== undefined || progress !== undefined || dueDate !== undefined) {
+  const { title, description, status, progress, dueDate, parentId } = body
+  if (title !== undefined || description !== undefined || status !== undefined || progress !== undefined || dueDate !== undefined || parentId !== undefined) {
     await prisma.goal.update({
       where: { id: params.goalId },
       data: {
@@ -130,8 +137,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { goalId: st
         ...(status !== undefined && { status }),
         ...(progress !== undefined && { progress }),
         ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
+        ...(parentId !== undefined && { parentId: parentId || null }),
       },
     })
+  }
+
+  // If this goal has a parent, recalculate parent progress = average of children
+  const updatedGoal = await prisma.goal.findUnique({ where: { id: params.goalId }, select: { parentId: true } })
+  if (updatedGoal?.parentId) {
+    const siblings = await prisma.goal.findMany({ where: { parentId: updatedGoal.parentId }, select: { progress: true } })
+    if (siblings.length > 0) {
+      const avgProgress = Math.round(siblings.reduce((sum, s) => sum + s.progress, 0) / siblings.length)
+      await prisma.goal.update({ where: { id: updatedGoal.parentId }, data: { progress: avgProgress } })
+    }
   }
 
   const goal = await prisma.goal.findUnique({
@@ -142,6 +160,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { goalId: st
 
   const totalTasks = goal.goalTasks.length
   const completedTasks = goal.goalTasks.filter(gt => gt.task.status === 'DONE').length
+
+  logAudit({ action: 'update', entityType: 'goal', entityId: params.goalId, entityName: goal.title, userId: session.user.id, request: req, metadata: { changes: Object.keys(body) } })
 
   return NextResponse.json({
     goal: {
@@ -154,11 +174,21 @@ export async function PATCH(req: NextRequest, { params }: { params: { goalId: st
       taskStats: { total: totalTasks, completed: completedTasks },
     },
   })
+  } catch (error) {
+    console.error('Error updating goal:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { goalId: string } }) {
-  const session = await auth()
-  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  await prisma.goal.delete({ where: { id: params.goalId } })
-  return NextResponse.json({ success: true })
+  try {
+    const session = await auth()
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    await prisma.goal.delete({ where: { id: params.goalId } })
+    logAudit({ action: 'delete', entityType: 'goal', entityId: params.goalId, userId: session.user.id, request: req })
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error deleting goal:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 }

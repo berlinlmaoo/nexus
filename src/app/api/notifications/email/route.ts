@@ -9,6 +9,7 @@ import {
   statusUpdateEmail,
 } from "@/lib/email"
 import prisma from "@/lib/prisma"
+import { logAudit } from "@/lib/audit"
 
 export async function POST(req: NextRequest) {
   const session = await auth()
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest) {
 
     payload.to = recipient.email
     const sent = await sendEmail(payload)
+    logAudit({ action: "create", entityType: "email", userId: session.user.id, request: req, metadata: { type, recipientId } })
     return NextResponse.json({ sent })
   } catch (error) {
     console.error("Email API error:", error)

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { logAudit } from "@/lib/audit"
 
 export async function PATCH(
   request: NextRequest,
@@ -35,6 +36,8 @@ export async function PATCH(
       include: { user: true },
     })
 
+    logAudit({ action: "update", entityType: "comment", entityId: params.commentId, userId: session.user.id!, request })
+
     return NextResponse.json(updated)
   } catch (error) {
     console.error("Error updating comment:", error)
@@ -43,7 +46,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { taskId: string; commentId: string } }
 ) {
   try {
@@ -83,6 +86,8 @@ export async function DELETE(
     }
 
     await prisma.comment.delete({ where: { id: params.commentId } })
+
+    logAudit({ action: "delete", entityType: "comment", entityId: params.commentId, userId: session.user.id!, request })
 
     return NextResponse.json({ success: true })
   } catch (error) {

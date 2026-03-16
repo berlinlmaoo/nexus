@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { logAudit } from "@/lib/audit"
 
 export async function GET() {
   try {
@@ -68,6 +69,8 @@ export async function POST(request: NextRequest) {
         },
       },
     })
+
+    logAudit({ action: "create", entityType: "workspace", entityId: workspace.id, entityName: name, userId, request })
 
     return NextResponse.json(workspace, { status: 201 })
   } catch (error) {

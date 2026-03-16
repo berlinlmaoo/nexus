@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { syncTeamProjectAccess, syncTeamMemberAccess, revokeTeamProjectAccess, revokeTeamMemberAccess } from '@/lib/team-sync'
+import { logAudit } from '@/lib/audit'
 
 export async function GET() {
   try {
@@ -51,6 +52,7 @@ export async function POST(req: NextRequest) {
       })
       // Propagate: grant all team members access to this project
       await syncTeamProjectAccess(teamId, projectId)
+      logAudit({ action: "create", entityType: "team_project_link", entityId: link.id ?? teamId, entityName: `${teamId}:${projectId}`, userId: user.id, request: req, metadata: { teamId, projectId } })
       return NextResponse.json(link, { status: 201 })
     }
 
@@ -62,6 +64,7 @@ export async function POST(req: NextRequest) {
       // Revoke team-propagated access before unlinking
       await revokeTeamProjectAccess(teamId, projectId)
       await prisma.teamProject.deleteMany({ where: { teamId, projectId } })
+      logAudit({ action: "delete", entityType: "team_project_link", entityId: teamId, entityName: `${teamId}:${projectId}`, userId: user.id, request: req, metadata: { teamId, projectId } })
       return NextResponse.json({ unlinked: true })
     }
 
@@ -77,6 +80,7 @@ export async function POST(req: NextRequest) {
       })
       // Propagate: grant new member access to all team-linked projects
       await syncTeamMemberAccess(teamId, userId)
+      logAudit({ action: "create", entityType: "team_member", entityId: member.id ?? teamId, entityName: `${teamId}:${userId}`, userId: user.id, request: req, metadata: { teamId, memberId: userId } })
       return NextResponse.json(member, { status: 201 })
     }
 
@@ -88,6 +92,7 @@ export async function POST(req: NextRequest) {
       // Revoke team-propagated project access before removing member
       await revokeTeamMemberAccess(teamId, userId)
       await prisma.teamMember.deleteMany({ where: { teamId, userId } })
+      logAudit({ action: "delete", entityType: "team_member", entityId: teamId, entityName: `${teamId}:${userId}`, userId: user.id, request: req, metadata: { teamId, memberId: userId } })
       return NextResponse.json({ removed: true })
     }
 
@@ -119,6 +124,7 @@ export async function POST(req: NextRequest) {
           projects: { include: { project: { select: { id: true, name: true, color: true, icon: true, status: true } } } }
         }
       })
+      logAudit({ action: "create", entityType: "team", entityId: team.id, entityName: name, userId: user.id, request: req })
       return NextResponse.json(team, { status: 201 })
     }
 
@@ -134,6 +140,7 @@ export async function POST(req: NextRequest) {
         projects: { include: { project: { select: { id: true, name: true, color: true, icon: true, status: true } } } }
       }
     })
+    logAudit({ action: "create", entityType: "team", entityId: team.id, entityName: name, userId: user.id, request: req })
     return NextResponse.json(team, { status: 201 })
   } catch (error) {
     console.error('Teams POST error:', error)

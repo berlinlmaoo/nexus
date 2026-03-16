@@ -2,6 +2,8 @@ import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import { DashboardContent } from "./dashboard-content"
 
+export const metadata = { title: "Dashboard | Nexus" }
+
 export default async function DashboardPage() {
   const session = await auth()
 

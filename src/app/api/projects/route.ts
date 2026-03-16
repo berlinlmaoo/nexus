@@ -80,6 +80,14 @@ export async function POST(request: NextRequest) {
 
     const userId = session.user.id
 
+    // Verify the user is a member of the target workspace
+    const workspaceMembership = await prisma.workspaceMember.findFirst({
+      where: { workspaceId, userId },
+    })
+    if (!workspaceMembership) {
+      return NextResponse.json({ error: "Forbidden: you are not a member of this workspace" }, { status: 403 })
+    }
+
     const project = await prisma.project.create({
       data: {
         name,

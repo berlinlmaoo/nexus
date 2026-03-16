@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { FormPublic } from '@/components/forms/form-public'
+import type { FormField as BuilderFormField } from '@/components/forms/form-builder'
 import { Loader2 } from 'lucide-react'
 
 interface FormField {
@@ -23,7 +24,7 @@ interface FormData {
 
 export default function PublicFormPage() {
   const params = useParams()
-  const formId = params.formId as string
+  const formId = params?.formId as string
   const [form, setForm] = useState<FormData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -70,7 +71,7 @@ export default function PublicFormPage() {
       formId={form.id}
       formName={form.name}
       formDescription={form.description}
-      fields={form.fields}
+      fields={form.fields as BuilderFormField[]}
     />
   )
 }

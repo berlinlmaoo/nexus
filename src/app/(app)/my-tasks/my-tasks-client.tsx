@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 import { format, isPast, isToday, isAfter, addDays, subDays } from "date-fns"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
 interface Task {
   id: string
@@ -142,9 +143,13 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: Task[]; project
       })
       if (res.ok) {
         setHiddenTasks(prev => new Set(prev).add(taskId))
+        toast.success("Task completed")
+      } else {
+        toast.error("Failed to complete task")
       }
     } catch (e) {
       console.error(e)
+      toast.error("Failed to complete task")
     } finally {
       setCompletingTasks(prev => {
         const next = new Set(prev)
@@ -182,10 +187,14 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: Task[]; project
       if (res.ok) {
         setNewTaskTitle("")
         setInlineAdding(null)
+        toast.success("Task created")
         router.refresh()
+      } else {
+        toast.error("Failed to create task")
       }
     } catch (e) {
       console.error(e)
+      toast.error("Failed to create task")
     } finally {
       setAddingTask(false)
     }

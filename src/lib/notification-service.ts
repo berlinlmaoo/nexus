@@ -209,6 +209,7 @@ export async function notifyDueSoon(data: {
   taskId: string
   taskTitle: string
   dueDate: string
+  projectId?: string
 }) {
   const user = await prisma.user.findUnique({
     where: { id: data.userId },
@@ -224,7 +225,10 @@ export async function notifyDueSoon(data: {
     title: "Task Due Soon",
     message: `"${data.taskTitle}" is due on ${data.dueDate}`,
     taskId: data.taskId,
-    link: `/tasks/${data.taskId}`,
+    projectId: data.projectId,
+    link: data.projectId
+      ? `/projects/${data.projectId}/tasks/${data.taskId}`
+      : `/tasks/${data.taskId}`,
   })
 
   if (!prefs.taskDueSoon) return
@@ -369,7 +373,7 @@ export async function notifyTaskCompleted(data: {
   for (const f of followers) recipientIds.add(f.userId)
   recipientIds.delete(data.completedById)
 
-  for (const userId of recipientIds) {
+  for (const userId of Array.from(recipientIds)) {
     await createInAppNotification({
       userId,
       type: "task_completed",
@@ -401,7 +405,7 @@ export async function notifyCommentAdded(data: {
   for (const f of followers) recipientIds.add(f.userId)
   recipientIds.delete(data.commentById)
 
-  for (const userId of recipientIds) {
+  for (const userId of Array.from(recipientIds)) {
     await createInAppNotification({
       userId,
       type: "comment_added",
@@ -428,6 +432,7 @@ export async function checkDueSoonTasks() {
     },
     include: {
       assignees: { include: { user: true } },
+      taskList: { select: { projectId: true } },
     },
   })
 
@@ -448,6 +453,7 @@ export async function checkDueSoonTasks() {
         userId: assignee.userId,
         taskId: task.id,
         taskTitle: task.title,
+        projectId: task.taskList.projectId,
         dueDate: task.dueDate!.toLocaleDateString("en-US", {
           month: "short",
           day: "numeric",

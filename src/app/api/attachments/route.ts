@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { logAudit } from "@/lib/audit"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 
@@ -68,6 +69,8 @@ export async function POST(request: NextRequest) {
         uploaderId: session.user.id,
       },
     })
+
+    logAudit({ action: "create", entityType: "attachment", entityId: attachment.id, entityName: file.name, userId: session.user.id, request, metadata: { taskId, mimeType: file.type, size: file.size } })
 
     return NextResponse.json(attachment, { status: 201 })
   } catch (error) {

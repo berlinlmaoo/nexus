@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma'
+import type { InputJsonValue } from '@prisma/client/runtime/client'
 import { NextRequest } from 'next/server'
 
 interface AuditLogParams {
@@ -40,7 +41,7 @@ export async function logAudit({
         entityId,
         entityName,
         userId,
-        metadata: metadata ?? undefined,
+        metadata: (metadata ?? undefined) as InputJsonValue | undefined,
         ipAddress,
         userAgent,
       },
@@ -83,7 +84,7 @@ export async function logAuditBatch(
         entityId: entry.entityId,
         entityName: entry.entityName,
         userId,
-        metadata: entry.metadata ?? undefined,
+        metadata: (entry.metadata ?? undefined) as InputJsonValue | undefined,
         ipAddress,
         userAgent,
       })),

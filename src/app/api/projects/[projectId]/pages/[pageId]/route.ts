@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { logAudit } from "@/lib/audit"
 
 export async function GET(
   request: NextRequest,
@@ -72,6 +73,8 @@ export async function PATCH(
       include: { children: true },
     })
 
+    logAudit({ action: "update", entityType: "project_page", entityId: params.pageId, entityName: page.name, userId: session.user.id, request, metadata: { projectId: params.projectId, changes: body } })
+
     return NextResponse.json(page)
   } catch (error) {
     console.error("Error updating page:", error)
@@ -98,6 +101,8 @@ export async function DELETE(
     }
 
     await prisma.projectPage.delete({ where: { id: params.pageId } })
+
+    logAudit({ action: "delete", entityType: "project_page", entityId: params.pageId, entityName: params.pageId, userId: session.user.id, request, metadata: { projectId: params.projectId } })
 
     return NextResponse.json({ success: true })
   } catch (error) {

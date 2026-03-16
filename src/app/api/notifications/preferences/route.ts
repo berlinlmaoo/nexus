@@ -1,31 +1,37 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { logAudit } from "@/lib/audit"
 
 export async function GET() {
-  const session = await auth()
-  if (!session?.user?.id)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  try {
+    const session = await auth()
+    if (!session?.user?.id)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const pref = await prisma.notificationPreference.findUnique({
-    where: { userId: session.user.id },
-  })
+    const pref = await prisma.notificationPreference.findUnique({
+      where: { userId: session.user.id },
+    })
 
-  // Return defaults if no preferences set
-  return NextResponse.json(
-    pref || {
-      emailEnabled: true,
-      waEnabled: false,
-      slackEnabled: false,
-      waPhone: null,
-      slackWebhook: null,
-      taskAssigned: true,
-      taskDueSoon: true,
-      commentMention: true,
-      projectInvite: true,
-      statusUpdate: true,
-    }
-  )
+    // Return defaults if no preferences set
+    return NextResponse.json(
+      pref || {
+        emailEnabled: true,
+        waEnabled: false,
+        slackEnabled: false,
+        waPhone: null,
+        slackWebhook: null,
+        taskAssigned: true,
+        taskDueSoon: true,
+        commentMention: true,
+        projectInvite: true,
+        statusUpdate: true,
+      }
+    )
+  } catch (error) {
+    console.error("Error fetching notification preferences:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
 }
 
 export async function PUT(req: NextRequest) {
@@ -64,6 +70,8 @@ export async function PUT(req: NextRequest) {
         statusUpdate: body.statusUpdate,
       },
     })
+
+    logAudit({ action: "update", entityType: "notificationPreference", entityId: pref.id, userId: session.user.id, request: req })
 
     return NextResponse.json(pref)
   } catch (error) {

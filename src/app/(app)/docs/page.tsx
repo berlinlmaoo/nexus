@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { DocsPageClient } from "./docs-client"
 
+export const metadata = { title: "Documents | Nexus" }
+
 export default async function DocsPage() {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")

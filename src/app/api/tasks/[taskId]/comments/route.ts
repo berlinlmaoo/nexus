@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { logAudit } from "@/lib/audit"
 import { notifyMention, notifyCommentAdded } from "@/lib/notification-service"
 import { executeAutomations } from "@/lib/automation-engine"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
@@ -133,6 +134,8 @@ export async function POST(
       commentById: session.user.id!,
       commentSnippet: content.slice(0, 200),
     }).catch(() => {})
+
+    logAudit({ action: "create", entityType: "comment", entityId: comment.id, entityName: task.title, userId: session.user.id!, request })
 
     // Auto-follow: commenter follows the task
     await prisma.taskFollower.upsert({

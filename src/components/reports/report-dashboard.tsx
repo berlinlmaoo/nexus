@@ -381,9 +381,10 @@ export function ReportDashboard() {
                   <Tooltip
                     contentStyle={{ backgroundColor: "#18181B", border: "1px solid #3F3F46", borderRadius: "8px" }}
                     itemStyle={{ color: "#FAFAFA" }}
-                    formatter={(value: number, name: string) => {
-                      if (name === "completionRate") return [`${value}%`, "Completion %"]
-                      return [value, name === "completed" ? "Completed" : "Total"]
+                    formatter={(value, name) => {
+                      const v = typeof value === 'number' ? value : 0
+                      if (name === "completionRate") return [`${v}%`, "Completion %"]
+                      return [v, name === "completed" ? "Completed" : "Total"]
                     }}
                   />
                   <Legend />

@@ -733,7 +733,7 @@ export function Sidebar({ user }: SidebarProps) {
                               key={page.id}
                               page={page}
                               projectId={project.id}
-                              pathname={pathname}
+                              pathname={pathname ?? ''}
                               onDelete={(pageId) => handleDeletePage(project.id, pageId)}
                               onDuplicate={(pageId) => handleDuplicatePage(project.id, pageId)}
                             />

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { notifyProjectInvite } from "@/lib/notification-service"
+import { logAudit } from "@/lib/audit"
 
 export async function GET(
   _request: NextRequest,
@@ -77,6 +78,8 @@ export async function POST(
       }).catch((err) => console.error("Project invite notification error:", err))
     }
 
+    logAudit({ action: "create", entityType: "project_member", entityId: member.id, entityName: member.user?.name || userId, userId: session.user.id!, request, metadata: { projectId: params.projectId, role: role || "MEMBER" } })
+
     return NextResponse.json(member, { status: 201 })
   } catch (error) {
     console.error("Error adding project member:", error)
@@ -120,6 +123,8 @@ export async function DELETE(
         },
       },
     })
+
+    logAudit({ action: "delete", entityType: "project_member", entityId: existing.userId, entityName: userId, userId: session.user.id!, request, metadata: { projectId: params.projectId } })
 
     return NextResponse.json({ message: "Member removed" })
   } catch (error) {

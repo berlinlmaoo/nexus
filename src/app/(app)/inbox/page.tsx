@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { InboxClient } from "./inbox-client"
 
+export const metadata = { title: "Inbox | Nexus" }
+
 export default async function InboxPage() {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
@@ -13,7 +15,7 @@ export default async function InboxPage() {
   })
 
   // Fetch project names for grouping
-  const projectIds = [...new Set(notifications.map(n => n.projectId).filter(Boolean))] as string[]
+  const projectIds = Array.from(new Set(notifications.map(n => n.projectId).filter(Boolean))) as string[]
   const projects = projectIds.length > 0
     ? await prisma.project.findMany({
         where: { id: { in: projectIds } },

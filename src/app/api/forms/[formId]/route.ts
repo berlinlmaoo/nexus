@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { logAudit } from "@/lib/audit"
 
 export async function GET(
   request: NextRequest,
@@ -51,6 +52,8 @@ export async function PATCH(
       },
     })
 
+    logAudit({ action: "update", entityType: "form", entityId: formId, entityName: form.name, userId: session.user.id, request, metadata: { changes: Object.keys(body) } })
+
     return NextResponse.json(form)
   } catch (error) {
     console.error("Error updating form:", error)
@@ -69,6 +72,8 @@ export async function DELETE(
     const { formId } = await params
 
     await prisma.form.delete({ where: { id: formId } })
+
+    logAudit({ action: "delete", entityType: "form", entityId: formId, userId: session.user.id, request })
 
     return NextResponse.json({ success: true })
   } catch (error) {
