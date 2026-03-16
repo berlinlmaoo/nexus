@@ -76,9 +76,6 @@ export function AppLayout({ children, title, breadcrumbs, user }: AppLayoutProps
               {children}
             </PageTransition>
           </main>
-          <footer className="shrink-0 border-t border-zinc-200 dark:border-zinc-800 py-2 px-4 text-center">
-            <p className="text-[10px] text-neutral-400 dark:text-neutral-400">Developed by Berlin & GIDEON</p>
-          </footer>
         </div>
 
         <GideonChat />

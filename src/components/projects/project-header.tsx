@@ -204,8 +204,8 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
 
   return (
     <div className="space-y-4 animate-fade-in px-6 pt-6 overflow-hidden">
-      {/* Cover gradient */}
-      <div className={cn("relative rounded-xl bg-gradient-to-r overflow-hidden transition-all duration-500", coverGradient, coverImage ? "h-36" : "h-8")}>
+      {/* Cover gradient — only show when there's a custom cover image */}
+      {coverImage && <div className={cn("relative rounded-xl bg-gradient-to-r overflow-hidden transition-all duration-500", coverGradient, "h-36")}>
         <button
           onClick={() => setShowCoverPicker(!showCoverPicker)}
           className={cn(
@@ -235,10 +235,10 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
             </div>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Project info row */}
-      <div className={cn("flex items-start gap-4 ml-6 relative z-10", coverImage ? "-mt-10" : "-mt-4")}>
+      <div className={cn("flex items-start gap-4 ml-6 relative z-10", coverImage ? "-mt-10" : "mt-0")}>
         {/* Icon */}
         <div className="relative">
           <button
