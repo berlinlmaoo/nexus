@@ -390,9 +390,9 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       <ProjectHeader project={project} />
 
       {/* Asana-style sub-header: view tabs + toolbar */}
-      <div className="flex items-center justify-between border-b bg-white dark:bg-zinc-950 px-4 h-10 shrink-0">
+      <div className="flex items-center justify-between border-b bg-white dark:bg-zinc-950 px-4 h-10 shrink-0 overflow-x-auto hide-scrollbar">
         {/* View tabs */}
-        <div className="flex items-center overflow-x-auto hide-scrollbar">
+        <div className="flex items-center shrink-0">
           {viewTabs.map((tab) => {
             const Icon = tab.icon
             return (

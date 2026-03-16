@@ -203,8 +203,8 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      {/* Cover accent bar */}
-      <div className={cn("relative h-1.5 rounded-full bg-gradient-to-r overflow-hidden", coverGradient)}>
+      {/* Cover accent bar — hidden by default, shown on hover */}
+      <div className={cn("relative h-0 rounded-full bg-gradient-to-r overflow-hidden opacity-0", coverGradient)}>
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAwIDEwIEwgNDAgMTAgTSAxMCAwIEwgMTAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjAzIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCBmaWxsPSJ1cmwoI2dyaWQpIiB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIi8+PC9zdmc+')] opacity-50" />
         <button
           onClick={() => setShowCoverPicker(!showCoverPicker)}
