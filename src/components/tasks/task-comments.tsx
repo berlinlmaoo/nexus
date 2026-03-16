@@ -277,14 +277,14 @@ function CommentComposer({
           onClick={handleSubmit}
           disabled={!content.trim() || submitting}
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+            "inline-flex items-center justify-center h-8 w-8 rounded-full transition-colors",
             content.trim() && !submitting
               ? "bg-foreground text-background hover:bg-foreground/90"
               : "bg-muted text-muted-foreground/60 cursor-not-allowed"
           )}
+          title="Send"
         >
-          {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-          Send
+          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </button>
       </div>
     </div>

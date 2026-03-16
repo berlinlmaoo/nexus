@@ -257,7 +257,7 @@ export default function TeamsPage() {
                   <div className="flex items-center gap-3">
                     <div
                       className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold"
-                      style={{ backgroundColor: getTeamAvatarColor(team.name) }}
+                      style={{ backgroundColor: team.color || getTeamAvatarColor(team.name) }}
                     >
                       {team.name.charAt(0).toUpperCase()}
                     </div>

@@ -236,7 +236,7 @@ export function InboxClient({
         <div>
           <h1 className="text-2xl font-bold">Inbox</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {unreadCount > 0 ? `${unreadCount} unread notification${unreadCount !== 1 ? "s" : ""}` : "All caught up"}
+            {notifications.length} notification{notifications.length !== 1 ? "s" : ""}{unreadCount > 0 ? ` · ${unreadCount} unread` : ""}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -256,7 +256,7 @@ export function InboxClient({
       </div>
 
       {/* View tabs */}
-      <div className="flex items-center gap-2 mb-3 pb-3 border-b border-border/40">
+      <div className="flex items-center gap-2 mb-3 pb-3 border-b border-border">
         {([
           { key: "all" as const, label: "All" },
           { key: "by-project" as const, label: "By Project" },
@@ -266,7 +266,7 @@ export function InboxClient({
             key={tab.key}
             onClick={() => setViewTab(tab.key)}
             className={cn(
-              "px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200",
+              "px-3 py-1.5 rounded-full text-sm font-semibold transition-all duration-200",
               viewTab === tab.key
                 ? "bg-foreground text-background shadow-sm"
                 : "bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80"
@@ -304,12 +304,12 @@ export function InboxClient({
       </div>
 
       {filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center animate-fade-in">
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center animate-fade-in">
           <div className="h-16 w-16 rounded-2xl bg-muted/60 flex items-center justify-center mb-4">
             <Inbox className="h-8 w-8 text-muted-foreground/60" />
           </div>
           <h3 className="text-lg font-semibold mb-1">
-            {filter === "unread" ? "No unread notifications" : "No notifications yet"}
+            {filter === "unread" ? "No unread notifications" : "No notifications"}
           </h3>
           <p className="text-sm text-muted-foreground max-w-xs">
             {filter === "unread" ? "You're all caught up!" : "Notifications will appear here when you have updates"}

@@ -356,7 +356,7 @@ export function SettingsClient({ user, workspace, isAdmin, workspaceRole }: Sett
 
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" value={user.email} disabled className="opacity-60" />
+                <Input id="email" value={user.email} disabled className="bg-neutral-100 dark:bg-neutral-900 text-neutral-500 cursor-not-allowed" />
                 <p className="text-xs text-muted-foreground">
                   Email cannot be changed
                 </p>
@@ -387,6 +387,7 @@ export function SettingsClient({ user, workspace, isAdmin, workspaceRole }: Sett
                     id="workspace-name"
                     value={workspaceName}
                     onChange={(e) => setWorkspaceName(e.target.value)}
+                    className="min-h-[40px]"
                   />
                 </div>
                 <div className="space-y-2">

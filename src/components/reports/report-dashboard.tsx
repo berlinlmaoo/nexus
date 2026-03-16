@@ -204,7 +204,7 @@ export function ReportDashboard() {
       />
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <MetricCard
           icon={BarChart3}
           label="Total Tasks"
@@ -270,7 +270,7 @@ export function ReportDashboard() {
                     stroke="#71717A"
                     fontSize={12}
                   />
-                  <YAxis stroke="#71717A" fontSize={12} />
+                  <YAxis stroke="#71717A" fontSize={12} allowDecimals={false} tickFormatter={(v: number) => Math.round(v).toString()} />
                   <Tooltip
                     contentStyle={{ backgroundColor: "#18181B", border: "1px solid #3F3F46", borderRadius: "8px" }}
                     labelStyle={{ color: "#A1A1AA" }}
@@ -339,7 +339,7 @@ export function ReportDashboard() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={priorityData} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" stroke="#27272A" />
-                  <XAxis type="number" stroke="#71717A" fontSize={12} />
+                  <XAxis type="number" stroke="#71717A" fontSize={12} allowDecimals={false} tickFormatter={(v: number) => Math.round(v).toString()} />
                   <YAxis
                     type="category"
                     dataKey="name"
@@ -377,7 +377,7 @@ export function ReportDashboard() {
                     fontSize={11}
                     tickFormatter={(v) => v.split(" ")[0]}
                   />
-                  <YAxis stroke="#71717A" fontSize={12} />
+                  <YAxis stroke="#71717A" fontSize={12} allowDecimals={false} tickFormatter={(v: number) => Math.round(v).toString()} />
                   <Tooltip
                     contentStyle={{ backgroundColor: "#18181B", border: "1px solid #3F3F46", borderRadius: "8px" }}
                     itemStyle={{ color: "#FAFAFA" }}
@@ -418,7 +418,7 @@ export function ReportDashboard() {
                         return `${d.getMonth() + 1}/${d.getDate()}`
                       }}
                     />
-                    <YAxis stroke="#71717A" fontSize={12} />
+                    <YAxis stroke="#71717A" fontSize={12} allowDecimals={false} tickFormatter={(v: number) => Math.round(v).toString()} />
                     <Tooltip
                       contentStyle={{ backgroundColor: "#18181B", border: "1px solid #3F3F46", borderRadius: "8px" }}
                       itemStyle={{ color: "#FAFAFA" }}
@@ -461,7 +461,7 @@ export function ReportDashboard() {
                         return `${d.getMonth() + 1}/${d.getDate()}`
                       }}
                     />
-                    <YAxis stroke="#71717A" fontSize={12} />
+                    <YAxis stroke="#71717A" fontSize={12} allowDecimals={false} tickFormatter={(v: number) => Math.round(v).toString()} />
                     <Tooltip
                       contentStyle={{ backgroundColor: "#18181B", border: "1px solid #3F3F46", borderRadius: "8px" }}
                       itemStyle={{ color: "#FAFAFA" }}

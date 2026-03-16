@@ -7,6 +7,7 @@ import {
   FileText,
   Target,
   BarChart3,
+  Users,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -39,6 +40,11 @@ const actions = [
     label: "Go to Reports",
     href: "/reports",
     icon: BarChart3,
+  },
+  {
+    label: "Go to Teams",
+    href: "/teams",
+    icon: Users,
   },
 ]
 

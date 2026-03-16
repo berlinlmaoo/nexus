@@ -325,12 +325,27 @@ export function BoardView({
                               )}
                               onClick={() => onTaskClick(task)}
                             >
+                              {/* Status badge */}
+                              <div className="flex items-center gap-1.5 mb-1.5">
+                                <span className={cn(
+                                  "inline-block h-2 w-2 rounded-full",
+                                  task.status === "DONE" ? "bg-green-500" :
+                                  task.status === "IN_PROGRESS" ? "bg-blue-500" :
+                                  task.status === "IN_REVIEW" ? "bg-yellow-500" :
+                                  task.status === "CANCELLED" ? "bg-red-500" :
+                                  "bg-zinc-400"
+                                )} />
+                                <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                                  {task.status.replace("_", " ")}
+                                </span>
+                              </div>
+
                               {/* Task name */}
                               <p className="text-[13px] font-medium text-foreground leading-snug line-clamp-2">
                                 {task.title}
                               </p>
 
-                              {/* Bottom: status + date + priority pill + avatar */}
+                              {/* Bottom: date + priority pill + avatar */}
                               <div className="flex items-center justify-between mt-3">
                                 <div className="flex items-center gap-2">
                                   {task.dueDate && (
@@ -345,13 +360,16 @@ export function BoardView({
                                     </span>
                                   )}
                                   {task.priority !== "NONE" && PRIORITY_COLORS[task.priority] && (
-                                    <span className={cn("h-2 w-2 rounded-full", PRIORITY_COLORS[task.priority])} />
+                                    <span className="inline-flex items-center gap-1">
+                                      <span className={cn("h-2 w-2 rounded-full", PRIORITY_COLORS[task.priority])} />
+                                      <span className="text-[10px] text-muted-foreground">{task.priority}</span>
+                                    </span>
                                   )}
                                 </div>
 
                                 {task.assignees.length > 0 && (
                                   <div className="flex -space-x-1">
-                                    {task.assignees.slice(0, 1).map((a) => (
+                                    {task.assignees.slice(0, 2).map((a) => (
                                       <UserAvatar
                                         key={a.id}
                                         user={{ name: a.name, avatar: a.avatar }}
@@ -359,9 +377,9 @@ export function BoardView({
                                         className="h-6 w-6 border border-white dark:border-zinc-900"
                                       />
                                     ))}
-                                    {task.assignees.length > 1 && (
+                                    {task.assignees.length > 2 && (
                                       <div className="flex h-6 w-6 items-center justify-center rounded-full border border-white dark:border-zinc-900 bg-muted text-[8px] font-medium text-muted-foreground">
-                                        +{task.assignees.length - 1}
+                                        +{task.assignees.length - 2}
                                       </div>
                                     )}
                                   </div>

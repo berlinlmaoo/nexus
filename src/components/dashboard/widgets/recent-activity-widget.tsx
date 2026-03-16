@@ -64,10 +64,7 @@ export function RecentActivityWidget({ data }: RecentActivityWidgetProps) {
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-1.5 text-muted-foreground">
-          <Activity className="h-3.5 w-3.5" />
-          <span className="text-xs font-medium">Recent activity</span>
-        </div>
+        <div></div>
         <button
           onClick={refresh}
           disabled={isRefreshing}
@@ -85,7 +82,25 @@ export function RecentActivityWidget({ data }: RecentActivityWidgetProps) {
       ) : (
         <ScrollArea className="h-[320px]">
           <div className="space-y-0.5 pr-3">
-            {activity.map((entry) => {
+            {(() => {
+              // Group identical consecutive entries (same action + same task within 1 hour)
+              const grouped: (ActivityEntry & { count: number })[] = []
+              for (const entry of activity) {
+                const last = grouped[grouped.length - 1]
+                if (
+                  last &&
+                  last.action === entry.action &&
+                  last.task?.id === entry.task?.id &&
+                  last.user.id === entry.user.id &&
+                  Math.abs(new Date(last.createdAt).getTime() - new Date(entry.createdAt).getTime()) < 3600000
+                ) {
+                  last.count++
+                } else {
+                  grouped.push({ ...entry, count: 1 })
+                }
+              }
+              return grouped
+            })().map((entry) => {
               const initials = entry.user.name
                 .split(" ")
                 .map((n) => n[0])
@@ -117,6 +132,11 @@ export function RecentActivityWidget({ data }: RecentActivityWidgetProps) {
                       {entry.task && (
                         <span className="font-medium text-foreground">
                           {" "}{entry.task.title}
+                        </span>
+                      )}
+                      {entry.count > 1 && (
+                        <span className="text-muted-foreground/80 font-medium">
+                          {" "}(x{entry.count})
                         </span>
                       )}
                       {entry.project && (

@@ -244,7 +244,7 @@ export function GoalsPageClient({ goals: initialGoals, workspaceId }: { goals: G
       </div>
 
       {topLevelGoals.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
           <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
             <Target className="h-8 w-8 text-[#18181B]" />
           </div>

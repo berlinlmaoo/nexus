@@ -398,6 +398,9 @@ export function WidgetGrid({ data, loading }: WidgetGridProps) {
         </Button>
       </div>
 
+      {/* Hide resize handles */}
+      <style>{`[class*='react-resizable-handle'] { display: none !important; }`}</style>
+
       {/* Grid */}
       {widthMounted && (
         <ResponsiveGridLayout

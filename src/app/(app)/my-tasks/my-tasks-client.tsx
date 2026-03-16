@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { PriorityBadge } from "@/components/tasks/priority-badge"
@@ -212,31 +213,39 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: Task[]; project
             {visibleTasks.length} task{visibleTasks.length !== 1 ? "s" : ""} assigned to you
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Sort by:</span>
-          <select
-            className="h-8 rounded-md border border-input bg-background px-3 text-xs"
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortBy)}
-          >
-            <option value="dueDate">Due Date</option>
-            <option value="priority">Priority</option>
-            <option value="project">Project</option>
-            <option value="dateAdded">Date Added</option>
-          </select>
-        </div>
+        {visibleTasks.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Sort by:</span>
+            <select
+              className="h-8 rounded-md border border-input bg-background px-3 text-xs"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortBy)}
+            >
+              <option value="dueDate">Due Date</option>
+              <option value="priority">Priority</option>
+              <option value="project">Project</option>
+              <option value="dateAdded">Date Added</option>
+            </select>
+          </div>
+        )}
       </div>
 
       {visibleTasks.length === 0 ? (
-        <Card className="p-16 text-center rounded-xl shadow-sm animate-fade-in">
-          <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-2xl bg-muted/60 mb-4">
-            <CheckSquare className="h-8 w-8 text-muted-foreground/50" />
-          </div>
-          <h3 className="text-lg font-semibold">No tasks assigned</h3>
-          <p className="text-sm text-muted-foreground mt-1.5 max-w-xs mx-auto">
-            You&apos;re all caught up! Tasks assigned to you will appear here.
-          </p>
-        </Card>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <Card className="p-16 text-center rounded-xl shadow-sm animate-fade-in">
+            <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-2xl bg-muted/60 mb-4">
+              <CheckSquare className="h-8 w-8 text-muted-foreground/50" />
+            </div>
+            <h3 className="text-lg font-semibold">No tasks assigned</h3>
+            <p className="text-sm text-muted-foreground mt-1.5 max-w-xs mx-auto">
+              You&apos;re all caught up! Tasks assigned to you will appear here.
+            </p>
+            <Link href="/projects" className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-md bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors">
+              <FolderKanban className="h-4 w-4" />
+              Browse Projects
+            </Link>
+          </Card>
+        </div>
       ) : (
         <div className="space-y-4">
           {sections.map(({ name, tasks: sectionTasks }) => {

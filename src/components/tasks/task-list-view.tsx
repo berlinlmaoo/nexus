@@ -159,11 +159,11 @@ function SortableTaskRow({
         <button
           onClick={(e) => {
             e.stopPropagation()
-            onToggleStatus(task.id, !isDone)
+            onToggleStatus(task.id, isDone ? false : true)
           }}
         >
-          {isDone ? (
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
+          {task.status === "DONE" ? (
+            <CheckCircle2 className="h-4 w-4 text-green-600 fill-green-600" />
           ) : (
             <Circle className="h-4 w-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
           )}

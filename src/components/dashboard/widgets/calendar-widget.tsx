@@ -60,7 +60,7 @@ export function CalendarWidget({ data }: CalendarWidgetProps) {
   }, [currentMonth])
 
   return (
-    <div className="flex flex-col h-full w-full">
+    <div className="flex flex-col h-full w-full overflow-hidden px-1">
       {/* Header with nav */}
       <div className="flex items-center justify-between flex-shrink-0 mb-2">
         <div className="flex items-center gap-1.5">
