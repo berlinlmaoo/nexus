@@ -37,7 +37,16 @@ import {
   Tag,
   Loader2,
   GripVertical,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
 } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { format, isPast, isToday } from "date-fns"
 import { cn } from "@/lib/utils"
 import { BatchActionsBar } from "./batch-actions"
@@ -300,6 +309,14 @@ export function TaskListView({
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
   const [activeTask, setActiveTask] = useState<TaskCardData | null>(null)
   const [overSectionId, setOverSectionId] = useState<string | null>(null)
+  const [renamingSection, setRenamingSection] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState("")
+  const [addingSectionName, setAddingSectionName] = useState("")
+  const [showAddSection, setShowAddSection] = useState(false)
+  const [creatingSec, setCreatingSec] = useState(false)
+  const [deletingSection, setDeletingSection] = useState<string | null>(null)
+  const sectionInputRef = useRef<HTMLInputElement>(null)
+  const renameInputRef = useRef<HTMLInputElement>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -382,6 +399,82 @@ export function TaskListView({
     setAddingTo(sectionId)
     setNewTitle("")
     setTimeout(() => inputRef.current?.focus(), 50)
+  }
+
+  const handleCreateSection = async () => {
+    if (!addingSectionName.trim() || !projectId) return
+    setCreatingSec(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/sections`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: addingSectionName.trim() }),
+      })
+      if (res.ok) {
+        setAddingSectionName("")
+        setShowAddSection(false)
+        router.refresh()
+      }
+    } catch (error) {
+      console.error("Failed to create section:", error)
+    } finally {
+      setCreatingSec(false)
+    }
+  }
+
+  const handleRenameSection = async (sectionId: string) => {
+    if (!renameValue.trim() || !projectId) return
+    try {
+      await fetch(`/api/projects/${projectId}/sections`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: sectionId, name: renameValue.trim() }),
+      })
+      setRenamingSection(null)
+      router.refresh()
+    } catch (error) {
+      console.error("Failed to rename section:", error)
+    }
+  }
+
+  const handleDeleteSection = async (sectionId: string) => {
+    if (!projectId) return
+    setDeletingSection(sectionId)
+    try {
+      await fetch(`/api/projects/${projectId}/sections`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: sectionId }),
+      })
+      router.refresh()
+    } catch (error) {
+      console.error("Failed to delete section:", error)
+    } finally {
+      setDeletingSection(null)
+    }
+  }
+
+  const handleReorderSection = async (sectionId: string, newPosition: number) => {
+    if (!projectId) return
+    // Optimistic update
+    setSections((prev) => {
+      const idx = prev.findIndex((s) => s.id === sectionId)
+      if (idx === -1) return prev
+      const reordered = [...prev]
+      const [moved] = reordered.splice(idx, 1)
+      reordered.splice(newPosition, 0, moved)
+      return reordered
+    })
+    try {
+      await fetch(`/api/projects/${projectId}/sections`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: sectionId, position: newPosition }),
+      })
+      router.refresh()
+    } catch {
+      setSections(initialSections)
+    }
   }
 
   const findTaskAndSection = useCallback(
@@ -571,7 +664,7 @@ export function TaskListView({
           </div>
         </div>
 
-        {sections.map((section) => {
+        {sections.map((section, sectionIndex) => {
           const isCollapsed = collapsed[section.id]
           const sorted = sortTasks(section.tasks)
           const isOver = overSectionId === section.id
@@ -579,20 +672,104 @@ export function TaskListView({
           return (
             <div key={section.id}>
               {/* Section header row */}
-              <button
-                className="flex w-full items-center gap-2 h-9 px-2 bg-muted/20 border-b border-border/50 hover:bg-muted/40 transition-colors"
-                onClick={() => toggleCollapse(section.id)}
+              <div
+                className="group/section flex w-full items-center gap-2 h-9 px-2 bg-muted/20 border-b border-border/50 hover:bg-muted/40 transition-colors"
               >
-                {isCollapsed ? (
-                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                ) : (
-                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                {/* Drag handle for section reorder */}
+                {projectId && sections.length > 1 && (
+                  <div className="flex items-center gap-0.5">
+                    {sectionIndex > 0 && (
+                      <button
+                        className="opacity-0 group-hover/section:opacity-100 text-muted-foreground/40 hover:text-muted-foreground transition-opacity p-0.5"
+                        onClick={() => handleReorderSection(section.id, sectionIndex - 1)}
+                        title="Move section up"
+                      >
+                        <ArrowUp className="h-3 w-3" />
+                      </button>
+                    )}
+                    {sectionIndex < sections.length - 1 && (
+                      <button
+                        className="opacity-0 group-hover/section:opacity-100 text-muted-foreground/40 hover:text-muted-foreground transition-opacity p-0.5"
+                        onClick={() => handleReorderSection(section.id, sectionIndex + 1)}
+                        title="Move section down"
+                      >
+                        <ArrowDown className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
                 )}
-                <span className="font-semibold text-[13px] text-foreground">{section.name}</span>
-                <span className="text-[11px] text-muted-foreground tabular-nums">
-                  {section.tasks.length}
-                </span>
-              </button>
+
+                <button onClick={() => toggleCollapse(section.id)} className="flex items-center">
+                  {isCollapsed ? (
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
+                </button>
+
+                {renamingSection === section.id ? (
+                  <input
+                    ref={renameInputRef}
+                    type="text"
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleRenameSection(section.id)
+                      if (e.key === "Escape") setRenamingSection(null)
+                    }}
+                    onBlur={() => {
+                      if (renameValue.trim()) handleRenameSection(section.id)
+                      else setRenamingSection(null)
+                    }}
+                    className="font-semibold text-[13px] bg-transparent outline-none border-b border-foreground/30 px-0.5"
+                    autoFocus
+                  />
+                ) : (
+                  <button onClick={() => toggleCollapse(section.id)} className="flex items-center gap-2">
+                    <span className="font-semibold text-[13px] text-foreground">{section.name}</span>
+                    <span className="text-[11px] text-muted-foreground tabular-nums">
+                      {section.tasks.length}
+                    </span>
+                  </button>
+                )}
+
+                {/* Section context menu */}
+                {projectId && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="ml-auto opacity-0 group-hover/section:opacity-100 p-1 rounded hover:bg-muted/60 transition-opacity text-muted-foreground">
+                        <MoreHorizontal className="h-3.5 w-3.5" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-44">
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setRenamingSection(section.id)
+                          setRenameValue(section.name)
+                          setTimeout(() => renameInputRef.current?.focus(), 50)
+                        }}
+                      >
+                        <Pencil className="h-3.5 w-3.5 mr-2" />
+                        Rename Section
+                      </DropdownMenuItem>
+                      {sections.length > 1 && (
+                        <DropdownMenuItem
+                          className="text-red-600 focus:text-red-600"
+                          disabled={deletingSection === section.id}
+                          onClick={() => {
+                            if (confirm(`Delete "${section.name}"? Tasks will be moved to the first remaining section.`)) {
+                              handleDeleteSection(section.id)
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-2" />
+                          Delete Section
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
 
               {/* Tasks */}
               {!isCollapsed && (
@@ -672,6 +849,43 @@ export function TaskListView({
             </div>
           )
         })}
+
+        {/* Add Section */}
+        {projectId && (
+          showAddSection ? (
+            <div className="flex items-center gap-2 h-9 px-2 bg-muted/10 border-b border-border/50">
+              <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+              <input
+                ref={sectionInputRef}
+                type="text"
+                placeholder="Section name..."
+                value={addingSectionName}
+                onChange={(e) => setAddingSectionName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && addingSectionName.trim()) handleCreateSection()
+                  if (e.key === "Escape") { setShowAddSection(false); setAddingSectionName("") }
+                }}
+                onBlur={() => { if (!addingSectionName.trim()) setShowAddSection(false) }}
+                disabled={creatingSec}
+                className="flex-1 text-[13px] bg-transparent outline-none placeholder:text-muted-foreground/50 font-semibold"
+                autoFocus
+              />
+              {creatingSec && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+            </div>
+          ) : (
+            <button
+              className="flex items-center gap-2 w-full h-8 px-2 text-[13px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/20 transition-colors"
+              onClick={() => {
+                setShowAddSection(true)
+                setAddingSectionName("")
+                setTimeout(() => sectionInputRef.current?.focus(), 50)
+              }}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Add Section</span>
+            </button>
+          )
+        )}
 
         {/* Bulk actions bar */}
         <BatchActionsBar
