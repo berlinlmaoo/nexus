@@ -358,18 +358,18 @@ export function TaskDetailPanel({
   ]
 
   return (
-    <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[45%] sm:min-w-[440px] sm:max-w-[680px] bg-card border-l border-border/60 shadow-overlay-200 animate-slide-in-right flex flex-col">
-      {/* Header — Plane style: clean, minimal chrome */}
-      <div className="flex items-center justify-between border-b border-border/50 px-5 h-[52px] shrink-0 bg-surface-1 dark:bg-surface-1">
-        <div className="flex items-center gap-2.5">
+    <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[45%] sm:min-w-[440px] sm:max-w-[680px] bg-background border-l shadow-2xl animate-slide-in-right flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b px-6 h-12 shrink-0">
+        <div className="flex items-center gap-3">
           {/* Mark complete button */}
           <button
             onClick={handleToggleComplete}
             className={cn(
-              "flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-all duration-200",
+              "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
               isDone
                 ? "border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-400"
-                : "border-border/60 hover:bg-surface-2 dark:hover:bg-surface-2"
+                : "border-border hover:bg-muted"
             )}
           >
             {isDone ? (
@@ -380,14 +380,14 @@ export function TaskDetailPanel({
             {isDone ? "Completed" : "Mark complete"}
           </button>
         </div>
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-1">
           {/* Like button */}
           <button
             className={cn(
-              "flex items-center gap-1 rounded-md px-2 py-1.5 text-xs transition-all duration-200",
+              "flex items-center gap-1 rounded px-1.5 py-1 text-xs transition-colors",
               liked
-                ? "text-red-500 bg-red-50 dark:bg-red-950/50"
-                : "text-muted-foreground hover:bg-surface-2"
+                ? "text-red-500 bg-red-50 dark:bg-red-950"
+                : "text-muted-foreground hover:bg-muted"
             )}
             onClick={toggleLike}
             disabled={togglingLike}
@@ -398,10 +398,10 @@ export function TaskDetailPanel({
           </button>
           <button
             className={cn(
-              "rounded-md p-1.5 transition-all duration-200",
+              "rounded p-1.5 transition-colors",
               isFollowing
-                ? "text-foreground bg-surface-2"
-                : "text-muted-foreground hover:bg-surface-2"
+                ? "text-foreground bg-muted"
+                : "text-muted-foreground hover:bg-muted"
             )}
             onClick={toggleFollow}
             disabled={togglingFollow}
@@ -410,14 +410,14 @@ export function TaskDetailPanel({
             {isFollowing ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
           </button>
           <button
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 transition-all duration-200"
+            className="rounded p-1.5 text-muted-foreground hover:bg-muted transition-colors"
             onClick={() => router.push(`/tasks/${task.id}`)}
             title="Open full page"
           >
             <Maximize2 className="h-3.5 w-3.5" />
           </button>
           <button
-            className="rounded-md p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/50 transition-all duration-200"
+            className="rounded p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
             onClick={handleDelete}
             disabled={deleting}
             title="Delete task"
@@ -428,9 +428,8 @@ export function TaskDetailPanel({
               <Trash2 className="h-3.5 w-3.5" />
             )}
           </button>
-          <div className="w-px h-4 bg-border/50 mx-1" />
           <button
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-2 transition-all duration-200"
+            className="rounded p-1.5 text-muted-foreground hover:bg-muted transition-colors"
             onClick={onClose}
           >
             <X className="h-4 w-4" />
@@ -441,64 +440,64 @@ export function TaskDetailPanel({
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto">
         {/* Title */}
-        <div className="px-5 pt-5 pb-2">
+        <div className="px-6 pt-6 pb-2">
           <input
-            className="w-full text-xl font-semibold bg-transparent border-none outline-none focus:ring-0 p-0 text-foreground placeholder:text-muted-foreground/40"
+            className="w-full text-xl font-semibold bg-transparent border-none outline-none focus:ring-0 p-0 text-foreground placeholder:text-muted-foreground/50"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Task title"
           />
         </div>
 
-        {/* Fields as property rows — Plane style: icon + label + value */}
-        <div className="px-5 py-3 space-y-0">
+        {/* Fields as rows - Asana style */}
+        <div className="px-6 py-3 space-y-0">
           {/* Assignee row */}
-          <div className="flex items-center py-2.5 border-b border-border/30">
-            <div className="flex items-center gap-2 w-[130px] shrink-0">
-              <User className="h-3.5 w-3.5 text-muted-foreground/60" />
-              <span className="text-[13px] text-muted-foreground">Assignee</span>
+          <div className="flex items-center py-2 border-b border-border/30">
+            <div className="flex items-center gap-2 w-32 shrink-0">
+              <User className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Assignee</span>
             </div>
             <div className="flex-1">
               {task.assignees.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
                   {task.assignees.map((a) => (
-                    <div key={a.id} className="flex items-center gap-1.5 rounded-md border border-border/50 bg-surface-2 px-2 py-0.5">
+                    <div key={a.id} className="flex items-center gap-1.5 rounded-full border px-2 py-0.5">
                       <UserAvatar user={{ name: a.name, avatar: a.avatar }} size="xs" className="h-4 w-4" />
                       <span className="text-xs">{a.name}</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <span className="text-xs text-muted-foreground/40">No assignee</span>
+                <span className="text-xs text-muted-foreground/50">No assignee</span>
               )}
             </div>
           </div>
 
           {/* Due Date row */}
-          <div className="flex items-center py-2.5 border-b border-border/30">
-            <div className="flex items-center gap-2 w-[130px] shrink-0">
-              <Calendar className="h-3.5 w-3.5 text-muted-foreground/60" />
-              <span className="text-[13px] text-muted-foreground">Due date</span>
+          <div className="flex items-center py-2 border-b border-border/30">
+            <div className="flex items-center gap-2 w-32 shrink-0">
+              <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Due date</span>
             </div>
             <div className="flex-1">
               <input
                 type="date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
-                className="h-7 rounded-md border border-border/50 bg-transparent px-2 text-xs outline-none focus:border-primary/40 transition-colors"
+                className="h-7 rounded border bg-transparent px-2 text-xs outline-none focus:border-foreground/30"
               />
             </div>
           </div>
 
           {/* Status row */}
-          <div className="flex items-center py-2.5 border-b border-border/30">
-            <div className="flex items-center gap-2 w-[130px] shrink-0">
-              <FolderKanban className="h-3.5 w-3.5 text-muted-foreground/60" />
-              <span className="text-[13px] text-muted-foreground">Status</span>
+          <div className="flex items-center py-2 border-b border-border/30">
+            <div className="flex items-center gap-2 w-32 shrink-0">
+              <FolderKanban className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Status</span>
             </div>
             <div className="flex-1">
               <select
-                className="h-7 rounded-md border border-border/50 bg-transparent px-2 text-xs outline-none focus:border-primary/40 transition-colors"
+                className="h-7 rounded border bg-transparent px-2 text-xs outline-none focus:border-foreground/30"
                 value={status}
                 onChange={(e) => setStatus(e.target.value as TaskCardData["status"])}
               >
@@ -512,14 +511,14 @@ export function TaskDetailPanel({
           </div>
 
           {/* Priority row */}
-          <div className="flex items-center py-2.5 border-b border-border/30">
-            <div className="flex items-center gap-2 w-[130px] shrink-0">
-              <Flag className="h-3.5 w-3.5 text-muted-foreground/60" />
-              <span className="text-[13px] text-muted-foreground">Priority</span>
+          <div className="flex items-center py-2 border-b border-border/30">
+            <div className="flex items-center gap-2 w-32 shrink-0">
+              <Flag className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Priority</span>
             </div>
             <div className="flex-1">
               <select
-                className="h-7 rounded-md border border-border/50 bg-transparent px-2 text-xs outline-none focus:border-primary/40 transition-colors"
+                className="h-7 rounded border bg-transparent px-2 text-xs outline-none focus:border-foreground/30"
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as TaskCardData["priority"])}
               >
@@ -533,10 +532,10 @@ export function TaskDetailPanel({
           </div>
 
           {/* Task Type row */}
-          <div className="flex items-center py-2.5 border-b border-border/30">
-            <div className="flex items-center gap-2 w-[130px] shrink-0">
-              <ListTodo className="h-3.5 w-3.5 text-muted-foreground/60" />
-              <span className="text-[13px] text-muted-foreground">Type</span>
+          <div className="flex items-center py-2 border-b border-border/30">
+            <div className="flex items-center gap-2 w-32 shrink-0">
+              <ListTodo className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Type</span>
             </div>
             <div className="flex-1 flex gap-1.5">
               {([
@@ -550,10 +549,10 @@ export function TaskDetailPanel({
                     key={opt.value}
                     onClick={() => setTaskType(opt.value)}
                     className={cn(
-                      "flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium transition-all duration-200",
+                      "flex items-center gap-1 rounded border px-2 py-1 text-[11px] font-medium transition-all",
                       taskType === opt.value
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border/50 hover:bg-surface-2"
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-border hover:bg-muted"
                     )}
                   >
                     <Icon className="h-3 w-3" />
@@ -565,26 +564,26 @@ export function TaskDetailPanel({
           </div>
 
           {taskType === "APPROVAL" && (
-            <div className="flex items-center py-2.5 border-b border-border/30">
-              <div className="flex items-center gap-2 w-[130px] shrink-0">
-                <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground/60" />
-                <span className="text-[13px] text-muted-foreground">Approval</span>
+            <div className="flex items-center py-2 border-b border-border/30">
+              <div className="flex items-center gap-2 w-32 shrink-0">
+                <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">Approval</span>
               </div>
               <div className="flex-1 flex flex-wrap gap-1.5">
                 {([
-                  { value: "PENDING" as const, label: "Pending", className: "border-border/50 bg-surface-2 text-muted-foreground" },
-                  { value: "APPROVED" as const, label: "Approve", className: "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400" },
-                  { value: "CHANGES_REQUESTED" as const, label: "Changes", className: "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400" },
-                  { value: "REJECTED" as const, label: "Reject", className: "border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-400" },
+                  { value: "PENDING" as const, label: "Pending", className: "border-border bg-muted/50 text-muted-foreground" },
+                  { value: "APPROVED" as const, label: "Approve", className: "border-emerald-300 bg-emerald-50 text-emerald-700" },
+                  { value: "CHANGES_REQUESTED" as const, label: "Changes", className: "border-amber-300 bg-amber-50 text-amber-700" },
+                  { value: "REJECTED" as const, label: "Reject", className: "border-red-300 bg-red-50 text-red-700" },
                 ]).map((opt) => (
                   <button
                     key={opt.value}
                     onClick={() => setApprovalStatus(opt.value)}
                     className={cn(
-                      "rounded-md border px-2 py-1 text-[11px] font-medium transition-all duration-200",
+                      "rounded border px-2 py-1 text-[11px] font-medium transition-all",
                       approvalStatus === opt.value
                         ? opt.className + " ring-1 ring-offset-1 ring-ring"
-                        : "border-border/50 hover:bg-surface-2"
+                        : "border-border hover:bg-muted"
                     )}
                   >
                     {opt.label}
@@ -595,10 +594,10 @@ export function TaskDetailPanel({
           )}
 
           {/* Recurring row */}
-          <div className="flex items-start py-2.5 border-b border-border/30">
-            <div className="flex items-center gap-2 w-[130px] shrink-0 pt-1">
-              <Repeat className="h-3.5 w-3.5 text-muted-foreground/60" />
-              <span className="text-[13px] text-muted-foreground">Repeat</span>
+          <div className="flex items-start py-2 border-b border-border/30">
+            <div className="flex items-center gap-2 w-32 shrink-0 pt-1">
+              <Repeat className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Repeat</span>
             </div>
             <div className="flex-1">
               <select
@@ -612,7 +611,7 @@ export function TaskDetailPanel({
                     setRecurPattern({ ...recurPattern, frequency: val as typeof recurPattern.frequency })
                   }
                 }}
-                className="h-7 rounded-md border border-border/50 bg-transparent px-2 text-xs outline-none focus:border-primary/40 transition-colors"
+                className="h-7 rounded border bg-transparent px-2 text-xs outline-none focus:border-foreground/30"
               >
                 <option value="NONE">None</option>
                 <option value="DAILY">Daily</option>
@@ -621,7 +620,7 @@ export function TaskDetailPanel({
                 <option value="YEARLY">Yearly</option>
               </select>
               {isRecurring && (
-                <div className="mt-2.5 space-y-2">
+                <div className="mt-2 space-y-2">
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">Every</span>
                     <input
@@ -630,7 +629,7 @@ export function TaskDetailPanel({
                       max={99}
                       value={recurPattern.interval}
                       onChange={(e) => setRecurPattern({ ...recurPattern, interval: parseInt(e.target.value) || 1 })}
-                      className="h-6 w-12 rounded-md border border-border/50 bg-transparent px-1.5 text-xs"
+                      className="h-6 w-12 rounded border bg-transparent px-1.5 text-xs"
                     />
                     <span className="text-xs text-muted-foreground">
                       {recurPattern.frequency === "DAILY" && (recurPattern.interval === 1 ? "day" : "days")}
@@ -651,10 +650,10 @@ export function TaskDetailPanel({
                             setRecurPattern({ ...recurPattern, daysOfWeek: next })
                           }}
                           className={cn(
-                            "h-6 w-8 rounded-md text-[10px] font-medium border transition-all duration-200",
+                            "h-6 w-8 rounded text-[10px] font-medium border transition-colors",
                             (recurPattern.daysOfWeek ?? []).includes(idx)
-                              ? "bg-primary text-primary-foreground border-primary"
-                              : "border-border/50 hover:bg-surface-2"
+                              ? "bg-foreground text-background border-foreground"
+                              : "border-border hover:bg-muted"
                           )}
                         >
                           {day.slice(0, 2)}
@@ -671,7 +670,7 @@ export function TaskDetailPanel({
                         max={31}
                         value={recurPattern.dayOfMonth ?? 1}
                         onChange={(e) => setRecurPattern({ ...recurPattern, dayOfMonth: parseInt(e.target.value) || 1 })}
-                        className="h-6 w-12 rounded-md border border-border/50 bg-transparent px-1.5 text-xs"
+                        className="h-6 w-12 rounded border bg-transparent px-1.5 text-xs"
                       />
                     </div>
                   )}
@@ -682,7 +681,7 @@ export function TaskDetailPanel({
                         type="date"
                         value={recurPattern.endDate ?? ""}
                         onChange={(e) => setRecurPattern({ ...recurPattern, endDate: e.target.value || undefined })}
-                        className="h-6 rounded-md border border-border/50 bg-transparent px-1.5 text-xs"
+                        className="h-6 rounded border bg-transparent px-1.5 text-xs"
                       />
                       <button
                         onClick={() => {
@@ -698,7 +697,7 @@ export function TaskDetailPanel({
                   {recurPattern.endDate === undefined && (
                     <button
                       onClick={() => setRecurPattern({ ...recurPattern, endDate: "" })}
-                      className="text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                      className="text-[11px] text-muted-foreground hover:text-foreground"
                     >
                       + Set end date
                     </button>
@@ -709,10 +708,10 @@ export function TaskDetailPanel({
           </div>
 
           {/* Time Tracking row */}
-          <div className="flex items-center py-2.5 border-b border-border/30">
-            <div className="flex items-center gap-2 w-[130px] shrink-0">
-              <Clock className="h-3.5 w-3.5 text-muted-foreground/60" />
-              <span className="text-[13px] text-muted-foreground">Time</span>
+          <div className="flex items-center py-2 border-b border-border/30">
+            <div className="flex items-center gap-2 w-32 shrink-0">
+              <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Time</span>
             </div>
             <div className="flex-1">
               <TimeTracker taskId={task.id} />
@@ -720,15 +719,15 @@ export function TaskDetailPanel({
           </div>
 
           {/* Tags row */}
-          <div className="flex items-start py-2.5 border-b border-border/30">
-            <div className="flex items-center gap-2 w-[130px] shrink-0 pt-1">
-              <Tag className="h-3.5 w-3.5 text-muted-foreground/60" />
-              <span className="text-[13px] text-muted-foreground">Tags</span>
+          <div className="flex items-start py-2 border-b border-border/30">
+            <div className="flex items-center gap-2 w-32 shrink-0 pt-1">
+              <Tag className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Tags</span>
             </div>
             <div className="flex-1">
               <div className="flex flex-wrap gap-1 mb-1.5">
                 {tags.map((tag) => (
-                  <Badge key={tag} variant="secondary" className="gap-1 text-[11px] h-5 bg-surface-2 border-border/40">
+                  <Badge key={tag} variant="secondary" className="gap-1 text-[11px] h-5">
                     {tag}
                     <button onClick={() => setTags(tags.filter((t) => t !== tag))}><X className="h-2.5 w-2.5" /></button>
                   </Badge>
@@ -740,11 +739,11 @@ export function TaskDetailPanel({
                   value={tagInput}
                   onChange={(e) => setTagInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddTag() } }}
-                  className="h-6 flex-1 rounded-md border border-border/50 bg-transparent px-2 text-xs outline-none placeholder:text-muted-foreground/40 focus:border-primary/40 transition-colors"
+                  className="h-6 flex-1 rounded border bg-transparent px-2 text-xs outline-none placeholder:text-muted-foreground/50 focus:border-foreground/30"
                 />
                 <button
                   onClick={handleAddTag}
-                  className="h-6 rounded-md border border-border/50 px-2 text-[11px] font-medium hover:bg-surface-2 transition-colors"
+                  className="h-6 rounded border px-2 text-[11px] font-medium hover:bg-muted transition-colors"
                 >
                   Add
                 </button>
@@ -753,10 +752,10 @@ export function TaskDetailPanel({
           </div>
         </div>
 
-        {/* Description — Plane style: subtle bg container */}
-        <div className="px-5 py-3">
-          <div className="text-[13px] font-medium text-muted-foreground mb-2">Description</div>
-          <div className="rounded-lg border border-border/40 bg-surface-2/50 dark:bg-surface-2/50 px-4 py-3 text-sm min-h-[80px]">
+        {/* Description */}
+        <div className="px-6 py-3">
+          <div className="text-xs font-medium text-muted-foreground mb-2">Description</div>
+          <div className="rounded-lg border border-border/50 bg-muted/20 px-4 py-3 text-sm min-h-[80px]">
             <BlockEditor
               initialBlocks={descriptionBlocksRef.current}
               onChange={(blocks) => {
@@ -770,19 +769,19 @@ export function TaskDetailPanel({
           </div>
         </div>
 
-        {/* Tabs — Plane style: clean underline tabs */}
-        <div className="px-5 pt-2">
-          <div className="flex border-b border-border/40 overflow-x-auto">
+        {/* Tabs */}
+        <div className="px-6 pt-2">
+          <div className="flex border-b overflow-x-auto">
             {tabs.map((tab) => {
               const Icon = tab.icon
               return (
                 <button
                   key={tab.key}
                   className={cn(
-                    "flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 transition-all duration-200 whitespace-nowrap",
+                    "flex items-center gap-1 px-3 py-2 text-xs font-medium border-b-2 transition-all duration-200 whitespace-nowrap",
                     activeTab === tab.key
-                      ? "border-primary text-foreground"
-                      : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+                      ? "border-foreground text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
                   )}
                   onClick={() => setActiveTab(tab.key)}
                 >
@@ -797,7 +796,7 @@ export function TaskDetailPanel({
             {activeTab === "subtasks" && (
               <>
                 {subtasks.map((st) => (
-                  <div key={st.id} className="flex items-center gap-2 py-1.5 group rounded-md hover:bg-surface-2/50 px-1 -mx-1 transition-colors">
+                  <div key={st.id} className="flex items-center gap-2 py-1.5 group">
                     <button
                       onClick={async () => {
                         const newStatus = st.status === "DONE" ? "TODO" : "DONE"
@@ -814,7 +813,7 @@ export function TaskDetailPanel({
                       {st.status === "DONE" ? (
                         <CheckCircle2 className="h-4 w-4 text-green-600" />
                       ) : (
-                        <Circle className="h-4 w-4 text-muted-foreground/40" />
+                        <Circle className="h-4 w-4 text-muted-foreground" />
                       )}
                     </button>
                     <span className={cn("text-[13px] flex-1 min-w-0 truncate", st.status === "DONE" && "line-through text-muted-foreground")}>{st.title}</span>
@@ -842,7 +841,7 @@ export function TaskDetailPanel({
                         } catch {}
                       }}
                       className={cn(
-                        "h-5 w-24 rounded-md border border-border/40 bg-transparent px-1 text-[10px] outline-none shrink-0 opacity-50 hover:opacity-100 focus:opacity-100 transition-opacity",
+                        "h-5 w-24 rounded border bg-transparent px-1 text-[10px] outline-none shrink-0 opacity-60 hover:opacity-100 focus:opacity-100 transition-opacity",
                         st.dueDate && new Date(st.dueDate) < new Date() && st.status !== "DONE" && "text-red-500 border-red-300"
                       )}
                       title="Due date"
@@ -855,12 +854,12 @@ export function TaskDetailPanel({
                     value={newSubtaskTitle}
                     onChange={(e) => setNewSubtaskTitle(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddSubtask() } }}
-                    className="h-7 flex-1 rounded-md border border-border/50 bg-transparent px-2 text-xs outline-none placeholder:text-muted-foreground/40"
+                    className="h-7 flex-1 rounded border bg-transparent px-2 text-xs outline-none placeholder:text-muted-foreground/50"
                   />
                   <button
                     onClick={handleAddSubtask}
                     disabled={addingSubtask}
-                    className="h-7 rounded-md border border-border/50 px-2 text-xs font-medium hover:bg-surface-2 transition-colors"
+                    className="h-7 rounded border px-2 text-xs font-medium hover:bg-muted transition-colors"
                   >
                     {addingSubtask ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
                   </button>
@@ -898,21 +897,21 @@ export function TaskDetailPanel({
         </div>
       </div>
 
-      {/* Footer — Plane style: clean save bar */}
-      <div className="border-t border-border/50 px-5 py-3 flex justify-end gap-2 shrink-0 bg-surface-1 dark:bg-surface-1">
+      {/* Footer with save */}
+      <div className="border-t px-6 py-3 flex justify-end gap-2 shrink-0">
         <button
           onClick={onClose}
-          className="h-8 rounded-md border border-border/50 px-4 text-xs font-medium hover:bg-surface-2 transition-all duration-200 active:scale-[0.98]"
+          className="h-8 rounded-lg border px-4 text-xs font-medium hover:bg-muted transition-all duration-200 active:scale-95"
         >
           Cancel
         </button>
         <button
           onClick={handleSave}
           disabled={saving}
-          className="h-8 rounded-md bg-primary px-4 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-all duration-200 disabled:opacity-50 active:scale-[0.98] shadow-raised-100 flex items-center gap-1.5"
+          className="h-8 rounded-lg bg-foreground px-4 text-xs font-medium text-background hover:bg-foreground/90 transition-all duration-200 disabled:opacity-50 active:scale-95 shadow-sm flex items-center gap-1.5"
         >
           {saving && <Loader2 className="h-3 w-3 animate-spin" />}
-          Save changes
+          Save
         </button>
       </div>
     </div>
