@@ -240,13 +240,15 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
     return () => window.removeEventListener("keydown", handler)
   }, [selectedTask, createDialogOpen])
 
-  // All tasks flat
-  const allTasks = useMemo(() =>
+  // All tasks flat — with optimistic local state
+  const serverTasks = useMemo(() =>
     project.taskLists.flatMap((tl) =>
       tl.tasks.map((t) => ({ ...t, taskListName: tl.name }))
     ),
     [project.taskLists]
   )
+  const [allTasks, setAllTasks] = useState(serverTasks)
+  useEffect(() => { setAllTasks(serverTasks) }, [serverTasks])
 
   // Filter + search
   const filteredTasks = useMemo(() => {
@@ -351,6 +353,10 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
 
   const handleStatusChange = useCallback(
     async (taskId: string, newStatus: TaskCardData["status"]) => {
+      // Optimistic update — all views see the change instantly
+      setAllTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
+      )
       try {
         await fetch(`/api/tasks/${taskId}`, {
           method: "PATCH",
@@ -360,9 +366,11 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
         router.refresh()
       } catch (error) {
         console.error("Failed to update task status:", error)
+        // Revert on error
+        setAllTasks(serverTasks)
       }
     },
-    [router]
+    [router, serverTasks]
   )
 
   const handleAddTask = useCallback((taskListId: string) => {
