@@ -80,7 +80,9 @@ const TRIGGERS: Record<string, string> = {
 
 const CONDITIONS: Record<string, string> = {
   PRIORITY_IS: "If priority is",
+  STATUS_IS: "If status is",
   ASSIGNEE_IS: "If assignee is",
+  TAGS_CONTAIN: "If tags contain",
   CUSTOM_FIELD_EQUALS: "If custom field equals",
 }
 
@@ -213,6 +215,23 @@ function ValueInput({
           {PRIORITY_VALUES.map((p) => (
             <SelectItem key={p} value={p}>
               {p.charAt(0) + p.slice(1).toLowerCase()}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    )
+  }
+
+  if (context === "condition" && parentType === "STATUS_IS") {
+    return (
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="h-9 w-40">
+          <SelectValue placeholder="Select status" />
+        </SelectTrigger>
+        <SelectContent>
+          {STATUS_VALUES.map((s) => (
+            <SelectItem key={s} value={s}>
+              {s.replace(/_/g, " ")}
             </SelectItem>
           ))}
         </SelectContent>

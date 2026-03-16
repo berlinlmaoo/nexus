@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
+import { extractTextFromTipTap } from '@/lib/tiptap-utils'
 
 export async function GET(req: NextRequest, { params }: { params: { docId: string } }) {
   const session = await auth()
@@ -25,7 +26,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { docId: str
 
   const data: Record<string, unknown> = {}
   if (body.title !== undefined) data.title = body.title
-  if (body.content !== undefined) data.content = body.content
+  if (body.content !== undefined) {
+    data.content = body.content
+    data.contentText = body.content ? extractTextFromTipTap(body.content) : null
+  }
   if (body.parentId !== undefined) data.parentId = body.parentId
   if (body.position !== undefined) data.position = body.position
   if (body.icon !== undefined) data.icon = body.icon

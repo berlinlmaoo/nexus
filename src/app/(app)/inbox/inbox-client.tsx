@@ -1,10 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Bell, CheckCheck, Circle, Inbox, Loader2 } from "lucide-react"
+import { Bell, CheckCheck, Circle, Inbox, Loader2, Trash2, ChevronDown, ChevronRight } from "lucide-react"
 
 interface Notification {
   id: string
@@ -14,20 +14,30 @@ interface Notification {
   read: boolean
   link: string | null
   createdAt: string
+  projectId: string | null
 }
 
-const TYPE_CONFIG: Record<string, { icon: string; color: string }> = {
-  TASK_ASSIGNED: { icon: "clipboard", color: "text-blue-600" },
-  TASK_COMPLETED: { icon: "check", color: "text-green-600" },
-  COMMENT_ADDED: { icon: "message", color: "text-foreground" },
-  MENTION: { icon: "at", color: "text-orange-600" },
-  DUE_DATE: { icon: "calendar", color: "text-red-600" },
+interface ProjectInfo {
+  id: string
+  name: string
+  color: string
 }
 
-export function InboxClient({ notifications: initialNotifications }: { notifications: Notification[] }) {
+type ViewTab = "all" | "by-project" | "by-type"
+
+export function InboxClient({
+  notifications: initialNotifications,
+  projectMap,
+}: {
+  notifications: Notification[]
+  projectMap: Record<string, ProjectInfo>
+}) {
   const [notifications, setNotifications] = useState<Notification[]>(initialNotifications)
   const [filter, setFilter] = useState<"all" | "unread">("all")
+  const [viewTab, setViewTab] = useState<ViewTab>("all")
   const [markingAll, setMarkingAll] = useState(false)
+  const [clearingRead, setClearingRead] = useState(false)
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
 
   const filtered = filter === "unread"
     ? notifications.filter(n => !n.read)
@@ -64,6 +74,34 @@ export function InboxClient({ notifications: initialNotifications }: { notificat
     }
   }
 
+  const readCount = notifications.filter(n => n.read).length
+
+  const clearAllRead = async () => {
+    setClearingRead(true)
+    try {
+      await fetch("/api/notifications?clearRead=true", { method: "DELETE" })
+      setNotifications(notifications.filter(n => !n.read))
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setClearingRead(false)
+    }
+  }
+
+  const deleteNotification = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      await fetch("/api/notifications", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      })
+      setNotifications(notifications.filter(n => n.id !== id))
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr)
     const now = new Date()
@@ -79,6 +117,106 @@ export function InboxClient({ notifications: initialNotifications }: { notificat
     return date.toLocaleDateString()
   }
 
+  const toggleGroup = (key: string) => {
+    setCollapsedGroups(prev => ({ ...prev, [key]: !prev[key] }))
+  }
+
+  // Group by project
+  const groupedByProject = useMemo(() => {
+    const groups: Record<string, Notification[]> = {}
+    for (const n of filtered) {
+      const key = n.projectId || "_none"
+      if (!groups[key]) groups[key] = []
+      groups[key].push(n)
+    }
+    return groups
+  }, [filtered])
+
+  // Group by type
+  const groupedByType = useMemo(() => {
+    const groups: Record<string, Notification[]> = {}
+    for (const n of filtered) {
+      const key = n.type
+      if (!groups[key]) groups[key] = []
+      groups[key].push(n)
+    }
+    return groups
+  }, [filtered])
+
+  const renderNotification = (notification: Notification) => (
+    <Card
+      key={notification.id}
+      className={`p-4 transition-colors cursor-pointer ${
+        !notification.read ? "bg-muted/50 border-muted" : "hover:bg-muted/30"
+      }`}
+      onClick={() => {
+        if (!notification.read) markRead(notification.id)
+        if (notification.link) window.location.href = notification.link
+      }}
+    >
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5">
+          {!notification.read ? (
+            <Circle className="h-2.5 w-2.5 fill-[#18181B] text-[#18181B]" />
+          ) : (
+            <Circle className="h-2.5 w-2.5 text-transparent" />
+          )}
+        </div>
+        <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+          <Bell className="h-4 w-4 text-[#18181B]" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <h4 className={`text-sm ${!notification.read ? "font-semibold" : "font-medium"}`}>
+              {notification.title}
+            </h4>
+            <div className="flex items-center gap-1 shrink-0">
+              <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                {formatDate(notification.createdAt)}
+              </span>
+              <button
+                onClick={(e) => deleteNotification(notification.id, e)}
+                className="rounded p-1 text-muted-foreground/40 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
+                title="Delete notification"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+          </div>
+          {notification.message && (
+            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{notification.message}</p>
+          )}
+          <Badge variant="secondary" className="mt-1.5 text-[10px]">{notification.type.replace(/_/g, " ")}</Badge>
+        </div>
+      </div>
+    </Card>
+  )
+
+  const renderGrouped = (groups: Record<string, Notification[]>, labelFn: (key: string) => string) => (
+    <div className="space-y-4">
+      {Object.entries(groups).map(([key, items]) => {
+        const isCollapsed = collapsedGroups[key]
+        return (
+          <div key={key}>
+            <button
+              onClick={() => toggleGroup(key)}
+              className="flex items-center gap-2 mb-2 text-sm font-medium text-foreground hover:text-foreground/80 transition-colors"
+            >
+              {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              {labelFn(key)}
+              <Badge variant="secondary" className="text-[10px]">{items.length}</Badge>
+            </button>
+            {!isCollapsed && (
+              <div className="space-y-2">
+                {items.map(renderNotification)}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+
   return (
     <div className="p-6 max-w-3xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -88,21 +226,51 @@ export function InboxClient({ notifications: initialNotifications }: { notificat
             {unreadCount > 0 ? `${unreadCount} unread notification${unreadCount !== 1 ? "s" : ""}` : "All caught up"}
           </p>
         </div>
-        {unreadCount > 0 && (
-          <Button variant="outline" size="sm" onClick={markAllRead} disabled={markingAll}>
-            {markingAll ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCheck className="h-4 w-4 mr-2" />}
-            Mark all read
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {readCount > 0 && (
+            <Button variant="outline" size="sm" onClick={clearAllRead} disabled={clearingRead}>
+              {clearingRead ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Clear all read
+            </Button>
+          )}
+          {unreadCount > 0 && (
+            <Button variant="outline" size="sm" onClick={markAllRead} disabled={markingAll}>
+              {markingAll ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCheck className="h-4 w-4 mr-2" />}
+              Mark all read
+            </Button>
+          )}
+        </div>
       </div>
 
+      {/* View tabs */}
+      <div className="flex items-center gap-2 mb-3">
+        {([
+          { key: "all" as const, label: "All" },
+          { key: "by-project" as const, label: "By Project" },
+          { key: "by-type" as const, label: "By Type" },
+        ]).map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setViewTab(tab.key)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+              viewTab === tab.key
+                ? "bg-[#18181B] text-white"
+                : "bg-muted text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Read/Unread filter */}
       <div className="flex items-center gap-2 mb-4">
         <button
           onClick={() => setFilter("all")}
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
             filter === "all"
-              ? "bg-[#18181B] text-white"
-              : "bg-muted text-muted-foreground hover:text-foreground"
+              ? "bg-foreground/10 text-foreground border border-foreground/20"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           All ({notifications.length})
@@ -111,8 +279,8 @@ export function InboxClient({ notifications: initialNotifications }: { notificat
           onClick={() => setFilter("unread")}
           className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
             filter === "unread"
-              ? "bg-[#18181B] text-white"
-              : "bg-muted text-muted-foreground hover:text-foreground"
+              ? "bg-foreground/10 text-foreground border border-foreground/20"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           Unread ({unreadCount})
@@ -131,48 +299,28 @@ export function InboxClient({ notifications: initialNotifications }: { notificat
             {filter === "unread" ? "You're all caught up!" : "Notifications will appear here when you have updates"}
           </p>
         </div>
-      ) : (
+      ) : viewTab === "all" ? (
         <div className="space-y-2">
-          {filtered.map(notification => (
-            <Card
-              key={notification.id}
-              className={`p-4 transition-colors cursor-pointer ${
-                !notification.read ? "bg-muted/50 border-muted" : "hover:bg-muted/30"
-              }`}
-              onClick={() => {
-                if (!notification.read) markRead(notification.id)
-                if (notification.link) window.location.href = notification.link
-              }}
-            >
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5">
-                  {!notification.read ? (
-                    <Circle className="h-2.5 w-2.5 fill-[#18181B] text-[#18181B]" />
-                  ) : (
-                    <Circle className="h-2.5 w-2.5 text-transparent" />
-                  )}
-                </div>
-                <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
-                  <Bell className="h-4 w-4 text-[#18181B]" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <h4 className={`text-sm ${!notification.read ? "font-semibold" : "font-medium"}`}>
-                      {notification.title}
-                    </h4>
-                    <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
-                      {formatDate(notification.createdAt)}
-                    </span>
-                  </div>
-                  {notification.message && (
-                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{notification.message}</p>
-                  )}
-                  <Badge variant="secondary" className="mt-1.5 text-[10px]">{notification.type.replace(/_/g, " ")}</Badge>
-                </div>
-              </div>
-            </Card>
-          ))}
+          {filtered.map(renderNotification)}
         </div>
+      ) : viewTab === "by-project" ? (
+        renderGrouped(groupedByProject, (key) => {
+          if (key === "_none") return "No Project"
+          return projectMap[key]?.name || "Unknown Project"
+        })
+      ) : (
+        renderGrouped(groupedByType, (key) => {
+          const labels: Record<string, string> = {
+            task_assigned: "Task Assigned",
+            task_completed: "Task Completed",
+            comment_added: "Comments",
+            comment_mention: "Mentions",
+            task_due_soon: "Due Soon",
+            project_invite: "Project Invites",
+            status_update: "Status Updates",
+          }
+          return labels[key] || key.replace(/_/g, " ")
+        })
       )}
     </div>
   )

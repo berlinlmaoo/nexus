@@ -27,6 +27,8 @@ import {
   PanelLeft,
   Star,
   Clock,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { cn } from "@/lib/utils"
@@ -46,6 +48,7 @@ interface Project {
   name: string
   color: string
   icon: string
+  status?: string
 }
 
 interface ProjectPage {
@@ -218,6 +221,7 @@ export function Sidebar({ user }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [projectMenu, setProjectMenu] = useState<{ x: number; y: number; projectId: string } | null>(null)
   const [confirmDeleteProject, setConfirmDeleteProject] = useState<{ id: string; name: string } | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
   const sidebarRef = useRef<HTMLDivElement>(null)
 
   // Favorites & Recents
@@ -663,12 +667,20 @@ export function Sidebar({ user }: SidebarProps) {
                 projectsOpen ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
               )}
             >
-              {projects.length === 0 ? (
+              {/* Archived toggle */}
+              <button
+                onClick={() => setShowArchived(!showArchived)}
+                className="flex items-center gap-1.5 px-3 py-1 text-[10px] text-sidebar-text/40 hover:text-sidebar-text/70 transition-colors"
+              >
+                <Archive className="h-3 w-3" />
+                {showArchived ? "Hide archived" : "Show archived"}
+              </button>
+              {projects.filter(p => showArchived || p.status !== "ARCHIVED").length === 0 ? (
                 <p className="px-3 py-2 text-xs text-sidebar-text/40">
                   No projects yet
                 </p>
               ) : (
-                projects.map((project) => {
+                projects.filter(p => showArchived || p.status !== "ARCHIVED").map((project) => {
                   const isProjectActive = pathname?.startsWith(`/projects/${project.id}`) ?? false
                   const isExpanded = expandedProjects[project.id] || false
                   const pages = projectPages[project.id] || []
@@ -703,7 +715,8 @@ export function Sidebar({ user }: SidebarProps) {
                               style={{ backgroundColor: project.color }}
                             />
                           )}
-                          <span className="truncate">{project.name}</span>
+                          <span className={cn("truncate", project.status === "ARCHIVED" && "opacity-50")}>{project.name}</span>
+                          {project.status === "ARCHIVED" && <Archive className="h-3 w-3 text-sidebar-text/30 shrink-0" />}
                         </Link>
                         <button
                           onClick={(e) => { e.preventDefault(); e.stopPropagation(); setProjectMenu({ x: e.clientX, y: e.clientY, projectId: project.id }) }}
@@ -878,20 +891,60 @@ export function Sidebar({ user }: SidebarProps) {
             className="fixed z-50 rounded-lg border border-white/10 bg-[#2e2f31] p-1 shadow-lg min-w-[160px]"
             style={{
               left: Math.min(projectMenu.x, window.innerWidth - 170),
-              top: Math.min(projectMenu.y, window.innerHeight - 80),
+              top: Math.min(projectMenu.y, window.innerHeight - 140),
             }}
           >
-            <button
-              onClick={() => {
-                const p = projects.find((p) => p.id === projectMenu.projectId)
-                if (p) setConfirmDeleteProject({ id: p.id, name: p.name })
-                setProjectMenu(null)
-              }}
-              className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-red-400 hover:bg-zinc-700 transition-colors"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Delete project
-            </button>
+            {(() => {
+              const p = projects.find((p) => p.id === projectMenu.projectId)
+              const isArchived = p?.status === "ARCHIVED"
+              return (
+                <>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await fetch(`/api/projects/${projectMenu.projectId}`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ status: isArchived ? "ACTIVE" : "ARCHIVED" }),
+                        })
+                        setProjects(prev => prev.map(p => p.id === projectMenu.projectId ? { ...p, status: isArchived ? "ACTIVE" : "ARCHIVED" } : p))
+                      } catch {}
+                      setProjectMenu(null)
+                    }}
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-sidebar-text hover:bg-zinc-700 transition-colors"
+                  >
+                    {isArchived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
+                    {isArchived ? "Unarchive" : "Archive"}
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(`/api/projects/${projectMenu.projectId}/duplicate`, { method: "POST" })
+                        if (res.ok) {
+                          const newProject = await res.json()
+                          setProjects(prev => [{ id: newProject.id, name: newProject.name, color: newProject.color, icon: newProject.icon, status: newProject.status }, ...prev])
+                        }
+                      } catch {}
+                      setProjectMenu(null)
+                    }}
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-sidebar-text hover:bg-zinc-700 transition-colors"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    Duplicate
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (p) setConfirmDeleteProject({ id: p.id, name: p.name })
+                      setProjectMenu(null)
+                    }}
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-red-400 hover:bg-zinc-700 transition-colors"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete project
+                  </button>
+                </>
+              )
+            })()}
           </div>
         </>,
         document.body

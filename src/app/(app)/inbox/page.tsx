@@ -11,5 +11,16 @@ export default async function InboxPage() {
     orderBy: { createdAt: 'desc' },
     take: 100,
   })
-  return <InboxClient notifications={JSON.parse(JSON.stringify(notifications))} />
+
+  // Fetch project names for grouping
+  const projectIds = [...new Set(notifications.map(n => n.projectId).filter(Boolean))] as string[]
+  const projects = projectIds.length > 0
+    ? await prisma.project.findMany({
+        where: { id: { in: projectIds } },
+        select: { id: true, name: true, color: true },
+      })
+    : []
+  const projectMap = Object.fromEntries(projects.map(p => [p.id, p]))
+
+  return <InboxClient notifications={JSON.parse(JSON.stringify(notifications))} projectMap={projectMap} />
 }

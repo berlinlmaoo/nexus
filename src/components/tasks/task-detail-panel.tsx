@@ -41,6 +41,8 @@ import {
   User,
   Flag,
   FolderKanban,
+  Eye,
+  EyeOff,
 } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
@@ -49,6 +51,8 @@ interface Subtask {
   id: string
   title: string
   status: "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE" | "CANCELLED"
+  dueDate: string | null
+  assignees?: { user: { id: string; name: string; avatar: string | null } }[]
 }
 
 interface ActivityLogEntry {
@@ -120,6 +124,26 @@ export function TaskDetailPanel({
   >("comments")
 
   const [projectId, setProjectId] = useState<string | null>(null)
+  const [isFollowing, setIsFollowing] = useState(false)
+  const [togglingFollow, setTogglingFollow] = useState(false)
+
+  useEffect(() => {
+    fetch(`/api/tasks/${task.id}/followers`)
+      .then(res => res.json())
+      .then(data => { if (data.isFollowing !== undefined) setIsFollowing(data.isFollowing) })
+      .catch(() => {})
+  }, [task.id])
+
+  const toggleFollow = async () => {
+    setTogglingFollow(true)
+    try {
+      const res = await fetch(`/api/tasks/${task.id}/followers`, { method: "POST" })
+      if (res.ok) {
+        const data = await res.json()
+        setIsFollowing(data.following)
+      }
+    } catch {} finally { setTogglingFollow(false) }
+  }
 
   useEffect(() => {
     fetch(`/api/tasks/${task.id}?include=subtasks`)
@@ -262,6 +286,19 @@ export function TaskDetailPanel({
           </button>
         </div>
         <div className="flex items-center gap-1">
+          <button
+            className={cn(
+              "rounded p-1.5 transition-colors",
+              isFollowing
+                ? "text-foreground bg-muted"
+                : "text-muted-foreground hover:bg-muted"
+            )}
+            onClick={toggleFollow}
+            disabled={togglingFollow}
+            title={isFollowing ? "Unfollow task" : "Follow task"}
+          >
+            {isFollowing ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+          </button>
           <button
             className="rounded p-1.5 text-muted-foreground hover:bg-muted transition-colors"
             onClick={() => router.push(`/tasks/${task.id}`)}
@@ -447,48 +484,114 @@ export function TaskDetailPanel({
           )}
 
           {/* Recurring row */}
-          <div className="flex items-center py-2 border-b border-border/30">
-            <div className="flex items-center gap-2 w-32 shrink-0">
+          <div className="flex items-start py-2 border-b border-border/30">
+            <div className="flex items-center gap-2 w-32 shrink-0 pt-1">
               <Repeat className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">Recurring</span>
+              <span className="text-xs text-muted-foreground">Repeat</span>
             </div>
             <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setIsRecurring(!isRecurring)}
-                  className={cn(
-                    "relative inline-flex h-4 w-7 items-center rounded-full transition-colors",
-                    isRecurring ? "bg-foreground" : "bg-muted-foreground/30"
-                  )}
-                >
-                  <span className={cn(
-                    "inline-block h-3 w-3 rounded-full bg-background transition-transform",
-                    isRecurring ? "translate-x-3.5" : "translate-x-0.5"
-                  )} />
-                </button>
-                <span className="text-xs text-muted-foreground">{isRecurring ? "On" : "Off"}</span>
-              </div>
+              <select
+                value={isRecurring ? recurPattern.frequency : "NONE"}
+                onChange={(e) => {
+                  const val = e.target.value
+                  if (val === "NONE") {
+                    setIsRecurring(false)
+                  } else {
+                    setIsRecurring(true)
+                    setRecurPattern({ ...recurPattern, frequency: val as typeof recurPattern.frequency })
+                  }
+                }}
+                className="h-7 rounded border bg-transparent px-2 text-xs outline-none focus:border-foreground/30"
+              >
+                <option value="NONE">None</option>
+                <option value="DAILY">Daily</option>
+                <option value="WEEKLY">Weekly</option>
+                <option value="MONTHLY">Monthly</option>
+                <option value="YEARLY">Yearly</option>
+              </select>
               {isRecurring && (
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">Every</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={99}
-                    value={recurPattern.interval}
-                    onChange={(e) => setRecurPattern({ ...recurPattern, interval: parseInt(e.target.value) || 1 })}
-                    className="h-6 w-12 rounded border bg-transparent px-1.5 text-xs"
-                  />
-                  <select
-                    value={recurPattern.frequency}
-                    onChange={(e) => setRecurPattern({ ...recurPattern, frequency: e.target.value as typeof recurPattern.frequency })}
-                    className="h-6 rounded border bg-transparent px-1.5 text-xs"
-                  >
-                    <option value="DAILY">Day(s)</option>
-                    <option value="WEEKLY">Week(s)</option>
-                    <option value="MONTHLY">Month(s)</option>
-                    <option value="YEARLY">Year(s)</option>
-                  </select>
+                <div className="mt-2 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Every</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={99}
+                      value={recurPattern.interval}
+                      onChange={(e) => setRecurPattern({ ...recurPattern, interval: parseInt(e.target.value) || 1 })}
+                      className="h-6 w-12 rounded border bg-transparent px-1.5 text-xs"
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      {recurPattern.frequency === "DAILY" && (recurPattern.interval === 1 ? "day" : "days")}
+                      {recurPattern.frequency === "WEEKLY" && (recurPattern.interval === 1 ? "week" : "weeks")}
+                      {recurPattern.frequency === "MONTHLY" && (recurPattern.interval === 1 ? "month" : "months")}
+                      {recurPattern.frequency === "YEARLY" && (recurPattern.interval === 1 ? "year" : "years")}
+                    </span>
+                  </div>
+                  {recurPattern.frequency === "WEEKLY" && (
+                    <div className="flex flex-wrap gap-1">
+                      {(["SUN","MON","TUE","WED","THU","FRI","SAT"] as const).map((day, idx) => (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() => {
+                            const days = recurPattern.daysOfWeek ?? []
+                            const next = days.includes(idx) ? days.filter(d => d !== idx) : [...days, idx]
+                            setRecurPattern({ ...recurPattern, daysOfWeek: next })
+                          }}
+                          className={cn(
+                            "h-6 w-8 rounded text-[10px] font-medium border transition-colors",
+                            (recurPattern.daysOfWeek ?? []).includes(idx)
+                              ? "bg-foreground text-background border-foreground"
+                              : "border-border hover:bg-muted"
+                          )}
+                        >
+                          {day.slice(0, 2)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {recurPattern.frequency === "MONTHLY" && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">on day</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={31}
+                        value={recurPattern.dayOfMonth ?? 1}
+                        onChange={(e) => setRecurPattern({ ...recurPattern, dayOfMonth: parseInt(e.target.value) || 1 })}
+                        className="h-6 w-12 rounded border bg-transparent px-1.5 text-xs"
+                      />
+                    </div>
+                  )}
+                  {recurPattern.endDate !== undefined && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">until</span>
+                      <input
+                        type="date"
+                        value={recurPattern.endDate ?? ""}
+                        onChange={(e) => setRecurPattern({ ...recurPattern, endDate: e.target.value || undefined })}
+                        className="h-6 rounded border bg-transparent px-1.5 text-xs"
+                      />
+                      <button
+                        onClick={() => {
+                          const { endDate: _, ...rest } = recurPattern
+                          setRecurPattern(rest as typeof recurPattern)
+                        }}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
+                  {recurPattern.endDate === undefined && (
+                    <button
+                      onClick={() => setRecurPattern({ ...recurPattern, endDate: "" })}
+                      className="text-[11px] text-muted-foreground hover:text-foreground"
+                    >
+                      + Set end date
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -583,13 +686,56 @@ export function TaskDetailPanel({
             {activeTab === "subtasks" && (
               <>
                 {subtasks.map((st) => (
-                  <div key={st.id} className="flex items-center gap-2 py-1">
-                    {st.status === "DONE" ? (
-                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    ) : (
-                      <Circle className="h-4 w-4 text-muted-foreground" />
+                  <div key={st.id} className="flex items-center gap-2 py-1.5 group">
+                    <button
+                      onClick={async () => {
+                        const newStatus = st.status === "DONE" ? "TODO" : "DONE"
+                        try {
+                          await fetch(`/api/tasks/${st.id}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ status: newStatus }),
+                          })
+                          setSubtasks(prev => prev.map(s => s.id === st.id ? { ...s, status: newStatus } : s))
+                        } catch {}
+                      }}
+                    >
+                      {st.status === "DONE" ? (
+                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <Circle className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </button>
+                    <span className={cn("text-[13px] flex-1 min-w-0 truncate", st.status === "DONE" && "line-through text-muted-foreground")}>{st.title}</span>
+                    {/* Assignees */}
+                    {st.assignees && st.assignees.length > 0 && (
+                      <div className="flex -space-x-1 shrink-0">
+                        {st.assignees.slice(0, 2).map((a) => (
+                          <UserAvatar key={a.user.id} user={{ name: a.user.name, avatar: a.user.avatar }} size="xs" className="h-5 w-5 ring-1 ring-background" />
+                        ))}
+                      </div>
                     )}
-                    <span className={cn("text-[13px]", st.status === "DONE" && "line-through text-muted-foreground")}>{st.title}</span>
+                    {/* Due date */}
+                    <input
+                      type="date"
+                      value={st.dueDate ? format(new Date(st.dueDate), "yyyy-MM-dd") : ""}
+                      onChange={async (e) => {
+                        const val = e.target.value || null
+                        try {
+                          await fetch(`/api/tasks/${st.id}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ dueDate: val }),
+                          })
+                          setSubtasks(prev => prev.map(s => s.id === st.id ? { ...s, dueDate: val } : s))
+                        } catch {}
+                      }}
+                      className={cn(
+                        "h-5 w-24 rounded border bg-transparent px-1 text-[10px] outline-none shrink-0 opacity-60 hover:opacity-100 focus:opacity-100 transition-opacity",
+                        st.dueDate && new Date(st.dueDate) < new Date() && st.status !== "DONE" && "text-red-500 border-red-300"
+                      )}
+                      title="Due date"
+                    />
                   </div>
                 ))}
                 <div className="flex items-center gap-2">

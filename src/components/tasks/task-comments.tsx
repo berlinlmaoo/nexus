@@ -18,9 +18,16 @@ import {
   MoreHorizontal,
   X,
   Check,
+  SmilePlus,
 } from "lucide-react"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { cn } from "@/lib/utils"
+
+interface Reaction {
+  id: string
+  emoji: string
+  user: { id: string; name: string }
+}
 
 interface Comment {
   id: string
@@ -30,6 +37,7 @@ interface Comment {
   parentId?: string | null
   user: { id: string; name: string; avatar: string | null }
   replies?: Comment[]
+  reactions?: Reaction[]
 }
 
 interface TaskCommentsProps {
@@ -305,7 +313,11 @@ function CommentItem({
   const [savingEdit, setSavingEdit] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const emojiRef = useRef<HTMLDivElement>(null)
+
+  const QUICK_EMOJIS = ["👍", "❤️", "😄", "🎉", "🤔", "👀", "🚀", "👏"]
 
   const isOwn = currentUserId === comment.user.id
 
@@ -314,10 +326,40 @@ function CommentItem({
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setShowMenu(false)
       }
+      if (emojiRef.current && !emojiRef.current.contains(e.target as Node)) {
+        setShowEmojiPicker(false)
+      }
     }
-    if (showMenu) document.addEventListener("mousedown", handleClickOutside)
+    if (showMenu || showEmojiPicker) document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [showMenu])
+  }, [showMenu, showEmojiPicker])
+
+  const toggleReaction = async (emoji: string) => {
+    setShowEmojiPicker(false)
+    try {
+      await fetch(`/api/tasks/${taskId}/comments/${comment.id}/reactions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emoji }),
+      })
+      onRefresh()
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  // Group reactions by emoji
+  const reactionGroups = useMemo(() => {
+    if (!comment.reactions?.length) return []
+    const groups: Record<string, { emoji: string; count: number; users: string[]; hasOwn: boolean }> = {}
+    for (const r of comment.reactions) {
+      if (!groups[r.emoji]) groups[r.emoji] = { emoji: r.emoji, count: 0, users: [], hasOwn: false }
+      groups[r.emoji].count++
+      groups[r.emoji].users.push(r.user.name)
+      if (r.user.id === currentUserId) groups[r.emoji].hasOwn = true
+    }
+    return Object.values(groups)
+  }, [comment.reactions, currentUserId])
 
   const handleReply = async (content: string) => {
     setReplying(true)
@@ -469,15 +511,60 @@ function CommentItem({
               dangerouslySetInnerHTML={{ __html: renderMarkdown(comment.content) }}
             />
 
-            {/* Reply button */}
-            {depth < 2 && (
-              <button
-                onClick={() => setShowReply(!showReply)}
-                className="flex items-center gap-1 mt-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-              >
-                <Reply className="h-3 w-3" /> Reply
-              </button>
+            {/* Reaction chips */}
+            {reactionGroups.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                {reactionGroups.map(g => (
+                  <button
+                    key={g.emoji}
+                    onClick={() => toggleReaction(g.emoji)}
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs transition-colors",
+                      g.hasOwn
+                        ? "border-foreground/30 bg-foreground/5"
+                        : "border-border hover:bg-muted"
+                    )}
+                    title={g.users.join(", ")}
+                  >
+                    <span>{g.emoji}</span>
+                    <span className="text-[10px] text-muted-foreground">{g.count}</span>
+                  </button>
+                ))}
+              </div>
             )}
+
+            {/* Reply + React buttons */}
+            <div className="flex items-center gap-2 mt-1.5">
+              {depth < 2 && (
+                <button
+                  onClick={() => setShowReply(!showReply)}
+                  className="flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                >
+                  <Reply className="h-3 w-3" /> Reply
+                </button>
+              )}
+              <div className="relative" ref={emojiRef}>
+                <button
+                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                  className="flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                >
+                  <SmilePlus className="h-3 w-3" />
+                </button>
+                {showEmojiPicker && (
+                  <div className="absolute left-0 top-full mt-1 z-50 flex gap-0.5 rounded-lg border bg-background p-1.5 shadow-lg">
+                    {QUICK_EMOJIS.map(emoji => (
+                      <button
+                        key={emoji}
+                        onClick={() => toggleReaction(emoji)}
+                        className="rounded p-1 text-sm hover:bg-muted transition-colors"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </>
         )}
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
-import { notifyMention } from "@/lib/notification-service"
+import { notifyMention, notifyCommentAdded } from "@/lib/notification-service"
 import { executeAutomations } from "@/lib/automation-engine"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import { emitCommentAdded } from "@/lib/socket-emitter"
@@ -18,11 +18,22 @@ export async function GET(
       where: { taskId: params.taskId },
       include: {
         user: true,
+        reactions: {
+          include: { user: { select: { id: true, name: true } } },
+        },
         replies: {
           include: {
             user: true,
+            reactions: {
+              include: { user: { select: { id: true, name: true } } },
+            },
             replies: {
-              include: { user: true },
+              include: {
+                user: true,
+                reactions: {
+                  include: { user: { select: { id: true, name: true } } },
+                },
+              },
               orderBy: { createdAt: "asc" },
             },
           },
@@ -112,6 +123,23 @@ export async function POST(
       content: content.slice(0, 500),
       authorId: session.user.id!,
     }, task.taskList.projectId).catch(() => {})
+
+    // Notify all assignees + followers about the new comment
+    notifyCommentAdded({
+      taskId: params.taskId,
+      taskTitle: task.title,
+      projectId: task.taskList.projectId,
+      commentByName: session.user.name || "Someone",
+      commentById: session.user.id!,
+      commentSnippet: content.slice(0, 200),
+    }).catch(() => {})
+
+    // Auto-follow: commenter follows the task
+    await prisma.taskFollower.upsert({
+      where: { taskId_userId: { taskId: params.taskId, userId: session.user.id! } },
+      create: { taskId: params.taskId, userId: session.user.id! },
+      update: {},
+    })
 
     // Detect @mentions and notify mentioned users
     const mentionRegex = /@(\S+)/g

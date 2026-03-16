@@ -30,3 +30,36 @@ export async function PATCH(req: NextRequest) {
   }
   return NextResponse.json({ error: 'id or markAllRead required' }, { status: 400 })
 }
+
+export async function DELETE(req: NextRequest) {
+  const session = await auth()
+  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { searchParams } = new URL(req.url)
+  const clearRead = searchParams.get('clearRead')
+
+  if (clearRead === 'true') {
+    const result = await prisma.notification.deleteMany({
+      where: { userId: session.user.id, read: true },
+    })
+    return NextResponse.json({ deleted: result.count })
+  }
+
+  const body = await req.json()
+
+  // Batch delete by ids array
+  if (Array.isArray(body.ids) && body.ids.length > 0) {
+    const result = await prisma.notification.deleteMany({
+      where: { id: { in: body.ids }, userId: session.user.id },
+    })
+    return NextResponse.json({ deleted: result.count })
+  }
+
+  // Single delete by id
+  if (body.id) {
+    await prisma.notification.delete({ where: { id: body.id, userId: session.user.id } })
+    return NextResponse.json({ success: true })
+  }
+
+  return NextResponse.json({ error: 'id, ids array, or clearRead param required' }, { status: 400 })
+}

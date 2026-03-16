@@ -125,6 +125,7 @@ export async function GET(request: NextRequest) {
         where: {
           OR: [
             { title: { contains: query, mode: "insensitive" } },
+            { contentText: { contains: query, mode: "insensitive" } },
           ],
         },
         select: {
