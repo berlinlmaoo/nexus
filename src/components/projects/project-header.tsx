@@ -202,10 +202,9 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
   const hasUploadedIcon = isUploadedIcon(selectedIcon)
 
   return (
-    <div className="space-y-4 animate-fade-in">
-      {/* Cover accent bar — hidden by default, shown on hover */}
-      <div className={cn("relative h-0 rounded-full bg-gradient-to-r overflow-hidden opacity-0", coverGradient)}>
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAwIDEwIEwgNDAgMTAgTSAxMCAwIEwgMTAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjAzIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCBmaWxsPSJ1cmwoI2dyaWQpIiB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIi8+PC9zdmc+')] opacity-50" />
+    <div className="animate-fade-in">
+      {/* Cover — completely hidden */}
+      <div className="hidden">
         <button
           onClick={() => setShowCoverPicker(!showCoverPicker)}
           className="absolute top-3 right-3 flex items-center gap-1.5 rounded-md bg-black/30 px-2.5 py-1.5 text-xs text-white/80 hover:bg-black/50 hover:text-white transition-all duration-200 backdrop-blur-sm"
@@ -235,7 +234,7 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
       </div>
 
       {/* Project info row */}
-      <div className="flex items-start gap-4 -mt-8 ml-6 relative z-10">
+      <div className="flex items-start gap-4 ml-2 pt-3 relative z-10">
         {/* Icon */}
         <div className="relative">
           <button
