@@ -65,7 +65,7 @@ export function AppLayout({ children, title, breadcrumbs, user }: AppLayoutProps
 
         <div
           className={cn(
-            "flex flex-1 flex-col transition-all duration-300 ease-in-out",
+            "flex flex-1 flex-col transition-all duration-300 ease-in-out min-w-0",
             sidebarOpen ? "md:ml-[260px] ml-0" : "ml-0"
           )}
         >
