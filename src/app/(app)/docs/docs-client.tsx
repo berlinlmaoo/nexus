@@ -10,8 +10,23 @@ import { Badge } from "@/components/ui/badge"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { WikiPage } from "@/components/wiki/wiki-page"
-import { FileText, Plus, Loader2, Search, BookOpen, LayoutList } from "lucide-react"
+import { FileText, Plus, Loader2, Search, BookOpen, LayoutList, LayoutTemplate } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
+
+interface DocTemplate {
+  id: string
+  title: string
+  category: string
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  meetings: "Meetings",
+  planning: "Planning",
+  engineering: "Engineering",
+  updates: "Updates",
+  general: "General",
+}
 
 interface Doc {
   id: string
@@ -50,10 +65,25 @@ export function DocsPageClient({
   const [search, setSearch] = useState("")
   const [viewMode, setViewMode] = useState<"list" | "wiki">("list")
   const [wikiProjectId, setWikiProjectId] = useState<string>(projects[0]?.id || "")
+  const [templates, setTemplates] = useState<DocTemplate[]>([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("")
+  const [templatesLoaded, setTemplatesLoaded] = useState(false)
 
   const filteredDocs = docs.filter(d =>
     d.title.toLowerCase().includes(search.toLowerCase())
   )
+
+  const fetchTemplates = async () => {
+    if (templatesLoaded) return
+    try {
+      // Get workspace from first project
+      const res = await fetch("/api/docs/templates?workspaceId=" + (projects[0]?.id ? "" : ""))
+      if (res.ok) {
+        const data = await res.json()
+        setTemplates(data.templates || [])
+      }
+    } catch {} finally { setTemplatesLoaded(true) }
+  }
 
   const handleCreate = async () => {
     if (!title.trim() || !projectId) return
@@ -62,7 +92,7 @@ export function DocsPageClient({
       const res = await fetch("/api/docs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, projectId }),
+        body: JSON.stringify({ title, projectId, templateId: selectedTemplateId || undefined }),
       })
       if (res.ok) {
         const data = await res.json()
@@ -70,10 +100,14 @@ export function DocsPageClient({
         setTitle("")
         setProjectId("")
         setOpen(false)
+        toast.success("Document created")
         router.push(`/docs/${data.doc.id}`)
+      } else {
+        toast.error("Failed to create document")
       }
     } catch (e) {
       console.error(e)
+      toast.error("Failed to create document")
     } finally {
       setCreating(false)
     }
@@ -132,13 +166,13 @@ export function DocsPageClient({
             <BookOpen className="h-4 w-4 mr-1.5" />
             Wiki Mode
           </Button>
-          <Dialog open={open} onOpenChange={setOpen}>
+          <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (v) fetchTemplates() }}>
             <DialogTrigger asChild>
               <Button className="bg-foreground text-background hover:bg-foreground/90">
                 <Plus className="h-4 w-4 mr-2" /> New Document
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
                 <DialogTitle>Create Document</DialogTitle>
               </DialogHeader>
@@ -160,6 +194,42 @@ export function DocsPageClient({
                     ))}
                   </select>
                 </div>
+                {templates.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-1.5">
+                      <LayoutTemplate className="h-3.5 w-3.5" /> Template (optional)
+                    </Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setSelectedTemplateId("")}
+                        className={cn(
+                          "rounded-lg border p-3 text-left text-xs transition-colors",
+                          !selectedTemplateId
+                            ? "border-foreground bg-foreground/5"
+                            : "border-border hover:border-foreground/30"
+                        )}
+                      >
+                        <div className="font-medium">Blank Document</div>
+                        <div className="text-muted-foreground mt-0.5">Start from scratch</div>
+                      </button>
+                      {templates.map(t => (
+                        <button
+                          key={t.id}
+                          onClick={() => setSelectedTemplateId(t.id)}
+                          className={cn(
+                            "rounded-lg border p-3 text-left text-xs transition-colors",
+                            selectedTemplateId === t.id
+                              ? "border-foreground bg-foreground/5"
+                              : "border-border hover:border-foreground/30"
+                          )}
+                        >
+                          <div className="font-medium">{t.title}</div>
+                          <div className="text-muted-foreground mt-0.5">{CATEGORY_LABELS[t.category] || t.category}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <Button onClick={handleCreate} disabled={creating || !title.trim() || !projectId} className="w-full bg-foreground text-background hover:bg-foreground/90">
                   {creating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
                   Create Document

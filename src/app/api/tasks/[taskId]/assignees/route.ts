@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { logAudit } from "@/lib/audit"
 import { notifyTaskAssigned } from "@/lib/notification-service"
 
 export async function POST(
@@ -70,6 +71,8 @@ export async function POST(
       }).catch((err) => console.error("Notification error:", err))
     }
 
+    logAudit({ action: "create", entityType: "task_assignee", entityId: params.taskId, entityName: task.title, userId: session.user.id!, request, metadata: { assigneeUserId: userId } })
+
     return NextResponse.json(assignee, { status: 201 })
   } catch (error) {
     console.error("Error adding assignee:", error)
@@ -132,6 +135,8 @@ export async function DELETE(
         projectId: task.taskList.projectId,
       },
     })
+
+    logAudit({ action: "delete", entityType: "task_assignee", entityId: params.taskId, entityName: task.title, userId: session.user.id!, request, metadata: { removedUserId: userId } })
 
     return NextResponse.json({ message: "Assignee removed" })
   } catch (error) {

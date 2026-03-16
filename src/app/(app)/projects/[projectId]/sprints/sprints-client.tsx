@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { SprintBoard } from "@/components/sprints/sprint-board"
 import { Plus, Loader2, Play, CheckCircle2, Clock, ArrowLeft, ChevronDown, ChevronUp, Zap, AlertTriangle, Archive, ArrowRight, FolderPlus } from "lucide-react"
+import { toast } from "sonner"
 
 interface SprintTask {
   id: string
@@ -71,6 +72,10 @@ export function SprintsClient({
 
   const handleCreate = async () => {
     if (!name.trim() || !startDate || !endDate) return
+    if (new Date(endDate) <= new Date(startDate)) {
+      toast.error("End date must be after start date")
+      return
+    }
     setCreating(true)
     try {
       const res = await fetch("/api/sprints", {
@@ -85,9 +90,13 @@ export function SprintsClient({
         setStartDate("")
         setEndDate("")
         setOpen(false)
+        toast.success("Sprint created")
+      } else {
+        toast.error("Failed to create sprint")
       }
     } catch (e) {
       console.error(e)
+      toast.error("Failed to create sprint")
     } finally {
       setCreating(false)
     }
@@ -108,9 +117,13 @@ export function SprintsClient({
           return
         }
         setSprints(sprints.map(s => s.id === sprintId ? { ...s, ...data.sprint } : s))
+        toast.success(`Sprint ${status === "ACTIVE" ? "started" : status === "COMPLETED" ? "completed" : "updated"}`)
+      } else {
+        toast.error("Failed to update sprint status")
       }
     } catch (e) {
       console.error(e)
+      toast.error("Failed to update sprint status")
     }
   }
 
@@ -123,6 +136,7 @@ export function SprintsClient({
       router.refresh()
     } catch (e) {
       console.error(e)
+      toast.error("Failed to complete sprint")
     } finally {
       setCompleting(false)
     }
@@ -140,9 +154,13 @@ export function SprintsClient({
         setSprints(sprints.map(s => s.id === sprintId ? { ...s, ...data.sprint } : s))
         setAvailableTasks(availableTasks.filter(t => t.id !== taskId))
         setAddingTask(null)
+        toast.success("Task added to sprint")
+      } else {
+        toast.error("Failed to add task to sprint")
       }
     } catch (e) {
       console.error(e)
+      toast.error("Failed to add task to sprint")
     }
   }
 

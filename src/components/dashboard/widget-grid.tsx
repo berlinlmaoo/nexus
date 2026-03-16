@@ -401,20 +401,19 @@ export function WidgetGrid({ data, loading }: WidgetGridProps) {
       {/* Grid */}
       {widthMounted && (
         <ResponsiveGridLayout
-          className="layout"
-          width={width}
-          layouts={layouts}
-          breakpoints={{ lg: 1200, md: 996, sm: 0 }}
-          cols={{ lg: 6, md: 4, sm: 2 }}
-          rowHeight={100}
-          isDraggable={isEditing}
-          isResizable={isEditing}
-          draggableHandle=".drag-handle"
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          onLayoutChange={handleLayoutChange as any}
-          compactType="vertical"
-          margin={[16, 16]}
-          useCSSTransforms={true}
+          {...{
+            className: "layout",
+            width,
+            layouts,
+            breakpoints: { lg: 1200, md: 996, sm: 0 },
+            cols: { lg: 6, md: 4, sm: 2 },
+            rowHeight: 100,
+            draggableHandle: ".drag-handle",
+            onLayoutChange: handleLayoutChange as any,
+            compactType: "vertical",
+            margin: [16, 16],
+            useCSSTransforms: true,
+          } as any}
         >
           {widgets.map((widget) => (
             <div key={widget.id}>

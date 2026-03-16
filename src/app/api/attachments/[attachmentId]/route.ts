@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { logAudit } from "@/lib/audit"
 import { unlink } from "fs/promises"
 import path from "path"
 
@@ -26,6 +27,8 @@ export async function DELETE(
     }
 
     await prisma.attachment.delete({ where: { id: attachmentId } })
+
+    logAudit({ action: "delete", entityType: "attachment", entityId: attachmentId, entityName: attachment.filename, userId: session.user.id, request })
 
     return NextResponse.json({ success: true })
   } catch (error) {

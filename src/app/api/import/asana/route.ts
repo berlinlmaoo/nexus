@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
+import { logAudit } from '@/lib/audit'
 
 const ASANA_BASE = 'https://app.asana.com/api/1.0'
 
@@ -25,54 +26,61 @@ function mapPriority(priority: string | null): string {
 }
 
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  try {
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-  const body = await req.json()
-  const { personalAccessToken, workspaceGid } = body
+    const body = await req.json()
+    const { personalAccessToken, workspaceGid } = body
 
-  if (!personalAccessToken || !workspaceGid) {
-    return NextResponse.json(
-      { error: 'personalAccessToken and workspaceGid are required' },
-      { status: 400 }
-    )
-  }
+    if (!personalAccessToken || !workspaceGid) {
+      return NextResponse.json(
+        { error: 'personalAccessToken and workspaceGid are required' },
+        { status: 400 }
+      )
+    }
 
-  const job = await prisma.importJob.create({
-    data: {
-      source: 'asana',
-      status: 'running',
-      userId: session.user.id,
-    },
-  })
-
-  const workspaceMember = await prisma.workspaceMember.findFirst({
-    where: { userId: session.user.id },
-  })
-
-  if (!workspaceMember) {
-    return NextResponse.json({ error: 'No workspace found' }, { status: 400 })
-  }
-
-  importFromAsana(
-    personalAccessToken,
-    workspaceGid,
-    session.user.id,
-    workspaceMember.workspaceId,
-    job.id
-  ).catch(async (err) => {
-    await prisma.importJob.update({
-      where: { id: job.id },
+    const job = await prisma.importJob.create({
       data: {
-        status: 'failed',
-        details: { error: err instanceof Error ? err.message : 'Unknown error' },
+        source: 'asana',
+        status: 'running',
+        userId: session.user.id,
       },
     })
-  })
 
-  return NextResponse.json({ jobId: job.id }, { status: 202 })
+    const workspaceMember = await prisma.workspaceMember.findFirst({
+      where: { userId: session.user.id },
+    })
+
+    if (!workspaceMember) {
+      return NextResponse.json({ error: 'No workspace found' }, { status: 400 })
+    }
+
+    importFromAsana(
+      personalAccessToken,
+      workspaceGid,
+      session.user.id,
+      workspaceMember.workspaceId,
+      job.id
+    ).catch(async (err) => {
+      await prisma.importJob.update({
+        where: { id: job.id },
+        data: {
+          status: 'failed',
+          details: { error: err instanceof Error ? err.message : 'Unknown error' },
+        },
+      })
+    })
+
+    logAudit({ action: 'create', entityType: 'import', entityId: job.id, entityName: 'asana', userId: session.user.id, request: req })
+
+    return NextResponse.json({ jobId: job.id }, { status: 202 })
+  } catch (error) {
+    console.error('Error starting Asana import:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 }
 
 async function importFromAsana(

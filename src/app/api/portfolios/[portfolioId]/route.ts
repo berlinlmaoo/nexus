@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { logAudit } from "@/lib/audit"
 
 export async function GET(
   _request: NextRequest,
@@ -125,6 +126,8 @@ export async function PATCH(
       },
     })
 
+    logAudit({ action: "update", entityType: "portfolio", entityId: portfolioId, entityName: portfolio.name, userId: session.user.id, request, metadata: { changes: { name, description, status, projectIds } } })
+
     return NextResponse.json(portfolio)
   } catch (error) {
     console.error("Error updating portfolio:", error)
@@ -148,6 +151,8 @@ export async function DELETE(
     }
 
     await prisma.portfolio.delete({ where: { id: portfolioId } })
+
+    logAudit({ action: "delete", entityType: "portfolio", entityId: portfolioId, entityName: existing.name, userId: session.user.id })
 
     return NextResponse.json({ message: "Portfolio deleted" })
   } catch (error) {

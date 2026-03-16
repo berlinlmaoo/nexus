@@ -172,6 +172,8 @@ model Task {
   relationsTo       TaskRelation[]   @relation("TaskRelationTarget")
   goalTasks         GoalTask[]
   followers         TaskFollower[]
+
+  @@index([parentId])
 }
 
 model TaskAssignee {
@@ -205,6 +207,8 @@ model Comment {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   reactions CommentReaction[]
+
+  @@index([taskId])
 }
 
 model CommentReaction {
@@ -232,6 +236,7 @@ model TaskFollower {
   user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([taskId, userId])
+  @@index([userId])
 }
 
 model ActivityLog {
@@ -247,6 +252,8 @@ model ActivityLog {
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   task    Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
 }
 
 // ─── NEW MODELS ────────────────────────────────────────────────
@@ -439,6 +446,8 @@ model Notification {
   task      Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   projectId String?
+
+  @@index([userId])
 }
 
 model Team {

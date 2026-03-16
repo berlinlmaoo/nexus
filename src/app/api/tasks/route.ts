@@ -21,10 +21,19 @@ export async function GET(request: NextRequest) {
     const assigneeId = searchParams.get("assigneeId")
     const search = searchParams.get("search")
 
-    const where: Prisma.TaskWhereInput = {}
+    const where: Prisma.TaskWhereInput = {
+      // Workspace isolation: only return tasks from projects the user is a member of
+      taskList: {
+        project: {
+          members: {
+            some: { userId: session.user.id },
+          },
+        },
+      },
+    }
 
     if (projectId) {
-      where.taskList = { projectId }
+      where.taskList = { ...where.taskList as Prisma.TaskListWhereInput, projectId }
     }
     if (taskListId) {
       where.taskListId = taskListId

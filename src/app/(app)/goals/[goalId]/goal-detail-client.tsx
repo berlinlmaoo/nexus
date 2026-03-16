@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { ArrowLeft, Plus, Trash2, Loader2, Target, Calendar, FolderKanban, CheckSquare, X, Search, Link2 } from "lucide-react"
+import { toast } from "sonner"
 
 interface Milestone {
   id: string
@@ -97,7 +98,7 @@ export function GoalDetailClient({
   const [projectSearch, setProjectSearch] = useState("")
   const [taskSearch, setTaskSearch] = useState("")
 
-  const update = async (data: Record<string, any>) => {
+  const update = async (data: Record<string, any>, successMsg?: string) => {
     setSaving(true)
     try {
       const res = await fetch(`/api/goals/${goal.id}`, {
@@ -108,57 +109,71 @@ export function GoalDetailClient({
       if (res.ok) {
         const result = await res.json()
         setGoal(result.goal)
+        if (successMsg) toast.success(successMsg)
+      } else {
+        toast.error("Failed to update goal")
       }
     } catch (e) {
       console.error(e)
+      toast.error("Failed to update goal")
     } finally {
       setSaving(false)
     }
   }
 
   const toggleMilestone = async (milestone: Milestone) => {
-    await update({ toggleMilestone: { id: milestone.id, completed: !milestone.completed } })
+    await update(
+      { toggleMilestone: { id: milestone.id, completed: !milestone.completed } },
+      milestone.completed ? "Milestone reopened" : "Milestone completed"
+    )
   }
 
   const addMilestone = async () => {
     if (!newMilestoneTitle.trim()) return
     setAddingMilestone(true)
-    await update({ addMilestone: { title: newMilestoneTitle, dueDate: newMilestoneDue || null } })
+    await update({ addMilestone: { title: newMilestoneTitle, dueDate: newMilestoneDue || null } }, "Milestone added")
     setNewMilestoneTitle("")
     setNewMilestoneDue("")
     setAddingMilestone(false)
   }
 
   const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this goal?")) return
+    if (!window.confirm("Are you sure you want to delete this goal? This action cannot be undone.")) return
     setDeleting(true)
     try {
-      await fetch(`/api/goals/${goal.id}`, { method: "DELETE" })
-      router.push("/goals")
+      const res = await fetch(`/api/goals/${goal.id}`, { method: "DELETE" })
+      if (res.ok) {
+        toast.success("Goal deleted")
+        router.push("/goals")
+      } else {
+        toast.error("Failed to delete goal")
+        setDeleting(false)
+      }
     } catch (e) {
       console.error(e)
+      toast.error("Failed to delete goal")
       setDeleting(false)
     }
   }
 
   const linkProject = async (projectId: string) => {
-    await update({ linkProject: projectId })
+    await update({ linkProject: projectId }, "Project linked")
     setShowProjectPicker(false)
     setProjectSearch("")
   }
 
   const unlinkProject = async (projectId: string) => {
-    await update({ unlinkProject: projectId })
+    await update({ unlinkProject: projectId }, "Project unlinked")
   }
 
   const linkTask = async (taskId: string) => {
-    await update({ linkTask: taskId })
+    await update({ linkTask: taskId }, "Task linked")
     setShowTaskPicker(false)
     setTaskSearch("")
   }
 
   const unlinkTask = async (taskId: string) => {
-    await update({ unlinkTask: taskId })
+    await update({ unlinkTask: taskId }, "Task unlinked")
   }
 
   const completedMilestones = goal.milestones.filter(m => m.completed).length

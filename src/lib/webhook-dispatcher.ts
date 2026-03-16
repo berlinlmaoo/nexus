@@ -1,5 +1,6 @@
 import crypto from 'crypto'
 import prisma from '@/lib/prisma'
+import type { InputJsonValue } from '@prisma/client/runtime/client'
 
 interface WebhookPayload {
   event: string
@@ -57,7 +58,7 @@ async function deliverWebhook(
     data: {
       webhookId,
       event: payload.event,
-      payload: payload as unknown as Record<string, unknown>,
+      payload: payload as unknown as InputJsonValue,
       statusCode,
       response: response.slice(0, 1000),
       success,

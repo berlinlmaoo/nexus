@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { logAudit } from "@/lib/audit"
 
 const DEFAULT_PAGES = [
   { name: "Tasks", icon: "💻", pageType: "tasks", position: 0 },
@@ -90,6 +91,8 @@ export async function POST(
         children: true,
       },
     })
+
+    logAudit({ action: "create", entityType: "project_page", entityId: page.id, entityName: name, userId: session.user.id, request, metadata: { projectId } })
 
     return NextResponse.json(page, { status: 201 })
   } catch (error) {

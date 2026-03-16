@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { logAudit } from "@/lib/audit"
 
 export async function POST(req: NextRequest) {
   const session = await auth()
@@ -35,6 +36,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    logAudit({ action: "create", entityType: "waMessage", userId: session.user.id, request: req, metadata: { phone } })
     return NextResponse.json({ sent: true })
   } catch (error) {
     console.error("WA API error:", error)

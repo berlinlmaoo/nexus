@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { logAudit } from "@/lib/audit"
 import { writeFile, mkdir, unlink, readdir } from "fs/promises"
 import path from "path"
 import prisma from "@/lib/prisma"
@@ -74,6 +75,8 @@ export async function POST(request: NextRequest) {
       select: { id: true, name: true, email: true, avatar: true },
     })
 
+    logAudit({ action: "update", entityType: "user_avatar", entityId: userId, userId, request })
+
     return NextResponse.json({ user, url: avatarUrl })
   } catch (error) {
     console.error("Error uploading avatar:", error)
@@ -110,6 +113,8 @@ export async function DELETE() {
       data: { avatar: null },
       select: { id: true, name: true, email: true, avatar: true },
     })
+
+    logAudit({ action: "delete", entityType: "user_avatar", entityId: userId, userId })
 
     return NextResponse.json({ user })
   } catch (error) {

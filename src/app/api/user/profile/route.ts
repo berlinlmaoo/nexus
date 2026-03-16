@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { logAudit } from "@/lib/audit"
 
 export async function GET() {
   try {
@@ -55,6 +56,8 @@ export async function PATCH(request: NextRequest) {
       data,
       select: { id: true, name: true, email: true, avatar: true },
     })
+
+    logAudit({ action: "update", entityType: "user_profile", entityId: session.user.id, userId: session.user.id, request })
 
     return NextResponse.json({ user })
   } catch (error) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { logAudit } from "@/lib/audit"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 
@@ -67,6 +68,8 @@ export async function POST(request: NextRequest) {
     await writeFile(filePath, buffer)
 
     const urlPath = `/api/files/project-icons/${fileName}`
+
+    logAudit({ action: "update", entityType: "project_icon", entityId: projectId, userId: session.user.id!, request })
 
     return NextResponse.json({ url: urlPath })
   } catch (error) {

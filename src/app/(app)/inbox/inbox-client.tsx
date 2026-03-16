@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Bell, CheckCheck, Circle, Inbox, Loader2, Trash2, ChevronDown, ChevronRight } from "lucide-react"
+import { toast } from "sonner"
 
 interface Notification {
   id: string
@@ -55,6 +56,7 @@ export function InboxClient({
       setNotifications(notifications.map(n => n.id === id ? { ...n, read: true } : n))
     } catch (e) {
       console.error(e)
+      toast.error("Failed to mark notification as read")
     }
   }
 
@@ -67,8 +69,10 @@ export function InboxClient({
         body: JSON.stringify({ markAllRead: true }),
       })
       setNotifications(notifications.map(n => ({ ...n, read: true })))
+      toast.success("All notifications marked as read")
     } catch (e) {
       console.error(e)
+      toast.error("Failed to mark all as read")
     } finally {
       setMarkingAll(false)
     }
@@ -77,12 +81,15 @@ export function InboxClient({
   const readCount = notifications.filter(n => n.read).length
 
   const clearAllRead = async () => {
+    if (!window.confirm(`Delete ${readCount} read notification${readCount !== 1 ? "s" : ""}? This cannot be undone.`)) return
     setClearingRead(true)
     try {
       await fetch("/api/notifications?clearRead=true", { method: "DELETE" })
       setNotifications(notifications.filter(n => !n.read))
+      toast.success(`Cleared ${readCount} read notification${readCount !== 1 ? "s" : ""}`)
     } catch (e) {
       console.error(e)
+      toast.error("Failed to clear read notifications")
     } finally {
       setClearingRead(false)
     }
@@ -97,8 +104,10 @@ export function InboxClient({
         body: JSON.stringify({ id }),
       })
       setNotifications(notifications.filter(n => n.id !== id))
+      toast.success("Notification deleted")
     } catch (e) {
       console.error(e)
+      toast.error("Failed to delete notification")
     }
   }
 
