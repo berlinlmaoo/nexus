@@ -248,6 +248,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
     [project.taskLists]
   )
   const [allTasks, setAllTasks] = useState(serverTasks)
+  const [viewKey, setViewKey] = useState(0)
   useEffect(() => { setAllTasks(serverTasks) }, [serverTasks])
 
   // Filter + search
@@ -359,6 +360,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       setAllTasks((prev) =>
         prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
       )
+      setViewKey((k) => k + 1)
       try {
         await fetch(`/api/tasks/${taskId}`, {
           method: "PATCH",
@@ -674,6 +676,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
         )}
         {viewMode === "list" && (
           <TaskListView
+            key={viewKey}
             sections={filteredSections}
             onTaskClick={handleTaskClick}
             onToggleStatus={handleToggleStatus}
