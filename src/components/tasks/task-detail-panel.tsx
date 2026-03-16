@@ -358,9 +358,9 @@ export function TaskDetailPanel({
   ]
 
   return (
-    <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[45%] sm:min-w-[440px] sm:max-w-[680px] bg-background border-l shadow-2xl animate-slide-in-right flex flex-col">
+    <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[480px] sm:min-w-[440px] sm:max-w-[680px] bg-white border-l border-neutral-200 shadow-2xl animate-slide-in-right flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-6 h-12 shrink-0">
+      <div className="flex items-center justify-between border-b border-neutral-200 px-6 h-12 shrink-0">
         <div className="flex items-center gap-3">
           {/* Mark complete button */}
           <button
@@ -442,7 +442,7 @@ export function TaskDetailPanel({
         {/* Title */}
         <div className="px-6 pt-6 pb-2">
           <input
-            className="w-full text-xl font-semibold bg-transparent border-none outline-none focus:ring-0 p-0 text-foreground placeholder:text-muted-foreground/50"
+            className="w-full text-lg font-semibold bg-transparent border-none outline-none focus:ring-0 p-0 text-neutral-900 placeholder:text-neutral-400"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Task title"
@@ -452,8 +452,8 @@ export function TaskDetailPanel({
         {/* Fields as rows - Asana style */}
         <div className="px-6 py-3 space-y-0">
           {/* Assignee row */}
-          <div className="flex items-center py-2 border-b border-border/30">
-            <div className="flex items-center gap-2 w-32 shrink-0">
+          <div className="flex items-center py-2 border-b border-neutral-100">
+            <div className="flex items-center gap-2 w-28 shrink-0">
               <User className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="text-xs text-muted-foreground">Assignee</span>
             </div>
@@ -474,8 +474,8 @@ export function TaskDetailPanel({
           </div>
 
           {/* Due Date row */}
-          <div className="flex items-center py-2 border-b border-border/30">
-            <div className="flex items-center gap-2 w-32 shrink-0">
+          <div className="flex items-center py-2 border-b border-neutral-100">
+            <div className="flex items-center gap-2 w-28 shrink-0">
               <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="text-xs text-muted-foreground">Due date</span>
             </div>
@@ -490,8 +490,8 @@ export function TaskDetailPanel({
           </div>
 
           {/* Status row */}
-          <div className="flex items-center py-2 border-b border-border/30">
-            <div className="flex items-center gap-2 w-32 shrink-0">
+          <div className="flex items-center py-2 border-b border-neutral-100">
+            <div className="flex items-center gap-2 w-28 shrink-0">
               <FolderKanban className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="text-xs text-muted-foreground">Status</span>
             </div>
@@ -511,8 +511,8 @@ export function TaskDetailPanel({
           </div>
 
           {/* Priority row */}
-          <div className="flex items-center py-2 border-b border-border/30">
-            <div className="flex items-center gap-2 w-32 shrink-0">
+          <div className="flex items-center py-2 border-b border-neutral-100">
+            <div className="flex items-center gap-2 w-28 shrink-0">
               <Flag className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="text-xs text-muted-foreground">Priority</span>
             </div>
@@ -532,8 +532,8 @@ export function TaskDetailPanel({
           </div>
 
           {/* Task Type row */}
-          <div className="flex items-center py-2 border-b border-border/30">
-            <div className="flex items-center gap-2 w-32 shrink-0">
+          <div className="flex items-center py-2 border-b border-neutral-100">
+            <div className="flex items-center gap-2 w-28 shrink-0">
               <ListTodo className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="text-xs text-muted-foreground">Type</span>
             </div>
@@ -564,8 +564,8 @@ export function TaskDetailPanel({
           </div>
 
           {taskType === "APPROVAL" && (
-            <div className="flex items-center py-2 border-b border-border/30">
-              <div className="flex items-center gap-2 w-32 shrink-0">
+            <div className="flex items-center py-2 border-b border-neutral-100">
+              <div className="flex items-center gap-2 w-28 shrink-0">
                 <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="text-xs text-muted-foreground">Approval</span>
               </div>
@@ -594,8 +594,8 @@ export function TaskDetailPanel({
           )}
 
           {/* Recurring row */}
-          <div className="flex items-start py-2 border-b border-border/30">
-            <div className="flex items-center gap-2 w-32 shrink-0 pt-1">
+          <div className="flex items-start py-2 border-b border-neutral-100">
+            <div className="flex items-center gap-2 w-28 shrink-0 pt-1">
               <Repeat className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="text-xs text-muted-foreground">Repeat</span>
             </div>
@@ -708,8 +708,8 @@ export function TaskDetailPanel({
           </div>
 
           {/* Time Tracking row */}
-          <div className="flex items-center py-2 border-b border-border/30">
-            <div className="flex items-center gap-2 w-32 shrink-0">
+          <div className="flex items-center py-2 border-b border-neutral-100">
+            <div className="flex items-center gap-2 w-28 shrink-0">
               <Clock className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="text-xs text-muted-foreground">Time</span>
             </div>
@@ -719,8 +719,8 @@ export function TaskDetailPanel({
           </div>
 
           {/* Tags row */}
-          <div className="flex items-start py-2 border-b border-border/30">
-            <div className="flex items-center gap-2 w-32 shrink-0 pt-1">
+          <div className="flex items-start py-2 border-b border-neutral-100">
+            <div className="flex items-center gap-2 w-28 shrink-0 pt-1">
               <Tag className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="text-xs text-muted-foreground">Tags</span>
             </div>
@@ -771,17 +771,17 @@ export function TaskDetailPanel({
 
         {/* Tabs */}
         <div className="px-6 pt-2">
-          <div className="flex border-b overflow-x-auto">
+          <div className="flex border-b border-neutral-200 overflow-x-auto">
             {tabs.map((tab) => {
               const Icon = tab.icon
               return (
                 <button
                   key={tab.key}
                   className={cn(
-                    "flex items-center gap-1 px-3 py-2 text-xs font-medium border-b-2 transition-all duration-200 whitespace-nowrap",
+                    "flex items-center gap-1 px-3 py-2 text-xs font-medium border-b-2 transition-colors duration-150 whitespace-nowrap",
                     activeTab === tab.key
-                      ? "border-foreground text-foreground"
-                      : "border-transparent text-muted-foreground hover:text-foreground"
+                      ? "border-blue-600 text-neutral-900"
+                      : "border-transparent text-neutral-500 hover:text-neutral-700"
                   )}
                   onClick={() => setActiveTab(tab.key)}
                 >
@@ -898,17 +898,17 @@ export function TaskDetailPanel({
       </div>
 
       {/* Footer with save */}
-      <div className="border-t px-6 py-3 flex justify-end gap-2 shrink-0">
+      <div className="border-t border-neutral-200 px-6 py-3 flex justify-end gap-2 shrink-0">
         <button
           onClick={onClose}
-          className="h-8 rounded-lg border px-4 text-xs font-medium hover:bg-muted transition-all duration-200 active:scale-95"
+          className="h-8 rounded-md border border-neutral-200 px-4 text-xs font-medium text-neutral-600 hover:bg-neutral-100 transition-colors duration-150 active:scale-95"
         >
           Cancel
         </button>
         <button
           onClick={handleSave}
           disabled={saving}
-          className="h-8 rounded-lg bg-foreground px-4 text-xs font-medium text-background hover:bg-foreground/90 transition-all duration-200 disabled:opacity-50 active:scale-95 shadow-sm flex items-center gap-1.5"
+          className="h-8 rounded-md bg-blue-600 px-4 text-xs font-medium text-white hover:bg-blue-700 transition-colors duration-150 disabled:opacity-50 active:scale-95 shadow-sm flex items-center gap-1.5"
         >
           {saving && <Loader2 className="h-3 w-3 animate-spin" />}
           Save

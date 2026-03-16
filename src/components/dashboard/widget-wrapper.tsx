@@ -39,16 +39,16 @@ export function WidgetWrapper({
   const [collapsed, setCollapsed] = useState(false)
 
   return (
-    <Card className={cn("flex flex-col h-full overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200 rounded-xl", className)}>
+    <Card className={cn("flex flex-col h-full overflow-hidden shadow-none hover:shadow-sm border border-neutral-200 transition-shadow duration-150 rounded-xl", className)}>
       {/* Title bar */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b bg-muted/20 flex-shrink-0">
+      <div className="flex items-center gap-2 px-5 py-3 border-b border-neutral-100 flex-shrink-0">
         {isEditing && (
           <div className="drag-handle cursor-grab active:cursor-grabbing">
-            <GripVertical className="h-4 w-4 text-muted-foreground" />
+            <GripVertical className="h-4 w-4 text-neutral-400" />
           </div>
         )}
-        {icon && <span className="text-muted-foreground">{icon}</span>}
-        <h3 className="text-sm font-semibold flex-1 truncate">{title}</h3>
+        {icon && <span className="text-neutral-500">{icon}</span>}
+        <h3 className="text-sm font-semibold text-neutral-800 flex-1 truncate">{title}</h3>
         <div className="flex items-center gap-1 flex-shrink-0">
           {onSettings && (
             <Button
@@ -87,7 +87,7 @@ export function WidgetWrapper({
 
       {/* Content */}
       {!collapsed && (
-        <div className={cn("flex-1 overflow-auto", !noPadding && "p-4 pt-3")}>
+        <div className={cn("flex-1 overflow-auto", !noPadding && "p-5 pt-3")}>
           {loading ? (
             <div className="flex items-center justify-center h-full min-h-[100px]">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />

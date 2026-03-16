@@ -111,9 +111,9 @@ function SortableTaskRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "group grid grid-cols-[20px_20px_24px_1fr_100px_90px_90px_72px] gap-0 items-center border-b border-border/50 h-9 cursor-pointer transition-colors text-[13px]",
-        isDragging && "z-50 shadow-lg bg-background",
-        isRowSelected ? "bg-muted/60" : "hover:bg-muted/30"
+        "group grid grid-cols-[20px_20px_24px_1fr_100px_90px_90px_72px] gap-0 items-center border-b border-neutral-100 h-10 cursor-pointer transition-colors text-sm",
+        isDragging && "z-50 shadow-lg bg-white",
+        isRowSelected ? "bg-blue-50" : "hover:bg-neutral-50"
       )}
       onClick={() => onTaskClick(task)}
     >
@@ -140,10 +140,10 @@ function SortableTaskRow({
         >
           <div
             className={cn(
-              "h-3.5 w-3.5 rounded-sm border transition-colors",
+              "h-4 w-4 rounded border transition-colors",
               isRowSelected
-                ? "bg-foreground border-foreground"
-                : "border-border"
+                ? "bg-blue-600 border-blue-600"
+                : "border-neutral-300"
             )}
           >
             {isRowSelected && (
@@ -172,7 +172,7 @@ function SortableTaskRow({
       </div>
 
       {/* Title + tags */}
-      <div className="flex items-center gap-2 min-w-0 px-2 h-full border-r border-border/30">
+      <div className="flex items-center gap-2 min-w-0 px-2 h-full border-r border-neutral-100">
         <span
           className={cn(
             "text-[13px] truncate",
@@ -196,7 +196,7 @@ function SortableTaskRow({
       </div>
 
       {/* Assignees */}
-      <div className="flex items-center px-2 h-full border-r border-border/30">
+      <div className="flex items-center px-2 h-full border-r border-neutral-100">
         {task.assignees.length > 0 ? (
           <div className="flex -space-x-1">
             {task.assignees.slice(0, 2).map((a) => (
@@ -219,7 +219,7 @@ function SortableTaskRow({
       </div>
 
       {/* Due date */}
-      <div className="flex items-center px-2 h-full border-r border-border/30">
+      <div className="flex items-center px-2 h-full border-r border-neutral-100">
         {task.dueDate ? (
           <span
             className={cn(
@@ -235,7 +235,7 @@ function SortableTaskRow({
       </div>
 
       {/* Status */}
-      <div className="flex items-center px-2 h-full border-r border-border/30">
+      <div className="flex items-center px-2 h-full border-r border-neutral-100">
         <StatusBadge status={task.status} />
       </div>
 
@@ -659,7 +659,7 @@ export function TaskListView({
     >
       <div>
         {/* Table column headers */}
-        <div className="grid grid-cols-[20px_20px_24px_1fr_100px_90px_90px_72px] gap-0 items-center border-b-2 border-border h-8 bg-muted/30 sticky top-0 z-10">
+        <div className="grid grid-cols-[20px_20px_24px_1fr_100px_90px_90px_72px] gap-0 items-center border-b border-neutral-200 h-8 bg-neutral-50 sticky top-0 z-10">
           <div />
           <div />
           <div />
@@ -689,7 +689,7 @@ export function TaskListView({
             <div key={section.id}>
               {/* Section header row */}
               <div
-                className="group/section flex w-full items-center gap-2 h-9 px-2 bg-muted/20 border-b border-border/50 hover:bg-muted/40 transition-colors"
+                className="group/section flex w-full items-center gap-2 h-9 px-2 bg-neutral-50 border-b border-neutral-200 hover:bg-neutral-100 transition-colors"
               >
                 {/* Drag handle for section reorder */}
                 {projectId && sections.length > 1 && (
@@ -742,7 +742,7 @@ export function TaskListView({
                   />
                 ) : (
                   <button onClick={() => toggleCollapse(section.id)} className="flex items-center gap-2">
-                    <span className="font-semibold text-[13px] text-foreground">{section.name}</span>
+                    <span className="font-medium text-sm text-neutral-700">{section.name}</span>
                     <span className="text-[11px] text-muted-foreground tabular-nums">
                       {section.tasks.length}
                     </span>
@@ -808,7 +808,7 @@ export function TaskListView({
 
                   {/* Inline quick-add row */}
                   {addingTo === section.id ? (
-                    <div className="grid grid-cols-[20px_20px_24px_1fr] gap-0 items-center h-9 border-b border-border/50 bg-muted/10">
+                    <div className="grid grid-cols-[20px_20px_24px_1fr] gap-0 items-center h-10 border-b border-neutral-100 bg-neutral-50/50">
                       <div />
                       <div />
                       <div className="flex items-center justify-center">
@@ -845,7 +845,7 @@ export function TaskListView({
                     </div>
                   ) : (
                     <button
-                      className="flex items-center gap-2 w-full h-8 px-2 text-[13px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/20 transition-colors border-b border-border/30"
+                      className="flex items-center gap-2 w-full h-8 px-2 text-sm text-neutral-400 hover:text-neutral-600 hover:bg-neutral-50 transition-colors border-b border-neutral-100"
                       onClick={() => {
                         if (projectId) {
                           startAdding(section.id)
@@ -869,7 +869,7 @@ export function TaskListView({
         {/* Add Section */}
         {projectId && (
           showAddSection ? (
-            <div className="flex items-center gap-2 h-9 px-2 bg-muted/10 border-b border-border/50">
+            <div className="flex items-center gap-2 h-9 px-2 bg-neutral-50/50 border-b border-neutral-100">
               <Plus className="h-3.5 w-3.5 text-muted-foreground" />
               <input
                 ref={sectionInputRef}
@@ -890,7 +890,7 @@ export function TaskListView({
             </div>
           ) : (
             <button
-              className="flex items-center gap-2 w-full h-8 px-2 text-[13px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/20 transition-colors"
+              className="flex items-center gap-2 w-full h-8 px-2 text-sm text-neutral-400 hover:text-neutral-600 hover:bg-neutral-50 transition-colors"
               onClick={() => {
                 setShowAddSection(true)
                 setAddingSectionName("")
