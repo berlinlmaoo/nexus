@@ -39,7 +39,7 @@ export function Header({ title, breadcrumbs, user, children }: HeaderProps) {
   const { resolvedTheme, setTheme } = useTheme()
 
   return (
-    <header className="flex h-11 items-center justify-between border-b border-neutral-200 bg-white px-4 shrink-0">
+    <header className="flex h-11 items-center justify-between border-b bg-white dark:bg-zinc-950 px-4 shrink-0">
       {/* Left: hamburger + breadcrumb */}
       <div className="flex items-center gap-2 min-w-0">
         <button
@@ -99,7 +99,7 @@ export function Header({ title, breadcrumbs, user, children }: HeaderProps) {
           onClick={() => {
             window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))
           }}
-          className="hidden sm:flex items-center gap-2 h-7 w-48 rounded-md border border-neutral-200 bg-neutral-50 px-2.5 text-xs text-neutral-500 hover:bg-neutral-100 transition-colors duration-150"
+          className="hidden sm:flex items-center gap-2 h-7 w-48 rounded border bg-muted/50 px-2.5 text-xs text-muted-foreground hover:bg-muted transition-all duration-150"
         >
           <Search className="h-3.5 w-3.5" />
           <span className="flex-1 text-left">Search</span>

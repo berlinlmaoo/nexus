@@ -443,7 +443,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       <ProjectHeader project={project} />
 
       {/* View tabs row */}
-      <div className="border-b border-neutral-200 bg-white px-4 shrink-0 overflow-x-auto hide-scrollbar">
+      <div className="border-b bg-white dark:bg-zinc-950 px-4 shrink-0 overflow-x-auto hide-scrollbar">
         <div className="flex items-center">
           {viewTabs.map((tab) => {
             const Icon = tab.icon
@@ -451,10 +451,10 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
               <button
                 key={tab.id}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors duration-150 whitespace-nowrap",
+                  "flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 -mb-px transition-all duration-200 whitespace-nowrap",
                   viewMode === tab.id
-                    ? "border-blue-600 text-neutral-900"
-                    : "border-transparent text-neutral-500 hover:text-neutral-700"
+                    ? "border-foreground text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40"
                 )}
                 onClick={() => handleViewChange(tab.id)}
               >
@@ -467,7 +467,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       </div>
 
       {/* Toolbar row: search, filter, sort, group */}
-      <div className="flex items-center gap-1 border-b border-neutral-200 bg-white px-4 py-1.5 shrink-0 overflow-x-auto hide-scrollbar">
+      <div className="flex items-center gap-1 border-b bg-white dark:bg-zinc-950 px-4 py-1.5 shrink-0 overflow-x-auto hide-scrollbar">
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
@@ -476,7 +476,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
               placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-7 w-32 rounded-md border border-neutral-200 bg-transparent pl-7 pr-2 text-xs outline-none placeholder:text-neutral-400 focus:border-blue-500 focus:ring-0 transition-colors duration-150"
+              className="h-7 w-32 rounded border bg-transparent pl-7 pr-2 text-xs outline-none placeholder:text-muted-foreground/60 focus:border-foreground/30 focus:ring-0 transition-all duration-150"
             />
             {searchQuery && (
               <button onClick={() => setSearchQuery("")} className="absolute right-1.5 top-1/2 -translate-y-1/2">
@@ -661,7 +661,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       )}
 
       {/* Quick action pills */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-neutral-200 bg-white">
+      <div className="flex items-center gap-2 px-4 py-2 border-b bg-white dark:bg-zinc-950">
         <Link href={`/projects/${project.id}/sprints`}>
           <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border transition-all duration-200 active:scale-95">
             <Zap className="h-3 w-3" /> Sprints
@@ -812,7 +812,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
         defaultTaskListId={createTaskListId}
         onCreated={() => { setCreateTaskListId(undefined); setCreateDialogOpen(false) }}
       >
-        <button className="fixed bottom-20 md:bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 transition-all duration-200 hover:scale-105 hover:shadow-xl active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
+        <button className="fixed bottom-20 md:bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-lg hover:bg-foreground/90 transition-all duration-200 hover:scale-105 hover:shadow-xl active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
           <Plus className="h-5 w-5" />
         </button>
       </CreateTaskDialog>
