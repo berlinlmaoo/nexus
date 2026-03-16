@@ -251,7 +251,7 @@ export function GoalsPageClient({ goals: initialGoals, workspaceId }: { goals: G
           <h3 className="text-lg font-semibold mb-1">No goals yet</h3>
           <p className="text-sm text-muted-foreground mb-4">Create your first goal to start tracking objectives</p>
           <Button onClick={() => setOpen(true)} className="bg-foreground text-background hover:bg-foreground/90">
-            <Plus className="h-4 w-4 mr-2" /> Create Goal
+            <Plus className="h-4 w-4 mr-2" /> New Goal
           </Button>
         </div>
       ) : (

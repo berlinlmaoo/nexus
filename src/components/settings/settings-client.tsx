@@ -207,7 +207,7 @@ export function SettingsClient({ user, workspace, isAdmin, workspaceRole }: Sett
       </div>
 
       {/* Tab navigation */}
-      <div className="flex gap-1 border-b overflow-x-auto hide-scrollbar">
+      <div className="flex flex-nowrap gap-1 border-b overflow-x-auto">
         {tabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
