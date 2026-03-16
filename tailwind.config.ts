@@ -50,6 +50,11 @@ const config: Config = {
           text: "#9ca0a5",
           "text-active": "#ffffff",
         },
+        "icon-rail": {
+          DEFAULT: "#2B3040",
+          hover: "#363B4D",
+          active: "#414859",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

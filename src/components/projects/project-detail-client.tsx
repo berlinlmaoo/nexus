@@ -442,8 +442,8 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       {/* Project Header */}
       <ProjectHeader project={project} />
 
-      {/* View tabs row */}
-      <div className="border-b bg-white dark:bg-zinc-950 px-4 shrink-0 overflow-x-auto hide-scrollbar">
+      {/* View tabs row — Plane style */}
+      <div className="border-b border-neutral-200 bg-white px-4 shrink-0 overflow-x-auto hide-scrollbar">
         <div className="flex items-center">
           {viewTabs.map((tab) => {
             const Icon = tab.icon
@@ -451,10 +451,10 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
               <button
                 key={tab.id}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 -mb-px transition-all duration-200 whitespace-nowrap",
+                  "flex items-center gap-1.5 px-3 py-2.5 text-sm border-b-2 -mb-px transition-all duration-200 whitespace-nowrap",
                   viewMode === tab.id
-                    ? "border-foreground text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                    ? "border-neutral-800 text-neutral-900 font-medium"
+                    : "border-transparent text-neutral-500 hover:text-neutral-700"
                 )}
                 onClick={() => handleViewChange(tab.id)}
               >
@@ -466,8 +466,53 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
         </div>
       </div>
 
-      {/* Toolbar row: search, filter, sort, group */}
-      <div className="flex items-center gap-1 border-b bg-white dark:bg-zinc-950 px-4 py-1.5 shrink-0 overflow-x-auto hide-scrollbar">
+      {/* Toolbar row: work items count + view toggles + search, filter, sort, group */}
+      <div className="flex items-center gap-2 border-b border-neutral-200 bg-white px-4 py-2 shrink-0 overflow-x-auto hide-scrollbar">
+          {/* Work items count badge */}
+          <div className="flex items-center gap-2 mr-2">
+            <span className="text-sm font-medium text-neutral-900">Work items</span>
+            <span className="flex h-5 items-center rounded bg-blue-100 px-1.5 text-[11px] font-medium text-blue-700">
+              {filteredTasks.length}
+            </span>
+          </div>
+
+          {/* View toggle icons */}
+          <div className="flex items-center rounded-md border border-neutral-200 overflow-hidden mr-2">
+            {[
+              { id: "list" as const, icon: List },
+              { id: "board" as const, icon: LayoutGrid },
+            ].map((v) => (
+              <button
+                key={v.id}
+                onClick={() => handleViewChange(v.id)}
+                className={cn(
+                  "flex items-center justify-center h-7 w-7 transition-colors",
+                  viewMode === v.id ? "bg-neutral-100 text-neutral-900" : "text-neutral-400 hover:text-neutral-600"
+                )}
+              >
+                <v.icon className="h-3.5 w-3.5" />
+              </button>
+            ))}
+          </div>
+
+          {/* Add work item button — Plane blue */}
+          <CreateTaskDialog
+            projectId={project.id}
+            taskLists={project.taskLists.map((tl) => ({ id: tl.id, name: tl.name }))}
+            defaultTaskListId={createTaskListId}
+            onCreated={() => { setCreateTaskListId(undefined); setCreateDialogOpen(false) }}
+          >
+            <button className="flex items-center gap-1.5 rounded-full bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors shadow-sm">
+              <Plus className="h-3.5 w-3.5" />
+              Add work item
+            </button>
+          </CreateTaskDialog>
+
+          <div className="flex-1" />
+      </div>
+
+      {/* Filter/sort row */}
+      <div className="flex items-center gap-1 border-b border-neutral-200 bg-white px-4 py-1.5 shrink-0 overflow-x-auto hide-scrollbar">
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
@@ -661,24 +706,24 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       )}
 
       {/* Quick action pills */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b bg-white dark:bg-zinc-950">
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-neutral-200 bg-white">
         <Link href={`/projects/${project.id}/sprints`}>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border transition-all duration-200 active:scale-95">
+          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-neutral-200 text-xs font-medium text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50 transition-all duration-200 active:scale-95">
             <Zap className="h-3 w-3" /> Sprints
           </button>
         </Link>
         <Link href={`/projects/${project.id}/automations`}>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border transition-all duration-200 active:scale-95">
+          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-neutral-200 text-xs font-medium text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50 transition-all duration-200 active:scale-95">
             <Workflow className="h-3 w-3" /> Automations
           </button>
         </Link>
         <Link href={`/projects/${project.id}/forms`}>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border transition-all duration-200 active:scale-95">
+          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-neutral-200 text-xs font-medium text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50 transition-all duration-200 active:scale-95">
             <ClipboardList className="h-3 w-3" /> Forms
           </button>
         </Link>
         <SaveTemplateDialog project={{ id: project.id, name: project.name }}>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border transition-all duration-200 active:scale-95">
+          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-neutral-200 text-xs font-medium text-neutral-500 hover:text-neutral-700 hover:bg-neutral-50 transition-all duration-200 active:scale-95">
             <Copy className="h-3 w-3" /> Template
           </button>
         </SaveTemplateDialog>
@@ -805,14 +850,14 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
         )}
       </div>
 
-      {/* Floating create button */}
+      {/* Floating create button — Plane blue */}
       <CreateTaskDialog
         projectId={project.id}
         taskLists={project.taskLists.map((tl) => ({ id: tl.id, name: tl.name }))}
         defaultTaskListId={createTaskListId}
         onCreated={() => { setCreateTaskListId(undefined); setCreateDialogOpen(false) }}
       >
-        <button className="fixed bottom-20 md:bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-lg hover:bg-foreground/90 transition-all duration-200 hover:scale-105 hover:shadow-xl active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+        <button className="fixed bottom-20 md:bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 transition-all duration-200 hover:scale-105 hover:shadow-xl active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
           <Plus className="h-5 w-5" />
         </button>
       </CreateTaskDialog>
