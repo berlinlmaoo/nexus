@@ -375,18 +375,39 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
     [router, serverTasks]
   )
 
+  // Map section names to statuses for auto-status on drag
+  const STATUS_MAP: Record<string, TaskCardData["status"]> = {
+    "to do": "TODO", "todo": "TODO", "backlog": "TODO",
+    "in progress": "IN_PROGRESS", "doing": "IN_PROGRESS", "wip": "IN_PROGRESS",
+    "in review": "IN_REVIEW", "review": "IN_REVIEW",
+    "done": "DONE", "complete": "DONE", "completed": "DONE",
+    "cancelled": "CANCELLED", "canceled": "CANCELLED",
+  }
+
   const handleSectionChange = useCallback(
     async (taskId: string, newSectionId: string) => {
-      // Optimistic update — move task to new section
+      // Find section name and auto-map to status
+      const section = project.taskLists.find((tl) => tl.id === newSectionId)
+      const sectionName = section?.name?.toLowerCase().trim() || ""
+      const autoStatus = STATUS_MAP[sectionName]
+
+      // Optimistic update — move task to new section + update status if mapped
       setAllTasks((prev) =>
-        prev.map((t) => (t.id === taskId ? { ...t, taskListId: newSectionId } : t))
+        prev.map((t) => {
+          if (t.id !== taskId) return t
+          const updated = { ...t, taskListId: newSectionId }
+          if (autoStatus) updated.status = autoStatus
+          return updated
+        })
       )
       setViewKey((k) => k + 1)
       try {
+        const patchBody: Record<string, string> = { taskListId: newSectionId }
+        if (autoStatus) patchBody.status = autoStatus
         await fetch(`/api/tasks/${taskId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ taskListId: newSectionId }),
+          body: JSON.stringify(patchBody),
         })
         router.refresh()
       } catch (error) {
@@ -394,7 +415,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
         setAllTasks(serverTasks)
       }
     },
-    [router, serverTasks]
+    [router, serverTasks, project.taskLists]
   )
 
   const handleAddTask = useCallback((taskListId: string) => {
