@@ -25,6 +25,8 @@ import {
   Search,
   PanelLeftClose,
   PanelLeft,
+  Star,
+  Clock,
 } from "lucide-react"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { cn } from "@/lib/utils"
@@ -218,12 +220,53 @@ export function Sidebar({ user }: SidebarProps) {
   const [confirmDeleteProject, setConfirmDeleteProject] = useState<{ id: string; name: string } | null>(null)
   const sidebarRef = useRef<HTMLDivElement>(null)
 
+  // Favorites & Recents
+  const [favorites, setFavorites] = useState<Array<{ id: string; type: string; targetId: string }>>([])
+  const [favoritesOpen, setFavoritesOpen] = useState(true)
+  const [recentsOpen, setRecentsOpen] = useState(true)
+  const [recentProjects, setRecentProjects] = useState<Array<{ id: string; name: string; color: string; icon: string }>>([])
+
+  const RECENTS_KEY = "nexus-recent-projects"
+
   useEffect(() => {
     fetch("/api/projects")
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => setProjects(Array.isArray(data) ? data : data.projects ?? []))
       .catch(() => setProjects([]))
   }, [])
+
+  // Fetch favorites
+  useEffect(() => {
+    fetch("/api/favorites")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setFavorites(Array.isArray(data) ? data : []))
+      .catch(() => setFavorites([]))
+  }, [])
+
+  // Load recent projects from localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(RECENTS_KEY)
+      if (raw) setRecentProjects(JSON.parse(raw))
+    } catch {}
+  }, [])
+
+  // Track current project visit in recents
+  useEffect(() => {
+    const match = pathname?.match(/^\/projects\/([^/]+)/)
+    if (match && projects.length > 0) {
+      const pid = match[1]
+      const project = projects.find((p) => p.id === pid)
+      if (project) {
+        setRecentProjects((prev) => {
+          const filtered = prev.filter((p) => p.id !== pid)
+          const updated = [{ id: project.id, name: project.name, color: project.color, icon: project.icon }, ...filtered].slice(0, 5)
+          try { localStorage.setItem(RECENTS_KEY, JSON.stringify(updated)) } catch {}
+          return updated
+        })
+      }
+    }
+  }, [pathname, projects])
 
   useEffect(() => {
     const match = pathname?.match(/^\/projects\/([^/]+)/)
@@ -489,6 +532,101 @@ export function Sidebar({ user }: SidebarProps) {
                 </Link>
               )
             })}
+          </div>
+        )}
+
+        {/* Favorites section */}
+        {!isCollapsed && favorites.length > 0 && (
+          <div className="mb-2">
+            <button
+              onClick={() => setFavoritesOpen(!favoritesOpen)}
+              className="flex w-full items-center justify-between px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-text/50 hover:text-sidebar-text/80 transition-colors"
+            >
+              <span className="flex items-center gap-1.5">
+                <Star className="h-3 w-3" />
+                Favorites
+              </span>
+              {favoritesOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            </button>
+            {favoritesOpen && (
+              <div className="mt-0.5 space-y-0.5">
+                {favorites
+                  .filter((f) => f.type === "project")
+                  .map((fav) => {
+                    const project = projects.find((p) => p.id === fav.targetId)
+                    if (!project) return null
+                    const isActive = pathname?.startsWith(`/projects/${project.id}`) ?? false
+                    return (
+                      <Link
+                        key={fav.id}
+                        href={`/projects/${project.id}`}
+                        className={cn(
+                          "group flex items-center gap-2.5 rounded-md px-3 py-1.5 text-[13px] transition-all duration-150",
+                          isActive
+                            ? "bg-sidebar-light text-white"
+                            : "text-sidebar-text hover:bg-sidebar-light hover:text-white"
+                        )}
+                      >
+                        {isUploadedIcon(project.icon) ? (
+                          <ProjectIcon icon={project.icon} size="sm" className="h-4 w-4" />
+                        ) : (
+                          <span
+                            className="h-2.5 w-2.5 rounded-full flex-shrink-0 ring-1 ring-white/10"
+                            style={{ backgroundColor: project.color }}
+                          />
+                        )}
+                        <span className="truncate">{project.name}</span>
+                        <Star className="h-3 w-3 ml-auto text-yellow-400/70 flex-shrink-0" />
+                      </Link>
+                    )
+                  })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Recents section */}
+        {!isCollapsed && recentProjects.length > 0 && (
+          <div className="mb-2">
+            <button
+              onClick={() => setRecentsOpen(!recentsOpen)}
+              className="flex w-full items-center justify-between px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-text/50 hover:text-sidebar-text/80 transition-colors"
+            >
+              <span className="flex items-center gap-1.5">
+                <Clock className="h-3 w-3" />
+                Recent
+              </span>
+              {recentsOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+            </button>
+            {recentsOpen && (
+              <div className="mt-0.5 space-y-0.5">
+                {recentProjects.map((project) => {
+                  const isActive = pathname?.startsWith(`/projects/${project.id}`) ?? false
+                  return (
+                    <Link
+                      key={project.id}
+                      href={`/projects/${project.id}`}
+                      className={cn(
+                        "group flex items-center gap-2.5 rounded-md px-3 py-1.5 text-[13px] transition-all duration-150",
+                        isActive
+                          ? "bg-sidebar-light text-white"
+                          : "text-sidebar-text hover:bg-sidebar-light hover:text-white"
+                      )}
+                    >
+                      {isUploadedIcon(project.icon) ? (
+                        <ProjectIcon icon={project.icon} size="sm" className="h-4 w-4" />
+                      ) : (
+                        <span
+                          className="h-2.5 w-2.5 rounded-full flex-shrink-0 ring-1 ring-white/10"
+                          style={{ backgroundColor: project.color }}
+                        />
+                      )}
+                      <span className="truncate">{project.name}</span>
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )}
 

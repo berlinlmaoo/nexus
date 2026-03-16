@@ -14,6 +14,7 @@ export default async function AppGroupLayout({
   }
 
   const user = {
+    id: session.user.id!,
     name: session.user.name ?? "User",
     email: session.user.email ?? "",
     image: session.user.image ?? null,

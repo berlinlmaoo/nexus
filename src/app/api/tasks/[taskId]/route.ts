@@ -5,6 +5,7 @@ import { logAudit } from "@/lib/audit"
 import { checkProjectAccess } from "@/lib/rbac"
 import { executeAutomations } from "@/lib/automation-engine"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
+import { emitTaskUpdated, emitTaskDeleted } from "@/lib/socket-emitter"
 
 export async function GET(
   _request: NextRequest,
@@ -168,8 +169,14 @@ export async function PATCH(
         },
       })
 
+      // Real-time: broadcast to project room
+      emitTaskUpdated(existing.taskList.projectId, JSON.parse(JSON.stringify(updatedTask)))
+
       return NextResponse.json(updatedTask)
     }
+
+    // Real-time: broadcast to project room
+    emitTaskUpdated(existing.taskList.projectId, JSON.parse(JSON.stringify(task)))
 
     return NextResponse.json(task)
   } catch (error) {
@@ -217,6 +224,9 @@ export async function DELETE(
     await prisma.task.delete({
       where: { id: params.taskId },
     })
+
+    // Real-time: broadcast deletion to project room
+    emitTaskDeleted(existing.taskList.projectId, params.taskId)
 
     return NextResponse.json({ message: "Task deleted" })
   } catch (error) {

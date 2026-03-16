@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma"
+import { emitNotification } from "@/lib/socket-emitter"
 import {
   sendEmail,
   taskAssignedEmail,
@@ -68,7 +69,7 @@ async function createInAppNotification(data: {
   taskId?: string
   projectId?: string
 }) {
-  return prisma.notification.create({
+  const notification = await prisma.notification.create({
     data: {
       userId: data.userId,
       type: data.type,
@@ -78,6 +79,11 @@ async function createInAppNotification(data: {
       projectId: data.projectId || null,
     },
   })
+
+  // Real-time: push to user's socket room
+  emitNotification(data.userId, JSON.parse(JSON.stringify(notification)))
+
+  return notification
 }
 
 // ── Public methods ──────────────────────────────────────────────
