@@ -389,10 +389,9 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       {/* Project Header */}
       <ProjectHeader project={project} />
 
-      {/* Asana-style sub-header: view tabs + toolbar */}
-      <div className="flex flex-wrap items-center border-b bg-white dark:bg-zinc-950 px-4 min-h-[40px] shrink-0">
-        {/* View tabs — scrollable */}
-        <div className="flex items-center overflow-x-auto hide-scrollbar flex-1 min-w-0">
+      {/* View tabs row */}
+      <div className="border-b bg-white dark:bg-zinc-950 px-4 shrink-0 overflow-x-auto hide-scrollbar">
+        <div className="flex items-center">
           {viewTabs.map((tab) => {
             const Icon = tab.icon
             return (
@@ -412,9 +411,10 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
             )
           })}
         </div>
+      </div>
 
-        {/* Right toolbar: search, filter, sort, group, customize */}
-        <div className="flex items-center gap-1 shrink-0 ml-2">
+      {/* Toolbar row: search, filter, sort, group */}
+      <div className="flex items-center gap-1 border-b bg-white dark:bg-zinc-950 px-4 py-1.5 shrink-0 overflow-x-auto hide-scrollbar">
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
@@ -565,7 +565,6 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
               Share
             </button>
           </div>
-        </div>
       </div>
 
       {/* Filter bar */}
