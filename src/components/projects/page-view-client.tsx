@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useMemo, lazy, Suspense } from "react"
+import { useState, useCallback, useMemo, lazy, Suspense, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -19,6 +19,7 @@ import {
   CheckSquare,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useAppStore } from "@/stores/app-store"
 
 const KanbanView = lazy(() => import("@/components/tasks/kanban-view").then(m => ({ default: m.KanbanView })))
 const CalendarView = lazy(() => import("@/components/tasks/calendar-view").then(m => ({ default: m.CalendarView })))
@@ -277,8 +278,15 @@ export function PageViewClient({ page, tasks }: PageViewClientProps) {
   const router = useRouter()
   const [selectedTask, setSelectedTask] = useState<TaskCardData | null>(null)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const { setTaskPanelOpen } = useAppStore()
 
   const defaultTaskListId = page.project.taskLists[0]?.id
+
+  // Sync task panel open state to app store so GIDEON button can hide
+  useEffect(() => {
+    setTaskPanelOpen(!!selectedTask)
+    return () => setTaskPanelOpen(false)
+  }, [selectedTask, setTaskPanelOpen])
 
   const handleTaskClick = useCallback((task: TaskCardData) => {
     setSelectedTask(task)

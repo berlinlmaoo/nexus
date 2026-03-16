@@ -98,11 +98,11 @@ export function CalendarWidget({ data }: CalendarWidgetProps) {
       </div>
 
       {/* Weekday headers */}
-      <div className="grid grid-cols-7 gap-0 flex-shrink-0">
+      <div className="grid grid-cols-7 gap-0 flex-shrink-0 w-full">
         {WEEKDAYS.map((day) => (
           <div
             key={day}
-            className="text-center text-[10px] font-medium text-muted-foreground py-1"
+            className="text-center text-[10px] font-medium text-muted-foreground py-1 truncate px-0.5"
           >
             {day}
           </div>
@@ -110,7 +110,7 @@ export function CalendarWidget({ data }: CalendarWidgetProps) {
       </div>
 
       {/* Day grid — fills remaining space */}
-      <div className="grid grid-cols-7 flex-1 auto-rows-fr min-w-0">
+      <div className="grid grid-cols-7 flex-1 auto-rows-fr min-w-0 w-full">
         {calendarDays.map((day) => {
           const dateKey = format(day, "yyyy-MM-dd")
           const dayTasks = tasksByDate.get(dateKey) ?? []

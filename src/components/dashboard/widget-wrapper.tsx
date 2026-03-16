@@ -87,7 +87,7 @@ export function WidgetWrapper({
 
       {/* Content */}
       {!collapsed && (
-        <div className={cn("flex-1 overflow-auto", !noPadding && "p-4 pt-3")}>
+        <div className={cn("flex-1 overflow-auto min-w-0", !noPadding && "p-4 pt-3")}>
           {loading ? (
             <div className="flex items-center justify-center h-full min-h-[100px]">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
