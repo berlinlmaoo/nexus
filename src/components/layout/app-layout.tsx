@@ -71,7 +71,7 @@ export function AppLayout({ children, title, breadcrumbs, user }: AppLayoutProps
         >
           <Header title={title} breadcrumbs={breadcrumbs} user={user} />
 
-          <main className="flex-1 overflow-y-auto p-3 sm:p-6 pb-16 md:pb-6">
+          <main className="flex-1 overflow-auto p-3 sm:p-6 pb-16 md:pb-6">
             <PageTransition>
               {children}
             </PageTransition>
