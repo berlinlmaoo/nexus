@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useRef, useCallback } from "react"
+import { useState, useMemo, useRef, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import {
   DndContext,
@@ -288,6 +288,8 @@ export function TaskListView({
 }: TaskListViewProps) {
   const router = useRouter()
   const [sections, setSections] = useState(initialSections)
+  // Always sync from props — this is the key fix
+  useEffect(() => { setSections(initialSections) }, [initialSections])
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [sortField, setSortField] = useState<SortField>("priority")
   const [sortDir, setSortDir] = useState<SortDir>("asc")
@@ -298,12 +300,6 @@ export function TaskListView({
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
   const [activeTask, setActiveTask] = useState<TaskCardData | null>(null)
   const [overSectionId, setOverSectionId] = useState<string | null>(null)
-
-  const prevSectionsRef = useRef(initialSections)
-  if (prevSectionsRef.current !== initialSections) {
-    prevSectionsRef.current = initialSections
-    setSections(initialSections)
-  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })

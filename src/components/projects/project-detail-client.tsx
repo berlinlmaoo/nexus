@@ -299,33 +299,31 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
   }, [allTasks, statusFilter, priorityFilter, assigneeFilter, sprintFilter, sprintTaskMap, searchQuery, sortMode])
 
   // Filtered sections for list view
-  const filteredSections = useMemo(() =>
-    project.taskLists.map((tl) => ({
-      id: tl.id,
-      name: tl.name,
-      tasks: allTasks
-        .filter((t) => t.taskListId === tl.id || (t as Record<string,unknown>).taskListName === tl.name)
-        .filter((t) => {
-          if (statusFilter !== "ALL" && t.status !== statusFilter) return false
-          if (priorityFilter !== "ALL" && t.priority !== priorityFilter) return false
-          if (assigneeFilter !== "ALL" && !t.assignees.some((a: {id:string}) => a.id === assigneeFilter)) return false
-          if (sprintFilter === "NONE") {
-            const allSprintTaskIds = new Set<string>()
-            Object.values(sprintTaskMap).forEach(s => s.forEach(id => allSprintTaskIds.add(id)))
-            if (allSprintTaskIds.has(t.id)) return false
-          } else if (sprintFilter !== "ALL") {
-            const sprintTasks = sprintTaskMap[sprintFilter]
-            if (sprintTasks && !sprintTasks.has(t.id)) return false
-          }
-          if (searchQuery.trim()) {
-            const q = searchQuery.toLowerCase()
-            if (!t.title.toLowerCase().includes(q) && !(t.tags as string[]).some(tag => tag.toLowerCase().includes(q))) return false
-          }
-          return true
-        }),
-    })),
-    [project.taskLists, allTasks, statusFilter, priorityFilter, assigneeFilter, sprintFilter, sprintTaskMap, searchQuery]
-  )
+  // No useMemo — recomputes every render to guarantee sync across views
+  const filteredSections = project.taskLists.map((tl) => ({
+    id: tl.id,
+    name: tl.name,
+    tasks: allTasks
+      .filter((t) => t.taskListId === tl.id)
+      .filter((t) => {
+        if (statusFilter !== "ALL" && t.status !== statusFilter) return false
+        if (priorityFilter !== "ALL" && t.priority !== priorityFilter) return false
+        if (assigneeFilter !== "ALL" && !t.assignees.some((a: {id:string}) => a.id === assigneeFilter)) return false
+        if (sprintFilter === "NONE") {
+          const allSprintTaskIds = new Set<string>()
+          Object.values(sprintTaskMap).forEach(s => s.forEach(id => allSprintTaskIds.add(id)))
+          if (allSprintTaskIds.has(t.id)) return false
+        } else if (sprintFilter !== "ALL") {
+          const sprintTasks = sprintTaskMap[sprintFilter]
+          if (sprintTasks && !sprintTasks.has(t.id)) return false
+        }
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase()
+          if (!t.title.toLowerCase().includes(q) && !(t.tags as string[]).some(tag => tag.toLowerCase().includes(q))) return false
+        }
+        return true
+      }),
+  }))
 
   const activeFilterCount = [
     statusFilter !== "ALL",
