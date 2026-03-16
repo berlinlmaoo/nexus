@@ -23,7 +23,7 @@ interface Message {
 type ModelChoice = 'sonnet' | 'opus'
 
 export function GideonChat() {
-  const { gideonOpen, toggleGideon } = useAppStore()
+  const { gideonOpen, toggleGideon, taskPanelOpen } = useAppStore()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -159,7 +159,7 @@ export function GideonChat() {
 
   return (
     <>
-      <GideonButton isOpen={gideonOpen} onClick={toggleGideon} />
+      <GideonButton isOpen={gideonOpen || taskPanelOpen} onClick={toggleGideon} />
 
       {/* Backdrop */}
       <div
