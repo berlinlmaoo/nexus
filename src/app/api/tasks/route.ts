@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
+import { checkProjectAccess } from "@/lib/rbac"
+import { executeAutomations } from "@/lib/automation-engine"
+import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import type { Prisma } from "@/generated/prisma/client"
 
 export async function GET(request: NextRequest) {
@@ -85,6 +88,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "TaskList not found" }, { status: 404 })
     }
 
+    const { allowed } = await checkProjectAccess(session.user.id, taskList.projectId, ["MEMBER"])
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden: MEMBER role or higher required to create tasks" }, { status: 403 })
+    }
+
     const userId = session.user.id
 
     const task = await prisma.task.create({
@@ -125,6 +133,23 @@ export async function POST(request: NextRequest) {
     })
 
     logAudit({ action: "create", entityType: "task", entityId: task.id, entityName: title, userId, request })
+
+    // Fire automations and webhook (non-blocking)
+    executeAutomations(taskList.projectId, "task_created", {
+      taskId: task.id,
+      userId,
+      projectId: taskList.projectId,
+      assigneeIds: assigneeIds || [],
+    }).catch(() => {})
+
+    dispatchWebhookEvent("task.created", {
+      taskId: task.id,
+      title: task.title,
+      status: task.status,
+      priority: task.priority,
+      taskListId: task.taskListId,
+      creatorId: userId,
+    }, taskList.projectId).catch(() => {})
 
     return NextResponse.json(task, { status: 201 })
   } catch (error) {

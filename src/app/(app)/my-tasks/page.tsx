@@ -27,6 +27,21 @@ export default async function MyTasksPage() {
     orderBy: [{ priority: "asc" }, { dueDate: "asc" }],
   })
 
+  // Get task lists for inline creation (user's projects)
+  const projectMemberships = await prisma.projectMember.findMany({
+    where: { userId: session.user.id },
+    include: {
+      project: {
+        select: {
+          id: true,
+          name: true,
+          color: true,
+          taskLists: { select: { id: true, name: true }, take: 1, orderBy: { position: "asc" } },
+        },
+      },
+    },
+  })
+
   const formatted = tasks.map((t) => ({
     id: t.id,
     title: t.title,
@@ -34,6 +49,7 @@ export default async function MyTasksPage() {
     status: t.status,
     priority: t.priority,
     dueDate: t.dueDate?.toISOString() || null,
+    createdAt: t.createdAt.toISOString(),
     tags: t.tags,
     position: t.position,
     taskListId: t.taskListId,
@@ -49,5 +65,12 @@ export default async function MyTasksPage() {
     })),
   }))
 
-  return <MyTasksClient tasks={formatted} />
+  const projects = projectMemberships.map((pm) => ({
+    id: pm.project.id,
+    name: pm.project.name,
+    color: pm.project.color,
+    defaultTaskListId: pm.project.taskLists[0]?.id || null,
+  }))
+
+  return <MyTasksClient tasks={formatted} projects={projects} />
 }

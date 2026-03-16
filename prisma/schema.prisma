@@ -37,6 +37,7 @@ model User {
   accounts         Account[]
   webhooks         Webhook[]
   inviteTokens     InviteToken[]
+  portfolios       Portfolio[]
 }
 
 model Workspace {
@@ -47,10 +48,11 @@ model Workspace {
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
-  members  WorkspaceMember[]
-  projects Project[]
-  goals    Goal[]
-  teams    Team[]
+  members    WorkspaceMember[]
+  projects   Project[]
+  goals      Goal[]
+  teams      Team[]
+  portfolios Portfolio[]
 }
 
 model WorkspaceMember {
@@ -90,7 +92,9 @@ model Project {
   forms          Form[]
   statusUpdates  StatusUpdate[]
   pages          ProjectPage[]
-  webhooks       Webhook[]
+  webhooks           Webhook[]
+  goalProjects       GoalProject[]
+  portfolioProjects  PortfolioProject[]
 }
 
 model ProjectMember {
@@ -161,6 +165,7 @@ model Task {
   formSubmission    FormSubmission?
   relationsFrom     TaskRelation[]   @relation("TaskRelationSource")
   relationsTo       TaskRelation[]   @relation("TaskRelationTarget")
+  goalTasks         GoalTask[]
 }
 
 model TaskAssignee {
@@ -181,9 +186,14 @@ model Comment {
   content   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  isEdited  Boolean  @default(false)
 
   taskId String
   userId String
+
+  parentId String?
+  parent   Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  Comment[] @relation("CommentReplies")
 
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -223,6 +233,8 @@ model Goal {
   owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
   milestones GoalMilestone[]
+  goalProjects GoalProject[]
+  goalTasks    GoalTask[]
 }
 
 model GoalMilestone {
@@ -233,6 +245,24 @@ model GoalMilestone {
 
   goalId String
   goal   Goal   @relation(fields: [goalId], references: [id], onDelete: Cascade)
+}
+
+model GoalProject {
+  id        String  @id @default(cuid())
+  goalId    String
+  projectId String
+  goal      Goal    @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@unique([goalId, projectId])
+}
+
+model GoalTask {
+  id     String @id @default(cuid())
+  goalId String
+  taskId String
+  goal   Goal   @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  @@unique([goalId, taskId])
 }
 
 model Doc {
@@ -501,6 +531,13 @@ enum ApprovalStatus {
   REJECTED
 }
 
+enum PortfolioStatus {
+  ON_TRACK
+  AT_RISK
+  OFF_TRACK
+  COMPLETED
+}
+
 // ─── PHASE 1A MODELS ─────────────────────────────────────────
 
 model Attachment {
@@ -701,6 +738,34 @@ model InviteToken {
 
   @@index([token])
   @@index([email])
+}
+
+// ─── PORTFOLIO MODELS ────────────────────────────────────────
+
+model Portfolio {
+  id          String          @id @default(cuid())
+  name        String
+  description String?
+  status      PortfolioStatus @default(ON_TRACK)
+  ownerId     String
+  workspaceId String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  owner     User               @relation(fields: [ownerId], references: [id])
+  workspace Workspace          @relation(fields: [workspaceId], references: [id])
+  projects  PortfolioProject[]
+}
+
+model PortfolioProject {
+  id          String @id @default(cuid())
+  portfolioId String
+  projectId   String
+
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([portfolioId, projectId])
 }
 
 model ImportJob {
