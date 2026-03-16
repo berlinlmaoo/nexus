@@ -2,6 +2,7 @@ import NextAuth, { type NextAuthConfig } from 'next-auth'
 import Credentials from 'next-auth/providers/credentials'
 import Google from 'next-auth/providers/google'
 import bcrypt from 'bcryptjs'
+import crypto from 'crypto'
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
 

@@ -1,17 +1,47 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Send, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
-import type { FormField } from "./form-builder";
+import type { FormField, FormFieldCondition } from "./form-builder";
+
+interface FormBranding {
+  logoUrl?: string;
+  primaryColor?: string;
+  backgroundColor?: string;
+  headerImage?: string;
+}
 
 interface FormPublicProps {
   formId: string;
   formName: string;
   formDescription?: string | null;
   fields: FormField[];
+  branding?: FormBranding | null;
+}
+
+function evaluateCondition(
+  condition: FormFieldCondition,
+  formValues: Record<string, unknown>
+): boolean {
+  const fieldValue = String(formValues[condition.fieldId] ?? "");
+
+  switch (condition.operator) {
+    case "equals":
+      return fieldValue === condition.value;
+    case "not_equals":
+      return fieldValue !== condition.value;
+    case "contains":
+      return fieldValue.toLowerCase().includes(condition.value.toLowerCase());
+    case "is_empty":
+      return !fieldValue;
+    case "is_not_empty":
+      return !!fieldValue;
+    default:
+      return true;
+  }
 }
 
 export function FormPublic({
@@ -19,12 +49,20 @@ export function FormPublic({
   formName,
   formDescription,
   fields,
+  branding,
 }: FormPublicProps) {
   const [formValues, setFormValues] = useState<Record<string, unknown>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const visibleFields = useMemo(() => {
+    return fields.filter((field) => {
+      if (!field.showIf) return true;
+      return evaluateCondition(field.showIf, formValues);
+    });
+  }, [fields, formValues]);
 
   function handleChange(fieldId: string, value: unknown) {
     setFormValues((prev) => ({ ...prev, [fieldId]: value }));
@@ -39,7 +77,7 @@ export function FormPublic({
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
-    for (const field of fields) {
+    for (const field of visibleFields) {
       if (field.required) {
         const value = formValues[field.id];
         if (value === undefined || value === null || value === "") {
@@ -101,22 +139,58 @@ export function FormPublic({
     );
   }
 
+  const bgColor = branding?.backgroundColor || undefined;
+  const primaryColor = branding?.primaryColor || undefined;
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-4">
+    <div
+      className="flex min-h-screen items-center justify-center bg-zinc-50 p-4"
+      style={bgColor ? { backgroundColor: bgColor } : undefined}
+    >
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, ease: "easeOut" }}
         className="w-full max-w-lg rounded-xl border border-zinc-200 bg-white p-8 shadow-sm"
       >
-        <h1 className="text-2xl font-semibold text-zinc-900">{formName}</h1>
+        {branding?.headerImage && (
+          <div className="-mx-8 -mt-8 mb-6 overflow-hidden rounded-t-xl">
+            <img
+              src={branding.headerImage}
+              alt=""
+              className="h-32 w-full object-cover"
+            />
+          </div>
+        )}
+
+        {branding?.logoUrl && (
+          <img
+            src={branding.logoUrl}
+            alt="Logo"
+            className="mb-4 h-10 object-contain"
+          />
+        )}
+
+        <h1
+          className="text-2xl font-semibold text-zinc-900"
+          style={primaryColor ? { color: primaryColor } : undefined}
+        >
+          {formName}
+        </h1>
         {formDescription && (
           <p className="mt-1 text-sm text-zinc-500">{formDescription}</p>
         )}
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-5">
-          {fields.map((field) => (
-            <div key={field.id} className="space-y-1.5">
+          {visibleFields.map((field) => (
+            <motion.div
+              key={field.id}
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="space-y-1.5"
+            >
               <label
                 htmlFor={field.id}
                 className="block text-sm font-medium text-zinc-700"
@@ -135,7 +209,7 @@ export function FormPublic({
                   {errors[field.id]}
                 </p>
               )}
-            </div>
+            </motion.div>
           ))}
 
           {submitError && (
@@ -149,8 +223,15 @@ export function FormPublic({
             type="submit"
             disabled={isSubmitting}
             className={cn(
-              "inline-flex w-full items-center justify-center gap-2 rounded-md bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              "inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+              !primaryColor &&
+                "bg-zinc-900 hover:bg-zinc-800 focus-visible:ring-zinc-900"
             )}
+            style={
+              primaryColor
+                ? { backgroundColor: primaryColor }
+                : undefined
+            }
           >
             {isSubmitting ? (
               <>

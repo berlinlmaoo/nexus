@@ -16,34 +16,53 @@ export async function GET(
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const task = await prisma.task.findUnique({
-      where: { id: params.taskId },
-      include: {
-        assignees: { include: { user: true } },
-        comments: {
-          include: { user: true },
-          orderBy: { createdAt: "asc" },
-        },
-        subtasks: {
-          include: {
-            assignees: { include: { user: { select: { id: true, name: true, avatar: true } } } },
+    const [task, likeCount, userLike, taskProjects] = await Promise.all([
+      prisma.task.findUnique({
+        where: { id: params.taskId },
+        include: {
+          assignees: { include: { user: true } },
+          comments: {
+            include: { user: true },
+            orderBy: { createdAt: "asc" },
           },
-          orderBy: { position: "asc" },
+          subtasks: {
+            include: {
+              assignees: { include: { user: { select: { id: true, name: true, avatar: true } } } },
+            },
+            orderBy: { position: "asc" },
+          },
+          activityLogs: {
+            include: { user: true },
+            orderBy: { createdAt: "desc" },
+          },
+          taskList: { include: { project: { select: { id: true, name: true, color: true, icon: true } } } },
+          creator: true,
         },
-        activityLogs: {
-          include: { user: true },
-          orderBy: { createdAt: "desc" },
+      }),
+      prisma.taskLike.count({ where: { taskId: params.taskId } }),
+      prisma.taskLike.findUnique({
+        where: { taskId_userId: { taskId: params.taskId, userId: session.user.id! } },
+      }),
+      prisma.taskProject.findMany({
+        where: { taskId: params.taskId },
+        include: {
+          project: { select: { id: true, name: true, color: true, icon: true } },
+          taskList: { select: { id: true, name: true } },
         },
-        taskList: true,
-        creator: true,
-      },
-    })
+        orderBy: { createdAt: "asc" },
+      }),
+    ])
 
     if (!task) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 })
     }
 
-    return NextResponse.json(task)
+    return NextResponse.json({
+      ...task,
+      likeCount,
+      liked: !!userLike,
+      taskProjects,
+    })
   } catch (error) {
     console.error("Error fetching task:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

@@ -12,7 +12,7 @@ export async function GET() {
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { id: true, name: true, email: true, avatar: true },
+      select: { id: true, name: true, email: true, avatar: true, dndUntil: true },
     })
 
     if (!user) {
@@ -37,11 +37,14 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name } = body
+    const { name, dndUntil } = body
 
-    const data: { name?: string } = {}
+    const data: { name?: string; dndUntil?: Date | null } = {}
     if (typeof name === "string" && name.trim()) {
       data.name = name.trim()
+    }
+    if (dndUntil !== undefined) {
+      data.dndUntil = dndUntil ? new Date(dndUntil) : null
     }
 
     if (Object.keys(data).length === 0) {
@@ -54,7 +57,7 @@ export async function PATCH(request: NextRequest) {
     const user = await prisma.user.update({
       where: { id: session.user.id },
       data,
-      select: { id: true, name: true, email: true, avatar: true },
+      select: { id: true, name: true, email: true, avatar: true, dndUntil: true },
     })
 
     logAudit({ action: "update", entityType: "user_profile", entityId: session.user.id, userId: session.user.id, request })

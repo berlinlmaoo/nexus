@@ -11,6 +11,15 @@ import {
 
 // ── Helpers ─────────────────────────────────────────────────────
 
+async function isUserDnd(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { dndUntil: true },
+  })
+  if (!user?.dndUntil) return false
+  return new Date(user.dndUntil) > new Date()
+}
+
 async function getUserPrefs(userId: string) {
   const pref = await prisma.notificationPreference.findUnique({
     where: { userId },
@@ -98,6 +107,9 @@ export async function notifyTaskAssigned(data: {
   projectId: string
   assignedByName: string
 }) {
+  // Skip if user has DND active
+  if (await isUserDnd(data.assigneeId)) return
+
   const user = await prisma.user.findUnique({
     where: { id: data.assigneeId },
     select: { name: true, email: true },
@@ -157,6 +169,9 @@ export async function notifyMention(data: {
   commentSnippet: string
   projectId?: string
 }) {
+  // Skip if user has DND active
+  if (await isUserDnd(data.mentionedUserId)) return
+
   const user = await prisma.user.findUnique({
     where: { id: data.mentionedUserId },
     select: { name: true, email: true },
@@ -211,6 +226,9 @@ export async function notifyDueSoon(data: {
   dueDate: string
   projectId?: string
 }) {
+  // Skip if user has DND active
+  if (await isUserDnd(data.userId)) return
+
   const user = await prisma.user.findUnique({
     where: { id: data.userId },
     select: { name: true, email: true },
@@ -259,6 +277,9 @@ export async function notifyProjectInvite(data: {
   invitedByName: string
   role: string
 }) {
+  // Skip if user has DND active
+  if (await isUserDnd(data.userId)) return
+
   const user = await prisma.user.findUnique({
     where: { id: data.userId },
     select: { name: true, email: true },
@@ -319,6 +340,9 @@ export async function notifyStatusUpdate(data: {
   })
 
   for (const member of members) {
+    // Skip if user has DND active
+    if (await isUserDnd(member.userId)) continue
+
     const prefs = await getUserPrefs(member.userId)
 
     await createInAppNotification({
@@ -374,6 +398,9 @@ export async function notifyTaskCompleted(data: {
   recipientIds.delete(data.completedById)
 
   for (const userId of Array.from(recipientIds)) {
+    // Skip if user has DND active
+    if (await isUserDnd(userId)) continue
+
     await createInAppNotification({
       userId,
       type: "task_completed",
@@ -406,6 +433,9 @@ export async function notifyCommentAdded(data: {
   recipientIds.delete(data.commentById)
 
   for (const userId of Array.from(recipientIds)) {
+    // Skip if user has DND active
+    if (await isUserDnd(userId)) continue
+
     await createInAppNotification({
       userId,
       type: "comment_added",

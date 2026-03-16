@@ -15,6 +15,7 @@ export async function GET(
         name: true,
         description: true,
         fields: true,
+        branding: true,
         isPublic: true,
       },
     })
