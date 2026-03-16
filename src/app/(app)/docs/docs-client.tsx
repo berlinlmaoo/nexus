@@ -251,9 +251,9 @@ export function DocsPageClient({
       </div>
 
       {filteredDocs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
-            <FileText className="h-8 w-8 text-foreground" />
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center animate-fade-in">
+          <div className="h-16 w-16 rounded-2xl bg-muted/60 flex items-center justify-center mb-4">
+            <FileText className="h-8 w-8 text-muted-foreground/50" />
           </div>
           <h3 className="text-lg font-semibold mb-1">{search ? "No documents found" : "No documents yet"}</h3>
           <p className="text-sm text-muted-foreground mb-4">

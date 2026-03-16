@@ -60,7 +60,7 @@ export function CalendarWidget({ data }: CalendarWidgetProps) {
   }, [currentMonth])
 
   return (
-    <div className="flex flex-col h-full w-full overflow-hidden px-1">
+    <div className="flex flex-col h-full w-full min-w-0 overflow-x-hidden">
       {/* Header with nav */}
       <div className="flex items-center justify-between flex-shrink-0 mb-2">
         <div className="flex items-center gap-1.5">
@@ -110,7 +110,7 @@ export function CalendarWidget({ data }: CalendarWidgetProps) {
       </div>
 
       {/* Day grid — fills remaining space */}
-      <div className="grid grid-cols-7 flex-1 auto-rows-fr">
+      <div className="grid grid-cols-7 flex-1 auto-rows-fr min-w-0">
         {calendarDays.map((day) => {
           const dateKey = format(day, "yyyy-MM-dd")
           const dayTasks = tasksByDate.get(dateKey) ?? []

@@ -200,14 +200,14 @@ export function SettingsClient({ user, workspace, isAdmin, workspaceRole }: Sett
   ]
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 min-w-0">
+    <div className="mx-auto max-w-3xl space-y-6 min-w-0">
       <div>
         <h1 className="text-2xl font-bold">Settings</h1>
         <p className="text-muted-foreground">Manage your account and workspace</p>
       </div>
 
       {/* Tab navigation */}
-      <div className="flex flex-nowrap gap-1 border-b overflow-x-auto min-w-0 pb-1">
+      <div className="flex flex-nowrap gap-0.5 border-b overflow-x-auto min-w-0 pb-0 scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {tabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}

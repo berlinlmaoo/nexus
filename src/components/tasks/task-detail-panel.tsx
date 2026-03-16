@@ -358,7 +358,7 @@ export function TaskDetailPanel({
   ]
 
   return (
-    <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[45%] sm:min-w-[440px] sm:max-w-[680px] bg-background border-l shadow-2xl animate-slide-in-right flex flex-col">
+    <div className="fixed inset-y-0 right-0 z-[60] w-full sm:w-[45%] sm:min-w-[440px] sm:max-w-[680px] bg-background border-l shadow-2xl animate-slide-in-right flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between border-b px-6 h-12 shrink-0">
         <div className="flex items-center gap-3">

@@ -173,23 +173,26 @@ export default function PortfoliosPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Portfolios</h1>
-          <p className="text-muted-foreground mt-1">Manage collections of projects and track their progress</p>
+          <h1 className="text-2xl font-bold">Portfolios</h1>
+          <p className="text-sm text-muted-foreground mt-1">Manage collections of projects and track their progress</p>
         </div>
-        <Button onClick={openCreate} className="gap-2">
-          <Plus className="w-4 h-4" />
+        <Button onClick={openCreate} className="bg-foreground text-background hover:bg-foreground/90">
+          <Plus className="w-4 h-4 mr-2" />
           New Portfolio
         </Button>
       </div>
 
       {portfolios.length === 0 ? (
-        <Card>
-          <CardContent className="py-16 text-center">
-            <FolderKanban className="w-12 h-12 text-muted-foreground/60 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-muted-foreground">No portfolios yet</h3>
-            <p className="text-muted-foreground/60 mt-1">Create your first portfolio to group and track projects</p>
-          </CardContent>
-        </Card>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center animate-fade-in">
+          <div className="h-16 w-16 rounded-2xl bg-muted/60 flex items-center justify-center mb-4">
+            <FolderKanban className="h-8 w-8 text-muted-foreground/50" />
+          </div>
+          <h3 className="text-lg font-semibold mb-1">No portfolios yet</h3>
+          <p className="text-sm text-muted-foreground max-w-xs">Create your first portfolio to group and track projects</p>
+          <Button onClick={openCreate} className="mt-5 bg-foreground text-background hover:bg-foreground/90">
+            <Plus className="h-4 w-4 mr-2" /> Create Portfolio
+          </Button>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {portfolios.map((portfolio) => (

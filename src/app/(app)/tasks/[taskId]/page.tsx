@@ -7,6 +7,8 @@ interface TaskPageProps {
   params: { taskId: string }
 }
 
+export const dynamic = "force-dynamic"
+
 export default async function TaskPage({ params }: TaskPageProps) {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")

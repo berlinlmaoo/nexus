@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { DocEditorPage } from "./doc-editor-page"
 
+export const dynamic = "force-dynamic"
+
 export default async function DocDetailPage({ params }: { params: { docId: string } }) {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")

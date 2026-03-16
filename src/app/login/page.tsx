@@ -91,30 +91,30 @@ function LoginContent() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#000000] px-4">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-[420px]">
         {/* Logo & Branding */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-10">
           <div className="flex justify-center mb-3">
             <Image
               src="/logos/nexus-logo-login.png"
               alt="NEXUS"
               width={1000}
               height={232}
-              className="w-[180px] h-auto object-contain"
+              className="w-[160px] h-auto object-contain"
               priority
             />
           </div>
-          <div className="w-16 h-px bg-gray-700 mx-auto mb-3" />
+          <div className="w-12 h-px bg-gray-700/60 mx-auto mb-3" />
           <p className="text-sm text-gray-400">Navigation & Execution Hub for Unified Strategy</p>
           <p className="text-xs text-gray-600 mt-1">by PATS Group</p>
         </div>
 
         {/* Card */}
-        <div className="bg-[#09090B] border border-gray-800 rounded-2xl p-8 shadow-xl transition-all duration-300">
+        <div className="bg-[#0A0A0C] border border-white/[0.08] rounded-2xl p-8 shadow-2xl shadow-black/40">
           <h2 className="text-xl font-semibold text-white mb-6">Sign in to your account</h2>
 
           {success && (
-            <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3 text-sm text-green-400 transition-all duration-200 mb-5">
+            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3 text-sm text-emerald-400 transition-all duration-200 mb-5">
               {success}
             </div>
           )}
@@ -131,7 +131,7 @@ function LoginContent() {
                 type="button"
                 onClick={handleGoogleSignIn}
                 disabled={isGoogleLoading}
-                className="w-full py-2.5 px-4 bg-white text-gray-900 font-medium rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-2 focus:ring-offset-[#09090B] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-3"
+                className="w-full py-2.5 px-4 bg-white text-gray-900 font-medium rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-2 focus:ring-offset-[#0A0A0C] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-3"
               >
                 {isGoogleLoading ? (
                   <svg className="animate-spin h-4 w-4 text-gray-900" viewBox="0 0 24 24">
@@ -155,15 +155,15 @@ function LoginContent() {
                   <div className="w-full border-t border-gray-700" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-[#09090B] px-2 text-gray-500">or continue with email</span>
+                  <span className="bg-[#0A0A0C] px-2 text-gray-500">or continue with email</span>
                 </div>
               </div>
             </>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-2">
-              <label htmlFor="email" className="block text-sm font-medium text-gray-300">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor="email" className="block text-sm font-medium text-gray-400">
                 Email
               </label>
               <input
@@ -173,12 +173,12 @@ function LoginContent() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@patsgroup.id"
                 required
-                className="w-full px-4 py-2.5 bg-[#000000] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#18181B] focus:border-transparent transition-all duration-200"
+                className="w-full px-4 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent transition-all duration-200"
               />
             </div>
 
-            <div className="space-y-2">
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300">
+            <div className="space-y-1.5">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-400">
                 Password
               </label>
               <input
@@ -188,14 +188,14 @@ function LoginContent() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
                 required
-                className="w-full px-4 py-2.5 bg-[#000000] border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#18181B] focus:border-transparent transition-all duration-200"
+                className="w-full px-4 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent transition-all duration-200"
               />
             </div>
 
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-2.5 px-4 bg-gradient-to-r from-[#18181B] to-[#09090B] text-white font-medium rounded-lg hover:from-[#3F3F46] hover:to-[#27272A] focus:outline-none focus:ring-2 focus:ring-[#18181B] focus:ring-offset-2 focus:ring-offset-[#09090B] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              className="w-full py-2.5 px-4 mt-1 bg-white text-black text-sm font-semibold rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-white/40 focus:ring-offset-2 focus:ring-offset-[#0A0A0C] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
             >
               {isLoading ? (
                 <span className="inline-flex items-center gap-2">
@@ -216,7 +216,7 @@ function LoginContent() {
               Don&apos;t have an account?{' '}
               <Link
                 href="/register"
-                className="text-[#18181B] hover:text-[#52525B] font-medium transition-colors duration-200"
+                className="text-white hover:text-gray-300 font-medium transition-colors duration-200"
               >
                 Create one
               </Link>
@@ -224,7 +224,7 @@ function LoginContent() {
           </div>
         </div>
 
-        <p className="text-center text-xs text-gray-600 mt-6">
+        <p className="text-center text-xs text-gray-600 mt-8">
           Restricted to @patsgroup.id accounts
         </p>
         <p className="text-center text-[10px] text-gray-700 mt-1">

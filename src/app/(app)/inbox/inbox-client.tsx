@@ -255,8 +255,8 @@ export function InboxClient({
         </div>
       </div>
 
-      {/* View tabs */}
-      <div className="flex items-center gap-2 mb-3 pb-3 border-b border-border">
+      {/* View tabs + filter */}
+      <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border">
         {([
           { key: "all" as const, label: "All" },
           { key: "by-project" as const, label: "By Project" },
@@ -266,7 +266,7 @@ export function InboxClient({
             key={tab.key}
             onClick={() => setViewTab(tab.key)}
             className={cn(
-              "px-3 py-1.5 rounded-full text-sm font-semibold transition-all duration-200",
+              "px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200",
               viewTab === tab.key
                 ? "bg-foreground text-background shadow-sm"
                 : "bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80"
@@ -275,32 +275,30 @@ export function InboxClient({
             {tab.label}
           </button>
         ))}
-      </div>
-
-      {/* Read/Unread filter */}
-      <div className="flex items-center gap-2 mb-4">
-        <button
-          onClick={() => setFilter("all")}
-          className={cn(
-            "px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200",
-            filter === "all"
-              ? "bg-foreground/10 text-foreground border border-foreground/20"
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          All ({notifications.length})
-        </button>
-        <button
-          onClick={() => setFilter("unread")}
-          className={cn(
-            "px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200",
-            filter === "unread"
-              ? "bg-foreground/10 text-foreground border border-foreground/20"
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          Unread ({unreadCount})
-        </button>
+        <div className="ml-auto flex items-center gap-1.5">
+          <button
+            onClick={() => setFilter("all")}
+            className={cn(
+              "px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200",
+              filter === "all"
+                ? "bg-foreground/10 text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            All ({notifications.length})
+          </button>
+          <button
+            onClick={() => setFilter("unread")}
+            className={cn(
+              "px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-200",
+              filter === "unread"
+                ? "bg-foreground/10 text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Unread ({unreadCount})
+          </button>
+        </div>
       </div>
 
       {filtered.length === 0 ? (

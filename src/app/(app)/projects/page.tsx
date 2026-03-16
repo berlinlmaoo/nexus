@@ -4,6 +4,8 @@ import prisma from "@/lib/prisma"
 import { ProjectsPageClient } from "@/components/projects/projects-page-client"
 import type { ProjectCardData } from "@/components/projects/project-card"
 
+export const dynamic = "force-dynamic"
+
 export default async function ProjectsPage() {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")

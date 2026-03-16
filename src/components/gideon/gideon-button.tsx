@@ -13,7 +13,7 @@ export function GideonButton({ isOpen, onClick }: GideonButtonProps) {
     <button
       onClick={onClick}
       className={cn(
-        'fixed bottom-20 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all duration-300 hover:scale-110 active:scale-95 focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 overflow-hidden',
+        'fixed bottom-20 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all duration-300 hover:scale-110 active:scale-95 focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 overflow-hidden',
         'bg-zinc-900',
         isOpen && 'scale-0 opacity-0 pointer-events-none'
       )}

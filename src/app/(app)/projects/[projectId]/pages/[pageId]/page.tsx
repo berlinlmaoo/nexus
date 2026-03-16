@@ -8,6 +8,8 @@ interface PageViewProps {
   params: { projectId: string; pageId: string }
 }
 
+export const dynamic = "force-dynamic"
+
 export default async function ProjectPageView({ params }: PageViewProps) {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")

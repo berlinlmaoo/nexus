@@ -56,11 +56,11 @@ export function QuickActionsWidget({ data }: QuickActionsWidgetProps) {
           key={action.label}
           variant="outline"
           asChild
-          className="h-auto flex-col gap-1.5 py-3 px-2 text-muted-foreground hover:text-foreground hover:bg-accent border-border"
+          className="h-auto flex-col gap-1.5 py-3 px-2 text-muted-foreground hover:text-foreground hover:bg-accent/80 border-border/60 hover:border-border transition-all duration-200"
         >
           <Link href={action.href}>
             <action.icon className="h-4 w-4" />
-            <span className="text-xs font-medium">{action.label}</span>
+            <span className="text-[11px] font-medium leading-tight text-center">{action.label}</span>
           </Link>
         </Button>
       ))}

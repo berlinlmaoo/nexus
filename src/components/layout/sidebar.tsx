@@ -670,7 +670,7 @@ export function Sidebar({ user }: SidebarProps) {
               {/* Archived toggle */}
               <button
                 onClick={() => setShowArchived(!showArchived)}
-                className="flex items-center gap-1.5 px-3 py-1 text-[10px] text-sidebar-text/60 hover:text-sidebar-text/70 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1 text-[11px] text-sidebar-text/40 hover:text-sidebar-text/60 transition-colors"
               >
                 <Archive className="h-3 w-3" />
                 {showArchived ? "Hide archived" : "Show archived"}
@@ -838,16 +838,16 @@ export function Sidebar({ user }: SidebarProps) {
       </nav>
 
       {/* User section */}
-      <div className="border-t border-white/[0.08] p-2">
+      <div className="border-t border-white/[0.06] p-2">
         {!isCollapsed ? (
-          <div className="flex items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-sidebar-light transition-colors duration-200">
+          <div className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 hover:bg-sidebar-light/80 transition-colors duration-200 group">
             <UserAvatar
               user={{ name: user.name, image: user.image }}
               size="sm"
-              className="border border-white/20"
+              className="border border-white/15 ring-1 ring-white/5"
             />
             <div className="flex-1 min-w-0">
-              <p className="truncate text-[13px] font-medium text-white">
+              <p className="truncate text-[13px] font-medium text-white/90">
                 {user.name}
               </p>
             </div>
@@ -855,7 +855,7 @@ export function Sidebar({ user }: SidebarProps) {
               onClick={() => {
                 window.location.href = "/api/auth/signout"
               }}
-              className="rounded-md p-1 text-sidebar-text/50 hover:text-white transition-colors"
+              className="rounded-md p-1.5 text-sidebar-text/40 hover:text-white hover:bg-sidebar-lighter/60 transition-colors opacity-0 group-hover:opacity-100"
               title="Sign out"
             >
               <LogOut className="h-3.5 w-3.5" />

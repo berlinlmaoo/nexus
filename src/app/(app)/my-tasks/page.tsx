@@ -5,6 +5,8 @@ import { MyTasksClient } from "./my-tasks-client"
 
 export const metadata = { title: "My Tasks | Nexus" }
 
+export const dynamic = "force-dynamic"
+
 export default async function MyTasksPage() {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")

@@ -39,7 +39,7 @@ export function Header({ title, breadcrumbs, user, children }: HeaderProps) {
   const { resolvedTheme, setTheme } = useTheme()
 
   return (
-    <header className="flex h-11 items-center justify-between border-b bg-white dark:bg-zinc-950 px-4 shrink-0">
+    <header className="flex h-11 items-center justify-between border-b bg-background px-4 shrink-0">
       {/* Left: hamburger + breadcrumb */}
       <div className="flex items-center gap-2 min-w-0">
         <button

@@ -31,6 +31,7 @@ import {
   Home,
   Image,
   BarChart3,
+  Columns3,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useRealtimeProject } from "@/hooks/use-realtime-project"
@@ -50,6 +51,7 @@ const GalleryView = lazy(() => import("@/components/tasks/gallery-view").then(m 
 const ChartsView = lazy(() => import("@/components/tasks/charts-view").then(m => ({ default: m.ChartsView })))
 const ProjectOverview = lazy(() => import("@/components/projects/project-overview").then(m => ({ default: m.ProjectOverview })))
 const FeedView = lazy(() => import("@/components/tasks/feed-view").then(m => ({ default: m.FeedView })))
+const KanbanView = lazy(() => import("@/components/tasks/kanban-view").then(m => ({ default: m.KanbanView })))
 
 interface ProjectMember {
   id: string
@@ -93,7 +95,7 @@ interface ProjectDetailClientProps {
   currentUser: CurrentUser
 }
 
-type ViewMode = "overview" | "list" | "board" | "calendar" | "timeline" | "gantt" | "gallery" | "charts" | "feed" | "workload"
+type ViewMode = "overview" | "list" | "board" | "kanban" | "calendar" | "timeline" | "gantt" | "gallery" | "charts" | "feed" | "workload"
 type SortMode = "position" | "priority" | "dueDate" | "created" | "assignee"
 type GroupMode = "status" | "assignee" | "priority" | "dueDate" | "none"
 
@@ -108,7 +110,7 @@ function getStoredView(projectId: string): ViewMode {
   if (typeof window === "undefined") return "list"
   try {
     const stored = localStorage.getItem(`nexus-view-${projectId}`)
-    if (stored && ["overview", "list", "board", "calendar", "timeline", "gantt", "gallery", "charts", "feed", "workload"].includes(stored)) {
+    if (stored && ["overview", "list", "board", "kanban", "calendar", "timeline", "gantt", "gallery", "charts", "feed", "workload"].includes(stored)) {
       return stored as ViewMode
     }
   } catch {}
@@ -426,6 +428,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
     { id: "overview" as const, label: "Overview", icon: Home },
     { id: "list" as const, label: "List", icon: List },
     { id: "board" as const, label: "Board", icon: LayoutGrid },
+    { id: "kanban" as const, label: "Kanban", icon: Columns3 },
     { id: "calendar" as const, label: "Calendar", icon: CalendarDays },
     { id: "timeline" as const, label: "Timeline", icon: GanttChart },
     { id: "gantt" as const, label: "Gantt", icon: Workflow },
@@ -733,6 +736,17 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
             projectId={project.id}
             defaultTaskListId={defaultTaskListId}
           />
+        )}
+        {viewMode === "kanban" && (
+          <Suspense fallback={<SkeletonKanban />}>
+            <KanbanView
+              tasks={filteredTasks}
+              onTaskClick={handleTaskClick}
+              onStatusChange={handleStatusChange}
+              projectId={project.id}
+              defaultTaskListId={defaultTaskListId}
+            />
+          </Suspense>
         )}
         {viewMode === "calendar" && (
           <Suspense fallback={<SkeletonKanban />}>

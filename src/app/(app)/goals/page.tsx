@@ -5,6 +5,8 @@ import { GoalsPageClient } from "./goals-client"
 
 export const metadata = { title: "Goals | Nexus" }
 
+export const dynamic = "force-dynamic"
+
 export default async function GoalsPage() {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")

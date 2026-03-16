@@ -309,7 +309,7 @@ export function TimelineView({ tasks, onTaskClick }: TimelineViewProps) {
                 <div key={task.id} className="flex items-center h-10 group hover:bg-accent/50 transition-colors">
                   <div className="w-52 shrink-0 flex items-center gap-2 pr-3 border-r">
                     <span
-                      className="text-xs font-medium text-muted-foreground truncate flex-1 cursor-pointer hover:text-muted-foreground transition-colors"
+                      className="text-xs font-medium text-foreground truncate flex-1 cursor-pointer hover:text-muted-foreground transition-colors"
                       onClick={() => onTaskClick(task)}
                     >
                       {task.title}

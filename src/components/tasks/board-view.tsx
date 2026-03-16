@@ -231,6 +231,7 @@ export function BoardView({
                     <span className="text-[11px] text-muted-foreground tabular-nums">
                       {column.tasks.length}
                     </span>
+                    <span className="text-[10px] text-muted-foreground/60 hidden group-hover/col:inline" title="Board view groups tasks by project sections">by section</span>
                   </>
                 )}
               </div>

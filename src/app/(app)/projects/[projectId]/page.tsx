@@ -8,6 +8,8 @@ interface ProjectDetailPageProps {
   params: { projectId: string }
 }
 
+export const dynamic = "force-dynamic"
+
 export default async function ProjectDetailPage({
   params,
 }: ProjectDetailPageProps) {

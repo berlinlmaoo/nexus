@@ -4,6 +4,8 @@ import { DashboardContent } from "./dashboard-content"
 
 export const metadata = { title: "Dashboard | Nexus" }
 
+export const dynamic = "force-dynamic"
+
 export default async function DashboardPage() {
   const session = await auth()
 

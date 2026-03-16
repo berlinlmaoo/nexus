@@ -40,7 +40,7 @@ export function ProjectSummaryWidget({ data }: ProjectSummaryWidgetProps) {
             <Link
               key={project.id}
               href={`/projects/${project.id}`}
-              className="group rounded-lg border p-3 hover:shadow-sm transition-all duration-200"
+              className="group rounded-lg border border-border/60 p-3 hover:shadow-sm hover:border-border transition-all duration-200"
             >
               <div className="flex items-center gap-2 mb-2">
                 <span

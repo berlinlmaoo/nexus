@@ -303,6 +303,7 @@ export function KanbanView({
                         >
                           <div className={cn("h-2.5 w-2.5 rounded-full", column.dot)} />
                           <h3 className="text-sm font-semibold">{column.label}</h3>
+                          <span className="text-[10px] text-muted-foreground/60 hidden group-hover:inline" title="Kanban view groups tasks by status">by status</span>
                           <span
                             className={cn(
                               "text-xs rounded-full px-2 py-0.5 tabular-nums",

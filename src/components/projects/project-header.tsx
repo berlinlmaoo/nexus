@@ -203,7 +203,7 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
   const hasUploadedIcon = isUploadedIcon(selectedIcon)
 
   return (
-    <div className="space-y-4 animate-fade-in px-6 pt-6 overflow-hidden">
+    <div className="space-y-3 animate-fade-in px-4 pt-4 overflow-hidden">
       {/* Cover gradient — only show when there's a custom cover image */}
       {coverImage && <div className={cn("relative rounded-xl bg-gradient-to-r overflow-hidden transition-all duration-500", coverGradient, "h-36")}>
         <button
@@ -238,7 +238,7 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
       </div>}
 
       {/* Project info row */}
-      <div className={cn("flex items-start gap-4 ml-6 relative z-10", coverImage ? "-mt-10" : "mt-0")}>
+      <div className={cn("flex items-start gap-4 relative z-10", coverImage ? "-mt-10" : "mt-0")}>
         {/* Icon */}
         <div className="relative">
           <button
@@ -418,7 +418,7 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
         </div>
 
         {/* Name and description */}
-        <div className="flex-1 pt-6">
+        <div className="flex-1 pt-2">
           <div className="flex items-center gap-3">
             {editingName ? (
               <input
@@ -472,7 +472,7 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
           </div>
 
           {/* Description */}
-          <div className="mt-2">
+          <div className="mt-1">
             {editingDescription ? (
               <div className="flex items-center gap-2 animate-fade-in">
                 <input
