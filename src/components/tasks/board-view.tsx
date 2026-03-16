@@ -185,14 +185,14 @@ export function BoardView({
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
-      <div className="flex gap-3 pb-4 overflow-x-auto min-w-0 w-full">
+      <div className="flex gap-4 pb-4 overflow-x-auto min-w-0 w-full">
         {columns.map((column) => (
           <div
             key={column.id}
             className="flex-shrink-0 w-72 flex flex-col"
           >
             {/* Column header */}
-            <div className="group/col flex items-center justify-between mb-2 px-1">
+            <div className="group/col flex items-center justify-between mb-3 px-1">
               <div className="flex items-center gap-2 min-w-0 flex-1">
                 {/* Reorder arrows */}
                 {projectId && columns.length > 1 && (
@@ -228,8 +228,8 @@ export function BoardView({
                   />
                 ) : (
                   <>
-                    <h3 className="text-[13px] font-semibold text-foreground truncate">{column.name}</h3>
-                    <span className="text-[11px] text-muted-foreground tabular-nums">
+                    <h3 className="text-sm font-medium text-neutral-800 truncate">{column.name}</h3>
+                    <span className="text-[11px] text-neutral-400 tabular-nums">
                       {column.tasks.length}
                     </span>
                   </>
@@ -320,19 +320,19 @@ export function BoardView({
                           >
                             <div
                               className={cn(
-                                "rounded-lg border bg-white dark:bg-zinc-900 p-3 cursor-pointer transition-all duration-150",
-                                "hover:shadow-md",
-                                snapshot.isDragging && "shadow-xl ring-1 ring-border"
+                                "rounded-lg border border-neutral-200 bg-white p-3 cursor-pointer transition-shadow duration-150",
+                                "hover:shadow-sm",
+                                snapshot.isDragging && "shadow-lg ring-2 ring-blue-200"
                               )}
                               onClick={() => onTaskClick(task)}
                             >
                               {/* Task name */}
-                              <p className="text-[13px] font-medium text-foreground leading-snug line-clamp-2">
+                              <p className="text-sm font-medium text-neutral-800 leading-snug line-clamp-2">
                                 {task.title}
                               </p>
 
                               {/* Bottom: status + date + priority pill + avatar */}
-                              <div className="flex items-center justify-between mt-3">
+                              <div className="flex items-center justify-between mt-2.5">
                                 <div className="flex items-center gap-2">
                                   <StatusBadge status={task.status} />
                                   {task.dueDate && (
@@ -347,7 +347,7 @@ export function BoardView({
                                     </span>
                                   )}
                                   {task.priority !== "NONE" && PRIORITY_COLORS[task.priority] && (
-                                    <span className={cn("h-2 w-2 rounded-full", PRIORITY_COLORS[task.priority])} />
+                                    <span className={cn("h-2.5 w-2.5 rounded-full", PRIORITY_COLORS[task.priority])} />
                                   )}
                                 </div>
 
@@ -358,11 +358,11 @@ export function BoardView({
                                         key={a.id}
                                         user={{ name: a.name, avatar: a.avatar }}
                                         size="xs"
-                                        className="h-6 w-6 border border-white dark:border-zinc-900"
+                                        className="h-6 w-6 border border-white"
                                       />
                                     ))}
                                     {task.assignees.length > 1 && (
-                                      <div className="flex h-6 w-6 items-center justify-center rounded-full border border-white dark:border-zinc-900 bg-muted text-[8px] font-medium text-muted-foreground">
+                                      <div className="flex h-6 w-6 items-center justify-center rounded-full border border-white bg-neutral-100 text-[8px] font-medium text-neutral-500">
                                         +{task.assignees.length - 1}
                                       </div>
                                     )}
@@ -386,7 +386,7 @@ export function BoardView({
 
                   {/* Inline quick-add */}
                   {addingTo === column.id && (
-                    <div className="rounded-lg border bg-white dark:bg-zinc-900 p-2.5">
+                    <div className="rounded-lg border border-neutral-200 bg-white p-2.5">
                       <input
                         ref={inputRef}
                         type="text"
@@ -428,7 +428,7 @@ export function BoardView({
         {projectId && (
           <div className="flex-shrink-0 w-72 flex flex-col">
             {showAddSection ? (
-              <div className="rounded-lg border bg-white dark:bg-zinc-900 p-2.5">
+              <div className="rounded-lg border border-neutral-200 bg-white p-2.5">
                 <input
                   ref={sectionInputRef}
                   type="text"
