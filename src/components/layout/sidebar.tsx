@@ -670,7 +670,7 @@ export function Sidebar({ user }: SidebarProps) {
               {/* Archived toggle */}
               <button
                 onClick={() => setShowArchived(!showArchived)}
-                className="flex items-center gap-1.5 px-3 py-1 text-[10px] text-sidebar-text/40 hover:text-sidebar-text/70 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1 text-[10px] text-sidebar-text/60 hover:text-sidebar-text/70 transition-colors"
               >
                 <Archive className="h-3 w-3" />
                 {showArchived ? "Hide archived" : "Show archived"}

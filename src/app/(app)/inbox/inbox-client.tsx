@@ -256,7 +256,7 @@ export function InboxClient({
       </div>
 
       {/* View tabs */}
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex items-center gap-2 mb-3 pb-3 border-b border-border/40">
         {([
           { key: "all" as const, label: "All" },
           { key: "by-project" as const, label: "By Project" },

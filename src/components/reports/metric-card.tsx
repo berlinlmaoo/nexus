@@ -14,14 +14,14 @@ interface MetricCardProps {
 
 export function MetricCard({ icon: Icon, label, value, trend, iconBg = "bg-zinc-100 dark:bg-zinc-800", iconColor = "text-zinc-700 dark:text-zinc-300" }: MetricCardProps) {
   return (
-    <Card>
+    <Card className="min-w-[140px]">
       <CardContent className="pt-6">
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-lg ${iconBg}`}>
             <Icon className={`w-5 h-5 ${iconColor}`} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm text-muted-foreground truncate">{label}</p>
+            <p className="text-sm text-muted-foreground truncate" title={label}>{label}</p>
             <div className="flex items-baseline gap-2">
               <p className="text-2xl font-bold">{value}</p>
               {trend !== undefined && trend !== 0 && (

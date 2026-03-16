@@ -22,7 +22,6 @@ import { CSS } from "@dnd-kit/utilities"
 import { useDroppable } from "@dnd-kit/core"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { PriorityBadge } from "./priority-badge"
-import { StatusBadge } from "./status-badge"
 import type { TaskCardData } from "./task-card"
 import {
   CheckCircle2,
@@ -111,7 +110,7 @@ function SortableTaskRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "group grid grid-cols-[20px_20px_24px_1fr_100px_90px_90px_72px] gap-0 items-center border-b border-border/50 h-9 cursor-pointer transition-colors text-[13px]",
+        "group grid grid-cols-[20px_20px_24px_1fr_100px_90px_72px] gap-0 items-center border-b border-border/50 h-9 cursor-pointer transition-colors text-[13px]",
         isDragging && "z-50 shadow-lg bg-background",
         isRowSelected ? "bg-muted/60" : "hover:bg-muted/30"
       )}
@@ -232,11 +231,6 @@ function SortableTaskRow({
         ) : (
           <span className="text-muted-foreground/30 text-xs">—</span>
         )}
-      </div>
-
-      {/* Status */}
-      <div className="flex items-center px-2 h-full border-r border-border/30">
-        <StatusBadge status={task.status} />
       </div>
 
       {/* Priority */}
@@ -634,7 +628,7 @@ export function TaskListView({
   }) => (
     <button
       className={cn(
-        "flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors",
+        "flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap",
         sortField === field && "text-foreground",
         className
       )}
@@ -659,7 +653,7 @@ export function TaskListView({
     >
       <div>
         {/* Table column headers */}
-        <div className="grid grid-cols-[20px_20px_24px_1fr_100px_90px_90px_72px] gap-0 items-center border-b-2 border-border h-8 bg-muted/30 sticky top-0 z-10">
+        <div className="grid grid-cols-[20px_20px_24px_1fr_100px_90px_72px] gap-0 items-center border-b-2 border-border h-8 bg-muted/30 sticky top-0 z-10">
           <div />
           <div />
           <div />
@@ -667,13 +661,10 @@ export function TaskListView({
             <SortHeader label="Task name" field="title" />
           </div>
           <div className="px-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Assignee</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Assignee</span>
           </div>
           <div className="px-2">
             <SortHeader label="Due date" field="dueDate" />
-          </div>
-          <div className="px-2">
-            <SortHeader label="Status" field="status" />
           </div>
           <div className="px-2">
             <SortHeader label="Priority" field="priority" />

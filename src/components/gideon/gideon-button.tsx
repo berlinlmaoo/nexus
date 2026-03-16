@@ -18,6 +18,7 @@ export function GideonButton({ isOpen, onClick }: GideonButtonProps) {
         isOpen && 'scale-0 opacity-0 pointer-events-none'
       )}
       aria-label="Toggle GIDEON AI Assistant"
+      title="GIDEON AI Assistant"
     >
       <Image
         src="/logos/gideon-icon-white.png"

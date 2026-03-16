@@ -74,6 +74,7 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
   const [selectedIcon, setSelectedIcon] = useState(project.icon || "folder")
   const [selectedColor, setSelectedColor] = useState(project.color)
   const [coverGradient, setCoverGradient] = useState(PRESET_GRADIENTS[0])
+  const [coverImage, setCoverImage] = useState<string | null>(null)
 
   // Upload state
   const [uploading, setUploading] = useState(false)
@@ -204,10 +205,13 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
   return (
     <div className="space-y-4 animate-fade-in px-6 pt-6 overflow-hidden">
       {/* Cover gradient */}
-      <div className={cn("relative h-36 rounded-xl bg-gradient-to-r overflow-hidden transition-all duration-500", coverGradient)}>
+      <div className={cn("relative rounded-xl bg-gradient-to-r overflow-hidden transition-all duration-500", coverGradient, coverImage ? "h-36" : "h-8")}>
         <button
           onClick={() => setShowCoverPicker(!showCoverPicker)}
-          className="absolute top-3 right-3 flex items-center gap-1.5 rounded-lg bg-black/30 px-2.5 py-1.5 text-xs text-white/80 hover:bg-black/50 hover:text-white transition-all duration-200 backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+          className={cn(
+            "absolute right-3 flex items-center gap-1.5 rounded-lg bg-black/30 text-xs text-white/80 hover:bg-black/50 hover:text-white transition-all duration-200 backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
+            coverImage ? "top-3 px-2.5 py-1.5" : "top-1 px-2 py-0.5"
+          )}
         >
           <ImageIcon className="h-3.5 w-3.5" />
           Cover
@@ -234,7 +238,7 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
       </div>
 
       {/* Project info row */}
-      <div className="flex items-start gap-4 -mt-10 ml-6 relative z-10">
+      <div className={cn("flex items-start gap-4 ml-6 relative z-10", coverImage ? "-mt-10" : "-mt-4")}>
         {/* Icon */}
         <div className="relative">
           <button

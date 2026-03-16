@@ -19,7 +19,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useRouter } from "next/navigation"
 import { format, isPast, isToday } from "date-fns"
-import { StatusBadge } from "./status-badge"
 
 const PRIORITY_COLORS: Record<string, string> = {
   URGENT: "bg-red-500",
@@ -334,7 +333,6 @@ export function BoardView({
                               {/* Bottom: status + date + priority pill + avatar */}
                               <div className="flex items-center justify-between mt-3">
                                 <div className="flex items-center gap-2">
-                                  <StatusBadge status={task.status} />
                                   {task.dueDate && (
                                     <span
                                       className={cn(

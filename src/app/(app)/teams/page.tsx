@@ -176,6 +176,15 @@ export default function TeamsPage() {
     }
   }
 
+  const avatarColors = ['#2563EB', '#059669', '#DC2626', '#D97706', '#7C3AED', '#0891B2', '#BE185D', '#4F46E5', '#0D9488', '#E11D48']
+  const getTeamAvatarColor = (name: string) => {
+    let hash = 0
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash)
+    }
+    return avatarColors[Math.abs(hash) % avatarColors.length]
+  }
+
   const teamColors = ['#18181B', '#2563EB', '#059669', '#DC2626', '#D97706', '#7C3AED', '#0891B2', '#BE185D']
 
   return (
@@ -247,9 +256,11 @@ export default function TeamsPage() {
                 <CardHeader className="pb-3">
                   <div className="flex items-center gap-3">
                     <div
-                      className="w-4 h-4 rounded-full"
-                      style={{ backgroundColor: team.color }}
-                    />
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold"
+                      style={{ backgroundColor: getTeamAvatarColor(team.name) }}
+                    >
+                      {team.name.charAt(0).toUpperCase()}
+                    </div>
                     <CardTitle className="text-lg">{team.name}</CardTitle>
                   </div>
                 </CardHeader>
@@ -257,7 +268,7 @@ export default function TeamsPage() {
                   {/* Members section */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-sm text-muted-foreground">{team.members?.length ?? 0} members</p>
+                      <p className="text-sm text-muted-foreground">{team.members?.length ?? 0} {(team.members?.length ?? 0) === 1 ? 'member' : 'members'}</p>
                       <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => openMemberPicker(team.id)}>
                         <UserPlus className="w-3.5 h-3.5 mr-1" />
                         <span className="text-xs">Manage</span>
@@ -283,7 +294,7 @@ export default function TeamsPage() {
                   {/* Projects section */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-sm text-muted-foreground">{team.projects?.length ?? 0} projects</p>
+                      <p className="text-sm text-muted-foreground">{team.projects?.length ?? 0} {(team.projects?.length ?? 0) === 1 ? 'project' : 'projects'}</p>
                       <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => openProjectPicker(team.id)}>
                         <LinkIcon className="w-3.5 h-3.5 mr-1" />
                         <span className="text-xs">Link</span>
