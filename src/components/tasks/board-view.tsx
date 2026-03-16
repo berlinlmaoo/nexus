@@ -48,22 +48,17 @@ export function BoardView({
   defaultTaskListId,
 }: BoardViewProps) {
   const router = useRouter()
-  const [localTasks, setLocalTasks] = useState<TaskCardData[]>(tasks)
   const [addingTo, setAddingTo] = useState<string | null>(null)
   const [newTitle, setNewTitle] = useState("")
   const [creating, setCreating] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  if (tasks !== localTasks && JSON.stringify(tasks) !== JSON.stringify(localTasks)) {
-    setLocalTasks(tasks)
-  }
-
   const getColumnTasks = useCallback(
     (status: TaskCardData["status"]) =>
-      localTasks
+      tasks
         .filter((t) => t.status === status)
         .sort((a, b) => a.position - b.position),
-    [localTasks]
+    [tasks]
   )
 
   const handleDragEnd = useCallback(
@@ -73,9 +68,6 @@ export function BoardView({
       if (destination.droppableId === source.droppableId && destination.index === source.index) return
 
       const newStatus = destination.droppableId as TaskCardData["status"]
-      setLocalTasks((prev) =>
-        prev.map((t) => (t.id === draggableId ? { ...t, status: newStatus } : t))
-      )
       onStatusChange(draggableId, newStatus)
     },
     [onStatusChange]
