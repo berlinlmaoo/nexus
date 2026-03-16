@@ -302,26 +302,28 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
     project.taskLists.map((tl) => ({
       id: tl.id,
       name: tl.name,
-      tasks: tl.tasks.filter((t) => {
-        if (statusFilter !== "ALL" && t.status !== statusFilter) return false
-        if (priorityFilter !== "ALL" && t.priority !== priorityFilter) return false
-        if (assigneeFilter !== "ALL" && !t.assignees.some((a) => a.id === assigneeFilter)) return false
-        if (sprintFilter === "NONE") {
-          const allSprintTaskIds = new Set<string>()
-          Object.values(sprintTaskMap).forEach(s => s.forEach(id => allSprintTaskIds.add(id)))
-          if (allSprintTaskIds.has(t.id)) return false
-        } else if (sprintFilter !== "ALL") {
-          const sprintTasks = sprintTaskMap[sprintFilter]
-          if (sprintTasks && !sprintTasks.has(t.id)) return false
-        }
-        if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase()
-          if (!t.title.toLowerCase().includes(q) && !t.tags.some(tag => tag.toLowerCase().includes(q))) return false
-        }
-        return true
-      }),
+      tasks: allTasks
+        .filter((t) => t.taskListId === tl.id || (t as Record<string,unknown>).taskListName === tl.name)
+        .filter((t) => {
+          if (statusFilter !== "ALL" && t.status !== statusFilter) return false
+          if (priorityFilter !== "ALL" && t.priority !== priorityFilter) return false
+          if (assigneeFilter !== "ALL" && !t.assignees.some((a: {id:string}) => a.id === assigneeFilter)) return false
+          if (sprintFilter === "NONE") {
+            const allSprintTaskIds = new Set<string>()
+            Object.values(sprintTaskMap).forEach(s => s.forEach(id => allSprintTaskIds.add(id)))
+            if (allSprintTaskIds.has(t.id)) return false
+          } else if (sprintFilter !== "ALL") {
+            const sprintTasks = sprintTaskMap[sprintFilter]
+            if (sprintTasks && !sprintTasks.has(t.id)) return false
+          }
+          if (searchQuery.trim()) {
+            const q = searchQuery.toLowerCase()
+            if (!t.title.toLowerCase().includes(q) && !(t.tags as string[]).some(tag => tag.toLowerCase().includes(q))) return false
+          }
+          return true
+        }),
     })),
-    [project.taskLists, statusFilter, priorityFilter, assigneeFilter, sprintFilter, sprintTaskMap, searchQuery]
+    [project.taskLists, allTasks, statusFilter, priorityFilter, assigneeFilter, sprintFilter, sprintTaskMap, searchQuery]
   )
 
   const activeFilterCount = [
