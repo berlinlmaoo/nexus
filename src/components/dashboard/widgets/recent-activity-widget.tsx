@@ -63,13 +63,12 @@ export function RecentActivityWidget({ data }: RecentActivityWidgetProps) {
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between mb-2">
-        <div></div>
+      <div className="flex items-center justify-end mb-1">
         <button
           onClick={refresh}
           disabled={isRefreshing}
-          className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
-          title="Refresh"
+          className="text-muted-foreground/60 hover:text-foreground transition-colors p-1 rounded-md hover:bg-muted/50"
+          title="Refresh activity"
         >
           <RefreshCw className={cn("h-3 w-3", isRefreshing && "animate-spin")} />
         </button>

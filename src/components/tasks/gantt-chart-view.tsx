@@ -8,6 +8,7 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronRight as ChevronRightIcon,
+  Calendar,
 } from "lucide-react"
 import {
   format,
@@ -29,8 +30,6 @@ import {
   isToday,
   getDay,
   isWithinInterval,
-  eachWeekOfInterval,
-  eachMonthOfInterval,
 } from "date-fns"
 import { cn } from "@/lib/utils"
 import { motion } from "framer-motion"
@@ -88,6 +87,7 @@ export function GanttChartView({ tasks, onTaskClick }: GanttChartViewProps) {
     }
 
     const items: HierarchyItem[] = []
+    const unscheduled: TaskCardData[] = []
 
     // Add parent tasks with their subtask info
     parentTasks.forEach((t) => {
@@ -107,15 +107,7 @@ export function GanttChartView({ tasks, onTaskClick }: GanttChartViewProps) {
     // Add standalone tasks
     standaloneTasks.forEach((t) => {
       if (!t.dueDate) {
-        // No dates - still show in list
-        const now = startOfDay(new Date())
-        items.push({
-          task: { ...t, startDate: now, endDate: now },
-          depth: 0,
-          isParent: false,
-          progress: t.status === "DONE" ? 100 : 0,
-          isMilestone: false,
-        })
+        unscheduled.push(t)
         return
       }
 
@@ -134,21 +126,22 @@ export function GanttChartView({ tasks, onTaskClick }: GanttChartViewProps) {
       })
     })
 
-    return items
+    return { items, unscheduled }
   }, [tasks])
+
+  const { items: hierarchyItems, unscheduled: unscheduledTasks } = taskHierarchy
 
   // Filter visible tasks
   const visibleItems = useMemo(() => {
-    return taskHierarchy.filter((item) => {
+    return hierarchyItems.filter((item) => {
       const t = item.task
-      if (!t.dueDate) return true
       return (
         isWithinInterval(t.startDate, { start: rangeStart, end: rangeEnd }) ||
         isWithinInterval(t.endDate, { start: rangeStart, end: rangeEnd }) ||
         isWithinInterval(rangeStart, { start: t.startDate, end: t.endDate })
       )
     })
-  }, [taskHierarchy, rangeStart, rangeEnd])
+  }, [hierarchyItems, rangeStart, rangeEnd])
 
   // Find critical path (longest chain - simplified: tasks with URGENT/HIGH priority)
   const criticalTaskIds = useMemo(() => {
@@ -168,7 +161,7 @@ export function GanttChartView({ tasks, onTaskClick }: GanttChartViewProps) {
     if (clampedStart > totalDays - 1 || clampedEnd < 0) return null
     const left = (clampedStart / totalDays) * 100
     const width = ((clampedEnd - clampedStart + 1) / totalDays) * 100
-    return { left: `${left}%`, width: `${Math.max(width, 1.5)}%` }
+    return { left: `${left}%`, width: `${Math.max(width, 3)}%` }
   }
 
   const navigate = (dir: 1 | -1) => {
@@ -269,7 +262,7 @@ export function GanttChartView({ tasks, onTaskClick }: GanttChartViewProps) {
       </div>
 
       {/* Task rows */}
-      {visibleItems.length === 0 ? (
+      {visibleItems.length === 0 && unscheduledTasks.length === 0 ? (
         <div className="py-12 text-center text-sm text-muted-foreground">
           No tasks to display in this period
         </div>
@@ -395,6 +388,33 @@ export function GanttChartView({ tasks, onTaskClick }: GanttChartViewProps) {
               </motion.div>
             )
           })}
+
+          {/* Unscheduled section */}
+          {unscheduledTasks.length > 0 && (
+            <>
+              <div className="border-t my-3" />
+              <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5 px-1">
+                <Calendar className="h-3 w-3" />
+                Unscheduled ({unscheduledTasks.length})
+              </div>
+              {unscheduledTasks.map((task) => (
+                <div key={task.id} className="flex items-center h-10 group hover:bg-accent/50 transition-colors">
+                  <div className="w-56 shrink-0 flex items-center gap-2 pr-3 border-r pl-2">
+                    <span className="text-xs font-medium text-foreground truncate flex-1 cursor-pointer hover:text-muted-foreground transition-colors" onClick={() => onTaskClick?.(task)}>
+                      {task.title}
+                    </span>
+                  </div>
+                  <div className="flex-1 relative h-8">
+                    <div className="absolute inset-0 flex">
+                      {days.map((_, i) => (<div key={i} className="flex-1 border-r border-border/30 last:border-r-0" />))}
+                    </div>
+                    {todayIndex >= 0 && (<div className="absolute top-0 bottom-0 w-0.5 bg-red-500/20 z-10" style={{ left: `${((todayIndex + 0.5) / days.length) * 100}%` }} />)}
+                    <span className="absolute inset-0 flex items-center justify-center text-[10px] text-muted-foreground/60 italic">No dates set</span>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       )}
 

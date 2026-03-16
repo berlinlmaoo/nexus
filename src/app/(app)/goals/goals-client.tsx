@@ -107,10 +107,10 @@ function GoalCard({
           </div>
           <div className="flex items-center gap-3 ml-4">
             <div className="text-right">
-              <span className="text-sm font-semibold text-[#18181B]">{goal.progress}%</span>
+              <span className="text-sm font-semibold text-foreground">{goal.progress}%</span>
               <div className="w-24 h-1.5 bg-muted rounded-full mt-1">
                 <div
-                  className="h-full rounded-full bg-[#18181B] transition-all"
+                  className="h-full rounded-full bg-foreground transition-all"
                   style={{ width: `${goal.progress}%` }}
                 />
               </div>
@@ -207,11 +207,13 @@ export function GoalsPageClient({ goals: initialGoals, workspaceId }: { goals: G
           <p className="text-sm text-muted-foreground mt-1">Track and manage team objectives</p>
         </div>
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setParentGoalId("") }}>
-          <DialogTrigger asChild>
-            <Button className="bg-foreground text-background hover:bg-foreground/90">
-              <Plus className="h-4 w-4 mr-2" /> New Goal
-            </Button>
-          </DialogTrigger>
+          {topLevelGoals.length > 0 && (
+            <DialogTrigger asChild>
+              <Button className="bg-foreground text-background hover:bg-foreground/90">
+                <Plus className="h-4 w-4 mr-2" /> New Goal
+              </Button>
+            </DialogTrigger>
+          )}
           <DialogContent>
             <DialogHeader>
               <DialogTitle>{parentGoalId ? "Create Sub-Goal" : "Create Goal"}</DialogTitle>
@@ -244,14 +246,14 @@ export function GoalsPageClient({ goals: initialGoals, workspaceId }: { goals: G
       </div>
 
       {topLevelGoals.length === 0 ? (
-        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-          <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
-            <Target className="h-8 w-8 text-[#18181B]" />
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center animate-fade-in">
+          <div className="h-16 w-16 rounded-2xl bg-muted/60 flex items-center justify-center mb-4">
+            <Target className="h-8 w-8 text-muted-foreground/50" />
           </div>
           <h3 className="text-lg font-semibold mb-1">No goals yet</h3>
-          <p className="text-sm text-muted-foreground mb-4">Create your first goal to start tracking objectives</p>
-          <Button onClick={() => setOpen(true)} className="bg-foreground text-background hover:bg-foreground/90">
-            <Plus className="h-4 w-4 mr-2" /> New Goal
+          <p className="text-sm text-muted-foreground max-w-xs">Create your first goal to start tracking team objectives and milestones.</p>
+          <Button onClick={() => setOpen(true)} className="mt-5 bg-foreground text-background hover:bg-foreground/90">
+            <Plus className="h-4 w-4 mr-2" /> Create Goal
           </Button>
         </div>
       ) : (

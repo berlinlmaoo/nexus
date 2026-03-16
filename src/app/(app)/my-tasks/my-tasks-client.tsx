@@ -3,7 +3,6 @@
 import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { PriorityBadge } from "@/components/tasks/priority-badge"
 import { StatusBadge } from "@/components/tasks/status-badge"
@@ -50,7 +49,6 @@ const PRIORITY_ORDER: Record<string, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, 
 
 function getSectionForTask(task: Task): string {
   const now = new Date()
-  const sevenDaysAgo = subDays(now, 7)
   const sevenDaysFromNow = addDays(now, 7)
 
   if (!task.dueDate) return "No Due Date"
@@ -205,10 +203,7 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: Task[]; project
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <CheckSquare className="h-6 w-6 text-foreground/80" />
-            My Tasks
-          </h1>
+          <h1 className="text-2xl font-bold">My Tasks</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {visibleTasks.length} task{visibleTasks.length !== 1 ? "s" : ""} assigned to you
           </p>
@@ -231,20 +226,18 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: Task[]; project
       </div>
 
       {visibleTasks.length === 0 ? (
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <Card className="p-16 text-center rounded-xl shadow-sm animate-fade-in">
-            <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-2xl bg-muted/60 mb-4">
-              <CheckSquare className="h-8 w-8 text-muted-foreground/50" />
-            </div>
-            <h3 className="text-lg font-semibold">No tasks assigned</h3>
-            <p className="text-sm text-muted-foreground mt-1.5 max-w-xs mx-auto">
-              You&apos;re all caught up! Tasks assigned to you will appear here.
-            </p>
-            <Link href="/projects" className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-md bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors">
-              <FolderKanban className="h-4 w-4" />
-              Browse Projects
-            </Link>
-          </Card>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center animate-fade-in">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/60 mb-4">
+            <CheckSquare className="h-8 w-8 text-muted-foreground/50" />
+          </div>
+          <h3 className="text-lg font-semibold mb-1">No tasks assigned</h3>
+          <p className="text-sm text-muted-foreground max-w-xs">
+            You&apos;re all caught up! Tasks assigned to you will appear here.
+          </p>
+          <Link href="/projects" className="inline-flex items-center gap-2 mt-5 px-4 py-2 rounded-md bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors">
+            <FolderKanban className="h-4 w-4" />
+            Browse Projects
+          </Link>
         </div>
       ) : (
         <div className="space-y-4">

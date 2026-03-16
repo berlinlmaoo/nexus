@@ -5,6 +5,8 @@ import { DocsPageClient } from "./docs-client"
 
 export const metadata = { title: "Documents | Nexus" }
 
+export const dynamic = "force-dynamic"
+
 export default async function DocsPage() {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")

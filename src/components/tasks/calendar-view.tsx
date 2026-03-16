@@ -266,6 +266,13 @@ export function CalendarView({ tasks, onTaskClick, projectId, defaultTaskListId 
         </div>
       </div>
 
+      {/* Empty state hint */}
+      {Object.keys(tasksByDate).length === 0 && tasks.length > 0 && (
+        <div className="text-center py-3 text-xs text-muted-foreground">
+          {tasks.length} {tasks.length === 1 ? "task has" : "tasks have"} no due date set — assign dates to see them on the calendar
+        </div>
+      )}
+
       {/* Selected date tasks panel */}
       <AnimatePresence>
         {selectedDate && selectedDateTasks.length > 0 && (

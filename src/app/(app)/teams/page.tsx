@@ -191,12 +191,12 @@ export default function TeamsPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Teams</h1>
-          <p className="text-muted-foreground mt-1">Manage your divisions and team members</p>
+          <h1 className="text-2xl font-bold">Teams</h1>
+          <p className="text-sm text-muted-foreground mt-1">Manage your divisions and team members</p>
         </div>
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-[#18181B] hover:bg-[#27272A]">
+            <Button className="bg-foreground text-background hover:bg-foreground/90">
               <Plus className="w-4 h-4 mr-2" />
               New Team
             </Button>
@@ -229,7 +229,7 @@ export default function TeamsPage() {
                   ))}
                 </div>
               </div>
-              <Button onClick={createTeam} disabled={isLoading || !newTeamName.trim()} className="w-full bg-[#18181B] hover:bg-[#27272A]">
+              <Button onClick={createTeam} disabled={isLoading || !newTeamName.trim()} className="w-full bg-foreground text-background hover:bg-foreground/90">
                 {isLoading ? 'Creating...' : 'Create Team'}
               </Button>
             </div>
