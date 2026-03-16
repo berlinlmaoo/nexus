@@ -411,6 +411,9 @@ export function TaskListView({
         body: JSON.stringify({ name: addingSectionName.trim() }),
       })
       if (res.ok) {
+        const data = await res.json()
+        // Optimistic: add new section to local state immediately
+        setSections((prev) => [...prev, { id: data.id, name: data.name, tasks: [] }])
         setAddingSectionName("")
         setShowAddSection(false)
         router.refresh()
@@ -424,13 +427,15 @@ export function TaskListView({
 
   const handleRenameSection = async (sectionId: string) => {
     if (!renameValue.trim() || !projectId) return
+    // Optimistic rename
+    setSections((prev) => prev.map((s) => s.id === sectionId ? { ...s, name: renameValue.trim() } : s))
+    setRenamingSection(null)
     try {
       await fetch(`/api/projects/${projectId}/sections`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: sectionId, name: renameValue.trim() }),
       })
-      setRenamingSection(null)
       router.refresh()
     } catch (error) {
       console.error("Failed to rename section:", error)
@@ -438,7 +443,18 @@ export function TaskListView({
   }
 
   const handleDeleteSection = async (sectionId: string) => {
-    if (!projectId) return
+    if (!projectId || sections.length <= 1) return
+    // Optimistic delete — move tasks to first remaining section
+    const firstRemaining = sections.find((s) => s.id !== sectionId)
+    if (!firstRemaining) return
+    const deletedSection = sections.find((s) => s.id === sectionId)
+    setSections((prev) => prev
+      .filter((s) => s.id !== sectionId)
+      .map((s) => s.id === firstRemaining.id
+        ? { ...s, tasks: [...s.tasks, ...(deletedSection?.tasks || [])] }
+        : s
+      )
+    )
     setDeletingSection(sectionId)
     try {
       await fetch(`/api/projects/${projectId}/sections`, {
