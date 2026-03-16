@@ -223,13 +223,13 @@ export function BoardView({
                       if (renameValue.trim()) handleRenameColumn(column.id)
                       else setRenamingColumn(null)
                     }}
-                    className="text-[13px] font-semibold bg-transparent outline-none border-b border-foreground/30 px-0.5 min-w-0"
+                    className="text-sm font-medium bg-transparent outline-none border-b border-neutral-300 dark:border-neutral-600 px-0.5 min-w-0"
                     autoFocus
                   />
                 ) : (
                   <>
-                    <h3 className="text-[13px] font-semibold text-foreground truncate">{column.name}</h3>
-                    <span className="text-[11px] text-muted-foreground tabular-nums">
+                    <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 truncate">{column.name}</h3>
+                    <span className="text-xs text-neutral-400 tabular-nums">
                       {column.tasks.length}
                     </span>
                   </>
@@ -297,8 +297,8 @@ export function BoardView({
                   className={cn(
                     "flex-1 space-y-2 rounded-lg p-1.5 min-h-[120px] transition-colors duration-150",
                     snapshot.isDraggingOver
-                      ? "bg-muted/60"
-                      : "bg-transparent"
+                      ? "bg-neutral-100 dark:bg-neutral-800/50"
+                      : "bg-neutral-50/30 dark:bg-transparent"
                   )}
                 >
                   {column.tasks
@@ -320,14 +320,14 @@ export function BoardView({
                           >
                             <div
                               className={cn(
-                                "rounded-lg border bg-white dark:bg-zinc-900 p-3 cursor-pointer transition-all duration-150",
-                                "hover:shadow-md",
-                                snapshot.isDragging && "shadow-xl ring-1 ring-border"
+                                "rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-zinc-900 p-3 cursor-pointer transition-all duration-150",
+                                "hover:shadow-sm",
+                                snapshot.isDragging && "shadow-lg ring-1 ring-neutral-200 dark:ring-neutral-700"
                               )}
                               onClick={() => onTaskClick(task)}
                             >
                               {/* Task name */}
-                              <p className="text-[13px] font-medium text-foreground leading-snug line-clamp-2">
+                              <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100 leading-snug line-clamp-2">
                                 {task.title}
                               </p>
 
@@ -338,7 +338,7 @@ export function BoardView({
                                   {task.dueDate && (
                                     <span
                                       className={cn(
-                                        "inline-flex items-center gap-1 text-[11px]",
+                                        "inline-flex items-center gap-1 text-xs",
                                         isOverdue ? "text-red-600 font-medium" : "text-muted-foreground"
                                       )}
                                     >
@@ -358,7 +358,7 @@ export function BoardView({
                                         key={a.id}
                                         user={{ name: a.name, avatar: a.avatar }}
                                         size="xs"
-                                        className="h-6 w-6 border border-white dark:border-zinc-900"
+                                        className="h-6 w-6 border-2 border-white dark:border-zinc-900"
                                       />
                                     ))}
                                     {task.assignees.length > 1 && (
@@ -386,7 +386,7 @@ export function BoardView({
 
                   {/* Inline quick-add */}
                   {addingTo === column.id && (
-                    <div className="rounded-lg border bg-white dark:bg-zinc-900 p-2.5">
+                    <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-zinc-900 p-3">
                       <input
                         ref={inputRef}
                         type="text"
@@ -399,7 +399,7 @@ export function BoardView({
                         }}
                         onBlur={() => { if (!newTitle.trim()) setAddingTo(null) }}
                         disabled={creating}
-                        className="w-full text-[13px] bg-transparent outline-none placeholder:text-muted-foreground/50"
+                        className="w-full text-sm bg-transparent outline-none placeholder:text-neutral-400"
                       />
                       {creating && (
                         <div className="flex items-center gap-1 mt-1.5 text-[11px] text-muted-foreground">
@@ -428,7 +428,7 @@ export function BoardView({
         {projectId && (
           <div className="flex-shrink-0 w-72 flex flex-col">
             {showAddSection ? (
-              <div className="rounded-lg border bg-white dark:bg-zinc-900 p-2.5">
+              <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-zinc-900 p-3">
                 <input
                   ref={sectionInputRef}
                   type="text"
@@ -441,7 +441,7 @@ export function BoardView({
                   }}
                   onBlur={() => { if (!addingSectionName.trim()) setShowAddSection(false) }}
                   disabled={creatingSec}
-                  className="w-full text-[13px] font-semibold bg-transparent outline-none placeholder:text-muted-foreground/50"
+                  className="w-full text-sm font-medium bg-transparent outline-none placeholder:text-neutral-400"
                   autoFocus
                 />
                 {creatingSec && (

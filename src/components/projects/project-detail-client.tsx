@@ -443,31 +443,27 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       <ProjectHeader project={project} />
 
       {/* View tabs row */}
-      <div className="border-b bg-white dark:bg-zinc-950 px-4 shrink-0 overflow-x-auto hide-scrollbar">
+      <div className="border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-zinc-950 px-4 shrink-0 overflow-x-auto hide-scrollbar">
         <div className="flex items-center">
-          {viewTabs.map((tab) => {
-            const Icon = tab.icon
-            return (
+          {viewTabs.map((tab) => (
               <button
                 key={tab.id}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 -mb-px transition-all duration-200 whitespace-nowrap",
+                  "px-3 py-2.5 text-sm font-medium border-b-2 -mb-px transition-all duration-200 whitespace-nowrap",
                   viewMode === tab.id
-                    ? "border-foreground text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                    ? "border-blue-600 text-neutral-900 dark:text-neutral-100"
+                    : "border-transparent text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100"
                 )}
                 onClick={() => handleViewChange(tab.id)}
               >
-                <Icon className="h-3.5 w-3.5" />
                 {tab.label}
               </button>
-            )
-          })}
+          ))}
         </div>
       </div>
 
       {/* Toolbar row: search, filter, sort, group */}
-      <div className="flex items-center gap-1 border-b bg-white dark:bg-zinc-950 px-4 py-1.5 shrink-0 overflow-x-auto hide-scrollbar">
+      <div className="flex items-center gap-1 border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-zinc-950 px-4 py-1.5 shrink-0 overflow-x-auto hide-scrollbar">
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
@@ -476,7 +472,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
               placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-7 w-32 rounded border bg-transparent pl-7 pr-2 text-xs outline-none placeholder:text-muted-foreground/60 focus:border-foreground/30 focus:ring-0 transition-all duration-150"
+              className="h-7 w-32 rounded border border-neutral-200 dark:border-neutral-700 bg-transparent pl-7 pr-2 text-xs outline-none placeholder:text-neutral-400 focus:border-blue-500 focus:ring-0 transition-all duration-150"
             />
             {searchQuery && (
               <button onClick={() => setSearchQuery("")} className="absolute right-1.5 top-1/2 -translate-y-1/2">
@@ -488,8 +484,8 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
           {/* Filter */}
           <button
             className={cn(
-              "flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors",
-              showFilters ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              "flex items-center gap-1 h-7 px-2 rounded text-xs font-medium transition-colors",
+              showFilters ? "bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100" : "text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800"
             )}
             onClick={() => setShowFilters(!showFilters)}
           >
@@ -506,8 +502,8 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
           <div className="relative">
             <button
               className={cn(
-                "flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors",
-                showSort ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                "flex items-center gap-1 h-7 px-2 rounded text-xs font-medium transition-colors",
+                showSort ? "bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100" : "text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800"
               )}
               onClick={() => { setShowSort(!showSort); setShowGroup(false) }}
             >
@@ -541,8 +537,8 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
           <div className="relative">
             <button
               className={cn(
-                "flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors",
-                showGroup ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                "flex items-center gap-1 h-7 px-2 rounded text-xs font-medium transition-colors",
+                showGroup ? "bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100" : "text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800"
               )}
               onClick={() => { setShowGroup(!showGroup); setShowSort(false) }}
             >
@@ -661,7 +657,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       )}
 
       {/* Quick action pills */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b bg-white dark:bg-zinc-950">
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-zinc-950">
         <Link href={`/projects/${project.id}/sprints`}>
           <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border transition-all duration-200 active:scale-95">
             <Zap className="h-3 w-3" /> Sprints

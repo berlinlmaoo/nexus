@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Bell, CheckCheck, Circle, Inbox, Loader2, Trash2, ChevronDown, ChevronRight } from "lucide-react"
@@ -154,13 +153,13 @@ export function InboxClient({
   }, [filtered])
 
   const renderNotification = (notification: Notification) => (
-    <Card
+    <div
       key={notification.id}
       className={cn(
-        "p-4 cursor-pointer rounded-xl transition-all duration-200 hover:shadow-sm group",
+        "px-4 py-3 cursor-pointer transition-colors duration-150 border-b border-neutral-100 dark:border-neutral-800 group",
         !notification.read
-          ? "bg-muted/50 border-muted-foreground/10"
-          : "hover:bg-muted/30"
+          ? "bg-blue-50/50 dark:bg-blue-950/20"
+          : "hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
       )}
       onClick={() => {
         if (!notification.read) markRead(notification.id)
@@ -202,7 +201,7 @@ export function InboxClient({
           <Badge variant="secondary" className="mt-2 text-[10px]">{notification.type.replace(/_/g, " ")}</Badge>
         </div>
       </div>
-    </Card>
+    </div>
   )
 
   const renderGrouped = (groups: Record<string, Notification[]>, labelFn: (key: string) => string) => (
@@ -220,7 +219,7 @@ export function InboxClient({
               <Badge variant="secondary" className="text-[10px]">{items.length}</Badge>
             </button>
             {!isCollapsed && (
-              <div className="space-y-2">
+              <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden">
                 {items.map(renderNotification)}
               </div>
             )}
@@ -234,7 +233,7 @@ export function InboxClient({
     <div className="p-6 max-w-3xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Inbox</h1>
+          <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">Inbox</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {unreadCount > 0 ? `${unreadCount} unread notification${unreadCount !== 1 ? "s" : ""}` : "All caught up"}
           </p>
@@ -316,7 +315,7 @@ export function InboxClient({
           </p>
         </div>
       ) : viewTab === "all" ? (
-        <div className="space-y-2">
+        <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden">
           {filtered.map(renderNotification)}
         </div>
       ) : viewTab === "by-project" ? (

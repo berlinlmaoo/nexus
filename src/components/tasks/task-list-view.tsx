@@ -111,16 +111,16 @@ function SortableTaskRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "group grid grid-cols-[20px_20px_24px_1fr_100px_90px_90px_72px] gap-0 items-center border-b border-border/50 h-9 cursor-pointer transition-colors text-[13px]",
-        isDragging && "z-50 shadow-lg bg-background",
-        isRowSelected ? "bg-muted/60" : "hover:bg-muted/30"
+        "group grid grid-cols-[20px_20px_24px_1fr_100px_90px_90px_72px] gap-0 items-center border-b border-border/40 h-[38px] cursor-pointer transition-colors duration-150 text-[13px]",
+        isDragging && "z-50 shadow-raised-300 bg-card rounded-md",
+        isRowSelected ? "bg-primary/[0.04] dark:bg-primary/[0.06]" : "hover:bg-surface-2 dark:hover:bg-surface-2"
       )}
       onClick={() => onTaskClick(task)}
     >
       {/* Drag handle */}
       <div className="flex items-center justify-center h-full">
         <button
-          className="opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing touch-none text-muted-foreground/40 hover:text-muted-foreground transition-opacity"
+          className="opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing touch-none text-muted-foreground/30 hover:text-muted-foreground transition-opacity"
           onClick={(e) => e.stopPropagation()}
           {...attributes}
           {...listeners}
@@ -142,8 +142,8 @@ function SortableTaskRow({
             className={cn(
               "h-3.5 w-3.5 rounded-sm border transition-colors",
               isRowSelected
-                ? "bg-foreground border-foreground"
-                : "border-border"
+                ? "bg-primary border-primary"
+                : "border-border hover:border-muted-foreground/50"
             )}
           >
             {isRowSelected && (
@@ -166,7 +166,7 @@ function SortableTaskRow({
           {isDone ? (
             <CheckCircle2 className="h-4 w-4 text-green-600" />
           ) : (
-            <Circle className="h-4 w-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
+            <Circle className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground/60 transition-colors" />
           )}
         </button>
       </div>
@@ -186,7 +186,7 @@ function SortableTaskRow({
             {task.tags.slice(0, 2).map((tag) => (
               <span
                 key={tag}
-                className="inline-flex items-center rounded bg-muted px-1.5 py-0 text-[10px] font-medium text-muted-foreground"
+                className="inline-flex items-center rounded-md bg-surface-2 dark:bg-surface-3 px-1.5 py-0 text-[10px] font-medium text-muted-foreground"
               >
                 {tag}
               </span>
@@ -204,17 +204,17 @@ function SortableTaskRow({
                 key={a.id}
                 user={{ name: a.name, avatar: a.avatar }}
                 size="xs"
-                className="h-5 w-5 border border-background"
+                className="h-5 w-5 border-[1.5px] border-background"
               />
             ))}
             {task.assignees.length > 2 && (
-              <div className="flex h-5 w-5 items-center justify-center rounded-full border border-background bg-muted text-[8px] font-medium text-muted-foreground">
+              <div className="flex h-5 w-5 items-center justify-center rounded-full border-[1.5px] border-background bg-surface-2 text-[8px] font-medium text-muted-foreground">
                 +{task.assignees.length - 2}
               </div>
             )}
           </div>
         ) : (
-          <span className="text-muted-foreground/30 text-xs">—</span>
+          <span className="text-muted-foreground/20 text-xs">&mdash;</span>
         )}
       </div>
 
@@ -224,13 +224,13 @@ function SortableTaskRow({
           <span
             className={cn(
               "text-xs",
-              isOverdue ? "text-red-600 font-medium" : "text-muted-foreground"
+              isOverdue ? "text-red-600 dark:text-red-400 font-medium" : "text-muted-foreground"
             )}
           >
             {format(new Date(task.dueDate), "MMM d")}
           </span>
         ) : (
-          <span className="text-muted-foreground/30 text-xs">—</span>
+          <span className="text-muted-foreground/20 text-xs">&mdash;</span>
         )}
       </div>
 
@@ -250,7 +250,7 @@ function SortableTaskRow({
 function DragOverlayRow({ task }: { task: TaskCardData }) {
   const isDone = task.status === "DONE"
   return (
-    <div className="flex items-center gap-3 rounded-lg px-3 py-2 bg-background border shadow-xl opacity-90 text-[13px]">
+    <div className="flex items-center gap-3 rounded-lg px-3 py-2 bg-card border border-border/60 shadow-overlay-100 text-[13px]">
       <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
       {isDone ? (
         <CheckCircle2 className="h-4 w-4 text-green-600" />
@@ -279,8 +279,8 @@ function DroppableSection({
     <div
       ref={setNodeRef}
       className={cn(
-        "min-h-[32px] transition-colors duration-150",
-        isOver && "bg-muted/20"
+        "min-h-[32px] transition-colors duration-200",
+        isOver && "bg-primary/[0.03] dark:bg-primary/[0.05]"
       )}
     >
       {children}
@@ -634,7 +634,7 @@ export function TaskListView({
   }) => (
     <button
       className={cn(
-        "flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors",
+        "flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors duration-150",
         sortField === field && "text-foreground",
         className
       )}
@@ -658,8 +658,8 @@ export function TaskListView({
       onDragEnd={handleDragEnd}
     >
       <div>
-        {/* Table column headers */}
-        <div className="grid grid-cols-[20px_20px_24px_1fr_100px_90px_90px_72px] gap-0 items-center border-b-2 border-border h-8 bg-muted/30 sticky top-0 z-10">
+        {/* Table column headers — Plane style: surface-2 bg, clean borders */}
+        <div className="grid grid-cols-[20px_20px_24px_1fr_100px_90px_90px_72px] gap-0 items-center border-b border-border h-8 bg-surface-2 dark:bg-surface-2 sticky top-0 z-10">
           <div />
           <div />
           <div />
@@ -687,16 +687,16 @@ export function TaskListView({
 
           return (
             <div key={section.id}>
-              {/* Section header row */}
+              {/* Section header row — Plane style: surface bg, clean group */}
               <div
-                className="group/section flex w-full items-center gap-2 h-9 px-2 bg-muted/20 border-b border-border/50 hover:bg-muted/40 transition-colors"
+                className="group/section flex w-full items-center gap-2 h-[38px] px-2 bg-surface-2/60 dark:bg-surface-2/60 border-b border-border/50 hover:bg-surface-2 dark:hover:bg-surface-2 transition-colors duration-150"
               >
                 {/* Drag handle for section reorder */}
                 {projectId && sections.length > 1 && (
                   <div className="flex items-center gap-0.5">
                     {sectionIndex > 0 && (
                       <button
-                        className="opacity-0 group-hover/section:opacity-100 text-muted-foreground/40 hover:text-muted-foreground transition-opacity p-0.5"
+                        className="opacity-0 group-hover/section:opacity-100 text-muted-foreground/30 hover:text-muted-foreground transition-opacity p-0.5"
                         onClick={() => handleReorderSection(section.id, sectionIndex - 1)}
                         title="Move section up"
                       >
@@ -705,7 +705,7 @@ export function TaskListView({
                     )}
                     {sectionIndex < sections.length - 1 && (
                       <button
-                        className="opacity-0 group-hover/section:opacity-100 text-muted-foreground/40 hover:text-muted-foreground transition-opacity p-0.5"
+                        className="opacity-0 group-hover/section:opacity-100 text-muted-foreground/30 hover:text-muted-foreground transition-opacity p-0.5"
                         onClick={() => handleReorderSection(section.id, sectionIndex + 1)}
                         title="Move section down"
                       >
@@ -716,11 +716,7 @@ export function TaskListView({
                 )}
 
                 <button onClick={() => toggleCollapse(section.id)} className="flex items-center">
-                  {isCollapsed ? (
-                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                  ) : (
-                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                  )}
+                  <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform duration-200", isCollapsed && "-rotate-90")} />
                 </button>
 
                 {renamingSection === section.id ? (
@@ -737,13 +733,13 @@ export function TaskListView({
                       if (renameValue.trim()) handleRenameSection(section.id)
                       else setRenamingSection(null)
                     }}
-                    className="font-semibold text-[13px] bg-transparent outline-none border-b border-foreground/30 px-0.5"
+                    className="font-semibold text-[13px] bg-transparent outline-none border-b border-primary/40 px-0.5"
                     autoFocus
                   />
                 ) : (
                   <button onClick={() => toggleCollapse(section.id)} className="flex items-center gap-2">
                     <span className="font-semibold text-[13px] text-foreground">{section.name}</span>
-                    <span className="text-[11px] text-muted-foreground tabular-nums">
+                    <span className="flex items-center justify-center h-5 min-w-[20px] rounded-full bg-surface-3 dark:bg-surface-3 px-1.5 text-[11px] font-medium text-muted-foreground tabular-nums">
                       {section.tasks.length}
                     </span>
                   </button>
@@ -753,7 +749,7 @@ export function TaskListView({
                 {projectId && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button className="ml-auto opacity-0 group-hover/section:opacity-100 p-1 rounded hover:bg-muted/60 transition-opacity text-muted-foreground">
+                      <button className="ml-auto opacity-0 group-hover/section:opacity-100 p-1 rounded-md hover:bg-surface-3 transition-all text-muted-foreground/40 hover:text-muted-foreground">
                         <MoreHorizontal className="h-3.5 w-3.5" />
                       </button>
                     </DropdownMenuTrigger>
@@ -808,11 +804,11 @@ export function TaskListView({
 
                   {/* Inline quick-add row */}
                   {addingTo === section.id ? (
-                    <div className="grid grid-cols-[20px_20px_24px_1fr] gap-0 items-center h-9 border-b border-border/50 bg-muted/10">
+                    <div className="grid grid-cols-[20px_20px_24px_1fr] gap-0 items-center h-[38px] border-b border-border/40 bg-surface-2/30">
                       <div />
                       <div />
                       <div className="flex items-center justify-center">
-                        <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+                        <Plus className="h-3.5 w-3.5 text-muted-foreground/40" />
                       </div>
                       <div className="flex items-center gap-2 px-2">
                         <input
@@ -836,7 +832,7 @@ export function TaskListView({
                             }
                           }}
                           disabled={creating}
-                          className="flex-1 text-[13px] bg-transparent outline-none placeholder:text-muted-foreground/50"
+                          className="flex-1 text-[13px] bg-transparent outline-none placeholder:text-muted-foreground/40"
                         />
                         {creating && (
                           <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
@@ -845,7 +841,7 @@ export function TaskListView({
                     </div>
                   ) : (
                     <button
-                      className="flex items-center gap-2 w-full h-8 px-2 text-[13px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/20 transition-colors border-b border-border/30"
+                      className="flex items-center gap-2 w-full h-8 px-2 text-[13px] text-muted-foreground/30 hover:text-muted-foreground hover:bg-surface-2/50 transition-colors duration-150 border-b border-border/20"
                       onClick={() => {
                         if (projectId) {
                           startAdding(section.id)
@@ -869,8 +865,8 @@ export function TaskListView({
         {/* Add Section */}
         {projectId && (
           showAddSection ? (
-            <div className="flex items-center gap-2 h-9 px-2 bg-muted/10 border-b border-border/50">
-              <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+            <div className="flex items-center gap-2 h-[38px] px-2 bg-surface-2/30 border-b border-border/40">
+              <Plus className="h-3.5 w-3.5 text-muted-foreground/40" />
               <input
                 ref={sectionInputRef}
                 type="text"
@@ -883,14 +879,14 @@ export function TaskListView({
                 }}
                 onBlur={() => { if (!addingSectionName.trim()) setShowAddSection(false) }}
                 disabled={creatingSec}
-                className="flex-1 text-[13px] bg-transparent outline-none placeholder:text-muted-foreground/50 font-semibold"
+                className="flex-1 text-[13px] bg-transparent outline-none placeholder:text-muted-foreground/40 font-semibold"
                 autoFocus
               />
               {creatingSec && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
             </div>
           ) : (
             <button
-              className="flex items-center gap-2 w-full h-8 px-2 text-[13px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/20 transition-colors"
+              className="flex items-center gap-2 w-full h-8 px-2 text-[13px] text-muted-foreground/30 hover:text-muted-foreground hover:bg-surface-2/50 transition-colors duration-150"
               onClick={() => {
                 setShowAddSection(true)
                 setAddingSectionName("")
