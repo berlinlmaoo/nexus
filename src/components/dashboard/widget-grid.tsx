@@ -371,7 +371,7 @@ export function WidgetGrid({ data, loading }: WidgetGridProps) {
   return (
     <div ref={containerRef as unknown as React.Ref<HTMLDivElement>}>
       {/* Toolbar */}
-      <div className="flex items-center justify-end gap-2 mb-4">
+      <div className="flex items-center justify-end gap-2 mb-6">
         {isEditing && (
           <>
             <Button

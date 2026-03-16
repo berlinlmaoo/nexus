@@ -39,9 +39,9 @@ export function WidgetWrapper({
   const [collapsed, setCollapsed] = useState(false)
 
   return (
-    <Card className={cn("flex flex-col h-full overflow-hidden", className)}>
+    <Card className={cn("flex flex-col h-full overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200 rounded-xl", className)}>
       {/* Title bar */}
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 flex-shrink-0">
+      <div className="flex items-center gap-2 px-4 py-3 border-b bg-muted/20 flex-shrink-0">
         {isEditing && (
           <div className="drag-handle cursor-grab active:cursor-grabbing">
             <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -87,7 +87,7 @@ export function WidgetWrapper({
 
       {/* Content */}
       {!collapsed && (
-        <div className={cn("flex-1 overflow-auto", !noPadding && "p-4")}>
+        <div className={cn("flex-1 overflow-auto", !noPadding && "p-4 pt-3")}>
           {loading ? (
             <div className="flex items-center justify-center h-full min-h-[100px]">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />

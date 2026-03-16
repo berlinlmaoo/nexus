@@ -205,11 +205,11 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: Task[]; project
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <CheckSquare className="h-6 w-6 text-zinc-800" />
+            <CheckSquare className="h-6 w-6 text-foreground/80" />
             My Tasks
           </h1>
-          <p className="text-muted-foreground mt-1">
-            {visibleTasks.length} tasks assigned to you
+          <p className="text-sm text-muted-foreground mt-1">
+            {visibleTasks.length} task{visibleTasks.length !== 1 ? "s" : ""} assigned to you
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -228,11 +228,13 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: Task[]; project
       </div>
 
       {visibleTasks.length === 0 ? (
-        <Card className="p-12 text-center">
-          <CheckSquare className="h-12 w-12 mx-auto text-muted-foreground/40" />
-          <h3 className="mt-4 text-lg font-medium">No tasks assigned</h3>
-          <p className="text-muted-foreground mt-1">
-            You&apos;re all caught up!
+        <Card className="p-16 text-center rounded-xl shadow-sm animate-fade-in">
+          <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-2xl bg-muted/60 mb-4">
+            <CheckSquare className="h-8 w-8 text-muted-foreground/50" />
+          </div>
+          <h3 className="text-lg font-semibold">No tasks assigned</h3>
+          <p className="text-sm text-muted-foreground mt-1.5 max-w-xs mx-auto">
+            You&apos;re all caught up! Tasks assigned to you will appear here.
           </p>
         </Card>
       ) : (
@@ -245,7 +247,7 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: Task[]; project
               <div key={name}>
                 <button
                   onClick={() => toggleSection(name)}
-                  className="flex items-center gap-2 mb-2 w-full text-left group"
+                  className="flex items-center gap-2 mb-2 w-full text-left group transition-colors duration-200"
                 >
                   {isCollapsed ? (
                     <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -259,8 +261,8 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: Task[]; project
                     {name}
                   </h2>
                   <span className={cn(
-                    "text-xs rounded-full px-2 py-0.5",
-                    isOverdue ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground"
+                    "text-xs rounded-full px-2 py-0.5 font-medium",
+                    isOverdue ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400" : "bg-muted text-muted-foreground"
                   )}>
                     {sectionTasks.length}
                   </span>
@@ -273,7 +275,7 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: Task[]; project
                       return (
                         <div
                           key={task.id}
-                          className="flex items-center gap-3 py-2.5 px-3 rounded-md border hover:shadow-sm transition-shadow cursor-pointer group"
+                          className="flex items-center gap-3 py-2.5 px-3 rounded-lg border hover:shadow-sm hover:border-border transition-all duration-200 cursor-pointer group"
                           onClick={() => handleTaskClick(task)}
                         >
                           {/* Quick complete checkbox */}

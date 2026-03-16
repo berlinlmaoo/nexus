@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Bell, CheckCheck, Circle, Inbox, Loader2, Trash2, ChevronDown, ChevronRight } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
 interface Notification {
@@ -155,28 +156,31 @@ export function InboxClient({
   const renderNotification = (notification: Notification) => (
     <Card
       key={notification.id}
-      className={`p-4 transition-colors cursor-pointer ${
-        !notification.read ? "bg-muted/50 border-muted" : "hover:bg-muted/30"
-      }`}
+      className={cn(
+        "p-4 cursor-pointer rounded-xl transition-all duration-200 hover:shadow-sm group",
+        !notification.read
+          ? "bg-muted/50 border-muted-foreground/10"
+          : "hover:bg-muted/30"
+      )}
       onClick={() => {
         if (!notification.read) markRead(notification.id)
         if (notification.link) window.location.href = notification.link
       }}
     >
       <div className="flex items-start gap-3">
-        <div className="mt-0.5">
+        <div className="mt-1.5">
           {!notification.read ? (
-            <Circle className="h-2.5 w-2.5 fill-[#18181B] text-[#18181B]" />
+            <Circle className="h-2 w-2 fill-foreground text-foreground" />
           ) : (
-            <Circle className="h-2.5 w-2.5 text-transparent" />
+            <Circle className="h-2 w-2 text-transparent" />
           )}
         </div>
         <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
-          <Bell className="h-4 w-4 text-[#18181B]" />
+          <Bell className="h-4 w-4 text-foreground/70" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
-            <h4 className={`text-sm ${!notification.read ? "font-semibold" : "font-medium"}`}>
+            <h4 className={cn("text-sm", !notification.read ? "font-semibold" : "font-medium")}>
               {notification.title}
             </h4>
             <div className="flex items-center gap-1 shrink-0">
@@ -185,7 +189,7 @@ export function InboxClient({
               </span>
               <button
                 onClick={(e) => deleteNotification(notification.id, e)}
-                className="rounded p-1 text-muted-foreground/40 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950 transition-colors"
+                className="rounded p-1 text-muted-foreground/40 opacity-0 group-hover:opacity-100 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950 transition-all duration-200"
                 title="Delete notification"
               >
                 <Trash2 className="h-3 w-3" />
@@ -195,7 +199,7 @@ export function InboxClient({
           {notification.message && (
             <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{notification.message}</p>
           )}
-          <Badge variant="secondary" className="mt-1.5 text-[10px]">{notification.type.replace(/_/g, " ")}</Badge>
+          <Badge variant="secondary" className="mt-2 text-[10px]">{notification.type.replace(/_/g, " ")}</Badge>
         </div>
       </div>
     </Card>
@@ -227,8 +231,8 @@ export function InboxClient({
   )
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-6 max-w-3xl mx-auto space-y-6">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Inbox</h1>
           <p className="text-sm text-muted-foreground mt-1">
@@ -261,11 +265,12 @@ export function InboxClient({
           <button
             key={tab.key}
             onClick={() => setViewTab(tab.key)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+            className={cn(
+              "px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200",
               viewTab === tab.key
-                ? "bg-[#18181B] text-white"
-                : "bg-muted text-muted-foreground hover:text-foreground"
-            }`}
+                ? "bg-foreground text-background shadow-sm"
+                : "bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80"
+            )}
           >
             {tab.label}
           </button>
@@ -276,35 +281,37 @@ export function InboxClient({
       <div className="flex items-center gap-2 mb-4">
         <button
           onClick={() => setFilter("all")}
-          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+          className={cn(
+            "px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200",
             filter === "all"
               ? "bg-foreground/10 text-foreground border border-foreground/20"
               : "text-muted-foreground hover:text-foreground"
-          }`}
+          )}
         >
           All ({notifications.length})
         </button>
         <button
           onClick={() => setFilter("unread")}
-          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+          className={cn(
+            "px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200",
             filter === "unread"
               ? "bg-foreground/10 text-foreground border border-foreground/20"
               : "text-muted-foreground hover:text-foreground"
-          }`}
+          )}
         >
           Unread ({unreadCount})
         </button>
       </div>
 
       {filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
-            <Inbox className="h-8 w-8 text-[#18181B]" />
+        <div className="flex flex-col items-center justify-center py-24 text-center animate-fade-in">
+          <div className="h-16 w-16 rounded-2xl bg-muted/60 flex items-center justify-center mb-4">
+            <Inbox className="h-8 w-8 text-muted-foreground/60" />
           </div>
           <h3 className="text-lg font-semibold mb-1">
             {filter === "unread" ? "No unread notifications" : "No notifications yet"}
           </h3>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground max-w-xs">
             {filter === "unread" ? "You're all caught up!" : "Notifications will appear here when you have updates"}
           </p>
         </div>

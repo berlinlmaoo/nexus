@@ -541,13 +541,13 @@ export function Sidebar({ user }: SidebarProps) {
 
         {/* Favorites section */}
         {!isCollapsed && favorites.length > 0 && (
-          <div className="mb-2">
+          <div className="mb-3">
             <button
               onClick={() => setFavoritesOpen(!favoritesOpen)}
-              className="flex w-full items-center justify-between px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-text/50 hover:text-sidebar-text/80 transition-colors"
+              className="flex w-full items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-sidebar-text/50 hover:text-sidebar-text/80 transition-colors duration-200"
             >
               <span className="flex items-center gap-1.5">
-                <Star className="h-3 w-3" />
+                <Star className="h-3 w-3 text-yellow-400/60" />
                 Favorites
               </span>
               {favoritesOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
@@ -591,10 +591,10 @@ export function Sidebar({ user }: SidebarProps) {
 
         {/* Recents section */}
         {!isCollapsed && recentProjects.length > 0 && (
-          <div className="mb-2">
+          <div className="mb-3">
             <button
               onClick={() => setRecentsOpen(!recentsOpen)}
-              className="flex w-full items-center justify-between px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-text/50 hover:text-sidebar-text/80 transition-colors"
+              className="flex w-full items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-sidebar-text/50 hover:text-sidebar-text/80 transition-colors duration-200"
             >
               <span className="flex items-center gap-1.5">
                 <Clock className="h-3 w-3" />
@@ -840,7 +840,7 @@ export function Sidebar({ user }: SidebarProps) {
       {/* User section */}
       <div className="border-t border-white/[0.08] p-2">
         {!isCollapsed ? (
-          <div className="flex items-center gap-2.5 rounded-md px-2 py-2 hover:bg-sidebar-light transition-colors">
+          <div className="flex items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-sidebar-light transition-colors duration-200">
             <UserAvatar
               user={{ name: user.name, image: user.image }}
               size="sm"
