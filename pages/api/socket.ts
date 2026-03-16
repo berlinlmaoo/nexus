@@ -1,0 +1,168 @@
+import { Server as IOServer } from "socket.io"
+import type { NextApiRequest, NextApiResponse } from "next"
+import type { Server as HTTPServer } from "http"
+import type { Socket as NetSocket } from "net"
+
+interface SocketServer extends HTTPServer {
+  io?: IOServer
+}
+
+interface SocketWithIO extends NetSocket {
+  server: SocketServer
+}
+
+interface NextApiResponseWithSocket extends NextApiResponse {
+  socket: SocketWithIO
+}
+
+export default function handler(
+  _req: NextApiRequest,
+  res: NextApiResponseWithSocket
+) {
+  if (res.socket.server.io) {
+    console.log("[SOCKET] Already running")
+    res.end()
+    return
+  }
+
+  console.log("[SOCKET] Initializing Socket.IO server...")
+  const io = new IOServer(res.socket.server as unknown as HTTPServer, {
+    path: "/api/socket",
+    addTrailingSlash: false,
+    cors: { origin: "*", methods: ["GET", "POST"] },
+    transports: ["polling", "websocket"],
+  })
+
+  // ── Room & presence management ──────────────────────────────
+  const roomPresence = new Map<string, Map<string, { userId: string; name: string; avatar: string | null; color: string; lastSeen: number }>>()
+
+  const COLORS = [
+    "#ef4444", "#f97316", "#eab308", "#22c55e",
+    "#06b6d4", "#3b82f6", "#8b5cf6", "#ec4899",
+  ]
+
+  function getColor(idx: number) {
+    return COLORS[idx % COLORS.length]
+  }
+
+  io.on("connection", (socket) => {
+    let currentRoom: string | null = null
+    let currentUser: { userId: string; name: string; avatar: string | null } | null = null
+
+    socket.on("join-room", (data: { room: string; userId: string; name: string; avatar?: string | null }) => {
+      currentRoom = data.room
+      currentUser = { userId: data.userId, name: data.name, avatar: data.avatar || null }
+
+      socket.join(data.room)
+
+      // Track presence
+      if (!roomPresence.has(data.room)) {
+        roomPresence.set(data.room, new Map())
+      }
+      const members = roomPresence.get(data.room)!
+      const color = getColor(members.size)
+      members.set(socket.id, {
+        userId: data.userId,
+        name: data.name,
+        avatar: data.avatar || null,
+        color,
+        lastSeen: Date.now(),
+      })
+
+      // Broadcast presence update
+      io.to(data.room).emit("presence-update", Array.from(members.values()))
+      socket.to(data.room).emit("presence-join", {
+        userId: data.userId,
+        name: data.name,
+        avatar: data.avatar || null,
+        color,
+      })
+    })
+
+    socket.on("leave-room", (room: string) => {
+      socket.leave(room)
+      if (roomPresence.has(room)) {
+        const members = roomPresence.get(room)!
+        const member = members.get(socket.id)
+        members.delete(socket.id)
+        if (members.size === 0) {
+          roomPresence.delete(room)
+        } else {
+          io.to(room).emit("presence-update", Array.from(members.values()))
+        }
+        if (member) {
+          socket.to(room).emit("presence-leave", { userId: member.userId })
+        }
+      }
+      currentRoom = null
+    })
+
+    socket.on("cursor-move", (data: { x: number; y: number; blockId?: string }) => {
+      if (!currentRoom || !currentUser) return
+      socket.to(currentRoom).emit("cursor-move", {
+        socketId: socket.id,
+        userId: currentUser.userId,
+        name: currentUser.name,
+        color: roomPresence.get(currentRoom)?.get(socket.id)?.color || "#3b82f6",
+        ...data,
+      })
+    })
+
+    socket.on("content-change", (data: { blockId: string; content: string; type?: string }) => {
+      if (!currentRoom || !currentUser) return
+      socket.to(currentRoom).emit("content-change", {
+        userId: currentUser.userId,
+        ...data,
+      })
+    })
+
+    socket.on("task-update", (data: Record<string, unknown>) => {
+      if (!currentRoom) return
+      socket.to(currentRoom).emit("task-update", data)
+    })
+
+    socket.on("heartbeat", () => {
+      if (!currentRoom) return
+      const members = roomPresence.get(currentRoom)
+      if (members?.has(socket.id)) {
+        members.get(socket.id)!.lastSeen = Date.now()
+      }
+    })
+
+    socket.on("disconnect", () => {
+      if (currentRoom && roomPresence.has(currentRoom)) {
+        const members = roomPresence.get(currentRoom)!
+        const member = members.get(socket.id)
+        members.delete(socket.id)
+        if (members.size === 0) {
+          roomPresence.delete(currentRoom)
+        } else {
+          io.to(currentRoom).emit("presence-update", Array.from(members.values()))
+        }
+        if (member) {
+          io.to(currentRoom).emit("presence-leave", { userId: member.userId })
+        }
+      }
+    })
+  })
+
+  // Cleanup stale connections every 60s
+  setInterval(() => {
+    const staleThreshold = Date.now() - 90000 // 90s
+    const rooms = Array.from(roomPresence.entries())
+    for (const [room, members] of rooms) {
+      const entries = Array.from(members.entries())
+      for (const [socketId, member] of entries) {
+        if (member.lastSeen < staleThreshold) {
+          members.delete(socketId)
+          io.to(room).emit("presence-leave", { userId: member.userId })
+        }
+      }
+      if (members.size === 0) roomPresence.delete(room)
+      else io.to(room).emit("presence-update", Array.from(members.values()))
+    }
+  }, 60000)
+
+  res.socket.server.io = io
+  res.end()
+}
