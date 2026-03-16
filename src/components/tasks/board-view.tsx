@@ -185,7 +185,7 @@ export function BoardView({
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
-      <div className="flex gap-3 overflow-x-auto pb-4">
+      <div className="flex gap-3 pb-4 overflow-x-auto min-w-0 w-full">
         {columns.map((column) => (
           <div
             key={column.id}

@@ -438,7 +438,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
   ]
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-w-0">
       {/* Project Header */}
       <ProjectHeader project={project} />
 
@@ -685,7 +685,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       </div>
 
       {/* View content */}
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 overflow-auto p-4 min-w-0">
         {viewMode === "overview" && (
           <>
             {project.pages && project.pages.length > 0 && (
