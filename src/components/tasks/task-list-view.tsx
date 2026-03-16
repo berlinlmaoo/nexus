@@ -110,7 +110,7 @@ function SortableTaskRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "group grid grid-cols-[20px_20px_24px_1fr_100px_90px_72px] gap-0 items-center border-b border-border/50 h-9 cursor-pointer transition-colors text-[13px]",
+        "group grid grid-cols-[20px_20px_24px_1fr_100px_90px_minmax(80px,auto)] gap-0 items-center border-b border-border/50 h-9 cursor-pointer transition-colors text-[13px]",
         isDragging && "z-50 shadow-lg bg-background",
         isRowSelected ? "bg-muted/60" : "hover:bg-muted/30"
       )}
@@ -651,9 +651,9 @@ export function TaskListView({
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div>
+      <div className="overflow-x-auto">
         {/* Table column headers */}
-        <div className="grid grid-cols-[20px_20px_24px_1fr_100px_90px_72px] gap-0 items-center border-b-2 border-border h-8 bg-muted/30 sticky top-0 z-10">
+        <div className="grid grid-cols-[20px_20px_24px_1fr_100px_90px_minmax(80px,auto)] gap-0 items-center border-b-2 border-border h-8 bg-muted/30 sticky top-0 z-10">
           <div />
           <div />
           <div />

@@ -122,7 +122,7 @@ export function CalendarWidget({ data }: CalendarWidgetProps) {
               key={dateKey}
               className={cn(
                 "relative flex flex-col items-center justify-center p-0.5",
-                !inCurrentMonth && "opacity-30"
+                !inCurrentMonth && "opacity-20"
               )}
             >
               <span
