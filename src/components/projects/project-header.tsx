@@ -202,15 +202,45 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
   const hasUploadedIcon = isUploadedIcon(selectedIcon)
 
   return (
-    <div className="animate-fade-in px-6 pt-5 pb-2 overflow-hidden">
-      {/* Project info row — clean, no cover */}
-      <div className="flex items-start gap-3">
+    <div className="space-y-4 animate-fade-in px-6 pt-6 overflow-hidden">
+      {/* Cover gradient */}
+      <div className={cn("relative h-36 rounded-xl bg-gradient-to-r overflow-hidden transition-all duration-500", coverGradient)}>
+        <button
+          onClick={() => setShowCoverPicker(!showCoverPicker)}
+          className="absolute top-3 right-3 flex items-center gap-1.5 rounded-lg bg-black/30 px-2.5 py-1.5 text-xs text-white/80 hover:bg-black/50 hover:text-white transition-all duration-200 backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+        >
+          <ImageIcon className="h-3.5 w-3.5" />
+          Cover
+        </button>
+
+        {showCoverPicker && (
+          <div className="absolute top-12 right-3 z-10 rounded-lg border bg-background p-3 shadow-lg animate-scale-in">
+            <p className="text-xs font-medium mb-2">Select Cover</p>
+            <div className="grid grid-cols-3 gap-2">
+              {PRESET_GRADIENTS.map((gradient) => (
+                <button
+                  key={gradient}
+                  onClick={() => { setCoverGradient(gradient); setShowCoverPicker(false) }}
+                  className={cn(
+                    "h-10 rounded-md bg-gradient-to-r transition-all duration-200 hover:scale-105",
+                    gradient,
+                    coverGradient === gradient && "ring-2 ring-white ring-offset-2"
+                  )}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Project info row */}
+      <div className="flex items-start gap-4 -mt-10 ml-6 relative z-10">
         {/* Icon */}
         <div className="relative">
           <button
             onClick={() => { setShowIconPicker(!showIconPicker); clearUploadState() }}
-            className="flex h-9 w-9 items-center justify-center rounded-md border border-neutral-200 bg-white text-lg transition-all duration-200 hover:shadow-sm hover:scale-105 active:scale-95 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            style={!hasUploadedIcon ? { backgroundColor: selectedColor + "10" } : undefined}
+            className="flex h-16 w-16 items-center justify-center rounded-xl border-4 border-background bg-background text-2xl shadow-sm transition-all duration-200 hover:shadow-md hover:scale-105 active:scale-95 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            style={!hasUploadedIcon ? { backgroundColor: selectedColor + "15" } : undefined}
           >
             {hasUploadedIcon ? (
               <Image

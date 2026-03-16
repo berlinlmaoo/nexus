@@ -44,11 +44,11 @@ const config: Config = {
           foreground: "hsl(var(--card-foreground))",
         },
         sidebar: {
-          DEFAULT: "#f5f5f5",
-          light: "#e5e5e5",
-          lighter: "#d4d4d4",
-          text: "#525252",
-          "text-active": "#171717",
+          DEFAULT: "#1e1f21",
+          light: "#2e2f31",
+          lighter: "#3a3b3d",
+          text: "#9ca0a5",
+          "text-active": "#ffffff",
         },
       },
       borderRadius: {

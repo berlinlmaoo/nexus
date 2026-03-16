@@ -106,7 +106,7 @@ function PageTreeItem({
         {hasChildren && (
           <button
             onClick={(e) => { e.preventDefault(); setExpanded(!expanded) }}
-            className="absolute left-0 z-10 flex h-5 w-5 items-center justify-center text-neutral-400 hover:text-neutral-700"
+            className="absolute left-0 z-10 flex h-5 w-5 items-center justify-center text-sidebar-text/40 hover:text-sidebar-text"
             style={{ marginLeft: `${depth * 12 + 8}px` }}
           >
             {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
@@ -117,8 +117,8 @@ function PageTreeItem({
           className={cn(
             "flex flex-1 items-center gap-2 rounded-md py-1 text-[13px] transition-all duration-150",
             isActive
-              ? "bg-neutral-200/60 text-neutral-900"
-              : "text-neutral-500 hover:bg-neutral-200/60 hover:text-neutral-900"
+              ? "bg-sidebar-light text-white"
+              : "text-sidebar-text/70 hover:bg-sidebar-light hover:text-white"
           )}
           style={{ paddingLeft: `${depth * 12 + (hasChildren ? 22 : 12)}px`, paddingRight: "8px" }}
         >
@@ -128,24 +128,24 @@ function PageTreeItem({
         <div className="absolute right-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowMenu(!showMenu) }}
-            className="flex h-5 w-5 items-center justify-center rounded text-neutral-400 hover:bg-neutral-200 hover:text-neutral-900"
+            className="flex h-5 w-5 items-center justify-center rounded text-sidebar-text/40 hover:bg-sidebar-lighter hover:text-white"
           >
             <MoreHorizontal className="h-3 w-3" />
           </button>
           {showMenu && (
             <>
               <div className="fixed inset-0 z-50" onClick={() => setShowMenu(false)} />
-              <div className="fixed right-auto z-[60] mt-1 w-36 rounded-md border border-neutral-200 bg-white py-1 shadow-xl" style={{ left: '160px' }}>
+              <div className="fixed right-auto z-[60] mt-1 w-36 rounded-md border border-white/10 bg-[#2e2f31] py-1 shadow-xl" style={{ left: '160px' }}>
                 <Link
                   href={href}
                   onClick={() => setShowMenu(false)}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-neutral-600 hover:bg-neutral-200/60 hover:text-neutral-900"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-sidebar-text hover:bg-sidebar-light hover:text-white"
                 >
                   <Pencil className="h-3 w-3" /> Rename
                 </Link>
                 <button
                   onClick={() => { onDuplicate(page.id); setShowMenu(false) }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-neutral-600 hover:bg-neutral-200/60 hover:text-neutral-900"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-sidebar-text hover:bg-sidebar-light hover:text-white"
                 >
                   <Copy className="h-3 w-3" /> Duplicate
                 </button>
@@ -164,21 +164,21 @@ function PageTreeItem({
       {confirmDelete && createPortal(
         <>
           <div className="fixed inset-0 z-50 bg-black/50" onClick={() => setConfirmDelete(false)} />
-          <div className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-80 rounded-lg border border-neutral-200 bg-white p-5 shadow-2xl">
-            <h4 className="text-sm font-semibold text-neutral-900 mb-2">Delete page</h4>
-            <p className="text-xs text-neutral-500 mb-4">
+          <div className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-80 rounded-lg border border-white/10 bg-[#2e2f31] p-5 shadow-2xl">
+            <h4 className="text-sm font-semibold text-white mb-2">Delete page</h4>
+            <p className="text-xs text-zinc-400 mb-4">
               Are you sure you want to delete &ldquo;{page.name}&rdquo;? This action cannot be undone.
             </p>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setConfirmDelete(false)}
-                className="rounded-md px-3 py-1.5 text-xs text-neutral-600 hover:bg-neutral-100 transition-colors"
+                className="rounded-md px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={() => { onDelete(page.id); setConfirmDelete(false) }}
-                className="rounded-md bg-red-600 px-3 py-1.5 text-xs text-neutral-900 hover:bg-red-700 transition-colors"
+                className="rounded-md bg-red-600 px-3 py-1.5 text-xs text-white hover:bg-red-700 transition-colors"
               >
                 Delete
               </button>
@@ -384,7 +384,7 @@ export function Sidebar({ user }: SidebarProps) {
   return (
     <aside
       ref={sidebarRef}
-      className="fixed left-0 top-0 z-40 flex h-screen flex-col bg-neutral-50 text-neutral-600 animate-fade-in max-md:shadow-2xl select-none border-r border-neutral-200"
+      className="fixed left-0 top-0 z-40 flex h-screen flex-col bg-sidebar text-sidebar-text animate-fade-in max-md:shadow-2xl select-none"
       style={{ width: `${effectiveWidth}px` }}
     >
       {/* Top area: brand + create */}
@@ -400,7 +400,7 @@ export function Sidebar({ user }: SidebarProps) {
         )}
         <button
           onClick={toggleCollapse}
-          className="rounded-md p-1.5 text-neutral-400 hover:bg-neutral-200/60 hover:text-neutral-700 transition-colors"
+          className="rounded-md p-1.5 text-sidebar-text/60 hover:bg-sidebar-light hover:text-white transition-colors"
           title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {isCollapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
@@ -412,7 +412,7 @@ export function Sidebar({ user }: SidebarProps) {
         <div className="px-3 pb-2">
           <Link
             href="/projects"
-            className="flex items-center gap-2 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-neutral-900 hover:bg-neutral-800 transition-colors w-full"
+            className="flex items-center gap-2 rounded-md bg-sidebar-lighter px-3 py-2 text-sm font-medium text-white hover:bg-[#484a4d] transition-colors w-full"
           >
             <Plus className="h-4 w-4" />
             Create
@@ -422,7 +422,7 @@ export function Sidebar({ user }: SidebarProps) {
         <div className="flex justify-center pb-2">
           <Link
             href="/projects"
-            className="flex h-8 w-8 items-center justify-center rounded-md bg-neutral-900 text-neutral-900 hover:bg-neutral-800 transition-colors"
+            className="flex h-8 w-8 items-center justify-center rounded-md bg-sidebar-lighter text-white hover:bg-[#484a4d] transition-colors"
             title="Create"
           >
             <Plus className="h-4 w-4" />
@@ -444,15 +444,15 @@ export function Sidebar({ user }: SidebarProps) {
                 className={cn(
                   "group flex items-center gap-3 rounded-md px-3 py-1.5 text-[13px] font-medium transition-all duration-150",
                   isActive
-                    ? "bg-neutral-200/60 text-neutral-900"
-                    : "text-neutral-600 hover:bg-neutral-200/60 hover:text-neutral-900"
+                    ? "bg-sidebar-light text-white"
+                    : "text-sidebar-text hover:bg-sidebar-light hover:text-white"
                 )}
                 title={isCollapsed ? item.label : undefined}
               >
                 <item.icon
                   className={cn(
                     "h-4 w-4 shrink-0 transition-colors duration-150",
-                    isActive ? "text-neutral-900" : "text-neutral-500 group-hover:text-neutral-900"
+                    isActive ? "text-white" : "text-sidebar-text group-hover:text-white"
                   )}
                 />
                 {!isCollapsed && (
@@ -466,14 +466,14 @@ export function Sidebar({ user }: SidebarProps) {
         </div>
 
         {/* Divider */}
-        <div className="my-3 border-t border-neutral-200" />
+        <div className="my-3 border-t border-white/[0.08]" />
 
         {/* Insights section */}
         {!isCollapsed && (
           <div className="mb-2">
             <button
               onClick={() => setInsightsOpen(!insightsOpen)}
-              className="flex w-full items-center justify-between px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-neutral-400 hover:text-neutral-600 transition-colors"
+              className="flex w-full items-center justify-between px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-text/50 hover:text-sidebar-text/80 transition-colors"
             >
               <span>Insights</span>
               {insightsOpen ? (
@@ -495,14 +495,14 @@ export function Sidebar({ user }: SidebarProps) {
                       className={cn(
                         "group flex items-center gap-3 rounded-md px-3 py-1.5 text-[13px] font-medium transition-all duration-150",
                         isActive
-                          ? "bg-neutral-200/60 text-neutral-900"
-                          : "text-neutral-600 hover:bg-neutral-200/60 hover:text-neutral-900"
+                          ? "bg-sidebar-light text-white"
+                          : "text-sidebar-text hover:bg-sidebar-light hover:text-white"
                       )}
                     >
                       <item.icon
                         className={cn(
                           "h-4 w-4 shrink-0 transition-colors duration-150",
-                          isActive ? "text-neutral-900" : "text-neutral-500 group-hover:text-neutral-900"
+                          isActive ? "text-white" : "text-sidebar-text group-hover:text-white"
                         )}
                       />
                       <span>{item.label}</span>
@@ -527,8 +527,8 @@ export function Sidebar({ user }: SidebarProps) {
                   className={cn(
                     "flex items-center justify-center rounded-md p-2 transition-all duration-150",
                     isActive
-                      ? "bg-neutral-200/60 text-neutral-900"
-                      : "text-neutral-600 hover:bg-neutral-200/60 hover:text-neutral-900"
+                      ? "bg-sidebar-light text-white"
+                      : "text-sidebar-text hover:bg-sidebar-light hover:text-white"
                   )}
                   title={item.label}
                 >
@@ -544,7 +544,7 @@ export function Sidebar({ user }: SidebarProps) {
           <div className="mb-3">
             <button
               onClick={() => setFavoritesOpen(!favoritesOpen)}
-              className="flex w-full items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-neutral-400 hover:text-neutral-600 transition-colors duration-200"
+              className="flex w-full items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-sidebar-text/50 hover:text-sidebar-text/80 transition-colors duration-200"
             >
               <span className="flex items-center gap-1.5">
                 <Star className="h-3 w-3 text-yellow-400/60" />
@@ -567,15 +567,15 @@ export function Sidebar({ user }: SidebarProps) {
                         className={cn(
                           "group flex items-center gap-2.5 rounded-md px-3 py-1.5 text-[13px] transition-all duration-150",
                           isActive
-                            ? "bg-neutral-200/60 text-neutral-900"
-                            : "text-neutral-600 hover:bg-neutral-200/60 hover:text-neutral-900"
+                            ? "bg-sidebar-light text-white"
+                            : "text-sidebar-text hover:bg-sidebar-light hover:text-white"
                         )}
                       >
                         {isUploadedIcon(project.icon) ? (
                           <ProjectIcon icon={project.icon} size="sm" className="h-4 w-4" />
                         ) : (
                           <span
-                            className="h-2.5 w-2.5 rounded-full flex-shrink-0 ring-1 ring-neutral-200"
+                            className="h-2.5 w-2.5 rounded-full flex-shrink-0 ring-1 ring-white/10"
                             style={{ backgroundColor: project.color }}
                           />
                         )}
@@ -594,7 +594,7 @@ export function Sidebar({ user }: SidebarProps) {
           <div className="mb-3">
             <button
               onClick={() => setRecentsOpen(!recentsOpen)}
-              className="flex w-full items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-neutral-400 hover:text-neutral-600 transition-colors duration-200"
+              className="flex w-full items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-sidebar-text/50 hover:text-sidebar-text/80 transition-colors duration-200"
             >
               <span className="flex items-center gap-1.5">
                 <Clock className="h-3 w-3" />
@@ -613,15 +613,15 @@ export function Sidebar({ user }: SidebarProps) {
                       className={cn(
                         "group flex items-center gap-2.5 rounded-md px-3 py-1.5 text-[13px] transition-all duration-150",
                         isActive
-                          ? "bg-neutral-200/60 text-neutral-900"
-                          : "text-neutral-600 hover:bg-neutral-200/60 hover:text-neutral-900"
+                          ? "bg-sidebar-light text-white"
+                          : "text-sidebar-text hover:bg-sidebar-light hover:text-white"
                       )}
                     >
                       {isUploadedIcon(project.icon) ? (
                         <ProjectIcon icon={project.icon} size="sm" className="h-4 w-4" />
                       ) : (
                         <span
-                          className="h-2.5 w-2.5 rounded-full flex-shrink-0 ring-1 ring-neutral-200"
+                          className="h-2.5 w-2.5 rounded-full flex-shrink-0 ring-1 ring-white/10"
                           style={{ backgroundColor: project.color }}
                         />
                       )}
@@ -635,21 +635,21 @@ export function Sidebar({ user }: SidebarProps) {
         )}
 
         {/* Divider */}
-        <div className="my-3 border-t border-neutral-200" />
+        <div className="my-3 border-t border-white/[0.08]" />
 
         {/* Projects section */}
         {!isCollapsed ? (
           <div>
             <button
               onClick={() => setProjectsOpen(!projectsOpen)}
-              className="flex w-full items-center justify-between px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-neutral-400 hover:text-neutral-600 transition-colors"
+              className="flex w-full items-center justify-between px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-text/50 hover:text-sidebar-text/80 transition-colors"
             >
               <span>Projects</span>
               <div className="flex items-center gap-1">
                 <Link
                   href="/projects"
                   onClick={(e) => e.stopPropagation()}
-                  className="rounded p-0.5 hover:bg-neutral-200/60er transition-colors"
+                  className="rounded p-0.5 hover:bg-sidebar-lighter transition-colors"
                 >
                   <Plus className="h-3 w-3" />
                 </Link>
@@ -670,13 +670,13 @@ export function Sidebar({ user }: SidebarProps) {
               {/* Archived toggle */}
               <button
                 onClick={() => setShowArchived(!showArchived)}
-                className="flex items-center gap-1.5 px-3 py-1 text-[10px] text-neutral-400 hover:text-neutral-700/70 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1 text-[10px] text-sidebar-text/40 hover:text-sidebar-text/70 transition-colors"
               >
                 <Archive className="h-3 w-3" />
                 {showArchived ? "Hide archived" : "Show archived"}
               </button>
               {projects.filter(p => showArchived || p.status !== "ARCHIVED").length === 0 ? (
-                <p className="px-3 py-2 text-xs text-neutral-400">
+                <p className="px-3 py-2 text-xs text-sidebar-text/40">
                   No projects yet
                 </p>
               ) : (
@@ -690,7 +690,7 @@ export function Sidebar({ user }: SidebarProps) {
                       <div className="flex items-center group">
                         <button
                           onClick={() => toggleProject(project.id)}
-                          className="flex h-6 w-5 shrink-0 items-center justify-center text-neutral-300 hover:text-neutral-600 transition-colors"
+                          className="flex h-6 w-5 shrink-0 items-center justify-center text-sidebar-text/30 hover:text-sidebar-text transition-colors"
                         >
                           {isExpanded ? (
                             <ChevronDown className="h-3 w-3" />
@@ -703,31 +703,31 @@ export function Sidebar({ user }: SidebarProps) {
                           className={cn(
                             "flex flex-1 items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition-all duration-150",
                             isProjectActive
-                              ? "bg-neutral-200/60 text-neutral-900"
-                              : "text-neutral-600 hover:bg-neutral-200/60 hover:text-neutral-900"
+                              ? "bg-sidebar-light text-white"
+                              : "text-sidebar-text hover:bg-sidebar-light hover:text-white"
                           )}
                         >
                           {isUploadedIcon(project.icon) ? (
                             <ProjectIcon icon={project.icon} size="sm" className="h-4 w-4" />
                           ) : (
                             <span
-                              className="h-2.5 w-2.5 rounded-full flex-shrink-0 ring-1 ring-neutral-200"
+                              className="h-2.5 w-2.5 rounded-full flex-shrink-0 ring-1 ring-white/10"
                               style={{ backgroundColor: project.color }}
                             />
                           )}
                           <span className={cn("truncate", project.status === "ARCHIVED" && "opacity-50")}>{project.name}</span>
-                          {project.status === "ARCHIVED" && <Archive className="h-3 w-3 text-neutral-400 shrink-0" />}
+                          {project.status === "ARCHIVED" && <Archive className="h-3 w-3 text-sidebar-text/30 shrink-0" />}
                         </Link>
                         <button
                           onClick={(e) => { e.preventDefault(); e.stopPropagation(); setProjectMenu({ x: e.clientX, y: e.clientY, projectId: project.id }) }}
-                          className="mr-1 flex h-5 w-5 shrink-0 items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-neutral-200/60er transition-all"
+                          className="mr-1 flex h-5 w-5 shrink-0 items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-sidebar-lighter transition-all"
                         >
                           <MoreHorizontal className="h-3 w-3" />
                         </button>
                       </div>
 
                       {isExpanded && (
-                        <div className="ml-5 mt-0.5 space-y-0 border-l border-neutral-200 pl-1">
+                        <div className="ml-5 mt-0.5 space-y-0 border-l border-white/[0.06] pl-1">
                           {pages.map((page) => (
                             <PageTreeItem
                               key={page.id}
@@ -740,7 +740,7 @@ export function Sidebar({ user }: SidebarProps) {
                           ))}
                           <Link
                             href={`/projects/${project.id}?addPage=true`}
-                            className="flex items-center gap-2 rounded-md py-1 pl-3 text-[12px] text-neutral-400 hover:text-neutral-700/70 transition-colors"
+                            className="flex items-center gap-2 rounded-md py-1 pl-3 text-[12px] text-sidebar-text/40 hover:text-sidebar-text/70 transition-colors"
                           >
                             <Plus className="h-3 w-3" />
                             <span>Add Page</span>
@@ -759,14 +759,14 @@ export function Sidebar({ user }: SidebarProps) {
               <Link
                 key={project.id}
                 href={`/projects/${project.id}`}
-                className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-neutral-200/60 transition-colors"
+                className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-sidebar-light transition-colors"
                 title={project.name}
               >
                 {isUploadedIcon(project.icon) ? (
                   <ProjectIcon icon={project.icon} size="sm" className="h-4 w-4" />
                 ) : (
                   <span
-                    className="h-3 w-3 rounded-full ring-1 ring-neutral-200"
+                    className="h-3 w-3 rounded-full ring-1 ring-white/10"
                     style={{ backgroundColor: project.color }}
                   />
                 )}
@@ -776,7 +776,7 @@ export function Sidebar({ user }: SidebarProps) {
         )}
 
         {/* Divider */}
-        <div className="my-3 border-t border-neutral-200" />
+        <div className="my-3 border-t border-white/[0.08]" />
 
         {/* Teams + Settings */}
         {!isCollapsed ? (
@@ -794,14 +794,14 @@ export function Sidebar({ user }: SidebarProps) {
                   className={cn(
                     "group flex items-center gap-3 rounded-md px-3 py-1.5 text-[13px] font-medium transition-all duration-150",
                     isActive
-                      ? "bg-neutral-200/60 text-neutral-900"
-                      : "text-neutral-600 hover:bg-neutral-200/60 hover:text-neutral-900"
+                      ? "bg-sidebar-light text-white"
+                      : "text-sidebar-text hover:bg-sidebar-light hover:text-white"
                   )}
                 >
                   <item.icon
                     className={cn(
                       "h-4 w-4 shrink-0 transition-colors duration-150",
-                      isActive ? "text-neutral-900" : "text-neutral-500 group-hover:text-neutral-900"
+                      isActive ? "text-white" : "text-sidebar-text group-hover:text-white"
                     )}
                   />
                   <span>{item.label}</span>
@@ -824,8 +824,8 @@ export function Sidebar({ user }: SidebarProps) {
                   className={cn(
                     "flex items-center justify-center rounded-md p-2 transition-all duration-150",
                     isActive
-                      ? "bg-neutral-200/60 text-neutral-900"
-                      : "text-neutral-600 hover:bg-neutral-200/60 hover:text-neutral-900"
+                      ? "bg-sidebar-light text-white"
+                      : "text-sidebar-text hover:bg-sidebar-light hover:text-white"
                   )}
                   title={item.label}
                 >
@@ -838,16 +838,16 @@ export function Sidebar({ user }: SidebarProps) {
       </nav>
 
       {/* User section */}
-      <div className="border-t border-neutral-200 p-2">
+      <div className="border-t border-white/[0.08] p-2">
         {!isCollapsed ? (
-          <div className="flex items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-neutral-200/60 transition-colors duration-200">
+          <div className="flex items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-sidebar-light transition-colors duration-200">
             <UserAvatar
               user={{ name: user.name, image: user.image }}
               size="sm"
-              className="border border-neutral-200"
+              className="border border-white/20"
             />
             <div className="flex-1 min-w-0">
-              <p className="truncate text-[13px] font-medium text-neutral-900">
+              <p className="truncate text-[13px] font-medium text-white">
                 {user.name}
               </p>
             </div>
@@ -855,7 +855,7 @@ export function Sidebar({ user }: SidebarProps) {
               onClick={() => {
                 window.location.href = "/api/auth/signout"
               }}
-              className="rounded-md p-1 text-neutral-400 hover:text-neutral-700 transition-colors"
+              className="rounded-md p-1 text-sidebar-text/50 hover:text-white transition-colors"
               title="Sign out"
             >
               <LogOut className="h-3.5 w-3.5" />
@@ -866,7 +866,7 @@ export function Sidebar({ user }: SidebarProps) {
             <UserAvatar
               user={{ name: user.name, image: user.image }}
               size="sm"
-              className="border border-neutral-200"
+              className="border border-white/20"
             />
           </div>
         )}
@@ -876,8 +876,8 @@ export function Sidebar({ user }: SidebarProps) {
       {!isCollapsed && (
         <div
           className={cn(
-            "absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-neutral-300/40 transition-colors",
-            isResizing && "bg-neutral-300/60"
+            "absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-white/10 transition-colors",
+            isResizing && "bg-white/20"
           )}
           onMouseDown={startResize}
         />
@@ -888,7 +888,7 @@ export function Sidebar({ user }: SidebarProps) {
         <>
           <div className="fixed inset-0 z-50" onClick={() => setProjectMenu(null)} />
           <div
-            className="fixed z-50 rounded-lg border border-neutral-200 bg-white p-1 shadow-lg min-w-[160px]"
+            className="fixed z-50 rounded-lg border border-white/10 bg-[#2e2f31] p-1 shadow-lg min-w-[160px]"
             style={{
               left: Math.min(projectMenu.x, window.innerWidth - 170),
               top: Math.min(projectMenu.y, window.innerHeight - 140),
@@ -911,7 +911,7 @@ export function Sidebar({ user }: SidebarProps) {
                       } catch {}
                       setProjectMenu(null)
                     }}
-                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-neutral-600 hover:bg-neutral-100 transition-colors"
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-sidebar-text hover:bg-zinc-700 transition-colors"
                   >
                     {isArchived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
                     {isArchived ? "Unarchive" : "Archive"}
@@ -927,7 +927,7 @@ export function Sidebar({ user }: SidebarProps) {
                       } catch {}
                       setProjectMenu(null)
                     }}
-                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-neutral-600 hover:bg-neutral-100 transition-colors"
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-sidebar-text hover:bg-zinc-700 transition-colors"
                   >
                     <Copy className="h-3.5 w-3.5" />
                     Duplicate
@@ -937,7 +937,7 @@ export function Sidebar({ user }: SidebarProps) {
                       if (p) setConfirmDeleteProject({ id: p.id, name: p.name })
                       setProjectMenu(null)
                     }}
-                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-red-400 hover:bg-neutral-100 transition-colors"
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-red-400 hover:bg-zinc-700 transition-colors"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     Delete project
@@ -954,21 +954,21 @@ export function Sidebar({ user }: SidebarProps) {
       {confirmDeleteProject && createPortal(
         <>
           <div className="fixed inset-0 z-50 bg-black/50" onClick={() => setConfirmDeleteProject(null)} />
-          <div className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-80 rounded-lg border border-neutral-200 bg-white p-5 shadow-2xl">
-            <h4 className="text-sm font-semibold text-neutral-900 mb-2">Delete project</h4>
-            <p className="text-xs text-neutral-500 mb-4">
+          <div className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-80 rounded-lg border border-white/10 bg-[#2e2f31] p-5 shadow-2xl">
+            <h4 className="text-sm font-semibold text-white mb-2">Delete project</h4>
+            <p className="text-xs text-zinc-400 mb-4">
               Are you sure you want to delete &ldquo;{confirmDeleteProject.name}&rdquo;? This will delete all tasks, pages, and data. This action cannot be undone.
             </p>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setConfirmDeleteProject(null)}
-                className="rounded-md px-3 py-1.5 text-xs text-neutral-600 hover:bg-neutral-100 transition-colors"
+                className="rounded-md px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={() => { handleDeleteProject(confirmDeleteProject.id); setConfirmDeleteProject(null) }}
-                className="rounded-md bg-red-600 px-3 py-1.5 text-xs text-neutral-900 hover:bg-red-700 transition-colors"
+                className="rounded-md bg-red-600 px-3 py-1.5 text-xs text-white hover:bg-red-700 transition-colors"
               >
                 Delete
               </button>

@@ -175,10 +175,10 @@ export function DashboardContent({ userName }: { userName: string }) {
       {/* Greeting + Quick Create */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">
+          <h1 className="text-2xl font-bold">
             {greeting}, {userName}
           </h1>
-          <p className="text-xs text-neutral-500 mt-1">
+          <p className="text-muted-foreground mt-1">
             Here&apos;s what&apos;s happening with your projects today.
           </p>
         </div>

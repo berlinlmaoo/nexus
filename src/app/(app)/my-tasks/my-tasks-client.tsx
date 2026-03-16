@@ -204,8 +204,8 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: Task[]; project
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
-            <CheckSquare className="h-5 w-5 text-neutral-500" />
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <CheckSquare className="h-6 w-6 text-foreground/80" />
             My Tasks
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
@@ -215,7 +215,7 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: Task[]; project
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">Sort by:</span>
           <select
-            className="h-7 rounded border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-zinc-900 px-2 text-xs"
+            className="h-8 rounded-md border border-input bg-background px-3 text-xs"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortBy)}
           >
@@ -228,7 +228,7 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: Task[]; project
       </div>
 
       {visibleTasks.length === 0 ? (
-        <Card className="p-16 text-center rounded-xl shadow-none border border-neutral-200 dark:border-neutral-700 animate-fade-in">
+        <Card className="p-16 text-center rounded-xl shadow-sm animate-fade-in">
           <div className="flex h-16 w-16 mx-auto items-center justify-center rounded-2xl bg-muted/60 mb-4">
             <CheckSquare className="h-8 w-8 text-muted-foreground/50" />
           </div>
@@ -255,8 +255,8 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: Task[]; project
                     <ChevronDown className="h-4 w-4 text-muted-foreground" />
                   )}
                   <h2 className={cn(
-                    "font-medium text-sm text-neutral-700 dark:text-neutral-300",
-                    isOverdue && "text-red-600 dark:text-red-400"
+                    "font-semibold text-sm",
+                    isOverdue && "text-red-600"
                   )}>
                     {name}
                   </h2>
@@ -275,7 +275,7 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: Task[]; project
                       return (
                         <div
                           key={task.id}
-                          className="flex items-center gap-3 py-2 px-3 border-b border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors duration-150 cursor-pointer group"
+                          className="flex items-center gap-3 py-2.5 px-3 rounded-lg border hover:shadow-sm hover:border-border transition-all duration-200 cursor-pointer group"
                           onClick={() => handleTaskClick(task)}
                         >
                           {/* Quick complete checkbox */}
@@ -338,7 +338,7 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: Task[]; project
 
                     {/* Inline task creation */}
                     {inlineAdding === name ? (
-                      <div className="flex items-center gap-2 py-2 px-3 border-b border-dashed border-neutral-200 dark:border-neutral-700">
+                      <div className="flex items-center gap-2 py-2 px-3 rounded-md border border-dashed">
                         <Circle className="h-5 w-5 text-muted-foreground/30 shrink-0" />
                         <Input
                           placeholder="Task name..."
