@@ -20,8 +20,16 @@ import {
   Mail,
   CheckSquare,
   AlignLeft,
+  GitBranch,
+  X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+
+export interface FormFieldCondition {
+  fieldId: string
+  operator: "equals" | "not_equals" | "contains" | "is_empty" | "is_not_empty"
+  value: string
+}
 
 export interface FormField {
   id: string
@@ -37,6 +45,7 @@ export interface FormField {
     | "checkbox"
   required: boolean
   options?: string[]
+  showIf?: FormFieldCondition
 }
 
 interface FormBuilderProps {
@@ -50,6 +59,17 @@ interface FormBuilderProps {
   }
   onSave?: () => void
 }
+
+const CONDITION_OPERATORS: {
+  value: FormFieldCondition["operator"]
+  label: string
+}[] = [
+  { value: "equals", label: "Equals" },
+  { value: "not_equals", label: "Does not equal" },
+  { value: "contains", label: "Contains" },
+  { value: "is_empty", label: "Is empty" },
+  { value: "is_not_empty", label: "Is not empty" },
+]
 
 const FIELD_TYPES: {
   value: FormField["type"]
@@ -538,6 +558,105 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                         placeholder="Option 1, Option 2, Option 3"
                         className="block w-full rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
                       />
+                    </div>
+                  )}
+
+                  {/* Condition editor */}
+                  {field.showIf ? (
+                    <div className="border-t border-zinc-100 px-3 py-2.5 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1.5 text-xs font-medium text-zinc-500">
+                          <GitBranch className="h-3 w-3" />
+                          Show if condition
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateField(field.id, { showIf: undefined })
+                          }
+                          className="rounded p-0.5 text-zinc-400 hover:text-zinc-600"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          value={field.showIf.fieldId}
+                          onChange={(e) =>
+                            updateField(field.id, {
+                              showIf: {
+                                ...field.showIf!,
+                                fieldId: e.target.value,
+                              },
+                            })
+                          }
+                          className="h-7 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                        >
+                          <option value="">Select field...</option>
+                          {fields
+                            .filter((f) => f.id !== field.id)
+                            .map((f) => (
+                              <option key={f.id} value={f.id}>
+                                {f.name || "Unnamed"}
+                              </option>
+                            ))}
+                        </select>
+                        <select
+                          value={field.showIf.operator}
+                          onChange={(e) =>
+                            updateField(field.id, {
+                              showIf: {
+                                ...field.showIf!,
+                                operator: e.target
+                                  .value as FormFieldCondition["operator"],
+                              },
+                            })
+                          }
+                          className="h-7 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                        >
+                          {CONDITION_OPERATORS.map((op) => (
+                            <option key={op.value} value={op.value}>
+                              {op.label}
+                            </option>
+                          ))}
+                        </select>
+                        {field.showIf.operator !== "is_empty" &&
+                          field.showIf.operator !== "is_not_empty" && (
+                            <input
+                              type="text"
+                              value={field.showIf.value}
+                              onChange={(e) =>
+                                updateField(field.id, {
+                                  showIf: {
+                                    ...field.showIf!,
+                                    value: e.target.value,
+                                  },
+                                })
+                              }
+                              placeholder="Value"
+                              className="h-7 w-32 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                            />
+                          )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="border-t border-zinc-100 px-3 py-1.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateField(field.id, {
+                            showIf: {
+                              fieldId: "",
+                              operator: "equals",
+                              value: "",
+                            },
+                          })
+                        }
+                        className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-600"
+                      >
+                        <GitBranch className="h-3 w-3" />
+                        Add condition
+                      </button>
                     </div>
                   )}
                 </div>

@@ -14,12 +14,20 @@ interface FormField {
   options?: string[]
 }
 
+interface FormBranding {
+  logoUrl?: string
+  primaryColor?: string
+  backgroundColor?: string
+  headerImage?: string
+}
+
 interface FormData {
   id: string
   name: string
   description: string | null
   fields: FormField[]
   isPublic: boolean
+  branding?: FormBranding | null
 }
 
 export default function PublicFormPage() {
@@ -72,6 +80,7 @@ export default function PublicFormPage() {
       formName={form.name}
       formDescription={form.description}
       fields={form.fields as BuilderFormField[]}
+      branding={form.branding}
     />
   )
 }

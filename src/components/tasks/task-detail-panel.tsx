@@ -43,6 +43,8 @@ import {
   FolderKanban,
   Eye,
   EyeOff,
+  Heart,
+  FolderPlus,
 } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
@@ -126,6 +128,21 @@ export function TaskDetailPanel({
   const [projectId, setProjectId] = useState<string | null>(null)
   const [isFollowing, setIsFollowing] = useState(false)
   const [togglingFollow, setTogglingFollow] = useState(false)
+  const [liked, setLiked] = useState(false)
+  const [likeCount, setLikeCount] = useState(0)
+  const [togglingLike, setTogglingLike] = useState(false)
+  const [taskProjectsList, setTaskProjectsList] = useState<Array<{
+    id?: string
+    projectId: string
+    project: { id: string; name: string; color: string; icon: string }
+    taskListId: string
+    taskListName: string
+    isPrimary?: boolean
+  }>>([])
+  const [showAddProject, setShowAddProject] = useState(false)
+  const [availableProjects, setAvailableProjects] = useState<Array<{ id: string; name: string; taskLists: Array<{ id: string; name: string }> }>>([])
+  const [selectedProjectId, setSelectedProjectId] = useState("")
+  const [selectedTaskListId, setSelectedTaskListId] = useState("")
 
   useEffect(() => {
     fetch(`/api/tasks/${task.id}/followers`)
@@ -133,6 +150,84 @@ export function TaskDetailPanel({
       .then(data => { if (data.isFollowing !== undefined) setIsFollowing(data.isFollowing) })
       .catch(() => {})
   }, [task.id])
+
+  // Fetch likes
+  useEffect(() => {
+    fetch(`/api/tasks/${task.id}/likes`)
+      .then(res => res.json())
+      .then(data => {
+        setLiked(data.liked ?? false)
+        setLikeCount(data.count ?? 0)
+      })
+      .catch(() => {})
+  }, [task.id])
+
+  // Fetch task projects
+  useEffect(() => {
+    fetch(`/api/tasks/${task.id}/projects`)
+      .then(res => res.json())
+      .then(data => {
+        const projects: typeof taskProjectsList = []
+        if (data.primaryProject) {
+          projects.push({ ...data.primaryProject, isPrimary: true })
+        }
+        if (data.additionalProjects) {
+          projects.push(...data.additionalProjects.map((p: typeof taskProjectsList[0]) => ({ ...p, isPrimary: false })))
+        }
+        setTaskProjectsList(projects)
+      })
+      .catch(() => {})
+  }, [task.id])
+
+  const toggleLike = async () => {
+    setTogglingLike(true)
+    try {
+      const res = await fetch(`/api/tasks/${task.id}/likes`, { method: "POST" })
+      if (res.ok) {
+        const data = await res.json()
+        setLiked(data.liked)
+        setLikeCount(data.count)
+      }
+    } catch {} finally { setTogglingLike(false) }
+  }
+
+  const handleAddToProject = async () => {
+    if (!selectedProjectId || !selectedTaskListId) return
+    try {
+      const res = await fetch(`/api/tasks/${task.id}/projects`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: selectedProjectId, taskListId: selectedTaskListId }),
+      })
+      if (res.ok) {
+        const tp = await res.json()
+        setTaskProjectsList(prev => [...prev, {
+          id: tp.id,
+          projectId: tp.projectId,
+          project: tp.project,
+          taskListId: tp.taskListId,
+          taskListName: tp.taskList.name,
+          isPrimary: false,
+        }])
+        setShowAddProject(false)
+        setSelectedProjectId("")
+        setSelectedTaskListId("")
+      }
+    } catch {}
+  }
+
+  const handleRemoveFromProject = async (projId: string) => {
+    try {
+      const res = await fetch(`/api/tasks/${task.id}/projects`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: projId }),
+      })
+      if (res.ok) {
+        setTaskProjectsList(prev => prev.filter(p => p.projectId !== projId || p.isPrimary))
+      }
+    } catch {}
+  }
 
   const toggleFollow = async () => {
     setTogglingFollow(true)
@@ -286,6 +381,21 @@ export function TaskDetailPanel({
           </button>
         </div>
         <div className="flex items-center gap-1">
+          {/* Like button */}
+          <button
+            className={cn(
+              "flex items-center gap-1 rounded px-1.5 py-1 text-xs transition-colors",
+              liked
+                ? "text-red-500 bg-red-50 dark:bg-red-950"
+                : "text-muted-foreground hover:bg-muted"
+            )}
+            onClick={toggleLike}
+            disabled={togglingLike}
+            title={liked ? "Unlike" : "Like"}
+          >
+            <Heart className={cn("h-3.5 w-3.5", liked && "fill-current")} />
+            {likeCount > 0 && <span>{likeCount}</span>}
+          </button>
           <button
             className={cn(
               "rounded p-1.5 transition-colors",
