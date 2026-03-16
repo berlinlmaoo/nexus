@@ -35,7 +35,8 @@ export async function GET(request: NextRequest) {
     if (assigneeId) {
       taskWhere.assignees = { some: { userId: assigneeId } }
     }
-    if (status) {
+    const VALID_TASK_STATUSES = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"]
+    if (status && VALID_TASK_STATUSES.includes(status)) {
       taskWhere.status = status
     }
     if (startDate || endDate) {
