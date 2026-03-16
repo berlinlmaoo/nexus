@@ -66,18 +66,18 @@ export function AppLayout({ children, title, breadcrumbs, user }: AppLayoutProps
         <div
           className={cn(
             "flex flex-1 flex-col transition-all duration-300 ease-in-out min-w-0",
-            sidebarOpen ? "md:ml-[296px] ml-0" : "ml-0"
+            sidebarOpen ? "md:ml-[260px] ml-0" : "ml-0"
           )}
         >
           <Header title={title} breadcrumbs={breadcrumbs} user={user} />
 
-          <main className="flex-1 overflow-auto p-3 sm:p-4 pb-16 md:pb-4 bg-white">
+          <main className="flex-1 overflow-auto p-3 sm:p-6 pb-16 md:pb-6">
             <PageTransition>
               {children}
             </PageTransition>
           </main>
-          <footer className="shrink-0 border-t border-neutral-200 py-2 px-4 text-center bg-white">
-            <p className="text-[10px] text-neutral-400">Developed by Berlin & GIDEON</p>
+          <footer className="shrink-0 border-t border-zinc-200 dark:border-zinc-800 py-2 px-4 text-center">
+            <p className="text-[10px] text-zinc-400 dark:text-zinc-600">Developed by Berlin & GIDEON</p>
           </footer>
         </div>
 

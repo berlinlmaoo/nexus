@@ -191,9 +191,24 @@ export function BoardView({
             key={column.id}
             className="flex-shrink-0 w-72 flex flex-col"
           >
-            {/* Column header — Plane style: text-sm font-medium + count, mb-3 */}
-            <div className="group/col flex items-center justify-between mb-3 px-1">
+            {/* Column header */}
+            <div className="group/col flex items-center justify-between mb-2 px-1">
               <div className="flex items-center gap-2 min-w-0 flex-1">
+                {/* Reorder arrows */}
+                {projectId && columns.length > 1 && (
+                  <div className="flex flex-col opacity-0 group-hover/col:opacity-100 transition-opacity">
+                    {columns.indexOf(column) > 0 && (
+                      <button
+                        className="text-muted-foreground/40 hover:text-muted-foreground p-0"
+                        onClick={() => handleReorderColumn(column.id, columns.indexOf(column) - 1)}
+                        title="Move left"
+                      >
+                        <GripVertical className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 {renamingColumn === column.id ? (
                   <input
                     ref={renameInputRef}
@@ -208,13 +223,13 @@ export function BoardView({
                       if (renameValue.trim()) handleRenameColumn(column.id)
                       else setRenamingColumn(null)
                     }}
-                    className="text-sm font-medium bg-transparent outline-none border-b border-blue-500 px-0.5 min-w-0 text-neutral-900"
+                    className="text-[13px] font-semibold bg-transparent outline-none border-b border-foreground/30 px-0.5 min-w-0"
                     autoFocus
                   />
                 ) : (
                   <>
-                    <h3 className="text-sm font-medium text-neutral-800 truncate">{column.name}</h3>
-                    <span className="text-xs text-neutral-400 tabular-nums">
+                    <h3 className="text-[13px] font-semibold text-foreground truncate">{column.name}</h3>
+                    <span className="text-[11px] text-muted-foreground tabular-nums">
                       {column.tasks.length}
                     </span>
                   </>
@@ -280,9 +295,9 @@ export function BoardView({
                   ref={provided.innerRef}
                   {...provided.droppableProps}
                   className={cn(
-                    "flex-1 space-y-2 min-h-[120px] transition-colors duration-150",
+                    "flex-1 space-y-2 rounded-lg p-1.5 min-h-[120px] transition-colors duration-150",
                     snapshot.isDraggingOver
-                      ? "bg-blue-50/50 rounded-lg"
+                      ? "bg-muted/60"
                       : "bg-transparent"
                   )}
                 >
@@ -305,29 +320,30 @@ export function BoardView({
                           >
                             <div
                               className={cn(
-                                "rounded-lg border border-neutral-200 bg-white p-3 cursor-pointer transition-all duration-150 shadow-sm",
+                                "rounded-lg border bg-white dark:bg-zinc-900 p-3 cursor-pointer transition-all duration-150",
                                 "hover:shadow-md",
-                                snapshot.isDragging && "shadow-xl ring-1 ring-blue-200"
+                                snapshot.isDragging && "shadow-xl ring-1 ring-border"
                               )}
                               onClick={() => onTaskClick(task)}
                             >
                               {/* Task name */}
-                              <p className="text-sm font-medium text-neutral-800 leading-snug line-clamp-2">
+                              <p className="text-[13px] font-medium text-foreground leading-snug line-clamp-2">
                                 {task.title}
                               </p>
 
-                              {/* Bottom: assignee + label + date */}
+                              {/* Bottom: status + date + priority pill + avatar */}
                               <div className="flex items-center justify-between mt-3">
                                 <div className="flex items-center gap-2">
+                                  <StatusBadge status={task.status} />
                                   {task.dueDate && (
                                     <span
                                       className={cn(
-                                        "inline-flex items-center gap-1 text-xs",
-                                        isOverdue ? "text-red-600 font-medium" : "text-neutral-500"
+                                        "inline-flex items-center gap-1 text-[11px]",
+                                        isOverdue ? "text-red-600 font-medium" : "text-muted-foreground"
                                       )}
                                     >
                                       <Calendar className="h-3 w-3" />
-                                      {format(new Date(task.dueDate), "dd MMM")}
+                                      {format(new Date(task.dueDate), "MMM d")}
                                     </span>
                                   )}
                                   {task.priority !== "NONE" && PRIORITY_COLORS[task.priority] && (
@@ -336,17 +352,17 @@ export function BoardView({
                                 </div>
 
                                 {task.assignees.length > 0 && (
-                                  <div className="flex -space-x-1.5">
+                                  <div className="flex -space-x-1">
                                     {task.assignees.slice(0, 1).map((a) => (
                                       <UserAvatar
                                         key={a.id}
                                         user={{ name: a.name, avatar: a.avatar }}
                                         size="xs"
-                                        className="h-6 w-6 border-2 border-white"
+                                        className="h-6 w-6 border border-white dark:border-zinc-900"
                                       />
                                     ))}
                                     {task.assignees.length > 1 && (
-                                      <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-neutral-100 text-[8px] font-medium text-neutral-500">
+                                      <div className="flex h-6 w-6 items-center justify-center rounded-full border border-white dark:border-zinc-900 bg-muted text-[8px] font-medium text-muted-foreground">
                                         +{task.assignees.length - 1}
                                       </div>
                                     )}

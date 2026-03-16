@@ -50,6 +50,15 @@ const ICON_MAP: Record<string, string> = {
   flag: "🏁",
 }
 
+const PRESET_GRADIENTS = [
+  "from-zinc-800 to-zinc-900",
+  "from-zinc-700 to-zinc-950",
+  "from-zinc-600 to-zinc-900",
+  "from-gray-700 to-gray-900",
+  "from-neutral-700 to-neutral-900",
+  "from-stone-700 to-stone-900",
+]
+
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/svg+xml", "image/webp"]
 const MAX_FILE_SIZE = 5 * 1024 * 1024
 
@@ -57,12 +66,14 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
   const router = useRouter()
   const [showIconPicker, setShowIconPicker] = useState(false)
   const [showColorPicker, setShowColorPicker] = useState(false)
+  const [showCoverPicker, setShowCoverPicker] = useState(false)
   const [editingName, setEditingName] = useState(false)
   const [projectName, setProjectName] = useState(project.name)
   const [editingDescription, setEditingDescription] = useState(false)
   const [description, setDescription] = useState(project.description || "")
   const [selectedIcon, setSelectedIcon] = useState(project.icon || "folder")
   const [selectedColor, setSelectedColor] = useState(project.color)
+  const [coverGradient, setCoverGradient] = useState(PRESET_GRADIENTS[0])
 
   // Upload state
   const [uploading, setUploading] = useState(false)
@@ -191,264 +202,301 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
   const hasUploadedIcon = isUploadedIcon(selectedIcon)
 
   return (
-    <div className="flex items-center gap-4 px-6 py-4 border-b border-neutral-200 bg-white">
-      {/* Icon */}
-      <div className="relative">
+    <div className="space-y-4 animate-fade-in px-6 pt-6 overflow-hidden">
+      {/* Cover gradient */}
+      <div className={cn("relative h-36 rounded-xl bg-gradient-to-r overflow-hidden transition-all duration-500", coverGradient)}>
         <button
-          onClick={() => { setShowIconPicker(!showIconPicker); clearUploadState() }}
-          className="flex h-10 w-10 items-center justify-center rounded-lg text-xl transition-all duration-200 hover:bg-neutral-100 active:scale-95 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          style={!hasUploadedIcon ? { backgroundColor: selectedColor + "15" } : undefined}
+          onClick={() => setShowCoverPicker(!showCoverPicker)}
+          className="absolute top-3 right-3 flex items-center gap-1.5 rounded-lg bg-black/30 px-2.5 py-1.5 text-xs text-white/80 hover:bg-black/50 hover:text-white transition-all duration-200 backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
         >
-          {hasUploadedIcon ? (
-            <Image
-              src={selectedIcon}
-              alt="Project icon"
-              fill
-              className="object-cover"
-              sizes="40px"
-            />
-          ) : (
-            ICON_MAP[selectedIcon] || "📁"
-          )}
+          <ImageIcon className="h-3.5 w-3.5" />
+          Cover
         </button>
 
-        <Dialog open={showIconPicker} onOpenChange={(open) => { setShowIconPicker(open); if (!open) clearUploadState() }}>
-          <DialogContent className="sm:max-w-[340px] p-0">
-            <DialogHeader className="px-4 pt-4 pb-0">
-              <DialogTitle className="text-sm font-medium">Change Icon</DialogTitle>
-            </DialogHeader>
-            <Tabs defaultValue="emoji" className="w-full">
-              <div className="px-4">
-                <TabsList className="w-full h-9">
-                  <TabsTrigger value="emoji" className="flex-1 text-xs gap-1.5">
-                    <Smile className="h-3.5 w-3.5" />
-                    Emoji
-                  </TabsTrigger>
-                  <TabsTrigger value="upload" className="flex-1 text-xs gap-1.5">
-                    <Upload className="h-3.5 w-3.5" />
-                    Upload
-                  </TabsTrigger>
-                </TabsList>
-              </div>
-
-              {/* Emoji Tab */}
-              <TabsContent value="emoji" className="px-4 pb-4">
-                <div className="grid grid-cols-8 gap-1">
-                  {PRESET_ICONS.map((icon) => (
-                    <button
-                      key={icon}
-                      onClick={() => handleIconSelect(icon)}
-                      className={cn(
-                        "flex h-8 w-8 items-center justify-center rounded-md text-sm hover:bg-neutral-100 transition-all duration-150",
-                        selectedIcon === icon && "bg-neutral-100 ring-1 ring-neutral-300"
-                      )}
-                    >
-                      {ICON_MAP[icon]}
-                    </button>
-                  ))}
-                </div>
-                {hasUploadedIcon && (
-                  <button
-                    onClick={handleRemoveUploadedIcon}
-                    className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-neutral-200 py-1.5 text-xs text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700 transition-all duration-200"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                    Remove uploaded icon
-                  </button>
-                )}
-              </TabsContent>
-
-              {/* Upload Tab */}
-              <TabsContent value="upload" className="px-4 pb-4">
-                {uploadPreview ? (
-                  <div className="space-y-3">
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="relative h-20 w-20 overflow-hidden rounded-full border-2 border-neutral-200">
-                        <Image
-                          src={uploadPreview}
-                          alt="Preview"
-                          fill
-                          className="object-cover"
-                          sizes="80px"
-                        />
-                      </div>
-                      <p className="text-xs text-neutral-500 truncate max-w-full">
-                        {uploadFile?.name}
-                      </p>
-                    </div>
-
-                    {uploadError && (
-                      <p className="text-xs text-red-500 text-center">{uploadError}</p>
-                    )}
-
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="flex-1 text-xs"
-                        onClick={clearUploadState}
-                        disabled={uploading}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="flex-1 text-xs bg-blue-600 text-white hover:bg-blue-700"
-                        onClick={handleUploadConfirm}
-                        disabled={uploading}
-                      >
-                        {uploading ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          "Save"
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div
-                      onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-                      onDragLeave={() => setDragOver(false)}
-                      onDrop={handleDrop}
-                      onClick={() => fileInputRef.current?.click()}
-                      className={cn(
-                        "flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-6 cursor-pointer transition-all duration-200",
-                        dragOver
-                          ? "border-blue-500 bg-blue-50"
-                          : "border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50"
-                      )}
-                    >
-                      <div className={cn(
-                        "flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 transition-all duration-200",
-                        dragOver && "bg-blue-100 scale-110"
-                      )}>
-                        <Upload className="h-4 w-4 text-neutral-500" />
-                      </div>
-                      <div className="text-center">
-                        <p className="text-xs font-medium text-neutral-500">
-                          Drop image here or click to browse
-                        </p>
-                        <p className="text-[10px] text-neutral-400 mt-0.5">
-                          PNG, JPG, SVG, WEBP · Max 5MB
-                        </p>
-                      </div>
-                    </div>
-
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".png,.jpg,.jpeg,.svg,.webp"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0]
-                        if (file) handleFileSelect(file)
-                        e.target.value = ""
-                      }}
-                    />
-
-                    {uploadError && (
-                      <p className="text-xs text-red-500 text-center">{uploadError}</p>
-                    )}
-
-                    {hasUploadedIcon && (
-                      <button
-                        onClick={handleRemoveUploadedIcon}
-                        className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-neutral-200 py-1.5 text-xs text-neutral-500 hover:bg-neutral-50 hover:text-neutral-700 transition-all duration-200"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                        Remove uploaded icon
-                      </button>
-                    )}
-                  </div>
-                )}
-              </TabsContent>
-            </Tabs>
-          </DialogContent>
-        </Dialog>
+        {showCoverPicker && (
+          <div className="absolute top-12 right-3 z-10 rounded-lg border bg-background p-3 shadow-lg animate-scale-in">
+            <p className="text-xs font-medium mb-2">Select Cover</p>
+            <div className="grid grid-cols-3 gap-2">
+              {PRESET_GRADIENTS.map((gradient) => (
+                <button
+                  key={gradient}
+                  onClick={() => { setCoverGradient(gradient); setShowCoverPicker(false) }}
+                  className={cn(
+                    "h-10 rounded-md bg-gradient-to-r transition-all duration-200 hover:scale-105",
+                    gradient,
+                    coverGradient === gradient && "ring-2 ring-white ring-offset-2"
+                  )}
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Name + description */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          {editingName ? (
-            <input
-              autoFocus
-              type="text"
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleNameSave(); if (e.key === "Escape") { setProjectName(project.name); setEditingName(false) } }}
-              onBlur={handleNameSave}
-              className="text-lg font-semibold bg-transparent border-b-2 border-blue-500 outline-none px-0 py-0 transition-colors text-neutral-900"
-            />
-          ) : (
-            <h1
-              className="text-lg font-semibold text-neutral-900 cursor-pointer hover:bg-neutral-50 rounded-md px-1 -mx-1 py-0.5 transition-colors duration-200"
-              onClick={() => setEditingName(true)}
-            >
-              {projectName}
-            </h1>
-          )}
+      {/* Project info row */}
+      <div className="flex items-start gap-4 -mt-10 ml-6 relative z-10">
+        {/* Icon */}
+        <div className="relative">
+          <button
+            onClick={() => { setShowIconPicker(!showIconPicker); clearUploadState() }}
+            className="flex h-16 w-16 items-center justify-center rounded-xl border-4 border-background bg-background text-2xl shadow-sm transition-all duration-200 hover:shadow-md hover:scale-105 active:scale-95 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            style={!hasUploadedIcon ? { backgroundColor: selectedColor + "15" } : undefined}
+          >
+            {hasUploadedIcon ? (
+              <Image
+                src={selectedIcon}
+                alt="Project icon"
+                fill
+                className="object-cover"
+                sizes="64px"
+              />
+            ) : (
+              ICON_MAP[selectedIcon] || "📁"
+            )}
+          </button>
 
-          {/* Color picker trigger */}
-          <div className="relative">
-            <button
-              onClick={() => setShowColorPicker(!showColorPicker)}
-              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-neutral-400 hover:bg-neutral-100 transition-all duration-200"
-            >
-              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: selectedColor }} />
-              <Palette className="h-3 w-3" />
-            </button>
-
-            {showColorPicker && (
-              <div className="absolute top-full left-0 mt-1 z-20 rounded-lg border border-neutral-200 bg-white p-3 shadow-lg animate-scale-in">
-                <p className="text-xs font-medium text-neutral-700 mb-2">Project Color</p>
-                <div className="grid grid-cols-6 gap-1.5">
-                  {PRESET_COLORS.map((color) => (
-                    <button
-                      key={color}
-                      onClick={() => handleColorSelect(color)}
-                      className="relative flex h-7 w-7 items-center justify-center rounded-full transition-all duration-200 hover:scale-110"
-                      style={{ backgroundColor: color }}
-                    >
-                      {selectedColor === color && (
-                        <Check className="h-3.5 w-3.5 text-white" />
-                      )}
-                    </button>
-                  ))}
+          <Dialog open={showIconPicker} onOpenChange={(open) => { setShowIconPicker(open); if (!open) clearUploadState() }}>
+            <DialogContent className="sm:max-w-[340px] p-0">
+              <DialogHeader className="px-4 pt-4 pb-0">
+                <DialogTitle className="text-sm font-medium">Change Icon</DialogTitle>
+              </DialogHeader>
+              <Tabs defaultValue="emoji" className="w-full">
+                <div className="px-4">
+                  <TabsList className="w-full h-9">
+                    <TabsTrigger value="emoji" className="flex-1 text-xs gap-1.5">
+                      <Smile className="h-3.5 w-3.5" />
+                      Emoji
+                    </TabsTrigger>
+                    <TabsTrigger value="upload" className="flex-1 text-xs gap-1.5">
+                      <Upload className="h-3.5 w-3.5" />
+                      Upload
+                    </TabsTrigger>
+                  </TabsList>
                 </div>
+
+                {/* Emoji Tab */}
+                <TabsContent value="emoji" className="px-4 pb-4">
+                  <div className="grid grid-cols-8 gap-1">
+                    {PRESET_ICONS.map((icon) => (
+                      <button
+                        key={icon}
+                        onClick={() => handleIconSelect(icon)}
+                        className={cn(
+                          "flex h-8 w-8 items-center justify-center rounded-md text-sm hover:bg-muted transition-all duration-150",
+                          selectedIcon === icon && "bg-muted ring-1 ring-ring"
+                        )}
+                      >
+                        {ICON_MAP[icon]}
+                      </button>
+                    ))}
+                  </div>
+                  {hasUploadedIcon && (
+                    <button
+                      onClick={handleRemoveUploadedIcon}
+                      className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-border py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Remove uploaded icon
+                    </button>
+                  )}
+                </TabsContent>
+
+                {/* Upload Tab */}
+                <TabsContent value="upload" className="px-4 pb-4">
+                  {uploadPreview ? (
+                    <div className="space-y-3">
+                      {/* Preview */}
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="relative h-20 w-20 overflow-hidden rounded-full border-2 border-border">
+                          <Image
+                            src={uploadPreview}
+                            alt="Preview"
+                            fill
+                            className="object-cover"
+                            sizes="80px"
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate max-w-full">
+                          {uploadFile?.name}
+                        </p>
+                      </div>
+
+                      {uploadError && (
+                        <p className="text-xs text-red-500 text-center">{uploadError}</p>
+                      )}
+
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 text-xs"
+                          onClick={clearUploadState}
+                          disabled={uploading}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="flex-1 text-xs bg-foreground text-background hover:bg-foreground/90"
+                          onClick={handleUploadConfirm}
+                          disabled={uploading}
+                        >
+                          {uploading ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            "Save"
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {/* Drop zone */}
+                      <div
+                        onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+                        onDragLeave={() => setDragOver(false)}
+                        onDrop={handleDrop}
+                        onClick={() => fileInputRef.current?.click()}
+                        className={cn(
+                          "flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-6 cursor-pointer transition-all duration-200",
+                          dragOver
+                            ? "border-ring bg-muted"
+                            : "border-border hover:border-border hover:bg-accent"
+                        )}
+                      >
+                        <div className={cn(
+                          "flex h-10 w-10 items-center justify-center rounded-full bg-muted transition-all duration-200",
+                          dragOver && "bg-muted scale-110"
+                        )}>
+                          <Upload className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Drop image here or click to browse
+                          </p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            PNG, JPG, SVG, WEBP · Max 5MB
+                          </p>
+                        </div>
+                      </div>
+
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".png,.jpg,.jpeg,.svg,.webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) handleFileSelect(file)
+                          e.target.value = ""
+                        }}
+                      />
+
+                      {uploadError && (
+                        <p className="text-xs text-red-500 text-center">{uploadError}</p>
+                      )}
+
+                      {hasUploadedIcon && (
+                        <button
+                          onClick={handleRemoveUploadedIcon}
+                          className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-border py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          Remove uploaded icon
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {/* Name and description */}
+        <div className="flex-1 pt-6">
+          <div className="flex items-center gap-3">
+            {editingName ? (
+              <input
+                autoFocus
+                type="text"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleNameSave(); if (e.key === "Escape") { setProjectName(project.name); setEditingName(false) } }}
+                onBlur={handleNameSave}
+                className="text-2xl font-bold tracking-tight bg-transparent border-b-2 border-foreground/30 outline-none focus:border-foreground px-0 py-0 transition-colors"
+              />
+            ) : (
+              <h1
+                className="text-2xl font-bold tracking-tight cursor-pointer hover:bg-muted/50 rounded-md px-1.5 -mx-1.5 py-0.5 transition-colors duration-200"
+                onClick={() => setEditingName(true)}
+              >
+                {projectName}
+              </h1>
+            )}
+
+            {/* Color picker trigger */}
+            <div className="relative">
+              <button
+                onClick={() => setShowColorPicker(!showColorPicker)}
+                className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted transition-all duration-200"
+              >
+                <span className="h-3 w-3 rounded-full" style={{ backgroundColor: selectedColor }} />
+                <Palette className="h-3 w-3" />
+              </button>
+
+              {showColorPicker && (
+                <div className="absolute top-full left-0 mt-1 z-20 rounded-lg border bg-background p-3 shadow-lg animate-scale-in">
+                  <p className="text-xs font-medium mb-2">Project Color</p>
+                  <div className="grid grid-cols-6 gap-1.5">
+                    {PRESET_COLORS.map((color) => (
+                      <button
+                        key={color}
+                        onClick={() => handleColorSelect(color)}
+                        className="relative flex h-7 w-7 items-center justify-center rounded-full transition-all duration-200 hover:scale-110"
+                        style={{ backgroundColor: color }}
+                      >
+                        {selectedColor === color && (
+                          <Check className="h-3.5 w-3.5 text-white" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Description */}
+          <div className="mt-2">
+            {editingDescription ? (
+              <div className="flex items-center gap-2 animate-fade-in">
+                <input
+                  autoFocus
+                  type="text"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleDescriptionSave(); if (e.key === "Escape") setEditingDescription(false) }}
+                  className="flex-1 rounded-md border px-2 py-1 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring transition-all"
+                  placeholder="Add a project description..."
+                />
+                <Button size="sm" variant="outline" onClick={handleDescriptionSave}>
+                  Save
+                </Button>
               </div>
+            ) : (
+              <button
+                onClick={() => setEditingDescription(true)}
+                className="group flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors duration-200"
+              >
+                <span className="text-sm">
+                  {description || "Add a description..."}
+                </span>
+                <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+              </button>
             )}
           </div>
         </div>
-
-        {/* Description */}
-        {editingDescription ? (
-          <div className="flex items-center gap-2 mt-1 animate-fade-in">
-            <input
-              autoFocus
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleDescriptionSave(); if (e.key === "Escape") setEditingDescription(false) }}
-              className="flex-1 rounded-md border border-neutral-200 px-2 py-1 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
-              placeholder="Add a project description..."
-            />
-            <Button size="sm" variant="outline" onClick={handleDescriptionSave}>
-              Save
-            </Button>
-          </div>
-        ) : (
-          <button
-            onClick={() => setEditingDescription(true)}
-            className="group flex items-center gap-1.5 text-neutral-500 hover:text-neutral-700 transition-colors duration-200 mt-0.5"
-          >
-            <span className="text-xs">
-              {description || "Add a description..."}
-            </span>
-            <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
-          </button>
-        )}
       </div>
     </div>
   )
