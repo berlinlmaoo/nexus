@@ -398,10 +398,10 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
               <button
                 key={tab.id}
                 className={cn(
-                  "flex items-center gap-1 px-2.5 py-2 text-xs font-medium border-b-2 -mb-px transition-all duration-150 whitespace-nowrap",
+                  "flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 -mb-px transition-all duration-200 whitespace-nowrap",
                   viewMode === tab.id
                     ? "border-foreground text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40"
                 )}
                 onClick={() => handleViewChange(tab.id)}
               >
@@ -610,22 +610,22 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       {/* Quick action pills */}
       <div className="flex items-center gap-2 px-4 py-2 border-b bg-white dark:bg-zinc-950">
         <Link href={`/projects/${project.id}/sprints`}>
-          <button className="flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border transition-all duration-200 active:scale-95">
             <Zap className="h-3 w-3" /> Sprints
           </button>
         </Link>
         <Link href={`/projects/${project.id}/automations`}>
-          <button className="flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border transition-all duration-200 active:scale-95">
             <Workflow className="h-3 w-3" /> Automations
           </button>
         </Link>
         <Link href={`/projects/${project.id}/forms`}>
-          <button className="flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border transition-all duration-200 active:scale-95">
             <ClipboardList className="h-3 w-3" /> Forms
           </button>
         </Link>
         <SaveTemplateDialog project={{ id: project.id, name: project.name }}>
-          <button className="flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border transition-all duration-200 active:scale-95">
             <Copy className="h-3 w-3" /> Template
           </button>
         </SaveTemplateDialog>
@@ -734,16 +734,16 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
 
         {/* Empty state */}
         {filteredTasks.length === 0 && viewMode !== "overview" && viewMode !== "feed" && (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted mb-3">
-              <Search className="h-6 w-6 text-muted-foreground" />
+          <div className="flex flex-col items-center justify-center py-24 text-center animate-fade-in">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/60 mb-4">
+              <Search className="h-7 w-7 text-muted-foreground/60" />
             </div>
-            <h3 className="text-sm font-semibold">No tasks found</h3>
-            <p className="text-xs text-muted-foreground mt-1">
+            <h3 className="text-base font-semibold">No tasks found</h3>
+            <p className="text-sm text-muted-foreground mt-1.5 max-w-xs">
               {searchQuery ? "Try adjusting your search or filters" : "Create a task to get started"}
             </p>
-            <p className="text-[11px] text-muted-foreground mt-2">
-              Press <kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">N</kbd> to create a new task
+            <p className="text-xs text-muted-foreground mt-3">
+              Press <kbd className="px-1.5 py-0.5 rounded-md border bg-muted text-[10px] font-mono shadow-sm">N</kbd> to create a new task
             </p>
           </div>
         )}
@@ -756,7 +756,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
         defaultTaskListId={createTaskListId}
         onCreated={() => { setCreateTaskListId(undefined); setCreateDialogOpen(false) }}
       >
-        <button className="fixed bottom-20 md:bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-lg hover:bg-foreground/90 transition-all duration-150 hover:scale-105 active:scale-95">
+        <button className="fixed bottom-20 md:bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-lg hover:bg-foreground/90 transition-all duration-200 hover:scale-105 hover:shadow-xl active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
           <Plus className="h-5 w-5" />
         </button>
       </CreateTaskDialog>

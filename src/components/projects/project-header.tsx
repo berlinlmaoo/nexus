@@ -202,12 +202,12 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
   const hasUploadedIcon = isUploadedIcon(selectedIcon)
 
   return (
-    <div className="space-y-4 animate-fade-in px-4 pt-4 overflow-hidden">
+    <div className="space-y-4 animate-fade-in px-6 pt-6 overflow-hidden">
       {/* Cover gradient */}
-      <div className={cn("relative h-32 rounded-xl bg-gradient-to-r overflow-hidden transition-all duration-500", coverGradient)}>
+      <div className={cn("relative h-36 rounded-xl bg-gradient-to-r overflow-hidden transition-all duration-500", coverGradient)}>
         <button
           onClick={() => setShowCoverPicker(!showCoverPicker)}
-          className="absolute top-3 right-3 flex items-center gap-1.5 rounded-md bg-black/30 px-2.5 py-1.5 text-xs text-white/80 hover:bg-black/50 hover:text-white transition-all duration-200 backdrop-blur-sm"
+          className="absolute top-3 right-3 flex items-center gap-1.5 rounded-lg bg-black/30 px-2.5 py-1.5 text-xs text-white/80 hover:bg-black/50 hover:text-white transition-all duration-200 backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
         >
           <ImageIcon className="h-3.5 w-3.5" />
           Cover
@@ -234,12 +234,12 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
       </div>
 
       {/* Project info row */}
-      <div className="flex items-start gap-4 -mt-8 ml-6 relative z-10">
+      <div className="flex items-start gap-4 -mt-10 ml-6 relative z-10">
         {/* Icon */}
         <div className="relative">
           <button
             onClick={() => { setShowIconPicker(!showIconPicker); clearUploadState() }}
-            className="flex h-16 w-16 items-center justify-center rounded-xl border-4 border-background bg-background text-2xl shadow-sm transition-all duration-200 hover:shadow-md hover:scale-105 overflow-hidden"
+            className="flex h-16 w-16 items-center justify-center rounded-xl border-4 border-background bg-background text-2xl shadow-sm transition-all duration-200 hover:shadow-md hover:scale-105 active:scale-95 overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             style={!hasUploadedIcon ? { backgroundColor: selectedColor + "15" } : undefined}
           >
             {hasUploadedIcon ? (
@@ -428,7 +428,7 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
               />
             ) : (
               <h1
-                className="text-2xl font-bold tracking-tight cursor-pointer hover:bg-muted/50 rounded px-1 -mx-1 transition-colors"
+                className="text-2xl font-bold tracking-tight cursor-pointer hover:bg-muted/50 rounded-md px-1.5 -mx-1.5 py-0.5 transition-colors duration-200"
                 onClick={() => setEditingName(true)}
               >
                 {projectName}
@@ -468,7 +468,7 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
           </div>
 
           {/* Description */}
-          <div className="mt-1">
+          <div className="mt-2">
             {editingDescription ? (
               <div className="flex items-center gap-2 animate-fade-in">
                 <input

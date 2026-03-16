@@ -265,7 +265,7 @@ export function TaskDetailPanel({
   return (
     <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[45%] sm:min-w-[440px] sm:max-w-[680px] bg-background border-l shadow-2xl animate-slide-in-right flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-5 h-12 shrink-0">
+      <div className="flex items-center justify-between border-b px-6 h-12 shrink-0">
         <div className="flex items-center gap-3">
           {/* Mark complete button */}
           <button
@@ -330,7 +330,7 @@ export function TaskDetailPanel({
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto">
         {/* Title */}
-        <div className="px-5 pt-5 pb-2">
+        <div className="px-6 pt-6 pb-2">
           <input
             className="w-full text-xl font-semibold bg-transparent border-none outline-none focus:ring-0 p-0 text-foreground placeholder:text-muted-foreground/50"
             value={title}
@@ -340,7 +340,7 @@ export function TaskDetailPanel({
         </div>
 
         {/* Fields as rows - Asana style */}
-        <div className="px-5 py-3 space-y-0">
+        <div className="px-6 py-3 space-y-0">
           {/* Assignee row */}
           <div className="flex items-center py-2 border-b border-border/30">
             <div className="flex items-center gap-2 w-32 shrink-0">
@@ -643,9 +643,9 @@ export function TaskDetailPanel({
         </div>
 
         {/* Description */}
-        <div className="px-5 py-3">
+        <div className="px-6 py-3">
           <div className="text-xs font-medium text-muted-foreground mb-2">Description</div>
-          <div className="rounded border border-border/50 bg-muted/20 px-3 py-2 text-sm min-h-[80px]">
+          <div className="rounded-lg border border-border/50 bg-muted/20 px-4 py-3 text-sm min-h-[80px]">
             <BlockEditor
               initialBlocks={descriptionBlocksRef.current}
               onChange={(blocks) => {
@@ -660,7 +660,7 @@ export function TaskDetailPanel({
         </div>
 
         {/* Tabs */}
-        <div className="px-5 pt-2">
+        <div className="px-6 pt-2">
           <div className="flex border-b overflow-x-auto">
             {tabs.map((tab) => {
               const Icon = tab.icon
@@ -668,7 +668,7 @@ export function TaskDetailPanel({
                 <button
                   key={tab.key}
                   className={cn(
-                    "flex items-center gap-1 px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap",
+                    "flex items-center gap-1 px-3 py-2 text-xs font-medium border-b-2 transition-all duration-200 whitespace-nowrap",
                     activeTab === tab.key
                       ? "border-foreground text-foreground"
                       : "border-transparent text-muted-foreground hover:text-foreground"
@@ -788,17 +788,17 @@ export function TaskDetailPanel({
       </div>
 
       {/* Footer with save */}
-      <div className="border-t px-5 py-2.5 flex justify-end gap-2 shrink-0">
+      <div className="border-t px-6 py-3 flex justify-end gap-2 shrink-0">
         <button
           onClick={onClose}
-          className="h-8 rounded border px-3 text-xs font-medium hover:bg-muted transition-colors"
+          className="h-8 rounded-lg border px-4 text-xs font-medium hover:bg-muted transition-all duration-200 active:scale-95"
         >
           Cancel
         </button>
         <button
           onClick={handleSave}
           disabled={saving}
-          className="h-8 rounded bg-foreground px-3 text-xs font-medium text-background hover:bg-foreground/90 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+          className="h-8 rounded-lg bg-foreground px-4 text-xs font-medium text-background hover:bg-foreground/90 transition-all duration-200 disabled:opacity-50 active:scale-95 shadow-sm flex items-center gap-1.5"
         >
           {saving && <Loader2 className="h-3 w-3 animate-spin" />}
           Save

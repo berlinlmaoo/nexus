@@ -207,16 +207,16 @@ export function SettingsClient({ user, workspace, isAdmin, workspaceRole }: Sett
       </div>
 
       {/* Tab navigation */}
-      <div className="flex gap-1 border-b">
+      <div className="flex gap-1 border-b overflow-x-auto hide-scrollbar">
         {tabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActiveTab(id)}
             className={cn(
-              "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors",
+              "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-all duration-200 whitespace-nowrap",
               activeTab === id
-                ? "border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-100"
-                : "border-transparent text-muted-foreground hover:text-zinc-700 dark:hover:text-zinc-300"
+                ? "border-foreground text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40"
             )}
           >
             <Icon className="h-4 w-4" />
@@ -420,10 +420,10 @@ export function SettingsClient({ user, workspace, isAdmin, workspaceRole }: Sett
                     key={value}
                     onClick={() => setTheme(value)}
                     className={cn(
-                      "flex h-20 w-20 flex-col items-center justify-center gap-1.5 rounded-lg border-2 text-sm font-medium transition-all duration-200",
+                      "flex h-24 w-24 flex-col items-center justify-center gap-2 rounded-xl border-2 text-sm font-medium transition-all duration-200 active:scale-95",
                       theme === value
-                        ? "border-zinc-900 dark:border-zinc-100 bg-zinc-50 dark:bg-zinc-800"
-                        : "border-transparent bg-zinc-100 dark:bg-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-600"
+                        ? "border-foreground bg-muted shadow-sm"
+                        : "border-transparent bg-muted/50 hover:border-border hover:bg-muted/80"
                     )}
                   >
                     <Icon className="h-5 w-5" />
@@ -989,13 +989,13 @@ function ToggleRow({
         aria-checked={checked}
         onClick={onChange}
         className={cn(
-          "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200",
-          checked ? "bg-zinc-900 dark:bg-zinc-100" : "bg-zinc-200 dark:bg-zinc-700"
+          "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+          checked ? "bg-foreground" : "bg-muted-foreground/30"
         )}
       >
         <span
           className={cn(
-            "pointer-events-none inline-block h-4 w-4 rounded-full bg-white dark:bg-zinc-900 shadow-sm transition-transform duration-200",
+            "pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow-sm transition-transform duration-200",
             checked ? "translate-x-4" : "translate-x-0"
           )}
         />
