@@ -375,6 +375,28 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
     [router, serverTasks]
   )
 
+  const handleSectionChange = useCallback(
+    async (taskId: string, newSectionId: string) => {
+      // Optimistic update — move task to new section
+      setAllTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, taskListId: newSectionId } : t))
+      )
+      setViewKey((k) => k + 1)
+      try {
+        await fetch(`/api/tasks/${taskId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ taskListId: newSectionId }),
+        })
+        router.refresh()
+      } catch (error) {
+        console.error("Failed to move task:", error)
+        setAllTasks(serverTasks)
+      }
+    },
+    [router, serverTasks]
+  )
+
   const handleAddTask = useCallback((taskListId: string) => {
     setCreateTaskListId(taskListId)
     setCreateDialogOpen(true)
@@ -685,8 +707,10 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
         {viewMode === "board" && (
           <BoardView
             tasks={filteredTasks}
+            sections={filteredSections}
             onTaskClick={handleTaskClick}
             onStatusChange={handleStatusChange}
+            onSectionChange={handleSectionChange}
             projectId={project.id}
             defaultTaskListId={defaultTaskListId}
           />
