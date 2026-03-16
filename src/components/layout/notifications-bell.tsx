@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Bell, CheckCheck, ExternalLink } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
+import { useSocket } from "@/hooks/use-socket"
 
 interface Notification {
   id: string
@@ -16,13 +17,26 @@ interface Notification {
   projectId: string | null
 }
 
-export function NotificationsBell() {
+interface NotificationsBellProps {
+  userId?: string
+  userName?: string
+}
+
+export function NotificationsBell({ userId, userName }: NotificationsBellProps) {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  const fetchNotifications = () => {
+  // Socket connection for real-time notifications
+  const { on, connected } = useSocket({
+    room: userId ? `user:${userId}` : "",
+    userId: userId || "",
+    userName: userName || "User",
+    enabled: !!userId,
+  })
+
+  const fetchNotifications = useCallback(() => {
     fetch("/api/notifications")
       .then(r => r.json())
       .then(data => {
@@ -30,13 +44,27 @@ export function NotificationsBell() {
         setUnreadCount(data.unreadCount || 0)
       })
       .catch(() => {})
-  }
+  }, [])
 
+  // Initial fetch + polling fallback (extended to 60s since we have sockets)
   useEffect(() => {
     fetchNotifications()
-    const interval = setInterval(fetchNotifications, 30000)
+    const interval = setInterval(fetchNotifications, 60000)
     return () => clearInterval(interval)
-  }, [])
+  }, [fetchNotifications])
+
+  // Real-time: listen for new notifications via socket
+  useEffect(() => {
+    if (!connected) return
+
+    const unsub = on("new-notification", (notification: unknown) => {
+      const n = notification as Notification
+      setNotifications(prev => [n, ...prev].slice(0, 50))
+      setUnreadCount(prev => prev + 1)
+    })
+
+    return unsub
+  }, [connected, on])
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

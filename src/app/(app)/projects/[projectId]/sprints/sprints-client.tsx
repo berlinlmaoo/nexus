@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { SprintBoard } from "@/components/sprints/sprint-board"
-import { Plus, Loader2, Play, CheckCircle2, Clock, ArrowLeft, ChevronDown, ChevronUp, Zap } from "lucide-react"
+import { Plus, Loader2, Play, CheckCircle2, Clock, ArrowLeft, ChevronDown, ChevronUp, Zap, AlertTriangle, Archive, ArrowRight, FolderPlus } from "lucide-react"
 
 interface SprintTask {
   id: string
@@ -26,6 +26,13 @@ interface Sprint {
 }
 
 interface AvailableTask {
+  id: string
+  title: string
+  status: string
+  priority: string
+}
+
+interface IncompleteTask {
   id: string
   title: string
   status: string
@@ -58,6 +65,10 @@ export function SprintsClient({
   const [expandedSprint, setExpandedSprint] = useState<string | null>(sprints.find(s => s.status === "ACTIVE")?.id || sprints[0]?.id || null)
   const [addingTask, setAddingTask] = useState<string | null>(null)
 
+  // Sprint completion dialog state
+  const [completionDialog, setCompletionDialog] = useState<{ sprintId: string; incompleteTasks: IncompleteTask[] } | null>(null)
+  const [completing, setCompleting] = useState(false)
+
   const handleCreate = async () => {
     if (!name.trim() || !startDate || !endDate) return
     setCreating(true)
@@ -82,19 +93,38 @@ export function SprintsClient({
     }
   }
 
-  const updateSprintStatus = async (sprintId: string, status: string) => {
+  const updateSprintStatus = async (sprintId: string, status: string, moveIncompleteTo?: string) => {
     try {
       const res = await fetch("/api/sprints", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: sprintId, status }),
+        body: JSON.stringify({ id: sprintId, status, ...(moveIncompleteTo && { moveIncompleteTo }) }),
       })
       if (res.ok) {
         const data = await res.json()
+        // If API returns incomplete tasks requiring action, show dialog
+        if (data.requiresAction && data.incompleteTasks) {
+          setCompletionDialog({ sprintId, incompleteTasks: data.incompleteTasks })
+          return
+        }
         setSprints(sprints.map(s => s.id === sprintId ? { ...s, ...data.sprint } : s))
       }
     } catch (e) {
       console.error(e)
+    }
+  }
+
+  const handleCompleteSprint = async (moveIncompleteTo: 'backlog' | 'next_sprint' | 'new_sprint') => {
+    if (!completionDialog) return
+    setCompleting(true)
+    try {
+      await updateSprintStatus(completionDialog.sprintId, 'COMPLETED', moveIncompleteTo)
+      setCompletionDialog(null)
+      router.refresh()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setCompleting(false)
     }
   }
 
@@ -281,6 +311,90 @@ export function SprintsClient({
           })}
         </div>
       )}
+
+      {/* Sprint Completion Dialog */}
+      <Dialog open={!!completionDialog} onOpenChange={(open) => { if (!open) setCompletionDialog(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-blue-500" />
+              Complete Sprint
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            {/* Completion summary */}
+            {completionDialog && (() => {
+              const sprint = sprints.find(s => s.id === completionDialog.sprintId)
+              const totalTasks = sprint?.tasks.length ?? 0
+              const completedTasks = totalTasks - completionDialog.incompleteTasks.length
+              return (
+                <div className="flex gap-4 rounded-lg border p-3">
+                  <div className="flex-1 text-center">
+                    <p className="text-2xl font-bold text-green-600">{completedTasks}</p>
+                    <p className="text-[11px] text-muted-foreground">Completed</p>
+                  </div>
+                  <div className="w-px bg-border" />
+                  <div className="flex-1 text-center">
+                    <p className="text-2xl font-bold text-amber-500">{completionDialog.incompleteTasks.length}</p>
+                    <p className="text-[11px] text-muted-foreground">Incomplete</p>
+                  </div>
+                  <div className="w-px bg-border" />
+                  <div className="flex-1 text-center">
+                    <p className="text-2xl font-bold">{totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0}%</p>
+                    <p className="text-[11px] text-muted-foreground">Velocity</p>
+                  </div>
+                </div>
+              )
+            })()}
+
+            <p className="text-sm text-muted-foreground">
+              What should happen to the {completionDialog?.incompleteTasks.length} incomplete task{completionDialog?.incompleteTasks.length !== 1 ? 's' : ''}?
+            </p>
+
+            <div className="max-h-36 overflow-y-auto space-y-1.5 rounded-md border p-2">
+              {completionDialog?.incompleteTasks.map(task => (
+                <div key={task.id} className="flex items-center gap-2 text-sm py-1">
+                  <div className="h-2 w-2 rounded-full bg-amber-400 shrink-0" />
+                  <span className="flex-1 truncate">{task.title}</span>
+                  <Badge variant="secondary" className="text-[10px] shrink-0">{task.priority}</Badge>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-2">
+              <Button
+                variant="outline"
+                onClick={() => handleCompleteSprint('backlog')}
+                disabled={completing}
+                className="w-full flex items-center justify-center gap-2"
+              >
+                {completing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
+                Move to Backlog
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleCompleteSprint('next_sprint')}
+                disabled={completing}
+                className="w-full flex items-center justify-center gap-2"
+              >
+                {completing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                Move to Next Sprint
+              </Button>
+              <Button
+                onClick={() => handleCompleteSprint('new_sprint')}
+                disabled={completing}
+                className="w-full flex items-center justify-center gap-2 bg-foreground text-background hover:bg-foreground/90"
+              >
+                {completing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderPlus className="h-4 w-4" />}
+                Create New Sprint & Move
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground text-center">
+              &ldquo;Next Sprint&rdquo; moves tasks to the next Planning sprint. If none exists, tasks go to backlog.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

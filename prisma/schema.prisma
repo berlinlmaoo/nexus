@@ -95,11 +95,13 @@ model Project {
   webhooks           Webhook[]
   goalProjects       GoalProject[]
   portfolioProjects  PortfolioProject[]
+  teamProjects       TeamProject[]
 }
 
 model ProjectMember {
   id        String      @id @default(cuid())
   role      ProjectRole @default(MEMBER)
+  source    String      @default("direct")  // "direct" | "team:{teamId}"
   joinedAt  DateTime    @default(now())
 
   userId    String
@@ -407,11 +409,22 @@ model Team {
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  members TeamMember[]
+  members  TeamMember[]
+  projects TeamProject[]
+}
+
+model TeamProject {
+  id        String  @id @default(cuid())
+  teamId    String
+  projectId String
+  team      Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@unique([teamId, projectId])
 }
 
 model TeamMember {
-  id String @id @default(cuid())
+  id   String   @id @default(cuid())
+  role TeamRole @default(MEMBER)
 
   teamId String
   team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
@@ -420,6 +433,11 @@ model TeamMember {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, userId])
+}
+
+enum TeamRole {
+  LEAD
+  MEMBER
 }
 
 model ProjectPage {

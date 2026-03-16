@@ -2,6 +2,7 @@ import { Server as IOServer } from "socket.io"
 import type { NextApiRequest, NextApiResponse } from "next"
 import type { Server as HTTPServer } from "http"
 import type { Socket as NetSocket } from "net"
+import { eventBus, BUS_EVENTS } from "@/lib/event-bus"
 
 interface SocketServer extends HTTPServer {
   io?: IOServer
@@ -162,6 +163,32 @@ export default function handler(
       else io.to(room).emit("presence-update", Array.from(members.values()))
     }
   }, 60000)
+
+  // ── Event bus → Socket.IO bridge ───────────────────────────
+  // API routes publish to the event bus; we relay to Socket.IO rooms.
+  eventBus.on(BUS_EVENTS.TASK_CREATED, (data: { projectId: string; task: unknown }) => {
+    io.to(`project:${data.projectId}`).emit("task-created", data.task)
+  })
+
+  eventBus.on(BUS_EVENTS.TASK_UPDATED, (data: { projectId: string; task: unknown }) => {
+    io.to(`project:${data.projectId}`).emit("task-updated", data.task)
+  })
+
+  eventBus.on(BUS_EVENTS.TASK_DELETED, (data: { projectId: string; taskId: string }) => {
+    io.to(`project:${data.projectId}`).emit("task-deleted", { taskId: data.taskId })
+  })
+
+  eventBus.on(BUS_EVENTS.COMMENT_ADDED, (data: { projectId: string; taskId: string; comment: unknown }) => {
+    io.to(`project:${data.projectId}`).emit("comment-added", { taskId: data.taskId, comment: data.comment })
+  })
+
+  eventBus.on(BUS_EVENTS.NOTIFICATION, (data: { userId: string; notification: unknown }) => {
+    io.to(`user:${data.userId}`).emit("new-notification", data.notification)
+  })
+
+  eventBus.on(BUS_EVENTS.SPRINT_UPDATED, (data: { projectId: string; sprint: unknown }) => {
+    io.to(`project:${data.projectId}`).emit("sprint-updated", data.sprint)
+  })
 
   res.socket.server.io = io
   res.end()

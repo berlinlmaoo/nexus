@@ -5,6 +5,7 @@ import { logAudit } from "@/lib/audit"
 import { checkProjectAccess } from "@/lib/rbac"
 import { executeAutomations } from "@/lib/automation-engine"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
+import { emitTaskCreated } from "@/lib/socket-emitter"
 import type { Prisma } from "@/generated/prisma/client"
 
 export async function GET(request: NextRequest) {
@@ -150,6 +151,9 @@ export async function POST(request: NextRequest) {
       taskListId: task.taskListId,
       creatorId: userId,
     }, taskList.projectId).catch(() => {})
+
+    // Real-time: broadcast to project room
+    emitTaskCreated(taskList.projectId, JSON.parse(JSON.stringify(task)))
 
     return NextResponse.json(task, { status: 201 })
   } catch (error) {

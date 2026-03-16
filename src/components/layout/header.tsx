@@ -25,6 +25,7 @@ interface HeaderProps {
   title?: string
   breadcrumbs?: Breadcrumb[]
   user?: {
+    id: string
     name: string
     email: string
     image?: string | null
@@ -125,7 +126,7 @@ export function Header({ title, breadcrumbs, user, children }: HeaderProps) {
         </button>
 
         {/* Notifications */}
-        <NotificationsBell />
+        <NotificationsBell userId={user?.id} userName={user?.name} />
 
         {/* User dropdown */}
         {user && (

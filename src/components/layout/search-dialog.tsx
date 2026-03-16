@@ -12,6 +12,10 @@ import {
   Clock,
   X,
   Command,
+  Target,
+  ClipboardList,
+  Timer,
+  Filter,
 } from "lucide-react"
 import {
   Dialog,
@@ -50,21 +54,53 @@ interface SearchMember {
   avatar: string
 }
 
+interface SearchGoal {
+  id: string
+  title: string
+  status: string
+  progress: number
+  owner: { name: string }
+}
+
+interface SearchForm {
+  id: string
+  name: string
+  projectId: string
+  project: { name: string }
+}
+
+interface SearchSprint {
+  id: string
+  name: string
+  status: string
+  projectId: string
+  project: { name: string }
+}
+
 interface SearchResponse {
   tasks: SearchTask[]
   projects: SearchProject[]
   docs: SearchDoc[]
   members: SearchMember[]
+  goals: SearchGoal[]
+  forms: SearchForm[]
+  sprints: SearchSprint[]
 }
 
 interface SearchResultItem {
   id: string
-  type: "task" | "project" | "doc" | "member"
+  type: "task" | "project" | "doc" | "member" | "goal" | "form" | "sprint"
   label: string
   sublabel?: string
   href: string
   color?: string
   status?: string
+}
+
+interface SearchFilters {
+  projectId: string
+  status: string
+  assigneeId: string
 }
 
 // ---------------------------------------------------------------------------
@@ -120,7 +156,7 @@ function addRecentSearch(query: string) {
 function flattenResults(data: SearchResponse): SearchResultItem[] {
   const items: SearchResultItem[] = []
 
-  for (const task of data.tasks) {
+  for (const task of data.tasks ?? []) {
     items.push({
       id: task.id,
       type: "task",
@@ -131,7 +167,7 @@ function flattenResults(data: SearchResponse): SearchResultItem[] {
     })
   }
 
-  for (const project of data.projects) {
+  for (const project of data.projects ?? []) {
     items.push({
       id: project.id,
       type: "project",
@@ -141,7 +177,7 @@ function flattenResults(data: SearchResponse): SearchResultItem[] {
     })
   }
 
-  for (const doc of data.docs) {
+  for (const doc of data.docs ?? []) {
     items.push({
       id: doc.id,
       type: "doc",
@@ -150,13 +186,45 @@ function flattenResults(data: SearchResponse): SearchResultItem[] {
     })
   }
 
-  for (const member of data.members) {
+  for (const member of data.members ?? []) {
     items.push({
       id: member.id,
       type: "member",
       label: member.name,
       sublabel: member.email,
       href: "/teams",
+    })
+  }
+
+  for (const goal of data.goals ?? []) {
+    items.push({
+      id: goal.id,
+      type: "goal",
+      label: goal.title,
+      sublabel: `${goal.progress}% - ${goal.owner?.name ?? ""}`,
+      status: goal.status,
+      href: `/goals`,
+    })
+  }
+
+  for (const form of data.forms ?? []) {
+    items.push({
+      id: form.id,
+      type: "form",
+      label: form.name,
+      sublabel: form.project?.name,
+      href: `/projects/${form.projectId}`,
+    })
+  }
+
+  for (const sprint of data.sprints ?? []) {
+    items.push({
+      id: sprint.id,
+      type: "sprint",
+      label: sprint.name,
+      sublabel: sprint.project?.name,
+      status: sprint.status,
+      href: `/projects/${sprint.projectId}`,
     })
   }
 
@@ -175,7 +243,16 @@ const sectionMeta: Record<
   project: { label: "Projects", icon: FolderKanban },
   doc: { label: "Docs", icon: FileText },
   member: { label: "People", icon: Users },
+  goal: { label: "Goals", icon: Target },
+  form: { label: "Forms", icon: ClipboardList },
+  sprint: { label: "Sprints", icon: Timer },
 }
+
+// ---------------------------------------------------------------------------
+// Filter chip options
+// ---------------------------------------------------------------------------
+
+const statusOptions = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"]
 
 // ---------------------------------------------------------------------------
 // SearchDialog
@@ -190,6 +267,9 @@ export function SearchDialog() {
   const [hasSearched, setHasSearched] = React.useState(false)
   const [selectedIndex, setSelectedIndex] = React.useState(0)
   const [recentSearches, setRecentSearches] = React.useState<string[]>([])
+  const [showFilters, setShowFilters] = React.useState(false)
+  const [filters, setFilters] = React.useState<SearchFilters>({ projectId: "", status: "", assigneeId: "" })
+  const [filterProjects, setFilterProjects] = React.useState<Array<{ id: string; name: string }>>([])
 
   const inputRef = React.useRef<HTMLInputElement>(null)
   const listRef = React.useRef<HTMLDivElement>(null)
@@ -200,16 +280,29 @@ export function SearchDialog() {
   React.useEffect(() => {
     if (open) {
       setRecentSearches(getRecentSearches())
-      // Focus input on next tick (after dialog animation)
       setTimeout(() => inputRef.current?.focus(), 0)
     } else {
-      // Reset state on close
       setQuery("")
       setResults([])
       setHasSearched(false)
       setSelectedIndex(0)
+      setShowFilters(false)
+      setFilters({ projectId: "", status: "", assigneeId: "" })
     }
   }, [open])
+
+  // Fetch filter options when filters panel opens
+  React.useEffect(() => {
+    if (showFilters && filterProjects.length === 0) {
+      fetch("/api/projects")
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+          const list = Array.isArray(data) ? data : data.projects ?? []
+          setFilterProjects(list.map((p: { id: string; name: string }) => ({ id: p.id, name: p.name })))
+        })
+        .catch(() => {})
+    }
+  }, [showFilters, filterProjects.length])
 
   // Global keyboard shortcut: Cmd+K / Ctrl+K
   React.useEffect(() => {
@@ -223,7 +316,7 @@ export function SearchDialog() {
     return () => document.removeEventListener("keydown", handleKeyDown)
   }, [])
 
-  // Fetch results when debounced query changes
+  // Fetch results when debounced query or filters change
   React.useEffect(() => {
     if (!debouncedQuery.trim()) {
       setResults([])
@@ -235,7 +328,12 @@ export function SearchDialog() {
     let cancelled = false
     setLoading(true)
 
-    fetch(`/api/search?q=${encodeURIComponent(debouncedQuery.trim())}`)
+    const params = new URLSearchParams({ q: debouncedQuery.trim() })
+    if (filters.projectId) params.set("projectId", filters.projectId)
+    if (filters.status) params.set("status", filters.status)
+    if (filters.assigneeId) params.set("assigneeId", filters.assigneeId)
+
+    fetch(`/api/search?${params.toString()}`)
       .then((res) => res.json())
       .then((data: SearchResponse) => {
         if (cancelled) return
@@ -255,7 +353,7 @@ export function SearchDialog() {
     return () => {
       cancelled = true
     }
-  }, [debouncedQuery])
+  }, [debouncedQuery, filters])
 
   // Scroll selected item into view
   React.useEffect(() => {
@@ -323,6 +421,8 @@ export function SearchDialog() {
     return groups
   }, [results])
 
+  const activeFilterCount = [filters.projectId, filters.status, filters.assigneeId].filter(Boolean).length
+
   // Compute a flat index for each item across groups
   let flatIndex = 0
 
@@ -345,9 +445,26 @@ export function SearchDialog() {
               setQuery(e.target.value)
               setSelectedIndex(0)
             }}
-            placeholder="Search tasks, projects, docs, people..."
+            placeholder="Search tasks, projects, docs, goals, sprints..."
             className="flex-1 bg-transparent text-base outline-none placeholder:text-zinc-400"
           />
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={cn(
+              "rounded-md p-1.5 transition-colors",
+              showFilters || activeFilterCount > 0
+                ? "bg-zinc-100 text-zinc-700"
+                : "text-zinc-400 hover:text-zinc-600"
+            )}
+            title="Filters"
+          >
+            <Filter className="h-4 w-4" />
+            {activeFilterCount > 0 && (
+              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-blue-500 text-[10px] text-white flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
           {query && (
             <button
               onClick={() => {
@@ -360,6 +477,54 @@ export function SearchDialog() {
             </button>
           )}
         </div>
+
+        {/* Filter chips */}
+        {showFilters && (
+          <div className="border-t border-zinc-200 px-4 py-2.5 flex flex-wrap gap-2 items-center">
+            <span className="text-xs text-zinc-400 font-medium mr-1">Filters:</span>
+            {/* Project filter */}
+            <select
+              value={filters.projectId}
+              onChange={(e) => setFilters((f) => ({ ...f, projectId: e.target.value }))}
+              className={cn(
+                "rounded-full border px-2.5 py-1 text-xs outline-none transition-colors",
+                filters.projectId
+                  ? "border-blue-300 bg-blue-50 text-blue-700"
+                  : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:border-zinc-300"
+              )}
+            >
+              <option value="">All Projects</option>
+              {filterProjects.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            {/* Status filter */}
+            <select
+              value={filters.status}
+              onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}
+              className={cn(
+                "rounded-full border px-2.5 py-1 text-xs outline-none transition-colors",
+                filters.status
+                  ? "border-blue-300 bg-blue-50 text-blue-700"
+                  : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:border-zinc-300"
+              )}
+            >
+              <option value="">All Statuses</option>
+              {statusOptions.map((s) => (
+                <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
+              ))}
+            </select>
+            {/* Clear all filters */}
+            {activeFilterCount > 0 && (
+              <button
+                onClick={() => setFilters({ projectId: "", status: "", assigneeId: "" })}
+                className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs text-zinc-500 hover:bg-zinc-100 transition-colors"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Separator */}
         <div className="border-t border-zinc-200" />
@@ -564,6 +729,9 @@ function SearchResultRow({
     project: FolderKanban,
     doc: FileText,
     member: Users,
+    goal: Target,
+    form: ClipboardList,
+    sprint: Timer,
   }
   const Icon = icons[item.type]
 
@@ -587,10 +755,10 @@ function SearchResultRow({
         )}
       </div>
 
-      {/* Task status badge */}
-      {item.type === "task" && item.status && (
+      {/* Status badge for tasks, goals, sprints */}
+      {(item.type === "task" || item.type === "goal" || item.type === "sprint") && item.status && (
         <span className="shrink-0 rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] font-medium text-zinc-600 capitalize">
-          {item.status}
+          {item.status.replace(/_/g, " ")}
         </span>
       )}
 

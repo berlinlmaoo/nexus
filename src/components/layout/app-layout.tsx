@@ -22,6 +22,7 @@ interface AppLayoutProps {
   title?: string
   breadcrumbs?: Breadcrumb[]
   user: {
+    id: string
     name: string
     email: string
     image?: string | null

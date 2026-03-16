@@ -1,7 +1,8 @@
 "use client"
 
+import { useState, useEffect, useCallback } from "react"
 import { formatDistanceToNow } from "date-fns"
-import { Activity } from "lucide-react"
+import { Activity, RefreshCw } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
@@ -27,13 +28,54 @@ interface RecentActivityWidgetProps {
 }
 
 export function RecentActivityWidget({ data }: RecentActivityWidgetProps) {
-  const activity = (data?.activity ?? []).slice(0, 20)
+  const [activity, setActivity] = useState<ActivityEntry[]>((data?.activity ?? []).slice(0, 20))
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  // Sync from props on initial load
+  useEffect(() => {
+    if (data?.activity) {
+      setActivity(data.activity.slice(0, 20))
+    }
+  }, [data?.activity])
+
+  const refresh = useCallback(async () => {
+    setIsRefreshing(true)
+    try {
+      const res = await fetch("/api/dashboard")
+      if (res.ok) {
+        const json = await res.json()
+        if (json.activity) {
+          setActivity(json.activity.slice(0, 20))
+        }
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setIsRefreshing(false)
+    }
+  }, [])
+
+  // Auto-refresh every 60 seconds
+  useEffect(() => {
+    const interval = setInterval(refresh, 60000)
+    return () => clearInterval(interval)
+  }, [refresh])
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center gap-1.5 text-muted-foreground mb-2">
-        <Activity className="h-3.5 w-3.5" />
-        <span className="text-xs font-medium">Recent activity</span>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5 text-muted-foreground">
+          <Activity className="h-3.5 w-3.5" />
+          <span className="text-xs font-medium">Recent activity</span>
+        </div>
+        <button
+          onClick={refresh}
+          disabled={isRefreshing}
+          className="text-muted-foreground hover:text-foreground transition-colors p-0.5"
+          title="Refresh"
+        >
+          <RefreshCw className={cn("h-3 w-3", isRefreshing && "animate-spin")} />
+        </button>
       </div>
 
       {activity.length === 0 ? (

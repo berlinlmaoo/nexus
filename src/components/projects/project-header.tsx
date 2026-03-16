@@ -67,6 +67,8 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
   const [showIconPicker, setShowIconPicker] = useState(false)
   const [showColorPicker, setShowColorPicker] = useState(false)
   const [showCoverPicker, setShowCoverPicker] = useState(false)
+  const [editingName, setEditingName] = useState(false)
+  const [projectName, setProjectName] = useState(project.name)
   const [editingDescription, setEditingDescription] = useState(false)
   const [description, setDescription] = useState(project.description || "")
   const [selectedIcon, setSelectedIcon] = useState(project.icon || "folder")
@@ -104,6 +106,16 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
     setSelectedColor(color)
     setShowColorPicker(false)
     updateProject({ color })
+  }
+
+  const handleNameSave = () => {
+    const trimmed = projectName.trim()
+    if (trimmed && trimmed !== project.name) {
+      updateProject({ name: trimmed })
+    } else {
+      setProjectName(project.name)
+    }
+    setEditingName(false)
   }
 
   const handleDescriptionSave = () => {
@@ -405,7 +417,24 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
         {/* Name and description */}
         <div className="flex-1 pt-6">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight">{project.name}</h1>
+            {editingName ? (
+              <input
+                autoFocus
+                type="text"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleNameSave(); if (e.key === "Escape") { setProjectName(project.name); setEditingName(false) } }}
+                onBlur={handleNameSave}
+                className="text-2xl font-bold tracking-tight bg-transparent border-b-2 border-foreground/30 outline-none focus:border-foreground px-0 py-0 transition-colors"
+              />
+            ) : (
+              <h1
+                className="text-2xl font-bold tracking-tight cursor-pointer hover:bg-muted/50 rounded px-1 -mx-1 transition-colors"
+                onClick={() => setEditingName(true)}
+              >
+                {projectName}
+              </h1>
+            )}
 
             {/* Color picker trigger */}
             <div className="relative">

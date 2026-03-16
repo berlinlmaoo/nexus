@@ -33,6 +33,7 @@ import {
   BarChart3,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useRealtimeProject } from "@/hooks/use-realtime-project"
 import Link from "next/link"
 import { StatusUpdates } from "@/components/projects/status-updates"
 import { AddPageDialog } from "@/components/projects/add-page-dialog"
@@ -82,8 +83,15 @@ interface ProjectDetailData {
   pages?: ProjectPageData[]
 }
 
+interface CurrentUser {
+  id: string
+  name: string
+  avatar: string | null
+}
+
 interface ProjectDetailClientProps {
   project: ProjectDetailData
+  currentUser: CurrentUser
 }
 
 type ViewMode = "overview" | "list" | "board" | "kanban" | "calendar" | "timeline" | "gantt" | "gallery" | "charts" | "feed" | "workload"
@@ -144,8 +152,16 @@ function StatusUpdatesButton({ projectId }: { projectId: string }) {
   )
 }
 
-export function ProjectDetailClient({ project }: ProjectDetailClientProps) {
+export function ProjectDetailClient({ project, currentUser }: ProjectDetailClientProps) {
   const router = useRouter()
+
+  // Real-time updates via Socket.IO
+  useRealtimeProject({
+    projectId: project.id,
+    userId: currentUser.id,
+    userName: currentUser.name,
+    userAvatar: currentUser.avatar,
+  })
   const [viewMode, setViewMode] = useState<ViewMode>(() => getStoredView(project.id))
   const [selectedTask, setSelectedTask] = useState<TaskCardData | null>(null)
   const [createTaskListId, setCreateTaskListId] = useState<string | undefined>(undefined)

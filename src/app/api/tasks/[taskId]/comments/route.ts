@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth"
 import { notifyMention } from "@/lib/notification-service"
 import { executeAutomations } from "@/lib/automation-engine"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
+import { emitCommentAdded } from "@/lib/socket-emitter"
 
 export async function GET(
   _request: NextRequest,
@@ -138,6 +139,9 @@ export async function POST(
         }).catch((err) => console.error("Mention notification error:", err))
       }
     }
+
+    // Real-time: broadcast to project room
+    emitCommentAdded(task.taskList.projectId, params.taskId, JSON.parse(JSON.stringify(comment)))
 
     return NextResponse.json(comment, { status: 201 })
   } catch (error) {

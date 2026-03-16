@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { executeAutomations } from '@/lib/automation-engine'
+import { emitSprintUpdated } from '@/lib/socket-emitter'
 
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -32,11 +33,82 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const { id, status, addTaskId, removeTaskId, name, startDate, endDate } = await req.json()
+  const { id, status, addTaskId, removeTaskId, name, startDate, endDate, moveIncompleteTo } = await req.json()
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
   if (addTaskId) await prisma.sprintTask.create({ data: { sprintId: id, taskId: addTaskId } }).catch(() => {})
   if (removeTaskId) await prisma.sprintTask.deleteMany({ where: { sprintId: id, taskId: removeTaskId } })
   const existingSprint = await prisma.sprint.findUnique({ where: { id }, select: { status: true, projectId: true } })
+
+  // Handle sprint completion: find incomplete tasks
+  if (status === 'COMPLETED' && existingSprint && existingSprint.status !== 'COMPLETED') {
+    const sprintTasks = await prisma.sprintTask.findMany({
+      where: { sprintId: id },
+      include: { task: { select: { id: true, title: true, status: true, priority: true, assignees: { include: { user: { select: { id: true, name: true } } } } } } },
+    })
+    const incompleteTasks = sprintTasks.filter(st => st.task.status !== 'DONE').map(st => st.task)
+
+    // If there are incomplete tasks and no moveIncompleteTo directive, return them for UI to handle
+    if (incompleteTasks.length > 0 && !moveIncompleteTo) {
+      return NextResponse.json({ incompleteTasks, requiresAction: true })
+    }
+
+    // Handle incomplete tasks based on directive
+    if (incompleteTasks.length > 0 && moveIncompleteTo) {
+      const incompleteTaskIds = incompleteTasks.map(t => t.id)
+      if (moveIncompleteTo === 'backlog') {
+        // Remove from sprint (unassign)
+        await prisma.sprintTask.deleteMany({ where: { sprintId: id, taskId: { in: incompleteTaskIds } } })
+      } else if (moveIncompleteTo === 'next_sprint') {
+        // Find the next PLANNING sprint in same project
+        const nextSprint = await prisma.sprint.findFirst({
+          where: { projectId: existingSprint.projectId, status: 'PLANNING', id: { not: id } },
+          orderBy: { startDate: 'asc' },
+        })
+        if (nextSprint) {
+          // Move tasks to next sprint
+          await prisma.sprintTask.updateMany({
+            where: { sprintId: id, taskId: { in: incompleteTaskIds } },
+            data: { sprintId: nextSprint.id },
+          })
+        } else {
+          // No next sprint, move to backlog
+          await prisma.sprintTask.deleteMany({ where: { sprintId: id, taskId: { in: incompleteTaskIds } } })
+        }
+      } else if (moveIncompleteTo === 'new_sprint') {
+        // Create a new sprint and move incomplete tasks there
+        const completedSprint = await prisma.sprint.findUnique({ where: { id } })
+        if (completedSprint) {
+          const duration = completedSprint.endDate.getTime() - completedSprint.startDate.getTime()
+          const newSprint = await prisma.sprint.create({
+            data: {
+              name: `${completedSprint.name} (Overflow)`,
+              projectId: existingSprint.projectId,
+              startDate: completedSprint.endDate,
+              endDate: new Date(completedSprint.endDate.getTime() + duration),
+              status: 'PLANNING',
+            },
+          })
+          await prisma.sprintTask.updateMany({
+            where: { sprintId: id, taskId: { in: incompleteTaskIds } },
+            data: { sprintId: newSprint.id },
+          })
+        }
+      }
+    }
+
+    // Calculate completion stats
+    const allSprintTasks = await prisma.sprintTask.findMany({
+      where: { sprintId: id },
+      include: { task: { select: { status: true } } },
+    })
+    const completedTaskCount = allSprintTasks.filter(st => st.task.status === 'DONE').length
+    const totalTaskCount = sprintTasks.length
+    // Return completion stats alongside the sprint update
+    const completionStats = { completedTaskCount, totalTaskCount, incompleteCount: incompleteTasks.length }
+    // Include stats in the requiresAction response above; attach to the final response below
+    ;(existingSprint as Record<string, unknown>).__completionStats = completionStats
+  }
+
   const sprint = await prisma.sprint.update({
     where: { id },
     data: { ...(status !== undefined && { status }), ...(name !== undefined && { name }), ...(startDate !== undefined && { startDate: new Date(startDate) }), ...(endDate !== undefined && { endDate: new Date(endDate) }) },
@@ -51,6 +123,9 @@ export async function PATCH(req: NextRequest) {
       sprintId: sprint.id,
     }).catch(() => {})
   }
+
+  // Emit sprint updated event for real-time updates
+  emitSprintUpdated(sprint.projectId, sprint)
 
   return NextResponse.json({ sprint })
 }

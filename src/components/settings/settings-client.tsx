@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
-import { User, Building2, Palette, Camera, X, Loader2, Sun, Moon, Monitor, Bell, Mail, MessageSquare, Hash, Shield, Webhook, Upload } from "lucide-react"
+import { User, Building2, Palette, Camera, X, Loader2, Sun, Moon, Monitor, Bell, Mail, MessageSquare, Hash, Shield, Webhook, Upload, Users, Lock, UserPlus, Trash2, Crown, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useRouter } from "next/navigation"
 import { useTheme } from "@/components/layout/theme-provider"
@@ -28,14 +28,15 @@ interface SettingsClientProps {
     slug: string
   } | null
   isAdmin?: boolean
+  workspaceRole?: string | null
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"]
 
-type SettingsTab = "profile" | "notifications" | "webhooks" | "import" | "audit"
+type SettingsTab = "profile" | "security" | "members" | "notifications" | "webhooks" | "import" | "audit"
 
-export function SettingsClient({ user, workspace, isAdmin }: SettingsClientProps) {
+export function SettingsClient({ user, workspace, isAdmin, workspaceRole }: SettingsClientProps) {
   const router = useRouter()
   const { theme, setTheme } = useTheme()
   const [activeTab, setActiveTab] = useState<SettingsTab>("profile")
@@ -186,8 +187,12 @@ export function SettingsClient({ user, workspace, isAdmin }: SettingsClientProps
 
   const displayImage = previewUrl || avatarUrl
 
+  const canManageMembers = workspaceRole === "OWNER" || workspaceRole === "ADMIN"
+
   const tabs: { id: SettingsTab; label: string; icon: typeof User }[] = [
     { id: "profile", label: "Profile", icon: User },
+    { id: "security", label: "Security", icon: Lock },
+    { id: "members", label: "Members", icon: Users },
     { id: "notifications", label: "Notifications", icon: Bell },
     { id: "webhooks" as const, label: "Webhooks", icon: Webhook },
     { id: "import" as const, label: "Import", icon: Upload },
@@ -431,6 +436,10 @@ export function SettingsClient({ user, workspace, isAdmin }: SettingsClientProps
         </>
       )}
 
+      {activeTab === "security" && <PasswordChangeSection />}
+
+      {activeTab === "members" && <WorkspaceMembersSection canManage={canManageMembers} currentUserId={user.id} />}
+
       {activeTab === "notifications" && <NotificationSettings />}
 
       {activeTab === "webhooks" && <WebhooksManager />}
@@ -630,6 +639,322 @@ function NotificationSettings() {
       >
         {saving ? "Saving..." : saved ? "Saved" : "Save Preferences"}
       </Button>
+    </>
+  )
+}
+
+// ── Password Change Section ──────────────────────────────────
+
+function PasswordChangeSection() {
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
+
+  const handleSubmit = async () => {
+    setError(null)
+    setSuccess(false)
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setError("All fields are required")
+      return
+    }
+    if (newPassword.length < 8) {
+      setError("New password must be at least 8 characters")
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setError("New passwords do not match")
+      return
+    }
+
+    setSaving(true)
+    try {
+      const res = await fetch("/api/user/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || "Failed to change password")
+      }
+      setSuccess(true)
+      setCurrentPassword("")
+      setNewPassword("")
+      setConfirmPassword("")
+      setTimeout(() => setSuccess(false), 3000)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to change password")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Lock className="h-5 w-5" />
+          Change Password
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="current-password">Current Password</Label>
+          <Input
+            id="current-password"
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            placeholder="Enter current password"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="new-password">New Password</Label>
+          <Input
+            id="new-password"
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            placeholder="Enter new password (min 8 characters)"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="confirm-password">Confirm New Password</Label>
+          <Input
+            id="confirm-password"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="Confirm new password"
+            onKeyDown={(e) => { if (e.key === "Enter") handleSubmit() }}
+          />
+        </div>
+
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        {success && <p className="text-sm text-green-600">Password updated successfully</p>}
+
+        <Button
+          className="bg-foreground text-background hover:bg-foreground/90"
+          onClick={handleSubmit}
+          disabled={saving || !currentPassword || !newPassword || !confirmPassword}
+        >
+          {saving ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Updating...
+            </>
+          ) : (
+            "Update Password"
+          )}
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ── Workspace Members Section ──────────────────────────────────
+
+interface WorkspaceMember {
+  id: string
+  userId: string
+  name: string
+  email: string
+  avatar: string | null
+  role: string
+  joinedAt: string
+}
+
+function WorkspaceMembersSection({ canManage, currentUserId }: { canManage: boolean; currentUserId: string }) {
+  const [members, setMembers] = useState<WorkspaceMember[]>([])
+  const [loading, setLoading] = useState(true)
+  const [inviteEmail, setInviteEmail] = useState("")
+  const [inviteRole, setInviteRole] = useState("MEMBER")
+  const [inviting, setInviting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [showInvite, setShowInvite] = useState(false)
+
+  useEffect(() => {
+    fetch("/api/workspaces/members")
+      .then((r) => r.json())
+      .then((data) => {
+        setMembers(data.members || [])
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [])
+
+  const handleInvite = async () => {
+    if (!inviteEmail.trim()) return
+    setInviting(true)
+    setError(null)
+    try {
+      const res = await fetch("/api/workspaces/members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || "Failed to invite member")
+      }
+      const data = await res.json()
+      setMembers([...members, data.member])
+      setInviteEmail("")
+      setShowInvite(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to invite member")
+    } finally {
+      setInviting(false)
+    }
+  }
+
+  const handleRoleChange = async (memberId: string, role: string) => {
+    try {
+      const res = await fetch("/api/workspaces/members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memberId, role }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setMembers(members.map(m => m.id === memberId ? { ...m, role: data.member.role } : m))
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const handleRemove = async (memberId: string) => {
+    if (!confirm("Remove this member from the workspace?")) return
+    try {
+      const res = await fetch(`/api/workspaces/members?memberId=${memberId}`, { method: "DELETE" })
+      if (res.ok) {
+        setMembers(members.filter(m => m.id !== memberId))
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center py-12">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Workspace Members
+              <span className="text-sm font-normal text-muted-foreground">({members.length})</span>
+            </CardTitle>
+            {canManage && (
+              <Button
+                size="sm"
+                className="bg-foreground text-background hover:bg-foreground/90"
+                onClick={() => setShowInvite(!showInvite)}
+              >
+                <UserPlus className="h-4 w-4 mr-1" />
+                Invite
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Invite form */}
+          {showInvite && (
+            <div className="rounded-lg border p-4 space-y-3">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Email address"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleInvite() }}
+                  className="flex-1"
+                />
+                <select
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value)}
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="MEMBER">Member</option>
+                  <option value="ADMIN">Admin</option>
+                </select>
+                <Button
+                  onClick={handleInvite}
+                  disabled={inviting || !inviteEmail.trim()}
+                  className="bg-foreground text-background hover:bg-foreground/90"
+                >
+                  {inviting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
+                </Button>
+              </div>
+              {error && <p className="text-xs text-red-600">{error}</p>}
+            </div>
+          )}
+
+          {/* Members list */}
+          <div className="space-y-1">
+            {members.map((member) => (
+              <div key={member.id} className="flex items-center justify-between py-2.5 px-2 rounded-md hover:bg-muted/50 transition-colors">
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-8 w-8">
+                    {member.avatar && <AvatarImage src={member.avatar} alt={member.name} />}
+                    <AvatarFallback className="bg-[#18181B] text-white text-xs">
+                      {member.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium">{member.name}</p>
+                      {member.role === "OWNER" && <Crown className="h-3 w-3 text-amber-500" />}
+                      {member.userId === currentUserId && <span className="text-[10px] text-muted-foreground">(you)</span>}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{member.email}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-muted-foreground">
+                    Joined {new Date(member.joinedAt).toLocaleDateString()}
+                  </span>
+                  {canManage && member.userId !== currentUserId ? (
+                    <>
+                      <select
+                        value={member.role}
+                        onChange={(e) => handleRoleChange(member.id, e.target.value)}
+                        className="h-7 rounded border bg-background px-2 text-xs"
+                      >
+                        <option value="MEMBER">Member</option>
+                        <option value="ADMIN">Admin</option>
+                        <option value="OWNER">Owner</option>
+                      </select>
+                      <button
+                        onClick={() => handleRemove(member.id)}
+                        className="p-1 text-muted-foreground hover:text-red-600 transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-xs font-medium text-muted-foreground capitalize">{member.role.toLowerCase()}</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </>
   )
 }
