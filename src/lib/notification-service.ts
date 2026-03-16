@@ -68,6 +68,7 @@ async function createInAppNotification(data: {
   message: string
   taskId?: string
   projectId?: string
+  link?: string
 }) {
   const notification = await prisma.notification.create({
     data: {
@@ -77,6 +78,7 @@ async function createInAppNotification(data: {
       message: data.message,
       taskId: data.taskId || null,
       projectId: data.projectId || null,
+      link: data.link || null,
     },
   })
 
@@ -112,6 +114,7 @@ export async function notifyTaskAssigned(data: {
     message: `${data.assignedByName} assigned you "${data.taskTitle}"`,
     taskId: data.taskId,
     projectId: data.projectId,
+    link: `/projects/${data.projectId}/tasks/${data.taskId}`,
   })
 
   if (!prefs.taskAssigned) return
@@ -169,6 +172,7 @@ export async function notifyMention(data: {
     message: `${data.mentionedByName} mentioned you on "${data.taskTitle}"`,
     taskId: data.taskId,
     projectId: data.projectId,
+    link: data.projectId ? `/projects/${data.projectId}/tasks/${data.taskId}` : undefined,
   })
 
   if (!prefs.commentMention) return
@@ -220,6 +224,7 @@ export async function notifyDueSoon(data: {
     title: "Task Due Soon",
     message: `"${data.taskTitle}" is due on ${data.dueDate}`,
     taskId: data.taskId,
+    link: `/tasks/${data.taskId}`,
   })
 
   if (!prefs.taskDueSoon) return
@@ -264,6 +269,7 @@ export async function notifyProjectInvite(data: {
     title: "Project Invitation",
     message: `${data.invitedByName} invited you to "${data.projectName}"`,
     projectId: data.projectId,
+    link: `/projects/${data.projectId}`,
   })
 
   if (!prefs.projectInvite) return
@@ -317,6 +323,7 @@ export async function notifyStatusUpdate(data: {
       title: "Status Update",
       message: `${data.updatedByName} updated "${data.projectName}" status to ${data.status}`,
       projectId: data.projectId,
+      link: `/projects/${data.projectId}`,
     })
 
     if (!prefs.statusUpdate) continue
@@ -340,6 +347,70 @@ export async function notifyStatusUpdate(data: {
         `[NEXUS] ${data.updatedByName} updated "${data.projectName}" → ${data.status}`
       )
     }
+  }
+}
+
+export async function notifyTaskCompleted(data: {
+  taskId: string
+  taskTitle: string
+  projectId: string
+  projectName: string
+  completedByName: string
+  completedById: string
+}) {
+  // Notify all assignees + followers (except the person who completed it)
+  const [assignees, followers] = await Promise.all([
+    prisma.taskAssignee.findMany({ where: { taskId: data.taskId }, select: { userId: true } }),
+    prisma.taskFollower.findMany({ where: { taskId: data.taskId }, select: { userId: true } }),
+  ])
+
+  const recipientIds = new Set<string>()
+  for (const a of assignees) recipientIds.add(a.userId)
+  for (const f of followers) recipientIds.add(f.userId)
+  recipientIds.delete(data.completedById)
+
+  for (const userId of recipientIds) {
+    await createInAppNotification({
+      userId,
+      type: "task_completed",
+      title: "Task Completed",
+      message: `${data.completedByName} completed "${data.taskTitle}"`,
+      taskId: data.taskId,
+      projectId: data.projectId,
+      link: `/projects/${data.projectId}/tasks/${data.taskId}`,
+    })
+  }
+}
+
+export async function notifyCommentAdded(data: {
+  taskId: string
+  taskTitle: string
+  projectId: string
+  commentByName: string
+  commentById: string
+  commentSnippet: string
+}) {
+  // Notify all assignees + followers (except the commenter)
+  const [assignees, followers] = await Promise.all([
+    prisma.taskAssignee.findMany({ where: { taskId: data.taskId }, select: { userId: true } }),
+    prisma.taskFollower.findMany({ where: { taskId: data.taskId }, select: { userId: true } }),
+  ])
+
+  const recipientIds = new Set<string>()
+  for (const a of assignees) recipientIds.add(a.userId)
+  for (const f of followers) recipientIds.add(f.userId)
+  recipientIds.delete(data.commentById)
+
+  for (const userId of recipientIds) {
+    await createInAppNotification({
+      userId,
+      type: "comment_added",
+      title: "New Comment",
+      message: `${data.commentByName} commented on "${data.taskTitle}"`,
+      taskId: data.taskId,
+      projectId: data.projectId,
+      link: `/projects/${data.projectId}/tasks/${data.taskId}`,
+    })
   }
 }
 

@@ -6,6 +6,7 @@ import { checkProjectAccess } from "@/lib/rbac"
 import { executeAutomations } from "@/lib/automation-engine"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import { emitTaskUpdated, emitTaskDeleted } from "@/lib/socket-emitter"
+import { notifyTaskCompleted } from "@/lib/notification-service"
 
 export async function GET(
   _request: NextRequest,
@@ -24,6 +25,9 @@ export async function GET(
           orderBy: { createdAt: "asc" },
         },
         subtasks: {
+          include: {
+            assignees: { include: { user: { select: { id: true, name: true, avatar: true } } } },
+          },
           orderBy: { position: "asc" },
         },
         activityLogs: {
@@ -55,11 +59,11 @@ export async function PATCH(
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const body = await request.json()
-    const { title, description, status, priority, dueDate, tags, taskListId, position, assigneeIds } = body
+    const { title, description, status, priority, dueDate, tags, taskListId, position, assigneeIds, isRecurring, recurPattern, taskType } = body
 
     const existing = await prisma.task.findUnique({
       where: { id: params.taskId },
-      include: { taskList: true },
+      include: { taskList: true, assignees: { select: { userId: true } } },
     })
 
     if (!existing) {
@@ -82,6 +86,9 @@ export async function PATCH(
         ...(tags !== undefined && { tags }),
         ...(taskListId !== undefined && { taskListId }),
         ...(position !== undefined && { position }),
+        ...(isRecurring !== undefined && { isRecurring }),
+        ...(recurPattern !== undefined && { recurPattern }),
+        ...(taskType !== undefined && { taskType }),
       },
       include: {
         assignees: { include: { user: true } },
@@ -103,6 +110,60 @@ export async function PATCH(
           projectId: existing.taskList.projectId,
         },
       })
+    }
+
+    // Auto-create next occurrence for recurring tasks completed
+    if (status === "DONE" && existing.status !== "DONE" && existing.isRecurring && existing.recurPattern) {
+      const pattern = existing.recurPattern as { frequency: string; interval: number; daysOfWeek?: number[]; dayOfMonth?: number; endDate?: string }
+      const baseDate = existing.dueDate ? new Date(existing.dueDate) : new Date()
+      let nextDue: Date | null = null
+
+      switch (pattern.frequency) {
+        case "DAILY":
+          nextDue = new Date(baseDate)
+          nextDue.setDate(nextDue.getDate() + (pattern.interval || 1))
+          break
+        case "WEEKLY": {
+          nextDue = new Date(baseDate)
+          nextDue.setDate(nextDue.getDate() + 7 * (pattern.interval || 1))
+          break
+        }
+        case "MONTHLY": {
+          nextDue = new Date(baseDate)
+          nextDue.setMonth(nextDue.getMonth() + (pattern.interval || 1))
+          if (pattern.dayOfMonth) nextDue.setDate(pattern.dayOfMonth)
+          break
+        }
+        case "YEARLY":
+          nextDue = new Date(baseDate)
+          nextDue.setFullYear(nextDue.getFullYear() + (pattern.interval || 1))
+          break
+      }
+
+      if (nextDue && (!pattern.endDate || nextDue <= new Date(pattern.endDate))) {
+        const nextTask = await prisma.task.create({
+          data: {
+            title: existing.title,
+            description: existing.description,
+            priority: existing.priority,
+            tags: existing.tags,
+            taskType: existing.taskType,
+            taskListId: existing.taskListId,
+            creatorId: session.user.id!,
+            parentId: existing.parentId,
+            isRecurring: true,
+            recurPattern: existing.recurPattern as object,
+            dueDate: nextDue,
+            estimatedHours: existing.estimatedHours,
+          },
+        })
+        // Copy assignees to new task
+        if (existing.assignees.length > 0) {
+          await prisma.taskAssignee.createMany({
+            data: existing.assignees.map((a: { userId: string }) => ({ taskId: nextTask.id, userId: a.userId })),
+          })
+        }
+      }
     }
 
     logAudit({
@@ -132,6 +193,18 @@ export async function PATCH(
       }).catch(() => {})
     }
 
+    // Notify assignees + followers when task is completed
+    if (status === "DONE" && existing.status !== "DONE") {
+      notifyTaskCompleted({
+        taskId: params.taskId,
+        taskTitle: task.title,
+        projectId: existing.taskList.projectId,
+        projectName: existing.taskList.name || "",
+        completedByName: session.user.name || "Someone",
+        completedById: session.user.id!,
+      }).catch(() => {})
+    }
+
     // Webhook: task.updated (or task.completed if status → DONE)
     const webhookEvent = (status === "DONE" && existing.status !== "DONE") ? "task.completed" : "task.updated"
     dispatchWebhookEvent(webhookEvent, {
@@ -155,6 +228,15 @@ export async function PATCH(
             userId,
           })),
         })
+
+        // Auto-follow: assigned users follow the task
+        for (const userId of assigneeIds) {
+          await prisma.taskFollower.upsert({
+            where: { taskId_userId: { taskId: params.taskId, userId } },
+            create: { taskId: params.taskId, userId },
+            update: {},
+          })
+        }
       }
 
       const updatedTask = await prisma.task.findUnique({

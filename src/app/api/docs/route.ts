@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
+import { extractTextFromTipTap } from '@/lib/tiptap-utils'
 
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -34,6 +35,7 @@ export async function POST(req: NextRequest) {
     data: {
       title,
       content: content || null,
+      contentText: content ? extractTextFromTipTap(content) : null,
       projectId,
       authorId: session.user.id,
       ownerId: session.user.id,

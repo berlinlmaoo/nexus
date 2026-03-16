@@ -25,6 +25,11 @@ interface AutomationTrigger {
   value?: string
 }
 
+interface AutomationCondition {
+  type: string
+  value?: string
+}
+
 interface AutomationAction {
   type: string
   value?: string
@@ -70,6 +75,37 @@ function matchesTrigger(
       return triggerType === "TASK_CREATED"
     default:
       return false
+  }
+}
+
+async function matchesCondition(
+  condition: AutomationCondition | undefined,
+  context: AutomationContext
+): Promise<boolean> {
+  if (!condition || !condition.type) return true
+
+  const { taskId } = context
+  if (!taskId) return true
+
+  const task = await prisma.task.findUnique({
+    where: { id: taskId },
+    select: { priority: true, status: true, tags: true, assignees: { select: { userId: true } } },
+  })
+  if (!task) return false
+
+  switch (condition.type) {
+    case "PRIORITY_IS":
+      return task.priority === condition.value
+    case "STATUS_IS":
+      return task.status === condition.value
+    case "ASSIGNEE_IS":
+      return task.assignees.some((a: { userId: string }) => a.userId === condition.value)
+    case "TAGS_CONTAIN":
+      return (task.tags as string[]).some(
+        (t) => t.toLowerCase() === (condition.value ?? "").toLowerCase()
+      )
+    default:
+      return true
   }
 }
 
@@ -206,8 +242,11 @@ export async function executeAutomations(
     for (const automation of automations) {
       const trigger = automation.trigger as unknown as AutomationTrigger
       const action = automation.action as unknown as AutomationAction
+      // Condition is stored as a separate field on the automation record
+      const condition = (automation as unknown as { condition?: AutomationCondition }).condition
 
       if (!matchesTrigger(trigger, event, context)) continue
+      if (!(await matchesCondition(condition, context))) continue
 
       try {
         const result = await executeAction(action, context)

@@ -171,7 +171,27 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
   const [statusFilter, setStatusFilter] = useState<string>("ALL")
   const [priorityFilter, setPriorityFilter] = useState<string>("ALL")
   const [assigneeFilter, setAssigneeFilter] = useState<string>("ALL")
+  const [sprintFilter, setSprintFilter] = useState<string>("ALL")
   const [showFilters, setShowFilters] = useState(false)
+
+  // Sprints for filter
+  const [sprints, setSprints] = useState<{ id: string; name: string; status: string }[]>([])
+  const [sprintTaskMap, setSprintTaskMap] = useState<Record<string, Set<string>>>({})
+
+  useEffect(() => {
+    fetch(`/api/sprints?projectId=${project.id}`)
+      .then(res => res.ok ? res.json() : { sprints: [] })
+      .then(data => {
+        const sprintList = data.sprints || data || []
+        setSprints(sprintList)
+        const map: Record<string, Set<string>> = {}
+        for (const sprint of sprintList) {
+          map[sprint.id] = new Set((sprint.tasks || []).map((st: { taskId?: string; task?: { id: string } }) => st.taskId || st.task?.id))
+        }
+        setSprintTaskMap(map)
+      })
+      .catch(() => {})
+  }, [project.id])
 
   // Search
   const [searchQuery, setSearchQuery] = useState("")
@@ -235,6 +255,15 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
     if (statusFilter !== "ALL") tasks = tasks.filter(t => t.status === statusFilter)
     if (priorityFilter !== "ALL") tasks = tasks.filter(t => t.priority === priorityFilter)
     if (assigneeFilter !== "ALL") tasks = tasks.filter(t => t.assignees.some(a => a.id === assigneeFilter))
+    if (sprintFilter === "NONE") {
+      // Show tasks not in any sprint
+      const allSprintTaskIds = new Set<string>()
+      Object.values(sprintTaskMap).forEach(s => s.forEach(id => allSprintTaskIds.add(id)))
+      tasks = tasks.filter(t => !allSprintTaskIds.has(t.id))
+    } else if (sprintFilter !== "ALL") {
+      const sprintTasks = sprintTaskMap[sprintFilter]
+      if (sprintTasks) tasks = tasks.filter(t => sprintTasks.has(t.id))
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
       tasks = tasks.filter(t =>
@@ -264,7 +293,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
     })
 
     return tasks
-  }, [allTasks, statusFilter, priorityFilter, assigneeFilter, searchQuery, sortMode])
+  }, [allTasks, statusFilter, priorityFilter, assigneeFilter, sprintFilter, sprintTaskMap, searchQuery, sortMode])
 
   // Filtered sections for list view
   const filteredSections = useMemo(() =>
@@ -275,6 +304,14 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
         if (statusFilter !== "ALL" && t.status !== statusFilter) return false
         if (priorityFilter !== "ALL" && t.priority !== priorityFilter) return false
         if (assigneeFilter !== "ALL" && !t.assignees.some((a) => a.id === assigneeFilter)) return false
+        if (sprintFilter === "NONE") {
+          const allSprintTaskIds = new Set<string>()
+          Object.values(sprintTaskMap).forEach(s => s.forEach(id => allSprintTaskIds.add(id)))
+          if (allSprintTaskIds.has(t.id)) return false
+        } else if (sprintFilter !== "ALL") {
+          const sprintTasks = sprintTaskMap[sprintFilter]
+          if (sprintTasks && !sprintTasks.has(t.id)) return false
+        }
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase()
           if (!t.title.toLowerCase().includes(q) && !t.tags.some(tag => tag.toLowerCase().includes(q))) return false
@@ -282,13 +319,14 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
         return true
       }),
     })),
-    [project.taskLists, statusFilter, priorityFilter, assigneeFilter, searchQuery]
+    [project.taskLists, statusFilter, priorityFilter, assigneeFilter, sprintFilter, sprintTaskMap, searchQuery]
   )
 
   const activeFilterCount = [
     statusFilter !== "ALL",
     priorityFilter !== "ALL",
     assigneeFilter !== "ALL",
+    sprintFilter !== "ALL",
   ].filter(Boolean).length
 
   const handleTaskClick = useCallback((task: TaskCardData) => {
@@ -552,8 +590,18 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
               {project.members.map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}
             </select>
           </div>
+          {sprints.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-medium text-muted-foreground">Sprint:</span>
+              <select className="h-7 rounded border bg-background px-2 text-xs" value={sprintFilter} onChange={(e) => setSprintFilter(e.target.value)}>
+                <option value="ALL">All</option>
+                <option value="NONE">No Sprint</option>
+                {sprints.map((s) => (<option key={s.id} value={s.id}>{s.name}{s.status === "ACTIVE" ? " (Active)" : ""}</option>))}
+              </select>
+            </div>
+          )}
           {activeFilterCount > 0 && (
-            <button className="text-xs text-muted-foreground hover:text-foreground transition-colors" onClick={() => { setStatusFilter("ALL"); setPriorityFilter("ALL"); setAssigneeFilter("ALL") }}>
+            <button className="text-xs text-muted-foreground hover:text-foreground transition-colors" onClick={() => { setStatusFilter("ALL"); setPriorityFilter("ALL"); setAssigneeFilter("ALL"); setSprintFilter("ALL") }}>
               Clear
             </button>
           )}

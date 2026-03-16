@@ -38,6 +38,8 @@ model User {
   webhooks         Webhook[]
   inviteTokens     InviteToken[]
   portfolios       Portfolio[]
+  commentReactions CommentReaction[]
+  taskFollowing    TaskFollower[]
 }
 
 model Workspace {
@@ -48,11 +50,12 @@ model Workspace {
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
-  members    WorkspaceMember[]
-  projects   Project[]
-  goals      Goal[]
-  teams      Team[]
-  portfolios Portfolio[]
+  members      WorkspaceMember[]
+  projects     Project[]
+  goals        Goal[]
+  teams        Team[]
+  portfolios   Portfolio[]
+  docTemplates DocTemplate[]
 }
 
 model WorkspaceMember {
@@ -168,6 +171,7 @@ model Task {
   relationsFrom     TaskRelation[]   @relation("TaskRelationSource")
   relationsTo       TaskRelation[]   @relation("TaskRelationTarget")
   goalTasks         GoalTask[]
+  followers         TaskFollower[]
 }
 
 model TaskAssignee {
@@ -199,6 +203,35 @@ model Comment {
 
   task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  reactions CommentReaction[]
+}
+
+model CommentReaction {
+  id        String   @id @default(cuid())
+  emoji     String
+  createdAt DateTime @default(now())
+
+  commentId String
+  comment   Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId, emoji])
+}
+
+model TaskFollower {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  taskId    String
+  task      Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
 }
 
 model ActivityLog {
@@ -234,6 +267,10 @@ model Goal {
   ownerId String
   owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
+  parentId    String?
+  parent      Goal?    @relation("SubGoals", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Goal[]   @relation("SubGoals")
+
   milestones GoalMilestone[]
   goalProjects GoalProject[]
   goalTasks    GoalTask[]
@@ -268,11 +305,12 @@ model GoalTask {
 }
 
 model Doc {
-  id        String   @id @default(cuid())
-  title     String
-  content   Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  title       String
+  content     Json?
+  contentText String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // Wiki fields
   parentId           String?
@@ -336,11 +374,12 @@ model SprintTask {
 }
 
 model Automation {
-  id      String  @id @default(cuid())
-  name    String
-  trigger Json
-  action  Json
-  enabled Boolean @default(true)
+  id        String  @id @default(cuid())
+  name      String
+  trigger   Json
+  action    Json
+  condition Json?
+  enabled   Boolean @default(true)
 
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -390,6 +429,7 @@ model Notification {
   title     String
   message   String
   read      Boolean  @default(false)
+  link      String?
   createdAt DateTime @default(now())
 
   userId    String
@@ -797,4 +837,18 @@ model ImportJob {
   updatedAt DateTime @updatedAt
 
   userId    String
+}
+
+// ─── PHASE 3 MODELS ─────────────────────────────────────────
+
+model DocTemplate {
+  id          String   @id @default(cuid())
+  title       String
+  content     Json?
+  category    String   @default("general")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }
