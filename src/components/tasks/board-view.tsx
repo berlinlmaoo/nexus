@@ -10,7 +10,13 @@ import {
 import { UserAvatar } from "@/components/ui/user-avatar"
 import type { TaskCardData } from "./task-card"
 import { cn } from "@/lib/utils"
-import { Plus, Loader2, Calendar } from "lucide-react"
+import { Plus, Loader2, Calendar, MoreHorizontal, Pencil, Trash2, GripVertical } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { useRouter } from "next/navigation"
 import { format, isPast, isToday } from "date-fns"
 import { StatusBadge } from "./status-badge"
@@ -53,6 +59,14 @@ export function BoardView({
   const [newTitle, setNewTitle] = useState("")
   const [creating, setCreating] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const [renamingColumn, setRenamingColumn] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState("")
+  const [showAddSection, setShowAddSection] = useState(false)
+  const [addingSectionName, setAddingSectionName] = useState("")
+  const [creatingSec, setCreatingSec] = useState(false)
+  const [deletingColumn, setDeletingColumn] = useState<string | null>(null)
+  const sectionInputRef = useRef<HTMLInputElement>(null)
+  const renameInputRef = useRef<HTMLInputElement>(null)
 
   // Use sections as columns (Asana-style)
   const columns = sections || []
@@ -102,6 +116,73 @@ export function BoardView({
     setTimeout(() => inputRef.current?.focus(), 50)
   }
 
+  const handleCreateSection = async () => {
+    if (!addingSectionName.trim() || !projectId) return
+    setCreatingSec(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/sections`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: addingSectionName.trim() }),
+      })
+      if (res.ok) {
+        setAddingSectionName("")
+        setShowAddSection(false)
+        router.refresh()
+      }
+    } catch (error) {
+      console.error("Failed to create section:", error)
+    } finally {
+      setCreatingSec(false)
+    }
+  }
+
+  const handleRenameColumn = async (columnId: string) => {
+    if (!renameValue.trim() || !projectId) return
+    try {
+      await fetch(`/api/projects/${projectId}/sections`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: columnId, name: renameValue.trim() }),
+      })
+      setRenamingColumn(null)
+      router.refresh()
+    } catch (error) {
+      console.error("Failed to rename section:", error)
+    }
+  }
+
+  const handleDeleteColumn = async (columnId: string) => {
+    if (!projectId) return
+    setDeletingColumn(columnId)
+    try {
+      await fetch(`/api/projects/${projectId}/sections`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: columnId }),
+      })
+      router.refresh()
+    } catch (error) {
+      console.error("Failed to delete section:", error)
+    } finally {
+      setDeletingColumn(null)
+    }
+  }
+
+  const handleReorderColumn = async (columnId: string, newPosition: number) => {
+    if (!projectId) return
+    try {
+      await fetch(`/api/projects/${projectId}/sections`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: columnId, position: newPosition }),
+      })
+      router.refresh()
+    } catch (error) {
+      console.error("Failed to reorder section:", error)
+    }
+  }
+
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
       <div className="flex gap-3 overflow-x-auto pb-4">
@@ -111,13 +192,100 @@ export function BoardView({
             className="flex-shrink-0 w-72 flex flex-col"
           >
             {/* Column header */}
-            <div className="flex items-center justify-between mb-2 px-1">
-              <div className="flex items-center gap-2">
-                <h3 className="text-[13px] font-semibold text-foreground">{column.name}</h3>
-                <span className="text-[11px] text-muted-foreground tabular-nums">
-                  {column.tasks.length}
-                </span>
+            <div className="group/col flex items-center justify-between mb-2 px-1">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                {/* Reorder arrows */}
+                {projectId && columns.length > 1 && (
+                  <div className="flex flex-col opacity-0 group-hover/col:opacity-100 transition-opacity">
+                    {columns.indexOf(column) > 0 && (
+                      <button
+                        className="text-muted-foreground/40 hover:text-muted-foreground p-0"
+                        onClick={() => handleReorderColumn(column.id, columns.indexOf(column) - 1)}
+                        title="Move left"
+                      >
+                        <GripVertical className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {renamingColumn === column.id ? (
+                  <input
+                    ref={renameInputRef}
+                    type="text"
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleRenameColumn(column.id)
+                      if (e.key === "Escape") setRenamingColumn(null)
+                    }}
+                    onBlur={() => {
+                      if (renameValue.trim()) handleRenameColumn(column.id)
+                      else setRenamingColumn(null)
+                    }}
+                    className="text-[13px] font-semibold bg-transparent outline-none border-b border-foreground/30 px-0.5 min-w-0"
+                    autoFocus
+                  />
+                ) : (
+                  <>
+                    <h3 className="text-[13px] font-semibold text-foreground truncate">{column.name}</h3>
+                    <span className="text-[11px] text-muted-foreground tabular-nums">
+                      {column.tasks.length}
+                    </span>
+                  </>
+                )}
               </div>
+
+              {/* Column context menu */}
+              {projectId && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="opacity-0 group-hover/col:opacity-100 p-1 rounded hover:bg-muted/60 transition-opacity text-muted-foreground shrink-0">
+                      <MoreHorizontal className="h-3.5 w-3.5" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setRenamingColumn(column.id)
+                        setRenameValue(column.name)
+                        setTimeout(() => renameInputRef.current?.focus(), 50)
+                      }}
+                    >
+                      <Pencil className="h-3.5 w-3.5 mr-2" />
+                      Rename Section
+                    </DropdownMenuItem>
+                    {columns.indexOf(column) > 0 && (
+                      <DropdownMenuItem
+                        onClick={() => handleReorderColumn(column.id, columns.indexOf(column) - 1)}
+                      >
+                        Move Left
+                      </DropdownMenuItem>
+                    )}
+                    {columns.indexOf(column) < columns.length - 1 && (
+                      <DropdownMenuItem
+                        onClick={() => handleReorderColumn(column.id, columns.indexOf(column) + 1)}
+                      >
+                        Move Right
+                      </DropdownMenuItem>
+                    )}
+                    {columns.length > 1 && (
+                      <DropdownMenuItem
+                        className="text-red-600 focus:text-red-600"
+                        disabled={deletingColumn === column.id}
+                        onClick={() => {
+                          if (confirm(`Delete "${column.name}"? Tasks will be moved to the first remaining section.`)) {
+                            handleDeleteColumn(column.id)
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-2" />
+                        Delete Section
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
 
             {/* Droppable area */}
@@ -256,6 +424,47 @@ export function BoardView({
             </Droppable>
           </div>
         ))}
+        {/* Add Section column */}
+        {projectId && (
+          <div className="flex-shrink-0 w-72 flex flex-col">
+            {showAddSection ? (
+              <div className="rounded-lg border bg-white dark:bg-zinc-900 p-2.5">
+                <input
+                  ref={sectionInputRef}
+                  type="text"
+                  placeholder="Section name..."
+                  value={addingSectionName}
+                  onChange={(e) => setAddingSectionName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && addingSectionName.trim()) handleCreateSection()
+                    if (e.key === "Escape") { setShowAddSection(false); setAddingSectionName("") }
+                  }}
+                  onBlur={() => { if (!addingSectionName.trim()) setShowAddSection(false) }}
+                  disabled={creatingSec}
+                  className="w-full text-[13px] font-semibold bg-transparent outline-none placeholder:text-muted-foreground/50"
+                  autoFocus
+                />
+                {creatingSec && (
+                  <div className="flex items-center gap-1 mt-1.5 text-[11px] text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Creating...
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setShowAddSection(true)
+                  setAddingSectionName("")
+                  setTimeout(() => sectionInputRef.current?.focus(), 50)
+                }}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/30 transition-colors border border-dashed border-border/50"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Section
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </DragDropContext>
   )
