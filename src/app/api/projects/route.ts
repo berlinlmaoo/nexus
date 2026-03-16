@@ -110,10 +110,7 @@ export async function POST(request: NextRequest) {
         },
         pages: {
           create: [
-            { name: "Tasks", icon: "💻", pageType: "tasks", position: 0 },
-            { name: "Calendar", icon: "📅", pageType: "calendar", position: 1 },
-            { name: "Documents", icon: "📁", pageType: "documents", position: 2 },
-            { name: "To Do List", icon: "⭐", pageType: "todo", position: 3 },
+
           ],
         },
       },
