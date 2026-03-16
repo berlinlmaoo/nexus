@@ -202,9 +202,9 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
   const hasUploadedIcon = isUploadedIcon(selectedIcon)
 
   return (
-    <div className="animate-fade-in">
-      {/* Cover — completely hidden */}
-      <div className="hidden">
+    <div className="space-y-4 animate-fade-in">
+      {/* Cover gradient */}
+      <div className={cn("relative h-32 rounded-xl bg-gradient-to-r overflow-hidden transition-all duration-500", coverGradient)}>
         <button
           onClick={() => setShowCoverPicker(!showCoverPicker)}
           className="absolute top-3 right-3 flex items-center gap-1.5 rounded-md bg-black/30 px-2.5 py-1.5 text-xs text-white/80 hover:bg-black/50 hover:text-white transition-all duration-200 backdrop-blur-sm"
@@ -234,7 +234,7 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
       </div>
 
       {/* Project info row */}
-      <div className="flex items-start gap-4 ml-2 pt-3 relative z-10">
+      <div className="flex items-start gap-4 -mt-8 ml-6 relative z-10">
         {/* Icon */}
         <div className="relative">
           <button
