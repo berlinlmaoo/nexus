@@ -80,7 +80,7 @@ export function RecentActivityWidget({ data }: RecentActivityWidgetProps) {
           No recent activity
         </p>
       ) : (
-        <ScrollArea className="h-[320px]">
+        <ScrollArea className="max-h-[320px] overflow-y-auto">
           <div className="space-y-0.5 pr-3">
             {(() => {
               // Group identical consecutive entries (same action + same task within 1 hour)
@@ -156,6 +156,16 @@ export function RecentActivityWidget({ data }: RecentActivityWidgetProps) {
             })}
           </div>
         </ScrollArea>
+      )}
+      {activity.length > 5 && (
+        <div className="pt-1 text-center border-t border-border/40">
+          <a
+            href="/activity"
+            className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+          >
+            View all activity
+          </a>
+        </div>
       )}
     </div>
   )

@@ -38,7 +38,7 @@ export async function GET() {
           userId,
           task: {
             status: { notIn: ["DONE", "CANCELLED"] },
-            dueDate: { lt: now },
+            dueDate: { not: null, lt: now },
           },
         },
       }),

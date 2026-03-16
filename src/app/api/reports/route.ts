@@ -88,6 +88,7 @@ export async function GET(request: NextRequest) {
       where: taskBaseWhere,
       select: {
         status: true,
+        dueDate: true,
         assignees: {
           select: {
             user: { select: { id: true, name: true, avatar: true } },
@@ -274,7 +275,7 @@ export async function GET(request: NextRequest) {
     const totalTaskCount = allTasks.length
     const completedCount = allTasks.filter((t) => t.status === 'DONE').length
     const overdueCount = allTasks.filter(
-      (t) => t.status !== 'DONE' && t.status !== 'CANCELLED'
+      (t) => t.status !== 'DONE' && t.status !== 'CANCELLED' && t.dueDate != null && t.dueDate < now
     ).length
 
     // Previous period for trend comparison
@@ -303,12 +304,15 @@ export async function GET(request: NextRequest) {
     })
 
     const avgCompletionTime = completedWithDates.length > 0
-      ? Math.round(
-          (completedWithDates.reduce(
-            (sum, t) => sum + (t.updatedAt.getTime() - t.createdAt.getTime()) / (1000 * 60 * 60 * 24),
-            0
-          ) / completedWithDates.length) * 10
-        ) / 10
+      ? Math.max(
+          0.1,
+          Math.round(
+            (completedWithDates.reduce(
+              (sum, t) => sum + (t.updatedAt.getTime() - t.createdAt.getTime()) / (1000 * 60 * 60 * 24),
+              0
+            ) / completedWithDates.length) * 10
+          ) / 10
+        )
       : 0
 
     return NextResponse.json({
