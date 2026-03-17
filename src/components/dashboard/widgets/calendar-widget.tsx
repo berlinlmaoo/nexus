@@ -9,13 +9,11 @@ import {
   eachDayOfInterval,
   format,
   isSameMonth,
-  isSameDay,
   isToday,
   addMonths,
   subMonths,
 } from "date-fns"
-import { ChevronLeft, ChevronRight, Calendar } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface CalendarTask {
@@ -33,7 +31,7 @@ interface CalendarWidgetProps {
   }
 }
 
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+const WEEKDAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"]
 
 export function CalendarWidget({ data }: CalendarWidgetProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date())
@@ -60,57 +58,48 @@ export function CalendarWidget({ data }: CalendarWidgetProps) {
   }, [currentMonth])
 
   return (
-    <div className="flex flex-col h-full w-full min-w-0 overflow-x-hidden">
-      {/* Header with nav */}
-      <div className="flex items-center justify-between flex-shrink-0 mb-2">
-        <div className="flex items-center gap-1.5">
-          <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-sm font-medium">
-            {format(currentMonth, "MMMM yyyy")}
-          </span>
-        </div>
-        <div className="flex items-center gap-0.5">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
+    <div className="flex flex-col h-full w-full pr-0.5">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-shrink-0 mb-1.5">
+        <span className="text-xs font-semibold">
+          {format(currentMonth, "MMM yyyy")}
+        </span>
+        <div className="flex items-center">
+          <button
+            className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted transition-colors"
             onClick={() => setCurrentMonth((m) => subMonths(m, 1))}
           >
-            <ChevronLeft className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
+            <ChevronLeft className="h-3 w-3" />
+          </button>
+          <button
+            className="h-5 px-1 flex items-center justify-center rounded hover:bg-muted transition-colors text-[9px] font-medium text-muted-foreground"
             onClick={() => setCurrentMonth(new Date())}
           >
-            <span className="text-[10px] font-medium">Today</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
+            Today
+          </button>
+          <button
+            className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted transition-colors"
             onClick={() => setCurrentMonth((m) => addMonths(m, 1))}
           >
-            <ChevronRight className="h-3.5 w-3.5" />
-          </Button>
+            <ChevronRight className="h-3 w-3" />
+          </button>
         </div>
       </div>
 
-      {/* Weekday headers */}
-      <div className="grid grid-cols-7 gap-0 flex-shrink-0 w-full">
-        {WEEKDAYS.map((day) => (
+      {/* Weekday headers — single letters */}
+      <div className="grid grid-cols-7 flex-shrink-0">
+        {WEEKDAY_LETTERS.map((letter, i) => (
           <div
-            key={day}
-            className="text-center text-[10px] font-medium text-muted-foreground py-1 truncate px-0.5"
+            key={i}
+            className="text-center text-[9px] font-medium text-muted-foreground/70 py-0.5"
           >
-            {day}
+            {letter}
           </div>
         ))}
       </div>
 
-      {/* Day grid — fills remaining space */}
-      <div className="grid grid-cols-7 flex-1 auto-rows-fr min-w-0 w-full">
+      {/* Day grid */}
+      <div className="grid grid-cols-7 flex-1 auto-rows-fr">
         {calendarDays.map((day) => {
           const dateKey = format(day, "yyyy-MM-dd")
           const dayTasks = tasksByDate.get(dateKey) ?? []
@@ -121,22 +110,21 @@ export function CalendarWidget({ data }: CalendarWidgetProps) {
             <div
               key={dateKey}
               className={cn(
-                "relative flex flex-col items-center justify-center p-0.5",
+                "flex flex-col items-center justify-center",
                 !inCurrentMonth && "opacity-20"
               )}
             >
               <span
                 className={cn(
-                  "text-xs leading-none w-6 h-6 flex items-center justify-center rounded-full",
+                  "text-[11px] leading-none w-5 h-5 flex items-center justify-center rounded-full",
                   today && "bg-foreground text-background font-bold",
                   !today && "text-muted-foreground"
                 )}
               >
                 {format(day, "d")}
               </span>
-              {/* Task dots */}
               {dayTasks.length > 0 && (
-                <div className="flex items-center gap-0.5 mt-0.5">
+                <div className="flex items-center gap-px mt-px">
                   {dayTasks.slice(0, 3).map((task, i) => (
                     <span
                       key={task.id ?? i}
@@ -146,9 +134,6 @@ export function CalendarWidget({ data }: CalendarWidgetProps) {
                       }}
                     />
                   ))}
-                  {dayTasks.length > 3 && (
-                    <span className="h-1 w-1 rounded-full bg-muted-foreground/40" />
-                  )}
                 </div>
               )}
             </div>

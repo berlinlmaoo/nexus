@@ -200,7 +200,7 @@ export function SettingsClient({ user, workspace, isAdmin, workspaceRole }: Sett
   ]
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 min-w-0">
+    <div className="mx-auto max-w-4xl space-y-6 min-w-0">
       <div>
         <h1 className="text-2xl font-bold">Settings</h1>
         <p className="text-muted-foreground">Manage your account and workspace</p>

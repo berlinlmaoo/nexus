@@ -326,20 +326,7 @@ export function BoardView({
                               )}
                               onClick={() => onTaskClick(task)}
                             >
-                              {/* Status badge */}
-                              <div className="flex items-center gap-1.5 mb-1.5">
-                                <span className={cn(
-                                  "inline-block h-2 w-2 rounded-full",
-                                  task.status === "DONE" ? "bg-green-500" :
-                                  task.status === "IN_PROGRESS" ? "bg-blue-500" :
-                                  task.status === "IN_REVIEW" ? "bg-yellow-500" :
-                                  task.status === "CANCELLED" ? "bg-red-500" :
-                                  "bg-zinc-400"
-                                )} />
-                                <span className="text-[10px] text-muted-foreground uppercase tracking-wide">
-                                  {task.status.replace("_", " ")}
-                                </span>
-                              </div>
+                              {/* Spacer — status badge removed (card is already in correct column) */}
 
                               {/* Task name */}
                               <p className="text-[13px] font-medium text-foreground leading-snug line-clamp-2">
@@ -363,7 +350,7 @@ export function BoardView({
                                   {task.priority !== "NONE" && PRIORITY_COLORS[task.priority] && (
                                     <span className="inline-flex items-center gap-1">
                                       <span className={cn("h-2 w-2 rounded-full", PRIORITY_COLORS[task.priority])} />
-                                      <span className="text-[10px] text-muted-foreground">{task.priority}</span>
+                                      <span className="text-[10px] text-muted-foreground capitalize">{task.priority.charAt(0) + task.priority.slice(1).toLowerCase()}</span>
                                     </span>
                                   )}
                                 </div>
