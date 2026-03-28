@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
+import { checkWorkspaceAccess } from '@/lib/workspace-scope'
 
 export async function GET(req: NextRequest) {
   try {
@@ -49,6 +50,10 @@ export async function POST(req: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const { title, description, dueDate, workspaceId, parentId } = await req.json()
     if (!title || !workspaceId) return NextResponse.json({ error: 'Title and workspaceId required' }, { status: 400 })
+
+    const { allowed } = await checkWorkspaceAccess(session.user.id, workspaceId)
+    if (!allowed) return NextResponse.json({ error: 'Forbidden: not a member of this workspace' }, { status: 403 })
+
     const goal = await prisma.goal.create({
       data: { title, description: description || null, dueDate: dueDate ? new Date(dueDate) : null, workspaceId, ownerId: session.user.id, parentId: parentId || null },
       include: { owner: { select: { id: true, name: true, avatar: true } }, milestones: true },

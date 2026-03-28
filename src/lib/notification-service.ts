@@ -8,8 +8,26 @@ import {
   projectInviteEmail,
   statusUpdateEmail,
 } from "@/lib/email"
+import { createLogger } from "@/lib/logger"
+
+const log = createLogger("notifications")
 
 // ── Helpers ─────────────────────────────────────────────────────
+
+const DEFAULT_PREFS = {
+  emailEnabled: true,
+  waEnabled: false,
+  slackEnabled: false,
+  waPhone: null as string | null,
+  slackWebhook: null as string | null,
+  taskAssigned: true,
+  taskDueSoon: true,
+  commentMention: true,
+  projectInvite: true,
+  statusUpdate: true,
+}
+
+type NotifPrefs = typeof DEFAULT_PREFS
 
 async function isUserDnd(userId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({
@@ -20,29 +38,64 @@ async function isUserDnd(userId: string): Promise<boolean> {
   return new Date(user.dndUntil) > new Date()
 }
 
-async function getUserPrefs(userId: string) {
+async function getUserPrefs(userId: string): Promise<NotifPrefs> {
   const pref = await prisma.notificationPreference.findUnique({
     where: { userId },
   })
-  // Default: everything enabled for email, disabled for WA/Slack
   return {
-    emailEnabled: pref?.emailEnabled ?? true,
-    waEnabled: pref?.waEnabled ?? false,
-    slackEnabled: pref?.slackEnabled ?? false,
-    waPhone: pref?.waPhone ?? null,
-    slackWebhook: pref?.slackWebhook ?? null,
-    taskAssigned: pref?.taskAssigned ?? true,
-    taskDueSoon: pref?.taskDueSoon ?? true,
-    commentMention: pref?.commentMention ?? true,
-    projectInvite: pref?.projectInvite ?? true,
-    statusUpdate: pref?.statusUpdate ?? true,
+    emailEnabled: pref?.emailEnabled ?? DEFAULT_PREFS.emailEnabled,
+    waEnabled: pref?.waEnabled ?? DEFAULT_PREFS.waEnabled,
+    slackEnabled: pref?.slackEnabled ?? DEFAULT_PREFS.slackEnabled,
+    waPhone: pref?.waPhone ?? DEFAULT_PREFS.waPhone,
+    slackWebhook: pref?.slackWebhook ?? DEFAULT_PREFS.slackWebhook,
+    taskAssigned: pref?.taskAssigned ?? DEFAULT_PREFS.taskAssigned,
+    taskDueSoon: pref?.taskDueSoon ?? DEFAULT_PREFS.taskDueSoon,
+    commentMention: pref?.commentMention ?? DEFAULT_PREFS.commentMention,
+    projectInvite: pref?.projectInvite ?? DEFAULT_PREFS.projectInvite,
+    statusUpdate: pref?.statusUpdate ?? DEFAULT_PREFS.statusUpdate,
   }
+}
+
+/** Batch-fetch DND status for multiple users in a single query */
+async function getBatchDndStatus(userIds: string[]): Promise<Set<string>> {
+  if (userIds.length === 0) return new Set()
+  const now = new Date()
+  const dndUsers = await prisma.user.findMany({
+    where: { id: { in: userIds }, dndUntil: { gt: now } },
+    select: { id: true },
+  })
+  return new Set(dndUsers.map((u) => u.id))
+}
+
+/** Batch-fetch notification prefs for multiple users in a single query */
+async function getBatchPrefs(userIds: string[]): Promise<Map<string, NotifPrefs>> {
+  if (userIds.length === 0) return new Map()
+  const prefs = await prisma.notificationPreference.findMany({
+    where: { userId: { in: userIds } },
+  })
+  const map = new Map<string, NotifPrefs>()
+  for (const userId of userIds) {
+    const pref = prefs.find((p) => p.userId === userId)
+    map.set(userId, {
+      emailEnabled: pref?.emailEnabled ?? DEFAULT_PREFS.emailEnabled,
+      waEnabled: pref?.waEnabled ?? DEFAULT_PREFS.waEnabled,
+      slackEnabled: pref?.slackEnabled ?? DEFAULT_PREFS.slackEnabled,
+      waPhone: pref?.waPhone ?? DEFAULT_PREFS.waPhone,
+      slackWebhook: pref?.slackWebhook ?? DEFAULT_PREFS.slackWebhook,
+      taskAssigned: pref?.taskAssigned ?? DEFAULT_PREFS.taskAssigned,
+      taskDueSoon: pref?.taskDueSoon ?? DEFAULT_PREFS.taskDueSoon,
+      commentMention: pref?.commentMention ?? DEFAULT_PREFS.commentMention,
+      projectInvite: pref?.projectInvite ?? DEFAULT_PREFS.projectInvite,
+      statusUpdate: pref?.statusUpdate ?? DEFAULT_PREFS.statusUpdate,
+    })
+  }
+  return map
 }
 
 async function sendWA(phone: string, message: string) {
   const webhookUrl = process.env.WA_WEBHOOK_URL
   if (!webhookUrl) {
-    console.log("[WA] Webhook not configured. Message:", message)
+    log.warn("WA webhook not configured", { message })
     return
   }
   try {
@@ -51,9 +104,9 @@ async function sendWA(phone: string, message: string) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ phone, message }),
     })
-    console.log("[WA] Sent to", phone)
+    log.info("WA message sent", { phone })
   } catch (error) {
-    console.error("[WA] Failed:", error)
+    log.error("WA delivery failed", { error: String(error) })
   }
 }
 
@@ -64,9 +117,9 @@ async function sendSlack(webhookUrl: string, message: string) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text: message }),
     })
-    console.log("[SLACK] Sent")
+    log.info("Slack message sent")
   } catch (error) {
-    console.error("[SLACK] Failed:", error)
+    log.error("Slack delivery failed", { error: String(error) })
   }
 }
 
@@ -333,17 +386,21 @@ export async function notifyStatusUpdate(data: {
   status: string
   summary: string
 }) {
-  // Notify all project members
   const members = await prisma.projectMember.findMany({
     where: { projectId: data.projectId },
     include: { user: { select: { id: true, name: true, email: true } } },
   })
 
-  for (const member of members) {
-    // Skip if user has DND active
-    if (await isUserDnd(member.userId)) continue
+  const userIds = members.map((m) => m.userId)
+  const [dndSet, prefsMap] = await Promise.all([
+    getBatchDndStatus(userIds),
+    getBatchPrefs(userIds),
+  ])
 
-    const prefs = await getUserPrefs(member.userId)
+  for (const member of members) {
+    if (dndSet.has(member.userId)) continue
+
+    const prefs = prefsMap.get(member.userId) ?? DEFAULT_PREFS
 
     await createInAppNotification({
       userId: member.userId,
@@ -386,7 +443,6 @@ export async function notifyTaskCompleted(data: {
   completedByName: string
   completedById: string
 }) {
-  // Notify all assignees + followers (except the person who completed it)
   const [assignees, followers] = await Promise.all([
     prisma.taskAssignee.findMany({ where: { taskId: data.taskId }, select: { userId: true } }),
     prisma.taskFollower.findMany({ where: { taskId: data.taskId }, select: { userId: true } }),
@@ -397,9 +453,11 @@ export async function notifyTaskCompleted(data: {
   for (const f of followers) recipientIds.add(f.userId)
   recipientIds.delete(data.completedById)
 
-  for (const userId of Array.from(recipientIds)) {
-    // Skip if user has DND active
-    if (await isUserDnd(userId)) continue
+  const userIds = Array.from(recipientIds)
+  const dndSet = await getBatchDndStatus(userIds)
+
+  for (const userId of userIds) {
+    if (dndSet.has(userId)) continue
 
     await createInAppNotification({
       userId,
@@ -421,7 +479,6 @@ export async function notifyCommentAdded(data: {
   commentById: string
   commentSnippet: string
 }) {
-  // Notify all assignees + followers (except the commenter)
   const [assignees, followers] = await Promise.all([
     prisma.taskAssignee.findMany({ where: { taskId: data.taskId }, select: { userId: true } }),
     prisma.taskFollower.findMany({ where: { taskId: data.taskId }, select: { userId: true } }),
@@ -432,9 +489,11 @@ export async function notifyCommentAdded(data: {
   for (const f of followers) recipientIds.add(f.userId)
   recipientIds.delete(data.commentById)
 
-  for (const userId of Array.from(recipientIds)) {
-    // Skip if user has DND active
-    if (await isUserDnd(userId)) continue
+  const userIds = Array.from(recipientIds)
+  const dndSet = await getBatchDndStatus(userIds)
+
+  for (const userId of userIds) {
+    if (dndSet.has(userId)) continue
 
     await createInAppNotification({
       userId,

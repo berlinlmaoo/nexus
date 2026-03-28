@@ -4,9 +4,21 @@
   "private": true,
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0",
+    "dev:3001": "NEXT_TELEMETRY_DISABLED=1 WATCHPACK_POLLING=true next dev -p 3001 --hostname 127.0.0.1",
+    "dev:3001:turbo": "NEXT_TELEMETRY_DISABLED=1 WATCHPACK_POLLING=true next dev --turbo -p 3001 --hostname 127.0.0.1",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:prod": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
@@ -30,6 +42,7 @@
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
+    "@socket.io/redis-adapter": "^8.3.0",
     "@tiptap/extension-placeholder": "^3.20.1",
     "@tiptap/react": "^3.20.1",
     "@tiptap/starter-kit": "^3.20.1",
@@ -43,9 +56,10 @@
     "framer-motion": "^12.36.0",
     "googleapis": "^171.4.0",
     "highlight.js": "^11.11.1",
+    "ioredis": "^5.10.1",
     "jspdf": "^4.2.0",
     "lucide-react": "^0.577.0",
-    "next": "14.2.35",
+    "next": "^14.2.35",
     "next-auth": "^5.0.0-beta.25",
     "nodemailer": "^8.0.2",
     "nprogress": "^0.2.0",
@@ -60,18 +74,25 @@
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
     "tailwindcss-animate": "^1.0.7",
+    "zod": "^4.3.6",
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "@vitejs/plugin-react": "^6.0.1",
     "eslint": "^8",
     "eslint-config-next": "14.2.35",
+    "jsdom": "^29.0.1",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "tsx": "^4.21.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.2"
   }
 }

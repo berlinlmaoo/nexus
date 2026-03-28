@@ -10,7 +10,13 @@ export async function GET() {
     const user = session?.user
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    // Workspace isolation: only return teams from workspaces the user belongs to
     const teams = await prisma.team.findMany({
+      where: {
+        workspace: {
+          members: { some: { userId: user.id } },
+        },
+      },
       include: {
         members: {
           include: {

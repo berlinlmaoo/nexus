@@ -7,6 +7,8 @@ import { executeAutomations } from "@/lib/automation-engine"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import { emitTaskUpdated, emitTaskDeleted } from "@/lib/socket-emitter"
 import { notifyTaskCompleted } from "@/lib/notification-service"
+import { updateTaskSchema, validateBody } from "@/lib/validations"
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit"
 
 export async function GET(
   _request: NextRequest,
@@ -77,8 +79,14 @@ export async function PATCH(
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
+    const { allowed: rlAllowed, resetAt } = checkRateLimit(request, session.user.id!, { limit: 60, windowSeconds: 60 })
+    if (!rlAllowed) return rateLimitResponse(resetAt)
+
     const body = await request.json()
-    const { title, description, status, priority, dueDate, tags, taskListId, position, assigneeIds, isRecurring, recurPattern, taskType } = body
+    const validation = validateBody(updateTaskSchema, body)
+    if (!validation.success) return validation.error
+
+    const { title, description, status, priority, dueDate, tags, taskListId, position, assigneeIds, isRecurring, recurPattern, taskType } = validation.data
 
     const existing = await prisma.task.findUnique({
       where: { id: params.taskId },
@@ -94,21 +102,22 @@ export async function PATCH(
       return NextResponse.json({ error: "Forbidden: MEMBER role or higher required to update tasks" }, { status: 403 })
     }
 
+    const updateData: Record<string, unknown> = {}
+    if (title !== undefined) updateData.title = title
+    if (description !== undefined) updateData.description = description
+    if (status !== undefined) updateData.status = status
+    if (priority !== undefined) updateData.priority = priority
+    if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null
+    if (tags !== undefined) updateData.tags = tags
+    if (taskListId !== undefined) updateData.taskListId = taskListId
+    if (position !== undefined) updateData.position = position
+    if (isRecurring !== undefined) updateData.isRecurring = isRecurring
+    if (recurPattern !== undefined) updateData.recurPattern = recurPattern
+    if (taskType !== undefined) updateData.taskType = taskType
+
     const task = await prisma.task.update({
       where: { id: params.taskId },
-      data: {
-        ...(title !== undefined && { title }),
-        ...(description !== undefined && { description }),
-        ...(status !== undefined && { status }),
-        ...(priority !== undefined && { priority }),
-        ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
-        ...(tags !== undefined && { tags }),
-        ...(taskListId !== undefined && { taskListId }),
-        ...(position !== undefined && { position }),
-        ...(isRecurring !== undefined && { isRecurring }),
-        ...(recurPattern !== undefined && { recurPattern }),
-        ...(taskType !== undefined && { taskType }),
-      },
+      data: updateData,
       include: {
         assignees: { include: { user: true } },
         creator: true,

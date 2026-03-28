@@ -186,6 +186,11 @@ model Task {
   taskProjects      TaskProject[]
 
   @@index([parentId])
+  @@index([taskListId])
+  @@index([creatorId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([priority])
 }
 
 model TaskAssignee {
