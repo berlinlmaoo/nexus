@@ -1,6 +1,9 @@
 import prisma from '@/lib/prisma'
 import type { InputJsonValue } from '@prisma/client/runtime/client'
 import { NextRequest } from 'next/server'
+import { createLogger } from '@/lib/logger'
+
+const log = createLogger('audit')
 
 interface AuditLogParams {
   action: string
@@ -47,7 +50,7 @@ export async function logAudit({
       },
     })
   } catch (error) {
-    console.error('Audit log error:', error)
+    log.error('Audit log write failed', { error: String(error) })
   }
 }
 
@@ -90,6 +93,6 @@ export async function logAuditBatch(
       })),
     })
   } catch (error) {
-    console.error('Batch audit log error:', error)
+    log.error('Batch audit log write failed', { error: String(error) })
   }
 }

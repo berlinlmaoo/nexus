@@ -3,6 +3,10 @@ import type { NextApiRequest, NextApiResponse } from "next"
 import type { Server as HTTPServer } from "http"
 import type { Socket as NetSocket } from "net"
 import { eventBus, BUS_EVENTS } from "@/lib/event-bus"
+import { getToken } from "next-auth/jwt"
+import { createLogger } from "@/lib/logger"
+
+const log = createLogger("socket")
 
 interface SocketServer extends HTTPServer {
   io?: IOServer
@@ -16,23 +20,40 @@ interface NextApiResponseWithSocket extends NextApiResponse {
   socket: SocketWithIO
 }
 
+const ALLOWED_ORIGINS = [
+  process.env.NEXTAUTH_URL || "http://localhost:3000",
+  process.env.NEXT_PUBLIC_APP_URL,
+].filter(Boolean) as string[]
+
 export default function handler(
   _req: NextApiRequest,
   res: NextApiResponseWithSocket
 ) {
   if (res.socket.server.io) {
-    console.log("[SOCKET] Already running")
     res.end()
     return
   }
 
-  console.log("[SOCKET] Initializing Socket.IO server...")
   const io = new IOServer(res.socket.server as unknown as HTTPServer, {
     path: "/api/socket",
     addTrailingSlash: false,
-    cors: { origin: "*", methods: ["GET", "POST"] },
+    cors: { origin: ALLOWED_ORIGINS, methods: ["GET", "POST"], credentials: true },
     transports: ["polling", "websocket"],
   })
+
+  // Redis adapter for horizontal scaling (optional)
+  if (process.env.REDIS_URL) {
+    import("@socket.io/redis-adapter").then(({ createAdapter }) => {
+      import("ioredis").then(({ default: Redis }) => {
+        const pubClient = new Redis(process.env.REDIS_URL!)
+        const subClient = pubClient.duplicate()
+        io.adapter(createAdapter(pubClient, subClient))
+        log.info("Redis adapter enabled for Socket.IO")
+      })
+    }).catch((err) => {
+      log.warn("Redis adapter failed to initialize, using in-memory", { error: String(err) })
+    })
+  }
 
   // ── Room & presence management ──────────────────────────────
   const roomPresence = new Map<string, Map<string, { userId: string; name: string; avatar: string | null; color: string; lastSeen: number }>>()
@@ -45,6 +66,38 @@ export default function handler(
   function getColor(idx: number) {
     return COLORS[idx % COLORS.length]
   }
+
+  // Authenticate socket connections via JWT
+  io.use(async (socket, next) => {
+    try {
+      const cookies = socket.handshake.headers.cookie
+      if (!cookies) return next(new Error("Authentication required"))
+
+      // Parse cookie header into a fake request for getToken
+      const fakeReq = {
+        headers: { cookie: cookies },
+        cookies: Object.fromEntries(
+          cookies.split("; ").map((c) => {
+            const [key, ...rest] = c.split("=")
+            return [key, rest.join("=")]
+          })
+        ),
+      }
+
+      const token = await getToken({
+        req: fakeReq as unknown as Parameters<typeof getToken>[0]["req"],
+        secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+      })
+
+      if (!token?.id) return next(new Error("Invalid session"))
+
+      socket.data.userId = token.id as string
+      socket.data.userName = token.name as string
+      next()
+    } catch {
+      next(new Error("Authentication failed"))
+    }
+  })
 
   io.on("connection", (socket) => {
     let currentRoom: string | null = null

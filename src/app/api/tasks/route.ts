@@ -7,6 +7,8 @@ import { executeAutomations } from "@/lib/automation-engine"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import { emitTaskCreated } from "@/lib/socket-emitter"
 import type { Prisma } from "@/generated/prisma/client"
+import { createTaskSchema, validateBody } from "@/lib/validations"
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit"
 
 export async function GET(request: NextRequest) {
   try {
@@ -82,12 +84,14 @@ export async function POST(request: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const body = await request.json()
-    const { title, description, status, priority, taskListId, dueDate, tags, assigneeIds, parentId } = body
+    const { allowed: rlAllowed, resetAt } = checkRateLimit(request, session.user.id, { limit: 30, windowSeconds: 60 })
+    if (!rlAllowed) return rateLimitResponse(resetAt)
 
-    if (!title || !taskListId) {
-      return NextResponse.json({ error: "Title and taskListId are required" }, { status: 400 })
-    }
+    const body = await request.json()
+    const validation = validateBody(createTaskSchema, body)
+    if (!validation.success) return validation.error
+
+    const { title, description, status, priority, taskListId, dueDate, tags, assigneeIds, parentId } = validation.data
 
     const taskList = await prisma.taskList.findUnique({
       where: { id: taskListId },

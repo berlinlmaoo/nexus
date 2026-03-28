@@ -14,10 +14,11 @@ NProgress.configure({
 export function LoadingBar() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const searchKey = searchParams?.toString() ?? ""
 
   useEffect(() => {
     NProgress.done()
-  }, [pathname, searchParams])
+  }, [pathname, searchKey])
 
   useEffect(() => {
     const handleAnchorClick = (event: MouseEvent) => {

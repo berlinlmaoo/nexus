@@ -1,4 +1,7 @@
 import prisma from "@/lib/prisma"
+import { createLogger } from "@/lib/logger"
+
+const log = createLogger("automation")
 
 type AutomationEvent =
   | "task_created"
@@ -262,7 +265,7 @@ export async function executeAutomations(
           },
         })
       } catch (err) {
-        console.error(`Automation "${automation.name}" failed:`, err)
+        log.error(`Automation "${automation.name}" failed`, { error: String(err) })
         // Log failure
         await prisma.activityLog.create({
           data: {
@@ -276,6 +279,6 @@ export async function executeAutomations(
       }
     }
   } catch (err) {
-    console.error("Failed to execute automations:", err)
+    log.error("Failed to execute automations", { error: String(err) })
   }
 }

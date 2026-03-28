@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
+import { checkWorkspaceAccess } from "@/lib/workspace-scope"
 
 export async function GET(request: NextRequest) {
   try {
@@ -47,6 +48,9 @@ export async function POST(request: NextRequest) {
     if (!name || !workspaceId) {
       return NextResponse.json({ error: "name and workspaceId are required" }, { status: 400 })
     }
+
+    const { allowed } = await checkWorkspaceAccess(session.user.id, workspaceId)
+    if (!allowed) return NextResponse.json({ error: "Forbidden: not a member of this workspace" }, { status: 403 })
 
     const portfolio = await prisma.portfolio.create({
       data: {
