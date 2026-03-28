@@ -10,17 +10,32 @@ const prisma = new PrismaClient({ adapter: new PrismaPg(pool) })
 async function main() {
   console.log('Seeding database...')
 
-  // Clean up existing data in reverse dependency order
-  await prisma.activityLog.deleteMany()
-  await prisma.comment.deleteMany()
-  await prisma.taskAssignee.deleteMany()
-  await prisma.task.deleteMany()
-  await prisma.taskList.deleteMany()
-  await prisma.projectMember.deleteMany()
-  await prisma.project.deleteMany()
-  await prisma.workspaceMember.deleteMany()
-  await prisma.workspace.deleteMany()
-  await prisma.user.deleteMany()
+  // Clean up ALL tables in reverse dependency order
+  // Use raw SQL truncate for reliability with foreign keys
+  const tableNames = [
+    'ProofAnnotation', 'Attachment', 'WebhookDelivery', 'Webhook',
+    'FormSubmission', 'Form', 'GoalTask', 'GoalProject', 'GoalMilestone', 'Goal',
+    'StatusUpdate', 'Favorite', 'SavedSearch', 'TaskLike', 'TaskFollower',
+    'TaskRelation', 'TaskDependency', 'CustomFieldValue', 'CustomField',
+    'SprintTask', 'Sprint', 'TimeEntry', 'CommentReaction', 'Comment',
+    'TaskAssignee', 'TaskProject', 'ActivityLog', 'Notification',
+    'NotificationPreference', 'AuditLog', 'InviteToken',
+    'Task', 'TaskList', 'ProjectPage', 'Doc', 'DocTemplate',
+    'Automation', 'PortfolioProject', 'Portfolio',
+    'TeamProject', 'TeamMember', 'Team',
+    'ProjectMember', 'Project',
+    'WorkflowBundle', 'SsoConfig', 'UserSession', 'SyncedBlock',
+    'WorkspaceMember', 'Workspace',
+    'Account', 'ImportJob', 'User',
+  ]
+
+  for (const table of tableNames) {
+    try {
+      await prisma.$executeRawUnsafe(`DELETE FROM "${table}"`)
+    } catch {
+      // Table might not exist yet, skip
+    }
+  }
 
   console.log('Cleaned existing data.')
 
