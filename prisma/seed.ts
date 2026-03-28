@@ -1,9 +1,11 @@
+import 'dotenv/config'
+import pg from 'pg'
+import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '../src/generated/prisma/client'
 import { hashSync } from 'bcryptjs'
 
-const prisma = new PrismaClient({
-  accelerateUrl: process.env.DATABASE_URL!,
-})
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL! })
+const prisma = new PrismaClient({ adapter: new PrismaPg(pool) })
 
 async function main() {
   console.log('Seeding database...')
@@ -523,9 +525,11 @@ async function main() {
 main()
   .then(async () => {
     await prisma.$disconnect()
+    await pool.end()
   })
   .catch(async (e) => {
     console.error('Seed error:', e)
     await prisma.$disconnect()
+    await pool.end()
     process.exit(1)
   })

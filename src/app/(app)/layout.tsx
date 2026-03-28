@@ -7,7 +7,10 @@ export default async function AppGroupLayout({
 }: {
   children: React.ReactNode
 }) {
-  const session = await auth()
+  const session = await auth().catch((err) => {
+    console.warn('[auth] session read failed, treating as signed out:', err)
+    return null
+  })
 
   if (!session?.user) {
     redirect("/login")
