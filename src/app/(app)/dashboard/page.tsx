@@ -7,10 +7,7 @@ export const metadata = { title: "Dashboard | Nexus" }
 export const dynamic = "force-dynamic"
 
 export default async function DashboardPage() {
-  const session = await auth().catch((err) => {
-    console.warn('[auth] session read failed, treating as signed out:', err)
-    return null
-  })
+  const session = await auth().catch(() => null)
 
   if (!session?.user) {
     redirect("/login")
