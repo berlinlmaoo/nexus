@@ -92,12 +92,18 @@ export function DashboardContent({ userName }: { userName: string }) {
   const [creating, setCreating] = useState(false)
 
   useEffect(() => {
-    fetch("/api/dashboard")
+    fetch("/api/dashboard", { credentials: "same-origin" })
       .then((res) => {
+        if (res.status === 401) {
+          window.location.assign("/login")
+          return null
+        }
         if (!res.ok) throw new Error("Failed to fetch")
         return res.json()
       })
-      .then((json) => setData(json))
+      .then((json) => {
+        if (json) setData(json)
+      })
       .catch((err) => console.error("Dashboard fetch error:", err))
       .finally(() => setLoading(false))
   }, [])
