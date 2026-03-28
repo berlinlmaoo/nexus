@@ -23,6 +23,7 @@ import { useDroppable } from "@dnd-kit/core"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { PriorityBadge } from "./priority-badge"
 import type { TaskCardData } from "./task-card"
+import { AnimatedCheckbox, TaskCelebration } from "./task-celebration"
 import {
   CheckCircle2,
   Circle,
@@ -76,12 +77,14 @@ function SortableTaskRow({
   onTaskClick,
   onToggleStatus,
   toggleRowSelect,
+  onCelebrate,
 }: {
   task: TaskCardData
   isRowSelected: boolean
   onTaskClick: (task: TaskCardData) => void
   onToggleStatus: (taskId: string, done: boolean) => void
   toggleRowSelect: (taskId: string) => void
+  onCelebrate?: () => void
 }) {
   const {
     attributes,
@@ -156,18 +159,14 @@ function SortableTaskRow({
 
       {/* Status checkbox */}
       <div className="flex items-center justify-center h-full">
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onToggleStatus(task.id, isDone ? false : true)
+        <AnimatedCheckbox
+          checked={isDone}
+          onChange={(checked) => {
+            onToggleStatus(task.id, checked)
+            if (checked) onCelebrate?.()
           }}
-        >
-          {task.status === "DONE" ? (
-            <CheckCircle2 className="h-4 w-4 text-green-600 fill-green-600" />
-          ) : (
-            <Circle className="h-4 w-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
-          )}
-        </button>
+          className="p-0"
+        />
       </div>
 
       {/* Title + tags */}
@@ -309,6 +308,7 @@ export function TaskListView({
   const [showAddSection, setShowAddSection] = useState(false)
   const [creatingSec, setCreatingSec] = useState(false)
   const [deletingSection, setDeletingSection] = useState<string | null>(null)
+  const [celebrateTrigger, setCelebrateTrigger] = useState(0)
   const sectionInputRef = useRef<HTMLInputElement>(null)
   const renameInputRef = useRef<HTMLInputElement>(null)
 
@@ -793,6 +793,7 @@ export function TaskListView({
                         onTaskClick={onTaskClick}
                         onToggleStatus={onToggleStatus}
                         toggleRowSelect={toggleRowSelect}
+                        onCelebrate={() => setCelebrateTrigger((t) => t + 1)}
                       />
                     ))}
                   </SortableContext>
@@ -931,6 +932,9 @@ export function TaskListView({
       <DragOverlay dropAnimation={{ duration: 200, easing: "ease" }}>
         {activeTask ? <DragOverlayRow task={activeTask} /> : null}
       </DragOverlay>
+
+      {/* Celebration particles */}
+      <TaskCelebration trigger={celebrateTrigger} />
     </DndContext>
   )
 }
