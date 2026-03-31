@@ -680,7 +680,7 @@ export function Sidebar({ user }: SidebarProps) {
                   No projects yet
                 </p>
               ) : (
-                projects.filter(p => showArchived || p.status !== "ARCHIVED").filter(p => !recentProjects.some(r => r.id === p.id)).map((project) => {
+                projects.filter(p => showArchived || p.status !== "ARCHIVED").map((project) => {
                   const isProjectActive = pathname?.startsWith(`/projects/${project.id}`) ?? false
                   const isExpanded = expandedProjects[project.id] || false
                   const pages = projectPages[project.id] || []
