@@ -14,8 +14,10 @@ export default async function DashboardPage() {
   }
 
   return (
-    <DashboardContent
-      userName={session.user.name ?? "User"}
-    />
+    <div className="p-6">
+      <DashboardContent
+        userName={session.user.name ?? "User"}
+      />
+    </div>
   )
 }

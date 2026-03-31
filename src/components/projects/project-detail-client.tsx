@@ -8,7 +8,7 @@ import { TaskListView } from "@/components/tasks/task-list-view"
 import { BoardView } from "@/components/tasks/board-view"
 import { CreateTaskDialog } from "@/components/tasks/create-task-dialog"
 import { TaskDetailPanel } from "@/components/tasks/task-detail-panel"
-import { ProjectHeader } from "@/components/projects/project-header"
+// ProjectHeader available for overview/settings if needed
 import { SkeletonKanban, SkeletonList } from "@/components/ui/skeleton"
 import type { TaskCardData } from "@/components/tasks/task-card"
 import {
@@ -34,6 +34,7 @@ import {
   Columns3,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { ProjectIcon } from "@/components/projects/project-icon"
 import { useRealtimeProject } from "@/hooks/use-realtime-project"
 import Link from "next/link"
 import { StatusUpdates } from "@/components/projects/status-updates"
@@ -440,22 +441,32 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
 
   return (
     <div className="flex flex-col h-full min-w-0">
-      {/* Project Header */}
-      <ProjectHeader project={project} />
+      {/* ── Asana-style compact header: tabs left, actions right ── */}
+      <div className="flex items-center justify-between border-b shrink-0 bg-background">
+        {/* Left: project name + view tabs */}
+        <div className="flex items-center min-w-0 overflow-x-auto hide-scrollbar">
+          {/* Project indicator */}
+          <div className="flex items-center gap-2 pl-4 pr-3 py-2 border-r shrink-0">
+            <div
+              className="h-5 w-5 rounded flex items-center justify-center text-xs shrink-0"
+              style={{ backgroundColor: project.color + "20", color: project.color }}
+            >
+              <ProjectIcon icon={project.icon} color={project.color} size="sm" />
+            </div>
+            <span className="text-sm font-semibold truncate max-w-[160px]">{project.name}</span>
+          </div>
 
-      {/* View tabs row */}
-      <div className="border-b bg-white dark:bg-zinc-950 px-4 shrink-0 overflow-x-auto hide-scrollbar">
-        <div className="flex items-center">
+          {/* View tabs */}
           {viewTabs.map((tab) => {
             const Icon = tab.icon
             return (
               <button
                 key={tab.id}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 -mb-px transition-all duration-200 whitespace-nowrap",
+                  "flex items-center gap-1.5 px-3 py-2.5 text-[13px] font-medium border-b-2 -mb-px transition-all duration-150 whitespace-nowrap",
                   viewMode === tab.id
                     ? "border-foreground text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
                 )}
                 onClick={() => handleViewChange(tab.id)}
               >
@@ -465,180 +476,191 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
             )
           })}
         </div>
-      </div>
 
-      {/* Toolbar row: search, filter, sort, group */}
-      <div className="flex items-center gap-1 border-b bg-white dark:bg-zinc-950 px-4 py-1.5 shrink-0 overflow-x-auto hide-scrollbar">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-7 w-32 rounded border bg-transparent pl-7 pr-2 text-xs outline-none placeholder:text-muted-foreground/60 focus:border-foreground/30 focus:ring-0 transition-all duration-150"
-            />
-            {searchQuery && (
-              <button onClick={() => setSearchQuery("")} className="absolute right-1.5 top-1/2 -translate-y-1/2">
-                <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-              </button>
+        {/* Right: members + share */}
+        <div className="flex items-center gap-2 pr-4 shrink-0">
+          <div className="flex -space-x-1.5">
+            {project.members.slice(0, 4).map((member) => (
+              <UserAvatar
+                key={member.id}
+                user={{ name: member.name, avatar: member.avatar }}
+                size="xs"
+                className="border-2 border-background h-6 w-6"
+              />
+            ))}
+            {project.members.length > 4 && (
+              <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-background bg-muted text-[9px] font-medium">
+                +{project.members.length - 4}
+              </div>
             )}
           </div>
+          <button className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-foreground text-background hover:bg-foreground/90 transition-colors">
+            <UserPlus className="h-3 w-3" />
+            Share
+          </button>
+        </div>
+      </div>
 
-          {/* Filter */}
+      {/* ── Toolbar: search, filter, sort, group, add task ── */}
+      <div className="flex items-center gap-1.5 border-b px-3 py-1 shrink-0 bg-background overflow-x-auto hide-scrollbar">
+        {/* Add task */}
+        <CreateTaskDialog
+          projectId={project.id}
+          taskLists={project.taskLists.map((tl) => ({ id: tl.id, name: tl.name }))}
+          defaultTaskListId={defaultTaskListId}
+          onCreated={() => router.refresh()}
+        >
+          <button className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium text-foreground hover:bg-muted/50 transition-colors">
+            <Plus className="h-3.5 w-3.5" />
+            Add task
+          </button>
+        </CreateTaskDialog>
+
+        <div className="w-px h-4 bg-border" />
+
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-7 w-28 focus:w-48 rounded border-0 bg-transparent pl-7 pr-2 text-xs outline-none placeholder:text-muted-foreground/50 focus:bg-muted/30 transition-all duration-200"
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery("")} className="absolute right-1.5 top-1/2 -translate-y-1/2">
+              <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+            </button>
+          )}
+        </div>
+
+        {/* Filter */}
+        <button
+          className={cn(
+            "flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors",
+            showFilters ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          )}
+          onClick={() => setShowFilters(!showFilters)}
+        >
+          <Filter className="h-3 w-3" />
+          Filter
+          {activeFilterCount > 0 && (
+            <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-foreground text-[9px] text-background px-1">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
+
+        {/* Sort */}
+        <div className="relative">
           <button
             className={cn(
               "flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors",
-              showFilters ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              showSort ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
             )}
-            onClick={() => setShowFilters(!showFilters)}
+            onClick={() => { setShowSort(!showSort); setShowGroup(false) }}
           >
-            <Filter className="h-3 w-3" />
-            Filter
-            {activeFilterCount > 0 && (
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-foreground text-[9px] text-background">
-                {activeFilterCount}
-              </span>
-            )}
+            <ArrowUpDown className="h-3 w-3" />
+            Sort
           </button>
-
-          {/* Sort */}
-          <div className="relative">
-            <button
-              className={cn(
-                "flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors",
-                showSort ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-              )}
-              onClick={() => { setShowSort(!showSort); setShowGroup(false) }}
-            >
-              <ArrowUpDown className="h-3 w-3" />
-              Sort
-            </button>
-            {showSort && (
-              <div className="absolute right-0 top-full mt-1 z-20 rounded-lg border bg-background p-1 shadow-lg min-w-[130px]">
-                {([
-                  ["position", "Default"],
-                  ["priority", "Priority"],
-                  ["dueDate", "Due Date"],
-                  ["assignee", "Assignee"],
-                ] as const).map(([value, label]) => (
-                  <button
-                    key={value}
-                    onClick={() => { setSortMode(value); setShowSort(false) }}
-                    className={cn(
-                      "flex w-full items-center rounded-md px-2.5 py-1.5 text-xs transition-colors",
-                      sortMode === value ? "bg-muted font-medium" : "hover:bg-muted/50"
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Group */}
-          <div className="relative">
-            <button
-              className={cn(
-                "flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors",
-                showGroup ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-              )}
-              onClick={() => { setShowGroup(!showGroup); setShowSort(false) }}
-            >
-              <Layers className="h-3 w-3" />
-              Group
-            </button>
-            {showGroup && (
-              <div className="absolute right-0 top-full mt-1 z-20 rounded-lg border bg-background p-1 shadow-lg min-w-[130px]">
-                {([
-                  ["status", "Status"],
-                  ["priority", "Priority"],
-                  ["assignee", "Assignee"],
-                  ["none", "None"],
-                ] as const).map(([value, label]) => (
-                  <button
-                    key={value}
-                    onClick={() => { setGroupMode(value); setShowGroup(false) }}
-                    className={cn(
-                      "flex w-full items-center rounded-md px-2.5 py-1.5 text-xs transition-colors",
-                      groupMode === value ? "bg-muted font-medium" : "hover:bg-muted/50"
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Customize */}
-          <StatusUpdatesButton projectId={project.id} />
-
-          {/* Saved Filters */}
-          <SavedFilters
-            projectId={project.id}
-            currentFilters={{
-              status: statusFilter,
-              priority: priorityFilter,
-              assignee: assigneeFilter,
-              sort: sortMode,
-              group: groupMode,
-              search: searchQuery,
-            }}
-            onApply={(filters) => {
-              setStatusFilter(filters.status)
-              setPriorityFilter(filters.priority)
-              setAssigneeFilter(filters.assignee)
-              setSortMode(filters.sort as SortMode)
-              setGroupMode(filters.group as GroupMode)
-              setSearchQuery(filters.search)
-            }}
-          />
-
-          {/* Members + Share */}
-          <div className="flex items-center gap-1 ml-1 pl-1 border-l">
-            <div className="flex -space-x-1.5">
-              {project.members.slice(0, 3).map((member) => (
-                <UserAvatar
-                  key={member.id}
-                  user={{ name: member.name, avatar: member.avatar }}
-                  size="xs"
-                  className="border border-background h-6 w-6"
-                />
+          {showSort && (
+            <div className="absolute left-0 top-full mt-1 z-20 rounded-lg border bg-popover p-1 shadow-lg min-w-[130px]">
+              {([
+                ["position", "Default"],
+                ["priority", "Priority"],
+                ["dueDate", "Due Date"],
+                ["assignee", "Assignee"],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  onClick={() => { setSortMode(value); setShowSort(false) }}
+                  className={cn(
+                    "flex w-full items-center rounded-md px-2.5 py-1.5 text-xs transition-colors",
+                    sortMode === value ? "bg-muted font-medium" : "hover:bg-muted/50"
+                  )}
+                >
+                  {label}
+                </button>
               ))}
-              {project.members.length > 3 && (
-                <div className="flex h-6 w-6 items-center justify-center rounded-full border border-background bg-muted text-[9px] font-medium">
-                  +{project.members.length - 3}
-                </div>
-              )}
             </div>
-            <button className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
-              <UserPlus className="h-3 w-3" />
-              Share
-            </button>
-          </div>
+          )}
+        </div>
+
+        {/* Group */}
+        <div className="relative">
+          <button
+            className={cn(
+              "flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors",
+              showGroup ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+            )}
+            onClick={() => { setShowGroup(!showGroup); setShowSort(false) }}
+          >
+            <Layers className="h-3 w-3" />
+            Group
+          </button>
+          {showGroup && (
+            <div className="absolute left-0 top-full mt-1 z-20 rounded-lg border bg-popover p-1 shadow-lg min-w-[130px]">
+              {([
+                ["status", "Status"],
+                ["priority", "Priority"],
+                ["assignee", "Assignee"],
+                ["none", "None"],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  onClick={() => { setGroupMode(value); setShowGroup(false) }}
+                  className={cn(
+                    "flex w-full items-center rounded-md px-2.5 py-1.5 text-xs transition-colors",
+                    groupMode === value ? "bg-muted font-medium" : "hover:bg-muted/50"
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="w-px h-4 bg-border" />
+
+        {/* Quick links */}
+        <Link href={`/projects/${project.id}/sprints`} className="flex items-center gap-1 px-2 py-1 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+          <Zap className="h-3 w-3" /> Sprints
+        </Link>
+        <Link href={`/projects/${project.id}/automations`} className="flex items-center gap-1 px-2 py-1 rounded text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors">
+          <Workflow className="h-3 w-3" /> Rules
+        </Link>
+
+        <div className="flex-1" />
+
+        {/* Status + Saved Filters */}
+        <StatusUpdatesButton projectId={project.id} />
+        <SavedFilters
+          projectId={project.id}
+          currentFilters={{ status: statusFilter, priority: priorityFilter, assignee: assigneeFilter, sort: sortMode, group: groupMode, search: searchQuery }}
+          onApply={(filters) => { setStatusFilter(filters.status); setPriorityFilter(filters.priority); setAssigneeFilter(filters.assignee); setSortMode(filters.sort as SortMode); setGroupMode(filters.group as GroupMode); setSearchQuery(filters.search) }}
+        />
       </div>
 
-      {/* Filter bar */}
+      {/* Filter bar (collapsible) */}
       {showFilters && (
-        <div className="flex items-center gap-3 px-4 py-2 border-b bg-muted/30">
+        <div className="flex items-center gap-3 px-4 py-1.5 border-b bg-muted/20 shrink-0">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-medium text-muted-foreground">Status:</span>
-            <select className="h-7 rounded border bg-background px-2 text-xs" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <select className="h-6 rounded border bg-background px-2 text-xs" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               {STATUS_FILTERS.map((s) => (<option key={s} value={s}>{s === "ALL" ? "All" : s.replace("_", " ")}</option>))}
             </select>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-medium text-muted-foreground">Priority:</span>
-            <select className="h-7 rounded border bg-background px-2 text-xs" value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}>
+            <select className="h-6 rounded border bg-background px-2 text-xs" value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}>
               {PRIORITY_FILTERS.map((p) => (<option key={p} value={p}>{p === "ALL" ? "All" : p}</option>))}
             </select>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-medium text-muted-foreground">Assignee:</span>
-            <select className="h-7 rounded border bg-background px-2 text-xs" value={assigneeFilter} onChange={(e) => setAssigneeFilter(e.target.value)}>
+            <select className="h-6 rounded border bg-background px-2 text-xs" value={assigneeFilter} onChange={(e) => setAssigneeFilter(e.target.value)}>
               <option value="ALL">All</option>
               {project.members.map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}
             </select>
@@ -646,7 +668,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
           {sprints.length > 0 && (
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-medium text-muted-foreground">Sprint:</span>
-              <select className="h-7 rounded border bg-background px-2 text-xs" value={sprintFilter} onChange={(e) => setSprintFilter(e.target.value)}>
+              <select className="h-6 rounded border bg-background px-2 text-xs" value={sprintFilter} onChange={(e) => setSprintFilter(e.target.value)}>
                 <option value="ALL">All</option>
                 <option value="NONE">No Sprint</option>
                 {sprints.map((s) => (<option key={s.id} value={s.id}>{s.name}{s.status === "ACTIVE" ? " (Active)" : ""}</option>))}
@@ -655,38 +677,17 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
           )}
           {activeFilterCount > 0 && (
             <button className="text-xs text-muted-foreground hover:text-foreground transition-colors" onClick={() => { setStatusFilter("ALL"); setPriorityFilter("ALL"); setAssigneeFilter("ALL"); setSprintFilter("ALL") }}>
-              Clear
+              Clear all
             </button>
           )}
         </div>
       )}
 
-      {/* Quick action pills */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b bg-white dark:bg-zinc-950">
-        <Link href={`/projects/${project.id}/sprints`}>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border transition-all duration-200 active:scale-95">
-            <Zap className="h-3 w-3" /> Sprints
-          </button>
-        </Link>
-        <Link href={`/projects/${project.id}/automations`}>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border transition-all duration-200 active:scale-95">
-            <Workflow className="h-3 w-3" /> Automations
-          </button>
-        </Link>
-        <Link href={`/projects/${project.id}/forms`}>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border transition-all duration-200 active:scale-95">
-            <ClipboardList className="h-3 w-3" /> Forms
-          </button>
-        </Link>
-        <SaveTemplateDialog project={{ id: project.id, name: project.name }}>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border transition-all duration-200 active:scale-95">
-            <Copy className="h-3 w-3" /> Template
-          </button>
-        </SaveTemplateDialog>
-      </div>
-
-      {/* View content */}
-      <div className="flex-1 overflow-auto p-4 min-w-0">
+      {/* ── View content (full remaining height) ── */}
+      <div className={cn(
+        "flex-1 overflow-auto min-w-0",
+        ["overview", "charts", "feed", "gallery"].includes(viewMode) && "p-4"
+      )}>
         {viewMode === "overview" && (
           <>
             {project.pages && project.pages.length > 0 && (

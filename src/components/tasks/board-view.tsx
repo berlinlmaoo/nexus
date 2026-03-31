@@ -184,11 +184,11 @@ export function BoardView({
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
-      <div className="flex gap-3 pb-4 overflow-x-auto min-w-0 w-full">
+      <div className="flex gap-3 pb-4 overflow-x-auto min-w-0 w-full h-full px-3 pt-3">
         {columns.map((column) => (
           <div
             key={column.id}
-            className="flex-shrink-0 w-72 flex flex-col"
+            className="flex-1 min-w-[250px] flex flex-col"
           >
             {/* Column header */}
             <div className="group/col flex items-center justify-between mb-2 px-1">
