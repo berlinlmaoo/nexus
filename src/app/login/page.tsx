@@ -51,13 +51,17 @@ export default async function LoginPage() {
         <div className="relative z-10 flex items-center gap-8 text-primary-foreground">
           <div className="space-y-1">
             <p className="text-[10px] font-black uppercase tracking-widest opacity-30">System Version</p>
-            <p className="text-xs font-bold opacity-60">V2.4.0 Codename: GIDEON</p>
+            <p className="text-xs font-bold opacity-60">V2.4.0 Codename: D41V4</p>
           </div>
           <div className="h-8 w-[1px] bg-primary-foreground/10" />
-          <div className="space-y-1">
-            <p className="text-[10px] font-black uppercase tracking-widest opacity-30">Infrastructure</p>
-            <p className="text-xs font-bold opacity-60">Edge Encrypted Node</p>
-          </div>
+          <Link 
+            href="https://www.instagram.com/jagain.networks/" 
+            target="_blank" 
+            className="space-y-1 hover:opacity-80 transition-opacity cursor-pointer"
+          >
+            <p className="text-[10px] font-black uppercase tracking-widest opacity-30">Engineered By</p>
+            <p className="text-xs font-bold opacity-60">Jagain Networks</p>
+          </Link>
         </div>
       </div>
 

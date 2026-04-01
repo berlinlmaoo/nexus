@@ -19,6 +19,7 @@ import {
   Database,
   Feather,
   Flag,
+  Megaphone,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -26,14 +27,14 @@ const EMOJI_MAP: Record<string, string> = {
   folder: "📁", rocket: "🚀", star: "⭐", zap: "⚡", target: "🎯",
   briefcase: "💼", code: "💻", globe: "🌍", heart: "❤️", shield: "🛡️",
   layers: "📚", box: "📦", cpu: "🔧", database: "🗄️", feather: "✏️",
-  flag: "🏁",
+  flag: "🏁", megaphone: "📢",
 }
 
 const LUCIDE_MAP: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
   folder: Folder, grid: LayoutGrid, code: Code, briefcase: Briefcase,
   rocket: Rocket, star: Star, zap: Zap, target: Target, globe: Globe,
   heart: Heart, shield: Shield, layers: Layers, box: Box, cpu: Cpu,
-  database: Database, feather: Feather, flag: Flag,
+  database: Database, feather: Feather, flag: Flag, megaphone: Megaphone,
 }
 
 export function isUploadedIcon(icon: string): boolean {

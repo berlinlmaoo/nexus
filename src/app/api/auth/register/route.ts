@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
-import { Prisma } from '@/generated/prisma/client'
+import { Prisma } from '@/generated/prisma'
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
 import { canonicalEmail } from '@/lib/email-auth'

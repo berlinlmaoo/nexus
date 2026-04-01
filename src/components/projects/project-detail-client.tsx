@@ -817,13 +817,15 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
         )}
         {viewMode === "calendar" && (
           <Suspense fallback={<SkeletonKanban />}>
-            <CalendarView
-              key={`calendar-${viewKey}`}
-              tasks={filteredTasks}
-              onTaskClick={handleTaskClick}
-              projectId={project.id}
-              defaultTaskListId={defaultTaskListId}
-            />
+            <ErrorBoundary>
+              <CalendarView
+                key={`calendar-${viewKey}`}
+                tasks={filteredTasks}
+                onTaskClick={handleTaskClick}
+                projectId={project.id}
+                defaultTaskListId={defaultTaskListId}
+              />
+            </ErrorBoundary>
           </Suspense>
         )}
         {viewMode === "timeline" && (

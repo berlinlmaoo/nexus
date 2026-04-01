@@ -38,27 +38,45 @@ export function CalendarView({ tasks, onTaskClick, projectId, defaultTaskListId 
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   const calendarDays = useMemo(() => {
-    const monthStart = startOfMonth(currentMonth)
-    const monthEnd = endOfMonth(currentMonth)
-    const calStart = startOfWeek(monthStart)
-    const calEnd = endOfWeek(monthEnd)
-    return eachDayOfInterval({ start: calStart, end: calEnd })
+    try {
+      const monthStart = startOfMonth(currentMonth)
+      const monthEnd = endOfMonth(currentMonth)
+      const calStart = startOfWeek(monthStart)
+      const calEnd = endOfWeek(monthEnd)
+      const days = eachDayOfInterval({ start: calStart, end: calEnd })
+      console.log("Calendar days generated:", days.length)
+      return days
+    } catch (err) {
+      console.error("Error generating calendar days:", err)
+      return []
+    }
   }, [currentMonth])
 
   const tasksByDate = useMemo(() => {
+    console.log("Processing tasks for calendar:", tasks?.length)
     const map: Record<string, TaskCardData[]> = {}
+    if (!tasks) return map
     tasks.forEach((task) => {
       if (task.dueDate) {
-        const key = format(new Date(task.dueDate), "yyyy-MM-dd")
-        if (!map[key]) map[key] = []
-        map[key].push(task)
+        try {
+          const key = format(new Date(task.dueDate), "yyyy-MM-dd")
+          if (!map[key]) map[key] = []
+          map[key].push(task)
+        } catch (err) {
+          console.error("Error formatting task date:", task.id, task.dueDate, err)
+        }
       }
     })
     return map
   }, [tasks])
 
   const activeMilestones = useMemo(() => {
-    return tasks.filter(t => t.dueDate && isSameMonth(new Date(t.dueDate), currentMonth)).length
+    if (!tasks) return 0
+    return tasks.filter(t => {
+      try {
+        return t.dueDate && isSameMonth(new Date(t.dueDate), currentMonth)
+      } catch { return false }
+    }).length
   }, [tasks, currentMonth])
 
   const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]

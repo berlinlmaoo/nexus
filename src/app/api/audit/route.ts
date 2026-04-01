@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
 
     const [logs, total] = await Promise.all([
       prisma.auditLog.findMany({
-        where,
+        where: where as any,
         include: {
           user: {
             select: { id: true, name: true, email: true, avatar: true },
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
         take: Math.min(limit, 100),
         skip: offset,
       }),
-      prisma.auditLog.count({ where }),
+      prisma.auditLog.count({ where: where as any }),
     ])
 
     return NextResponse.json({ logs, total, limit, offset })
