@@ -23,6 +23,7 @@ export const metadata: Metadata = {
     "NEXUS is a modern project management platform for agile teams to plan, track, and deliver work efficiently.",
   icons: {
     icon: [
+      { url: "/favicon.png", type: "image/png" },
       { url: "/logos/nexus-icon-black.png", type: "image/png" },
     ],
     apple: [
