@@ -881,7 +881,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
         defaultTaskListId={createTaskListId}
         onCreated={() => { setCreateTaskListId(undefined); setCreateDialogOpen(false) }}
       >
-        <button className="fixed bottom-20 md:bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-lg hover:bg-foreground/90 transition-all duration-200 hover:scale-105 hover:shadow-xl active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+        <button className="fixed bottom-20 md:bottom-6 right-24 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-lg hover:bg-foreground/90 transition-all duration-200 hover:scale-105 hover:shadow-xl active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
           <Plus className="h-5 w-5" />
         </button>
       </CreateTaskDialog>
