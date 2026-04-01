@@ -32,6 +32,7 @@ export const nexusNextAuthConfig = {
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
+        console.log("Authorize attempt:", { email: credentials?.email })
         const rawEmail = credentials?.email
         const rawPassword = credentials?.password
         const email =
@@ -44,12 +45,14 @@ export const nexusNextAuthConfig = {
             : String(rawPassword ?? '')
 
         if (!email || !password) {
+          console.log("Missing email or password")
           return null
         }
 
         try {
           let user = await prisma.user.findUnique({ where: { email } })
           if (!user) {
+            console.log("User not found by unique email:", email)
             try {
               user = await prisma.user.findFirst({
                 where: { email: { equals: email, mode: 'insensitive' } },
@@ -60,18 +63,22 @@ export const nexusNextAuthConfig = {
           }
 
           if (!user) {
+            console.log("User totally not found:", email)
             return null
           }
           if (!user.password) {
+            console.log("User has no password set:", email)
             return null
           }
 
           const isPasswordValid = await bcrypt.compare(password, user.password)
+          console.log("Password check result:", isPasswordValid)
 
           if (!isPasswordValid) {
             return null
           }
 
+          console.log("Login successful for:", user.email)
           return {
             id: user.id,
             name: user.name,
@@ -79,6 +86,7 @@ export const nexusNextAuthConfig = {
             image: user.avatar,
           }
         } catch (e) {
+          console.error("Authorize error:", e)
           log.error('credentials authorize failed', { error: String(e) })
           return null
         }
