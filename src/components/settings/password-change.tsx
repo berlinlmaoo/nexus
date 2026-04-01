@@ -56,34 +56,59 @@ export function PasswordChangeSection() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Lock className="h-5 w-5" />
-          Change Password
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <div className="space-y-12">
+      <div>
+        <h3 className="text-2xl font-headline font-black text-on-surface tracking-tight">Security Protocol</h3>
+        <p className="text-sm text-on-surface-variant/60 font-medium">Update your access cipher to maintain node integrity.</p>
+      </div>
+
+      <div className="space-y-8 pt-4">
         <div className="space-y-2">
-          <Label htmlFor="current-password">Current Password</Label>
-          <Input id="current-password" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Enter current password" />
+          <label className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/40 ml-1">Current Cipher</label>
+          <input
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            placeholder="Enter current password"
+            className="w-full h-14 bg-surface-container-low border-none rounded-2xl px-6 text-sm font-bold text-on-surface placeholder:text-on-surface-variant/20 focus:ring-4 focus:ring-primary/5 transition-all"
+          />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="new-password">New Password</Label>
-          <Input id="new-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Enter new password (min 8 characters)" />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="confirm-password">Confirm New Password</Label>
-          <Input id="confirm-password" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm new password" onKeyDown={(e) => { if (e.key === "Enter") handleSubmit() }} />
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/40 ml-1">New Cipher</label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Min 8 characters"
+              className="w-full h-14 bg-surface-container-low border-none rounded-2xl px-6 text-sm font-bold text-on-surface placeholder:text-on-surface-variant/20 focus:ring-4 focus:ring-primary/5 transition-all"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/40 ml-1">Confirm New Cipher</label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Repeat new password"
+              onKeyDown={(e) => { if (e.key === "Enter") handleSubmit() }}
+              className="w-full h-14 bg-surface-container-low border-none rounded-2xl px-6 text-sm font-bold text-on-surface placeholder:text-on-surface-variant/20 focus:ring-4 focus:ring-primary/5 transition-all"
+            />
+          </div>
         </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        {success && <p className="text-sm text-green-600">Password updated successfully</p>}
+        {error && <p className="text-[10px] font-bold text-red-600 ml-1 uppercase tracking-widest">{error}</p>}
+        {success && <p className="text-[10px] font-bold text-green-600 ml-1 uppercase tracking-widest">Protocol updated successfully</p>}
 
-        <Button className="bg-foreground text-background hover:bg-foreground/90" onClick={handleSubmit} disabled={saving || !currentPassword || !newPassword || !confirmPassword}>
-          {saving ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Updating...</>) : "Update Password"}
+        <Button 
+          onClick={handleSubmit} 
+          disabled={saving || !currentPassword || !newPassword || !confirmPassword}
+          className="h-14 px-8 bg-primary text-primary-foreground rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-primary/10 transition-all hover:-translate-y-1 active:scale-95"
+        >
+          {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : "Update Password"}
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

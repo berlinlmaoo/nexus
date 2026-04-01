@@ -9,82 +9,101 @@ import {
 } from "@hello-pangea/dnd"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { Button } from "@/components/ui/button"
-import type { TaskCardData } from "./task-card"
-import { cn } from "@/lib/utils"
 import {
   Plus,
-  Loader2,
   Calendar,
-  MessageSquare,
   ListTree,
-  ChevronDown,
+  MoreHorizontal,
   ChevronRight,
-  AlertTriangle,
+  ChevronDown,
   Tag,
+  AlertTriangle,
+  Loader2,
 } from "lucide-react"
+import { format, isPast, isToday } from "date-fns"
+import { cn } from "@/lib/utils"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
-import { format, isPast, isToday } from "date-fns"
+import { ProjectIcon, isUploadedIcon } from "@/components/projects/project-icon"
+import { type TaskCardData } from "./task-card"
 
 const COLUMNS: {
   id: TaskCardData["status"]
   label: string
-  dot: string
+  color: string
 }[] = [
-  { id: "TODO", label: "To Do", dot: "bg-zinc-400" },
-  { id: "IN_PROGRESS", label: "In Progress", dot: "bg-zinc-600" },
-  { id: "IN_REVIEW", label: "In Review", dot: "bg-zinc-800" },
-  { id: "DONE", label: "Done", dot: "bg-zinc-950" },
+  { id: "TODO", label: "To Do", color: "bg-on-surface-variant/20" },
+  { id: "IN_PROGRESS", label: "In Progress", color: "bg-tertiary-new" },
+  { id: "IN_REVIEW", label: "In Review", color: "bg-secondary-new" },
+  { id: "DONE", label: "Done", color: "bg-green-600" },
 ]
 
 const PRIORITY_BADGES: Record<string, { label: string; cls: string }> = {
-  URGENT: { label: "Urgent", cls: "bg-red-100 text-red-700 border-red-200" },
-  HIGH: { label: "High", cls: "bg-orange-100 text-orange-700 border-orange-200" },
-  MEDIUM: { label: "Medium", cls: "bg-muted text-muted-foreground border-border" },
-  LOW: { label: "Low", cls: "bg-muted/50 text-muted-foreground border-border" },
-  NONE: { label: "None", cls: "bg-muted/50 text-muted-foreground/60 border-border/50" },
+  URGENT: { label: "Urgent", cls: "bg-red-50 text-red-600 border-none" },
+  HIGH: { label: "High", cls: "bg-orange-50 text-orange-600 border-none" },
+  MEDIUM: { label: "Medium", cls: "bg-surface-container text-on-surface-variant border-none" },
+  LOW: { label: "Low", cls: "bg-surface-container/50 text-on-surface-variant/70 border-none" },
+  NONE: { label: "None", cls: "bg-transparent text-on-surface-variant/40 border-none" },
 }
 
 type SwimLaneMode = "none" | "assignee" | "priority"
+type GroupByMode = "status" | "section"
 
 interface KanbanViewProps {
   tasks: TaskCardData[]
+  sections?: Array<{ id: string; name: string; tasks: TaskCardData[] }>
   onTaskClick: (task: TaskCardData) => void
   onStatusChange: (taskId: string, newStatus: TaskCardData["status"]) => void
+  onSectionChange?: (taskId: string, newSectionId: string) => void
   projectId?: string
   defaultTaskListId?: string
 }
 
 export function KanbanView({
   tasks,
+  sections = [],
   onTaskClick,
   onStatusChange,
+  onSectionChange,
   projectId,
   defaultTaskListId,
 }: KanbanViewProps) {
   const router = useRouter()
-  const [localTasks, setLocalTasks] = useState<TaskCardData[]>(tasks)
   const [addingTo, setAddingTo] = useState<string | null>(null)
   const [newTitle, setNewTitle] = useState("")
   const [creating, setCreating] = useState(false)
   const [swimLaneMode, setSwimLaneMode] = useState<SwimLaneMode>("none")
+  const [groupBy, setGroupBy] = useState<GroupByMode>("status")
   const [wipLimits, setWipLimits] = useState<Record<string, number>>({
     TODO: 0, IN_PROGRESS: 5, IN_REVIEW: 3, DONE: 0,
   })
   const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set())
   const [collapsedLanes, setCollapsedLanes] = useState<Set<string>>(new Set())
   const [showWipConfig, setShowWipConfig] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  if (tasks !== localTasks && JSON.stringify(tasks) !== JSON.stringify(localTasks)) {
-    setLocalTasks(tasks)
-  }
+  const columns = useMemo(() => {
+    if (groupBy === "status") {
+      return COLUMNS.map(col => ({
+        id: col.id,
+        label: col.label,
+        color: col.color,
+        type: "status" as const
+      }))
+    }
+    return sections.map(sec => ({
+      id: sec.id,
+      label: sec.name,
+      color: "bg-primary/20",
+      type: "section" as const
+    }))
+  }, [groupBy, sections])
 
   const swimLanes = useMemo(() => {
     if (swimLaneMode === "none") return [{ id: "__all__", label: "All Tasks" }]
     if (swimLaneMode === "assignee") {
       const assigneeMap = new Map<string, string>()
-      localTasks.forEach((t) => {
+      tasks.forEach((t) => {
         if (t.assignees.length === 0) {
           assigneeMap.set("__unassigned__", "Unassigned")
         } else {
@@ -93,18 +112,24 @@ export function KanbanView({
       })
       return Array.from(assigneeMap.entries()).map(([id, label]) => ({ id, label }))
     }
-    // priority
     return ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"].map((p) => ({
       id: p,
       label: PRIORITY_BADGES[p].label,
     }))
-  }, [swimLaneMode, localTasks])
+  }, [swimLaneMode, tasks])
 
-  const getTasksForLaneAndStatus = useCallback(
-    (laneId: string, status: TaskCardData["status"]) => {
-      return localTasks
+  const getTasksForLaneAndColumn = useCallback(
+    (laneId: string, columnId: string) => {
+      return tasks
         .filter((t) => {
-          if (t.status !== status) return false
+          // Filter by Column (either status or section)
+          if (groupBy === "status") {
+            if (t.status !== columnId) return false
+          } else {
+            if (t.taskListId !== columnId) return false
+          }
+
+          // Filter by Swimlane
           if (swimLaneMode === "none") return true
           if (swimLaneMode === "assignee") {
             if (laneId === "__unassigned__") return t.assignees.length === 0
@@ -114,12 +139,17 @@ export function KanbanView({
         })
         .sort((a, b) => a.position - b.position)
     },
-    [localTasks, swimLaneMode]
+    [tasks, swimLaneMode, groupBy]
   )
 
   const getColumnCount = useCallback(
-    (status: TaskCardData["status"]) => localTasks.filter((t) => t.status === status).length,
-    [localTasks]
+    (columnId: string) => {
+      if (groupBy === "status") {
+        return tasks.filter((t) => t.status === columnId).length
+      }
+      return tasks.filter((t) => t.taskListId === columnId).length
+    },
+    [tasks, groupBy]
   )
 
   const handleDragEnd = useCallback(
@@ -128,29 +158,41 @@ export function KanbanView({
       if (!destination) return
       if (destination.droppableId === source.droppableId && destination.index === source.index) return
 
-      // droppableId format: "status__laneId"
-      const newStatus = destination.droppableId.split("__")[0] as TaskCardData["status"]
-      setLocalTasks((prev) =>
-        prev.map((t) => (t.id === draggableId ? { ...t, status: newStatus } : t))
-      )
-      onStatusChange(draggableId, newStatus)
+      const targetId = destination.droppableId.split("__")[0]
+      
+      if (groupBy === "status") {
+        onStatusChange(draggableId, targetId as TaskCardData["status"])
+      } else {
+        if (onSectionChange) {
+          onSectionChange(draggableId, targetId)
+        }
+      }
     },
-    [onStatusChange]
+    [onStatusChange, onSectionChange, groupBy]
   )
 
-  const handleQuickAdd = async (status: string) => {
-    if (!newTitle.trim() || !projectId || !defaultTaskListId) return
+  const handleQuickAdd = async (columnId: string) => {
+    if (!newTitle.trim() || !projectId) return
     setCreating(true)
     try {
+      const body: any = {
+        title: newTitle.trim(),
+        projectId,
+      }
+      
+      if (groupBy === "status") {
+        body.status = columnId
+        body.taskListId = defaultTaskListId
+      } else {
+        body.taskListId = columnId
+      }
+
+      if (!body.taskListId) return
+
       const res = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: newTitle.trim(),
-          status,
-          taskListId: defaultTaskListId,
-          projectId,
-        }),
+        body: JSON.stringify(body),
       })
       if (res.ok) {
         setNewTitle("")
@@ -183,323 +225,246 @@ export function KanbanView({
   }
 
   return (
-    <div className="space-y-3">
-      {/* Toolbar */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-muted-foreground">Swimlanes:</span>
-          <div className="flex rounded-lg border overflow-hidden">
-            {(["none", "assignee", "priority"] as const).map((mode) => (
-              <button
-                key={mode}
-                className={cn(
-                  "px-3 py-1 text-xs font-medium transition-colors",
-                  swimLaneMode === mode ? "bg-foreground text-background" : "hover:bg-accent text-muted-foreground"
-                )}
-                onClick={() => setSwimLaneMode(mode)}
-              >
-                {mode === "none" ? "None" : mode === "assignee" ? "Assignee" : "Priority"}
-              </button>
-            ))}
+    <div className="flex-1 flex flex-col min-h-0 space-y-8">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-6">
+          {/* Group By Toggle */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/40">Group By</span>
+            <div className="flex items-center gap-1 p-1 bg-surface-container-low rounded-xl">
+              {(["status", "section"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  className={cn(
+                    "px-3 py-1 text-[10px] font-black rounded-lg transition-all duration-200 uppercase tracking-wider",
+                    groupBy === mode 
+                      ? "bg-surface-container-lowest text-primary shadow-sm" 
+                      : "text-on-surface-variant/40 hover:text-primary"
+                  )}
+                  onClick={() => setGroupBy(mode)}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="h-6 w-[1px] bg-on-surface-variant/10" />
+
+          {/* Swimlanes Toggle */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/40">Swimlanes</span>
+            <div className="flex items-center gap-1 p-1 bg-surface-container-low rounded-xl">
+              {(["none", "assignee", "priority"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  className={cn(
+                    "px-3 py-1 text-[10px] font-black rounded-lg transition-all duration-200 uppercase tracking-wider",
+                    swimLaneMode === mode 
+                      ? "bg-surface-container-lowest text-primary shadow-sm" 
+                      : "text-on-surface-variant/40 hover:text-primary"
+                  )}
+                  onClick={() => setSwimLaneMode(mode)}
+                >
+                  {mode === "none" ? "Off" : mode}
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowWipConfig(!showWipConfig)}
+              className="font-black text-[10px] uppercase tracking-widest text-on-surface-variant/40 hover:text-primary hover:bg-surface-container-high transition-all"
+            >
+              <AlertTriangle className="h-3 w-3 mr-2" /> WIP
+            </Button>
+            {showWipConfig && (
+              <div className="absolute left-0 top-full mt-2 z-50 rounded-xl bg-surface-container-lowest p-4 shadow-2xl shadow-primary/10 border border-on-surface-variant/5 min-w-[220px] animate-scale-in">
+                <p className="text-[10px] font-black uppercase tracking-[0.15em] text-on-surface-variant/40 mb-4">WIP Configuration</p>
+                <div className="space-y-3">
+                  {columns.map((col) => (
+                    <div key={col.id} className="flex items-center justify-between gap-4">
+                      <span className="text-xs font-bold text-primary truncate flex-1">{col.label}</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={wipLimits[col.id] || 0}
+                        onChange={(e) =>
+                          setWipLimits((prev) => ({ ...prev, [col.id]: parseInt(e.target.value) || 0 }))
+                        }
+                        className="w-16 h-8 rounded-lg bg-surface-container-low border-none text-xs font-bold text-center focus:ring-2 focus:ring-primary/5 outline-none"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="relative">
-          <Button
-            variant={showWipConfig ? "secondary" : "outline"}
-            size="sm"
-            onClick={() => setShowWipConfig(!showWipConfig)}
-            className="text-xs"
-          >
-            WIP Limits
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" className="font-black text-[10px] uppercase tracking-widest text-on-surface-variant/40">
+            <Tag className="h-3.5 w-3.5 mr-2" /> Tags
           </Button>
-          {showWipConfig && (
-            <div className="absolute left-0 top-full mt-1 z-20 rounded-lg border bg-background p-3 shadow-lg min-w-[200px]">
-              <p className="text-xs font-medium text-muted-foreground mb-2">WIP Limits per Column</p>
-              {COLUMNS.map((col) => (
-                <div key={col.id} className="flex items-center justify-between gap-2 py-1">
-                  <span className="text-xs text-muted-foreground">{col.label}</span>
-                  <input
-                    type="number"
-                    min={0}
-                    value={wipLimits[col.id] || 0}
-                    onChange={(e) =>
-                      setWipLimits((prev) => ({ ...prev, [col.id]: parseInt(e.target.value) || 0 }))
-                    }
-                    className="w-14 h-6 rounded border text-xs text-center outline-none focus:ring-1 focus:ring-ring"
-                  />
-                </div>
-              ))}
-              <p className="text-[10px] text-muted-foreground/60 mt-2">0 = no limit</p>
-            </div>
-          )}
+          <Button variant="ghost" size="sm" className="font-black text-[10px] uppercase tracking-widest text-on-surface-variant/40">
+            <ListTree className="h-3.5 w-3.5 mr-2" /> Subtasks
+          </Button>
         </div>
       </div>
 
       <DragDropContext onDragEnd={handleDragEnd}>
-        {swimLanes.map((lane) => {
-          const isLaneCollapsed = collapsedLanes.has(lane.id)
+        <div className="flex flex-col gap-8">
+          {swimLanes.map((lane) => {
+            const isLaneCollapsed = collapsedLanes.has(lane.id)
 
-          return (
-            <div key={lane.id}>
-              {/* Swimlane header */}
-              {swimLaneMode !== "none" && (
-                <button
-                  className="flex items-center gap-2 w-full py-2 px-1 text-left group"
-                  onClick={() => toggleLane(lane.id)}
-                >
-                  {isLaneCollapsed ? (
-                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60" />
-                  ) : (
-                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/60" />
-                  )}
-                  <span className="text-xs font-semibold text-muted-foreground">{lane.label}</span>
-                  <div className="flex-1 border-t border-border ml-2" />
-                </button>
-              )}
+            return (
+              <div key={lane.id} className="space-y-4">
+                {swimLaneMode !== "none" && (
+                  <button
+                    className="flex items-center gap-3 w-full py-2 group"
+                    onClick={() => toggleLane(lane.id)}
+                  >
+                    <div className="h-6 w-6 rounded-lg bg-surface-container-low flex items-center justify-center text-on-surface-variant/40 group-hover:text-primary transition-all">
+                      {isLaneCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </div>
+                    <span className="text-sm font-headline font-black uppercase tracking-widest text-primary">{lane.label}</span>
+                    <div className="flex-1 h-[1px] bg-on-surface-variant/5" />
+                  </button>
+                )}
 
-              {!isLaneCollapsed && (
-                <div className="flex gap-3 overflow-x-auto pb-4">
-                  {COLUMNS.map((column, colIndex) => {
-                    const isCollapsed = collapsedColumns.has(column.id)
-                    const colTasks = getTasksForLaneAndStatus(lane.id, column.id)
-                    const totalColCount = getColumnCount(column.id)
-                    const wipLimit = wipLimits[column.id] || 0
-                    const isOverWip = wipLimit > 0 && totalColCount > wipLimit
+                {!isLaneCollapsed && (
+                  <div className="flex gap-6 overflow-x-auto pb-6 scrollbar-hide min-h-[400px]">
+                    {columns.map((column, colIndex) => {
+                      const isCollapsed = collapsedColumns.has(column.id)
+                      const colTasks = getTasksForLaneAndColumn(lane.id, column.id)
+                      const totalColCount = getColumnCount(column.id)
+                      const wipLimit = wipLimits[column.id] || 0
+                      const isOverWip = wipLimit > 0 && totalColCount > wipLimit
 
-                    if (isCollapsed) {
-                      return (
-                        <motion.div
-                          key={column.id}
-                          initial={{ width: 0, opacity: 0 }}
-                          animate={{ width: 40, opacity: 1 }}
-                          className="flex-shrink-0 w-10 flex flex-col items-center bg-muted/50 rounded-lg border cursor-pointer py-3"
-                          onClick={() => toggleColumn(column.id)}
-                        >
-                          <div className={cn("h-2.5 w-2.5 rounded-full mb-2", column.dot)} />
-                          <span className="text-xs font-medium text-muted-foreground [writing-mode:vertical-lr] rotate-180">
-                            {column.label}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground/60 mt-2 tabular-nums">{totalColCount}</span>
-                        </motion.div>
-                      )
-                    }
-
-                    return (
-                      <motion.div
-                        key={column.id}
-                        initial={{ opacity: 0, y: 12 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: colIndex * 0.04, duration: 0.2 }}
-                        className="flex-shrink-0 w-80 flex flex-col"
-                      >
-                        {/* Column header */}
-                        <div
-                          className={cn(
-                            "flex items-center gap-2 mb-3 px-1 cursor-pointer group",
-                            isOverWip && "text-red-600"
-                          )}
-                          onClick={() => toggleColumn(column.id)}
-                        >
-                          <div className={cn("h-2.5 w-2.5 rounded-full", column.dot)} />
-                          <h3 className="text-sm font-semibold">{column.label}</h3>
-                          <span className="text-[10px] text-muted-foreground/60 hidden group-hover:inline" title="Kanban view groups tasks by status">by status</span>
-                          <span
-                            className={cn(
-                              "text-xs rounded-full px-2 py-0.5 tabular-nums",
-                              isOverWip
-                                ? "bg-red-100 text-red-700 font-medium"
-                                : "text-muted-foreground bg-muted"
-                            )}
+                      if (isCollapsed) {
+                        return (
+                          <div
+                            key={column.id}
+                            className="flex-shrink-0 w-12 flex flex-col items-center bg-surface-container-low/40 rounded-2xl cursor-pointer py-6 hover:bg-surface-container-low transition-colors"
+                            onClick={() => toggleColumn(column.id)}
                           >
-                            {totalColCount}
-                            {wipLimit > 0 && `/${wipLimit}`}
-                          </span>
-                          {isOverWip && (
-                            <AlertTriangle className="h-3.5 w-3.5 text-red-500 ml-auto" />
-                          )}
-                        </div>
+                            <div className={cn("h-2 w-2 rounded-full mb-4", column.color)} />
+                            <span className="text-[10px] font-headline font-black uppercase tracking-widest text-on-surface-variant/40 [writing-mode:vertical-lr] rotate-180">
+                              {column.label}
+                            </span>
+                            <span className="mt-4 bg-surface-container-high px-2 py-0.5 rounded-full text-[10px] font-black text-on-surface-variant/60">{totalColCount}</span>
+                          </div>
+                        )
+                      }
 
-                        {/* Droppable area */}
-                        <Droppable droppableId={`${column.id}__${lane.id}`}>
-                          {(provided, snapshot) => (
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.droppableProps}
-                              className={cn(
-                                "flex-1 space-y-2 rounded-lg p-2 min-h-[120px] transition-all duration-200",
-                                snapshot.isDraggingOver
-                                  ? "bg-muted border-2 border-dashed border-border"
-                                  : "bg-muted/50 border-2 border-transparent",
-                                isOverWip && !snapshot.isDraggingOver && "border-red-200 bg-red-50/30"
-                              )}
-                            >
-                              {colTasks.map((task, index) => {
-                                const isOverdue =
-                                  task.dueDate &&
-                                  isPast(new Date(task.dueDate)) &&
-                                  !isToday(new Date(task.dueDate)) &&
-                                  task.status !== "DONE"
-                                const pb = PRIORITY_BADGES[task.priority]
+                      return (
+                        <div
+                          key={column.id}
+                          className="flex-shrink-0 w-80 flex flex-col h-full bg-surface-container-low/30 rounded-2xl p-4"
+                        >
+                          <div
+                            className={cn("flex items-center justify-between mb-5 px-1 cursor-pointer group", isOverWip && "text-error")}
+                            onClick={() => toggleColumn(column.id)}
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className={cn("w-2 h-2 rounded-full", column.color)} />
+                              <h3 className="font-headline font-black text-xs uppercase tracking-widest text-primary truncate max-w-[180px]">{column.label}</h3>
+                              <span className={cn("text-[10px] font-black rounded-full px-2 py-0.5", isOverWip ? "bg-error/10 text-error" : "bg-surface-container-high text-on-surface-variant/60")}>
+                                {totalColCount}{wipLimit > 0 && `/${wipLimit}`}
+                              </span>
+                            </div>
+                            <button onClick={(e) => { e.stopPropagation(); setAddingTo(column.id) }} className="p-1 hover:bg-surface-container-high rounded-lg text-on-surface-variant/30 hover:text-primary">
+                              <Plus className="h-4 w-4" />
+                            </button>
+                          </div>
 
-                                return (
+                          <Droppable droppableId={`${column.id}__${lane.id}`}>
+                            {(provided, snapshot) => (
+                              <div
+                                ref={provided.innerRef}
+                                {...provided.droppableProps}
+                                className={cn("flex-1 space-y-3 min-h-[120px] transition-all duration-200 rounded-xl", snapshot.isDraggingOver && "bg-surface-container-high/40")}
+                              >
+                                {colTasks.map((task, index) => (
                                   <Draggable key={task.id} draggableId={task.id} index={index}>
                                     {(provided, snapshot) => (
                                       <div
                                         ref={provided.innerRef}
                                         {...provided.draggableProps}
                                         {...provided.dragHandleProps}
+                                        onClick={() => onTaskClick(task)}
+                                        className={cn(
+                                          "bg-surface-container-lowest p-4 rounded-xl shadow-sm border border-transparent hover:ring-2 hover:ring-primary/5 transition-all duration-200 group cursor-grab active:cursor-grabbing",
+                                          snapshot.isDragging && "shadow-2xl shadow-primary/20 ring-2 ring-primary/10 rotate-2 scale-105"
+                                        )}
                                       >
-                                        <div
-                                          className={cn(
-                                            "rounded-lg border bg-card p-3 cursor-pointer transition-all duration-150 space-y-2",
-                                            "hover:shadow-sm hover:-translate-y-0.5",
-                                            snapshot.isDragging && "shadow-lg rotate-1 scale-[1.02] ring-1 ring-border"
-                                          )}
-                                          onClick={() => onTaskClick(task)}
-                                        >
-                                          {/* Title */}
-                                          <p className="text-sm font-medium text-foreground leading-snug line-clamp-2">
-                                            {task.title}
-                                          </p>
-
-                                          {/* Description preview */}
-                                          {task.description && (
-                                            <p className="text-xs text-muted-foreground line-clamp-1">
-                                              {task.description}
-                                            </p>
-                                          )}
-
-                                          {/* Tags */}
-                                          {task.tags.length > 0 && (
-                                            <div className="flex flex-wrap gap-1">
-                                              {task.tags.slice(0, 3).map((tag) => (
-                                                <span
-                                                  key={tag}
-                                                  className="inline-flex items-center gap-0.5 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
-                                                >
-                                                  <Tag className="h-2.5 w-2.5" />
-                                                  {tag}
-                                                </span>
-                                              ))}
-                                              {task.tags.length > 3 && (
-                                                <span className="text-[10px] text-muted-foreground/60">+{task.tags.length - 3}</span>
-                                              )}
+                                        <div className="space-y-4">
+                                          <h4 className="text-sm font-bold text-primary leading-snug group-hover:text-tertiary-new transition-colors line-clamp-2">{task.title}</h4>
+                                          <div className="flex flex-wrap gap-2">
+                                            {task.priority !== "NONE" && <span className={cn("px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md", PRIORITY_BADGES[task.priority].cls)}>{task.priority}</span>}
+                                          </div>
+                                          <div className="flex items-center justify-between pt-1">
+                                            <div className="flex items-center gap-3 text-on-surface-variant/40">
+                                              {task.dueDate && <div className="flex items-center gap-1 text-[10px] font-bold"><Calendar className="h-3.5 w-3.5" /><span>{format(new Date(task.dueDate), "MMM d")}</span></div>}
+                                              {(task.subtaskCount ?? 0) > 0 && <div className="flex items-center gap-1 text-[10px] font-bold"><ListTree className="h-3.5 w-3.5" /><span>{task.subtaskDoneCount}/{task.subtaskCount}</span></div>}
                                             </div>
-                                          )}
-
-                                          {/* Meta row */}
-                                          <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                              <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded border", pb.cls)}>
-                                                {pb.label}
-                                              </span>
-                                              {task.dueDate && (
-                                                <span
-                                                  className={cn(
-                                                    "inline-flex items-center gap-1 text-[11px]",
-                                                    isOverdue ? "text-red-600 font-medium" : "text-muted-foreground"
-                                                  )}
-                                                >
-                                                  <Calendar className="h-3 w-3" />
-                                                  {format(new Date(task.dueDate), "MMM d")}
-                                                </span>
-                                              )}
-                                            </div>
-
-                                            <div className="flex items-center gap-2">
-                                              {(task.subtaskCount ?? 0) > 0 && (
-                                                <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground/60">
-                                                  <ListTree className="h-3 w-3" />
-                                                  {task.subtaskDoneCount ?? 0}/{task.subtaskCount}
-                                                </span>
-                                              )}
+                                            <div className="flex -space-x-2">
+                                              {task.assignees.map((a) => <UserAvatar key={a.id} user={{ name: a.name, image: a.avatar }} size="xs" className="h-6 w-6 border-2 border-surface-container-lowest ring-1 ring-on-surface-variant/5" />)}
                                             </div>
                                           </div>
-
-                                          {/* Assignee row */}
-                                          {task.assignees.length > 0 && (
-                                            <div className="flex items-center gap-1.5 pt-0.5">
-                                              {task.assignees.slice(0, 3).map((a) => (
-                                                <div key={a.id} className="flex items-center gap-1">
-                                                  <UserAvatar user={{ name: a.name, avatar: a.avatar }} size="xs" className="h-4 w-4 border border-background" />
-                                                  <span className="text-[10px] text-muted-foreground">{a.name.split(" ")[0]}</span>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          )}
                                         </div>
                                       </div>
                                     )}
                                   </Draggable>
-                                )
-                              })}
-                              {provided.placeholder}
+                                ))}
+                                {provided.placeholder}
 
-                              {colTasks.length === 0 && !snapshot.isDraggingOver && addingTo !== column.id && (
-                                <div className="flex flex-col items-center justify-center py-6 border-2 border-dashed border-border rounded-lg">
-                                  <p className="text-xs text-muted-foreground/60">No tasks</p>
-                                </div>
-                              )}
-
-                              {/* Quick-add */}
-                              <AnimatePresence>
-                                {addingTo === column.id && (
-                                  <motion.div
-                                    initial={{ opacity: 0, height: 0 }}
-                                    animate={{ opacity: 1, height: "auto" }}
-                                    exit={{ opacity: 0, height: 0 }}
-                                    className="overflow-hidden"
-                                  >
-                                    <div className="rounded-lg border bg-card p-2.5 shadow-sm">
-                                      <input
+                                <AnimatePresence>
+                                  {addingTo === column.id && (
+                                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-surface-container-lowest p-4 rounded-xl shadow-xl shadow-primary/10 ring-2 ring-primary/5">
+                                      <textarea
                                         ref={inputRef}
-                                        type="text"
                                         placeholder="Task title..."
                                         value={newTitle}
                                         onChange={(e) => setNewTitle(e.target.value)}
                                         onKeyDown={(e) => {
-                                          if (e.key === "Enter" && newTitle.trim()) handleQuickAdd(column.id)
-                                          if (e.key === "Escape") { setAddingTo(null); setNewTitle("") }
+                                          if (e.key === "Enter" && !e.shiftKey && newTitle.trim()) { e.preventDefault(); handleQuickAdd(column.id); }
+                                          if (e.key === "Escape") { setAddingTo(null); setNewTitle(""); }
                                         }}
-                                        onBlur={() => { if (!newTitle.trim()) setAddingTo(null) }}
                                         disabled={creating}
-                                        className="w-full text-sm bg-transparent outline-none placeholder:text-muted-foreground/60"
+                                        className="w-full text-sm font-bold bg-transparent border-none p-0 focus:ring-0 placeholder:text-on-surface-variant/30 resize-none h-20"
+                                        autoFocus
                                       />
-                                      {creating && (
-                                        <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                                          <Loader2 className="h-3 w-3 animate-spin" /> Creating...
-                                        </div>
-                                      )}
-                                    </div>
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>
+                                      <div className="flex justify-end gap-2 mt-2">
+                                        <Button size="sm" variant="ghost" className="font-bold text-on-surface-variant/60" onClick={() => { setAddingTo(null); setNewTitle(""); }}>Cancel</Button>
+                                        <Button size="sm" onClick={() => handleQuickAdd(column.id)} disabled={creating || !newTitle.trim()} className="bg-primary text-primary-foreground font-bold">
+                                          {creating ? <Loader2 className="h-3 w-3 animate-spin" /> : "Create"}
+                                        </Button>
+                                      </div>
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
 
-                              {addingTo !== column.id && projectId && defaultTaskListId && (
-                                <button
-                                  onClick={() => {
-                                    setAddingTo(column.id)
-                                    setNewTitle("")
-                                    setTimeout(() => inputRef.current?.focus(), 50)
-                                  }}
-                                  className="flex items-center gap-1.5 w-full rounded-lg px-2 py-1.5 text-xs text-muted-foreground/60 hover:text-muted-foreground hover:bg-accent transition-colors"
-                                >
-                                  <Plus className="h-3.5 w-3.5" />
-                                  Add task
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </Droppable>
-                      </motion.div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          )
-        })}
+                                {addingTo !== column.id && (
+                                  <button onClick={() => setAddingTo(column.id)} className="w-full py-3 flex items-center justify-center gap-2 text-[11px] font-black uppercase tracking-widest text-on-surface-variant/20 hover:text-primary hover:bg-surface-container-high/50 rounded-xl transition-all duration-300">
+                                    <Plus className="h-4 w-4" /><span>Add Task</span>
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </Droppable>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
       </DragDropContext>
     </div>
   )

@@ -86,6 +86,7 @@ export default async function ProjectDetailPage({
           dueDate: t.dueDate?.toISOString() || null,
           tags: t.tags,
           position: t.position,
+          projectId: project.id,
           taskListId: t.taskListId,
           taskListName: tl.name,
           assignees: t.assignees.map((a) => ({

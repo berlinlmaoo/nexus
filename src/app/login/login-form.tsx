@@ -1,94 +1,166 @@
-'use client'
+"use client"
 
-import Link from 'next/link'
-import { useFormStatus } from 'react-dom'
-import { loginAction } from './login-actions'
+import { useState } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import * as z from "zod"
+import { signIn } from "next-auth/react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form"
+import { Input } from "@/components/ui/input"
+import { toast } from "sonner"
+import { Loader2, ArrowRight, Github } from "lucide-react"
 
-type Props = {
-  /** Rendered on the server from ?registered= / ?error= so it shows even if the client bundle fails to load. */
-  serverSuccess: string | null
-  serverError: string | null
-}
+const formSchema = z.object({
+  email: z.string().email({
+    message: "A valid operative email is required.",
+  }),
+  password: z.string().min(8, {
+    message: "Security protocol requires at least 8 characters.",
+  }),
+})
 
-function SubmitButton() {
-  const { pending } = useFormStatus()
+export function LoginForm() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const callbackUrl = searchParams?.get("callbackUrl") || "/dashboard"
+  const [isLoading, setIsLoading] = useState(false)
+  const [isGithubLoading, setIsGithubLoading] = useState(false)
+
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  })
+
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsLoading(true)
+    try {
+      const result = await signIn("credentials", {
+        email: values.email,
+        password: values.password,
+        redirect: false,
+      })
+
+      if (result?.error) {
+        toast.error("Access Denied", {
+          description: "Verification failed. Please check your credentials.",
+        })
+      } else {
+        toast.success("Identity Verified", {
+          description: "Welcome back to the Nexus sanctuary.",
+        })
+        router.push(callbackUrl)
+        router.refresh()
+      }
+    } catch (error) {
+      toast.error("System Error", {
+        description: "An unexpected error occurred during protocol initiation.",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleGithubSignIn = async () => {
+    setIsGithubLoading(true)
+    signIn("github", { callbackUrl })
+  }
+
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="w-full py-2.5 px-4 mt-1 bg-white text-black text-sm font-semibold rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-white/40 focus:ring-offset-2 focus:ring-offset-[#0A0A0C] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-    >
-      {pending ? (
-        <span className="inline-flex items-center gap-2">
-          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-          Signing in...
-        </span>
-      ) : (
-        'Sign in'
-      )}
-    </button>
-  )
-}
+    <div className="space-y-8 animate-fade-in">
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <div className="space-y-4">
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }: { field: any }) => (
+                <FormItem className="space-y-1.5">
+                  <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/40 ml-1">Operative Email</FormLabel>
+                  <FormControl>
+                    <input
+                      placeholder="name@agency.com"
+                      {...field}
+                      className="w-full h-12 bg-surface-container-low border-none rounded-2xl px-4 text-sm font-bold text-on-surface placeholder:text-on-surface-variant/20 focus:ring-2 focus:ring-primary/5 focus:bg-surface-container-lowest transition-all outline-none"
+                    />
+                  </FormControl>
+                  <FormMessage className="text-[10px] font-bold text-error ml-1" />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }: { field: any }) => (
+                <FormItem className="space-y-1.5">
+                  <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/40 ml-1">Access Cipher</FormLabel>
+                  <FormControl>
+                    <input
+                      type="password"
+                      placeholder="••••••••"
+                      {...field}
+                      className="w-full h-12 bg-surface-container-low border-none rounded-2xl px-4 text-sm font-bold text-on-surface placeholder:text-on-surface-variant/20 focus:ring-2 focus:ring-primary/5 focus:bg-surface-container-lowest transition-all outline-none"
+                    />
+                  </FormControl>
+                  <FormMessage className="text-[10px] font-bold text-error ml-1" />
+                </FormItem>
+              )}
+            />
+          </div>
 
-export function LoginForm({ serverSuccess, serverError }: Props) {
-  return (
-    <>
-      {serverSuccess && (
-        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3 text-sm text-emerald-400 transition-all duration-200 mb-5">
-          {serverSuccess}
+          <Button
+            type="submit"
+            disabled={isLoading}
+            className="w-full h-14 bg-primary text-primary-foreground rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:shadow-2xl hover:shadow-primary/20 transition-all duration-300 group shadow-lg"
+          >
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                Synchronize Identity
+                <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+              </>
+            )}
+          </Button>
+        </form>
+      </Form>
+
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <span className="w-full border-t border-on-surface-variant/5" />
         </div>
-      )}
-      {serverError && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-sm text-red-400 transition-all duration-200 mb-5">
-          {serverError}
+        <div className="relative flex justify-center text-[10px] font-black uppercase tracking-widest">
+          <span className="bg-surface px-4 text-on-surface-variant/30">Alternative Access</span>
         </div>
-      )}
-
-      <form action={loginAction} className="space-y-4">
-        <div className="space-y-1.5">
-          <label htmlFor="email" className="block text-sm font-medium text-gray-400">
-            Email
-          </label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            placeholder="you@example.com"
-            required
-            autoComplete="email"
-            className="w-full px-4 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent transition-all duration-200"
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <label htmlFor="password" className="block text-sm font-medium text-gray-400">
-            Password
-          </label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            placeholder="Enter your password"
-            required
-            autoComplete="current-password"
-            className="w-full px-4 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent transition-all duration-200"
-          />
-        </div>
-
-        <SubmitButton />
-      </form>
-
-      <div className="mt-6 text-center">
-        <p className="text-sm text-gray-400">
-          Don&apos;t have an account?{' '}
-          <Link href="/register" className="text-white hover:text-gray-300 font-medium transition-colors duration-200">
-            Create one
-          </Link>
-        </p>
       </div>
-    </>
+
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={handleGithubSignIn}
+        disabled={isGithubLoading}
+        className="w-full h-14 bg-surface-container-low text-primary rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-surface-container transition-all"
+      >
+        {isGithubLoading ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <>
+            <Github className="mr-2 h-4 w-4" />
+            Github Gateway
+          </>
+        )}
+      </Button>
+    </div>
   )
 }

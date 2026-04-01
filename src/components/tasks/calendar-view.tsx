@@ -4,7 +4,6 @@ import { useState, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import type { TaskCardData } from "./task-card"
-import { PriorityBadge } from "./priority-badge"
 import {
   startOfMonth,
   endOfMonth,
@@ -18,7 +17,7 @@ import {
   addMonths,
   subMonths,
 } from "date-fns"
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, Loader2, Calendar as CalendarIcon, MoreHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
 
@@ -36,7 +35,7 @@ export function CalendarView({ tasks, onTaskClick, projectId, defaultTaskListId 
   const [creatingOnDate, setCreatingOnDate] = useState<string | null>(null)
   const [newTitle, setNewTitle] = useState("")
   const [creating, setCreating] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
 
   const calendarDays = useMemo(() => {
     const monthStart = startOfMonth(currentMonth)
@@ -58,18 +57,15 @@ export function CalendarView({ tasks, onTaskClick, projectId, defaultTaskListId 
     return map
   }, [tasks])
 
-  const selectedDateTasks = useMemo(() => {
-    if (!selectedDate) return []
-    const key = format(selectedDate, "yyyy-MM-dd")
-    return tasksByDate[key] || []
-  }, [selectedDate, tasksByDate])
+  const activeMilestones = useMemo(() => {
+    return tasks.filter(t => t.dueDate && isSameMonth(new Date(t.dueDate), currentMonth)).length
+  }, [tasks, currentMonth])
 
   const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
   const handleDateClick = (day: Date) => {
     const key = format(day, "yyyy-MM-dd")
     if (selectedDate && isSameDay(day, selectedDate)) {
-      // Double-click same date = start creating
       if (projectId && defaultTaskListId) {
         setCreatingOnDate(key)
         setNewTitle("")
@@ -108,57 +104,83 @@ export function CalendarView({ tasks, onTaskClick, projectId, defaultTaskListId 
   }
 
   return (
-    <div className="space-y-4">
-      {/* Month navigation */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">
-          {format(currentMonth, "MMMM yyyy")}
-        </h2>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8"
-            onClick={() => setCurrentMonth(new Date())}
-          >
-            Today
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+    <div className="max-w-[1400px] mx-auto w-full space-y-10 animate-fade-in">
+      {/* Calendar Header */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div className="space-y-2">
+          <h2 className="text-5xl font-headline font-black tracking-tighter text-primary lowercase first-letter:uppercase">
+            {format(currentMonth, "MMMM yyyy")}
+          </h2>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 px-3 py-1 bg-tertiary-new/5 rounded-full">
+              <div className="w-2 h-2 rounded-full bg-tertiary-new animate-pulse" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-tertiary-new">
+                {activeMilestones} active tasks this month
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <div className="flex items-center p-1 bg-surface-container-low rounded-xl">
+            {["Week", "Month", "Quarter"].map((v) => (
+              <button
+                key={v}
+                className={cn(
+                  "px-5 py-2 text-[11px] font-black uppercase tracking-widest rounded-lg transition-all duration-200",
+                  v === "Month" ? "bg-surface-container-lowest text-primary shadow-sm shadow-primary/5" : "text-on-surface-variant/40 hover:text-primary"
+                )}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+          
+          <div className="flex items-center gap-1 ml-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 rounded-xl hover:bg-surface-container-low text-on-surface-variant/60"
+              onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </Button>
+            <Button
+              variant="ghost"
+              className="h-10 px-4 font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-surface-container-low text-on-surface-variant/60"
+              onClick={() => setCurrentMonth(new Date())}
+            >
+              Today
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 rounded-xl hover:bg-surface-container-low text-on-surface-variant/60"
+              onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+            >
+              <ChevronRight className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Calendar grid */}
-      <div className="border rounded-lg overflow-hidden">
-        {/* Week day headers */}
-        <div className="grid grid-cols-7 border-b bg-muted/50">
+      {/* Calendar Grid Container */}
+      <div className="bg-surface-container-lowest rounded-[32px] shadow-2xl shadow-primary/5 border border-on-surface-variant/5 overflow-hidden">
+        {/* Week Day Headers */}
+        <div className="grid grid-cols-7 border-b border-on-surface-variant/5 bg-surface-container-low/30">
           {weekDays.map((day) => (
             <div
               key={day}
-              className="px-2 py-2 text-center text-xs font-medium text-muted-foreground"
+              className="py-6 text-center text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/40"
             >
               {day}
             </div>
           ))}
         </div>
 
-        {/* Days grid */}
-        <div className="grid grid-cols-7">
-          {calendarDays.map((day) => {
+        {/* Days Grid */}
+        <div className="grid grid-cols-7 divide-x divide-y divide-on-surface-variant/5 border-on-surface-variant/5">
+          {calendarDays.map((day, idx) => {
             const key = format(day, "yyyy-MM-dd")
             const dayTasks = tasksByDate[key] || []
             const inMonth = isSameMonth(day, currentMonth)
@@ -170,139 +192,104 @@ export function CalendarView({ tasks, onTaskClick, projectId, defaultTaskListId 
               <div
                 key={key}
                 className={cn(
-                  "min-h-[100px] border-b border-r p-1 cursor-pointer transition-colors group/cell",
-                  !inMonth && "bg-muted/30",
-                  isSelected && "bg-accent ring-1 ring-inset ring-border",
-                  "hover:bg-accent/50"
+                  "min-h-[160px] p-4 cursor-pointer transition-all duration-300 group/cell relative",
+                  !inMonth && "bg-surface-container-low/20 opacity-30",
+                  isSelected && "bg-primary/[0.02]",
+                  "hover:bg-primary/[0.01]"
                 )}
                 onClick={() => handleDateClick(day)}
               >
-                <div className="flex items-center justify-between px-1">
+                <div className="flex items-center justify-between mb-4">
                   <span
                     className={cn(
-                      "text-xs font-medium",
-                      !inMonth && "text-muted-foreground/50",
-                      today &&
-                        "flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-background"
+                      "text-sm font-headline font-black tracking-tight",
+                      !inMonth ? "text-on-surface-variant/20" : "text-primary/40",
+                      today && "flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-primary-foreground text-xs shadow-lg shadow-primary/20 !text-primary-foreground opacity-100"
                     )}
                   >
                     {format(day, "d")}
                   </span>
-                  <div className="flex items-center gap-1">
-                    {dayTasks.length > 0 && (
-                      <span className="text-[10px] text-muted-foreground">
-                        {dayTasks.length}
-                      </span>
-                    )}
-                    {projectId && defaultTaskListId && inMonth && (
-                      <button
-                        className="opacity-0 group-hover/cell:opacity-100 transition-opacity h-4 w-4 flex items-center justify-center rounded hover:bg-accent"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setSelectedDate(day)
-                          setCreatingOnDate(key)
-                          setNewTitle("")
-                          setTimeout(() => inputRef.current?.focus(), 50)
-                        }}
-                      >
-                        <Plus className="h-3 w-3 text-muted-foreground" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Task pills */}
-                <div className="mt-1 space-y-0.5">
-                  {dayTasks.slice(0, 2).map((task) => (
-                    <div
-                      key={task.id}
-                      className="rounded px-1 py-0.5 text-[10px] leading-tight truncate cursor-pointer hover:opacity-80 bg-foreground/10 text-foreground"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onTaskClick(task)
-                      }}
-                    >
-                      {task.title}
-                    </div>
-                  ))}
-                  {dayTasks.length > 2 && (
-                    <div className="text-[10px] text-muted-foreground px-1">
-                      +{dayTasks.length - 2} more
+                  
+                  {inMonth && dayTasks.length > 0 && (
+                    <div className="flex -space-x-1.5 opacity-40 group-hover/cell:opacity-100 transition-opacity">
+                      {dayTasks.slice(0, 3).map((t, i) => (
+                        <div key={i} className="w-1.5 h-1.5 rounded-full bg-primary ring-2 ring-surface-container-lowest" />
+                      ))}
                     </div>
                   )}
                 </div>
 
-                {/* Inline create on this date */}
-                {isCreating && (
-                  <div className="mt-1" onClick={(e) => e.stopPropagation()}>
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      placeholder="Task title..."
-                      value={newTitle}
-                      onChange={(e) => setNewTitle(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && newTitle.trim()) {
-                          handleQuickCreate(key)
-                        }
-                        if (e.key === "Escape") {
-                          setCreatingOnDate(null)
-                          setNewTitle("")
-                        }
-                      }}
-                      onBlur={() => {
-                        if (!newTitle.trim()) {
-                          setCreatingOnDate(null)
-                        }
-                      }}
-                      disabled={creating}
-                      className="w-full text-[10px] bg-background border rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-ring"
-                    />
-                  </div>
+                <div className="space-y-1.5">
+                  {dayTasks.slice(0, 3).map((task) => (
+                    <div
+                      key={task.id}
+                      onClick={(e) => { e.stopPropagation(); onTaskClick(task); }}
+                      className="px-2 py-1.5 rounded-lg bg-surface-container-low hover:bg-surface-container-high transition-colors group/task"
+                    >
+                      <p className="text-[10px] font-bold text-primary truncate leading-tight group-hover/task:text-tertiary-new">
+                        {task.title}
+                      </p>
+                    </div>
+                  ))}
+                  {dayTasks.length > 3 && (
+                    <p className="text-[9px] font-black text-on-surface-variant/40 px-2 uppercase tracking-widest">
+                      + {dayTasks.length - 3} more
+                    </p>
+                  )}
+                </div>
+
+                {/* Quick Add Overlay */}
+                <AnimatePresence>
+                  {isCreating && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      className="absolute inset-2 z-20 bg-surface-container-lowest rounded-2xl shadow-2xl p-3 border-none ring-2 ring-primary/5 flex flex-col"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <textarea
+                        ref={inputRef}
+                        placeholder="Task title..."
+                        className="flex-1 bg-transparent border-none p-0 text-xs font-bold focus:ring-0 placeholder:text-on-surface-variant/20 resize-none"
+                        value={newTitle}
+                        onChange={(e) => setNewTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault()
+                            handleQuickCreate(key)
+                          }
+                          if (e.key === "Escape") setCreatingOnDate(null)
+                        }}
+                      />
+                      <div className="flex justify-end gap-1 mt-2">
+                        <Button size="sm" variant="ghost" className="h-6 text-[9px] font-black uppercase tracking-widest" onClick={() => setCreatingOnDate(null)}>Cancel</Button>
+                        <Button size="sm" className="h-6 bg-primary text-primary-foreground text-[9px] font-black uppercase tracking-widest" onClick={() => handleQuickCreate(key)} disabled={creating || !newTitle.trim()}>
+                          {creating ? <Loader2 className="h-3 w-3 animate-spin" /> : "Add"}
+                        </Button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {inMonth && !isCreating && (
+                  <button
+                    className="absolute bottom-2 right-2 opacity-0 group-hover/cell:opacity-100 transition-all h-6 w-6 flex items-center justify-center rounded-lg bg-surface-container hover:bg-primary hover:text-primary-foreground text-on-surface-variant/40"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setCreatingOnDate(key)
+                      setNewTitle("")
+                      setTimeout(() => inputRef.current?.focus(), 50)
+                    }}
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
                 )}
               </div>
             )
           })}
         </div>
       </div>
-
-      {/* Empty state hint */}
-      {Object.keys(tasksByDate).length === 0 && tasks.length > 0 && (
-        <div className="text-center py-3 text-xs text-muted-foreground">
-          {tasks.length} {tasks.length === 1 ? "task has" : "tasks have"} no due date set — assign dates to see them on the calendar
-        </div>
-      )}
-
-      {/* Selected date tasks panel */}
-      <AnimatePresence>
-        {selectedDate && selectedDateTasks.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            className="border rounded-lg p-4 space-y-3"
-          >
-            <h3 className="text-sm font-semibold">
-              Tasks for {format(selectedDate, "MMMM d, yyyy")}
-            </h3>
-            <div className="space-y-2">
-              {selectedDateTasks.map((task) => (
-                <div
-                  key={task.id}
-                  className="flex items-center gap-3 rounded-lg p-2 hover:bg-accent cursor-pointer transition-colors"
-                  onClick={() => onTaskClick(task)}
-                >
-                  <PriorityBadge priority={task.priority} showLabel={false} />
-                  <span className="text-sm flex-1 truncate">{task.title}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {task.status.replace("_", " ")}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   )
 }

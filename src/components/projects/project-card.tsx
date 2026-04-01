@@ -1,7 +1,6 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { Card, CardContent } from "@/components/ui/card"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import {
   Folder,
@@ -13,8 +12,10 @@ import {
   Zap,
   Users,
   ListTodo,
+  ArrowRight,
 } from "lucide-react"
 import { ProjectIcon, isUploadedIcon } from "./project-icon"
+import { cn } from "@/lib/utils"
 
 export interface ProjectCardData {
   id: string
@@ -56,50 +57,57 @@ export function ProjectCard({ project }: ProjectCardProps) {
       : 0
 
   return (
-    <Card
-      className="group cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-1 overflow-hidden"
+    <div
+      className="group relative bg-surface-container-lowest p-8 rounded-[2.5rem] shadow-sm border border-on-surface-variant/5 cursor-pointer transition-all duration-500 hover:shadow-2xl hover:shadow-primary/5 hover:-translate-y-2 overflow-hidden"
       onClick={() => router.push(`/projects/${project.id}`)}
     >
-      <div
-        className="h-1.5 w-full"
+      {/* Background Accent Gradient */}
+      <div 
+        className="absolute top-0 right-0 w-32 h-32 blur-[80px] opacity-10 group-hover:opacity-20 transition-opacity"
         style={{ backgroundColor: project.color }}
       />
-      <CardContent className="p-5">
-        <div className="flex items-start gap-3 mb-3">
-          {isUploadedIcon(project.icon) ? (
-            <ProjectIcon icon={project.icon} size="md" />
-          ) : (
-            <div
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
-              style={{ backgroundColor: `${project.color}20` }}
-            >
+
+      <div className="relative space-y-8">
+        {/* Header */}
+        <div className="flex items-start justify-between">
+          <div 
+            className="h-14 w-14 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/5 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3"
+            style={{ backgroundColor: `${project.color}15` }}
+          >
+            {isUploadedIcon(project.icon) ? (
+              <ProjectIcon icon={project.icon} size="md" />
+            ) : (
               <IconComponent
-                className="h-5 w-5"
+                className="h-7 w-7"
                 style={{ color: project.color }}
               />
-            </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <h3 className="font-semibold text-base truncate group-hover:text-[#18181B] transition-colors">
-              {project.name}
-            </h3>
-            {project.description && (
-              <p className="text-sm text-muted-foreground line-clamp-2 mt-0.5">
-                {project.description}
-              </p>
             )}
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1 bg-surface-container-low rounded-full border border-on-surface-variant/5">
+            <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: project.color }} />
+            <span className="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/60">{project.status}</span>
           </div>
         </div>
 
-        {/* Progress bar */}
-        <div className="mb-3">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-muted-foreground">Progress</span>
-            <span className="text-xs font-medium">{progress}%</span>
+        {/* Title & Desc */}
+        <div className="space-y-2">
+          <h3 className="text-2xl font-headline font-black text-primary tracking-tight group-hover:text-tertiary-new transition-colors">
+            {project.name}
+          </h3>
+          <p className="text-sm text-on-surface-variant/60 font-medium line-clamp-2 leading-relaxed">
+            {project.description || "No tactical description provided for this initiative."}
+          </p>
+        </div>
+
+        {/* Progress System */}
+        <div className="space-y-3">
+          <div className="flex items-end justify-between">
+            <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/30">Initiative Progress</p>
+            <span className="text-sm font-black text-primary">{progress}%</span>
           </div>
-          <div className="h-1.5 w-full rounded-full bg-secondary">
+          <div className="h-2 w-full rounded-full bg-surface-container overflow-hidden">
             <div
-              className="h-1.5 rounded-full transition-all duration-300"
+              className="h-full rounded-full transition-all duration-1000 ease-out shadow-[0_0_12px_rgba(0,0,0,0.1)]"
               style={{
                 width: `${progress}%`,
                 backgroundColor: project.color,
@@ -108,37 +116,37 @@ export function ProjectCard({ project }: ProjectCardProps) {
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <ListTodo className="h-3.5 w-3.5" />
-              {project.taskCount} tasks
-            </span>
-            <span className="flex items-center gap-1">
-              <Users className="h-3.5 w-3.5" />
-              {project.memberCount}
-            </span>
+        {/* Footer Meta */}
+        <div className="flex items-center justify-between pt-2 border-t border-on-surface-variant/5">
+          <div className="flex items-center gap-4">
+            <div className="flex -space-x-2.5">
+              {project.members.slice(0, 3).map((member) => (
+                <UserAvatar
+                  key={member.id}
+                  user={{ name: member.name, image: member.avatar }}
+                  size="xs"
+                  className="h-7 w-7 border-2 border-surface-container-lowest ring-1 ring-on-surface-variant/5"
+                />
+              ))}
+              {project.memberCount > 3 && (
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-container text-[9px] font-black text-on-surface-variant/60 border-2 border-surface-container-lowest">
+                  +{project.memberCount - 3}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-on-surface-variant/40">
+              <span className="flex items-center gap-1.5">
+                <ListTodo className="h-3 w-3" />
+                {project.taskCount}
+              </span>
+            </div>
           </div>
-
-          {/* Member avatars */}
-          <div className="flex -space-x-2">
-            {project.members.slice(0, 3).map((member) => (
-              <UserAvatar
-                key={member.id}
-                user={{ name: member.name, avatar: member.avatar }}
-                size="xs"
-                className="h-6 w-6 border-2 border-background"
-              />
-            ))}
-            {project.memberCount > 3 && (
-              <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-background bg-muted text-[10px] font-medium">
-                +{project.memberCount - 3}
-              </div>
-            )}
+          
+          <div className="h-8 w-8 rounded-full bg-surface-container-low flex items-center justify-center text-on-surface-variant/20 group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300">
+            <ArrowRight className="h-4 w-4" />
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

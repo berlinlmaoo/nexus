@@ -1,32 +1,29 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { Input } from "@/components/ui/input"
 import { PriorityBadge } from "@/components/tasks/priority-badge"
-import { StatusBadge } from "@/components/tasks/status-badge"
 import {
-  CheckSquare,
   Calendar,
-  FolderKanban,
   ChevronDown,
   ChevronRight,
   Plus,
   Loader2,
-  Check,
-  Circle,
+  Filter,
+  ArrowUpDown,
 } from "lucide-react"
 import { format, isPast, isToday, isAfter, addDays, subDays } from "date-fns"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { UserAvatar } from "@/components/ui/user-avatar"
+import { Button } from "@/components/ui/button"
 
 interface Task {
   id: string
   title: string
   description: string | null
-  status: string
-  priority: string
+  status: "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE" | "CANCELLED"
+  priority: "URGENT" | "HIGH" | "MEDIUM" | "LOW" | "NONE"
   dueDate: string | null
   createdAt: string
   tags: string[]
@@ -50,9 +47,7 @@ const PRIORITY_ORDER: Record<string, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, 
 function getSectionForTask(task: Task): string {
   const now = new Date()
   const sevenDaysFromNow = addDays(now, 7)
-
   if (!task.dueDate) return "No Due Date"
-
   const due = new Date(task.dueDate)
   if (isToday(due)) return "Today"
   if (isPast(due)) return "Overdue"
@@ -67,7 +62,7 @@ function getRecentlyAssigned(task: Task): boolean {
 
 const SECTION_ORDER = ["Overdue", "Today", "Recently Assigned", "Upcoming", "Later", "No Due Date"]
 
-export function MyTasksClient({ tasks, projects = [] }: { tasks: Task[]; projects?: ProjectInfo[] }) {
+export function MyTasksClient({ tasks, projects = [] }: { tasks: any[]; projects?: ProjectInfo[] }) {
   const router = useRouter()
   const [sortBy, setSortBy] = useState<SortBy>("dueDate")
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
@@ -78,24 +73,21 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: Task[]; project
   const [newTaskProject, setNewTaskProject] = useState(projects[0]?.id || "")
   const [addingTask, setAddingTask] = useState(false)
 
-  const visibleTasks = useMemo(() => tasks.filter(t => !hiddenTasks.has(t.id)), [tasks, hiddenTasks])
+  const typedTasks = tasks as Task[]
+  const visibleTasks = useMemo(() => typedTasks.filter(t => !hiddenTasks.has(t.id)), [typedTasks, hiddenTasks])
 
   const sections = useMemo(() => {
     const grouped: Record<string, Task[]> = {}
-
     visibleTasks.forEach(task => {
       const section = getSectionForTask(task)
       if (!grouped[section]) grouped[section] = []
       grouped[section].push(task)
-
-      // Also add to Recently Assigned if applicable and not already in Today/Overdue
       if (getRecentlyAssigned(task) && section !== "Today" && section !== "Overdue") {
         if (!grouped["Recently Assigned"]) grouped["Recently Assigned"] = []
         grouped["Recently Assigned"].push(task)
       }
     })
 
-    // Sort within each section
     Object.values(grouped).forEach(sectionTasks => {
       sectionTasks.sort((a, b) => {
         switch (sortBy) {
@@ -122,15 +114,6 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: Task[]; project
       .map(name => ({ name, tasks: grouped[name] }))
   }, [visibleTasks, sortBy])
 
-  const toggleSection = (name: string) => {
-    setCollapsedSections(prev => {
-      const next = new Set(prev)
-      if (next.has(name)) next.delete(name)
-      else next.add(name)
-      return next
-    })
-  }
-
   const quickComplete = async (taskId: string, e: React.MouseEvent) => {
     e.stopPropagation()
     setCompletingTasks(prev => new Set(prev).add(taskId))
@@ -142,38 +125,24 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: Task[]; project
       })
       if (res.ok) {
         setHiddenTasks(prev => new Set(prev).add(taskId))
-        toast.success("Task completed")
-      } else {
-        toast.error("Failed to complete task")
+        toast.success("Intelligence Synchronized")
       }
-    } catch (e) {
-      console.error(e)
-      toast.error("Failed to complete task")
-    } finally {
-      setCompletingTasks(prev => {
-        const next = new Set(prev)
-        next.delete(taskId)
-        return next
-      })
+    } catch (e) { console.error(e) } finally {
+      setCompletingTasks(prev => { const n = new Set(prev); n.delete(taskId); return n; })
     }
   }
 
-  const handleTaskClick = (task: Task) => {
+  const handleTaskClick = useCallback((task: Task) => {
     router.push(`/projects/${task.project.id}?task=${task.id}`)
-  }
+  }, [router])
 
   const handleInlineAdd = async (section: string) => {
     if (!newTaskTitle.trim() || !newTaskProject || addingTask) return
     const project = projects.find(p => p.id === newTaskProject)
     if (!project?.defaultTaskListId) return
-
     setAddingTask(true)
     try {
-      const dueDate = section === "Today" ? new Date().toISOString()
-        : section === "Upcoming" ? addDays(new Date(), 3).toISOString()
-        : section === "Later" ? addDays(new Date(), 14).toISOString()
-        : undefined
-
+      const dueDate = section === "Today" ? new Date().toISOString() : undefined
       const res = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -184,209 +153,159 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: Task[]; project
         }),
       })
       if (res.ok) {
-        setNewTaskTitle("")
-        setInlineAdding(null)
-        toast.success("Task created")
-        router.refresh()
-      } else {
-        toast.error("Failed to create task")
+        setNewTaskTitle(""); setInlineAdding(null); router.refresh();
       }
-    } catch (e) {
-      console.error(e)
-      toast.error("Failed to create task")
-    } finally {
-      setAddingTask(false)
-    }
+    } catch (e) { console.error(e) } finally { setAddingTask(false) }
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">My Tasks</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {visibleTasks.length} task{visibleTasks.length !== 1 ? "s" : ""} assigned to you
+    <div className="max-w-6xl mx-auto space-y-12 animate-fade-in pb-24">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-8">
+        <div className="space-y-2">
+          <h1 className="text-5xl font-headline font-black tracking-tighter text-primary">
+            Personal Protocols
+          </h1>
+          <p className="text-on-surface-variant/60 font-medium text-lg flex items-center gap-3">
+            <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+            Managing {typedTasks.length} tactical tasks
           </p>
         </div>
-        {visibleTasks.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Sort by:</span>
-            <select
-              className="h-8 rounded-md border border-input bg-background px-3 text-xs"
-              value={sortBy}
+        
+        <div className="flex items-center gap-3 bg-surface-container-low p-1.5 rounded-2xl">
+          <div className="flex items-center px-3 gap-2">
+            <ArrowUpDown className="h-3.5 w-3.5 text-on-surface-variant/40" />
+            <select 
+              value={sortBy} 
               onChange={(e) => setSortBy(e.target.value as SortBy)}
+              className="bg-transparent border-none text-[11px] font-black uppercase tracking-widest text-on-surface-variant/60 focus:ring-0 cursor-pointer"
             >
-              <option value="dueDate">Due Date</option>
+              <option value="dueDate">Timeline</option>
               <option value="priority">Priority</option>
-              <option value="project">Project</option>
-              <option value="dateAdded">Date Added</option>
+              <option value="project">Initiative</option>
+              <option value="dateAdded">Recency</option>
             </select>
           </div>
-        )}
+          <div className="h-6 w-[1px] bg-on-surface-variant/10" />
+          <button className="flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest text-primary hover:bg-surface-container transition-all">
+            <Filter className="h-3.5 w-3.5" /> Filter
+          </button>
+        </div>
       </div>
 
-      {visibleTasks.length === 0 ? (
-        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center animate-fade-in">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/60 mb-4">
-            <CheckSquare className="h-8 w-8 text-muted-foreground/50" />
-          </div>
-          <h3 className="text-lg font-semibold mb-1">No tasks assigned</h3>
-          <p className="text-sm text-muted-foreground max-w-xs">
-            You&apos;re all caught up! Tasks assigned to you will appear here.
-          </p>
-          <Link href="/projects" className="inline-flex items-center gap-2 mt-5 px-4 py-2 rounded-md bg-foreground text-background text-sm font-medium hover:bg-foreground/90 transition-colors">
-            <FolderKanban className="h-4 w-4" />
-            Browse Projects
-          </Link>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {sections.map(({ name, tasks: sectionTasks }) => {
-            const isCollapsed = collapsedSections.has(name)
-            const isOverdue = name === "Overdue"
+      <div className="space-y-16">
+        {sections.map((section) => (
+          <div key={section.name} className="space-y-6">
+            <div className="flex items-center justify-between px-2">
+              <div className="flex items-center gap-4 group cursor-pointer" onClick={() => {
+                const next = new Set(collapsedSections);
+                next.has(section.name) ? next.delete(section.name) : next.add(section.name);
+                setCollapsedSections(next);
+              }}>
+                <div className="h-8 w-8 rounded-xl bg-surface-container flex items-center justify-center text-primary transition-all group-hover:bg-primary group-hover:text-primary-foreground">
+                  {collapsedSections.has(section.name) ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </div>
+                <h3 className="font-headline font-black text-xs uppercase tracking-[0.25em] text-primary">
+                  {section.name}
+                </h3>
+                <span className="bg-surface-container-high px-2.5 py-0.5 rounded-full text-[10px] font-black text-on-surface-variant/60">
+                  {section.tasks.length}
+                </span>
+              </div>
+              <button 
+                onClick={() => setInlineAdding(section.name)}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest text-on-surface-variant/40 hover:text-primary hover:bg-surface-container-low transition-all"
+              >
+                <Plus className="h-4 w-4" /> New Tactical
+              </button>
+            </div>
 
-            return (
-              <div key={name}>
-                <button
-                  onClick={() => toggleSection(name)}
-                  className="flex items-center gap-2 mb-2 w-full text-left group transition-colors duration-200"
-                >
-                  {isCollapsed ? (
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                  )}
-                  <h2 className={cn(
-                    "font-semibold text-sm",
-                    isOverdue && "text-red-600"
-                  )}>
-                    {name}
-                  </h2>
-                  <span className={cn(
-                    "text-xs rounded-full px-2 py-0.5 font-medium",
-                    isOverdue ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400" : "bg-muted text-muted-foreground"
-                  )}>
-                    {sectionTasks.length}
-                  </span>
-                </button>
-
-                {!isCollapsed && (
-                  <div className="space-y-1 ml-6">
-                    {sectionTasks.map((task) => {
-                      const isCompleting = completingTasks.has(task.id)
-                      return (
-                        <div
-                          key={task.id}
-                          className="flex items-center gap-3 py-2.5 px-3 rounded-lg border hover:shadow-sm hover:border-border transition-all duration-200 cursor-pointer group"
-                          onClick={() => handleTaskClick(task)}
-                        >
-                          {/* Quick complete checkbox */}
-                          <button
-                            onClick={(e) => quickComplete(task.id, e)}
-                            disabled={isCompleting}
-                            className={cn(
-                              "shrink-0 h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors",
-                              task.status === "DONE"
-                                ? "bg-green-500 border-green-500 text-white"
-                                : "border-muted-foreground/30 hover:border-green-500 hover:bg-green-50"
-                            )}
-                          >
-                            {isCompleting ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : task.status === "DONE" ? (
-                              <Check className="h-3 w-3" />
-                            ) : null}
-                          </button>
-
-                          <div className="flex-1 min-w-0">
-                            <span className={cn(
-                              "text-sm font-medium",
-                              task.status === "DONE" && "line-through text-muted-foreground"
-                            )}>
-                              {task.title}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <FolderKanban className="h-3 w-3" />
-                              <span
-                                className="h-2 w-2 rounded-full inline-block"
-                                style={{ backgroundColor: task.project.color }}
-                              />
-                              {task.project.name}
-                            </span>
-                            {task.dueDate && (
-                              <span
-                                className={cn(
-                                  "flex items-center gap-1 text-xs",
-                                  isPast(new Date(task.dueDate)) &&
-                                    !isToday(new Date(task.dueDate))
-                                    ? "text-red-600"
-                                    : isToday(new Date(task.dueDate))
-                                    ? "text-orange-600"
-                                    : "text-muted-foreground"
-                                )}
-                              >
-                                <Calendar className="h-3 w-3" />
-                                {format(new Date(task.dueDate), "MMM d")}
-                              </span>
-                            )}
-                            <PriorityBadge priority={task.priority as "URGENT" | "HIGH" | "MEDIUM" | "LOW" | "NONE"} />
-                            <StatusBadge status={task.status as "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE" | "CANCELLED"} />
-                          </div>
-                        </div>
-                      )
-                    })}
-
-                    {/* Inline task creation */}
-                    {inlineAdding === name ? (
-                      <div className="flex items-center gap-2 py-2 px-3 rounded-md border border-dashed">
-                        <Circle className="h-5 w-5 text-muted-foreground/30 shrink-0" />
-                        <Input
-                          placeholder="Task name..."
-                          value={newTaskTitle}
-                          onChange={e => setNewTaskTitle(e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === "Enter") handleInlineAdd(name)
-                            if (e.key === "Escape") { setInlineAdding(null); setNewTaskTitle("") }
-                          }}
-                          className="h-7 border-0 p-0 text-sm focus-visible:ring-0 shadow-none"
-                          autoFocus
-                        />
-                        {projects.length > 1 && (
-                          <select
-                            className="h-7 rounded border text-xs bg-background px-2"
-                            value={newTaskProject}
-                            onChange={e => setNewTaskProject(e.target.value)}
-                          >
-                            {projects.map(p => (
-                              <option key={p.id} value={p.id}>{p.name}</option>
-                            ))}
-                          </select>
-                        )}
+            {!collapsedSections.has(section.name) && (
+              <div className="space-y-1">
+                {section.tasks.map((task) => {
+                  const isDone = task.status === "DONE"
+                  const isOverdue = task.dueDate && isPast(new Date(task.dueDate)) && !isToday(new Date(task.dueDate)) && !isDone
+                  return (
+                    <div
+                      key={task.id}
+                      onClick={() => handleTaskClick(task)}
+                      className="group grid grid-cols-[40px_1fr_140px_100px_120px] gap-0 items-center h-14 cursor-pointer transition-all duration-200 text-[13px] rounded-2xl mb-1 hover:bg-surface-container-low"
+                    >
+                      <div className="flex items-center justify-center h-full">
                         <button
-                          onClick={() => handleInlineAdd(name)}
-                          disabled={addingTask || !newTaskTitle.trim()}
-                          className="text-xs text-foreground font-medium hover:text-foreground/80 disabled:opacity-40"
+                          className={cn(
+                            "h-5 w-5 rounded-full border-2 transition-all duration-300 flex items-center justify-center",
+                            completingTasks.has(task.id) ? "border-primary/20" : "border-on-surface-variant/20 hover:border-primary"
+                          )}
+                          onClick={(e) => quickComplete(task.id, e)}
                         >
-                          {addingTask ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Add"}
+                          {completingTasks.has(task.id) ? <Loader2 className="h-3 w-3 animate-spin text-primary" /> : <div className="w-2 h-2 rounded-full bg-primary opacity-0 group-hover:opacity-20" />}
                         </button>
                       </div>
-                    ) : (
-                      <button
-                        onClick={() => { setInlineAdding(name); setNewTaskTitle("") }}
-                        className="flex items-center gap-2 py-1.5 px-3 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+
+                      <div className="flex items-center gap-3 px-4 min-w-0">
+                        <span className={cn("text-sm font-bold truncate transition-all duration-300", isDone ? "text-on-surface-variant/30 line-through" : "text-primary")}>
+                          {task.title}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center px-4 gap-2">
+                        <div className="h-2 w-2 rounded-full shadow-sm" style={{ backgroundColor: task.project.color }} />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/40 truncate">{task.project.name}</span>
+                      </div>
+
+                      <div className="flex items-center justify-center px-4">
+                        <PriorityBadge priority={task.priority} className="text-[9px] uppercase font-black tracking-widest border-none bg-transparent" />
+                      </div>
+
+                      <div className="flex items-center justify-center px-4 pr-8">
+                        {task.dueDate ? (
+                          <div className={cn("flex items-center gap-1.5 text-[11px] font-black uppercase tracking-tighter", isOverdue ? "text-error" : "text-on-surface-variant/30")}>
+                            <Calendar className="h-3.5 w-3.5" />
+                            <span>{format(new Date(task.dueDate), "MMM d")}</span>
+                          </div>
+                        ) : (
+                          <span className="text-on-surface-variant/10 text-[11px] font-black">---</span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {inlineAdding === section.name && (
+                  <div className="p-4 bg-surface-container-lowest rounded-3xl shadow-xl shadow-primary/5 ring-2 ring-primary/5 animate-scale-in">
+                    <input
+                      autoFocus
+                      placeholder="Protocol Designation..."
+                      value={newTaskTitle}
+                      onChange={(e) => setNewTaskTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleInlineAdd(section.name)
+                        if (e.key === "Escape") setInlineAdding(null)
+                      }}
+                      className="w-full bg-transparent border-none p-0 text-lg font-bold text-primary placeholder:text-on-surface-variant/10 focus:ring-0"
+                    />
+                    <div className="flex items-center justify-between mt-4">
+                      <select 
+                        value={newTaskProject}
+                        onChange={(e) => setNewTaskProject(e.target.value)}
+                        className="bg-surface-container-low border-none rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-on-surface-variant/60 focus:ring-2 focus:ring-primary/5"
                       >
-                        <Plus className="h-3.5 w-3.5" /> Add task
-                      </button>
-                    )}
+                        {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="ghost" className="font-bold text-[10px] uppercase tracking-widest" onClick={() => setInlineAdding(null)}>Cancel</Button>
+                        <Button size="sm" className="bg-primary text-primary-foreground font-bold text-[10px] uppercase tracking-widest px-4" onClick={() => handleInlineAdd(section.name)} disabled={addingTask}>
+                          {addingTask ? <Loader2 className="h-3 w-3 animate-spin" /> : "Deploy"}
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
-            )
-          })}
-        </div>
-      )}
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

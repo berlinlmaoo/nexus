@@ -9,14 +9,22 @@ interface ToolResult {
   result: unknown
 }
 
-interface MessageBubbleProps {
-  role: 'user' | 'assistant'
+interface Message {
+  id: string
+  role: "user" | "assistant"
   content: string
+}
+
+interface MessageBubbleProps {
+  role?: 'user' | 'assistant'
+  content?: string
+  message?: Message
   toolResults?: ToolResult[]
   isStreaming?: boolean
 }
 
 function formatContent(text: string) {
+  if (!text) return []
   const parts: React.ReactNode[] = []
   let key = 0
 
@@ -67,8 +75,10 @@ function formatContent(text: string) {
   return parts
 }
 
-export function MessageBubble({ role, content, toolResults, isStreaming }: MessageBubbleProps) {
-  const isUser = role === 'user'
+export function MessageBubble({ role, content, message, toolResults, isStreaming }: MessageBubbleProps) {
+  const finalRole = message?.role || role
+  const finalContent = message?.content || content || ""
+  const isUser = finalRole === 'user'
 
   return (
     <div className={cn('flex w-full gap-2', isUser ? 'justify-end' : 'justify-start')}>

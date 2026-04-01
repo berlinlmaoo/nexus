@@ -120,6 +120,7 @@ export function useOptimisticTasks(initialSections: TaskSection[]) {
         tags: [],
         assignees: [],
         taskListId: sectionId,
+        projectId,
         dueDate: null,
         description: null,
       }

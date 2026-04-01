@@ -73,6 +73,7 @@ export default async function ProjectPageView({ params }: PageViewProps) {
       dueDate: t.dueDate?.toISOString() || null,
       tags: t.tags,
       position: t.position,
+      projectId: page.project.id,
       taskListId: t.taskListId,
       taskListName: tl.name,
       assignees: t.assignees.map((a) => ({

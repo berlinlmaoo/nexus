@@ -59,6 +59,11 @@ export function InlineDatabase({
   const [docs, setDocs] = useState<DocItem[]>([])
   const [loading, setLoading] = useState(true)
   const [resizeHeight, setResizeHeight] = useState(maxHeight)
+  const [isClient, setIsClient] = useState(false)
+
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -123,10 +128,10 @@ export function InlineDatabase({
               key={id}
               onClick={() => setViewType(id)}
               className={cn(
-                "p-1.5 rounded transition-colors",
+                "p-1.5 rounded-lg transition-all",
                 viewType === id
-                  ? "bg-zinc-900 text-white"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  ? "bg-primary text-primary-foreground shadow-md scale-110"
+                  : "text-on-surface-variant/40 hover:text-on-surface hover:bg-surface-container-high"
               )}
               title={label}
             >
@@ -150,18 +155,18 @@ export function InlineDatabase({
               className="overflow-y-auto"
               style={{ maxHeight: resizeHeight }}
             >
-              {loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="h-5 w-5 border-2 border-zinc-300 border-t-zinc-900 rounded-full animate-spin" />
+              {loading || !isClient ? (
+                <div className="flex items-center justify-center py-24">
+                  <div className="h-8 w-8 border-2 border-primary/10 border-t-primary rounded-full animate-spin" />
                 </div>
               ) : (
-                <>
+                <div className="bg-surface-container-lowest/50 backdrop-blur-sm">
                   {type === "tasks" || type === "calendar" ? (
                     <TasksView tasks={tasks} viewType={viewType} />
                   ) : type === "docs" ? (
                     <DocsView docs={docs} viewType={viewType} />
                   ) : null}
-                </>
+                </div>
               )}
             </div>
 
@@ -209,16 +214,16 @@ function TasksView({ tasks, viewType }: { tasks: TaskCardData[]; viewType: ViewT
   }
 
   if (viewType === "gallery") {
-    return <DatabaseGalleryView items={tasks.map(t => ({
+    return <DatabaseGalleryView items={(tasks || []).map(t => ({
       id: t.id,
-      title: t.title,
-      subtitle: t.status.replace("_", " "),
+      title: t.title || "Untitled Task",
+      subtitle: (t.status || "").replace("_", " "),
       coverColor: t.priority === "URGENT" ? "from-red-100 to-red-50" : t.priority === "HIGH" ? "from-orange-100 to-orange-50" : t.priority === "MEDIUM" ? "from-yellow-100 to-yellow-50" : "from-zinc-100 to-zinc-50",
       properties: [
-        { label: "Status", value: t.status.replace("_", " ") },
-        { label: "Priority", value: t.priority },
+        { label: "Status", value: (t.status || "TODO").replace("_", " ") },
+        { label: "Priority", value: t.priority || "NONE" },
       ],
-      assignees: t.assignees,
+      assignees: t.assignees || [],
     }))} />
   }
 
@@ -236,16 +241,17 @@ function TasksView({ tasks, viewType }: { tasks: TaskCardData[]; viewType: ViewT
             </tr>
           </thead>
           <tbody>
-            {tasks.map((task) => (
+            {(tasks || []).map((task) => (
               <tr key={task.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                <td className="px-4 py-2.5 font-medium">{task.title}</td>
-                <td className="px-4 py-2.5"><StatusBadge status={task.status} /></td>
-                <td className="px-4 py-2.5"><PriorityBadge priority={task.priority} /></td>
+                <td className="px-4 py-2.5 font-medium">{task.title || "Untitled"}</td>
+                <td className="px-4 py-2.5"><StatusBadge status={task.status || "TODO"} /></td>
+                <td className="px-4 py-2.5"><PriorityBadge priority={task.priority || "NONE"} /></td>
                 <td className="px-4 py-2.5">
                   <div className="flex -space-x-1">
-                    {task.assignees.slice(0, 2).map((a) => (
-                      <UserAvatar key={a.id} user={{ name: a.name, avatar: a.avatar }} size="xs" />
-                    ))}
+                    {(task.assignees || []).slice(0, 2).map((a: any) => {
+                      const userData = a.user || a;
+                      return <UserAvatar key={userData.id || Math.random()} user={{ name: userData.name, avatar: userData.avatar }} size="xs" />
+                    })}
                   </div>
                 </td>
                 <td className="px-4 py-2.5 text-xs text-muted-foreground">
@@ -260,7 +266,8 @@ function TasksView({ tasks, viewType }: { tasks: TaskCardData[]; viewType: ViewT
   }
 
   if (viewType === "board") {
-    const grouped = tasks.reduce<Record<string, TaskCardData[]>>((acc, t) => {
+    const grouped = (tasks || []).reduce<Record<string, TaskCardData[]>>((acc, t) => {
+      if (!t.status) return acc
       if (!acc[t.status]) acc[t.status] = []
       acc[t.status].push(t)
       return acc
@@ -271,14 +278,14 @@ function TasksView({ tasks, viewType }: { tasks: TaskCardData[]; viewType: ViewT
         {["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"].map((status) => (
           <div key={status} className="min-w-[200px] flex-1">
             <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-              {status.replace("_", " ")} ({grouped[status]?.length || 0})
+              {(status || "").replace("_", " ")} ({grouped[status]?.length || 0})
             </div>
             <div className="space-y-2">
               {(grouped[status] || []).map((t) => (
                 <div key={t.id} className="rounded-md border bg-background p-2.5 text-sm hover:shadow-sm transition-shadow">
-                  <p className="font-medium text-xs">{t.title}</p>
+                  <p className="font-medium text-xs">{t.title || "Untitled"}</p>
                   <div className="mt-1.5 flex items-center gap-1.5">
-                    <PriorityBadge priority={t.priority} showLabel={false} />
+                    <PriorityBadge priority={t.priority || "NONE"} showLabel={false} />
                     {t.dueDate && (
                       <span className="text-[10px] text-muted-foreground">
                         {format(new Date(t.dueDate), "MMM d")}
@@ -297,20 +304,21 @@ function TasksView({ tasks, viewType }: { tasks: TaskCardData[]; viewType: ViewT
   // Default: list view
   return (
     <div className="divide-y">
-      {tasks.map((task) => (
+      {(tasks || []).map((task) => (
         <div key={task.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors">
-          <StatusBadge status={task.status} showLabel={false} />
-          <span className="text-sm font-medium flex-1 truncate">{task.title}</span>
-          <PriorityBadge priority={task.priority} showLabel={false} />
+          <StatusBadge status={task.status || "TODO"} showLabel={false} />
+          <span className="text-sm font-medium flex-1 truncate">{task.title || "Untitled"}</span>
+          <PriorityBadge priority={task.priority || "NONE"} showLabel={false} />
           {task.dueDate && (
             <span className="text-xs text-muted-foreground">
               {format(new Date(task.dueDate), "MMM d")}
             </span>
           )}
           <div className="flex -space-x-1">
-            {task.assignees.slice(0, 2).map((a) => (
-              <UserAvatar key={a.id} user={{ name: a.name, avatar: a.avatar }} size="xs" />
-            ))}
+            {(task.assignees || []).slice(0, 2).map((a: any) => {
+              const userData = a.user || a;
+              return <UserAvatar key={userData.id || Math.random()} user={{ name: userData.name, avatar: userData.avatar }} size="xs" />
+            })}
           </div>
         </div>
       ))}

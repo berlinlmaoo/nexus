@@ -16,6 +16,7 @@ export interface TaskCardData {
   dueDate: string | null
   tags: string[]
   position: number
+  projectId: string
   taskListId: string
   taskListName?: string
   taskType?: "TASK" | "MILESTONE" | "APPROVAL"

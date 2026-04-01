@@ -30,6 +30,9 @@ export async function GET(
         members: {
           include: { user: true },
         },
+        pages: {
+          orderBy: { createdAt: "asc" },
+        },
       },
     })
 

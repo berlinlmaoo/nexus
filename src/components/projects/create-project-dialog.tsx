@@ -3,13 +3,9 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -24,11 +20,12 @@ import {
   Zap,
   Plus,
   Loader2,
+  Sparkles,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const PRESET_COLORS = [
-  "#18181B",
+  "#0c1427",
   "#3B82F6",
   "#10B981",
   "#F59E0B",
@@ -70,7 +67,6 @@ export function CreateProjectDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
-
     setLoading(true)
     try {
       const res = await fetch("/api/projects", {
@@ -84,123 +80,119 @@ export function CreateProjectDialog({
           workspaceId,
         }),
       })
-
       if (res.ok) {
         setOpen(false)
-        setName("")
-        setDescription("")
-        setColor(PRESET_COLORS[0])
-        setIcon("folder")
-        router.refresh()
+        setName(""); setDescription(""); router.refresh();
       }
-    } catch (error) {
-      console.error("Failed to create project:", error)
-    } finally {
-      setLoading(false)
-    }
+    } catch (error) { console.error(error) } finally { setLoading(false) }
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {children || (
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            New Project
+          <Button className="bg-primary text-primary-foreground rounded-2xl h-14 px-8 font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-primary/20 transition-all hover:-translate-y-1 active:scale-95">
+            <Plus className="h-4 w-4 mr-3" />
+            Establish Initiative
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[480px]">
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>Create New Project</DialogTitle>
-            <DialogDescription>
-              Add a new project to your workspace.
-            </DialogDescription>
+      <DialogContent className="sm:max-w-[540px] rounded-[3rem] border-none shadow-2xl p-10 bg-surface-container-highest overflow-hidden">
+        <div className="absolute top-0 right-0 w-48 h-48 bg-primary/[0.03] rounded-full blur-[80px] -mr-24 -mt-24" />
+        
+        <form onSubmit={handleSubmit} className="relative z-10 space-y-10">
+          <DialogHeader className="space-y-3">
+            <div className="h-12 w-12 rounded-2xl bg-primary flex items-center justify-center text-primary-foreground shadow-lg shadow-primary/20 mb-2">
+              <Sparkles className="h-6 w-6" />
+            </div>
+            <DialogTitle className="text-3xl font-headline font-black text-primary tracking-tight text-left">Initiate New Protocol</DialogTitle>
+            <p className="text-sm font-medium text-on-surface-variant/60 text-left leading-relaxed">Define the parameters for a new strategic initiative within the Nexus ecosystem.</p>
           </DialogHeader>
 
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="project-name">Project Name</Label>
-              <Input
-                id="project-name"
-                placeholder="e.g. Website Redesign"
+          <div className="space-y-8">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/40 ml-1">Initiative Designation</label>
+              <input
+                placeholder="e.g. Operation Alpha"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
+                className="w-full h-14 bg-surface-container-low border-none rounded-2xl px-6 text-sm font-bold text-primary focus:ring-4 focus:ring-primary/5 transition-all"
               />
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="project-description">Description</Label>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/40 ml-1">Strategic Objective</label>
               <textarea
-                id="project-description"
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18181B] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
-                placeholder="Describe your project..."
+                placeholder="Briefly describe the mission parameters..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
+                className="w-full h-24 bg-surface-container-low border-none rounded-2xl px-6 py-4 text-sm font-bold text-primary focus:ring-4 focus:ring-primary/5 transition-all resize-none"
               />
             </div>
 
-            <div className="grid gap-2">
-              <Label>Color</Label>
-              <div className="flex flex-wrap gap-2">
-                {PRESET_COLORS.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    className={cn(
-                      "h-8 w-8 rounded-full transition-all duration-150 ring-offset-background",
-                      color === c
-                        ? "ring-2 ring-offset-2 ring-[#18181B] scale-110"
-                        : "hover:scale-105"
-                    )}
-                    style={{ backgroundColor: c }}
-                    onClick={() => setColor(c)}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div className="grid gap-2">
-              <Label>Icon</Label>
-              <div className="flex flex-wrap gap-2">
-                {ICONS.map((item) => {
-                  const IconComp = item.icon
-                  return (
+            <div className="grid grid-cols-2 gap-8">
+              <div className="space-y-4">
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/40 ml-1">Protocol Color</label>
+                <div className="flex flex-wrap gap-2">
+                  {PRESET_COLORS.slice(0, 5).map((c) => (
                     <button
-                      key={item.id}
+                      key={c}
                       type="button"
                       className={cn(
-                        "flex h-10 w-10 items-center justify-center rounded-lg border transition-all duration-150",
-                        icon === item.id
-                          ? "border-[#18181B] bg-[#18181B]/10 text-[#18181B]"
-                          : "border-input hover:border-[#18181B]/50 hover:bg-accent"
+                        "h-7 w-7 rounded-full transition-all duration-300 ring-offset-2 ring-offset-surface-container-highest",
+                        color === c ? "ring-2 ring-primary scale-110 shadow-lg" : "hover:scale-110"
                       )}
-                      onClick={() => setIcon(item.id)}
-                      title={item.label}
-                    >
-                      <IconComp className="h-5 w-5" />
-                    </button>
-                  )
-                })}
+                      style={{ backgroundColor: c }}
+                      onClick={() => setColor(c)}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/40 ml-1">Protocol Icon</label>
+                <div className="flex gap-2">
+                  {ICONS.slice(0, 4).map((item) => {
+                    const IconComp = item.icon
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={cn(
+                          "h-10 w-10 flex items-center justify-center rounded-xl transition-all duration-300",
+                          icon === item.id
+                            ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+                            : "bg-surface-container-low text-on-surface-variant/40 hover:bg-surface-container"
+                        )}
+                        onClick={() => setIcon(item.id)}
+                      >
+                        <IconComp className="h-4 w-4" />
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </div>
           </div>
 
-          <DialogFooter>
+          <div className="flex gap-3 pt-4">
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
+              className="flex-1 h-14 rounded-2xl font-black text-xs uppercase tracking-widest text-on-surface-variant/40 hover:bg-surface-container transition-all"
               onClick={() => setOpen(false)}
             >
-              Cancel
+              Abort
             </Button>
-            <Button type="submit" disabled={loading || !name.trim()}>
-              {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Create Project
+            <Button 
+              type="submit" 
+              disabled={loading || !name.trim()}
+              className="flex-[2] h-14 bg-primary text-primary-foreground rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-primary/10 transition-all hover:shadow-2xl active:scale-95"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Deploy Initiative"}
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>
