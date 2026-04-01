@@ -11,28 +11,28 @@ interface StatusBadgeProps {
 
 const statusConfig = {
   TODO: {
-    label: "To Do",
-    color: "bg-muted text-muted-foreground border-border",
+    label: "Pending",
+    color: "bg-surface-container-high text-on-surface-variant border-transparent",
     icon: Circle,
   },
   IN_PROGRESS: {
-    label: "In Progress",
-    color: "bg-blue-100 text-blue-700 border-blue-200",
+    label: "Executing",
+    color: "bg-primary/10 text-primary border-primary/20",
     icon: Loader2,
   },
   IN_REVIEW: {
-    label: "In Review",
-    color: "bg-muted text-muted-foreground border-border",
+    label: "Evaluating",
+    color: "bg-secondary/10 text-secondary border-secondary/20",
     icon: Eye,
   },
   DONE: {
-    label: "Done",
-    color: "bg-green-100 text-green-700 border-green-200",
+    label: "Finalized",
+    color: "bg-green-500/10 text-green-600 border-green-500/20",
     icon: CheckCircle2,
   },
   CANCELLED: {
-    label: "Cancelled",
-    color: "bg-red-100 text-red-700 border-red-200",
+    label: "Terminated",
+    color: "bg-red-500/10 text-red-600 border-red-500/20",
     icon: XCircle,
   },
 }
@@ -42,18 +42,18 @@ export function StatusBadge({
   className,
   showLabel = true,
 }: StatusBadgeProps) {
-  const config = statusConfig[status]
+  const config = statusConfig[status] || statusConfig.TODO
   const Icon = config.icon
 
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap",
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all",
         config.color,
         className
       )}
     >
-      <Icon className="h-3 w-3" />
+      <Icon className={cn("h-3 w-3", status === "IN_PROGRESS" && "animate-spin")} />
       {showLabel && config.label}
     </span>
   )

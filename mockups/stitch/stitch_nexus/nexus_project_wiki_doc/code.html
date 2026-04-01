@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-variant": "#e0e3e5",
+              "tertiary": "#001624",
+              "primary": "#0c1427",
+              "inverse-surface": "#2d3133",
+              "on-secondary": "#ffffff",
+              "on-secondary-container": "#54647a",
+              "on-secondary-fixed": "#0b1c30",
+              "surface-container-lowest": "#ffffff",
+              "on-tertiary-fixed-variant": "#004c6e",
+              "tertiary-fixed-dim": "#89ceff",
+              "on-primary-fixed": "#131b2e",
+              "on-tertiary-fixed": "#001e2f",
+              "on-surface-variant": "#45474c",
+              "primary-container": "#21283c",
+              "on-secondary-fixed-variant": "#38485d",
+              "surface-container": "#eceef0",
+              "on-primary-fixed-variant": "#3f465c",
+              "background": "#f7f9fb",
+              "tertiary-container": "#002c42",
+              "surface-container-high": "#e6e8ea",
+              "on-primary-container": "#888fa7",
+              "surface-bright": "#f7f9fb",
+              "surface-dim": "#d8dadc",
+              "inverse-primary": "#bec6e0",
+              "inverse-on-surface": "#eff1f3",
+              "on-error": "#ffffff",
+              "error": "#ba1a1a",
+              "on-background": "#191c1e",
+              "secondary-container": "#d0e1fb",
+              "tertiary-fixed": "#c9e6ff",
+              "outline": "#75777d",
+              "surface-container-highest": "#e0e3e5",
+              "on-tertiary": "#ffffff",
+              "primary-fixed": "#dae2fd",
+              "on-tertiary-container": "#0099d9",
+              "error-container": "#ffdad6",
+              "secondary-fixed": "#d3e4fe",
+              "surface-tint": "#565e74",
+              "primary-fixed-dim": "#bec6e0",
+              "secondary-fixed-dim": "#b7c8e1",
+              "secondary": "#505f76",
+              "surface": "#f7f9fb",
+              "on-surface": "#191c1e",
+              "on-error-container": "#93000a",
+              "on-primary": "#ffffff",
+              "outline-variant": "#c5c6cd",
+              "surface-container-low": "#f2f4f6"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3 { font-family: 'Manrope', sans-serif; }
+    </style>
+</head>
+<body class="bg-background text-on-surface min-h-screen">
+<!-- SideNavBar (Authority: JSON & Design System) -->
+<aside class="h-screen w-64 fixed left-0 top-0 overflow-y-auto z-50 bg-slate-50 border-r border-slate-200/50 flex flex-col p-4 gap-y-1 font-manrope text-sm font-medium text-slate-900">
+<div class="mb-8 px-3">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-primary flex items-center justify-center text-white font-black text-xs">NX</div>
+<div>
+<h2 class="text-lg font-black text-slate-900 uppercase tracking-widest leading-none">NEXUS</h2>
+<p class="text-[10px] text-slate-500 font-medium">Enterprise Workspace</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 bg-slate-200/50 text-slate-900 rounded-lg px-3 py-2 transition-all duration-150" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="folder_open">folder_open</span>
+<span>Projects</span>
+</a>
+<a class="flex items-center gap-3 text-slate-500 px-3 py-2 hover:bg-slate-100 rounded-lg transition-all duration-150" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="star">star</span>
+<span>Favorites</span>
+</a>
+<a class="flex items-center gap-3 text-slate-500 px-3 py-2 hover:bg-slate-100 rounded-lg transition-all duration-150" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="group">group</span>
+<span>Teams</span>
+</a>
+<a class="flex items-center gap-3 text-slate-500 px-3 py-2 hover:bg-slate-100 rounded-lg transition-all duration-150" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="check_circle">check_circle</span>
+<span>Tasks</span>
+</a>
+<a class="flex items-center gap-3 text-slate-500 px-3 py-2 hover:bg-slate-100 rounded-lg transition-all duration-150" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="inbox">inbox</span>
+<span>Inbox</span>
+</a>
+</nav>
+<div class="mt-auto pt-4 space-y-1">
+<button class="w-full mb-4 py-2 px-4 bg-primary text-white rounded-lg font-semibold text-xs tracking-tight hover:opacity-90 transition-opacity">
+                Quick Add
+            </button>
+<a class="flex items-center gap-3 text-slate-500 px-3 py-2 hover:bg-slate-100 rounded-lg" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="help_outline">help_outline</span>
+<span>Help Center</span>
+</a>
+<a class="flex items-center gap-3 text-slate-500 px-3 py-2 hover:bg-slate-100 rounded-lg" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="delete">delete</span>
+<span>Trash</span>
+</a>
+</div>
+</aside>
+<!-- Main Canvas Area -->
+<main class="ml-64 min-h-screen flex flex-col">
+<!-- TopNavBar (Authority: JSON & Design System) -->
+<header class="w-full sticky top-0 z-40 bg-white flex items-center justify-between px-6 py-3 font-manrope text-sm font-medium tracking-tight">
+<div class="flex items-center gap-8">
+<span class="text-xl font-bold tracking-tighter text-slate-900">NEXUS</span>
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-slate-500 hover:text-slate-700 transition-colors duration-200" href="#">Dashboard</a>
+<a class="text-slate-500 hover:text-slate-700 transition-colors duration-200" href="#">Analytics</a>
+<a class="text-slate-900 font-semibold border-b-2 border-slate-900 pb-1" href="#">Reports</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative group">
+<div class="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-slate-400 text-[18px]" data-icon="search">search</span>
+</div>
+<input class="pl-10 pr-4 py-1.5 bg-surface-container-high border-none rounded-lg text-xs focus:ring-2 focus:ring-primary/20 w-48 transition-all" placeholder="Search doc..." type="text"/>
+</div>
+<button class="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+<img alt="User Profile Avatar" class="w-8 h-8 rounded-full border border-slate-200" data-alt="professional portrait of a creative director in a minimalist office setting with soft natural light" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAlMaD_jpmF6wNi6JiNexc5cya_RFhuDpeBbPQ56gsu-jnxtPN2cPeuBX0g17BEXkqEIiBD5-8MYl3NoWFHvBRwJDp-tSleSGX9akZnfiUY4Ny7Z6UhN0Gb2YcFRdclIzVEx3LJQXkg-QY3GE2wkSOToQwgYf81pI9XOPJYOnDkG93n88AK67SuKuc1Dx7AmOBsb0_EQxYB1lDkXKgq-7USlLu6XbTzXVfhHANMtgWjs3BajQr6pzZ1TYAUcqMeLvYIby724tlmbgY"/>
+</div>
+</header>
+<!-- Document Content -->
+<div class="flex-1 px-12 py-16 max-w-5xl mx-auto w-full">
+<!-- Contextual Actions -->
+<div class="flex items-center justify-between mb-12 border-b border-outline-variant/10 pb-4">
+<div class="flex items-center gap-2 text-on-surface-variant text-[13px] font-medium">
+<span class="material-symbols-outlined text-[16px]" data-icon="folder">folder</span>
+<span>Resources</span>
+<span class="mx-1">/</span>
+<span>Documentation</span>
+</div>
+<div class="flex items-center gap-2">
+<button class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold hover:bg-surface-container transition-colors rounded">
+<span class="material-symbols-outlined text-[18px]" data-icon="share">share</span>
+                        Share
+                    </button>
+<button class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold hover:bg-surface-container transition-colors rounded">
+<span class="material-symbols-outlined text-[18px]" data-icon="history">history</span>
+                        History
+                    </button>
+<button class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold hover:bg-surface-container transition-colors rounded">
+<span class="material-symbols-outlined text-[18px]" data-icon="chat_bubble">chat_bubble</span>
+                        Comments
+                    </button>
+</div>
+</div>
+<!-- Page Header -->
+<div class="mb-16">
+<div class="w-full h-48 rounded-xl mb-12 overflow-hidden relative group">
+<img alt="Cover" class="w-full h-full object-cover" data-alt="abstract architectural geometry with clean lines and soft shadows in a monochrome slate palette" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBin7aGwlVcG7aZFtJ4proSXq4DUUA3cNsuanXPhN2_p16Rj2pjyZZlOHmddnFnXUrh3zc-gnz4Y3CGV28KvV9LiXSwh-M3CZO5_AaRYS5zJTUXA5XOvRaoIpjLaoQunDkYEuXi4hq452X1LlbASBfuIUbFwhWbghDxSjSZMZUvfaGyCf7Y80EdN3WxmmXgOw_1fPbnS0I1rEPbxfLykvmPSUpD9w5FWYKoAaUYCeDycHW-mBHc_ZDI5vhtTk5YHBYXCAjU2FAvMiQ"/>
+<div class="absolute inset-0 bg-gradient-to-t from-primary/20 to-transparent"></div>
+</div>
+<h1 class="text-5xl font-extrabold tracking-tight text-primary mb-4">Project Blueprint</h1>
+<p class="text-xl text-on-surface-variant font-light max-w-2xl leading-relaxed">
+                    A comprehensive framework for the upcoming Nexus ecosystem expansion. This document outlines core architectural decisions and strategic milestones.
+                </p>
+<div class="flex items-center gap-4 mt-8">
+<div class="flex -space-x-2">
+<img class="w-6 h-6 rounded-full border-2 border-white" data-alt="close-up portrait of a woman looking focused" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBla-LUcmV76TX3h_MlLmjG8TdHzybQnbw3c4Wp3lux3Eeqy_DtwEsG9g_smaWDtjX5zTrIuDEiUOTXxwHtlDnbywSXXozjVPy-84IAqUgM_iE3vA-rfF3FwT3Qm5kAcPblfZm-g0fPncECI9ecDjWRhUAK-1qgUpdx9-SJG7sJwnKh_kD6ot87Ak94QFeVCUR4a0CfzvVLPPchl3bM72uhAANg0ihu-uKqADszzIt4N9cGiQHQ6GAFROjwi3moAcYzbrsQ7brqNyo"/>
+<img class="w-6 h-6 rounded-full border-2 border-white" data-alt="close-up portrait of a man in casual attire" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDjgu5Z259vBKV1FKSecV5AGlzC3HqOgyd6wvmBMfgncrYmXA2kb1iKay4n7fSUZDBzECvAhb5JJAcD-UhdBNxnhl5Uksv7LXbt6bGtaSrMNf6HTzhs8WdsIDydpIZ3IGS3F5hxeG5T1FqamYfZeEmf7-zmLyukP2a3OwjFenDVh6H5Zz_XuH2q1K6SjSLEIen-wOmmtWuZhG__1NLpV6LgXyj7Pyoe0WboK53u41SFsd1TVUEHkmg0AT6DnjTfdx_sJ-rNshSV-lg"/>
+</div>
+<span class="text-xs text-on-surface-variant">Last edited by Sarah Chen 2 hours ago</span>
+</div>
+</div>
+<!-- Document Sections -->
+<div class="space-y-12">
+<section>
+<h2 class="text-2xl font-bold text-primary mb-6 flex items-center gap-3">
+<span class="w-1.5 h-6 bg-primary rounded-full"></span>
+                        Executive Summary
+                    </h2>
+<div class="space-y-4 text-on-surface leading-loose font-body text-base">
+<p>
+                            The Nexus expansion aims to redefine how cross-functional teams collaborate within the enterprise space. By leveraging <span class="bg-secondary-container text-on-secondary-fixed px-1 rounded">Asymmetric Workflow Design</span>, we reduce cognitive load while maximizing output velocity.
+                        </p>
+<p>
+                            Our primary objective is to move away from the "grid-and-border" constraints that have historically limited digital workspace flexibility.
+                        </p>
+</div>
+</section>
+<section class="grid grid-cols-1 md:grid-cols-2 gap-8 py-8 px-8 bg-surface-container-low rounded-xl">
+<div class="space-y-4">
+<h3 class="text-lg font-bold text-primary">Key Pillars</h3>
+<ul class="space-y-3">
+<li class="flex items-start gap-3 text-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-primary text-[20px]" data-icon="auto_awesome">auto_awesome</span>
+<span><strong>Minimalist Intent:</strong> Every pixel must earn its right to exist. No unnecessary lines.</span>
+</li>
+<li class="flex items-start gap-3 text-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-primary text-[20px]" data-icon="bolt">bolt</span>
+<span><strong>High Velocity:</strong> Interactions that feel tactile and instantaneous.</span>
+</li>
+<li class="flex items-start gap-3 text-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-primary text-[20px]" data-icon="psychology">psychology</span>
+<span><strong>Cognitive Ease:</strong> Using whitespace as a functional component.</span>
+</li>
+</ul>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-lg shadow-sm border border-outline-variant/5">
+<h3 class="text-sm font-bold text-on-surface-variant uppercase tracking-widest mb-4">Milestone Progress</h3>
+<div class="space-y-6">
+<div>
+<div class="flex justify-between text-xs mb-2">
+<span class="font-medium">Infrastructure Design</span>
+<span class="text-on-tertiary-container font-bold">85%</span>
+</div>
+<div class="w-full h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="w-[85%] h-full bg-primary"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between text-xs mb-2">
+<span class="font-medium">Alpha Testing</span>
+<span class="text-on-tertiary-container font-bold">32%</span>
+</div>
+<div class="w-full h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="w-[32%] h-full bg-primary"></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section>
+<h2 class="text-2xl font-bold text-primary mb-6 flex items-center gap-3">
+<span class="w-1.5 h-6 bg-on-tertiary-container rounded-full"></span>
+                        Action Items &amp; Checklist
+                    </h2>
+<div class="space-y-1">
+<div class="group flex items-center gap-4 p-3 hover:bg-surface-container-low rounded-lg transition-colors cursor-pointer">
+<div class="w-5 h-5 border-2 border-outline rounded flex items-center justify-center group-hover:border-primary">
+<span class="material-symbols-outlined text-[16px] text-primary opacity-0 group-hover:opacity-10" data-icon="check">check</span>
+</div>
+<span class="text-base text-on-surface">Finalize the architectural document for board review</span>
+<span class="ml-auto text-[10px] font-bold uppercase tracking-tighter bg-tertiary-container text-on-tertiary-container px-2 py-0.5 rounded">High Priority</span>
+</div>
+<div class="group flex items-center gap-4 p-3 bg-surface-container-low rounded-lg transition-colors cursor-pointer">
+<div class="w-5 h-5 bg-primary rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-[16px] text-white" data-icon="check" style="font-variation-settings: 'FILL' 1;">check</span>
+</div>
+<span class="text-base text-on-surface-variant line-through">Establish the primary color palette and typography scale</span>
+</div>
+<div class="group flex items-center gap-4 p-3 hover:bg-surface-container-low rounded-lg transition-colors cursor-pointer">
+<div class="w-5 h-5 border-2 border-outline rounded flex items-center justify-center group-hover:border-primary">
+<span class="material-symbols-outlined text-[16px] text-primary opacity-0 group-hover:opacity-10" data-icon="check">check</span>
+</div>
+<span class="text-base text-on-surface">Schedule initial stakeholder interviews for Phase 2</span>
+</div>
+<div class="group flex items-center gap-4 p-3 hover:bg-surface-container-low rounded-lg transition-colors cursor-pointer">
+<div class="w-5 h-5 border-2 border-outline rounded flex items-center justify-center group-hover:border-primary">
+<span class="material-symbols-outlined text-[16px] text-primary opacity-0 group-hover:opacity-10" data-icon="check">check</span>
+</div>
+<span class="text-base text-on-surface">Review security protocols for data transmission</span>
+</div>
+</div>
+</section>
+<section class="border-t border-outline-variant/10 pt-12">
+<div class="flex items-center justify-between mb-8">
+<h2 class="text-xl font-bold text-primary">Discussion</h2>
+<button class="text-xs font-bold text-on-tertiary-container hover:underline">View All 12 Comments</button>
+</div>
+<div class="space-y-6">
+<div class="flex gap-4">
+<img class="w-10 h-10 rounded-full" data-alt="close-up portrait of a man smiling warmly" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB4_YDpgnWphgHIwaBaHK1ndlgY9eGKbgDyp0NeQMYotYqjanpPkq53EOb8NkzLdo4srKpSMZqV1WhiqOQ4YsFh_LmgqXn-TQLv69W6cm5lvBsb92yJwz-xPlQdOmL7uOtQLSPI11hpGZLTM3ibqj7iq2EmyAgOK5ne4q0Pip0RbrWhSyM9Y2JFv1r68jLVL1dHVfTNXPuQCzvo8MghRVDY8uU8dHsx_5cjcwUfHmRXZKVFKrdY_EXT1QqkrLszsmdfMZvDM0upu9E"/>
+<div class="flex-1">
+<div class="flex items-baseline gap-2 mb-1">
+<span class="font-bold text-sm">David Miller</span>
+<span class="text-[10px] text-on-surface-variant">3h ago</span>
+</div>
+<div class="bg-surface-container p-4 rounded-xl rounded-tl-none">
+<p class="text-sm leading-relaxed">I think we should emphasize the mobile responsiveness more in the summary section. Our telemetry shows 40% of users are checking docs on the go.</p>
+</div>
+<div class="flex gap-4 mt-2 px-1">
+<button class="text-[10px] font-bold text-on-surface-variant hover:text-primary transition-colors">Reply</button>
+<button class="text-[10px] font-bold text-on-surface-variant hover:text-primary transition-colors">Like</button>
+</div>
+</div>
+</div>
+<div class="flex gap-4 items-center">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center">
+<span class="material-symbols-outlined text-slate-400" data-icon="person">person</span>
+</div>
+<div class="flex-1 relative">
+<input class="w-full bg-surface-container-low border-none rounded-full px-6 py-2.5 text-sm focus:ring-1 focus:ring-primary/10 transition-all" placeholder="Add a comment..." type="text"/>
+<button class="absolute right-4 top-1/2 -translate-y-1/2 text-primary">
+<span class="material-symbols-outlined text-[20px]" data-icon="send">send</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+</div>
+</div>
+<!-- Footer -->
+<footer class="mt-20 px-12 py-8 bg-surface-container-low border-t border-outline-variant/5">
+<div class="max-w-5xl mx-auto flex items-center justify-between">
+<div class="flex items-center gap-6">
+<span class="text-xs font-black text-slate-900 tracking-widest">NEXUS</span>
+<div class="flex gap-4 text-[11px] text-on-surface-variant font-medium">
+<a class="hover:text-primary" href="#">Terms</a>
+<a class="hover:text-primary" href="#">Privacy</a>
+<a class="hover:text-primary" href="#">Contact</a>
+</div>
+</div>
+<div class="text-[10px] text-on-surface-variant font-medium">
+                    © 2024 Nexus Intelligence Corp.
+                </div>
+</div>
+</footer>
+</main>
+</body></html>

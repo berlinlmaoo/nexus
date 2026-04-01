@@ -42,6 +42,7 @@ import { AddPageDialog } from "@/components/projects/add-page-dialog"
 import { SavedFilters } from "@/components/tasks/saved-filters"
 import { SaveTemplateDialog } from "@/components/projects/template-dialog"
 import { Copy } from "lucide-react"
+import { ErrorBoundary } from "@/components/ui/error-boundary"
 
 // Lazy load heavy view components
 const CalendarView = lazy(() => import("@/components/tasks/calendar-view").then(m => ({ default: m.CalendarView })))
@@ -338,20 +339,38 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
     setSelectedTask(task)
   }, [])
 
+  // Sync selectedTask with latest data from allTasks
+  useEffect(() => {
+    if (selectedTask) {
+      const updated = allTasks.find(t => t.id === selectedTask.id)
+      if (updated && JSON.stringify(updated) !== JSON.stringify(selectedTask)) {
+        setSelectedTask(updated)
+      }
+    }
+  }, [allTasks, selectedTask])
+
   const handleToggleStatus = useCallback(
     async (taskId: string, done: boolean) => {
+      const newStatus = done ? "DONE" : "TODO"
+      // Optimistic update
+      setAllTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
+      )
+      setViewKey((k) => k + 1)
       try {
         await fetch(`/api/tasks/${taskId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: done ? "DONE" : "TODO" }),
+          body: JSON.stringify({ status: newStatus }),
         })
         router.refresh()
       } catch (error) {
         console.error("Failed to update task:", error)
+        // Revert on error
+        setAllTasks(serverTasks)
       }
     },
-    [router]
+    [router, serverTasks]
   )
 
   const handleStatusChange = useCallback(
@@ -406,6 +425,46 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       try {
         const patchBody: Record<string, string> = { taskListId: newSectionId }
         if (autoStatus) patchBody.status = autoStatus
+        await fetch(`/api/tasks/${taskId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patchBody),
+        })
+        router.refresh()
+      } catch (error) {
+        console.error("Failed to move task:", error)
+        setAllTasks(serverTasks)
+      }
+    },
+    [router, serverTasks, project.taskLists]
+  )
+
+  const handleMoveTask = useCallback(
+    async (taskId: string, newSectionId: string, newIndex: number) => {
+      // Find section name and auto-map to status
+      const section = project.taskLists.find((tl) => tl.id === newSectionId)
+      const sectionName = section?.name?.toLowerCase().trim() || ""
+      const autoStatus = STATUS_MAP[sectionName]
+
+      // Optimistic update
+      setAllTasks((prev) => {
+        const updated = prev.map((t) => {
+          if (t.id !== taskId) return t
+          const newTask = { ...t, taskListId: newSectionId, position: newIndex * 100 }
+          if (autoStatus) newTask.status = autoStatus
+          return newTask
+        })
+        return updated
+      })
+      setViewKey((k) => k + 1)
+
+      try {
+        const patchBody: Record<string, any> = { 
+          taskListId: newSectionId,
+          position: newIndex * 100 
+        }
+        if (autoStatus) patchBody.status = autoStatus
+
         await fetch(`/api/tasks/${taskId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -697,14 +756,14 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
                     <Link
                       key={pg.id}
                       href={`/projects/${project.id}/pages/${pg.id}`}
-                      className="flex items-center gap-3 rounded-lg border p-4 hover:bg-muted/50 hover:border-border transition-all duration-150 group"
+                      className="flex items-center gap-3 rounded-lg border border-on-surface-variant/5 bg-surface-container-lowest p-4 hover:bg-surface-container-low transition-all duration-150 group"
                     >
                       <span className="text-2xl group-hover:scale-110 transition-transform">{pg.icon}</span>
-                      <span className="text-sm font-medium truncate">{pg.name}</span>
+                      <span className="text-sm font-medium truncate text-on-surface">{pg.name}</span>
                     </Link>
                   ))}
                   <AddPageDialog projectId={project.id}>
-                    <button className="flex items-center gap-3 rounded-lg border border-dashed p-4 text-muted-foreground hover:text-foreground hover:border-border transition-all duration-150">
+                    <button className="flex items-center gap-3 rounded-lg border border-dashed border-on-surface-variant/10 p-4 text-on-surface-variant/40 hover:text-on-surface hover:border-primary/20 transition-all duration-150">
                       <Plus className="h-5 w-5" />
                       <span className="text-sm font-medium">Add Page</span>
                     </button>
@@ -712,23 +771,27 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
                 </div>
               </div>
             )}
-            <Suspense fallback={<SkeletonList rows={6} />}>
-              <ProjectOverview project={project} />
-            </Suspense>
+            <ErrorBoundary>
+              <Suspense fallback={<SkeletonList rows={6} />}>
+                <ProjectOverview project={project} />
+              </Suspense>
+            </ErrorBoundary>
           </>
         )}
         {viewMode === "list" && (
           <TaskListView
-            key={viewKey}
+            key={`list-${viewKey}`}
             sections={filteredSections}
             onTaskClick={handleTaskClick}
             onToggleStatus={handleToggleStatus}
             onAddTask={handleAddTask}
+            onMoveTask={handleMoveTask}
             projectId={project.id}
           />
         )}
         {viewMode === "board" && (
           <BoardView
+            key={`board-${viewKey}`}
             tasks={filteredTasks}
             sections={filteredSections}
             onTaskClick={handleTaskClick}
@@ -741,9 +804,12 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
         {viewMode === "kanban" && (
           <Suspense fallback={<SkeletonKanban />}>
             <KanbanView
+              key={`kanban-${viewKey}`}
               tasks={filteredTasks}
+              sections={filteredSections}
               onTaskClick={handleTaskClick}
               onStatusChange={handleStatusChange}
+              onSectionChange={handleSectionChange}
               projectId={project.id}
               defaultTaskListId={defaultTaskListId}
             />
@@ -752,6 +818,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
         {viewMode === "calendar" && (
           <Suspense fallback={<SkeletonKanban />}>
             <CalendarView
+              key={`calendar-${viewKey}`}
               tasks={filteredTasks}
               onTaskClick={handleTaskClick}
               projectId={project.id}
@@ -761,32 +828,32 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
         )}
         {viewMode === "timeline" && (
           <Suspense fallback={<SkeletonList rows={6} />}>
-            <TimelineView tasks={filteredTasks} onTaskClick={handleTaskClick} />
+            <TimelineView key={`timeline-${viewKey}`} tasks={filteredTasks} onTaskClick={handleTaskClick} />
           </Suspense>
         )}
         {viewMode === "gantt" && (
           <Suspense fallback={<SkeletonList rows={6} />}>
-            <GanttChartView tasks={filteredTasks} onTaskClick={handleTaskClick} />
+            <GanttChartView key={`gantt-${viewKey}`} tasks={filteredTasks} onTaskClick={handleTaskClick} />
           </Suspense>
         )}
         {viewMode === "gallery" && (
           <Suspense fallback={<SkeletonList rows={6} />}>
-            <GalleryView tasks={filteredTasks} onTaskClick={handleTaskClick} projectId={project.id} defaultTaskListId={defaultTaskListId} />
+            <GalleryView key={`gallery-${viewKey}`} tasks={filteredTasks} onTaskClick={handleTaskClick} projectId={project.id} defaultTaskListId={defaultTaskListId} />
           </Suspense>
         )}
         {viewMode === "charts" && (
           <Suspense fallback={<SkeletonList rows={6} />}>
-            <ChartsView tasks={filteredTasks} members={project.members} />
+            <ChartsView key={`charts-${viewKey}`} tasks={filteredTasks} members={project.members} />
           </Suspense>
         )}
         {viewMode === "feed" && (
           <Suspense fallback={<SkeletonList rows={6} />}>
-            <FeedView projectId={project.id} />
+            <FeedView key={`feed-${viewKey}`} projectId={project.id} />
           </Suspense>
         )}
         {viewMode === "workload" && (
           <Suspense fallback={<SkeletonList rows={6} />}>
-            <WorkloadView tasks={filteredTasks} members={project.members} onTaskClick={handleTaskClick} />
+            <WorkloadView key={`workload-${viewKey}`} tasks={filteredTasks} members={project.members} onTaskClick={handleTaskClick} />
           </Suspense>
         )}
 

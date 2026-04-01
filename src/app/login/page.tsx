@@ -1,46 +1,104 @@
-import Image from 'next/image'
-import { LoginForm } from './login-form'
-import {
-  bannersFromAuthSearchParams,
-  firstSearchParam,
-} from '@/lib/auth-errors'
+import { Metadata } from "next"
+import Link from "next/link"
+import { LoginForm } from "./login-form"
+import { auth } from "@/lib/auth"
+import { redirect } from "next/navigation"
+import { Suspense } from "react"
+import { Loader2 } from "lucide-react"
+import Image from "next/image"
 
-type PageProps = {
-  searchParams: Record<string, string | string[] | undefined>
+export const metadata: Metadata = {
+  title: "Protocol Access | NEXUS",
+  description: "Secure gateway to the Nexus ecosystem.",
 }
 
-export default function LoginPage({ searchParams }: PageProps) {
-  const registered = firstSearchParam(searchParams.registered)
-  const errorParam = firstSearchParam(searchParams.error)
-  const { success, error } = bannersFromAuthSearchParams(registered, errorParam)
+export default async function LoginPage() {
+  const session = await auth()
+  if (session) redirect("/dashboard")
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#000000] px-4">
-      <div className="w-full max-w-[420px]">
-        <div className="text-center mb-10">
-          <div className="flex justify-center mb-3">
-            <Image
-              src="/logos/nexus-logo-login.png"
-              alt="NEXUS"
-              width={1000}
-              height={232}
-              className="w-[160px] h-auto object-contain"
+    <div className="relative min-h-screen flex items-stretch bg-surface overflow-hidden">
+      {/* Left Branding Side (Desktop) */}
+      <div className="hidden lg:flex w-1/2 bg-primary relative flex-col justify-between p-16 overflow-hidden">
+        <div className="absolute inset-0 opacity-20">
+          <div className="absolute top-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-white/10 blur-[120px] animate-pulse" />
+          <div className="absolute bottom-[-5%] left-[-5%] w-[40%] h-[40%] rounded-full bg-white/5 blur-[100px]" />
+        </div>
+        
+        <div className="relative z-10">
+          <Link href="/" className="flex items-center group">
+            <Image 
+              src="/logos/nexus-logo-login.png" 
+              alt="NEXUS" 
+              width={180} 
+              height={60} 
+              className="object-contain transition-transform duration-500 group-hover:scale-105"
               priority
             />
+          </Link>
+        </div>
+
+        <div className="relative z-10 space-y-8">
+          <h2 className="text-7xl font-headline font-black text-primary-foreground tracking-tighter leading-[0.9]">
+            The Digital <br />
+            <span className="opacity-40">Atheneum.</span>
+          </h2>
+          <p className="max-w-md text-xl text-primary-foreground/60 font-medium leading-relaxed">
+            Transition from the noise of traditional project management into a sanctuary of strategy and execution.
+          </p>
+        </div>
+
+        <div className="relative z-10 flex items-center gap-8 text-primary-foreground">
+          <div className="space-y-1">
+            <p className="text-[10px] font-black uppercase tracking-widest opacity-30">System Version</p>
+            <p className="text-xs font-bold opacity-60">V2.4.0 Codename: GIDEON</p>
           </div>
-          <div className="w-12 h-px bg-gray-700/60 mx-auto mb-3" />
-          <p className="text-sm text-gray-400">Navigation & Execution Hub for Unified Strategy</p>
-          <p className="text-xs text-gray-600 mt-1">by PATS Group</p>
+          <div className="h-8 w-[1px] bg-primary-foreground/10" />
+          <div className="space-y-1">
+            <p className="text-[10px] font-black uppercase tracking-widest opacity-30">Infrastructure</p>
+            <p className="text-xs font-bold opacity-60">Edge Encrypted Node</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Right Login Side */}
+      <div className="flex-1 flex flex-col justify-center px-8 sm:px-16 lg:px-24 xl:px-32 py-12 relative bg-surface">
+        <div className="lg:hidden absolute top-12 left-8 sm:left-16">
+          <Image 
+            src="/logos/nexus-logo-mono.png" 
+            alt="NEXUS" 
+            width={120} 
+            height={40} 
+            className="object-contain"
+          />
         </div>
 
-        <div className="bg-[#0A0A0C] border border-white/[0.08] rounded-2xl p-8 shadow-2xl shadow-black/40">
-          <h2 className="text-xl font-semibold text-white mb-6">Sign in to your account</h2>
-          <LoginForm serverSuccess={success} serverError={error} />
+        <div className="w-full max-w-md mx-auto space-y-10 animate-fade-in">
+          <div className="space-y-2">
+            <h3 className="text-4xl font-headline font-black text-on-surface tracking-tight">Initiate Protocol</h3>
+            <p className="text-on-surface-variant/60 font-medium">Verify your credentials to access the workspace.</p>
+          </div>
+
+          <Suspense fallback={<div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary/20" /></div>}>
+            <LoginForm />
+          </Suspense>
+
+          <div className="pt-8 border-t border-on-surface-variant/5">
+            <p className="text-sm text-center text-on-surface-variant/40 font-medium">
+              New operative?{" "}
+              <Link href="/register" className="text-primary font-black hover:underline underline-offset-4 decoration-2">
+                Apply for Node Access
+              </Link>
+            </p>
+          </div>
         </div>
 
-        <p className="text-center text-[10px] text-gray-700 mt-8">
-          Developed by Berlin & GIDEON
-        </p>
+        {/* Floating Help */}
+        <div className="absolute bottom-12 right-12 hidden sm:block">
+          <button className="h-12 w-12 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant/40 hover:text-primary transition-colors">
+            <span className="text-xs font-black">?</span>
+          </button>
+        </div>
       </div>
     </div>
   )

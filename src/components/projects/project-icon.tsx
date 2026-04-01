@@ -43,7 +43,7 @@ export function isUploadedIcon(icon: string): boolean {
 interface ProjectIconProps {
   icon: string
   color?: string
-  size?: "sm" | "md" | "lg"
+  size?: "sm" | "md" | "lg" | "xl"
   variant?: "emoji" | "lucide"
   className?: string
 }
@@ -52,10 +52,11 @@ const sizeConfig = {
   sm: { container: "h-6 w-6", text: "text-sm", image: 24, lucide: "h-3.5 w-3.5" },
   md: { container: "h-10 w-10", text: "text-lg", image: 40, lucide: "h-5 w-5" },
   lg: { container: "h-16 w-16", text: "text-2xl", image: 64, lucide: "h-8 w-8" },
+  xl: { container: "h-24 w-24", text: "text-4xl", image: 96, lucide: "h-12 w-12" },
 }
 
 export function ProjectIcon({ icon, color, size = "md", variant = "emoji", className }: ProjectIconProps) {
-  const cfg = sizeConfig[size]
+  const cfg = sizeConfig[size] || sizeConfig.md
 
   if (isUploadedIcon(icon)) {
     return (

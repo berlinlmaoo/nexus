@@ -1,7 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
-  darkMode: "class",
+  darkMode: "media",
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -18,6 +18,8 @@ const config: Config = {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          container: "#21283c",
+          "on-container": "#888fa7",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -50,11 +52,47 @@ const config: Config = {
           text: "#9ca0a5",
           "text-active": "#ffffff",
         },
+        // Digital Atheneum Palette
+        surface: {
+          DEFAULT: "#f7f9fb",
+          variant: "#e0e3e5",
+          dim: "#d8dadc",
+          bright: "#f7f9fb",
+          container: {
+            lowest: "#ffffff",
+            low: "#f2f4f6",
+            DEFAULT: "#eceef0",
+            high: "#e6e8ea",
+            highest: "#e0e3e5",
+          },
+        },
+        "on-surface": {
+          DEFAULT: "#191c1e",
+          variant: "#45474c",
+        },
+        "secondary-new": {
+          DEFAULT: "#505f76",
+          container: "#d0e1fb",
+          "on-container": "#54647a",
+        },
+        "tertiary-new": {
+          DEFAULT: "#001624",
+          container: "#002c42",
+          "on-container": "#0099d9",
+        },
+      },
+      fontFamily: {
+        headline: ["var(--font-manrope)", "sans-serif"],
+        body: ["var(--font-inter)", "sans-serif"],
+        label: ["var(--font-inter)", "sans-serif"],
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        DEFAULT: "0.25rem",
+        xl: "0.75rem",
+        "2xl": "1rem",
       },
       keyframes: {
         "accordion-down": {

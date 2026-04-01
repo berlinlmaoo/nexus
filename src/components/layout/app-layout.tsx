@@ -48,7 +48,7 @@ export function AppLayout({ children, title, breadcrumbs, user }: AppLayoutProps
 
   return (
     <ShortcutsHelpProvider>
-      <div className="flex h-screen overflow-hidden bg-background">
+      <div className="flex h-screen overflow-hidden bg-surface">
         <Suspense fallback={null}>
           <LoadingBar />
         </Suspense>
@@ -56,25 +56,22 @@ export function AppLayout({ children, title, breadcrumbs, user }: AppLayoutProps
         {/* Mobile overlay */}
         {sidebarOpen && (
           <div
-            className="fixed inset-0 z-30 bg-black/50 md:hidden"
+            className="fixed inset-0 z-30 bg-primary/20 backdrop-blur-sm md:hidden"
             onClick={toggleSidebar}
           />
         )}
 
         <Sidebar user={user} />
 
-        <div
-          className={cn(
-            "flex flex-1 flex-col transition-all duration-300 ease-in-out min-w-0",
-            sidebarOpen ? "md:ml-[260px] ml-0" : "ml-0"
-          )}
-        >
+        <div className="flex flex-1 flex-col min-w-0 bg-surface relative">
           <Header title={title} breadcrumbs={breadcrumbs} user={user} />
 
-          <main className="flex-1 overflow-auto pb-16 md:pb-0">
-            <PageTransition>
-              {children}
-            </PageTransition>
+          <main className="flex-1 overflow-y-auto overflow-x-hidden pb-16 md:pb-0 scroll-smooth">
+            <div className="p-6 md:p-12 max-w-[1600px] mx-auto">
+              <PageTransition>
+                {children}
+              </PageTransition>
+            </div>
           </main>
         </div>
 

@@ -101,9 +101,14 @@ export function TimelineView({ tasks, onTaskClick }: TimelineViewProps) {
     tasks.forEach((t) => {
       if (t.dueDate) {
         const endDate = startOfDay(new Date(t.dueDate))
-        // Estimate start date: 7 days before due date (or use due date if no start concept)
-        const startDate = startOfDay(subWeeks(endDate, 1))
-        scheduled.push({ ...t, startDate, endDate })
+        // Default to a 3-day bar ending at the due date for visibility, 
+        // or 1-day if it's strictly a deadline. Let's use 2 days for better UI presence.
+        const startDate = startOfDay(subWeeks(endDate, 0)) // Start = same day
+        // Adjust: make it a 2-day bar so it's visible but accurate to the deadline
+        const adjustedStart = new Date(endDate)
+        adjustedStart.setDate(endDate.getDate() - 1) 
+
+        scheduled.push({ ...t, startDate: adjustedStart, endDate })
       } else {
         unscheduled.push(t)
       }

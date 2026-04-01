@@ -14,6 +14,8 @@ import {
   Copy,
   Pencil,
   ArrowRight,
+  Database,
+  ShieldCheck,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -94,7 +96,7 @@ export function WikiSidebar({ projectId, activeDocId, onSelect }: WikiSidebarPro
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: "Untitled",
+          title: "Untitled Node",
           projectId,
           parentId: parentId || null,
         }),
@@ -113,8 +115,8 @@ export function WikiSidebar({ projectId, activeDocId, onSelect }: WikiSidebarPro
 
   const handleContextMenu = (e: React.MouseEvent, docId: string) => {
     e.preventDefault()
-    const menuWidth = 160
-    const menuHeight = 130
+    const menuWidth = 180
+    const menuHeight = 160
     const x = Math.min(e.clientX, window.innerWidth - menuWidth)
     const y = Math.min(e.clientY, window.innerHeight - menuHeight)
     setContextMenu({ x: Math.max(0, x), y: Math.max(0, y), docId })
@@ -127,7 +129,7 @@ export function WikiSidebar({ projectId, activeDocId, onSelect }: WikiSidebarPro
 
     switch (action) {
       case "rename": {
-        const newTitle = prompt("New name:")
+        const newTitle = prompt("Designate new node name:")
         if (newTitle) {
           await fetch(`/api/docs/${docId}`, {
             method: "PATCH",
@@ -139,7 +141,7 @@ export function WikiSidebar({ projectId, activeDocId, onSelect }: WikiSidebarPro
         break
       }
       case "delete": {
-        if (confirm("Delete this page and all subpages?")) {
+        if (confirm("Deauthorize this intelligence node and all sub-nodes?")) {
           await fetch(`/api/docs/${docId}`, { method: "DELETE" })
           fetchDocs()
         }
@@ -157,7 +159,6 @@ export function WikiSidebar({ projectId, activeDocId, onSelect }: WikiSidebarPro
     }
   }
 
-  // Filter tree by search
   const filterTree = (nodes: WikiDoc[], q: string): WikiDoc[] => {
     if (!q.trim()) return nodes
     const lower = q.toLowerCase()
@@ -178,60 +179,64 @@ export function WikiSidebar({ projectId, activeDocId, onSelect }: WikiSidebarPro
   const displayDocs = filterTree(docs, search)
 
   return (
-    <div className="flex flex-col h-full bg-zinc-50 dark:bg-zinc-900 border-r w-64">
+    <div className="flex flex-col h-full bg-transparent">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-3 border-b">
-        <div className="flex items-center gap-1.5">
-          <BookOpen className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-semibold">Wiki</span>
+      <div className="flex items-center justify-between px-6 py-8">
+        <div className="flex flex-col">
+          <span className="text-[10px] font-black uppercase tracking-[0.25em] text-primary/40 mb-1">Central Archive</span>
+          <h3 className="text-xl font-headline font-black text-primary tracking-tight">Intelligence</h3>
         </div>
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7"
+          className="h-10 w-10 rounded-xl bg-surface-container hover:bg-primary hover:text-primary-foreground transition-all duration-300"
           onClick={() => handleCreatePage()}
           disabled={creating}
         >
           {creating ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
-            <Plus className="h-3.5 w-3.5" />
+            <Plus className="h-4 w-4" />
           )}
         </Button>
       </div>
 
       {/* Search */}
-      <div className="px-3 py-2">
-        <div className="relative">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+      <div className="px-6 mb-6">
+        <div className="relative group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-on-surface-variant/20 group-focus-within:text-primary transition-colors" />
           <Input
-            placeholder="Search pages..."
+            placeholder="Filter Intel Node..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-8 pl-7 text-xs bg-white dark:bg-zinc-800"
+            className="h-12 pl-11 bg-surface-container-low border-none rounded-2xl text-xs font-bold text-primary placeholder:text-on-surface-variant/20 focus:ring-4 focus:ring-primary/5 transition-all"
           />
         </div>
       </div>
 
       {/* Tree */}
-      <div className="flex-1 overflow-y-auto px-2 py-1">
+      <div className="flex-1 overflow-y-auto px-4 space-y-0.5 scrollbar-hide">
         {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          <div className="flex flex-col items-center justify-center py-12 gap-3 opacity-20">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <span className="text-[10px] font-black uppercase tracking-widest">Decrypting Archive...</span>
           </div>
         ) : displayDocs.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-xs text-muted-foreground">
-              {search ? "No pages match" : "No pages yet"}
+          <div className="text-center py-12 px-6">
+            <div className="w-16 h-16 rounded-3xl bg-surface-container mx-auto flex items-center justify-center text-on-surface-variant/10 mb-4">
+               <Database className="h-8 w-8" />
+            </div>
+            <p className="text-[11px] font-black uppercase tracking-widest text-on-surface-variant/40 leading-relaxed">
+              {search ? "No matches found in tactical databank" : "Archive is currently vacant"}
             </p>
             {!search && (
               <Button
                 variant="ghost"
                 size="sm"
-                className="mt-2 text-xs"
+                className="mt-6 text-[10px] font-black uppercase tracking-widest text-primary bg-primary/5 hover:bg-primary hover:text-primary-foreground rounded-xl px-4"
                 onClick={() => handleCreatePage()}
               >
-                <Plus className="h-3 w-3 mr-1" /> New Page
+                Initialize Node
               </Button>
             )}
           </div>
@@ -253,18 +258,18 @@ export function WikiSidebar({ projectId, activeDocId, onSelect }: WikiSidebarPro
       {contextMenu && (
         <>
           <div
-            className="fixed inset-0 z-50"
+            className="fixed inset-0 z-[60]"
             onClick={() => setContextMenu(null)}
           />
           <div
-            className="fixed z-50 rounded-lg border bg-background p-1 shadow-lg animate-scale-in min-w-[160px]"
+            className="fixed z-[70] rounded-[24px] border-none bg-surface-container-highest p-2 shadow-2xl shadow-primary/20 animate-scale-in min-w-[180px]"
             style={{ left: contextMenu.x, top: contextMenu.y }}
           >
             {[
-              { action: "rename", label: "Rename", icon: Pencil },
-              { action: "duplicate", label: "Duplicate", icon: Copy },
-              { action: "add-subpage", label: "Add subpage", icon: Plus },
-              { action: "delete", label: "Delete", icon: Trash2 },
+              { action: "rename", label: "Rename Node", icon: Pencil },
+              { action: "duplicate", label: "Duplicate Data", icon: Copy },
+              { action: "add-subpage", label: "Add Sub-Node", icon: Plus },
+              { action: "delete", label: "Deauthorize", icon: Trash2 },
             ].map((item) => {
               const Icon = item.icon
               return (
@@ -272,8 +277,8 @@ export function WikiSidebar({ projectId, activeDocId, onSelect }: WikiSidebarPro
                   key={item.action}
                   onClick={() => handleContextAction(item.action)}
                   className={cn(
-                    "flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs transition-colors hover:bg-muted",
-                    item.action === "delete" && "text-red-600 hover:text-red-700"
+                    "flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-[11px] font-black uppercase tracking-widest transition-all hover:bg-surface-container-low group",
+                    item.action === "delete" ? "text-red-500 hover:bg-red-500/10" : "text-on-surface-variant/60 hover:text-primary"
                   )}
                 >
                   <Icon className="h-3.5 w-3.5" />

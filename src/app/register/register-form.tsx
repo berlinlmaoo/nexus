@@ -1,162 +1,152 @@
-'use client'
+"use client"
 
-import { useState } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useState } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import * as z from "zod"
+import { useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form"
+import { Input } from "@/components/ui/input"
+import { toast } from "sonner"
+import { Loader2, ArrowRight } from "lucide-react"
+
+const formSchema = z.object({
+  name: z.string().min(2, {
+    message: "Designation must be at least 2 characters.",
+  }),
+  email: z.string().email({
+    message: "A valid operative email is required.",
+  }),
+  password: z.string().min(8, {
+    message: "Security protocol requires at least 8 characters.",
+  }),
+})
 
 export function RegisterForm() {
   const router = useRouter()
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      password: "",
+    },
+  })
 
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters')
-      return
-    }
-
-    if (password !== confirmPassword) {
-      setError('Passwords do not match')
-      return
-    }
-
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true)
-
     try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password }),
+      const response = await fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
       })
 
-      let data: { error?: string } = {}
-      try {
-        data = await response.json()
-      } catch {
-        setError('Server returned an invalid response. Try again or restart the dev server (rm -rf .next).')
-        return
+      if (response.ok) {
+        toast.success("Identity Provisioned", {
+          description: "Your operative profile has been created successfully.",
+        })
+        router.push("/login")
+      } else {
+        const data = await response.json()
+        toast.error("Provisioning Failed", {
+          description: data.message || "An error occurred during identity setup.",
+        })
       }
-
-      if (!response.ok) {
-        setError(data.error || 'Registration failed')
-        return
-      }
-
-      router.push('/login?registered=true')
-    } catch {
-      setError('Something went wrong. Please try again.')
+    } catch (error) {
+      toast.error("System Error", {
+        description: "An unexpected error occurred during profile setup.",
+      })
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <>
-      <p className="text-sm text-gray-500 mb-4">
-        Password must be at least 8 characters. After signing up, sign in on the next screen.
-      </p>
+    <div className="space-y-8 animate-fade-in">
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <div className="space-y-4">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }: { field: any }) => (
+                <FormItem className="space-y-1.5">
+                  <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/40 ml-1">Full Designation</FormLabel>
+                  <FormControl>
+                    <input
+                      placeholder="Operative Name"
+                      {...field}
+                      className="w-full h-12 bg-surface-container-low border-none rounded-2xl px-4 text-sm font-bold text-primary placeholder:text-on-surface-variant/20 focus:ring-2 focus:ring-primary/5 focus:bg-surface-container-lowest transition-all"
+                    />
+                  </FormControl>
+                  <FormMessage className="text-[10px] font-bold text-error ml-1" />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }: { field: any }) => (
+                <FormItem className="space-y-1.5">
+                  <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/40 ml-1">Email Address</FormLabel>
+                  <FormControl>
+                    <input
+                      placeholder="name@agency.com"
+                      {...field}
+                      className="w-full h-12 bg-surface-container-low border-none rounded-2xl px-4 text-sm font-bold text-primary placeholder:text-on-surface-variant/20 focus:ring-2 focus:ring-primary/5 focus:bg-surface-container-lowest transition-all"
+                    />
+                  </FormControl>
+                  <FormMessage className="text-[10px] font-bold text-error ml-1" />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }: { field: any }) => (
+                <FormItem className="space-y-1.5">
+                  <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/40 ml-1">Secure Cipher</FormLabel>
+                  <FormControl>
+                    <input
+                      type="password"
+                      placeholder="••••••••"
+                      {...field}
+                      className="w-full h-12 bg-surface-container-low border-none rounded-2xl px-4 text-sm font-bold text-primary placeholder:text-on-surface-variant/20 focus:ring-2 focus:ring-primary/5 focus:bg-surface-container-lowest transition-all"
+                    />
+                  </FormControl>
+                  <FormMessage className="text-[10px] font-bold text-error ml-1" />
+                </FormItem>
+              )}
+            />
+          </div>
 
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-sm text-red-400 transition-all duration-200 mb-5">
-          {error}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-1.5">
-          <label htmlFor="name" className="block text-sm font-medium text-gray-400">
-            Full Name
-          </label>
-          <input
-            id="name"
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="John Doe"
-            required
-            className="w-full px-4 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent transition-all duration-200"
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <label htmlFor="email" className="block text-sm font-medium text-gray-400">
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            required
-            className="w-full px-4 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent transition-all duration-200"
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <label htmlFor="password" className="block text-sm font-medium text-gray-400">
-            Password
-          </label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Min. 8 characters"
-            required
-            className="w-full px-4 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent transition-all duration-200"
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-400">
-            Confirm Password
-          </label>
-          <input
-            id="confirmPassword"
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Re-enter your password"
-            required
-            className="w-full px-4 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent transition-all duration-200"
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="w-full py-2.5 px-4 mt-1 bg-white text-black text-sm font-semibold rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-white/40 focus:ring-offset-2 focus:ring-offset-[#0A0A0C] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-        >
-          {isLoading ? (
-            <span className="inline-flex items-center gap-2">
-              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              Creating account...
-            </span>
-          ) : (
-            'Create account'
-          )}
-        </button>
-      </form>
-
-      <div className="mt-6 text-center">
-        <p className="text-sm text-gray-400">
-          Already have an account?{' '}
-          <Link href="/login" className="text-white hover:text-gray-300 font-medium transition-colors duration-200">
-            Sign in
-          </Link>
-        </p>
-      </div>
-    </>
+          <Button
+            type="submit"
+            disabled={isLoading}
+            className="w-full h-14 bg-primary text-primary-foreground rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:shadow-2xl hover:shadow-primary/20 transition-all duration-300 group"
+          >
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                Create Operative Profile
+                <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+              </>
+            )}
+          </Button>
+        </form>
+      </Form>
+    </div>
   )
 }

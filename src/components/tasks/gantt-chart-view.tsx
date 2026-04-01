@@ -92,7 +92,9 @@ export function GanttChartView({ tasks, onTaskClick }: GanttChartViewProps) {
     // Add parent tasks with their subtask info
     parentTasks.forEach((t) => {
       const endDate = t.dueDate ? startOfDay(new Date(t.dueDate)) : startOfDay(new Date())
-      const startDate = startOfDay(subWeeks(endDate, 2))
+      // Use 3 days for parent tasks to make them more prominent
+      const startDate = new Date(endDate)
+      startDate.setDate(endDate.getDate() - 2)
       const progress = t.subtaskCount ? ((t.subtaskDoneCount ?? 0) / t.subtaskCount) * 100 : 0
 
       items.push({
@@ -112,10 +114,12 @@ export function GanttChartView({ tasks, onTaskClick }: GanttChartViewProps) {
       }
 
       const endDate = startOfDay(new Date(t.dueDate))
-      const startDate = startOfDay(subWeeks(endDate, 1))
+      // 2-day bar ending at due date
+      const startDate = new Date(endDate)
+      startDate.setDate(endDate.getDate() - 1)
 
-      // Milestone: if start == end (same day)
-      const isMilestone = differenceInDays(endDate, startDate) === 0
+      // Milestone: if start == end (not the case here, we force 2 days)
+      const isMilestone = t.taskType === "MILESTONE"
 
       items.push({
         task: { ...t, startDate, endDate },

@@ -34,6 +34,7 @@ import { UserAvatar } from "@/components/ui/user-avatar"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/stores/app-store"
 import { ProjectIcon, isUploadedIcon } from "@/components/projects/project-icon"
+import Image from "next/image"
 
 interface SidebarProps {
   user: {
@@ -106,7 +107,7 @@ function PageTreeItem({
         {hasChildren && (
           <button
             onClick={(e) => { e.preventDefault(); setExpanded(!expanded) }}
-            className="absolute left-0 z-10 flex h-5 w-5 items-center justify-center text-sidebar-text/40 hover:text-sidebar-text"
+            className="absolute left-0 z-10 flex h-5 w-5 items-center justify-center text-on-surface-variant/40 hover:text-on-surface-variant"
             style={{ marginLeft: `${depth * 12 + 8}px` }}
           >
             {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
@@ -117,8 +118,8 @@ function PageTreeItem({
           className={cn(
             "flex flex-1 items-center gap-2 rounded-md py-1 text-[13px] transition-all duration-150",
             isActive
-              ? "bg-sidebar-light text-white"
-              : "text-sidebar-text/70 hover:bg-sidebar-light hover:text-white"
+              ? "bg-surface-container-high text-primary"
+              : "text-on-surface-variant/70 hover:bg-surface-container-high hover:text-on-surface"
           )}
           style={{ paddingLeft: `${depth * 12 + (hasChildren ? 22 : 12)}px`, paddingRight: "8px" }}
         >
@@ -128,30 +129,30 @@ function PageTreeItem({
         <div className="absolute right-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowMenu(!showMenu) }}
-            className="flex h-5 w-5 items-center justify-center rounded text-sidebar-text/40 hover:bg-sidebar-lighter hover:text-white"
+            className="flex h-5 w-5 items-center justify-center rounded text-on-surface-variant/40 hover:bg-surface-container-highest hover:text-on-surface"
           >
             <MoreHorizontal className="h-3 w-3" />
           </button>
           {showMenu && (
             <>
               <div className="fixed inset-0 z-50" onClick={() => setShowMenu(false)} />
-              <div className="fixed right-auto z-[60] mt-1 w-36 rounded-md border border-white/10 bg-[#2e2f31] py-1 shadow-xl" style={{ left: '160px' }}>
+              <div className="fixed right-auto z-[60] mt-1 w-40 rounded-xl border-none bg-surface-container-highest py-1 shadow-2xl shadow-primary/10" style={{ left: '160px' }}>
                 <Link
                   href={href}
                   onClick={() => setShowMenu(false)}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-sidebar-text hover:bg-sidebar-light hover:text-white"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-on-surface-variant hover:bg-surface-container hover:text-primary transition-colors"
                 >
                   <Pencil className="h-3 w-3" /> Rename
                 </Link>
                 <button
                   onClick={() => { onDuplicate(page.id); setShowMenu(false) }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-sidebar-text hover:bg-sidebar-light hover:text-white"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-on-surface-variant hover:bg-surface-container hover:text-primary transition-colors"
                 >
                   <Copy className="h-3 w-3" /> Duplicate
                 </button>
                 <button
                   onClick={() => { setConfirmDelete(true); setShowMenu(false) }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10"
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-500 hover:bg-red-500/10 transition-colors"
                 >
                   <Trash2 className="h-3 w-3" /> Delete
                 </button>
@@ -163,22 +164,22 @@ function PageTreeItem({
 
       {confirmDelete && createPortal(
         <>
-          <div className="fixed inset-0 z-50 bg-black/50" onClick={() => setConfirmDelete(false)} />
-          <div className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-80 rounded-lg border border-white/10 bg-[#2e2f31] p-5 shadow-2xl">
-            <h4 className="text-sm font-semibold text-white mb-2">Delete page</h4>
-            <p className="text-xs text-zinc-400 mb-4">
+          <div className="fixed inset-0 z-50 bg-primary/20 backdrop-blur-sm" onClick={() => setConfirmDelete(false)} />
+          <div className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-80 rounded-2xl border-none bg-surface-container-lowest p-6 shadow-2xl shadow-primary/20">
+            <h4 className="text-sm font-headline font-bold text-primary mb-2">Delete page</h4>
+            <p className="text-xs text-on-surface-variant/60 font-medium mb-6">
               Are you sure you want to delete &ldquo;{page.name}&rdquo;? This action cannot be undone.
             </p>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setConfirmDelete(false)}
-                className="rounded-md px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
+                className="rounded-lg px-4 py-2 text-xs font-bold text-on-surface-variant hover:bg-surface-container transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={() => { onDelete(page.id); setConfirmDelete(false) }}
-                className="rounded-md bg-red-600 px-3 py-1.5 text-xs text-white hover:bg-red-700 transition-colors"
+                className="rounded-lg bg-red-600 px-4 py-2 text-xs font-black uppercase tracking-widest text-white hover:bg-red-700 transition-all"
               >
                 Delete
               </button>
@@ -222,7 +223,12 @@ export function Sidebar({ user }: SidebarProps) {
   const [projectMenu, setProjectMenu] = useState<{ x: number; y: number; projectId: string } | null>(null)
   const [confirmDeleteProject, setConfirmDeleteProject] = useState<{ id: string; name: string } | null>(null)
   const [showArchived, setShowArchived] = useState(false)
+  const [isClient, setIsClient] = useState(false)
   const sidebarRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
 
   // Favorites & Recents
   const [favorites, setFavorites] = useState<Array<{ id: string; type: string; targetId: string }>>([])
@@ -379,51 +385,74 @@ export function Sidebar({ user }: SidebarProps) {
 
   if (!sidebarOpen) return null
 
-  const effectiveWidth = isCollapsed ? 56 : sidebarWidth
+  const effectiveWidth = isClient && isCollapsed ? 56 : sidebarWidth
 
   return (
     <aside
       ref={sidebarRef}
-      className="fixed left-0 top-0 z-40 flex h-screen flex-col bg-sidebar text-sidebar-text animate-fade-in max-md:shadow-2xl select-none"
+      className="hidden md:flex h-screen flex-col bg-surface-container-low text-on-surface select-none border-r border-on-surface-variant/5 shrink-0 transition-all duration-300 ease-in-out"
       style={{ width: `${effectiveWidth}px` }}
     >
-      {/* Top area: brand + create */}
-      <div className="flex items-center justify-between px-3 pt-4 pb-2">
-        {!isCollapsed && (
-          <Link href="/dashboard" className="flex items-center">
-            <img
-              src="/logos/nexus-logo-mono-white.png"
-              alt="NEXUS"
-              className="h-5 w-auto object-contain"
-            />
-          </Link>
+      <div className="flex items-center justify-between px-4 pt-6 pb-2">
+        {!isCollapsed ? (
+          <>
+            <Link href="/dashboard" className="flex items-center gap-2.5 group">
+              <Image 
+                src="/logos/nexus-icon-black.png" 
+                alt="NEXUS" 
+                width={28} 
+                height={28} 
+                className="object-contain transition-transform duration-500 group-hover:rotate-12"
+              />
+              <span className="text-lg font-headline font-black tracking-[0.2em] text-on-surface uppercase">NEXUS</span>
+            </Link>
+            <button
+              onClick={toggleCollapse}
+              className="rounded-md p-1.5 text-on-surface-variant/40 hover:bg-surface-container-high hover:text-on-surface transition-colors"
+              title="Collapse sidebar"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </button>
+          </>
+        ) : (
+          <div className="flex flex-col items-center w-full gap-4">
+            <Link href="/dashboard" className="flex items-center justify-center">
+              <Image 
+                src="/logos/nexus-icon-black.png" 
+                alt="NX" 
+                width={24} 
+                height={24} 
+                className="object-contain"
+              />
+            </Link>
+            <button
+              onClick={toggleCollapse}
+              className="rounded-md p-1.5 text-on-surface-variant/40 hover:bg-surface-container-high hover:text-on-surface transition-colors"
+              title="Expand sidebar"
+            >
+              <PanelLeft className="h-4 w-4" />
+            </button>
+          </div>
         )}
-        <button
-          onClick={toggleCollapse}
-          className="rounded-md p-1.5 text-sidebar-text/60 hover:bg-sidebar-light hover:text-white transition-colors"
-          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {isCollapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-        </button>
       </div>
 
-      {/* Create button */}
+      {/* Quick Create button */}
       {!isCollapsed ? (
-        <div className="px-3 pb-2">
+        <div className="px-4 pb-4 pt-2">
           <Link
             href="/projects"
-            className="flex items-center gap-2 rounded-md bg-sidebar-lighter px-3 py-2 text-sm font-medium text-white hover:bg-[#484a4d] transition-colors w-full"
+            className="flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 hover:shadow-lg hover:translate-y-[-1px] transition-all duration-200 w-full px-4 py-2.5 text-sm font-bold shadow-md"
           >
             <Plus className="h-4 w-4" />
-            Create
+            Quick Add
           </Link>
         </div>
       ) : (
-        <div className="flex justify-center pb-2">
+        <div className="flex justify-center pb-4 pt-2">
           <Link
             href="/projects"
-            className="flex h-8 w-8 items-center justify-center rounded-md bg-sidebar-lighter text-white hover:bg-[#484a4d] transition-colors"
-            title="Create"
+            className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:opacity-90 hover:shadow-lg transition-all shadow-md"
+            title="Quick Add"
           >
             <Plus className="h-4 w-4" />
           </Link>
@@ -431,9 +460,9 @@ export function Sidebar({ user }: SidebarProps) {
       )}
 
       {/* Main nav */}
-      <nav className="flex-1 overflow-y-auto px-2">
+      <nav className="flex-1 overflow-y-auto px-2 space-y-0.5 scrollbar-hide">
         {/* Top nav: Home, My Tasks, Inbox */}
-        <div className="space-y-0.5">
+        <div>
           {topNavItems.map((item) => {
             const isActive =
               pathname === item.href || (pathname?.startsWith(item.href + "/") ?? false)
@@ -442,22 +471,22 @@ export function Sidebar({ user }: SidebarProps) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "group flex items-center gap-3 rounded-md px-3 py-1.5 text-[13px] font-medium transition-all duration-150",
+                  "group flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-semibold transition-all duration-200",
                   isActive
-                    ? "bg-sidebar-light text-white"
-                    : "text-sidebar-text hover:bg-sidebar-light hover:text-white"
+                    ? "bg-surface-container-high text-primary shadow-sm"
+                    : "text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
                 )}
                 title={isCollapsed ? item.label : undefined}
               >
                 <item.icon
                   className={cn(
-                    "h-4 w-4 shrink-0 transition-colors duration-150",
-                    isActive ? "text-white" : "text-sidebar-text group-hover:text-white"
+                    "h-4 w-4 shrink-0 transition-colors duration-200",
+                    isActive ? "text-primary" : "text-on-surface-variant group-hover:text-on-surface"
                   )}
                 />
                 {!isCollapsed && (
                   <>
-                    <span className="flex-1">{item.label}</span>
+                    <span className="flex-1 font-headline tracking-tight">{item.label}</span>
                   </>
                 )}
               </Link>
@@ -466,14 +495,14 @@ export function Sidebar({ user }: SidebarProps) {
         </div>
 
         {/* Divider */}
-        <div className="my-3 border-t border-white/[0.08]" />
+        <div className="mx-3 my-4 h-[1px] bg-on-surface-variant/5" />
 
         {/* Insights section */}
         {!isCollapsed && (
-          <div className="mb-2">
+          <div className="mb-4">
             <button
               onClick={() => setInsightsOpen(!insightsOpen)}
-              className="flex w-full items-center justify-between px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-text/50 hover:text-sidebar-text/80 transition-colors"
+              className="flex w-full items-center justify-between px-3 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-on-surface-variant/40 hover:text-on-surface-variant/70 transition-colors"
             >
               <span>Insights</span>
               {insightsOpen ? (
@@ -484,7 +513,7 @@ export function Sidebar({ user }: SidebarProps) {
             </button>
 
             {insightsOpen && (
-              <div className="mt-0.5 space-y-0.5">
+              <div className="mt-1 space-y-0.5">
                 {insightsItems.map((item) => {
                   const isActive =
                     pathname === item.href || (pathname?.startsWith(item.href + "/") ?? false)
@@ -493,19 +522,19 @@ export function Sidebar({ user }: SidebarProps) {
                       key={item.href}
                       href={item.href}
                       className={cn(
-                        "group flex items-center gap-3 rounded-md px-3 py-1.5 text-[13px] font-medium transition-all duration-150",
+                        "group flex items-center gap-3 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-all duration-200",
                         isActive
-                          ? "bg-sidebar-light text-white"
-                          : "text-sidebar-text hover:bg-sidebar-light hover:text-white"
+                          ? "bg-surface-container-high text-primary"
+                          : "text-on-surface-variant/80 hover:bg-surface-container hover:text-on-surface"
                       )}
                     >
                       <item.icon
                         className={cn(
-                          "h-4 w-4 shrink-0 transition-colors duration-150",
-                          isActive ? "text-white" : "text-sidebar-text group-hover:text-white"
+                          "h-4 w-4 shrink-0 transition-colors duration-200",
+                          isActive ? "text-primary" : "text-on-surface-variant/60 group-hover:text-on-surface"
                         )}
                       />
-                      <span>{item.label}</span>
+                      <span className="font-headline tracking-tight">{item.label}</span>
                     </Link>
                   )
                 })}
@@ -516,7 +545,7 @@ export function Sidebar({ user }: SidebarProps) {
 
         {/* Collapsed mode: show insight icons */}
         {isCollapsed && (
-          <div className="space-y-0.5 mb-2">
+          <div className="space-y-0.5 mb-2 px-1.5">
             {insightsItems.map((item) => {
               const isActive =
                 pathname === item.href || (pathname?.startsWith(item.href + "/") ?? false)
@@ -527,8 +556,8 @@ export function Sidebar({ user }: SidebarProps) {
                   className={cn(
                     "flex items-center justify-center rounded-md p-2 transition-all duration-150",
                     isActive
-                      ? "bg-sidebar-light text-white"
-                      : "text-sidebar-text hover:bg-sidebar-light hover:text-white"
+                      ? "bg-surface-container-high text-primary"
+                      : "text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
                   )}
                   title={item.label}
                 >
@@ -541,19 +570,19 @@ export function Sidebar({ user }: SidebarProps) {
 
         {/* Favorites section */}
         {!isCollapsed && favorites.length > 0 && (
-          <div className="mb-3">
+          <div className="mb-4">
             <button
               onClick={() => setFavoritesOpen(!favoritesOpen)}
-              className="flex w-full items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-sidebar-text/50 hover:text-sidebar-text/80 transition-colors duration-200"
+              className="flex w-full items-center justify-between px-3 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-on-surface-variant/40 hover:text-on-surface-variant/70 transition-colors"
             >
               <span className="flex items-center gap-1.5">
-                <Star className="h-3 w-3 text-yellow-400/60" />
+                <Star className="h-3 w-3 text-yellow-500/60" />
                 Favorites
               </span>
               {favoritesOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
             </button>
             {favoritesOpen && (
-              <div className="mt-0.5 space-y-0.5">
+              <div className="mt-1 space-y-0.5">
                 {favorites
                   .filter((f) => f.type === "project")
                   .map((fav) => {
@@ -565,22 +594,22 @@ export function Sidebar({ user }: SidebarProps) {
                         key={fav.id}
                         href={`/projects/${project.id}`}
                         className={cn(
-                          "group flex items-center gap-2.5 rounded-md px-3 py-1.5 text-[13px] transition-all duration-150",
+                          "group flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] transition-all duration-200",
                           isActive
-                            ? "bg-sidebar-light text-white"
-                            : "text-sidebar-text hover:bg-sidebar-light hover:text-white"
+                            ? "bg-surface-container-high text-primary"
+                            : "text-on-surface-variant/80 hover:bg-surface-container hover:text-on-surface"
                         )}
                       >
                         {isUploadedIcon(project.icon) ? (
                           <ProjectIcon icon={project.icon} size="sm" className="h-4 w-4" />
                         ) : (
                           <span
-                            className="h-2.5 w-2.5 rounded-full flex-shrink-0 ring-1 ring-white/10"
+                            className="h-2 w-2 rounded-full flex-shrink-0"
                             style={{ backgroundColor: project.color }}
                           />
                         )}
-                        <span className="truncate">{project.name}</span>
-                        <Star className="h-3 w-3 ml-auto text-yellow-400/70 flex-shrink-0" />
+                        <span className="truncate font-headline tracking-tight">{project.name}</span>
+                        <Star className="h-3 w-3 ml-auto text-yellow-500/40 flex-shrink-0" />
                       </Link>
                     )
                   })}
@@ -589,67 +618,19 @@ export function Sidebar({ user }: SidebarProps) {
           </div>
         )}
 
-        {/* Recents section */}
-        {!isCollapsed && recentProjects.length > 0 && (
-          <div className="mb-3">
-            <button
-              onClick={() => setRecentsOpen(!recentsOpen)}
-              className="flex w-full items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-sidebar-text/50 hover:text-sidebar-text/80 transition-colors duration-200"
-            >
-              <span className="flex items-center gap-1.5">
-                <Clock className="h-3 w-3" />
-                Recent
-              </span>
-              {recentsOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-            </button>
-            {recentsOpen && (
-              <div className="mt-0.5 space-y-0.5">
-                {recentProjects.map((project) => {
-                  const isActive = pathname?.startsWith(`/projects/${project.id}`) ?? false
-                  return (
-                    <Link
-                      key={project.id}
-                      href={`/projects/${project.id}`}
-                      className={cn(
-                        "group flex items-center gap-2.5 rounded-md px-3 py-1.5 text-[13px] transition-all duration-150",
-                        isActive
-                          ? "bg-sidebar-light text-white"
-                          : "text-sidebar-text hover:bg-sidebar-light hover:text-white"
-                      )}
-                    >
-                      {isUploadedIcon(project.icon) ? (
-                        <ProjectIcon icon={project.icon} size="sm" className="h-4 w-4" />
-                      ) : (
-                        <span
-                          className="h-2.5 w-2.5 rounded-full flex-shrink-0 ring-1 ring-white/10"
-                          style={{ backgroundColor: project.color }}
-                        />
-                      )}
-                      <span className="truncate">{project.name}</span>
-                    </Link>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Divider */}
-        <div className="my-3 border-t border-white/[0.08]" />
-
         {/* Projects section */}
         {!isCollapsed ? (
-          <div>
+          <div className="mb-4">
             <button
               onClick={() => setProjectsOpen(!projectsOpen)}
-              className="flex w-full items-center justify-between px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-text/50 hover:text-sidebar-text/80 transition-colors"
+              className="flex w-full items-center justify-between px-3 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-on-surface-variant/40 hover:text-on-surface-variant/70 transition-colors"
             >
               <span>Projects</span>
               <div className="flex items-center gap-1">
                 <Link
                   href="/projects"
                   onClick={(e) => e.stopPropagation()}
-                  className="rounded p-0.5 hover:bg-sidebar-lighter transition-colors"
+                  className="rounded p-0.5 hover:bg-surface-container-high transition-colors"
                 >
                   <Plus className="h-3 w-3" />
                 </Link>
@@ -663,20 +644,12 @@ export function Sidebar({ user }: SidebarProps) {
 
             <div
               className={cn(
-                "mt-0.5 space-y-0.5 overflow-hidden transition-all duration-200 ease-in-out",
+                "mt-1 space-y-0.5 overflow-hidden transition-all duration-300 ease-in-out",
                 projectsOpen ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
               )}
             >
-              {/* Archived toggle */}
-              <button
-                onClick={() => setShowArchived(!showArchived)}
-                className="flex items-center gap-1.5 px-3 py-1 text-[11px] text-sidebar-text/40 hover:text-sidebar-text/60 transition-colors"
-              >
-                <Archive className="h-3 w-3" />
-                {showArchived ? "Hide archived" : "Show archived"}
-              </button>
               {projects.filter(p => showArchived || p.status !== "ARCHIVED").length === 0 ? (
-                <p className="px-3 py-2 text-xs text-sidebar-text/40">
+                <p className="px-3 py-2 text-xs text-on-surface-variant/40 italic">
                   No projects yet
                 </p>
               ) : (
@@ -690,7 +663,7 @@ export function Sidebar({ user }: SidebarProps) {
                       <div className="flex items-center group">
                         <button
                           onClick={() => toggleProject(project.id)}
-                          className="flex h-6 w-5 shrink-0 items-center justify-center text-sidebar-text/30 hover:text-sidebar-text transition-colors"
+                          className="flex h-6 w-5 shrink-0 items-center justify-center text-on-surface-variant/30 hover:text-on-surface transition-colors"
                         >
                           {isExpanded ? (
                             <ChevronDown className="h-3 w-3" />
@@ -701,33 +674,26 @@ export function Sidebar({ user }: SidebarProps) {
                         <Link
                           href={`/projects/${project.id}`}
                           className={cn(
-                            "flex flex-1 items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] transition-all duration-150",
+                            "flex flex-1 items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] transition-all duration-200",
                             isProjectActive
-                              ? "bg-sidebar-light text-white"
-                              : "text-sidebar-text hover:bg-sidebar-light hover:text-white"
+                              ? "bg-surface-container-high text-primary shadow-sm"
+                              : "text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
                           )}
                         >
                           {isUploadedIcon(project.icon) ? (
                             <ProjectIcon icon={project.icon} size="sm" className="h-4 w-4" />
                           ) : (
                             <span
-                              className="h-2.5 w-2.5 rounded-full flex-shrink-0 ring-1 ring-white/10"
+                              className="h-2 w-2 rounded-full flex-shrink-0"
                               style={{ backgroundColor: project.color }}
                             />
                           )}
-                          <span className={cn("truncate", project.status === "ARCHIVED" && "opacity-50")}>{project.name}</span>
-                          {project.status === "ARCHIVED" && <Archive className="h-3 w-3 text-sidebar-text/30 shrink-0" />}
+                          <span className={cn("truncate font-headline tracking-tight", project.status === "ARCHIVED" && "opacity-50")}>{project.name}</span>
                         </Link>
-                        <button
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setProjectMenu({ x: e.clientX, y: e.clientY, projectId: project.id }) }}
-                          className="mr-1 flex h-5 w-5 shrink-0 items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-sidebar-lighter transition-all"
-                        >
-                          <MoreHorizontal className="h-3 w-3" />
-                        </button>
                       </div>
 
                       {isExpanded && (
-                        <div className="ml-5 mt-0.5 space-y-0 border-l border-white/[0.06] pl-1">
+                        <div className="ml-5 mt-0.5 space-y-0 border-l border-on-surface-variant/10 pl-1">
                           {pages.map((page) => (
                             <PageTreeItem
                               key={page.id}
@@ -738,13 +704,6 @@ export function Sidebar({ user }: SidebarProps) {
                               onDuplicate={(pageId) => handleDuplicatePage(project.id, pageId)}
                             />
                           ))}
-                          <Link
-                            href={`/projects/${project.id}?addPage=true`}
-                            className="flex items-center gap-2 rounded-md py-1 pl-3 text-[12px] text-sidebar-text/40 hover:text-sidebar-text/70 transition-colors"
-                          >
-                            <Plus className="h-3 w-3" />
-                            <span>Add Page</span>
-                          </Link>
                         </div>
                       )}
                     </div>
@@ -754,100 +713,67 @@ export function Sidebar({ user }: SidebarProps) {
             </div>
           </div>
         ) : (
-          <div className="flex flex-col items-center space-y-1">
+          <div className="flex flex-col items-center space-y-2 mb-4">
             {projects.slice(0, 5).map((project) => (
               <Link
                 key={project.id}
                 href={`/projects/${project.id}`}
-                className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-sidebar-light transition-colors"
+                className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-surface-container transition-colors"
                 title={project.name}
               >
-                {isUploadedIcon(project.icon) ? (
-                  <ProjectIcon icon={project.icon} size="sm" className="h-4 w-4" />
-                ) : (
-                  <span
-                    className="h-3 w-3 rounded-full ring-1 ring-white/10"
-                    style={{ backgroundColor: project.color }}
-                  />
-                )}
+                <span
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: project.color }}
+                />
               </Link>
             ))}
           </div>
         )}
 
-        {/* Divider */}
-        <div className="my-3 border-t border-white/[0.08]" />
-
-        {/* Teams + Settings */}
-        {!isCollapsed ? (
-          <div className="space-y-0.5 pb-2">
-            {[
-              { label: "Teams", href: "/teams", icon: Users },
-              { label: "Settings", href: "/settings", icon: Settings },
-            ].map((item) => {
-              const isActive =
-                pathname === item.href || (pathname?.startsWith(item.href + "/") ?? false)
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
+        {/* Bottom Nav: Teams + Settings */}
+        <div className="pt-2 space-y-0.5">
+          {[
+            { label: "Teams", href: "/teams", icon: Users },
+            { label: "Settings", href: "/settings", icon: Settings },
+          ].map((item) => {
+            const isActive =
+              pathname === item.href || (pathname?.startsWith(item.href + "/") ?? false)
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "group flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-200",
+                  isActive
+                    ? "bg-surface-container-high text-primary"
+                    : "text-on-surface-variant/80 hover:bg-surface-container hover:text-on-surface"
+                )}
+                title={isCollapsed ? item.label : undefined}
+              >
+                <item.icon
                   className={cn(
-                    "group flex items-center gap-3 rounded-md px-3 py-1.5 text-[13px] font-medium transition-all duration-150",
-                    isActive
-                      ? "bg-sidebar-light text-white"
-                      : "text-sidebar-text hover:bg-sidebar-light hover:text-white"
+                    "h-4 w-4 shrink-0 transition-colors duration-200",
+                    isActive ? "text-primary" : "text-on-surface-variant/60 group-hover:text-on-surface"
                   )}
-                >
-                  <item.icon
-                    className={cn(
-                      "h-4 w-4 shrink-0 transition-colors duration-150",
-                      isActive ? "text-white" : "text-sidebar-text group-hover:text-white"
-                    )}
-                  />
-                  <span>{item.label}</span>
-                </Link>
-              )
-            })}
-          </div>
-        ) : (
-          <div className="space-y-0.5 pb-2">
-            {[
-              { label: "Teams", href: "/teams", icon: Users },
-              { label: "Settings", href: "/settings", icon: Settings },
-            ].map((item) => {
-              const isActive =
-                pathname === item.href || (pathname?.startsWith(item.href + "/") ?? false)
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "flex items-center justify-center rounded-md p-2 transition-all duration-150",
-                    isActive
-                      ? "bg-sidebar-light text-white"
-                      : "text-sidebar-text hover:bg-sidebar-light hover:text-white"
-                  )}
-                  title={item.label}
-                >
-                  <item.icon className="h-4 w-4" />
-                </Link>
-              )
-            })}
-          </div>
-        )}
+                />
+                {!isCollapsed && <span className="font-headline tracking-tight">{item.label}</span>}
+              </Link>
+            )
+          })}
+        </div>
       </nav>
 
       {/* User section */}
-      <div className="border-t border-white/[0.06] p-2">
+      <div className="p-4">
         {!isCollapsed ? (
-          <div className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 hover:bg-sidebar-light/80 transition-colors duration-200 group">
+          <div className="flex items-center gap-3 rounded-xl bg-surface-container px-3 py-2.5 transition-all duration-200 hover:bg-surface-container-high group">
             <UserAvatar
               user={{ name: user.name, image: user.image }}
               size="sm"
-              className="border border-white/15 ring-1 ring-white/5"
+              className="ring-2 ring-white/50 ring-offset-1 ring-offset-surface-container"
             />
             <div className="flex-1 min-w-0">
-              <p className="truncate text-[13px] font-medium text-white/90">
+              <p className="truncate text-sm font-bold text-primary font-headline tracking-tight">
                 {user.name}
               </p>
             </div>
@@ -855,18 +781,18 @@ export function Sidebar({ user }: SidebarProps) {
               onClick={() => {
                 window.location.href = "/api/auth/signout"
               }}
-              className="rounded-md p-1.5 text-sidebar-text/40 hover:text-white hover:bg-sidebar-lighter/60 transition-colors opacity-0 group-hover:opacity-100"
+              className="rounded-md p-1.5 text-on-surface-variant/40 hover:text-error hover:bg-error/5 transition-colors opacity-0 group-hover:opacity-100"
               title="Sign out"
             >
-              <LogOut className="h-3.5 w-3.5" />
+              <LogOut className="h-4 w-4" />
             </button>
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-2 py-1">
+          <div className="flex flex-col items-center py-2">
             <UserAvatar
               user={{ name: user.name, image: user.image }}
               size="sm"
-              className="border border-white/20"
+              className="ring-2 ring-white/50"
             />
           </div>
         )}
