@@ -30,33 +30,33 @@ export function ProjectsPageClient({
   }, [projects, search])
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-12 animate-fade-in pb-20">
+    <div className="mx-auto max-w-[1600px] space-y-8 animate-fade-in pb-24 sm:space-y-12">
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-8">
+      <div className="flex flex-col justify-between gap-4 sm:gap-8 md:flex-row md:items-end">
         <div className="space-y-2">
-          <h1 className="text-5xl font-headline font-black tracking-tighter text-primary">
+          <h1 className="text-3xl font-headline font-black tracking-tighter text-primary sm:text-5xl">
             Workspace Projects
           </h1>
-          <p className="text-on-surface-variant/60 font-medium text-lg flex items-center gap-3">
+          <p className="flex items-center gap-3 text-sm font-medium text-on-surface-variant/60 sm:text-lg">
             <span className="w-2 h-2 rounded-full bg-primary" />
             Managing {projects.length} active initiatives
           </p>
         </div>
         
-        <div className="flex items-center gap-3 bg-surface-container-low p-1.5 rounded-2xl">
+        <div className="flex w-full flex-wrap items-center justify-between gap-3 rounded-2xl bg-surface-container-low p-1.5 md:w-auto md:flex-nowrap md:justify-start">
           <CreateFromTemplateDialog onCreated={() => window.location.reload()}>
-            <Button variant="ghost" className="rounded-xl font-bold text-[11px] uppercase tracking-widest text-on-surface-variant/60 hover:text-primary hover:bg-surface-container transition-all">
+            <Button variant="ghost" className="flex-1 rounded-xl font-bold text-[11px] uppercase tracking-widest text-on-surface-variant/60 transition-all hover:bg-surface-container hover:text-primary md:flex-none">
               <FileStack className="h-4 w-4 mr-2" />
               Templates
             </Button>
           </CreateFromTemplateDialog>
-          <div className="h-6 w-[1px] bg-on-surface-variant/10" />
+          <div className="hidden h-6 w-[1px] bg-on-surface-variant/10 md:block" />
           <CreateProjectDialog workspaceId={workspaceId} />
         </div>
       </div>
 
       {/* Control Bar */}
-      <div className="flex flex-col sm:flex-row items-center gap-4">
+      <div className="flex flex-col items-center gap-3 sm:flex-row sm:gap-4">
         <div className="relative w-full sm:max-w-md group">
           <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant/30 group-focus-within:text-primary transition-colors" />
           <input
@@ -67,7 +67,7 @@ export function ProjectsPageClient({
           />
         </div>
         
-        <div className="flex items-center gap-2 ml-auto">
+        <div className="ml-auto flex w-full items-center gap-2 sm:w-auto">
           <Button variant="ghost" size="icon" className="h-12 w-12 rounded-2xl bg-surface-container-low text-on-surface-variant/40 hover:text-primary hover:bg-surface-container">
             <LayoutGrid className="h-5 w-5" />
           </Button>
@@ -76,17 +76,17 @@ export function ProjectsPageClient({
 
       {/* Grid */}
       {filtered.length > 0 ? (
-        <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2 xl:grid-cols-3 xl:gap-8">
           {filtered.map((project) => (
             <ProjectCard key={project.id} project={project} />
           ))}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-32 text-center bg-surface-container-low/20 rounded-[3rem] border-2 border-dashed border-on-surface-variant/5">
-          <div className="w-20 h-20 rounded-3xl bg-surface-container flex items-center justify-center text-on-surface-variant/20 mb-6">
+        <div className="flex flex-col items-center justify-center rounded-[2rem] border-2 border-dashed border-on-surface-variant/5 bg-surface-container-low/20 py-20 text-center sm:rounded-[3rem] sm:py-32">
+          <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-3xl bg-surface-container text-on-surface-variant/20 sm:h-20 sm:w-20">
             <FolderOpen className="h-10 w-10" />
           </div>
-          <h3 className="text-2xl font-headline font-black text-primary tracking-tight">No projects found</h3>
+          <h3 className="text-xl font-headline font-black tracking-tight text-primary sm:text-2xl">No projects found</h3>
           <p className="text-on-surface-variant/40 mt-2 max-w-xs mx-auto">
             {search
               ? "Your search query yielded no results in this workspace."

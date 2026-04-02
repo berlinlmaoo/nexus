@@ -53,28 +53,28 @@ export function SettingsClient({ user, workspace, isAdmin, workspaceRole }: Sett
   }
 
   return (
-    <div className="max-w-[1600px] mx-auto animate-fade-in pb-24 [content-visibility:auto]">
+    <div className="mx-auto animate-fade-in pb-24 [content-visibility:auto]">
       {/* Header */}
-      <div className="mb-12 space-y-2 px-4">
-        <h1 className="text-5xl font-headline font-black tracking-tighter text-on-surface">
+      <div className="mb-8 space-y-2 sm:mb-12 sm:px-4">
+        <h1 className="text-3xl font-headline font-black tracking-tighter text-on-surface sm:text-5xl">
           System Configuration
         </h1>
-        <p className="text-on-surface-variant/60 font-medium text-lg flex items-center gap-3">
+        <p className="flex items-center gap-3 text-sm font-medium text-on-surface-variant/60 sm:text-lg">
           <span className="w-2 h-2 rounded-full bg-primary" />
           Modifying operational parameters for {user.name}
         </p>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-12">
+      <div className="flex flex-col gap-6 sm:gap-8 lg:flex-row lg:gap-12">
         {/* Navigation Sidebar */}
-        <aside className="w-full lg:w-72 shrink-0 px-4">
-          <nav className="flex flex-col gap-1">
+        <aside className="w-full shrink-0 lg:w-72 sm:px-4">
+          <nav className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar lg:flex-col lg:gap-1 lg:pb-0">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  "group flex items-center justify-between px-5 py-4 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] transition-all duration-300",
+                  "group flex shrink-0 items-center justify-between gap-3 rounded-xl px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] transition-all duration-300 sm:rounded-2xl sm:px-5 sm:py-4 sm:text-[11px]",
                   activeTab === tab.id
                     ? "bg-primary text-primary-foreground shadow-xl shadow-primary/20 scale-[1.02]"
                     : "text-on-surface-variant/40 hover:text-on-surface hover:bg-surface-container-low"
@@ -84,35 +84,35 @@ export function SettingsClient({ user, workspace, isAdmin, workspaceRole }: Sett
                   <tab.icon className="h-4 w-4" />
                   <span>{tab.label}</span>
                 </div>
-                <ChevronRight className={cn("h-3.5 w-3.5 opacity-0 transition-all", activeTab === tab.id ? "opacity-100 translate-x-0" : "group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0")} />
+                <ChevronRight className={cn("hidden h-3.5 w-3.5 transition-all sm:block", activeTab === tab.id ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0")} />
               </button>
             ))}
           </nav>
         </aside>
 
         {/* Main Content Area */}
-        <div className="flex-1 px-4">
-          <div className="bg-surface-container-lowest rounded-[3rem] p-12 shadow-sm border border-on-surface-variant/5 min-h-[600px] relative overflow-hidden">
+        <div className="flex-1 sm:px-4">
+          <div className="relative overflow-hidden rounded-[2rem] border border-on-surface-variant/5 bg-surface-container-lowest p-5 shadow-sm sm:rounded-[3rem] sm:p-12 sm:min-h-[600px]">
             {/* Background Decoration */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-primary/[0.02] rounded-full blur-[100px] -mr-32 -mt-32" />
 
             <div className="relative z-10 max-w-3xl">
               {activeTab === "profile" && (
-                <div className="space-y-12">
-                  <div className="flex items-center gap-8">
+                <div className="space-y-8 sm:space-y-12">
+                  <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center sm:gap-8">
                     <div className="relative group">
-                      <UserAvatar user={{ name: user.name, image: user.avatar }} size="lg" className="h-24 w-24 ring-4 ring-surface-container-low" />
+                      <UserAvatar user={{ name: user.name, image: user.avatar }} size="lg" className="h-20 w-20 ring-4 ring-surface-container-low sm:h-24 sm:w-24" />
                       <button className="absolute inset-0 rounded-full bg-primary/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-primary-foreground">
                         <Camera className="h-6 w-6" />
                       </button>
                     </div>
                     <div>
-                      <h3 className="text-2xl font-headline font-black text-on-surface tracking-tight">Identity Designation</h3>
+                      <h3 className="text-xl font-headline font-black tracking-tight text-on-surface sm:text-2xl">Identity Designation</h3>
                       <p className="text-sm text-on-surface-variant/60 font-medium">How you are recognized within the Nexus network.</p>
                     </div>
                   </div>
 
-                  <div className="space-y-8 pt-4">
+                  <div className="space-y-6 pt-2 sm:space-y-8 sm:pt-4">
                     <div className="space-y-2">
                       <label className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/40 ml-1">Full Designation</label>
                       <input
@@ -132,7 +132,7 @@ export function SettingsClient({ user, workspace, isAdmin, workspaceRole }: Sett
                     <Button 
                       onClick={handleSaveProfile} 
                       disabled={saving || name.trim() === user.name}
-                      className="h-14 px-8 bg-primary text-primary-foreground rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-primary/10 transition-all hover:-translate-y-1 active:scale-95"
+                      className="h-12 w-full rounded-2xl bg-primary px-8 text-xs font-black uppercase tracking-widest text-primary-foreground shadow-lg shadow-primary/10 transition-all hover:-translate-y-1 active:scale-95 sm:h-14 sm:w-auto"
                     >
                       {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : "Update Identity"}
                     </Button>

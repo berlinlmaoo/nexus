@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { syncTeamProjectAccess, syncTeamMemberAccess, revokeTeamProjectAccess, revokeTeamMemberAccess } from '@/lib/team-sync'
 import { logAudit } from '@/lib/audit'
+import { buildPersonalWorkspace } from '@/lib/workspace-defaults'
 
 export async function GET() {
   try {
@@ -10,13 +11,37 @@ export async function GET() {
     const user = session?.user
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    // Workspace isolation: only return teams from workspaces the user belongs to
+    const workspaceMemberships = await prisma.workspaceMember.findMany({
+      where: { userId: user.id },
+      select: { workspaceId: true, role: true },
+    })
+
+    const adminWorkspaceIds = workspaceMemberships
+      .filter((membership) => membership.role === 'OWNER' || membership.role === 'ADMIN')
+      .map((membership) => membership.workspaceId)
+
+    const memberWorkspaceIds = workspaceMemberships
+      .filter((membership) => membership.role === 'MEMBER')
+      .map((membership) => membership.workspaceId)
+
+    const teamScopes: any[] = []
+    if (adminWorkspaceIds.length > 0) {
+      teamScopes.push({ workspaceId: { in: adminWorkspaceIds } })
+    }
+    if (memberWorkspaceIds.length > 0) {
+      teamScopes.push({
+        workspaceId: { in: memberWorkspaceIds },
+        members: { some: { userId: user.id } },
+      })
+    }
+
+    if (teamScopes.length === 0) {
+      return NextResponse.json([])
+    }
+
+    // Workspace isolation: members only see teams they belong to, owners/admins see all teams in their workspace
     const teams = await prisma.team.findMany({
-      where: {
-        workspace: {
-          members: { some: { userId: user.id } },
-        },
-      },
+      where: teamScopes.length === 1 ? teamScopes[0] : { OR: teamScopes },
       include: {
         members: {
           include: {
@@ -111,10 +136,15 @@ export async function POST(req: NextRequest) {
     })
 
     if (!membership) {
+      const personalWorkspace = buildPersonalWorkspace({
+        id: user.id,
+        name: user.name,
+        email: user.email || `${user.id}@nexus.local`,
+      })
+
       const workspace = await prisma.workspace.create({
         data: {
-          name: 'PATS Group',
-          slug: 'pats-group',
+          ...personalWorkspace,
           members: { create: { userId: user.id, role: 'OWNER' } }
         }
       })

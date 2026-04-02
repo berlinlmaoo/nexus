@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useCallback } from "react"
+import { useState, useRef, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
@@ -28,6 +28,13 @@ interface ProjectHeaderProps {
     color: string
     icon: string
   }
+  onProjectChange?: (project: {
+    id: string
+    name: string
+    description: string | null
+    color: string
+    icon: string
+  }) => void
 }
 
 const PRESET_COLORS = [
@@ -62,7 +69,7 @@ const PRESET_GRADIENTS = [
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/svg+xml", "image/webp"]
 const MAX_FILE_SIZE = 5 * 1024 * 1024
 
-export function ProjectHeader({ project }: ProjectHeaderProps) {
+export function ProjectHeader({ project, onProjectChange }: ProjectHeaderProps) {
   const router = useRouter()
   const [showIconPicker, setShowIconPicker] = useState(false)
   const [showColorPicker, setShowColorPicker] = useState(false)
@@ -84,13 +91,43 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  useEffect(() => {
+    setProjectName(project.name)
+    setDescription(project.description || "")
+    setSelectedIcon(project.icon || "folder")
+    setSelectedColor(project.color)
+  }, [project.name, project.description, project.icon, project.color])
+
   const updateProject = async (updates: Record<string, string>) => {
     try {
-      await fetch(`/api/projects/${project.id}`, {
+      const res = await fetch(`/api/projects/${project.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
       })
+      if (!res.ok) {
+        throw new Error("Failed to update project")
+      }
+
+      const updatedProject = await res.json()
+      const nextProject = {
+        id: updatedProject.id ?? project.id,
+        name: updatedProject.name ?? project.name,
+        description: updatedProject.description ?? project.description,
+        color: updatedProject.color ?? project.color,
+        icon: updatedProject.icon ?? project.icon,
+      }
+
+      onProjectChange?.(nextProject)
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("project-updated", {
+            detail: { project: nextProject },
+          })
+        )
+      }
+
       router.refresh()
     } catch (error) {
       console.error("Failed to update project:", error)

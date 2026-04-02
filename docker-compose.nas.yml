@@ -1,15 +1,28 @@
+x-app-env: &app-env
+  NODE_ENV: production
+  DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env.docker.nas}
+  AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in .env.docker.nas}
+  NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+  AUTH_TRUST_HOST: ${AUTH_TRUST_HOST:-true}
+
 services:
+  bootstrap:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    command: ["npx", "prisma", "db", "push"]
+    restart: "no"
+    environment: *app-env
+
   app:
     build:
       context: .
       dockerfile: Dockerfile
     restart: always
     ports:
-      - "3000:3000"
-    environment:
-      # Database hosted on Synology NAS with custom credentials
-      DATABASE_URL: "postgresql://nexus_admin:PatsNexus2026!@192.168.223.92:5432/nexus_db?schema=public"
-      AUTH_SECRET: "83917d299c83455a82d226f4a0f3b0f677e3a8abf210d297baae0d95d4ddd0a0"
-      NEXTAUTH_URL: "http://localhost:3000" # Nanti ganti ke domain publik (misal https://nexus.kamu.com)
-      NEXTAUTH_SECRET: "83917d299c83455a82d226f4a0f3b0f677e3a8abf210d297baae0d95d4ddd0a0"
-    # Kita tidak butuh 'depends_on' karena database ada di luar Mac ini (di NAS)
+      - "${APP_PORT:-3000}:3000"
+    environment: *app-env
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully

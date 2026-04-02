@@ -63,11 +63,13 @@ export function ProjectIcon({ icon, color, size = "md", variant = "emoji", class
     return (
       <div className={cn("relative overflow-hidden rounded-full flex-shrink-0", cfg.container, className)}>
         <Image
+          key={icon}
           src={icon}
           alt="Project icon"
           fill
           className="object-cover"
           sizes={`${cfg.image}px`}
+          unoptimized
         />
       </div>
     )
