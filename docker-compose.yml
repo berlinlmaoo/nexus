@@ -1,15 +1,42 @@
+x-app-env: &app-env
+  NODE_ENV: production
+  DATABASE_URL: ${DATABASE_URL:-postgresql://nexus_user:password123@db:5432/nexus_db?schema=public}
+  AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in .env.docker}
+  NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+  AUTH_TRUST_HOST: ${AUTH_TRUST_HOST:-true}
+
 services:
   db:
     image: postgres:15-alpine
     restart: always
     environment:
-      POSTGRES_USER: nexus_user
-      POSTGRES_PASSWORD: password123
-      POSTGRES_DB: nexus_db
+      POSTGRES_USER: ${POSTGRES_USER:-nexus_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password123}
+      POSTGRES_DB: ${POSTGRES_DB:-nexus_db}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POSTGRES_USER:-nexus_user} -d ${POSTGRES_DB:-nexus_db}
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     volumes:
       - db_data:/var/lib/postgresql/data
+
+  bootstrap:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    command: ["npx", "prisma", "db", "push"]
+    restart: "no"
+    environment: *app-env
+    depends_on:
+      db:
+        condition: service_healthy
 
   app:
     build:
@@ -17,14 +44,13 @@ services:
       dockerfile: Dockerfile
     restart: always
     ports:
-      - "3000:3000"
-    environment:
-      DATABASE_URL: "postgresql://nexus_user:password123@db:5432/nexus_db?schema=public"
-      AUTH_SECRET: "83917d299c83455a82d226f4a0f3b0f677e3a8abf210d297baae0d95d4ddd0a0" # Same as local .env
-      NEXTAUTH_URL: "http://localhost:3000"
-      NEXTAUTH_SECRET: "83917d299c83455a82d226f4a0f3b0f677e3a8abf210d297baae0d95d4ddd0a0"
+      - "${APP_PORT:-3000}:3000"
+    environment: *app-env
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
 
 volumes:
   db_data:

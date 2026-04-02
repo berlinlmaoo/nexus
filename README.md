@@ -160,6 +160,36 @@ pm2 start npm --name nexus -- start
 
 Open your configured URL (default: [http://localhost:3000](http://localhost:3000)).
 
+## Docker Deployment
+
+### Local PostgreSQL in Docker
+
+```bash
+cp .env.docker.example .env.docker
+docker compose --env-file .env.docker up -d --build
+```
+
+This stack starts PostgreSQL, runs `prisma db push`, then launches the app on port `3000`.
+
+### External PostgreSQL / NAS
+
+```bash
+cp .env.docker.nas.example .env.docker.nas
+docker compose --env-file .env.docker.nas -f docker-compose.nas.yml up -d --build
+```
+
+Set `NEXTAUTH_URL` to the Mac Mini IP or public domain that users will actually open.
+If you are using Synology's PostgreSQL package, double-check the exposed port first; many setups listen on `5433` instead of `5432`.
+
+### Seed Demo Users Safely
+
+```bash
+docker compose --env-file .env.docker.nas -f docker-compose.nas.yml run --rm --build bootstrap npm run db:seed:users
+```
+
+This command only upserts the demo login accounts and workspace membership.
+Do not use `npm run db:seed` on a live database unless you intentionally want to wipe existing data first.
+
 ## Login
 
 **Google OAuth:** Sign in with any `@patsgroup.id` Google account.

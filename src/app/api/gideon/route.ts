@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
-import { TaskStatus, TaskPriority } from '@/generated/prisma/enums'
+import { TaskStatus, TaskPriority } from '@/generated/prisma'
 
 const SYSTEM_PROMPT = `You are GIDEON (Global Intelligence Data Enterprise Operational Network), Strategic Operations AI for PATS Group. You have full access to NEXUS — the PATS project management platform. You can create tasks, update status, assign people, create goals, summarize projects, track time, and manage sprints. Tone: casual but sharp, like a genius co-worker. Never use filler phrases.`
 

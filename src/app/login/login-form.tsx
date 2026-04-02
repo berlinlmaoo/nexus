@@ -15,9 +15,8 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
-import { Loader2, ArrowRight, Github } from "lucide-react"
+import { Loader2, ArrowRight } from "lucide-react"
 
 const formSchema = z.object({
   email: z.string().email({
@@ -33,7 +32,6 @@ export function LoginForm() {
   const searchParams = useSearchParams()
   const callbackUrl = searchParams?.get("callbackUrl") || "/dashboard"
   const [isLoading, setIsLoading] = useState(false)
-  const [isGithubLoading, setIsGithubLoading] = useState(false)
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -70,11 +68,6 @@ export function LoginForm() {
     } finally {
       setIsLoading(false)
     }
-  }
-
-  const handleGithubSignIn = async () => {
-    setIsGithubLoading(true)
-    signIn("github", { callbackUrl })
   }
 
   return (
@@ -135,32 +128,6 @@ export function LoginForm() {
           </Button>
         </form>
       </Form>
-
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t border-on-surface-variant/5" />
-        </div>
-        <div className="relative flex justify-center text-[10px] font-black uppercase tracking-widest">
-          <span className="bg-surface px-4 text-on-surface-variant/30">Alternative Access</span>
-        </div>
-      </div>
-
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={handleGithubSignIn}
-        disabled={isGithubLoading}
-        className="w-full h-14 bg-surface-container-low text-primary rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-surface-container transition-all"
-      >
-        {isGithubLoading ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <>
-            <Github className="mr-2 h-4 w-4" />
-            Github Gateway
-          </>
-        )}
-      </Button>
     </div>
   )
 }

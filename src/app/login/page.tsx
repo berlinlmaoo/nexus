@@ -54,20 +54,16 @@ export default async function LoginPage() {
             <p className="text-xs font-bold opacity-60">V2.4.0 Codename: D41V4</p>
           </div>
           <div className="h-8 w-[1px] bg-primary-foreground/10" />
-          <Link 
-            href="https://www.instagram.com/jagain.networks/" 
-            target="_blank" 
-            className="space-y-1 hover:opacity-80 transition-opacity cursor-pointer"
-          >
+          <div className="space-y-1">
             <p className="text-[10px] font-black uppercase tracking-widest opacity-30">Engineered By</p>
             <p className="text-xs font-bold opacity-60">Jagain Networks</p>
-          </Link>
+          </div>
         </div>
       </div>
 
       {/* Right Login Side */}
-      <div className="flex-1 flex flex-col justify-center px-8 sm:px-16 lg:px-24 xl:px-32 py-12 relative bg-surface">
-        <div className="lg:hidden absolute top-12 left-8 sm:left-16">
+      <div className="relative flex flex-1 flex-col justify-center bg-surface px-5 py-8 sm:px-10 sm:py-12 lg:px-24 xl:px-32">
+        <div className="absolute left-5 top-6 lg:hidden sm:left-10 sm:top-10">
           <Image 
             src="/logos/nexus-logo-mono.png" 
             alt="NEXUS" 
@@ -77,10 +73,10 @@ export default async function LoginPage() {
           />
         </div>
 
-        <div className="w-full max-w-md mx-auto space-y-10 animate-fade-in">
+        <div className="mx-auto w-full max-w-md space-y-8 animate-fade-in pt-14 sm:space-y-10 sm:pt-10 lg:pt-0">
           <div className="space-y-2">
-            <h3 className="text-4xl font-headline font-black text-on-surface tracking-tight">Initiate Protocol</h3>
-            <p className="text-on-surface-variant/60 font-medium">Verify your credentials to access the workspace.</p>
+            <h3 className="text-3xl font-headline font-black text-on-surface tracking-tight sm:text-4xl">Initiate Protocol</h3>
+            <p className="text-sm font-medium text-on-surface-variant/60 sm:text-base">Verify your credentials to access the workspace.</p>
           </div>
 
           <Suspense fallback={<div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary/20" /></div>}>
@@ -94,6 +90,11 @@ export default async function LoginPage() {
                 Apply for Node Access
               </Link>
             </p>
+          </div>
+
+          <div className="lg:hidden rounded-3xl border border-on-surface-variant/5 bg-surface-container-low/50 px-4 py-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/30">Engineered By</p>
+            <p className="mt-1 text-sm font-bold text-primary/70">Jagain Networks</p>
           </div>
         </div>
 

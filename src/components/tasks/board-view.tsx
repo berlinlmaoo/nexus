@@ -17,6 +17,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { useRouter } from "next/navigation"
 import { format, isPast, isToday } from "date-fns"
 
@@ -64,6 +65,7 @@ export function BoardView({
   const [addingSectionName, setAddingSectionName] = useState("")
   const [creatingSec, setCreatingSec] = useState(false)
   const [deletingColumn, setDeletingColumn] = useState<string | null>(null)
+  const [confirmDeleteColumn, setConfirmDeleteColumn] = useState<{ id: string; name: string } | null>(null)
   const sectionInputRef = useRef<HTMLInputElement>(null)
   const renameInputRef = useRef<HTMLInputElement>(null)
 
@@ -183,8 +185,9 @@ export function BoardView({
   }
 
   return (
-    <DragDropContext onDragEnd={handleDragEnd}>
-      <div className="flex gap-3 pb-4 overflow-x-auto min-w-0 w-full h-full px-3 pt-3">
+    <>
+      <DragDropContext onDragEnd={handleDragEnd}>
+        <div className="flex gap-3 pb-4 overflow-x-auto min-w-0 w-full h-full px-3 pt-3">
         {columns.map((column) => (
           <div
             key={column.id}
@@ -273,11 +276,7 @@ export function BoardView({
                       <DropdownMenuItem
                         className="text-red-600 focus:text-red-600"
                         disabled={deletingColumn === column.id}
-                        onClick={() => {
-                          if (confirm(`Delete "${column.name}"? Tasks will be moved to the first remaining section.`)) {
-                            handleDeleteColumn(column.id)
-                          }
-                        }}
+                        onClick={() => setConfirmDeleteColumn({ id: column.id, name: column.name })}
                       >
                         <Trash2 className="h-3.5 w-3.5 mr-2" />
                         Delete Section
@@ -470,6 +469,28 @@ export function BoardView({
           </div>
         )}
       </div>
-    </DragDropContext>
+      </DragDropContext>
+
+      <ConfirmDialog
+        open={!!confirmDeleteColumn}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDeleteColumn(null)
+        }}
+        title="Delete section?"
+        description={
+          confirmDeleteColumn
+            ? `Delete "${confirmDeleteColumn.name}"? Tasks in this section will be moved to the first remaining section.`
+            : ""
+        }
+        confirmLabel="Delete section"
+        icon={<Trash2 className="h-5 w-5" />}
+        isLoading={deletingColumn === confirmDeleteColumn?.id}
+        onConfirm={async () => {
+          if (!confirmDeleteColumn) return
+          await handleDeleteColumn(confirmDeleteColumn.id)
+          setConfirmDeleteColumn(null)
+        }}
+      />
+    </>
   )
 }

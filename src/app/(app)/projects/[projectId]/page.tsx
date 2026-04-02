@@ -60,6 +60,7 @@ export default async function ProjectDetailPage({
   // Verify user is a member
   const isMember = project.members.some((m) => m.user.id === session.user!.id)
   if (!isMember) redirect("/projects")
+  const currentMember = project.members.find((m) => m.user.id === session.user!.id)
 
   const projectData = {
     id: project.id,
@@ -107,7 +108,11 @@ export default async function ProjectDetailPage({
     <div className="h-full">
       <ProjectDetailClient
         project={projectData}
-        currentUser={{ id: session.user.id!, name: session.user.name || "User", avatar: session.user.image || null }}
+        currentUser={{
+          id: session.user.id!,
+          name: currentMember?.user.name || session.user.name || "User",
+          avatar: currentMember?.user.avatar ?? session.user.image ?? null,
+        }}
       />
     </div>
   )

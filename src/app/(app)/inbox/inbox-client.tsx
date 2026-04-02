@@ -76,36 +76,36 @@ export function InboxClient({
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-12 animate-fade-in pb-24">
+    <div className="mx-auto max-w-5xl space-y-8 animate-fade-in pb-24 sm:space-y-12">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-8">
+      <div className="flex flex-col justify-between gap-4 sm:gap-8 md:flex-row md:items-end">
         <div className="space-y-2">
-          <h1 className="text-5xl font-headline font-black tracking-tighter text-primary">
+          <h1 className="text-3xl font-headline font-black tracking-tighter text-primary sm:text-5xl">
             Intelligence Feed
           </h1>
-          <p className="text-on-surface-variant/60 font-medium text-lg flex items-center gap-3">
+          <p className="flex items-center gap-3 text-sm font-medium text-on-surface-variant/60 sm:text-lg">
             <span className="w-2 h-2 rounded-full bg-primary" />
             {unreadCount} pending transmissions
           </p>
         </div>
         
-        <div className="flex items-center gap-3 bg-surface-container-low p-1.5 rounded-2xl">
+        <div className="flex w-full flex-col gap-3 rounded-2xl bg-surface-container-low p-1.5 sm:flex-row sm:items-center md:w-auto">
           <button 
             onClick={markAllRead}
             disabled={markingAll || unreadCount === 0}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest text-on-surface-variant/40 hover:text-primary hover:bg-surface-container transition-all disabled:opacity-20"
+            className="flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-[11px] font-black uppercase tracking-widest text-on-surface-variant/40 transition-all hover:bg-surface-container hover:text-primary disabled:opacity-20"
           >
             {markingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCheck className="h-3.5 w-3.5" />}
             Clear All
           </button>
-          <div className="h-6 w-[1px] bg-on-surface-variant/10" />
+          <div className="hidden h-6 w-[1px] bg-on-surface-variant/10 sm:block" />
           <div className="flex bg-surface-container p-1 rounded-xl">
             {["all", "unread"].map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f as any)}
                 className={cn(
-                  "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                  "flex-1 rounded-lg px-4 py-1.5 text-[10px] font-black uppercase tracking-widest transition-all",
                   filter === f ? "bg-surface-container-lowest text-primary shadow-sm" : "text-on-surface-variant/40 hover:text-on-surface-variant/70"
                 )}
               >
@@ -119,11 +119,11 @@ export function InboxClient({
       {/* Feed */}
       <div className="space-y-4">
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-32 text-center bg-surface-container-low/20 rounded-[3rem] border-2 border-dashed border-on-surface-variant/5">
-            <div className="w-20 h-20 rounded-3xl bg-surface-container flex items-center justify-center text-on-surface-variant/20 mb-6">
+          <div className="flex flex-col items-center justify-center rounded-[2rem] border-2 border-dashed border-on-surface-variant/5 bg-surface-container-low/20 py-20 text-center sm:rounded-[3rem] sm:py-32">
+            <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-3xl bg-surface-container text-on-surface-variant/20 sm:h-20 sm:w-20">
               <Inbox className="h-10 w-10" />
             </div>
-            <h3 className="text-2xl font-headline font-black text-primary tracking-tight">Feed is silent</h3>
+            <h3 className="text-xl font-headline font-black tracking-tight text-primary sm:text-2xl">Feed is silent</h3>
             <p className="text-on-surface-variant/40 mt-2 max-w-xs mx-auto font-medium">No active transmissions currently requiring your attention.</p>
           </div>
         ) : (
@@ -136,11 +136,11 @@ export function InboxClient({
                   if (n.link) window.location.href = n.link
                 }}
                 className={cn(
-                  "group flex items-start gap-6 p-6 rounded-[2rem] transition-all duration-300 cursor-pointer border border-transparent hover:shadow-2xl hover:shadow-primary/5",
+                  "group cursor-pointer rounded-[1.5rem] border border-transparent p-4 transition-all duration-300 hover:shadow-2xl hover:shadow-primary/5 sm:flex sm:items-start sm:gap-6 sm:rounded-[2rem] sm:p-6",
                   !n.read ? "bg-surface-container-lowest ring-2 ring-primary/5" : "bg-surface-container-low/40 opacity-60 hover:opacity-100 hover:bg-surface-container-low"
                 )}
               >
-                <div className="relative mt-1">
+                <div className="relative mt-1 mb-4 sm:mb-0">
                   <div className={cn(
                     "h-12 w-12 rounded-2xl flex items-center justify-center shadow-lg transition-transform group-hover:scale-110",
                     !n.read ? "bg-primary text-primary-foreground" : "bg-surface-container text-on-surface-variant/40"
@@ -151,7 +151,7 @@ export function InboxClient({
                 </div>
 
                 <div className="flex-1 space-y-1">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <h4 className={cn("text-base tracking-tight", !n.read ? "font-black text-primary" : "font-bold text-on-surface-variant/60")}>
                       {n.title}
                     </h4>
@@ -166,7 +166,7 @@ export function InboxClient({
                   )}
                 </div>
                 
-                <div className="self-center opacity-0 group-hover:opacity-100 transition-all">
+                <div className="hidden self-center transition-all sm:block sm:opacity-0 sm:group-hover:opacity-100">
                   <div className="h-10 w-10 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant/40 hover:bg-primary hover:text-primary-foreground">
                     <ChevronRight className="h-5 w-5" />
                   </div>

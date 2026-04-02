@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
+import { signOut } from "next-auth/react"
 import {
   Home,
   CheckSquare,
@@ -31,9 +32,10 @@ import {
   ArchiveRestore,
 } from "lucide-react"
 import { UserAvatar } from "@/components/ui/user-avatar"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/stores/app-store"
-import { ProjectIcon, isUploadedIcon } from "@/components/projects/project-icon"
+import { ProjectIcon } from "@/components/projects/project-icon"
 import Image from "next/image"
 
 interface SidebarProps {
@@ -50,6 +52,10 @@ interface Project {
   color: string
   icon: string
   status?: string
+}
+
+interface ProjectUpdatedDetail {
+  project?: Partial<Project> & { id: string }
 }
 
 interface ProjectPage {
@@ -221,6 +227,8 @@ export function Sidebar({ user }: SidebarProps) {
   const [isResizing, setIsResizing] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [projectMenu, setProjectMenu] = useState<{ x: number; y: number; projectId: string } | null>(null)
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
   const [confirmDeleteProject, setConfirmDeleteProject] = useState<{ id: string; name: string } | null>(null)
   const [showArchived, setShowArchived] = useState(false)
   const [isClient, setIsClient] = useState(false)
@@ -243,6 +251,46 @@ export function Sidebar({ user }: SidebarProps) {
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => setProjects(Array.isArray(data) ? data : data.projects ?? []))
       .catch(() => setProjects([]))
+  }, [])
+
+  useEffect(() => {
+    const handleProjectUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<ProjectUpdatedDetail>).detail
+      const updatedProject = detail?.project
+
+      if (!updatedProject?.id) return
+
+      setProjects((prev) =>
+        prev.map((project) =>
+          project.id === updatedProject.id
+            ? {
+                ...project,
+                ...updatedProject,
+              }
+            : project
+        )
+      )
+
+      setRecentProjects((prev) => {
+        const next = prev.map((project) =>
+          project.id === updatedProject.id
+            ? {
+                ...project,
+                ...updatedProject,
+              }
+            : project
+        )
+
+        try {
+          localStorage.setItem(RECENTS_KEY, JSON.stringify(next))
+        } catch {}
+
+        return next
+      })
+    }
+
+    window.addEventListener("project-updated", handleProjectUpdated as EventListener)
+    return () => window.removeEventListener("project-updated", handleProjectUpdated as EventListener)
   }, [])
 
   // Fetch favorites
@@ -381,6 +429,11 @@ export function Sidebar({ user }: SidebarProps) {
 
   const toggleCollapse = useCallback(() => {
     setIsCollapsed((prev) => !prev)
+  }, [])
+
+  const handleSignOut = useCallback(async () => {
+    setSigningOut(true)
+    await signOut({ callbackUrl: "/login" })
   }, [])
 
   if (!sidebarOpen) return null
@@ -600,14 +653,7 @@ export function Sidebar({ user }: SidebarProps) {
                             : "text-on-surface-variant/80 hover:bg-surface-container hover:text-on-surface"
                         )}
                       >
-                        {isUploadedIcon(project.icon) ? (
-                          <ProjectIcon icon={project.icon} size="sm" className="h-4 w-4" />
-                        ) : (
-                          <span
-                            className="h-2 w-2 rounded-full flex-shrink-0"
-                            style={{ backgroundColor: project.color }}
-                          />
-                        )}
+                        <ProjectIcon icon={project.icon} color={project.color} size="sm" className="h-4 w-4" />
                         <span className="truncate font-headline tracking-tight">{project.name}</span>
                         <Star className="h-3 w-3 ml-auto text-yellow-500/40 flex-shrink-0" />
                       </Link>
@@ -660,7 +706,13 @@ export function Sidebar({ user }: SidebarProps) {
 
                   return (
                     <div key={project.id}>
-                      <div className="flex items-center group">
+                      <div
+                        className="flex items-center group"
+                        onContextMenu={(e) => {
+                          e.preventDefault()
+                          setProjectMenu({ x: e.clientX, y: e.clientY, projectId: project.id })
+                        }}
+                      >
                         <button
                           onClick={() => toggleProject(project.id)}
                           className="flex h-6 w-5 shrink-0 items-center justify-center text-on-surface-variant/30 hover:text-on-surface transition-colors"
@@ -674,22 +726,31 @@ export function Sidebar({ user }: SidebarProps) {
                         <Link
                           href={`/projects/${project.id}`}
                           className={cn(
-                            "flex flex-1 items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] transition-all duration-200",
+                            "flex flex-1 items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] transition-all duration-200 min-w-0",
                             isProjectActive
                               ? "bg-surface-container-high text-primary shadow-sm"
                               : "text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
                           )}
                         >
-                          {isUploadedIcon(project.icon) ? (
-                            <ProjectIcon icon={project.icon} size="sm" className="h-4 w-4" />
-                          ) : (
-                            <span
-                              className="h-2 w-2 rounded-full flex-shrink-0"
-                              style={{ backgroundColor: project.color }}
-                            />
-                          )}
+                          <ProjectIcon icon={project.icon} color={project.color} size="sm" className="h-4 w-4" />
                           <span className={cn("truncate font-headline tracking-tight", project.status === "ARCHIVED" && "opacity-50")}>{project.name}</span>
                         </Link>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            const rect = e.currentTarget.getBoundingClientRect()
+                            setProjectMenu({
+                              x: Math.max(12, rect.right - 160),
+                              y: rect.bottom + 6,
+                              projectId: project.id,
+                            })
+                          }}
+                          className="mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-on-surface-variant/30 opacity-0 transition-all hover:bg-surface-container hover:text-on-surface group-hover:opacity-100"
+                          title="Project options"
+                        >
+                          <MoreHorizontal className="h-3.5 w-3.5" />
+                        </button>
                       </div>
 
                       {isExpanded && (
@@ -721,10 +782,7 @@ export function Sidebar({ user }: SidebarProps) {
                 className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-surface-container transition-colors"
                 title={project.name}
               >
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ backgroundColor: project.color }}
-                />
+                <ProjectIcon icon={project.icon} color={project.color} size="sm" className="h-4 w-4" />
               </Link>
             ))}
           </div>
@@ -776,24 +834,33 @@ export function Sidebar({ user }: SidebarProps) {
               <p className="truncate text-sm font-bold text-primary font-headline tracking-tight">
                 {user.name}
               </p>
+              <p className="truncate text-[11px] font-medium text-on-surface-variant/50">
+                {user.email}
+              </p>
             </div>
             <button
-              onClick={() => {
-                window.location.href = "/api/auth/signout"
-              }}
-              className="rounded-md p-1.5 text-on-surface-variant/40 hover:text-error hover:bg-error/5 transition-colors opacity-0 group-hover:opacity-100"
+              onClick={() => setShowSignOutConfirm(true)}
+              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-on-surface-variant/50 hover:text-error hover:bg-error/5 transition-colors"
+              title="Sign out"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Sign out
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-2 py-2">
+            <UserAvatar
+              user={{ name: user.name, image: user.image }}
+              size="sm"
+              className="ring-2 ring-white/50 ring-offset-1 ring-offset-surface-container"
+            />
+            <button
+              onClick={() => setShowSignOutConfirm(true)}
+              className="rounded-xl p-2 text-on-surface-variant/60 transition-colors hover:bg-surface-container hover:text-error"
               title="Sign out"
             >
               <LogOut className="h-4 w-4" />
             </button>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center py-2">
-            <UserAvatar
-              user={{ name: user.name, image: user.image }}
-              size="sm"
-              className="ring-2 ring-white/50"
-            />
           </div>
         )}
       </div>
@@ -876,33 +943,36 @@ export function Sidebar({ user }: SidebarProps) {
         document.body
       )}
 
-      {/* Confirm delete project */}
-      {confirmDeleteProject && createPortal(
-        <>
-          <div className="fixed inset-0 z-50 bg-black/50" onClick={() => setConfirmDeleteProject(null)} />
-          <div className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-80 rounded-lg border border-white/10 bg-[#2e2f31] p-5 shadow-2xl">
-            <h4 className="text-sm font-semibold text-white mb-2">Delete project</h4>
-            <p className="text-xs text-zinc-400 mb-4">
-              Are you sure you want to delete &ldquo;{confirmDeleteProject.name}&rdquo;? This will delete all tasks, pages, and data. This action cannot be undone.
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setConfirmDeleteProject(null)}
-                className="rounded-md px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => { handleDeleteProject(confirmDeleteProject.id); setConfirmDeleteProject(null) }}
-                className="rounded-md bg-red-600 px-3 py-1.5 text-xs text-white hover:bg-red-700 transition-colors"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </>,
-        document.body
-      )}
+      <ConfirmDialog
+        open={!!confirmDeleteProject}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDeleteProject(null)
+        }}
+        title="Delete project?"
+        description={
+          confirmDeleteProject
+            ? `Delete "${confirmDeleteProject.name}" and all of its tasks, pages, and related data. This action cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete project"
+        onConfirm={async () => {
+          if (!confirmDeleteProject) return
+          await handleDeleteProject(confirmDeleteProject.id)
+          setConfirmDeleteProject(null)
+        }}
+      />
+
+      <ConfirmDialog
+        open={showSignOutConfirm}
+        onOpenChange={setShowSignOutConfirm}
+        title="Sign out of NEXUS?"
+        description="You’ll be returned to the login page and your current session will end on this device."
+        confirmLabel="Sign out"
+        tone="default"
+        icon={<LogOut className="h-5 w-5" />}
+        isLoading={signingOut}
+        onConfirm={handleSignOut}
+      />
     </aside>
   )
 }

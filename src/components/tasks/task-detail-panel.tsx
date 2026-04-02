@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
@@ -98,6 +99,7 @@ export function TaskDetailPanel({
   const [currentTask, setCurrentTask] = useState<TaskCardData>(initialTask)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const [title, setTitle] = useState(initialTask.title)
   const [description, setDescription] = useState(initialTask.description || "")
@@ -248,11 +250,13 @@ export function TaskDetailPanel({
   }
 
   const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this task?")) return
     setDeleting(true)
     try {
       const res = await fetch(`/api/tasks/${currentTask.id}`, { method: "DELETE" })
-      if (res.ok) onClose()
+      if (res.ok) {
+        setShowDeleteConfirm(false)
+        onClose()
+      }
     } catch (e) {
       console.error(e)
     } finally {
@@ -314,7 +318,7 @@ export function TaskDetailPanel({
             <Button
               variant="ghost"
               size="sm"
-              onClick={handleDelete}
+              onClick={() => setShowDeleteConfirm(true)}
               disabled={deleting}
               className="font-bold text-xs text-red-500/40 hover:text-red-600 hover:bg-red-50 rounded-xl"
             >
@@ -524,6 +528,17 @@ export function TaskDetailPanel({
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        title="Delete task?"
+        description={`Delete "${currentTask.title}" permanently? This action cannot be undone.`}
+        confirmLabel="Delete task"
+        icon={<Trash2 className="h-5 w-5" />}
+        isLoading={deleting}
+        onConfirm={handleDelete}
+      />
     </>
   )
 }

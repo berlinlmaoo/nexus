@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   DragDropContext,
@@ -45,8 +45,13 @@ export function TaskListView({
   onMoveTask,
   projectId,
 }: TaskListViewProps) {
+  const router = useRouter()
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
   const [celebration, setCelebration] = useState(false)
+  const [showAddSection, setShowAddSection] = useState(false)
+  const [newSectionName, setNewSectionName] = useState("")
+  const [creatingSection, setCreatingSection] = useState(false)
+  const sectionInputRef = useRef<HTMLInputElement>(null)
 
   const toggleSection = (sectionId: string) => {
     const next = new Set(collapsedSections)
@@ -69,10 +74,31 @@ export function TaskListView({
     }
   }
 
+  const handleCreateSection = async () => {
+    if (!newSectionName.trim() || !projectId) return
+    setCreatingSection(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/sections`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newSectionName.trim() }),
+      })
+      if (res.ok) {
+        setNewSectionName("")
+        setShowAddSection(false)
+        router.refresh()
+      }
+    } catch (error) {
+      console.error("Failed to create section:", error)
+    } finally {
+      setCreatingSection(false)
+    }
+  }
+
   return (
-    <div className="max-w-6xl mx-auto space-y-12 animate-fade-in pb-24">
+    <div className="w-full space-y-8 animate-fade-in px-4 pb-24 md:px-6 lg:px-8">
       <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="space-y-16">
+        <div className="space-y-10">
           {sections.map((section) => {
             const isCollapsed = collapsedSections.has(section.id)
             return (
@@ -231,6 +257,61 @@ export function TaskListView({
           })}
         </div>
       </DragDropContext>
+
+      {projectId && (
+        <div className="rounded-[2rem] border border-dashed border-on-surface-variant/10 bg-surface-container-low/20 p-5">
+          {showAddSection ? (
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <input
+                ref={sectionInputRef}
+                type="text"
+                value={newSectionName}
+                onChange={(e) => setNewSectionName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && newSectionName.trim()) handleCreateSection()
+                  if (e.key === "Escape") {
+                    setShowAddSection(false)
+                    setNewSectionName("")
+                  }
+                }}
+                placeholder="New section name..."
+                disabled={creatingSection}
+                className="h-12 flex-1 rounded-2xl bg-surface-container-lowest px-5 text-sm font-bold text-on-surface outline-none placeholder:text-on-surface-variant/30"
+                autoFocus
+              />
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowAddSection(false)
+                    setNewSectionName("")
+                  }}
+                  className="h-12 rounded-2xl px-5 text-xs font-black uppercase tracking-widest text-on-surface-variant/50 transition-colors hover:text-on-surface"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateSection}
+                  disabled={creatingSection || !newSectionName.trim()}
+                  className="h-12 rounded-2xl bg-primary px-6 text-xs font-black uppercase tracking-widest text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {creatingSection ? "Creating..." : "Add Section"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                setShowAddSection(true)
+                setTimeout(() => sectionInputRef.current?.focus(), 50)
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-xs font-black uppercase tracking-[0.2em] text-on-surface-variant/50 transition-colors hover:text-primary"
+            >
+              <Plus className="h-4 w-4" />
+              Add Section
+            </button>
+          )}
+        </div>
+      )}
 
       {celebration && (
         <TaskCelebration trigger={Date.now()} />

@@ -3,13 +3,6 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 
-const DEFAULT_PAGES = [
-  { name: "Tasks", icon: "💻", pageType: "tasks", position: 0 },
-  { name: "Calendar", icon: "📅", pageType: "calendar", position: 1 },
-  { name: "Documents", icon: "📁", pageType: "documents", position: 2 },
-  { name: "To Do List", icon: "⭐", pageType: "todo", position: 3 },
-]
-
 export async function GET(
   request: NextRequest,
   { params }: { params: { projectId: string } }
@@ -20,18 +13,6 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const { projectId } = params
-
-    // Check if project has any pages, if not create defaults
-    const pageCount = await prisma.projectPage.count({ where: { projectId } })
-    if (pageCount === 0) {
-      // Verify project exists
-      const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } })
-      if (project) {
-        await prisma.projectPage.createMany({
-          data: DEFAULT_PAGES.map((p) => ({ ...p, projectId })),
-        })
-      }
-    }
 
     const pages = await prisma.projectPage.findMany({
       where: { projectId, parentId: null },

@@ -3,6 +3,7 @@ import Link from "next/link"
 import { RegisterForm } from "./register-form"
 import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
+import Image from "next/image"
 
 export const metadata: Metadata = {
   title: "Request Access | NEXUS",
@@ -23,11 +24,15 @@ export default async function RegisterPage() {
         </div>
         
         <div className="relative z-10">
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="h-12 w-12 rounded-2xl bg-primary-foreground flex items-center justify-center text-primary transition-transform duration-500 group-hover:rotate-12">
-              <span className="font-headline font-black text-2xl uppercase">NX</span>
-            </div>
-            <h1 className="text-2xl font-headline font-black tracking-[0.3em] text-primary-foreground uppercase">NEXUS</h1>
+          <Link href="/" className="flex items-center group">
+            <Image
+              src="/logos/nexus-logo-login.png"
+              alt="NEXUS"
+              width={180}
+              height={60}
+              className="object-contain transition-transform duration-500 group-hover:scale-105"
+              priority
+            />
           </Link>
         </div>
 
@@ -50,16 +55,25 @@ export default async function RegisterPage() {
       </div>
 
       {/* Right Register Side */}
-      <div className="flex-1 flex flex-col justify-center px-8 sm:px-16 lg:px-24 xl:px-32 py-12 relative overflow-y-auto">
+      <div className="relative flex flex-1 flex-col justify-center overflow-y-auto bg-surface px-5 py-8 sm:px-10 sm:py-12 lg:px-24 xl:px-32">
         {/* Mobile Header */}
-        <div className="lg:hidden absolute top-8 left-8">
-          <h1 className="text-xl font-headline font-black tracking-widest text-primary uppercase">NEXUS</h1>
+        <div className="absolute left-5 top-6 lg:hidden sm:left-10 sm:top-10">
+          <Link href="/" className="flex items-center">
+            <Image
+              src="/logos/nexus-logo-mono.png"
+              alt="NEXUS"
+              width={120}
+              height={40}
+              className="object-contain"
+              priority
+            />
+          </Link>
         </div>
 
-        <div className="w-full max-w-md mx-auto space-y-10 animate-fade-in py-12">
+        <div className="mx-auto w-full max-w-md space-y-8 animate-fade-in py-6 pt-14 sm:space-y-10 sm:py-12 sm:pt-10 lg:pt-0">
           <div className="space-y-2">
-            <h3 className="text-4xl font-headline font-black text-primary tracking-tight">Request Entry</h3>
-            <p className="text-on-surface-variant/60 font-medium">Provision your operative profile within the system.</p>
+            <h3 className="text-3xl font-headline font-black text-primary tracking-tight sm:text-4xl">Request Entry</h3>
+            <p className="text-sm font-medium text-on-surface-variant/60 sm:text-base">Provision your operative profile within the system.</p>
           </div>
 
           <RegisterForm />

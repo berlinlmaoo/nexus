@@ -73,14 +73,18 @@ export function KanbanView({
   const [newTitle, setNewTitle] = useState("")
   const [creating, setCreating] = useState(false)
   const [swimLaneMode, setSwimLaneMode] = useState<SwimLaneMode>("none")
-  const [groupBy, setGroupBy] = useState<GroupByMode>("status")
+  const [groupBy, setGroupBy] = useState<GroupByMode>(sections.length > 0 ? "section" : "status")
   const [wipLimits, setWipLimits] = useState<Record<string, number>>({
     TODO: 0, IN_PROGRESS: 5, IN_REVIEW: 3, DONE: 0,
   })
   const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set())
   const [collapsedLanes, setCollapsedLanes] = useState<Set<string>>(new Set())
   const [showWipConfig, setShowWipConfig] = useState(false)
+  const [showAddSection, setShowAddSection] = useState(false)
+  const [newSectionName, setNewSectionName] = useState("")
+  const [creatingSection, setCreatingSection] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const sectionInputRef = useRef<HTMLInputElement>(null)
 
   const columns = useMemo(() => {
     if (groupBy === "status") {
@@ -224,30 +228,102 @@ export function KanbanView({
     })
   }
 
+  const handleCreateSection = async () => {
+    if (!newSectionName.trim() || !projectId) return
+    setCreatingSection(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/sections`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newSectionName.trim() }),
+      })
+      if (res.ok) {
+        setNewSectionName("")
+        setShowAddSection(false)
+        router.refresh()
+      }
+    } catch (error) {
+      console.error("Failed to create section:", error)
+    } finally {
+      setCreatingSection(false)
+    }
+  }
+
   return (
     <div className="flex-1 flex flex-col min-h-0 space-y-8">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-6 flex-wrap">
           {/* Group By Toggle */}
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/40">Group By</span>
             <div className="flex items-center gap-1 p-1 bg-surface-container-low rounded-xl">
-              {(["status", "section"] as const).map((mode) => (
+              {([
+                { id: "section", label: "Sections" },
+                { id: "status", label: "Status" },
+              ] as const).map((mode) => (
                 <button
-                  key={mode}
+                  key={mode.id}
                   className={cn(
                     "px-3 py-1 text-[10px] font-black rounded-lg transition-all duration-200 uppercase tracking-wider",
-                    groupBy === mode 
+                    groupBy === mode.id
                       ? "bg-surface-container-lowest text-primary shadow-sm" 
                       : "text-on-surface-variant/40 hover:text-primary"
                   )}
-                  onClick={() => setGroupBy(mode)}
+                  onClick={() => setGroupBy(mode.id)}
                 >
-                  {mode}
+                  {mode.label}
                 </button>
               ))}
             </div>
           </div>
+
+          {groupBy === "section" && projectId && (
+            <>
+              <div className="h-6 w-[1px] bg-on-surface-variant/10" />
+              {showAddSection ? (
+                <div className="flex items-center gap-2 rounded-xl bg-surface-container-low p-1.5">
+                  <input
+                    ref={sectionInputRef}
+                    type="text"
+                    value={newSectionName}
+                    onChange={(e) => setNewSectionName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && newSectionName.trim()) handleCreateSection()
+                      if (e.key === "Escape") {
+                        setShowAddSection(false)
+                        setNewSectionName("")
+                      }
+                    }}
+                    placeholder="New section..."
+                    disabled={creatingSection}
+                    className="h-8 rounded-lg bg-surface-container-lowest px-3 text-xs font-bold text-on-surface outline-none placeholder:text-on-surface-variant/30"
+                    autoFocus
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleCreateSection}
+                    disabled={creatingSection || !newSectionName.trim()}
+                    className="h-8 rounded-lg bg-primary px-3 text-[10px] font-black uppercase tracking-widest text-primary-foreground"
+                  >
+                    {creatingSection ? <Loader2 className="h-3 w-3 animate-spin" /> : "Add"}
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setShowAddSection(true)
+                    setTimeout(() => sectionInputRef.current?.focus(), 50)
+                  }}
+                  className="font-black text-[10px] uppercase tracking-widest text-on-surface-variant/40 hover:text-primary hover:bg-surface-container-high transition-all"
+                >
+                  <Plus className="h-3.5 w-3.5 mr-2" />
+                  Add Section
+                </Button>
+              )}
+            </>
+          )}
 
           <div className="h-6 w-[1px] bg-on-surface-variant/10" />
 
