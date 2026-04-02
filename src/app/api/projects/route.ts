@@ -3,21 +3,108 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 
+async function canManageTeamInWorkspace(userId: string, workspaceId: string, teamId?: string) {
+  if (!teamId) return false
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: {
+      workspaceId: true,
+      members: {
+        where: { userId },
+        select: { id: true },
+      },
+    },
+  })
+
+  return Boolean(team && team.workspaceId === workspaceId && team.members.length > 0)
+}
+
 export async function GET(request: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const workspaceId = request.nextUrl.searchParams.get("workspaceId")
+    const includeAllWorkspace = request.nextUrl.searchParams.get("includeAllWorkspace") === "1"
+    const teamId = request.nextUrl.searchParams.get("teamId") || undefined
+
+    if (workspaceId) {
+      const workspaceMembership = await prisma.workspaceMember.findUnique({
+        where: {
+          userId_workspaceId: {
+            userId: session.user.id,
+            workspaceId,
+          },
+        },
+        select: { role: true },
+      })
+
+      if (!workspaceMembership) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      }
+
+      const canSeeAllWorkspaceProjects =
+        workspaceMembership.role === "OWNER" ||
+        workspaceMembership.role === "ADMIN" ||
+        await canManageTeamInWorkspace(session.user.id, workspaceId, teamId)
+
+      const where: Record<string, unknown> = {
+        workspaceId,
+      }
+
+      if (!includeAllWorkspace || !canSeeAllWorkspaceProjects) {
+        where.members = {
+          some: { userId: session.user.id },
+        }
+      }
+
+      const projects = await prisma.project.findMany({
+        where,
+        include: {
+          _count: {
+            select: {
+              members: true,
+              taskLists: true,
+            },
+          },
+          taskLists: {
+            include: {
+              _count: {
+                select: { tasks: true },
+              },
+            },
+          },
+          members: {
+            include: { user: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      })
+
+      const result = projects.map((project) => {
+        const taskCount = project.taskLists.reduce(
+          (sum, tl) => sum + tl._count.tasks,
+          0
+        )
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { taskLists: _lists, ...rest } = project
+        return {
+          ...rest,
+          _count: {
+            ...project._count,
+            tasks: taskCount,
+          },
+        }
+      })
+
+      return NextResponse.json(result)
+    }
 
     const where: Record<string, unknown> = {
       members: {
         some: { userId: session.user.id },
       },
-    }
-
-    if (workspaceId) {
-      where.workspaceId = workspaceId
     }
 
     const projects = await prisma.project.findMany({

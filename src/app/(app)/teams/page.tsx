@@ -1,9 +1,12 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { EmptyTeams } from '@/components/ui/empty-state'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Users, Plus, FolderKanban, UserPlus, LinkIcon, ShieldCheck, Loader2, Trash2 } from 'lucide-react'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { ProjectIcon } from '@/components/projects/project-icon'
@@ -23,17 +26,20 @@ interface Team {
   id: string
   name: string
   color: string
+  workspaceId: string
+  canManage: boolean
   members: TeamMember[]
   projects: TeamProject[]
 }
 
-interface WorkspaceMember {
+interface MemberOption {
   id: string
   userId: string
   name: string
   email: string
   avatar: string | null
   role: string
+  isWorkspaceMember: boolean
 }
 
 interface ProjectOption {
@@ -46,8 +52,8 @@ interface ProjectOption {
 
 export default function TeamsPage() {
   const [teams, setTeams] = useState<Team[]>([])
-  const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>([])
-  const [projects, setProjects] = useState<ProjectOption[]>([])
+  const [memberOptionsByTeam, setMemberOptionsByTeam] = useState<Record<string, MemberOption[]>>({})
+  const [projectOptionsByTeam, setProjectOptionsByTeam] = useState<Record<string, ProjectOption[]>>({})
   const [newTeamName, setNewTeamName] = useState('')
   const [newTeamColor, setNewTeamColor] = useState('#0c1427')
   const [isOpen, setIsOpen] = useState(false)
@@ -56,28 +62,83 @@ export default function TeamsPage() {
   const [memberDrafts, setMemberDrafts] = useState<Record<string, string>>({})
   const [projectDrafts, setProjectDrafts] = useState<Record<string, string>>({})
   const [activeAction, setActiveAction] = useState<string | null>(null)
+  const [pendingMemberRemoval, setPendingMemberRemoval] = useState<{
+    teamId: string
+    userId: string
+    memberName: string
+  } | null>(null)
+  const [pendingProjectUnlink, setPendingProjectUnlink] = useState<{
+    teamId: string
+    projectId: string
+    projectName: string
+  } | null>(null)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const [teamsRes, membersRes, projectsRes] = await Promise.all([
-        fetch('/api/teams'),
-        fetch('/api/workspaces/members'),
-        fetch('/api/projects'),
-      ])
-
+      const teamsRes = await fetch('/api/teams', { cache: 'no-store' })
       const teamsData = teamsRes.ok ? await teamsRes.json() : []
-      const membersData = membersRes.ok ? await membersRes.json() : { members: [] }
-      const projectsData = projectsRes.ok ? await projectsRes.json() : []
+      const normalizedTeams = Array.isArray(teamsData) ? teamsData : []
 
-      setTeams(Array.isArray(teamsData) ? teamsData : [])
-      setWorkspaceMembers(Array.isArray(membersData?.members) ? membersData.members : [])
-      setProjects(Array.isArray(projectsData) ? projectsData : [])
+      const teamPayloads = await Promise.all(
+        normalizedTeams.map(async (team) => {
+          const teamQuery = `&teamId=${team.id}`
+
+          const [membersRes, projectsRes] = await Promise.all([
+            fetch(`/api/workspaces/members?workspaceId=${team.workspaceId}&includeRegistered=1${teamQuery}`, { cache: 'no-store' }),
+            fetch(`/api/projects?workspaceId=${team.workspaceId}&includeAllWorkspace=1${teamQuery}`, { cache: 'no-store' }),
+          ])
+
+          const membersData = membersRes.ok ? await membersRes.json() : { members: [], availableUsers: [] }
+          const projectsData = projectsRes.ok ? await projectsRes.json() : []
+
+          const members = Array.isArray(membersData?.members)
+            ? membersData.members.map((member: Omit<MemberOption, 'isWorkspaceMember'>) => ({
+                ...member,
+                isWorkspaceMember: true,
+              }))
+            : []
+
+          const availableUsers = Array.isArray(membersData?.availableUsers)
+            ? membersData.availableUsers.map((candidate: { id: string; name: string; email: string; avatar: string | null }) => ({
+                id: candidate.id,
+                userId: candidate.id,
+                name: candidate.name,
+                email: candidate.email,
+                avatar: candidate.avatar,
+                role: 'REGISTERED',
+                isWorkspaceMember: false,
+              }))
+            : []
+
+          const dedupedMembers = Array.from(
+            new Map([...members, ...availableUsers].map((member) => [member.userId, member])).values()
+          )
+
+          return {
+            teamId: team.id,
+            members: dedupedMembers,
+            projects: Array.isArray(projectsData) ? projectsData : [],
+          }
+        })
+      )
+
+      const nextMembersByTeam: Record<string, MemberOption[]> = {}
+      const nextProjectsByTeam: Record<string, ProjectOption[]> = {}
+
+      for (const payload of teamPayloads) {
+        nextMembersByTeam[payload.teamId] = payload.members
+        nextProjectsByTeam[payload.teamId] = payload.projects
+      }
+
+      setTeams(normalizedTeams)
+      setMemberOptionsByTeam(nextMembersByTeam)
+      setProjectOptionsByTeam(nextProjectsByTeam)
     } catch (error) {
       console.error('Failed to fetch team data:', error)
       setTeams([])
-      setWorkspaceMembers([])
-      setProjects([])
+      setMemberOptionsByTeam({})
+      setProjectOptionsByTeam({})
     } finally {
       setLoading(false)
     }
@@ -97,18 +158,27 @@ export default function TeamsPage() {
         body: JSON.stringify({ name: newTeamName, color: newTeamColor }),
       })
       if (res.ok) {
+        toast.success('Team created')
         setNewTeamName('')
         setIsOpen(false)
         await fetchData()
+      } else {
+        const data = await res.json().catch(() => null)
+        toast.error(data?.error || 'Failed to create team')
       }
     } catch (error) {
       console.error('Failed to create team:', error)
+      toast.error('Failed to create team')
     } finally {
       setIsCreatingTeam(false)
     }
   }
 
-  const runTeamAction = async (actionKey: string, body: Record<string, string>) => {
+  const runTeamAction = async (
+    actionKey: string,
+    body: Record<string, string>,
+    successMessage: string
+  ) => {
     setActiveAction(actionKey)
     try {
       const res = await fetch('/api/teams', {
@@ -118,10 +188,14 @@ export default function TeamsPage() {
       })
       if (res.ok) {
         await fetchData()
+        toast.success(successMessage)
         return true
       }
+      const data = await res.json().catch(() => null)
+      toast.error(data?.error || 'Team action failed')
     } catch (error) {
       console.error('Failed team action:', error)
+      toast.error('Team action failed')
     } finally {
       setActiveAction(null)
     }
@@ -135,19 +209,25 @@ export default function TeamsPage() {
       action: 'add-member',
       teamId,
       userId,
-    })
+    }, 'Member added to team')
     if (didAdd) {
       setMemberDrafts((prev) => ({ ...prev, [teamId]: '' }))
     }
   }
 
-  const handleRemoveMember = async (teamId: string, userId: string) => {
-    if (!confirm('Remove this member from the team?')) return
-    await runTeamAction(`remove-member-${teamId}-${userId}`, {
+  const confirmRemoveMember = async () => {
+    if (!pendingMemberRemoval) return
+
+    const { teamId, userId } = pendingMemberRemoval
+    const didRemove = await runTeamAction(`remove-member-${teamId}-${userId}`, {
       action: 'remove-member',
       teamId,
       userId,
-    })
+    }, 'Member removed from team')
+
+    if (didRemove) {
+      setPendingMemberRemoval(null)
+    }
   }
 
   const handleLinkProject = async (teamId: string) => {
@@ -157,19 +237,25 @@ export default function TeamsPage() {
       action: 'link-project',
       teamId,
       projectId,
-    })
+    }, 'Project linked to team')
     if (didLink) {
       setProjectDrafts((prev) => ({ ...prev, [teamId]: '' }))
     }
   }
 
-  const handleUnlinkProject = async (teamId: string, projectId: string) => {
-    if (!confirm('Unlink this project from the team?')) return
-    await runTeamAction(`unlink-project-${teamId}-${projectId}`, {
+  const confirmUnlinkProject = async () => {
+    if (!pendingProjectUnlink) return
+
+    const { teamId, projectId } = pendingProjectUnlink
+    const didUnlink = await runTeamAction(`unlink-project-${teamId}-${projectId}`, {
       action: 'unlink-project',
       teamId,
       projectId,
-    })
+    }, 'Project unlinked from team')
+
+    if (didUnlink) {
+      setPendingProjectUnlink(null)
+    }
   }
 
   return (
@@ -223,10 +309,13 @@ export default function TeamsPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:gap-8 xl:grid-cols-2">
           {teams.map((team) => {
+            const workspaceMembers = memberOptionsByTeam[team.id] || []
+            const workspaceProjects = projectOptionsByTeam[team.id] || []
+
             const availableMembers = workspaceMembers.filter(
               (member) => !team.members.some((teamMember) => teamMember.user.id === member.userId)
             )
-            const availableProjects = projects.filter(
+            const availableProjects = workspaceProjects.filter(
               (project) => !team.projects.some((teamProject) => teamProject.project.id === project.id)
             )
 
@@ -250,6 +339,12 @@ export default function TeamsPage() {
                         <span>{team.members.length} member{team.members.length === 1 ? '' : 's'}</span>
                         <span className="h-1 w-1 rounded-full bg-on-surface-variant/20" />
                         <span>{team.projects.length} project{team.projects.length === 1 ? '' : 's'}</span>
+                        {!team.canManage && (
+                          <>
+                            <span className="h-1 w-1 rounded-full bg-on-surface-variant/20" />
+                            <span>Read only</span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -277,14 +372,20 @@ export default function TeamsPage() {
                               <span className="rounded-full bg-surface-container px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-on-surface-variant/60">
                                 {member.role}
                               </span>
-                              <button
-                                onClick={() => handleRemoveMember(team.id, member.user.id)}
-                                disabled={activeAction === `remove-member-${team.id}-${member.user.id}`}
-                                className="rounded-xl p-2 text-on-surface-variant/30 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-                                title="Remove member"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
+                              {team.canManage && (
+                                <button
+                                  onClick={() => setPendingMemberRemoval({
+                                    teamId: team.id,
+                                    userId: member.user.id,
+                                    memberName: member.user.name,
+                                  })}
+                                  disabled={activeAction === `remove-member-${team.id}-${member.user.id}`}
+                                  className="rounded-xl p-2 text-on-surface-variant/30 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                                  title="Remove member"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
                             </div>
                           </div>
                         ))
@@ -300,22 +401,38 @@ export default function TeamsPage() {
                         <UserPlus className="h-3 w-3" />
                         Add Member
                       </div>
+                      {!team.canManage && (
+                        <p className="rounded-2xl border border-dashed border-on-surface-variant/10 px-4 py-3 text-xs text-on-surface-variant/40">
+                          You can only add members to teams you manage.
+                        </p>
+                      )}
+                      {team.canManage && (
+                        <p className="text-xs text-on-surface-variant/45">
+                          {availableMembers.length > 0
+                            ? `${availableMembers.length} user siap ditambahkan ke team ini.`
+                            : 'Belum ada user lain yang bisa ditambahkan ke team ini.'}
+                        </p>
+                      )}
                       <div className="flex flex-col gap-3 sm:flex-row">
-                        <select
-                          value={memberDrafts[team.id] || ''}
-                          onChange={(e) => setMemberDrafts((prev) => ({ ...prev, [team.id]: e.target.value }))}
-                          className="h-11 flex-1 rounded-2xl bg-surface-container-lowest px-4 text-sm font-medium text-on-surface outline-none"
+                        <Select
+                          value={memberDrafts[team.id] || undefined}
+                          onValueChange={(value) => setMemberDrafts((prev) => ({ ...prev, [team.id]: value }))}
+                          disabled={!team.canManage || availableMembers.length === 0}
                         >
-                          <option value="">Select workspace member...</option>
-                          {availableMembers.map((member) => (
-                            <option key={member.id} value={member.userId}>
-                              {member.name} ({member.email})
-                            </option>
-                          ))}
-                        </select>
+                          <SelectTrigger className="h-11 flex-1 rounded-2xl border-none bg-surface-container-lowest px-4 text-sm font-medium text-on-surface">
+                            <SelectValue placeholder={availableMembers.length > 0 ? 'Select member...' : 'No users available'} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableMembers.map((member) => (
+                              <SelectItem key={member.userId} value={member.userId}>
+                                {`${member.name} (${member.email})${!member.isWorkspaceMember ? ' - join workspace + team' : ''}`}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <Button
                           onClick={() => handleAddMember(team.id)}
-                          disabled={!memberDrafts[team.id] || activeAction === `add-member-${team.id}`}
+                          disabled={!team.canManage || availableMembers.length === 0 || !memberDrafts[team.id] || activeAction === `add-member-${team.id}`}
                           className="h-11 rounded-2xl bg-primary px-5 text-xs font-black uppercase tracking-widest text-primary-foreground"
                         >
                           {activeAction === `add-member-${team.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add'}
@@ -341,14 +458,20 @@ export default function TeamsPage() {
                                 <p className="truncate text-xs text-on-surface-variant/50">{teamProject.project.status}</p>
                               </div>
                             </div>
-                            <button
-                              onClick={() => handleUnlinkProject(team.id, teamProject.project.id)}
-                              disabled={activeAction === `unlink-project-${team.id}-${teamProject.project.id}`}
-                              className="self-end rounded-xl p-2 text-on-surface-variant/30 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50 sm:self-auto"
-                              title="Unlink project"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                            {team.canManage && (
+                              <button
+                                onClick={() => setPendingProjectUnlink({
+                                  teamId: team.id,
+                                  projectId: teamProject.project.id,
+                                  projectName: teamProject.project.name,
+                                })}
+                                disabled={activeAction === `unlink-project-${team.id}-${teamProject.project.id}`}
+                                className="self-end rounded-xl p-2 text-on-surface-variant/30 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50 sm:self-auto"
+                                title="Unlink project"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
                           </div>
                         ))
                       ) : (
@@ -363,22 +486,38 @@ export default function TeamsPage() {
                         <LinkIcon className="h-3 w-3" />
                         Link Project
                       </div>
+                      {!team.canManage && (
+                        <p className="rounded-2xl border border-dashed border-on-surface-variant/10 px-4 py-3 text-xs text-on-surface-variant/40">
+                          You can only link projects on teams you manage.
+                        </p>
+                      )}
+                      {team.canManage && (
+                        <p className="text-xs text-on-surface-variant/45">
+                          {availableProjects.length > 0
+                            ? `${availableProjects.length} project bisa di-link ke team ini.`
+                            : 'Semua project workspace ini sudah terhubung ke team ini.'}
+                        </p>
+                      )}
                       <div className="flex flex-col gap-3 sm:flex-row">
-                        <select
-                          value={projectDrafts[team.id] || ''}
-                          onChange={(e) => setProjectDrafts((prev) => ({ ...prev, [team.id]: e.target.value }))}
-                          className="h-11 flex-1 rounded-2xl bg-surface-container-lowest px-4 text-sm font-medium text-on-surface outline-none"
+                        <Select
+                          value={projectDrafts[team.id] || undefined}
+                          onValueChange={(value) => setProjectDrafts((prev) => ({ ...prev, [team.id]: value }))}
+                          disabled={!team.canManage || availableProjects.length === 0}
                         >
-                          <option value="">Select project...</option>
-                          {availableProjects.map((project) => (
-                            <option key={project.id} value={project.id}>
-                              {project.name}
-                            </option>
-                          ))}
-                        </select>
+                          <SelectTrigger className="h-11 flex-1 rounded-2xl border-none bg-surface-container-lowest px-4 text-sm font-medium text-on-surface">
+                            <SelectValue placeholder={availableProjects.length > 0 ? 'Select project...' : 'No projects available'} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableProjects.map((project) => (
+                              <SelectItem key={project.id} value={project.id}>
+                                {project.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <Button
                           onClick={() => handleLinkProject(team.id)}
-                          disabled={!projectDrafts[team.id] || activeAction === `link-project-${team.id}`}
+                          disabled={!team.canManage || availableProjects.length === 0 || !projectDrafts[team.id] || activeAction === `link-project-${team.id}`}
                           className="h-11 rounded-2xl bg-primary px-5 text-xs font-black uppercase tracking-widest text-primary-foreground"
                         >
                           {activeAction === `link-project-${team.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Link'}
@@ -392,6 +531,42 @@ export default function TeamsPage() {
           })}
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(pendingMemberRemoval)}
+        onOpenChange={(open) => {
+          if (!open) setPendingMemberRemoval(null)
+        }}
+        title="Remove member from team?"
+        description={pendingMemberRemoval
+          ? `${pendingMemberRemoval.memberName} will lose access to this team and any team-only project access that came from it.`
+          : 'Remove this member from the selected team.'}
+        confirmLabel="Remove member"
+        icon={<Trash2 className="h-5 w-5" />}
+        isLoading={Boolean(
+          pendingMemberRemoval &&
+          activeAction === `remove-member-${pendingMemberRemoval.teamId}-${pendingMemberRemoval.userId}`
+        )}
+        onConfirm={confirmRemoveMember}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingProjectUnlink)}
+        onOpenChange={(open) => {
+          if (!open) setPendingProjectUnlink(null)
+        }}
+        title="Unlink project from team?"
+        description={pendingProjectUnlink
+          ? `${pendingProjectUnlink.projectName} will stop being shared through this team. Members may lose access if this is their only project link.`
+          : 'Unlink this project from the selected team.'}
+        confirmLabel="Unlink project"
+        icon={<Trash2 className="h-5 w-5" />}
+        isLoading={Boolean(
+          pendingProjectUnlink &&
+          activeAction === `unlink-project-${pendingProjectUnlink.teamId}-${pendingProjectUnlink.projectId}`
+        )}
+        onConfirm={confirmUnlinkProject}
+      />
     </div>
   )
 }
