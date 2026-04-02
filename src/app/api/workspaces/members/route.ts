@@ -4,10 +4,31 @@ import prisma from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { logAudit } from '@/lib/audit'
 
-async function getWorkspaceAndRole(userId: string) {
+async function canManageTeamInWorkspace(userId: string, workspaceId: string, teamId?: string) {
+  if (!teamId) return false
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: {
+      workspaceId: true,
+      members: {
+        where: { userId },
+        select: { id: true },
+      },
+    },
+  })
+
+  return Boolean(team && team.workspaceId === workspaceId && team.members.length > 0)
+}
+
+async function getWorkspaceAndRole(userId: string, workspaceId?: string) {
   const member = await prisma.workspaceMember.findFirst({
-    where: { userId },
+    where: {
+      userId,
+      ...(workspaceId ? { workspaceId } : {}),
+    },
     include: { workspace: true },
+    orderBy: { joinedAt: 'asc' },
   })
   return member
 }
@@ -17,7 +38,11 @@ export async function GET(req: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const member = await getWorkspaceAndRole(session.user.id)
+    const requestedWorkspaceId = req.nextUrl.searchParams.get('workspaceId') || undefined
+    const includeRegistered = req.nextUrl.searchParams.get('includeRegistered') === '1'
+    const teamId = req.nextUrl.searchParams.get('teamId') || undefined
+
+    const member = await getWorkspaceAndRole(session.user.id, requestedWorkspaceId)
     if (!member) return NextResponse.json({ error: 'No workspace found' }, { status: 404 })
 
     const members = await prisma.workspaceMember.findMany({
@@ -28,7 +53,27 @@ export async function GET(req: NextRequest) {
       orderBy: { joinedAt: 'asc' },
     })
 
-    return NextResponse.json({
+    const payload: {
+      workspaceId: string
+      role: string
+      members: Array<{
+        id: string
+        userId: string
+        name: string
+        email: string
+        avatar: string | null
+        role: string
+        joinedAt: Date
+      }>
+      availableUsers?: Array<{
+        id: string
+        name: string
+        email: string
+        avatar: string | null
+      }>
+    } = {
+      workspaceId: member.workspaceId,
+      role: member.role,
       members: members.map(m => ({
         id: m.id,
         userId: m.user.id,
@@ -38,7 +83,35 @@ export async function GET(req: NextRequest) {
         role: m.role,
         joinedAt: m.joinedAt,
       })),
-    })
+    }
+
+    const canSeeRegistered =
+      member.role === 'OWNER' ||
+      member.role === 'ADMIN' ||
+      await canManageTeamInWorkspace(session.user.id, member.workspaceId, teamId)
+
+    if (includeRegistered && canSeeRegistered) {
+      const availableUsers = await prisma.user.findMany({
+        where: {
+          NOT: {
+            workspaceMembers: {
+              some: { workspaceId: member.workspaceId },
+            },
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          avatar: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+
+      payload.availableUsers = availableUsers
+    }
+
+    return NextResponse.json(payload)
   } catch (error) {
     console.error("Error fetching workspace members:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -50,13 +123,14 @@ export async function POST(req: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const currentMember = await getWorkspaceAndRole(session.user.id)
+    const { email, role = 'MEMBER', workspaceId } = await req.json()
+
+    const currentMember = await getWorkspaceAndRole(session.user.id, workspaceId)
     if (!currentMember) return NextResponse.json({ error: 'No workspace found' }, { status: 404 })
     if (currentMember.role !== 'OWNER' && currentMember.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Only owners and admins can invite members' }, { status: 403 })
     }
 
-    const { email, role = 'MEMBER' } = await req.json()
     if (!email) return NextResponse.json({ error: 'Email is required' }, { status: 400 })
 
     // Check if user already exists
@@ -117,13 +191,14 @@ export async function PATCH(req: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const currentMember = await getWorkspaceAndRole(session.user.id)
+    const { memberId, role, workspaceId } = await req.json()
+
+    const currentMember = await getWorkspaceAndRole(session.user.id, workspaceId)
     if (!currentMember) return NextResponse.json({ error: 'No workspace found' }, { status: 404 })
     if (currentMember.role !== 'OWNER' && currentMember.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Only owners and admins can change roles' }, { status: 403 })
     }
 
-    const { memberId, role } = await req.json()
     if (!memberId || !role) return NextResponse.json({ error: 'memberId and role are required' }, { status: 400 })
     if (!['OWNER', 'ADMIN', 'MEMBER'].includes(role)) {
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
@@ -132,6 +207,14 @@ export async function PATCH(req: NextRequest) {
     // Prevent non-owners from assigning OWNER role
     if (role === 'OWNER' && currentMember.role !== 'OWNER') {
       return NextResponse.json({ error: 'Only owners can assign the owner role' }, { status: 403 })
+    }
+
+    const targetMember = await prisma.workspaceMember.findUnique({
+      where: { id: memberId },
+    })
+
+    if (!targetMember || targetMember.workspaceId !== currentMember.workspaceId) {
+      return NextResponse.json({ error: 'Member not found' }, { status: 404 })
     }
 
     const updated = await prisma.workspaceMember.update({
@@ -166,7 +249,8 @@ export async function DELETE(req: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const currentMember = await getWorkspaceAndRole(session.user.id)
+    const requestedWorkspaceId = req.nextUrl.searchParams.get('workspaceId') || undefined
+    const currentMember = await getWorkspaceAndRole(session.user.id, requestedWorkspaceId)
     if (!currentMember) return NextResponse.json({ error: 'No workspace found' }, { status: 404 })
     if (currentMember.role !== 'OWNER' && currentMember.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Only owners and admins can remove members' }, { status: 403 })
@@ -178,7 +262,9 @@ export async function DELETE(req: NextRequest) {
 
     // Prevent removing yourself
     const targetMember = await prisma.workspaceMember.findUnique({ where: { id: memberId } })
-    if (!targetMember) return NextResponse.json({ error: 'Member not found' }, { status: 404 })
+    if (!targetMember || targetMember.workspaceId !== currentMember.workspaceId) {
+      return NextResponse.json({ error: 'Member not found' }, { status: 404 })
+    }
     if (targetMember.userId === session.user.id) {
       return NextResponse.json({ error: 'Cannot remove yourself' }, { status: 400 })
     }
