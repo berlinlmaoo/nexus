@@ -21,11 +21,13 @@ import {
 } from "lucide-react"
 import { format, isPast, isToday } from "date-fns"
 import { cn } from "@/lib/utils"
+import { formatTaskDueDate } from "@/lib/task-date-format"
 
 interface TaskListSection {
   id: string
   name: string
   tasks: TaskCardData[]
+  isTemporary?: boolean
 }
 
 interface TaskListViewProps {
@@ -35,6 +37,15 @@ interface TaskListViewProps {
   onAddTask: (taskListId: string) => void
   onMoveTask?: (taskId: string, newSectionId: string, newIndex: number) => void
   projectId?: string
+}
+
+function sortTasksDoneLast(tasks: TaskCardData[]) {
+  return [...tasks].sort((a, b) => {
+    const aDone = a.status === "DONE"
+    const bDone = b.status === "DONE"
+    if (aDone !== bDone) return aDone ? 1 : -1
+    return a.position - b.position
+  })
 }
 
 export function TaskListView({
@@ -68,6 +79,11 @@ export function TaskListView({
       destination.index === source.index
     )
       return
+
+    const destinationSection = sections.find((section) => section.id === destination.droppableId)
+    const draggedTask = sections.flatMap((section) => section.tasks).find((task) => task.id === draggableId)
+
+    if (destinationSection?.isTemporary || draggedTask?.isCrossProject) return
 
     if (onMoveTask) {
       onMoveTask(draggableId, destination.droppableId, destination.index)
@@ -118,14 +134,21 @@ export function TaskListView({
                     <span className="bg-surface-container-high px-2.5 py-0.5 rounded-full text-[10px] font-black text-on-surface-variant/60 tabular-nums">
                       {section.tasks.length}
                     </span>
+                    {section.isTemporary && (
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-primary">
+                        Linked
+                      </span>
+                    )}
                   </div>
-                  <button 
-                    onClick={() => onAddTask(section.id)}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest text-on-surface-variant/40 hover:text-primary hover:bg-surface-container-low transition-all duration-300"
-                  >
-                    <Plus className="h-4 w-4" />
-                    New Task
-                  </button>
+                  {!section.isTemporary && (
+                    <button 
+                      onClick={() => onAddTask(section.id)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest text-on-surface-variant/40 hover:text-primary hover:bg-surface-container-low transition-all duration-300"
+                    >
+                      <Plus className="h-4 w-4" />
+                      New Task
+                    </button>
+                  )}
                 </div>
 
                 {!isCollapsed && (
@@ -151,7 +174,7 @@ export function TaskListView({
                               No tasks in this sanctuary.
                             </div>
                           ) : (
-                            section.tasks.map((task, index) => {
+                            sortTasksDoneLast(section.tasks).map((task, index) => {
                               const isDone = task.status === "DONE"
                               const isOverdue =
                                 task.dueDate &&
@@ -160,7 +183,7 @@ export function TaskListView({
                                 !isDone
 
                               return (
-                                <Draggable key={task.id} draggableId={task.id} index={index}>
+                                <Draggable key={task.id} draggableId={task.id} index={index} isDragDisabled={Boolean(section.isTemporary || task.isCrossProject)}>
                                   {(provided, snapshot) => (
                                     <div
                                       ref={provided.innerRef}
@@ -193,14 +216,21 @@ export function TaskListView({
                                       </div>
 
                                       <div className="flex items-center gap-3 min-w-0 px-3 h-full">
-                                        <span
-                                          className={cn(
-                                            "text-[14px] font-medium transition-all duration-300 truncate",
-                                            isDone ? "text-on-surface-variant/40 line-through" : "text-on-surface"
+                                        <div className="min-w-0">
+                                          {task.isCrossProject && task.primaryProjectName && (
+                                            <p className="truncate text-[10px] font-medium text-on-surface-variant/50">
+                                              From {task.primaryProjectName}
+                                            </p>
                                           )}
-                                        >
-                                          {task.title}
-                                        </span>
+                                          <span
+                                            className={cn(
+                                              "text-[14px] font-medium transition-all duration-300 truncate block",
+                                              isDone ? "text-on-surface-variant/40 line-through" : "text-on-surface"
+                                            )}
+                                          >
+                                            {task.title}
+                                          </span>
+                                        </div>
                                       </div>
 
                                       <div className="flex items-center px-3 h-full justify-center">
@@ -234,7 +264,7 @@ export function TaskListView({
                                             isOverdue ? "text-red-600" : "text-on-surface-variant/40"
                                           )}>
                                             <Calendar className="h-3.5 w-3.5" />
-                                            <span>{format(new Date(task.dueDate), "MMM d")}</span>
+                                            <span>{formatTaskDueDate(task.dueDate)}</span>
                                           </div>
                                         ) : (
                                           <span className="text-on-surface-variant/10 text-[11px] font-bold">---</span>

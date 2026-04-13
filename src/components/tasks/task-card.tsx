@@ -6,6 +6,7 @@ import { PriorityBadge } from "./priority-badge"
 import { Calendar, Tag, Diamond, ShieldCheck, Repeat } from "lucide-react"
 import { format, isPast, isToday } from "date-fns"
 import { cn } from "@/lib/utils"
+import { formatTaskDueDate } from "@/lib/task-date-format"
 
 export interface TaskCardData {
   id: string
@@ -17,6 +18,11 @@ export interface TaskCardData {
   tags: string[]
   position: number
   projectId: string
+  viewProjectId?: string
+  primaryProjectId?: string
+  primaryProjectName?: string
+  linkedProjectPlacementId?: string
+  isCrossProject?: boolean
   taskListId: string
   taskListName?: string
   taskType?: "TASK" | "MILESTONE" | "APPROVAL"
@@ -26,6 +32,13 @@ export interface TaskCardData {
     id: string
     name: string
     avatar: string | null
+  }[]
+  customFieldChips?: {
+    id: string
+    fieldId: string
+    fieldName: string
+    fieldType: "NUMBER" | "SELECT" | "MULTI_SELECT" | "STATUS" | "DATE" | "CREATED" | "PLACE"
+    label: string
   }[]
   subtaskCount?: number
   subtaskDoneCount?: number
@@ -116,19 +129,26 @@ export function TaskCard({ task, onClick, isDragging, index = 0 }: TaskCardProps
 
         {/* Bottom row */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <PriorityBadge priority={task.priority} showLabel={false} />
-            {task.dueDate && (
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1 text-[11px]",
-                  isOverdue ? "text-red-600 font-medium" : "text-muted-foreground"
-                )}
-              >
-                <Calendar className="h-3 w-3" />
-                {format(new Date(task.dueDate), "MMM d")}
-              </span>
+          <div className="space-y-1">
+            {task.isCrossProject && task.primaryProjectName && (
+              <p className="text-[10px] font-medium text-muted-foreground/80">
+                From {task.primaryProjectName}
+              </p>
             )}
+            <div className="flex items-center gap-2">
+              <PriorityBadge priority={task.priority} showLabel={false} />
+              {task.dueDate && (
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 text-[11px]",
+                    isOverdue ? "text-red-600 font-medium" : "text-muted-foreground"
+                  )}
+                >
+                  <Calendar className="h-3 w-3" />
+                  {formatTaskDueDate(task.dueDate)}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Assignee avatars */}

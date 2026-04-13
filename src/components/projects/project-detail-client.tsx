@@ -3,6 +3,18 @@
 import { useState, useCallback, useMemo, useEffect, lazy, Suspense } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { TaskListView } from "@/components/tasks/task-list-view"
 import { BoardView } from "@/components/tasks/board-view"
@@ -67,6 +79,8 @@ interface TaskListData {
   id: string
   name: string
   tasks: TaskCardData[]
+  isTemporary?: boolean
+  temporarySourceProjectId?: string
 }
 
 interface ProjectPageData {
@@ -82,6 +96,7 @@ interface ProjectDetailData {
   description: string | null
   color: string
   icon: string
+  enableTaskBatchDuplicate: boolean
   members: ProjectMember[]
   taskLists: TaskListData[]
   pages?: ProjectPageData[]
@@ -185,6 +200,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
     description: project.description,
     color: project.color,
     icon: project.icon,
+    enableTaskBatchDuplicate: project.enableTaskBatchDuplicate,
   })
 
   // Filters
@@ -205,8 +221,47 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       description: project.description,
       color: project.color,
       icon: project.icon,
+      enableTaskBatchDuplicate: project.enableTaskBatchDuplicate,
     })
-  }, [project.id, project.name, project.description, project.color, project.icon])
+  }, [project.id, project.name, project.description, project.color, project.icon, project.enableTaskBatchDuplicate])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const dirtyKey = `nexus-project-dirty:${project.id}`
+
+    const refreshFromDirtyFlag = () => {
+      const dirtyValue = localStorage.getItem(dirtyKey)
+      if (!dirtyValue) return
+
+      localStorage.removeItem(dirtyKey)
+      router.refresh()
+    }
+
+    const handleDirtyEvent = (event: Event) => {
+      const detail = (event as CustomEvent<{ projectId?: string }>).detail
+      if (detail?.projectId !== project.id) return
+
+      localStorage.removeItem(dirtyKey)
+      router.refresh()
+    }
+
+    const handleStorageEvent = (event: StorageEvent) => {
+      if (event.key !== dirtyKey || !event.newValue) return
+
+      localStorage.removeItem(dirtyKey)
+      router.refresh()
+    }
+
+    refreshFromDirtyFlag()
+    window.addEventListener("nexus:project-dirty", handleDirtyEvent as EventListener)
+    window.addEventListener("storage", handleStorageEvent)
+
+    return () => {
+      window.removeEventListener("nexus:project-dirty", handleDirtyEvent as EventListener)
+      window.removeEventListener("storage", handleStorageEvent)
+    }
+  }, [project.id, router])
 
   useEffect(() => {
     fetch(`/api/sprints?projectId=${project.id}`)
@@ -228,11 +283,9 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
 
   // Sort
   const [sortMode, setSortMode] = useState<SortMode>("position")
-  const [showSort, setShowSort] = useState(false)
 
   // Group
   const [groupMode, setGroupMode] = useState<GroupMode>("status")
-  const [showGroup, setShowGroup] = useState(false)
 
   const defaultTaskListId = project.taskLists[0]?.id
 
@@ -281,30 +334,40 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
   const [viewKey, setViewKey] = useState(0)
   useEffect(() => { setAllTasks(serverTasks) }, [serverTasks])
 
-  // Filter + search
-  const filteredTasks = useMemo(() => {
-    let tasks = allTasks
+  const isVisibleLinkedTask = useCallback((task: TaskCardData) => {
+    if (!task.isCrossProject) return true
+    return task.status !== "DONE"
+  }, [])
 
-    if (statusFilter !== "ALL") tasks = tasks.filter(t => t.status === statusFilter)
-    if (priorityFilter !== "ALL") tasks = tasks.filter(t => t.priority === priorityFilter)
-    if (assigneeFilter !== "ALL") tasks = tasks.filter(t => t.assignees.some(a => a.id === assigneeFilter))
+  const matchesCurrentFilters = useCallback((task: TaskCardData) => {
+    if (!isVisibleLinkedTask(task)) return false
+    if (statusFilter !== "ALL" && task.status !== statusFilter) return false
+    if (priorityFilter !== "ALL" && task.priority !== priorityFilter) return false
+    if (assigneeFilter !== "ALL" && !task.assignees.some((a) => a.id === assigneeFilter)) return false
     if (sprintFilter === "NONE") {
-      // Show tasks not in any sprint
       const allSprintTaskIds = new Set<string>()
-      Object.values(sprintTaskMap).forEach(s => s.forEach(id => allSprintTaskIds.add(id)))
-      tasks = tasks.filter(t => !allSprintTaskIds.has(t.id))
+      Object.values(sprintTaskMap).forEach((s) => s.forEach((id) => allSprintTaskIds.add(id)))
+      if (allSprintTaskIds.has(task.id)) return false
     } else if (sprintFilter !== "ALL") {
       const sprintTasks = sprintTaskMap[sprintFilter]
-      if (sprintTasks) tasks = tasks.filter(t => sprintTasks.has(t.id))
+      if (sprintTasks && !sprintTasks.has(task.id)) return false
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
-      tasks = tasks.filter(t =>
-        t.title.toLowerCase().includes(q) ||
-        t.tags.some(tag => tag.toLowerCase().includes(q)) ||
-        t.description?.toLowerCase().includes(q)
-      )
+      if (
+        !task.title.toLowerCase().includes(q) &&
+        !task.tags.some((tag) => tag.toLowerCase().includes(q)) &&
+        !task.description?.toLowerCase().includes(q)
+      ) {
+        return false
+      }
     }
+    return true
+  }, [assigneeFilter, isVisibleLinkedTask, priorityFilter, searchQuery, sprintFilter, sprintTaskMap, statusFilter])
+
+  // Filter + search
+  const filteredTasks = useMemo(() => {
+    let tasks = allTasks.filter(matchesCurrentFilters)
 
     // Sort
     tasks = [...tasks].sort((a, b) => {
@@ -326,34 +389,45 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
     })
 
     return tasks
-  }, [allTasks, statusFilter, priorityFilter, assigneeFilter, sprintFilter, sprintTaskMap, searchQuery, sortMode])
+  }, [allTasks, matchesCurrentFilters, sortMode])
 
   // Filtered sections for list view
   // No useMemo — recomputes every render to guarantee sync across views
-  const filteredSections = project.taskLists.map((tl) => ({
-    id: tl.id,
-    name: tl.name,
-    tasks: allTasks
-      .filter((t) => t.taskListId === tl.id)
-      .filter((t) => {
-        if (statusFilter !== "ALL" && t.status !== statusFilter) return false
-        if (priorityFilter !== "ALL" && t.priority !== priorityFilter) return false
-        if (assigneeFilter !== "ALL" && !t.assignees.some((a: {id:string}) => a.id === assigneeFilter)) return false
-        if (sprintFilter === "NONE") {
-          const allSprintTaskIds = new Set<string>()
-          Object.values(sprintTaskMap).forEach(s => s.forEach(id => allSprintTaskIds.add(id)))
-          if (allSprintTaskIds.has(t.id)) return false
-        } else if (sprintFilter !== "ALL") {
-          const sprintTasks = sprintTaskMap[sprintFilter]
-          if (sprintTasks && !sprintTasks.has(t.id)) return false
+  const temporaryLinkedSections = Array.from(
+    allTasks
+      .filter((task) => task.isCrossProject && matchesCurrentFilters(task))
+      .reduce((map, task) => {
+        const sectionId = `linked:${task.primaryProjectId || task.projectId}`
+        const existingSection = map.get(sectionId) ?? {
+          id: sectionId,
+          name: task.primaryProjectName || "Linked Project",
+          tasks: [] as TaskCardData[],
+          isTemporary: true,
+          temporarySourceProjectId: task.primaryProjectId || task.projectId,
         }
-        if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase()
-          if (!t.title.toLowerCase().includes(q) && !(t.tags as string[]).some(tag => tag.toLowerCase().includes(q))) return false
-        }
-        return true
-      }),
-  }))
+
+        existingSection.tasks.push(task)
+        map.set(sectionId, existingSection)
+        return map
+      }, new Map<string, TaskListData>())
+      .values()
+  )
+    .map((section) => ({
+      ...section,
+      tasks: section.tasks.sort((a, b) => a.position - b.position),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+
+  const filteredSections = [
+    ...temporaryLinkedSections,
+    ...project.taskLists.map((tl) => ({
+      id: tl.id,
+      name: tl.name,
+      tasks: allTasks
+        .filter((t) => !t.isCrossProject && t.taskListId === tl.id)
+        .filter(matchesCurrentFilters),
+    })),
+  ]
 
   const sectionIdByStatus = useMemo(() => {
     const normalizedSections = project.taskLists.map((taskList) => ({
@@ -410,6 +484,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       try {
         const patchBody: Record<string, string> = { status: newStatus }
         if (targetSectionId) patchBody.taskListId = targetSectionId
+        patchBody.projectContextId = project.id
         await fetch(`/api/tasks/${taskId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -444,6 +519,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       try {
         const patchBody: Record<string, string> = { status: newStatus }
         if (targetSectionId) patchBody.taskListId = targetSectionId
+        patchBody.projectContextId = project.id
         await fetch(`/api/tasks/${taskId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -486,7 +562,10 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       )
       setViewKey((k) => k + 1)
       try {
-        const patchBody: Record<string, string> = { taskListId: newSectionId }
+        const patchBody: Record<string, string> = {
+          taskListId: newSectionId,
+          projectContextId: project.id,
+        }
         if (autoStatus) patchBody.status = autoStatus
         await fetch(`/api/tasks/${taskId}`, {
           method: "PATCH",
@@ -522,9 +601,10 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       setViewKey((k) => k + 1)
 
       try {
-        const patchBody: Record<string, any> = { 
+        const patchBody: Record<string, any> = {
           taskListId: newSectionId,
-          position: newIndex * 100 
+          position: newIndex * 100,
+          projectContextId: project.id,
         }
         if (autoStatus) patchBody.status = autoStatus
 
@@ -540,6 +620,38 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       }
     },
     [router, serverTasks, project.taskLists]
+  )
+
+  const handleTaskDateChange = useCallback(
+    async (taskId: string, newDueDate: string) => {
+      setAllTasks((prev) =>
+        prev.map((task) =>
+          task.id === taskId
+            ? {
+                ...task,
+                dueDate: newDueDate,
+              }
+            : task
+        )
+      )
+      setViewKey((k) => k + 1)
+
+      try {
+        await fetch(`/api/tasks/${taskId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            dueDate: newDueDate,
+            projectContextId: project.id,
+          }),
+        })
+        router.refresh()
+      } catch (error) {
+        console.error("Failed to move task on calendar:", error)
+        setAllTasks(serverTasks)
+      }
+    },
+    [project.id, router, serverTasks]
   )
 
   const handleAddTask = useCallback((taskListId: string) => {
@@ -635,20 +747,28 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
         </div>
       </div>
 
-      {showProjectSettings && (
-        <div className="border-b bg-muted/20">
-          <ProjectHeader
-            project={{
-              id: projectMeta.id,
-              name: projectMeta.name,
-              description: projectMeta.description,
-              color: projectMeta.color,
-              icon: projectMeta.icon,
-            }}
-            onProjectChange={setProjectMeta}
-          />
-        </div>
-      )}
+      <Dialog open={showProjectSettings} onOpenChange={setShowProjectSettings}>
+        <DialogContent className="max-w-3xl overflow-hidden rounded-[2rem] border-none p-0 shadow-2xl">
+          <DialogHeader className="border-b px-6 py-5">
+            <DialogTitle className="text-xl font-headline font-black tracking-tight text-primary">
+              Customize Project
+            </DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[80vh] overflow-y-auto pb-4">
+            <ProjectHeader
+              project={{
+                id: projectMeta.id,
+                name: projectMeta.name,
+                description: projectMeta.description,
+                color: projectMeta.color,
+                icon: projectMeta.icon,
+                enableTaskBatchDuplicate: projectMeta.enableTaskBatchDuplicate,
+              }}
+              onProjectChange={setProjectMeta}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Toolbar: search, filter, sort, group, add task ── */}
       <div className="flex items-center gap-1.5 overflow-x-auto border-b bg-background px-3 py-2 shrink-0 hide-scrollbar">
@@ -702,74 +822,72 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
         </button>
 
         {/* Sort */}
-        <div className="relative">
-          <button
-            className={cn(
-              "flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors",
-              showSort ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            )}
-            onClick={() => { setShowSort(!showSort); setShowGroup(false) }}
-          >
-            <ArrowUpDown className="h-3 w-3" />
-            Sort
-          </button>
-          {showSort && (
-            <div className="absolute left-0 top-full mt-1 z-20 rounded-lg border bg-popover p-1 shadow-lg min-w-[130px]">
-              {([
-                ["position", "Default"],
-                ["priority", "Priority"],
-                ["dueDate", "Due Date"],
-                ["assignee", "Assignee"],
-              ] as const).map(([value, label]) => (
-                <button
-                  key={value}
-                  onClick={() => { setSortMode(value); setShowSort(false) }}
-                  className={cn(
-                    "flex w-full items-center rounded-md px-2.5 py-1.5 text-xs transition-colors",
-                    sortMode === value ? "bg-muted font-medium" : "hover:bg-muted/50"
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className={cn(
+                "flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors",
+                "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              )}
+            >
+              <ArrowUpDown className="h-3 w-3" />
+              Sort
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-[150px] rounded-xl">
+            {([
+              ["position", "Default"],
+              ["priority", "Priority"],
+              ["dueDate", "Due Date"],
+              ["assignee", "Assignee"],
+            ] as const).map(([value, label]) => (
+              <DropdownMenuItem
+                key={value}
+                onClick={() => setSortMode(value)}
+                className={cn(
+                  "cursor-pointer rounded-lg text-xs font-medium",
+                  sortMode === value && "bg-muted"
+                )}
+              >
+                {label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Group */}
-        <div className="relative">
-          <button
-            className={cn(
-              "flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors",
-              showGroup ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            )}
-            onClick={() => { setShowGroup(!showGroup); setShowSort(false) }}
-          >
-            <Layers className="h-3 w-3" />
-            Group
-          </button>
-          {showGroup && (
-            <div className="absolute left-0 top-full mt-1 z-20 rounded-lg border bg-popover p-1 shadow-lg min-w-[130px]">
-              {([
-                ["status", "Status"],
-                ["priority", "Priority"],
-                ["assignee", "Assignee"],
-                ["none", "None"],
-              ] as const).map(([value, label]) => (
-                <button
-                  key={value}
-                  onClick={() => { setGroupMode(value); setShowGroup(false) }}
-                  className={cn(
-                    "flex w-full items-center rounded-md px-2.5 py-1.5 text-xs transition-colors",
-                    groupMode === value ? "bg-muted font-medium" : "hover:bg-muted/50"
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className={cn(
+                "flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors",
+                "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              )}
+            >
+              <Layers className="h-3 w-3" />
+              Group
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="min-w-[150px] rounded-xl">
+            {([
+              ["status", "Status"],
+              ["priority", "Priority"],
+              ["assignee", "Assignee"],
+              ["none", "None"],
+            ] as const).map(([value, label]) => (
+              <DropdownMenuItem
+                key={value}
+                onClick={() => setGroupMode(value)}
+                className={cn(
+                  "cursor-pointer rounded-lg text-xs font-medium",
+                  groupMode === value && "bg-muted"
+                )}
+              >
+                {label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <div className="w-px h-4 bg-border" />
 
@@ -889,6 +1007,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
             onSectionChange={handleSectionChange}
             projectId={project.id}
             defaultTaskListId={defaultTaskListId}
+            enableTaskBatchDuplicate={projectMeta.enableTaskBatchDuplicate}
           />
         )}
         {viewMode === "kanban" && (
@@ -912,6 +1031,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
                 key={`calendar-${viewKey}`}
                 tasks={filteredTasks}
                 onTaskClick={handleTaskClick}
+                onTaskDateChange={handleTaskDateChange}
                 projectId={project.id}
                 defaultTaskListId={defaultTaskListId}
               />

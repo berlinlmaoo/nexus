@@ -6,18 +6,10 @@ function slugify(value: string) {
     .replace(/^-+|-+$/g, "")
 }
 
-export function buildPersonalWorkspace(user: {
-  id: string
-  name?: string | null
-  email: string
-}) {
-  const baseName = (user.name || user.email.split("@")[0] || "My").trim()
-  const workspaceName = `${baseName} Workspace`
-  const slugBase = slugify(baseName) || "workspace"
-
+export function getPrimaryWorkspaceDefaults() {
   return {
-    name: workspaceName,
-    slug: `${slugBase}-${user.id.slice(-6)}`,
-    description: `Personal workspace for ${baseName}`,
+    name: "PATS Group",
+    slug: slugify("PATS Group"),
+    description: "Primary workspace for all Nexus users",
   }
 }

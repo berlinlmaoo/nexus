@@ -5,6 +5,18 @@ import { logAudit } from "@/lib/audit"
 import { unlink } from "fs/promises"
 import path from "path"
 
+function resolveAttachmentFilePath(url: string) {
+  const normalizedUrl = url.replace(/^\/+/, "")
+
+  const uploadRelativePath = normalizedUrl.startsWith("api/files/")
+    ? normalizedUrl.slice("api/files/".length)
+    : normalizedUrl.startsWith("uploads/")
+      ? normalizedUrl.slice("uploads/".length)
+      : normalizedUrl
+
+  return path.join(process.cwd(), "public", "uploads", uploadRelativePath)
+}
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ attachmentId: string }> }
@@ -20,7 +32,7 @@ export async function DELETE(
 
     // Delete file from disk
     try {
-      const filePath = path.join(process.cwd(), "public", attachment.url)
+      const filePath = resolveAttachmentFilePath(attachment.url)
       await unlink(filePath)
     } catch {
       // File may already be gone

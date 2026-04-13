@@ -15,6 +15,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Save, Loader2, Check, Copy } from "lucide-react"
+import { normalizeCustomFieldOptions, normalizeCustomFieldType } from "@/lib/custom-fields"
 
 const STORAGE_KEY = "nexus-project-templates"
 
@@ -47,8 +48,17 @@ interface ProjectTemplate {
     customFields?: Array<{
       name: string
       type: string
+      position?: number
+      options?: unknown
     }>
   }
+}
+
+interface SerializedTemplateCustomField {
+  name: string
+  type: string
+  position?: number
+  options?: unknown
 }
 
 interface SaveTemplateDialogProps {
@@ -110,7 +120,22 @@ export function SaveTemplateDialog({
             })),
           })
         ),
-        customFields: projectData.customFields || [],
+        customFields: (projectData.customFields || [])
+          .map((field: { name: string; type: string; position?: number; options?: unknown }) => {
+            const normalizedType = normalizeCustomFieldType(field.type)
+            if (!normalizedType) return null
+
+            return {
+              name: field.name,
+              type: normalizedType,
+              position: field.position,
+              options: normalizeCustomFieldOptions(normalizedType, field.options),
+            }
+          })
+          .filter(
+            (field: SerializedTemplateCustomField | null): field is SerializedTemplateCustomField =>
+              field !== null
+          ),
       }
 
       const template: ProjectTemplate = {

@@ -9,6 +9,7 @@ import { emitTaskCreated } from "@/lib/socket-emitter"
 import type { Prisma } from "@/generated/prisma/client"
 import { createTaskSchema, validateBody } from "@/lib/validations"
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit"
+import { seedTaskCustomFieldValues } from "@/lib/custom-field-sync"
 
 export async function GET(request: NextRequest) {
   try {
@@ -135,6 +136,8 @@ export async function POST(request: NextRequest) {
         },
       },
     })
+
+    await seedTaskCustomFieldValues(task.id, taskList.projectId, task.createdAt)
 
     await prisma.activityLog.create({
       data: {
