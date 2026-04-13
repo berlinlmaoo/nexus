@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { PageViewClient } from "@/components/projects/page-view-client"
 import type { TaskCardData } from "@/components/tasks/task-card"
+import { isSystemAdminUser } from "@/lib/rbac"
 
 interface PageViewProps {
   params: { projectId: string; pageId: string }
@@ -13,6 +14,7 @@ export const dynamic = "force-dynamic"
 export default async function ProjectPageView({ params }: PageViewProps) {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
+  const isSystemAdmin = await isSystemAdminUser(session.user.id)
 
   const page = await prisma.projectPage.findUnique({
     where: { id: params.pageId },
@@ -30,6 +32,15 @@ export default async function ProjectPageView({ params }: PageViewProps) {
           name: true,
           icon: true,
           color: true,
+          workspace: {
+            select: {
+              members: {
+                where: { userId: session.user.id },
+                select: { role: true },
+                take: 1,
+              },
+            },
+          },
           members: {
             include: {
               user: { select: { id: true, name: true, avatar: true } },
@@ -59,9 +70,14 @@ export default async function ProjectPageView({ params }: PageViewProps) {
 
   if (!page || page.projectId !== params.projectId) notFound()
 
-  // Verify membership
-  const isMember = page.project.members.some((m) => m.user.id === session.user!.id)
-  if (!isMember) redirect("/projects")
+  const workspaceRole = page.project.workspace.members[0]?.role
+  const hasWorkspaceAccess =
+    isSystemAdmin || workspaceRole === "OWNER" || workspaceRole === "ADMIN"
+  const isDirectProjectMember = page.project.members.some(
+    (m) => m.user.id === session.user!.id
+  )
+
+  if (!hasWorkspaceAccess && !isDirectProjectMember) redirect("/projects")
 
   const tasks: TaskCardData[] = page.project.taskLists.flatMap((tl) =>
     tl.tasks.map((t) => ({

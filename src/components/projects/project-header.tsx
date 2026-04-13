@@ -4,7 +4,9 @@ import { useState, useRef, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   Smile,
@@ -19,6 +21,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ProjectIcon, isUploadedIcon } from "./project-icon"
+import { ProjectCustomFieldsManager } from "./project-custom-fields-manager"
 
 interface ProjectHeaderProps {
   project: {
@@ -27,6 +30,7 @@ interface ProjectHeaderProps {
     description: string | null
     color: string
     icon: string
+    enableTaskBatchDuplicate: boolean
   }
   onProjectChange?: (project: {
     id: string
@@ -34,6 +38,7 @@ interface ProjectHeaderProps {
     description: string | null
     color: string
     icon: string
+    enableTaskBatchDuplicate: boolean
   }) => void
 }
 
@@ -80,6 +85,7 @@ export function ProjectHeader({ project, onProjectChange }: ProjectHeaderProps) 
   const [description, setDescription] = useState(project.description || "")
   const [selectedIcon, setSelectedIcon] = useState(project.icon || "folder")
   const [selectedColor, setSelectedColor] = useState(project.color)
+  const [enableTaskBatchDuplicate, setEnableTaskBatchDuplicate] = useState(project.enableTaskBatchDuplicate)
   const [coverGradient, setCoverGradient] = useState(PRESET_GRADIENTS[0])
   const [coverImage, setCoverImage] = useState<string | null>(null)
 
@@ -96,9 +102,10 @@ export function ProjectHeader({ project, onProjectChange }: ProjectHeaderProps) 
     setDescription(project.description || "")
     setSelectedIcon(project.icon || "folder")
     setSelectedColor(project.color)
-  }, [project.name, project.description, project.icon, project.color])
+    setEnableTaskBatchDuplicate(project.enableTaskBatchDuplicate)
+  }, [project.name, project.description, project.icon, project.color, project.enableTaskBatchDuplicate])
 
-  const updateProject = async (updates: Record<string, string>) => {
+  const updateProject = async (updates: Record<string, string | boolean | null>) => {
     try {
       const res = await fetch(`/api/projects/${project.id}`, {
         method: "PATCH",
@@ -116,6 +123,7 @@ export function ProjectHeader({ project, onProjectChange }: ProjectHeaderProps) 
         description: updatedProject.description ?? project.description,
         color: updatedProject.color ?? project.color,
         icon: updatedProject.icon ?? project.icon,
+        enableTaskBatchDuplicate: updatedProject.enableTaskBatchDuplicate ?? project.enableTaskBatchDuplicate,
       }
 
       onProjectChange?.(nextProject)
@@ -144,6 +152,11 @@ export function ProjectHeader({ project, onProjectChange }: ProjectHeaderProps) 
     setSelectedColor(color)
     setShowColorPicker(false)
     updateProject({ color })
+  }
+
+  const handleBatchDuplicateToggle = (checked: boolean) => {
+    setEnableTaskBatchDuplicate(checked)
+    updateProject({ enableTaskBatchDuplicate: checked })
   }
 
   const handleNameSave = () => {
@@ -240,7 +253,7 @@ export function ProjectHeader({ project, onProjectChange }: ProjectHeaderProps) 
   const hasUploadedIcon = isUploadedIcon(selectedIcon)
 
   return (
-    <div className="space-y-3 animate-fade-in px-4 pt-4 overflow-hidden">
+    <div className="space-y-3 animate-fade-in px-4 pt-4">
       {/* Cover gradient — only show when there's a custom cover image */}
       {coverImage && <div className={cn("relative rounded-xl bg-gradient-to-r overflow-hidden transition-all duration-500", coverGradient, "h-36")}>
         <button
@@ -477,35 +490,34 @@ export function ProjectHeader({ project, onProjectChange }: ProjectHeaderProps) 
             )}
 
             {/* Color picker trigger */}
-            <div className="relative">
-              <button
-                onClick={() => setShowColorPicker(!showColorPicker)}
-                className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted transition-all duration-200"
-              >
-                <span className="h-3 w-3 rounded-full" style={{ backgroundColor: selectedColor }} />
-                <Palette className="h-3 w-3" />
-              </button>
+            <Popover open={showColorPicker} onOpenChange={setShowColorPicker}>
+              <PopoverTrigger asChild>
+                <button
+                  className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted transition-all duration-200"
+                >
+                  <span className="h-3 w-3 rounded-full" style={{ backgroundColor: selectedColor }} />
+                  <Palette className="h-3 w-3" />
+                </button>
+              </PopoverTrigger>
 
-              {showColorPicker && (
-                <div className="absolute top-full left-0 mt-1 z-20 rounded-lg border bg-background p-3 shadow-lg animate-scale-in">
-                  <p className="text-xs font-medium mb-2">Project Color</p>
-                  <div className="grid grid-cols-6 gap-1.5">
-                    {PRESET_COLORS.map((color) => (
-                      <button
-                        key={color}
-                        onClick={() => handleColorSelect(color)}
-                        className="relative flex h-7 w-7 items-center justify-center rounded-full transition-all duration-200 hover:scale-110"
-                        style={{ backgroundColor: color }}
-                      >
-                        {selectedColor === color && (
-                          <Check className="h-3.5 w-3.5 text-white" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
+              <PopoverContent align="start" sideOffset={8} className="w-auto rounded-xl border bg-background p-3 shadow-lg">
+                <p className="mb-2 text-xs font-medium">Project Color</p>
+                <div className="grid grid-cols-6 gap-1.5">
+                  {PRESET_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      onClick={() => handleColorSelect(color)}
+                      className="relative flex h-7 w-7 items-center justify-center rounded-full transition-all duration-200 hover:scale-110"
+                      style={{ backgroundColor: color }}
+                    >
+                      {selectedColor === color && (
+                        <Check className="h-3.5 w-3.5 text-white" />
+                      )}
+                    </button>
+                  ))}
                 </div>
-              )}
-            </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Description */}
@@ -539,6 +551,24 @@ export function ProjectHeader({ project, onProjectChange }: ProjectHeaderProps) 
           </div>
         </div>
       </div>
+
+      <div className="rounded-2xl border bg-card/80 px-4 py-4 shadow-sm">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-foreground">Task duplicate mode</p>
+            <p className="text-xs text-muted-foreground">
+              Turn on multi-select duplicate with a due date popup for repeating task sets like PATS Socials.
+            </p>
+          </div>
+          <Switch
+            checked={enableTaskBatchDuplicate}
+            onCheckedChange={handleBatchDuplicateToggle}
+            aria-label="Enable task batch duplicate"
+          />
+        </div>
+      </div>
+
+      <ProjectCustomFieldsManager projectId={project.id} />
     </div>
   )
 }

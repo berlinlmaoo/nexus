@@ -9,6 +9,7 @@ import { emitTaskUpdated, emitTaskDeleted } from "@/lib/socket-emitter"
 import { notifyTaskCompleted } from "@/lib/notification-service"
 import { updateTaskSchema, validateBody } from "@/lib/validations"
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit"
+import { seedTaskCustomFieldValues } from "@/lib/custom-field-sync"
 
 export async function GET(
   _request: NextRequest,
@@ -86,47 +87,135 @@ export async function PATCH(
     const validation = validateBody(updateTaskSchema, body)
     if (!validation.success) return validation.error
 
-    const { title, description, status, priority, dueDate, tags, taskListId, position, assigneeIds, isRecurring, recurPattern, taskType } = validation.data
+    const {
+      title,
+      description,
+      status,
+      priority,
+      dueDate,
+      tags,
+      projectContextId,
+      taskListId,
+      position,
+      assigneeIds,
+      isRecurring,
+      recurPattern,
+      taskType,
+    } = validation.data
 
     const existing = await prisma.task.findUnique({
       where: { id: params.taskId },
-      include: { taskList: true, assignees: { select: { userId: true } } },
+      include: {
+        taskList: true,
+        assignees: { select: { userId: true } },
+        customFieldValues: {
+          select: {
+            customFieldId: true,
+            value: true,
+          },
+        },
+        taskProjects: {
+          select: {
+            id: true,
+            projectId: true,
+            taskListId: true,
+            position: true,
+          },
+        },
+      },
     })
 
     if (!existing) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 })
     }
 
-    const { allowed } = await checkProjectAccess(session.user.id!, existing.taskList.projectId, ["MEMBER"])
+    const effectiveProjectId = projectContextId ?? existing.taskList.projectId
+
+    const { allowed } = await checkProjectAccess(session.user.id!, effectiveProjectId, ["MEMBER"])
     if (!allowed) {
       return NextResponse.json({ error: "Forbidden: MEMBER role or higher required to update tasks" }, { status: 403 })
     }
 
     const updateData: Record<string, unknown> = {}
+    const linkedPlacementData: Record<string, unknown> = {}
     if (title !== undefined) updateData.title = title
     if (description !== undefined) updateData.description = description
     if (status !== undefined) updateData.status = status
     if (priority !== undefined) updateData.priority = priority
     if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null
     if (tags !== undefined) updateData.tags = tags
-    if (taskListId !== undefined) updateData.taskListId = taskListId
-    if (position !== undefined) updateData.position = position
     if (isRecurring !== undefined) updateData.isRecurring = isRecurring
     if (recurPattern !== undefined) updateData.recurPattern = recurPattern
     if (taskType !== undefined) updateData.taskType = taskType
 
-    const task = await prisma.task.update({
-      where: { id: params.taskId },
-      data: updateData,
-      include: {
-        assignees: { include: { user: true } },
-        creator: true,
-        taskList: true,
-        _count: {
-          select: { subtasks: true, comments: true },
+    const primaryProjectId = existing.taskList.projectId
+    const isLinkedProjectContext = effectiveProjectId !== primaryProjectId
+
+    if (taskListId !== undefined) {
+      const targetTaskList = await prisma.taskList.findFirst({
+        where: { id: taskListId, projectId: effectiveProjectId },
+        select: { id: true },
+      })
+
+      if (!targetTaskList) {
+        return NextResponse.json({ error: "Task list not found in the selected project" }, { status: 404 })
+      }
+
+      if (isLinkedProjectContext) linkedPlacementData.taskListId = taskListId
+      else updateData.taskListId = taskListId
+    }
+
+    if (position !== undefined) {
+      if (isLinkedProjectContext) linkedPlacementData.position = position
+      else updateData.position = position
+    }
+
+    let task: any = {
+      ...existing,
+      ...updateData,
+      dueDate:
+        updateData.dueDate !== undefined
+          ? (updateData.dueDate as Date | null)
+          : existing.dueDate,
+      taskListId:
+        updateData.taskListId !== undefined
+          ? (updateData.taskListId as string)
+          : existing.taskListId,
+      position:
+        updateData.position !== undefined
+          ? (updateData.position as number)
+          : existing.position,
+    }
+
+    if (Object.keys(updateData).length > 0) {
+      task = await prisma.task.update({
+        where: { id: params.taskId },
+        data: updateData,
+        include: {
+          assignees: { include: { user: true } },
+          creator: true,
+          taskList: true,
+          _count: {
+            select: { subtasks: true, comments: true },
+          },
         },
-      },
-    })
+      })
+    }
+
+    if (isLinkedProjectContext && Object.keys(linkedPlacementData).length > 0) {
+      const linkedPlacement = existing.taskProjects.find(
+        (taskProject) => taskProject.projectId === effectiveProjectId
+      )
+
+      if (!linkedPlacement) {
+        return NextResponse.json({ error: "Task is not linked to the selected project" }, { status: 404 })
+      }
+
+      await prisma.taskProject.update({
+        where: { id: linkedPlacement.id },
+        data: linkedPlacementData,
+      })
+    }
 
     if (status !== undefined && status !== existing.status) {
       await prisma.activityLog.create({
@@ -135,7 +224,7 @@ export async function PATCH(
           details: `Changed status from ${existing.status} to ${status}`,
           userId: session.user.id!,
           taskId: params.taskId,
-          projectId: existing.taskList.projectId,
+          projectId: effectiveProjectId,
         },
       })
     }
@@ -168,8 +257,8 @@ export async function PATCH(
           break
       }
 
-      if (nextDue && (!pattern.endDate || nextDue <= new Date(pattern.endDate))) {
-        const nextTask = await prisma.task.create({
+        if (nextDue && (!pattern.endDate || nextDue <= new Date(pattern.endDate))) {
+          const nextTask = await prisma.task.create({
           data: {
             title: existing.title,
             description: existing.description,
@@ -186,13 +275,26 @@ export async function PATCH(
           },
         })
         // Copy assignees to new task
-        if (existing.assignees.length > 0) {
-          await prisma.taskAssignee.createMany({
-            data: existing.assignees.map((a: { userId: string }) => ({ taskId: nextTask.id, userId: a.userId })),
-          })
+          if (existing.assignees.length > 0) {
+            await prisma.taskAssignee.createMany({
+              data: existing.assignees.map((a: { userId: string }) => ({ taskId: nextTask.id, userId: a.userId })),
+            })
+          }
+
+          if (existing.customFieldValues.length > 0) {
+            await prisma.customFieldValue.createMany({
+              data: existing.customFieldValues.map((fieldValue) => ({
+                customFieldId: fieldValue.customFieldId,
+                taskId: nextTask.id,
+                value: fieldValue.value,
+              })),
+              skipDuplicates: true,
+            })
+          }
+
+          await seedTaskCustomFieldValues(nextTask.id, existing.taskList.projectId, nextTask.createdAt)
         }
       }
-    }
 
     logAudit({
       action: "update", entityType: "task", entityId: params.taskId, entityName: task.title,
@@ -205,7 +307,7 @@ export async function PATCH(
       executeAutomations(existing.taskList.projectId, "task_status_changed", {
         taskId: params.taskId,
         userId: session.user.id!,
-        projectId: existing.taskList.projectId,
+        projectId: effectiveProjectId,
         oldStatus: existing.status,
         newStatus: status,
       }).catch(() => {})
@@ -216,7 +318,7 @@ export async function PATCH(
       executeAutomations(existing.taskList.projectId, "task_assigned", {
         taskId: params.taskId,
         userId: session.user.id!,
-        projectId: existing.taskList.projectId,
+        projectId: effectiveProjectId,
         assigneeIds,
       }).catch(() => {})
     }
@@ -226,7 +328,7 @@ export async function PATCH(
       notifyTaskCompleted({
         taskId: params.taskId,
         taskTitle: task.title,
-        projectId: existing.taskList.projectId,
+        projectId: effectiveProjectId,
         projectName: existing.taskList.name || "",
         completedByName: session.user.name || "Someone",
         completedById: session.user.id!,
@@ -242,7 +344,7 @@ export async function PATCH(
       priority: task.priority,
       changes: body,
       previousStatus: existing.status,
-    }, existing.taskList.projectId).catch(() => {})
+    }, effectiveProjectId).catch(() => {})
 
     if (assigneeIds !== undefined) {
       await prisma.taskAssignee.deleteMany({
@@ -279,14 +381,24 @@ export async function PATCH(
         },
       })
 
-      // Real-time: broadcast to project room
-      emitTaskUpdated(existing.taskList.projectId, JSON.parse(JSON.stringify(updatedTask)))
+      const relatedProjectIds = [
+        existing.taskList.projectId,
+        ...existing.taskProjects.map((taskProject) => taskProject.projectId),
+      ]
+      for (const projectId of Array.from(new Set(relatedProjectIds))) {
+        emitTaskUpdated(projectId, JSON.parse(JSON.stringify(updatedTask)))
+      }
 
       return NextResponse.json(updatedTask)
     }
 
-    // Real-time: broadcast to project room
-    emitTaskUpdated(existing.taskList.projectId, JSON.parse(JSON.stringify(task)))
+    const relatedProjectIds = [
+      existing.taskList.projectId,
+      ...existing.taskProjects.map((taskProject) => taskProject.projectId),
+    ]
+    for (const projectId of Array.from(new Set(relatedProjectIds))) {
+      emitTaskUpdated(projectId, JSON.parse(JSON.stringify(task)))
+    }
 
     return NextResponse.json(task)
   } catch (error) {
@@ -305,7 +417,12 @@ export async function DELETE(
 
     const existing = await prisma.task.findUnique({
       where: { id: params.taskId },
-      include: { taskList: true },
+      include: {
+        taskList: true,
+        taskProjects: {
+          select: { projectId: true },
+        },
+      },
     })
 
     if (!existing) {
@@ -335,8 +452,13 @@ export async function DELETE(
       where: { id: params.taskId },
     })
 
-    // Real-time: broadcast deletion to project room
-    emitTaskDeleted(existing.taskList.projectId, params.taskId)
+    const relatedProjectIds = [
+      existing.taskList.projectId,
+      ...existing.taskProjects.map((taskProject) => taskProject.projectId),
+    ]
+    for (const projectId of Array.from(new Set(relatedProjectIds))) {
+      emitTaskDeleted(projectId, params.taskId)
+    }
 
     return NextResponse.json({ message: "Task deleted" })
   } catch (error) {

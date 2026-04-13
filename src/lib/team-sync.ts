@@ -1,4 +1,5 @@
-import prisma from "@/lib/prisma"
+import prisma from "./prisma"
+import { Prisma } from "../generated/prisma"
 
 /**
  * Team ↔ Project access propagation.
@@ -16,19 +17,21 @@ const ROLE_HIERARCHY: Record<string, number> = {
   GUEST: 1,
 }
 
+type DbClient = Prisma.TransactionClient | typeof prisma
+
 /**
  * Grant all members of `teamId` MEMBER access to `projectId`.
  * Skips users who already have equal or higher access.
  */
-export async function syncTeamProjectAccess(teamId: string, projectId: string): Promise<void> {
-  const teamMembers = await prisma.teamMember.findMany({
+export async function syncTeamProjectAccess(teamId: string, projectId: string, db: DbClient = prisma): Promise<void> {
+  const teamMembers = await db.teamMember.findMany({
     where: { teamId },
     select: { userId: true },
   })
 
   if (teamMembers.length === 0) return
 
-  const existingAccess = await prisma.projectMember.findMany({
+  const existingAccess = await db.projectMember.findMany({
     where: {
       projectId,
       userId: { in: teamMembers.map((m) => m.userId) },
@@ -54,7 +57,7 @@ export async function syncTeamProjectAccess(teamId: string, projectId: string): 
     }
     // If user has lower access (VIEWER/GUEST), upgrade them
     if (currentRole && (ROLE_HIERARCHY[currentRole] ?? 0) < ROLE_HIERARCHY.MEMBER) {
-      await prisma.projectMember.updateMany({
+      await db.projectMember.updateMany({
         where: { userId: member.userId, projectId },
         data: { role: "MEMBER", source: `team:${teamId}` },
       })
@@ -62,7 +65,7 @@ export async function syncTeamProjectAccess(teamId: string, projectId: string): 
   }
 
   if (toCreate.length > 0) {
-    await prisma.projectMember.createMany({
+    await db.projectMember.createMany({
       data: toCreate,
       skipDuplicates: true,
     })
@@ -72,15 +75,15 @@ export async function syncTeamProjectAccess(teamId: string, projectId: string): 
 /**
  * Grant a single user MEMBER access to all projects linked to `teamId`.
  */
-export async function syncTeamMemberAccess(teamId: string, userId: string): Promise<void> {
-  const teamProjects = await prisma.teamProject.findMany({
+export async function syncTeamMemberAccess(teamId: string, userId: string, db: DbClient = prisma): Promise<void> {
+  const teamProjects = await db.teamProject.findMany({
     where: { teamId },
     select: { projectId: true },
   })
 
   if (teamProjects.length === 0) return
 
-  const existingAccess = await prisma.projectMember.findMany({
+  const existingAccess = await db.projectMember.findMany({
     where: {
       userId,
       projectId: { in: teamProjects.map((tp) => tp.projectId) },
@@ -105,7 +108,7 @@ export async function syncTeamMemberAccess(teamId: string, userId: string): Prom
       })
     }
     if (currentRole && (ROLE_HIERARCHY[currentRole] ?? 0) < ROLE_HIERARCHY.MEMBER) {
-      await prisma.projectMember.updateMany({
+      await db.projectMember.updateMany({
         where: { userId, projectId: tp.projectId },
         data: { role: "MEMBER", source: `team:${teamId}` },
       })
@@ -113,7 +116,7 @@ export async function syncTeamMemberAccess(teamId: string, userId: string): Prom
   }
 
   if (toCreate.length > 0) {
-    await prisma.projectMember.createMany({
+    await db.projectMember.createMany({
       data: toCreate,
       skipDuplicates: true,
     })
@@ -124,8 +127,8 @@ export async function syncTeamMemberAccess(teamId: string, userId: string): Prom
  * Revoke project access for team members who have no other access path.
  * Only removes records with source "team:{teamId}".
  */
-export async function revokeTeamProjectAccess(teamId: string, projectId: string): Promise<void> {
-  const teamMembers = await prisma.teamMember.findMany({
+export async function revokeTeamProjectAccess(teamId: string, projectId: string, db: DbClient = prisma): Promise<void> {
+  const teamMembers = await db.teamMember.findMany({
     where: { teamId },
     select: { userId: true },
   })
@@ -133,7 +136,7 @@ export async function revokeTeamProjectAccess(teamId: string, projectId: string)
   if (teamMembers.length === 0) return
 
   // Only remove ProjectMember records that were team-propagated
-  await prisma.projectMember.deleteMany({
+  await db.projectMember.deleteMany({
     where: {
       projectId,
       userId: { in: teamMembers.map((m) => m.userId) },
@@ -146,15 +149,15 @@ export async function revokeTeamProjectAccess(teamId: string, projectId: string)
  * Revoke a single user's team-propagated access when removed from a team.
  * Only removes records with source "team:{teamId}".
  */
-export async function revokeTeamMemberAccess(teamId: string, userId: string): Promise<void> {
-  const teamProjects = await prisma.teamProject.findMany({
+export async function revokeTeamMemberAccess(teamId: string, userId: string, db: DbClient = prisma): Promise<void> {
+  const teamProjects = await db.teamProject.findMany({
     where: { teamId },
     select: { projectId: true },
   })
 
   if (teamProjects.length === 0) return
 
-  await prisma.projectMember.deleteMany({
+  await db.projectMember.deleteMany({
     where: {
       userId,
       projectId: { in: teamProjects.map((tp) => tp.projectId) },

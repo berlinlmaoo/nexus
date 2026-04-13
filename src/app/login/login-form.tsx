@@ -16,7 +16,7 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { toast } from "sonner"
-import { Loader2, ArrowRight } from "lucide-react"
+import { Loader2, ArrowRight, Eye, EyeOff } from "lucide-react"
 
 const formSchema = z.object({
   email: z.string().email({
@@ -32,6 +32,7 @@ export function LoginForm() {
   const searchParams = useSearchParams()
   const callbackUrl = searchParams?.get("callbackUrl") || "/dashboard"
   const [isLoading, setIsLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -99,12 +100,22 @@ export function LoginForm() {
                 <FormItem className="space-y-1.5">
                   <FormLabel className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/40 ml-1">Access Cipher</FormLabel>
                   <FormControl>
-                    <input
-                      type="password"
-                      placeholder="••••••••"
-                      {...field}
-                      className="w-full h-12 bg-surface-container-low border-none rounded-2xl px-4 text-sm font-bold text-on-surface placeholder:text-on-surface-variant/20 focus:ring-2 focus:ring-primary/5 focus:bg-surface-container-lowest transition-all outline-none"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        {...field}
+                        className="w-full h-12 bg-surface-container-low border-none rounded-2xl pl-4 pr-12 text-sm font-bold text-on-surface placeholder:text-on-surface-variant/20 focus:ring-2 focus:ring-primary/5 focus:bg-surface-container-lowest transition-all outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((current) => !current)}
+                        className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-on-surface-variant/40 transition-colors hover:text-on-surface"
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </FormControl>
                   <FormMessage className="text-[10px] font-bold text-error ml-1" />
                 </FormItem>

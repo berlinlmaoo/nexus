@@ -142,10 +142,35 @@ export function SettingsClient({ user, workspace, isAdmin, workspaceRole }: Sett
 
               {activeTab === "security" && <PasswordChangeSection />}
               {activeTab === "members" && (
-                <WorkspaceMembersSection 
-                  canManage={isAdmin || user?.role === "ADMIN"} 
-                  currentUserId={user?.id || ""} 
-                />
+                <div className="space-y-6">
+                  {isAdmin && (
+                    <div className="rounded-[2rem] border border-primary/10 bg-primary/[0.03] p-5 sm:p-6">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/60">
+                            Admin Control
+                          </p>
+                          <h3 className="text-lg font-headline font-black tracking-tight text-primary sm:text-xl">
+                            User Management lives in its own admin panel
+                          </h3>
+                          <p className="text-sm text-on-surface-variant/60">
+                            Use the dedicated User Management page for global directory, system roles, and workspace access control.
+                          </p>
+                        </div>
+                        <Button
+                          onClick={() => router.push("/admin/users")}
+                          className="h-11 rounded-2xl bg-primary px-5 text-xs font-black uppercase tracking-widest text-primary-foreground"
+                        >
+                          Open User Management
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  <WorkspaceMembersSection 
+                    canManage={isAdmin || user?.role === "ADMIN"} 
+                    currentUserId={user?.id || ""} 
+                  />
+                </div>
               )}
               {activeTab === "notifications" && <NotificationSettings />}
               {activeTab === "webhooks" && <WebhooksManager />}

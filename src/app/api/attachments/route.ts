@@ -5,7 +5,7 @@ import { logAudit } from "@/lib/audit"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
 
-const MAX_SIZE = 10 * 1024 * 1024 // 10MB
+const MAX_SIZE = 50 * 1024 * 1024 // 50MB
 
 export async function GET(request: NextRequest) {
   try {
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     if (!taskId) return NextResponse.json({ error: "taskId is required" }, { status: 400 })
 
     if (file.size > MAX_SIZE) {
-      return NextResponse.json({ error: "File too large. Maximum size is 10MB" }, { status: 400 })
+      return NextResponse.json({ error: "File too large. Maximum size is 50MB" }, { status: 400 })
     }
 
     // Verify task exists
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(bytes)
     await writeFile(path.join(uploadDir, safeName), buffer)
 
-    const url = `/uploads/attachments/${safeName}`
+    const url = `/api/files/attachments/${safeName}`
 
     const attachment = await prisma.attachment.create({
       data: {

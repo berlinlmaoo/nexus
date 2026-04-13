@@ -30,12 +30,15 @@ import {
   Clock,
   Archive,
   ArchiveRestore,
+  Shield,
+  CalendarDays,
 } from "lucide-react"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/stores/app-store"
 import { ProjectIcon } from "@/components/projects/project-icon"
+import { toastError, toastSuccess } from "@/lib/toast"
 import Image from "next/image"
 
 interface SidebarProps {
@@ -43,6 +46,7 @@ interface SidebarProps {
     name: string
     email: string
     image?: string | null
+    canAccessUserManagement?: boolean
   }
 }
 
@@ -70,6 +74,7 @@ const topNavItems = [
   { label: "Home", href: "/dashboard", icon: Home },
   { label: "My Tasks", href: "/my-tasks", icon: CheckSquare, badge: true },
   { label: "Inbox", href: "/inbox", icon: Inbox, badge: true },
+  { label: "Team Calendar", href: "/master-calendar", icon: CalendarDays },
 ]
 
 const insightsItems = [
@@ -230,6 +235,7 @@ export function Sidebar({ user }: SidebarProps) {
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const [confirmDeleteProject, setConfirmDeleteProject] = useState<{ id: string; name: string } | null>(null)
+  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
   const [isClient, setIsClient] = useState(false)
   const sidebarRef = useRef<HTMLDivElement>(null)
@@ -389,14 +395,24 @@ export function Sidebar({ user }: SidebarProps) {
 
   const handleDeleteProject = useCallback(async (projectId: string) => {
     try {
+      setDeletingProjectId(projectId)
       const res = await fetch(`/api/projects/${projectId}`, { method: "DELETE" })
-      if (res.ok) {
-        setProjects((prev) => prev.filter((p) => p.id !== projectId))
-        setProjectPages((prev) => { const n = { ...prev }; delete n[projectId]; return n })
-        setExpandedProjects((prev) => { const n = { ...prev }; delete n[projectId]; return n })
-        router.refresh()
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        toastError(data?.error || "Failed to delete project")
+        return
       }
-    } catch {}
+
+      toastSuccess("Project deleted")
+      setProjects((prev) => prev.filter((p) => p.id !== projectId))
+      setProjectPages((prev) => { const n = { ...prev }; delete n[projectId]; return n })
+      setExpandedProjects((prev) => { const n = { ...prev }; delete n[projectId]; return n })
+      router.refresh()
+    } catch {
+      toastError("Failed to delete project")
+    } finally {
+      setDeletingProjectId(null)
+    }
   }, [router])
 
   useEffect(() => {
@@ -788,9 +804,12 @@ export function Sidebar({ user }: SidebarProps) {
           </div>
         )}
 
-        {/* Bottom Nav: Teams + Settings */}
+        {/* Bottom Nav: Team Ops + Settings */}
         <div className="pt-2 space-y-0.5">
           {[
+            ...(user.canAccessUserManagement
+              ? [{ label: "User Management", href: "/admin/users", icon: Shield }]
+              : []),
             { label: "Teams", href: "/teams", icon: Users },
             { label: "Settings", href: "/settings", icon: Settings },
           ].map((item) => {
@@ -955,6 +974,7 @@ export function Sidebar({ user }: SidebarProps) {
             : ""
         }
         confirmLabel="Delete project"
+        isLoading={!!confirmDeleteProject && deletingProjectId === confirmDeleteProject.id}
         onConfirm={async () => {
           if (!confirmDeleteProject) return
           await handleDeleteProject(confirmDeleteProject.id)

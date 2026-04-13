@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react"
 import { WidgetGrid } from "@/components/dashboard/widget-grid"
 import { DashboardSkeleton } from "@/components/ui/skeleton"
-import { Plus, X, Loader2, ArrowRight, CheckCircle2, Calendar } from "lucide-react"
+import { Plus, X, Loader2, ArrowRight, CheckCircle2, Calendar, Circle, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { StatusBadge } from "@/components/tasks/status-badge"
 import { format } from "date-fns"
@@ -24,7 +25,7 @@ interface DashboardData {
     title: string
     status: "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE" | "CANCELLED"
     dueDate: string | null
-    project: { name: string; color: string }
+    project: { id: string; name: string; color: string }
   }>
   projects: Array<{
     id: string
@@ -58,6 +59,7 @@ const getGreeting = () => {
 }
 
 export function DashboardContent({ userName }: { userName: string }) {
+  const router = useRouter()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [quickCreateOpen, setQuickCreateOpen] = useState(false)
@@ -67,6 +69,7 @@ export function DashboardContent({ userName }: { userName: string }) {
   const [taskPriority, setTaskPriority] = useState("MEDIUM")
   const [projects, setProjects] = useState<ProjectOption[]>([])
   const [creating, setCreating] = useState(false)
+  const [completingIds, setCompletingIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     fetch("/api/dashboard", { credentials: "same-origin" })
@@ -143,6 +146,67 @@ export function DashboardContent({ userName }: { userName: string }) {
     }
   }, [taskTitle, selectedTaskList, taskPriority])
 
+  const markProjectDirty = useCallback((projectId: string) => {
+    if (typeof window === "undefined") return
+
+    const key = `nexus-project-dirty:${projectId}`
+    const value = String(Date.now())
+
+    try {
+      localStorage.setItem(key, value)
+      window.dispatchEvent(new CustomEvent("nexus:project-dirty", { detail: { projectId, value } }))
+    } catch {}
+  }, [])
+
+  const completeDashboardTask = useCallback(async (taskId: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const task = data?.tasks.find((entry) => entry.id === taskId)
+    if (!task) return
+
+    setCompletingIds((prev) => new Set(prev).add(taskId))
+
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "DONE" }),
+      })
+
+      if (!res.ok) {
+        throw new Error("Failed to complete task")
+      }
+
+      markProjectDirty(task.project.id)
+      router.refresh()
+
+      setTimeout(() => {
+        setData((prev) => {
+          if (!prev) return prev
+
+          return {
+            ...prev,
+            tasks: prev.tasks.filter((task) => task.id !== taskId),
+          }
+        })
+
+        setCompletingIds((prev) => {
+          const next = new Set(prev)
+          next.delete(taskId)
+          return next
+        })
+      }, 450)
+    } catch (error) {
+      console.error("Failed to complete dashboard task:", error)
+      setCompletingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(taskId)
+        return next
+      })
+    }
+  }, [data?.tasks, markProjectDirty, router])
+
   const selectedProjectData = projects.find((p) => p.id === selectedProject)
   const greeting = getGreeting()
 
@@ -192,17 +256,45 @@ export function DashboardContent({ userName }: { userName: string }) {
             {data?.tasks.length === 0 ? (
               <div className="py-12 text-center text-on-surface-variant/40 italic font-medium text-sm">System clear. No pending objectives for this cycle.</div>
             ) : (
-              data?.tasks.slice(0, 5).map((task) => (
+              data?.tasks.slice(0, 5).map((task) => {
+                const isCompleting = completingIds.has(task.id)
+
+                return (
                 <div 
                   key={task.id}
-                  className="group cursor-pointer rounded-2xl border border-transparent bg-surface-container-low/30 p-4 transition-all duration-300 hover:border-on-surface-variant/5 hover:bg-surface-container-low sm:px-6 sm:py-4"
+                  role="button"
+                  tabIndex={0}
+                  className={cn(
+                    "group block cursor-pointer rounded-2xl border border-transparent bg-surface-container-low/30 p-4 transition-all duration-300 hover:border-on-surface-variant/5 hover:bg-surface-container-low sm:px-6 sm:py-4",
+                    isCompleting && "opacity-60"
+                  )}
+                  onClick={() => {
+                    router.push(`/projects/${task.project.id}?task=${task.id}`)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault()
+                      router.push(`/projects/${task.project.id}?task=${task.id}`)
+                    }
+                  }}
                 >
                   <div className="flex items-start gap-3 sm:items-center">
-                    <button className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border-2 border-on-surface-variant/20 bg-surface-container-lowest shadow-sm transition-all group-hover:border-primary sm:mt-0">
-                      <div className="h-2.5 w-2.5 scale-50 rounded-sm bg-primary opacity-0 transition-all group-hover:scale-100 group-hover:opacity-100" />
+                    <button
+                      onClick={(e) => completeDashboardTask(task.id, e)}
+                      className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border-2 border-on-surface-variant/20 bg-surface-container-lowest text-on-surface-variant/60 shadow-sm transition-all hover:border-emerald-500 hover:text-emerald-500 sm:mt-0"
+                      aria-label={isCompleting ? "Task completed" : `Mark ${task.title} as done`}
+                    >
+                      {isCompleting ? (
+                        <CheckCircle className="h-4 w-4 text-emerald-500" />
+                      ) : (
+                        <Circle className="h-4 w-4" />
+                      )}
                     </button>
                     <div className="min-w-0 flex-1">
-                      <span className="mb-0.5 block truncate text-sm font-bold text-on-surface">{task.title}</span>
+                      <span className={cn(
+                        "mb-0.5 block truncate text-sm font-bold text-on-surface transition-all",
+                        isCompleting && "line-through text-on-surface-variant/50"
+                      )}>{task.title}</span>
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                         <div className="flex items-center gap-1.5">
                           <div className="h-2 w-2 rounded-full" style={{ backgroundColor: task.project.color }} />
@@ -223,7 +315,7 @@ export function DashboardContent({ userName }: { userName: string }) {
                     <ArrowRight className="h-4 w-4 text-on-surface-variant/20 transition-all group-hover:translate-x-1 group-hover:opacity-100 sm:opacity-0" />
                   </div>
                 </div>
-              ))
+              )})
             )}
           </div>
         </section>

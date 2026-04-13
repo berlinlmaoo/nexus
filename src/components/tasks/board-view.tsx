@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useRef } from "react"
+import { useState, useCallback, useRef, useEffect } from "react"
 import {
   DragDropContext,
   Droppable,
@@ -8,18 +8,30 @@ import {
   type DropResult,
 } from "@hello-pangea/dnd"
 import { UserAvatar } from "@/components/ui/user-avatar"
+import { DateTimePicker } from "@/components/ui/date-time-picker"
+import { Button } from "@/components/ui/button"
 import type { TaskCardData } from "./task-card"
 import { cn } from "@/lib/utils"
-import { Plus, Loader2, Calendar, MoreHorizontal, Pencil, Trash2, GripVertical } from "lucide-react"
+import { Plus, Loader2, Calendar, MoreHorizontal, Pencil, Trash2, GripVertical, Copy, CheckCircle2, Circle } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { useRouter } from "next/navigation"
 import { format, isPast, isToday } from "date-fns"
+import { toast } from "sonner"
+import { formatTaskDueDate } from "@/lib/task-date-format"
 
 const PRIORITY_COLORS: Record<string, string> = {
   URGENT: "bg-red-500",
@@ -33,6 +45,7 @@ interface Section {
   id: string
   name: string
   tasks: TaskCardData[]
+  isTemporary?: boolean
 }
 
 interface BoardViewProps {
@@ -43,6 +56,16 @@ interface BoardViewProps {
   onSectionChange?: (taskId: string, newSectionId: string) => void
   projectId?: string
   defaultTaskListId?: string
+  enableTaskBatchDuplicate?: boolean
+}
+
+function sortTasksDoneLast(tasks: TaskCardData[]) {
+  return [...tasks].sort((a, b) => {
+    const aDone = a.status === "DONE"
+    const bDone = b.status === "DONE"
+    if (aDone !== bDone) return aDone ? 1 : -1
+    return a.position - b.position
+  })
 }
 
 export function BoardView({
@@ -53,6 +76,7 @@ export function BoardView({
   onSectionChange,
   projectId,
   defaultTaskListId,
+  enableTaskBatchDuplicate = false,
 }: BoardViewProps) {
   const router = useRouter()
   const [addingTo, setAddingTo] = useState<string | null>(null)
@@ -65,12 +89,20 @@ export function BoardView({
   const [addingSectionName, setAddingSectionName] = useState("")
   const [creatingSec, setCreatingSec] = useState(false)
   const [deletingColumn, setDeletingColumn] = useState<string | null>(null)
+  const [duplicatingTaskId, setDuplicatingTaskId] = useState<string | null>(null)
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set())
+  const [showBulkDuplicateDialog, setShowBulkDuplicateDialog] = useState(false)
+  const [bulkDuplicateDueDate, setBulkDuplicateDueDate] = useState<string | null>(null)
+  const [bulkDuplicating, setBulkDuplicating] = useState(false)
   const [confirmDeleteColumn, setConfirmDeleteColumn] = useState<{ id: string; name: string } | null>(null)
   const sectionInputRef = useRef<HTMLInputElement>(null)
   const renameInputRef = useRef<HTMLInputElement>(null)
 
   // Use sections as columns (Asana-style)
   const columns = sections || []
+  const selectedTasks = columns.flatMap((column) =>
+    column.tasks.filter((task) => selectedTaskIds.has(task.id))
+  )
 
   const handleDragEnd = useCallback(
     (result: DropResult) => {
@@ -79,11 +111,16 @@ export function BoardView({
       if (destination.droppableId === source.droppableId && destination.index === source.index) return
 
       const newSectionId = destination.droppableId
+      const destinationSection = columns.find((column) => column.id === newSectionId)
+      const draggedTask = columns.flatMap((column) => column.tasks).find((task) => task.id === draggableId)
+
+      if (destinationSection?.isTemporary || draggedTask?.isCrossProject) return
+
       if (onSectionChange) {
         onSectionChange(draggableId, newSectionId)
       }
     },
-    [onSectionChange]
+    [columns, onSectionChange]
   )
 
   const handleQuickAdd = async (sectionId: string) => {
@@ -184,8 +221,161 @@ export function BoardView({
     }
   }
 
+  const handleDuplicateTask = async (task: TaskCardData) => {
+    if (!enableTaskBatchDuplicate) {
+      setDuplicatingTaskId(task.id)
+      try {
+        const res = await fetch(`/api/tasks/${task.id}/duplicate`, {
+          method: "POST",
+        })
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => null)
+          throw new Error(data?.error || `Failed to duplicate ${task.title}`)
+        }
+
+        toast.success("Task duplicated")
+        router.refresh()
+      } catch (error) {
+        console.error("Failed to duplicate task:", error)
+        toast.error(error instanceof Error ? error.message : "Failed to duplicate task")
+      } finally {
+        setDuplicatingTaskId(null)
+      }
+      return
+    }
+
+    setSelectedTaskIds(new Set([task.id]))
+    setBulkDuplicateDueDate(task.dueDate ?? null)
+    setShowBulkDuplicateDialog(true)
+  }
+
+  const toggleTaskSelection = (taskId: string) => {
+    setSelectedTaskIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(taskId)) next.delete(taskId)
+      else next.add(taskId)
+      return next
+    })
+  }
+
+  const clearSelectedTasks = () => {
+    setSelectedTaskIds(new Set())
+  }
+
+  const openBulkDuplicateDialog = () => {
+    if (selectedTasks.length === 0) return
+    setBulkDuplicateDueDate(selectedTasks[0]?.dueDate ?? null)
+    setShowBulkDuplicateDialog(true)
+  }
+
+  const handleBulkDuplicate = async () => {
+    if (selectedTasks.length === 0) return
+    if (!bulkDuplicateDueDate) {
+      toast.error("Pick a new due date first")
+      return
+    }
+
+    setBulkDuplicating(true)
+    setDuplicatingTaskId(selectedTasks.length === 1 ? selectedTasks[0].id : null)
+    try {
+      const results = await Promise.all(
+        selectedTasks.map(async (task) => {
+          const res = await fetch(`/api/tasks/${task.id}/duplicate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ dueDate: bulkDuplicateDueDate }),
+          })
+
+          if (!res.ok) {
+            const data = await res.json().catch(() => null)
+            throw new Error(data?.error || `Failed to duplicate ${task.title}`)
+          }
+
+          return res.json()
+        })
+      )
+
+      toast.success(
+        results.length === 1
+          ? "Task duplicated"
+          : `${results.length} tasks duplicated`
+      )
+      setShowBulkDuplicateDialog(false)
+      setBulkDuplicateDueDate(null)
+      setSelectedTaskIds(new Set())
+      router.refresh()
+    } catch (error) {
+      console.error("Failed to duplicate selected tasks:", error)
+      toast.error(error instanceof Error ? error.message : "Failed to duplicate selected tasks")
+    } finally {
+      setBulkDuplicating(false)
+      setDuplicatingTaskId(null)
+    }
+  }
+
+  useEffect(() => {
+    if (!renamingColumn) return
+
+    const focusTimer = window.setTimeout(() => {
+      renameInputRef.current?.focus()
+      renameInputRef.current?.select()
+    }, 0)
+
+    return () => window.clearTimeout(focusTimer)
+  }, [renamingColumn])
+
+  useEffect(() => {
+    if (enableTaskBatchDuplicate) return
+    setSelectedTaskIds(new Set())
+    setShowBulkDuplicateDialog(false)
+    setBulkDuplicateDueDate(null)
+  }, [enableTaskBatchDuplicate])
+
   return (
     <>
+      {enableTaskBatchDuplicate && (
+        selectedTasks.length > 0 ? (
+          <div className="sticky top-0 z-20 mb-3 flex items-center justify-between gap-3 rounded-2xl border border-primary/10 bg-background/90 px-4 py-3 shadow-lg backdrop-blur">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-primary" />
+              <div className="space-y-0.5">
+                <p className="text-sm font-bold text-foreground">
+                  {selectedTasks.length} task{selectedTasks.length === 1 ? "" : "s"} selected
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Use Cmd/Ctrl + click to add or remove tasks from this selection.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={clearSelectedTasks}
+                className="rounded-xl"
+              >
+                Clear
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={openBulkDuplicateDialog}
+                className="rounded-xl bg-primary text-primary-foreground"
+              >
+                <Copy className="mr-2 h-3.5 w-3.5" />
+                Duplicate selected
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="mb-3 px-4 text-[11px] font-medium text-muted-foreground/75">
+            Cmd/Ctrl + click a task card to multi-select it for duplicate.
+          </div>
+        )
+      )}
+
       <DragDropContext onDragEnd={handleDragEnd}>
         <div className="flex gap-3 pb-4 overflow-x-auto min-w-0 w-full h-full px-3 pt-3">
         {columns.map((column) => (
@@ -221,12 +411,7 @@ export function BoardView({
                       if (e.key === "Enter") handleRenameColumn(column.id)
                       if (e.key === "Escape") setRenamingColumn(null)
                     }}
-                    onBlur={() => {
-                      if (renameValue.trim()) handleRenameColumn(column.id)
-                      else setRenamingColumn(null)
-                    }}
                     className="text-[13px] font-semibold bg-transparent outline-none border-b border-foreground/30 px-0.5 min-w-0"
-                    autoFocus
                   />
                 ) : (
                   <>
@@ -234,13 +419,18 @@ export function BoardView({
                     <span className="text-[11px] text-muted-foreground tabular-nums">
                       {column.tasks.length}
                     </span>
+                    {column.isTemporary && (
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-primary">
+                        Linked
+                      </span>
+                    )}
                     <span className="text-[10px] text-muted-foreground/60 hidden group-hover/col:inline" title="Board view groups tasks by project sections">by section</span>
                   </>
                 )}
               </div>
 
               {/* Column context menu */}
-              {projectId && (
+              {projectId && !column.isTemporary && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="opacity-0 group-hover/col:opacity-100 p-1 rounded hover:bg-muted/60 transition-opacity text-muted-foreground shrink-0">
@@ -252,7 +442,6 @@ export function BoardView({
                       onClick={() => {
                         setRenamingColumn(column.id)
                         setRenameValue(column.name)
-                        setTimeout(() => renameInputRef.current?.focus(), 50)
                       }}
                     >
                       <Pencil className="h-3.5 w-3.5 mr-2" />
@@ -300,17 +489,16 @@ export function BoardView({
                       : "bg-transparent"
                   )}
                 >
-                  {column.tasks
-                    .sort((a, b) => a.position - b.position)
-                    .map((task, index) => {
+                  {sortTasksDoneLast(column.tasks).map((task, index) => {
                     const isOverdue =
                       task.dueDate &&
                       isPast(new Date(task.dueDate)) &&
                       !isToday(new Date(task.dueDate)) &&
                       task.status !== "DONE"
+                    const isDone = task.status === "DONE"
 
                     return (
-                      <Draggable key={task.id} draggableId={task.id} index={index}>
+                      <Draggable key={task.id} draggableId={task.id} index={index} isDragDisabled={Boolean(column.isTemporary || task.isCrossProject)}>
                         {(provided, snapshot) => (
                           <div
                             ref={provided.innerRef}
@@ -319,18 +507,101 @@ export function BoardView({
                           >
                             <div
                               className={cn(
-                                "rounded-lg border bg-white dark:bg-zinc-900 p-3 cursor-pointer transition-all duration-150",
+                                "group/task relative rounded-lg border bg-card p-3 cursor-pointer transition-all duration-150",
                                 "hover:shadow-md",
+                                selectedTaskIds.has(task.id) && "border-primary/30 bg-primary/5 ring-2 ring-primary/20 shadow-md",
                                 snapshot.isDragging && "shadow-xl ring-1 ring-border"
                               )}
-                              onClick={() => onTaskClick(task)}
+                              onClick={(event) => {
+                                if (enableTaskBatchDuplicate && (event.metaKey || event.ctrlKey)) {
+                                  event.preventDefault()
+                                  toggleTaskSelection(task.id)
+                                  return
+                                }
+                                onTaskClick(task)
+                              }}
                             >
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    onClick={(event) => event.stopPropagation()}
+                                    className="absolute right-2 top-2 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted/60 hover:text-foreground group-hover/task:opacity-100"
+                                    aria-label="Task actions"
+                                  >
+                                    {duplicatingTaskId === task.id ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    ) : (
+                                      <MoreHorizontal className="h-3.5 w-3.5" />
+                                    )}
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-44" onClick={(event) => event.stopPropagation()}>
+                                  <DropdownMenuItem onClick={() => handleDuplicateTask(task)}>
+                                    <Copy className="mr-2 h-3.5 w-3.5" />
+                                    Duplicate task
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+
                               {/* Spacer — status badge removed (card is already in correct column) */}
 
                               {/* Task name */}
-                              <p className="text-[13px] font-medium text-foreground leading-snug line-clamp-2">
-                                {task.title}
-                              </p>
+                              <div className="px-0">
+                                {task.isCrossProject && task.primaryProjectName && (
+                                  <p className="mb-1 text-[10px] font-medium text-muted-foreground/80">
+                                    From {task.primaryProjectName}
+                                  </p>
+                                )}
+                                <div className="flex items-start gap-2">
+                                  <button
+                                    type="button"
+                                    onMouseDown={(event) => event.stopPropagation()}
+                                    onClick={(event) => {
+                                      event.stopPropagation()
+                                      onStatusChange(task.id, isDone ? "TODO" : "DONE")
+                                    }}
+                                    className="mt-0.5 shrink-0 rounded-full text-muted-foreground transition-colors hover:text-foreground"
+                                    aria-label={isDone ? "Mark task as not done" : "Mark task as done"}
+                                    title={isDone ? "Mark as not done" : "Mark as done"}
+                                  >
+                                    {isDone ? (
+                                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                    ) : (
+                                      <Circle className="h-4 w-4 opacity-70" />
+                                    )}
+                                  </button>
+                                  <p
+                                    className={cn(
+                                      "pr-8 text-[13px] font-medium leading-snug line-clamp-2",
+                                      isDone ? "text-muted-foreground/70 line-through" : "text-foreground"
+                                    )}
+                                  >
+                                    {task.title}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {task.customFieldChips && task.customFieldChips.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-1.5 pl-6">
+                                  {task.customFieldChips.slice(0, 3).map((chip) => (
+                                    <span
+                                      key={chip.id}
+                                      className="inline-flex items-center rounded-full bg-muted/70 px-2 py-1 text-[10px] font-semibold text-muted-foreground"
+                                      title={`${chip.fieldName}: ${chip.label}`}
+                                    >
+                                      {chip.label}
+                                    </span>
+                                  ))}
+                                  {task.customFieldChips.length > 3 && (
+                                    <span
+                                      className="inline-flex items-center rounded-full bg-muted/50 px-2 py-1 text-[10px] font-semibold text-muted-foreground/80"
+                                      title={task.customFieldChips.slice(3).map((chip) => `${chip.fieldName}: ${chip.label}`).join(", ")}
+                                    >
+                                      +{task.customFieldChips.length - 3}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
 
                               {/* Bottom: date + priority pill + avatar */}
                               <div className="flex items-center justify-between mt-3">
@@ -343,7 +614,7 @@ export function BoardView({
                                       )}
                                     >
                                       <Calendar className="h-3 w-3" />
-                                      {format(new Date(task.dueDate), "MMM d")}
+                                      {formatTaskDueDate(task.dueDate)}
                                     </span>
                                   )}
                                   {task.priority !== "NONE" && PRIORITY_COLORS[task.priority] && (
@@ -361,11 +632,11 @@ export function BoardView({
                                         key={a.id}
                                         user={{ name: a.name, avatar: a.avatar }}
                                         size="xs"
-                                        className="h-6 w-6 border border-white dark:border-zinc-900"
+                                        className="h-6 w-6 border border-background"
                                       />
                                     ))}
                                     {task.assignees.length > 2 && (
-                                      <div className="flex h-6 w-6 items-center justify-center rounded-full border border-white dark:border-zinc-900 bg-muted text-[8px] font-medium text-muted-foreground">
+                                      <div className="flex h-6 w-6 items-center justify-center rounded-full border border-background bg-muted text-[8px] font-medium text-muted-foreground">
                                         +{task.assignees.length - 2}
                                       </div>
                                     )}
@@ -389,7 +660,7 @@ export function BoardView({
 
                   {/* Inline quick-add */}
                   {addingTo === column.id && (
-                    <div className="rounded-lg border bg-white dark:bg-zinc-900 p-2.5">
+                    <div className="rounded-lg border bg-card p-2.5">
                       <input
                         ref={inputRef}
                         type="text"
@@ -413,7 +684,7 @@ export function BoardView({
                   )}
 
                   {/* Add button */}
-                  {addingTo !== column.id && projectId && (
+                  {addingTo !== column.id && projectId && !column.isTemporary && (
                     <button
                       onClick={() => startAdding(column.id)}
                       className="flex items-center gap-1.5 w-full rounded-lg px-2 py-1.5 text-xs text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/30 transition-colors"
@@ -431,7 +702,7 @@ export function BoardView({
         {projectId && (
           <div className="flex-shrink-0 w-72 flex flex-col">
             {showAddSection ? (
-              <div className="rounded-lg border bg-white dark:bg-zinc-900 p-2.5">
+              <div className="rounded-lg border bg-card p-2.5">
                 <input
                   ref={sectionInputRef}
                   type="text"
@@ -491,6 +762,55 @@ export function BoardView({
           setConfirmDeleteColumn(null)
         }}
       />
+
+      <Dialog
+        open={enableTaskBatchDuplicate && showBulkDuplicateDialog}
+        onOpenChange={setShowBulkDuplicateDialog}
+      >
+        <DialogContent className="sm:max-w-md rounded-[2rem] border-none p-6 shadow-2xl">
+          <DialogHeader className="space-y-3">
+            <DialogTitle className="text-xl font-black tracking-tight text-primary">
+              Duplicate {selectedTasks.length} Task{selectedTasks.length === 1 ? "" : "s"}
+            </DialogTitle>
+            <DialogDescription>
+              Pick the new due date for the duplicated task set. This is handy when the task structure stays the same and only the schedule moves.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <DateTimePicker
+              value={bulkDuplicateDueDate}
+              onChange={setBulkDuplicateDueDate}
+              variant="inline"
+            />
+
+            <div className="rounded-2xl bg-surface-container-low px-4 py-3 text-xs text-on-surface-variant/60">
+              {selectedTasks.slice(0, 3).map((task) => task.title).join(", ")}
+              {selectedTasks.length > 3 ? `, +${selectedTasks.length - 3} more` : ""}
+            </div>
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setShowBulkDuplicateDialog(false)}
+              disabled={bulkDuplicating}
+              className="rounded-2xl"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleBulkDuplicate}
+              disabled={bulkDuplicating || !bulkDuplicateDueDate}
+              className="rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              {bulkDuplicating ? "Duplicating..." : "Duplicate tasks"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

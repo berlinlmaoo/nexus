@@ -22,6 +22,7 @@ import {
 } from "lucide-react"
 import { format, isPast, isToday } from "date-fns"
 import { cn } from "@/lib/utils"
+import { formatTaskDueDate } from "@/lib/task-date-format"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { ProjectIcon, isUploadedIcon } from "@/components/projects/project-icon"
@@ -51,7 +52,7 @@ type GroupByMode = "status" | "section"
 
 interface KanbanViewProps {
   tasks: TaskCardData[]
-  sections?: Array<{ id: string; name: string; tasks: TaskCardData[] }>
+  sections?: Array<{ id: string; name: string; tasks: TaskCardData[]; isTemporary?: boolean }>
   onTaskClick: (task: TaskCardData) => void
   onStatusChange: (taskId: string, newStatus: TaskCardData["status"]) => void
   onSectionChange?: (taskId: string, newSectionId: string) => void
@@ -85,6 +86,16 @@ export function KanbanView({
   const [creatingSection, setCreatingSection] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const sectionInputRef = useRef<HTMLInputElement>(null)
+  const sectionTaskMap = useMemo(
+    () =>
+      new Map(
+        sections.map((section) => [
+          section.id,
+          section.tasks.slice().sort((a, b) => a.position - b.position),
+        ])
+      ),
+    [sections]
+  )
 
   const columns = useMemo(() => {
     if (groupBy === "status") {
@@ -92,14 +103,16 @@ export function KanbanView({
         id: col.id,
         label: col.label,
         color: col.color,
-        type: "status" as const
+        type: "status" as const,
+        isTemporary: false,
       }))
     }
     return sections.map(sec => ({
       id: sec.id,
       label: sec.name,
       color: "bg-primary/20",
-      type: "section" as const
+      type: "section" as const,
+      isTemporary: Boolean(sec.isTemporary),
     }))
   }, [groupBy, sections])
 
@@ -130,7 +143,8 @@ export function KanbanView({
           if (groupBy === "status") {
             if (t.status !== columnId) return false
           } else {
-            if (t.taskListId !== columnId) return false
+            const columnTasks = sectionTaskMap.get(columnId) ?? []
+            if (!columnTasks.some((task) => task.id === t.id)) return false
           }
 
           // Filter by Swimlane
@@ -143,7 +157,7 @@ export function KanbanView({
         })
         .sort((a, b) => a.position - b.position)
     },
-    [tasks, swimLaneMode, groupBy]
+    [groupBy, sectionTaskMap, swimLaneMode, tasks]
   )
 
   const getColumnCount = useCallback(
@@ -151,9 +165,9 @@ export function KanbanView({
       if (groupBy === "status") {
         return tasks.filter((t) => t.status === columnId).length
       }
-      return tasks.filter((t) => t.taskListId === columnId).length
+      return (sectionTaskMap.get(columnId) ?? []).length
     },
-    [tasks, groupBy]
+    [groupBy, sectionTaskMap, tasks]
   )
 
   const handleDragEnd = useCallback(
@@ -163,6 +177,10 @@ export function KanbanView({
       if (destination.droppableId === source.droppableId && destination.index === source.index) return
 
       const targetId = destination.droppableId.split("__")[0]
+      const destinationColumn = columns.find((column) => column.id === targetId)
+      const draggedTask = tasks.find((task) => task.id === draggableId)
+
+      if (destinationColumn?.isTemporary || draggedTask?.isCrossProject) return
       
       if (groupBy === "status") {
         onStatusChange(draggableId, targetId as TaskCardData["status"])
@@ -172,7 +190,7 @@ export function KanbanView({
         }
       }
     },
-    [onStatusChange, onSectionChange, groupBy]
+    [columns, groupBy, onSectionChange, onStatusChange, tasks]
   )
 
   const handleQuickAdd = async (columnId: string) => {
@@ -448,13 +466,20 @@ export function KanbanView({
                             <div className="flex items-center gap-2">
                               <div className={cn("w-2 h-2 rounded-full", column.color)} />
                               <h3 className="font-headline font-black text-xs uppercase tracking-widest text-primary truncate max-w-[180px]">{column.label}</h3>
+                              {column.isTemporary && (
+                                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-primary">
+                                  Linked
+                                </span>
+                              )}
                               <span className={cn("text-[10px] font-black rounded-full px-2 py-0.5", isOverWip ? "bg-error/10 text-error" : "bg-surface-container-high text-on-surface-variant/60")}>
                                 {totalColCount}{wipLimit > 0 && `/${wipLimit}`}
                               </span>
                             </div>
-                            <button onClick={(e) => { e.stopPropagation(); setAddingTo(column.id) }} className="p-1 hover:bg-surface-container-high rounded-lg text-on-surface-variant/30 hover:text-primary">
-                              <Plus className="h-4 w-4" />
-                            </button>
+                            {!column.isTemporary && (
+                              <button onClick={(e) => { e.stopPropagation(); setAddingTo(column.id) }} className="p-1 hover:bg-surface-container-high rounded-lg text-on-surface-variant/30 hover:text-primary">
+                                <Plus className="h-4 w-4" />
+                              </button>
+                            )}
                           </div>
 
                           <Droppable droppableId={`${column.id}__${lane.id}`}>
@@ -465,7 +490,7 @@ export function KanbanView({
                                 className={cn("flex-1 space-y-3 min-h-[120px] transition-all duration-200 rounded-xl", snapshot.isDraggingOver && "bg-surface-container-high/40")}
                               >
                                 {colTasks.map((task, index) => (
-                                  <Draggable key={task.id} draggableId={task.id} index={index}>
+                                  <Draggable key={task.id} draggableId={task.id} index={index} isDragDisabled={Boolean(column.isTemporary || task.isCrossProject)}>
                                     {(provided, snapshot) => (
                                       <div
                                         ref={provided.innerRef}
@@ -478,13 +503,20 @@ export function KanbanView({
                                         )}
                                       >
                                         <div className="space-y-4">
-                                          <h4 className="text-sm font-bold text-primary leading-snug group-hover:text-tertiary-new transition-colors line-clamp-2">{task.title}</h4>
+                                          <div className="space-y-1">
+                                            {task.isCrossProject && task.primaryProjectName && (
+                                              <p className="text-[10px] font-medium text-on-surface-variant/50">
+                                                From {task.primaryProjectName}
+                                              </p>
+                                            )}
+                                            <h4 className="text-sm font-bold text-primary leading-snug group-hover:text-tertiary-new transition-colors line-clamp-2">{task.title}</h4>
+                                          </div>
                                           <div className="flex flex-wrap gap-2">
                                             {task.priority !== "NONE" && <span className={cn("px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md", PRIORITY_BADGES[task.priority].cls)}>{task.priority}</span>}
                                           </div>
                                           <div className="flex items-center justify-between pt-1">
                                             <div className="flex items-center gap-3 text-on-surface-variant/40">
-                                              {task.dueDate && <div className="flex items-center gap-1 text-[10px] font-bold"><Calendar className="h-3.5 w-3.5" /><span>{format(new Date(task.dueDate), "MMM d")}</span></div>}
+                                              {task.dueDate && <div className="flex items-center gap-1 text-[10px] font-bold"><Calendar className="h-3.5 w-3.5" /><span>{formatTaskDueDate(task.dueDate)}</span></div>}
                                               {(task.subtaskCount ?? 0) > 0 && <div className="flex items-center gap-1 text-[10px] font-bold"><ListTree className="h-3.5 w-3.5" /><span>{task.subtaskDoneCount}/{task.subtaskCount}</span></div>}
                                             </div>
                                             <div className="flex -space-x-2">
@@ -524,7 +556,7 @@ export function KanbanView({
                                   )}
                                 </AnimatePresence>
 
-                                {addingTo !== column.id && (
+                                {addingTo !== column.id && !column.isTemporary && (
                                   <button onClick={() => setAddingTo(column.id)} className="w-full py-3 flex items-center justify-center gap-2 text-[11px] font-black uppercase tracking-widest text-on-surface-variant/20 hover:text-primary hover:bg-surface-container-high/50 rounded-xl transition-all duration-300">
                                     <Plus className="h-4 w-4" /><span>Add Task</span>
                                   </button>

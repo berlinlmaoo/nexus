@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Image from "next/image"
 import {
   Folder,
@@ -58,8 +59,13 @@ const sizeConfig = {
 
 export function ProjectIcon({ icon, color, size = "md", variant = "emoji", className }: ProjectIconProps) {
   const cfg = sizeConfig[size] || sizeConfig.md
+  const [imageFailed, setImageFailed] = useState(false)
 
-  if (isUploadedIcon(icon)) {
+  useEffect(() => {
+    setImageFailed(false)
+  }, [icon])
+
+  if (isUploadedIcon(icon) && !imageFailed) {
     return (
       <div className={cn("relative overflow-hidden rounded-full flex-shrink-0", cfg.container, className)}>
         <Image
@@ -70,6 +76,7 @@ export function ProjectIcon({ icon, color, size = "md", variant = "emoji", class
           className="object-cover"
           sizes={`${cfg.image}px`}
           unoptimized
+          onError={() => setImageFailed(true)}
         />
       </div>
     )

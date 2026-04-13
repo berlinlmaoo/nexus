@@ -56,7 +56,14 @@ export default async function LoginPage() {
           <div className="h-8 w-[1px] bg-primary-foreground/10" />
           <div className="space-y-1">
             <p className="text-[10px] font-black uppercase tracking-widest opacity-30">Engineered By</p>
-            <p className="text-xs font-bold opacity-60">Jagain Networks</p>
+            <Link
+              href="https://www.instagram.com/jagain.networks/"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex text-xs font-bold opacity-60 transition-opacity hover:opacity-100"
+            >
+              Jagain Networks
+            </Link>
           </div>
         </div>
       </div>
@@ -94,7 +101,14 @@ export default async function LoginPage() {
 
           <div className="lg:hidden rounded-3xl border border-on-surface-variant/5 bg-surface-container-low/50 px-4 py-3">
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/30">Engineered By</p>
-            <p className="mt-1 text-sm font-bold text-primary/70">Jagain Networks</p>
+            <Link
+              href="https://www.instagram.com/jagain.networks/"
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 inline-flex text-sm font-bold text-primary/70 transition-colors hover:text-primary"
+            >
+              Jagain Networks
+            </Link>
           </div>
         </div>
 

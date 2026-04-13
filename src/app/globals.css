@@ -4,6 +4,7 @@
 
 @layer base {
   :root {
+    color-scheme: light;
     --background: 210 20% 98%; /* #f7f9fb */
     --foreground: 200 10% 10%;
     --card: 0 0% 100%;
@@ -51,7 +52,21 @@
 
 @layer base {
   * { @apply border-border; }
-  body { @apply bg-background text-foreground font-body; }
+  html {
+    color-scheme: light;
+    background-color: hsl(var(--background));
+  }
+  body {
+    @apply bg-background text-foreground font-body;
+    color-scheme: light;
+    background-color: hsl(var(--background));
+  }
+  input,
+  textarea,
+  select,
+  button {
+    color-scheme: light;
+  }
   h1, h2, h3, h4, h5, h6 { @apply font-headline font-extrabold tracking-tight; }
 }
 

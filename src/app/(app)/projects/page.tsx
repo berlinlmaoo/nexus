@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { ProjectsPageClient } from "@/components/projects/projects-page-client"
 import type { ProjectCardData } from "@/components/projects/project-card"
+import { isSystemAdminUser } from "@/lib/rbac"
 
 export const dynamic = "force-dynamic"
 
@@ -11,23 +12,42 @@ export default async function ProjectsPage() {
   if (!session?.user?.id) redirect("/login")
 
   const userId = session.user.id
+  const isSystemAdmin = await isSystemAdminUser(userId)
 
   // Get user's workspace (first one)
   const workspaceMember = await prisma.workspaceMember.findFirst({
     where: { userId },
-    select: { workspaceId: true },
+    select: { workspaceId: true, role: true },
   })
 
-  if (!workspaceMember) redirect("/login")
+  if (!workspaceMember && !isSystemAdmin) redirect("/login")
 
-  const workspaceId = workspaceMember.workspaceId
+  const fallbackWorkspace = !workspaceMember
+    ? await prisma.workspace.findFirst({
+        select: { id: true },
+        orderBy: { createdAt: "asc" },
+      })
+    : null
 
-  // Fetch projects user is a member of
+  const workspaceId = workspaceMember?.workspaceId ?? fallbackWorkspace?.id ?? ""
+
+  const canSeeAllWorkspaceProjects =
+    isSystemAdmin ||
+    workspaceMember?.role === "OWNER" ||
+    workspaceMember?.role === "ADMIN"
+
+  // Fetch projects for the workspace. Owners/admins can see all workspace projects.
   const projects = await prisma.project.findMany({
-    where: {
-      workspaceId,
-      members: { some: { userId } },
-    },
+    where: isSystemAdmin
+      ? {}
+      : {
+          workspaceId,
+          ...(canSeeAllWorkspaceProjects
+            ? {}
+            : {
+                members: { some: { userId } },
+              }),
+        },
     include: {
       members: {
         include: {

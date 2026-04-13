@@ -6,7 +6,8 @@ import { logAudit } from '@/lib/audit'
 import { canonicalEmail } from '@/lib/email-auth'
 import { registerSchema, validateBody } from '@/lib/validations'
 import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit'
-import { buildPersonalWorkspace } from '@/lib/workspace-defaults'
+import { ensureUserInPrimaryWorkspaceTeam } from '@/lib/primary-team'
+import { syncTeamMemberAccess } from '@/lib/team-sync'
 
 /** Prisma 7 + bundlers can duplicate the error class; use `code` + `meta` duck-typing. */
 function prismaKnownRequestMeta(error: unknown): {
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
 
     const hashedPassword = await bcrypt.hash(password, 12)
 
-    const user = await prisma.$transaction(async (tx) => {
+    const { user, primaryTeamId } = await prisma.$transaction(async (tx) => {
       const createdUser = await tx.user.create({
         data: {
           name,
@@ -67,26 +68,12 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      const workspace = buildPersonalWorkspace({
-        id: createdUser.id,
-        name: createdUser.name,
-        email: createdUser.email,
-      })
+      const { team } = await ensureUserInPrimaryWorkspaceTeam(tx, createdUser.id)
 
-      await tx.workspace.create({
-        data: {
-          ...workspace,
-          members: {
-            create: {
-              userId: createdUser.id,
-              role: 'OWNER',
-            },
-          },
-        },
-      })
-
-      return createdUser
+      return { user: createdUser, primaryTeamId: team.id }
     })
+
+    await syncTeamMemberAccess(primaryTeamId, user.id)
 
     await logAudit({
       action: 'create',
