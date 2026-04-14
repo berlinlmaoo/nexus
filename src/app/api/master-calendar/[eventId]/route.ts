@@ -4,6 +4,8 @@ import prisma from "@/lib/prisma"
 import {
   canAccessMasterCalendarEvent,
   findBookedAttendeeConflicts,
+  formatMasterCalendarDateInput,
+  formatMasterCalendarTimeInput,
   getMasterCalendarTeamAccess,
   normalizeMasterCalendarRange,
 } from "@/lib/master-calendar"
@@ -56,17 +58,17 @@ export async function PATCH(
     }
 
     const nextIsAllDay = validation.data.isAllDay ?? existing.isAllDay
-    const nextDate = validation.data.date ?? existing.startsAt?.toISOString().slice(0, 10)
+    const nextDate = validation.data.date ?? (existing.startsAt ? formatMasterCalendarDateInput(existing.startsAt) : null)
 
     if (!nextDate) {
       return NextResponse.json({ error: "Date is required" }, { status: 400 })
     }
 
     const existingStartTime = existing.startsAt
-      ? `${String(existing.startsAt.getHours()).padStart(2, "0")}:${String(existing.startsAt.getMinutes()).padStart(2, "0")}`
+      ? formatMasterCalendarTimeInput(existing.startsAt)
       : null
     const existingEndTime = existing.endsAt
-      ? `${String(existing.endsAt.getHours()).padStart(2, "0")}:${String(existing.endsAt.getMinutes()).padStart(2, "0")}`
+      ? formatMasterCalendarTimeInput(existing.endsAt)
       : null
 
     const { startsAt, endsAt } = normalizeMasterCalendarRange({

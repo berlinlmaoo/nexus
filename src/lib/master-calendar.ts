@@ -336,6 +336,24 @@ export function normalizeMasterCalendarRange(input: {
   return { startsAt, endsAt }
 }
 
+export function formatMasterCalendarDateInput(date: Date) {
+  return Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date)
+}
+
+export function formatMasterCalendarTimeInput(date: Date) {
+  return Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Jakarta",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date)
+}
+
 export async function canAccessMasterCalendarEvent(userId: string, eventId: string) {
   const event = await prisma.teamCalendarEvent.findUnique({
     where: { id: eventId },

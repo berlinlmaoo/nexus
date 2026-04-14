@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
-import { checkProjectAccess } from "@/lib/rbac"
+import { checkProjectAccess, isSystemAdminUser } from "@/lib/rbac"
 import { executeAutomations } from "@/lib/automation-engine"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import { emitTaskCreated } from "@/lib/socket-emitter"
@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const isSystemAdmin = await isSystemAdminUser(session.user.id)
 
     const searchParams = request.nextUrl.searchParams
     const projectId = searchParams.get("projectId")
@@ -24,19 +25,63 @@ export async function GET(request: NextRequest) {
     const assigneeId = searchParams.get("assigneeId")
     const search = searchParams.get("search")
 
-    const where: Prisma.TaskWhereInput = {
-      // Workspace isolation: only return tasks from projects the user is a member of
-      taskList: {
-        project: {
-          members: {
-            some: { userId: session.user.id },
+    const where: Prisma.TaskWhereInput = {}
+
+    if (!isSystemAdmin) {
+      const workspaceMemberships = await prisma.workspaceMember.findMany({
+        where: { userId: session.user.id },
+        select: { workspaceId: true, role: true },
+      })
+
+      const adminWorkspaceIds = workspaceMemberships
+        .filter((membership) => membership.role === "OWNER" || membership.role === "ADMIN")
+        .map((membership) => membership.workspaceId)
+
+      const memberWorkspaceIds = workspaceMemberships
+        .filter((membership) => membership.role === "MEMBER")
+        .map((membership) => membership.workspaceId)
+
+      const accessScopes: Prisma.TaskWhereInput[] = []
+
+      if (adminWorkspaceIds.length > 0) {
+        accessScopes.push({
+          taskList: {
+            project: {
+              workspaceId: { in: adminWorkspaceIds },
+            },
           },
-        },
-      },
+        })
+      }
+
+      if (memberWorkspaceIds.length > 0) {
+        accessScopes.push({
+          taskList: {
+            project: {
+              workspaceId: { in: memberWorkspaceIds },
+              members: {
+                some: { userId: session.user.id },
+              },
+            },
+          },
+        })
+      }
+
+      if (accessScopes.length === 0) {
+        return NextResponse.json([])
+      }
+
+      if (accessScopes.length === 1) {
+        Object.assign(where, accessScopes[0])
+      } else {
+        where.OR = accessScopes
+      }
     }
 
     if (projectId) {
-      where.taskList = { ...where.taskList as Prisma.TaskListWhereInput, projectId }
+      where.taskList = {
+        ...(where.taskList as Prisma.TaskListWhereInput | undefined),
+        projectId,
+      }
     }
     if (taskListId) {
       where.taskListId = taskListId

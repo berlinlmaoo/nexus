@@ -5,6 +5,7 @@ import { logAudit } from "@/lib/audit"
 import { checkProjectAccess } from "@/lib/rbac"
 import type { InputJsonValue } from "@prisma/client/runtime/client"
 import {
+  coerceCustomFieldValueForType,
   type CustomFieldOptionConfig,
   type PlaceFieldValue,
   type SupportedCustomFieldType,
@@ -311,14 +312,56 @@ export async function PATCH(req: NextRequest) {
       })
     }
 
-    const updatedField = await prisma.customField.update({
-      where: { id },
-      data: {
-        ...(name !== undefined ? { name: String(name).trim() } : {}),
-        ...(type !== undefined ? { type: normalizedType } : {}),
-        ...(options !== undefined ? { options: normalizedOptionsJson } : {}),
-        ...(position !== undefined ? { position: Number(position) } : {}),
-      },
+    const previousFieldType = normalizeCustomFieldType(existingField.type)
+
+    const updatedField = await prisma.$transaction(async (tx) => {
+      const nextField = await tx.customField.update({
+        where: { id },
+        data: {
+          ...(name !== undefined ? { name: String(name).trim() } : {}),
+          ...(type !== undefined ? { type: normalizedType } : {}),
+          ...(options !== undefined ? { options: normalizedOptionsJson } : {}),
+          ...(position !== undefined ? { position: Number(position) } : {}),
+        },
+      })
+
+      if (type !== undefined && previousFieldType && previousFieldType !== normalizedType) {
+        const existingValues = await tx.customFieldValue.findMany({
+          where: { customFieldId: id },
+          include: {
+            task: {
+              select: {
+                createdAt: true,
+              },
+            },
+          },
+        })
+
+        for (const fieldValue of existingValues) {
+          const previousValue = parseCustomFieldValue(
+            previousFieldType,
+            fieldValue.value,
+            fieldValue.task.createdAt
+          )
+
+          await tx.customFieldValue.update({
+            where: { id: fieldValue.id },
+            data: {
+              value: serializeCustomFieldValue(
+                normalizedType,
+                coerceCustomFieldValueForType(
+                  normalizedType,
+                  previousValue,
+                  fieldValue.task.createdAt
+                ),
+                fieldValue.task.createdAt
+              ),
+            },
+          })
+        }
+      }
+
+      return nextField
     })
 
     logAudit({

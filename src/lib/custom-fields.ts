@@ -114,6 +114,66 @@ export function serializeCustomFieldValue(
   return String(nextValue)
 }
 
+export function coerceCustomFieldValueForType(
+  type: SupportedCustomFieldType,
+  value: unknown,
+  taskCreatedAt?: Date | string | null
+): string | string[] | PlaceFieldValue {
+  if (value === null || value === undefined || value === "") {
+    return getDefaultCustomFieldValue(type, taskCreatedAt)
+  }
+
+  if (type === "MULTI_SELECT") {
+    if (Array.isArray(value)) {
+      return value.map((item) => String(item).trim()).filter(Boolean)
+    }
+
+    if (typeof value === "object") {
+      const placeValue = value as Partial<PlaceFieldValue>
+      if (typeof placeValue.label === "string" && placeValue.label.trim()) {
+        return [placeValue.label.trim()]
+      }
+      return []
+    }
+
+    const normalized = String(value).trim()
+    return normalized ? [normalized] : []
+  }
+
+  if (type === "PLACE") {
+    if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+      const placeValue = value as Partial<PlaceFieldValue>
+      return {
+        label: typeof placeValue.label === "string" ? placeValue.label : "",
+        mapUrl: typeof placeValue.mapUrl === "string" ? placeValue.mapUrl : "",
+      }
+    }
+
+    if (Array.isArray(value)) {
+      return {
+        label: String(value[0] ?? "").trim(),
+        mapUrl: "",
+      }
+    }
+
+    return {
+      label: String(value).trim(),
+      mapUrl: "",
+    }
+  }
+
+  if (Array.isArray(value)) {
+    return String(value[0] ?? "").trim()
+  }
+
+  if (typeof value === "object" && value !== null) {
+    const placeValue = value as Partial<PlaceFieldValue>
+    return typeof placeValue.label === "string" ? placeValue.label.trim() : ""
+  }
+
+  return String(value).trim()
+}
+
 export function parseCustomFieldValue(
   type: SupportedCustomFieldType,
   value: string | null | undefined,
