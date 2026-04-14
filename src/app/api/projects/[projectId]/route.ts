@@ -2,8 +2,51 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
-import { checkProjectAccess } from "@/lib/rbac"
+import { checkProjectAccess, isSystemAdminUser } from "@/lib/rbac"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
+
+async function canManageProject(userId: string, projectId: string) {
+  if (await isSystemAdminUser(userId)) {
+    return { allowed: true, reason: "system-admin" as const }
+  }
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: {
+      workspaceId: true,
+      members: {
+        where: { userId },
+        select: { role: true },
+      },
+    },
+  })
+
+  if (!project) {
+    return { allowed: false, reason: "Project not found" as const }
+  }
+
+  const projectRole = project.members[0]?.role ?? null
+  if (projectRole === "LEAD") {
+    return { allowed: true, reason: "project-lead" as const }
+  }
+
+  const workspaceMembership = await prisma.workspaceMember.findUnique({
+    where: {
+      userId_workspaceId: {
+        userId,
+        workspaceId: project.workspaceId,
+      },
+    },
+    select: { role: true },
+  })
+
+  const workspaceRole = workspaceMembership?.role ?? null
+  if (workspaceRole === "OWNER" || workspaceRole === "ADMIN") {
+    return { allowed: true, reason: "workspace-admin" as const }
+  }
+
+  return { allowed: false, reason: "forbidden" as const }
+}
 
 export async function GET(
   _request: NextRequest,
@@ -33,11 +76,19 @@ export async function GET(
         pages: {
           orderBy: { createdAt: "asc" },
         },
+        customFields: {
+          orderBy: [{ position: "asc" }, { id: "asc" }],
+        },
       },
     })
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
+    }
+
+    const { allowed } = await checkProjectAccess(session.user.id!, params.projectId, ["MEMBER"])
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
     return NextResponse.json(project)
@@ -56,7 +107,7 @@ export async function PATCH(
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const body = await request.json()
-    const { name, description, color, icon, status } = body
+    const { name, description, color, icon, status, enableTaskBatchDuplicate } = body
 
     const existing = await prisma.project.findUnique({
       where: { id: params.projectId },
@@ -79,6 +130,7 @@ export async function PATCH(
         ...(color !== undefined && { color }),
         ...(icon !== undefined && { icon }),
         ...(status !== undefined && { status }),
+        ...(enableTaskBatchDuplicate !== undefined && { enableTaskBatchDuplicate }),
       },
       include: {
         taskLists: true,
@@ -121,9 +173,9 @@ export async function DELETE(
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
     }
 
-    const { allowed } = await checkProjectAccess(session.user.id!, params.projectId, ["LEAD"])
+    const { allowed } = await canManageProject(session.user.id!, params.projectId)
     if (!allowed) {
-      return NextResponse.json({ error: "Forbidden: LEAD role required to delete projects" }, { status: 403 })
+      return NextResponse.json({ error: "Forbidden: project lead or workspace admin required to delete projects" }, { status: 403 })
     }
 
     logAudit({

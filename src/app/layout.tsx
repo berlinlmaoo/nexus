@@ -38,7 +38,11 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${manrope.variable} ${inter.variable}`} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`light ${manrope.variable} ${inter.variable}`}
+      suppressHydrationWarning
+    >
       <body className="font-body antialiased bg-background text-foreground">
         <ThemeProvider>
           <TooltipProvider delayDuration={200}>

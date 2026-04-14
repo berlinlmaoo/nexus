@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import type { InputJsonValue } from "@prisma/client/runtime/client"
+import { normalizeCustomFieldOptions, normalizeCustomFieldType } from "@/lib/custom-fields"
 
 interface BundleConfig {
   sections?: { name: string; position?: number }[]
@@ -60,13 +61,18 @@ export async function POST(
 
     // Create custom fields
     if (config.customFields?.length) {
-      for (const field of config.customFields) {
+      for (let index = 0; index < config.customFields.length; index += 1) {
+        const field = config.customFields[index]
+        const normalizedType = normalizeCustomFieldType(field.type || "SELECT")
+        if (!normalizedType) continue
+
         await prisma.customField.create({
           data: {
             name: field.name,
-            type: (field.type || "TEXT") as "TEXT" | "NUMBER" | "DATE" | "DROPDOWN" | "PEOPLE" | "CHECKBOX" | "RATING",
-            options: field.options ? (field.options as InputJsonValue) : undefined,
+            type: normalizedType,
+            options: (normalizeCustomFieldOptions(normalizedType, field.options) ?? undefined) as InputJsonValue | undefined,
             projectId,
+            position: index,
           },
         })
         results.customFields++

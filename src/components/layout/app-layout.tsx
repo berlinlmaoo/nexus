@@ -26,6 +26,7 @@ interface AppLayoutProps {
     name: string
     email: string
     image?: string | null
+    canAccessUserManagement?: boolean
   }
 }
 
@@ -66,8 +67,8 @@ export function AppLayout({ children, title, breadcrumbs, user }: AppLayoutProps
         <div className="flex flex-1 flex-col min-w-0 bg-surface relative">
           <Header title={title} breadcrumbs={breadcrumbs} user={user} />
 
-          <main className="flex-1 overflow-y-auto overflow-x-hidden pb-16 md:pb-0 scroll-smooth">
-            <div className="p-6 md:p-12 max-w-[1600px] mx-auto">
+          <main className="flex-1 overflow-y-auto overflow-x-hidden pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-0 scroll-smooth">
+            <div className="mx-auto max-w-[1600px] px-4 py-4 sm:px-6 sm:py-6 md:p-12">
               <PageTransition>
                 {children}
               </PageTransition>
