@@ -18,7 +18,10 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:migrate:prod": "prisma migrate deploy",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "db:seed:users": "tsx prisma/seed-users-safe.ts",
+    "db:sync:primary-team": "tsx prisma/backfill-primary-team.ts",
+    "db:sync:team-project-access": "tsx prisma/backfill-team-project-access.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

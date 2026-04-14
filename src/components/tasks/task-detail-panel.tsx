@@ -1,8 +1,10 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { DateTimePicker } from "@/components/ui/date-time-picker"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
@@ -47,9 +49,11 @@ import {
   FolderPlus,
   Share2,
   ChevronRight,
+  Copy,
 } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
 interface Subtask {
   id: string
@@ -73,13 +77,13 @@ interface TaskDetailPanelProps {
   onUpdate?: () => void
 }
 
-const STATUS_OPTIONS = [
-  { value: "TODO", label: "To Do" },
-  { value: "IN_PROGRESS", label: "In Progress" },
-  { value: "IN_REVIEW", label: "In Review" },
-  { value: "DONE", label: "Done" },
-  { value: "CANCELLED", label: "Cancelled" },
-] as const
+const STATUS_SECTION_ALIASES: Record<TaskCardData["status"], string[]> = {
+  TODO: ["to do", "todo", "backlog"],
+  IN_PROGRESS: ["in progress", "doing", "wip"],
+  IN_REVIEW: ["in review", "review"],
+  DONE: ["done", "complete", "completed"],
+  CANCELLED: ["cancelled", "canceled"],
+}
 
 const PRIORITY_OPTIONS = [
   { value: "URGENT", label: "Urgent" },
@@ -94,31 +98,41 @@ export function TaskDetailPanel({
   onClose,
   onUpdate,
 }: TaskDetailPanelProps) {
+  const getStatusFromSectionName = (sectionName: string): TaskCardData["status"] | undefined => {
+    const normalizedName = sectionName.toLowerCase().trim()
+
+    return (Object.entries(STATUS_SECTION_ALIASES).find(([, aliases]) =>
+      aliases.includes(normalizedName)
+    )?.[0] as TaskCardData["status"] | undefined)
+  }
+
   const router = useRouter()
   const [currentTask, setCurrentTask] = useState<TaskCardData>(initialTask)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [duplicating, setDuplicating] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const [title, setTitle] = useState(initialTask.title)
   const [description, setDescription] = useState(initialTask.description || "")
   const descriptionBlocksRef = useRef<Block[]>(parseDescriptionToBlocks(initialTask.description))
   const [status, setStatus] = useState(initialTask.status)
   const [priority, setPriority] = useState(initialTask.priority)
-  const [dueDate, setDueDate] = useState(
-    initialTask.dueDate ? format(new Date(initialTask.dueDate), "yyyy-MM-dd") : ""
-  )
+  const [dueDate, setDueDate] = useState<string | null>(initialTask.dueDate ?? null)
   const [tags, setTags] = useState<string[]>(initialTask.tags)
   const [taskType, setTaskType] = useState<"TASK" | "MILESTONE" | "APPROVAL">("TASK")
   const [subtasks, setSubtasks] = useState<Subtask[]>([])
   const [activeTab, setActiveTab] = useState<
     "subtasks" | "comments" | "attachments" | "activity" | "dependencies" | "relations" | "fields"
-  >("comments")
+  >("attachments")
 
   const [isFollowing, setIsFollowing] = useState(false)
   const [liked, setLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(0)
   const [projectMembers, setProjectMembers] = useState<any[]>([])
+  const [projectSections, setProjectSections] = useState<Array<{ id: string; name: string }>>([])
   const [showMemberSelector, setShowMemberSelector] = useState(false)
+  const [memberSearch, setMemberSearch] = useState("")
   const memberSelectorRef = useRef<HTMLDivElement>(null)
 
   const [taskProjectsList, setTaskProjectsList] = useState<Array<{
@@ -129,8 +143,36 @@ export function TaskDetailPanel({
     taskListName: string
     isPrimary?: boolean
   }>>([])
+  const [availableProjects, setAvailableProjects] = useState<Array<{
+    id: string
+    name: string
+    color: string
+    icon: string
+    defaultTaskListId: string
+    defaultTaskListName: string
+  }>>([])
+  const [showProjectSelector, setShowProjectSelector] = useState(false)
+  const [projectSearch, setProjectSearch] = useState("")
+  const [linkingProjectId, setLinkingProjectId] = useState<string | null>(null)
+  const [unlinkingProjectId, setUnlinkingProjectId] = useState<string | null>(null)
+  const projectSelectorRef = useRef<HTMLDivElement>(null)
 
   const currentUser = { id: 'current-user-id', name: 'Berlin' } // Simplified for UI update
+
+  const loadTaskProjects = useCallback(async () => {
+    const response = await fetch(`/api/tasks/${currentTask.id}/projects`)
+    if (!response.ok) throw new Error("Failed to load project mentions")
+
+    const data = await response.json()
+    const projects: typeof taskProjectsList = []
+    if (data.primaryProject) projects.push({ ...data.primaryProject, isPrimary: true })
+    if (data.additionalProjects) {
+      projects.push(...data.additionalProjects.map((project: any) => ({ ...project, isPrimary: false })))
+    }
+
+    setTaskProjectsList(projects)
+    setAvailableProjects(Array.isArray(data.availableProjects) ? data.availableProjects : [])
+  }, [currentTask.id])
 
   useEffect(() => {
     setCurrentTask(initialTask)
@@ -138,25 +180,30 @@ export function TaskDetailPanel({
     setDescription(initialTask.description || "")
     setStatus(initialTask.status)
     setPriority(initialTask.priority)
-    setDueDate(initialTask.dueDate ? format(new Date(initialTask.dueDate), "yyyy-MM-dd") : "")
+    setDueDate(initialTask.dueDate ?? null)
     setTags(initialTask.tags)
   }, [initialTask])
 
   useEffect(() => {
     if (!currentTask.id) return
-    // Fetch project members
-    const projectId = taskProjectsList[0]?.projectId || currentTask.projectId
-    if (projectId) {
-      fetch(`/api/projects/${projectId}/members`)
-        .then(res => res.json())
-        .then(data => {
-          // data is an array of ProjectMember objects with nested user
-          const members = Array.isArray(data) ? data.map((m: any) => m.user) : []
-          setProjectMembers(members)
-        })
-        .catch(() => {})
-    }
-  }, [currentTask.id, currentTask.projectId, taskProjectsList])
+    const projectId = currentTask.projectId || currentTask.viewProjectId || currentTask.primaryProjectId
+    if (!projectId) return
+
+    fetch(`/api/projects/${projectId}`)
+      .then(res => res.json())
+      .then(data => {
+        const taskLists = Array.isArray(data?.taskLists)
+          ? data.taskLists.map((taskList: any) => ({ id: taskList.id, name: taskList.name }))
+          : []
+        const members = Array.isArray(data?.members)
+          ? data.members.map((member: any) => member.user)
+          : []
+
+        setProjectSections(taskLists)
+        setProjectMembers(members)
+      })
+      .catch(() => {})
+  }, [currentTask.id, currentTask.projectId, currentTask.viewProjectId, currentTask.primaryProjectId])
 
   // Handle click outside member selector
   useEffect(() => {
@@ -164,10 +211,86 @@ export function TaskDetailPanel({
       if (memberSelectorRef.current && !memberSelectorRef.current.contains(event.target as Node)) {
         setShowMemberSelector(false)
       }
+      if (projectSelectorRef.current && !projectSelectorRef.current.contains(event.target as Node)) {
+        setShowProjectSelector(false)
+      }
     }
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
+
+  useEffect(() => {
+    if (showMemberSelector) return
+    setMemberSearch("")
+  }, [showMemberSelector])
+
+  useEffect(() => {
+    if (showProjectSelector) return
+    setProjectSearch("")
+  }, [showProjectSelector])
+
+  const filteredProjectMembers = useMemo(() => {
+    const query = memberSearch.trim().toLowerCase()
+
+    const rankMember = (member: any) => {
+      const name = (member.name || "").toLowerCase()
+      if (!query) return 3
+      if (name === query) return 0
+      if (name.startsWith(query)) return 1
+      if (name.includes(query)) return 2
+      return 99
+    }
+
+    return [...projectMembers]
+      .map((member, index) => ({
+        member,
+        index,
+        score: rankMember(member),
+      }))
+      .filter(({ score }) => score < 99)
+      .sort((a, b) => {
+        if (a.score !== b.score) return a.score - b.score
+        return a.index - b.index
+      })
+      .map(({ member }) => member)
+  }, [memberSearch, projectMembers])
+
+  const filteredAvailableProjects = useMemo(() => {
+    const query = projectSearch.trim().toLowerCase()
+
+    const rankProject = (project: { name: string }) => {
+      const name = project.name.toLowerCase()
+      if (!query) return 3
+      if (name === query) return 0
+      if (name.startsWith(query)) return 1
+      if (name.includes(query)) return 2
+      return 99
+    }
+
+    return [...availableProjects]
+      .map((project, index) => ({
+        project,
+        index,
+        score: rankProject(project),
+      }))
+      .filter(({ score }) => score < 99)
+      .sort((a, b) => {
+        if (a.score !== b.score) return a.score - b.score
+        return a.index - b.index
+      })
+      .map(({ project }) => project)
+  }, [availableProjects, projectSearch])
+
+  const getSectionForStatus = useCallback(
+    (targetStatus: TaskCardData["status"]) => {
+      const aliases = STATUS_SECTION_ALIASES[targetStatus]
+
+      return projectSections.find((section) =>
+        aliases.includes(section.name.toLowerCase().trim())
+      )
+    },
+    [projectSections]
+  )
 
   const toggleAssignee = async (memberId: string) => {
     const currentIds = currentTask.assignees.map(a => a.id)
@@ -208,16 +331,8 @@ export function TaskDetailPanel({
   }, [currentTask.id])
 
   useEffect(() => {
-    fetch(`/api/tasks/${currentTask.id}/projects`)
-      .then(res => res.json())
-      .then(data => {
-        const projects: typeof taskProjectsList = []
-        if (data.primaryProject) projects.push({ ...data.primaryProject, isPrimary: true })
-        if (data.additionalProjects) projects.push(...data.additionalProjects.map((p: any) => ({ ...p, isPrimary: false })))
-        setTaskProjectsList(projects)
-      })
-      .catch(() => {})
-  }, [currentTask.id])
+    loadTaskProjects().catch(() => {})
+  }, [loadTaskProjects])
 
   const saveTask = async (updates: Partial<TaskCardData>) => {
     setSaving(true)
@@ -225,7 +340,10 @@ export function TaskDetailPanel({
       await fetch(`/api/tasks/${currentTask.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates),
+        body: JSON.stringify({
+          ...updates,
+          projectContextId: currentTask.projectId || currentTask.viewProjectId || currentTask.primaryProjectId,
+        }),
       })
       setCurrentTask(prev => ({ ...prev, ...updates }))
       onUpdate?.()
@@ -233,6 +351,149 @@ export function TaskDetailPanel({
       console.error(e)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleSectionSelect = async (sectionId: string) => {
+    const selectedSection = projectSections.find((section) => section.id === sectionId)
+    if (!selectedSection) return
+    const projectContextId = currentTask.projectId || currentTask.viewProjectId || currentTask.primaryProjectId
+
+    const nextStatus = getStatusFromSectionName(selectedSection.name)
+    setStatus(nextStatus ?? currentTask.status)
+    setCurrentTask((prev) => ({
+      ...prev,
+      taskListId: selectedSection.id,
+      taskListName: selectedSection.name,
+      ...(nextStatus ? { status: nextStatus } : {}),
+    }))
+    setTaskProjectsList((prev) =>
+      prev.map((taskProject) =>
+        taskProject.projectId === projectContextId
+          ? {
+              ...taskProject,
+              taskListId: selectedSection.id,
+              taskListName: selectedSection.name,
+            }
+          : taskProject
+      )
+    )
+
+    await saveTask({
+      taskListId: selectedSection.id,
+      taskListName: selectedSection.name,
+      ...(nextStatus ? { status: nextStatus } : {}),
+    })
+  }
+
+  const handleToggleDone = async () => {
+    const nextStatus: TaskCardData["status"] = status === "DONE" ? "TODO" : "DONE"
+    const matchingSection = getSectionForStatus(nextStatus)
+
+    setStatus(nextStatus)
+    setCurrentTask((prev) => ({
+      ...prev,
+      status: nextStatus,
+      ...(matchingSection
+        ? {
+            taskListId: matchingSection.id,
+            taskListName: matchingSection.name,
+          }
+        : {}),
+    }))
+
+    if (matchingSection) {
+      const projectContextId = currentTask.projectId || currentTask.viewProjectId || currentTask.primaryProjectId
+      setTaskProjectsList((prev) =>
+        prev.map((taskProject) =>
+          taskProject.projectId === projectContextId
+            ? {
+                ...taskProject,
+                taskListId: matchingSection.id,
+                taskListName: matchingSection.name,
+              }
+            : taskProject
+        )
+      )
+    }
+
+    await saveTask({
+      status: nextStatus,
+      ...(matchingSection
+        ? {
+            taskListId: matchingSection.id,
+            taskListName: matchingSection.name,
+          }
+        : {}),
+    })
+  }
+
+  const handleLinkProject = async (project: {
+    id: string
+    name: string
+    defaultTaskListId: string
+  }) => {
+    setLinkingProjectId(project.id)
+    try {
+      const response = await fetch(`/api/tasks/${currentTask.id}/projects`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: project.id,
+          taskListId: project.defaultTaskListId,
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+        throw new Error(data?.error || `Failed to link ${project.name}`)
+      }
+
+      toast.success(`Task now appears in ${project.name}`)
+      setShowProjectSelector(false)
+      await loadTaskProjects()
+      onUpdate?.()
+      router.refresh()
+    } catch (error) {
+      console.error(error)
+      toast.error(error instanceof Error ? error.message : "Failed to link project")
+    } finally {
+      setLinkingProjectId(null)
+    }
+  }
+
+  const handleUnlinkProject = async (projectId: string, projectName: string, isPrimary?: boolean) => {
+    if (isPrimary) return
+
+    setUnlinkingProjectId(projectId)
+    try {
+      const response = await fetch(`/api/tasks/${currentTask.id}/projects`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+        throw new Error(data?.error || `Failed to unlink ${projectName}`)
+      }
+
+      toast.success(`${projectName} removed`)
+      onUpdate?.()
+
+      if (currentTask.projectId === projectId && currentTask.isCrossProject) {
+        router.refresh()
+        onClose()
+        return
+      }
+
+      await loadTaskProjects()
+      router.refresh()
+    } catch (error) {
+      console.error(error)
+      toast.error(error instanceof Error ? error.message : "Failed to unlink project")
+    } finally {
+      setUnlinkingProjectId(null)
     }
   }
 
@@ -248,15 +509,37 @@ export function TaskDetailPanel({
   }
 
   const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this task?")) return
     setDeleting(true)
     try {
       const res = await fetch(`/api/tasks/${currentTask.id}`, { method: "DELETE" })
-      if (res.ok) onClose()
+      if (res.ok) {
+        setShowDeleteConfirm(false)
+        onClose()
+      }
     } catch (e) {
       console.error(e)
     } finally {
       setDeleting(false)
+    }
+  }
+
+  const handleDuplicate = async () => {
+    setDuplicating(true)
+    try {
+      const res = await fetch(`/api/tasks/${currentTask.id}/duplicate`, { method: "POST" })
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || "Failed to duplicate task")
+      }
+
+      toast.success("Task duplicated")
+      onUpdate?.()
+      router.refresh()
+    } catch (error) {
+      console.error(error)
+      toast.error(error instanceof Error ? error.message : "Failed to duplicate task")
+    } finally {
+      setDuplicating(false)
     }
   }
 
@@ -295,6 +578,15 @@ export function TaskDetailPanel({
             <Button
               variant="ghost"
               size="sm"
+              onClick={handleDuplicate}
+              disabled={duplicating}
+              className="font-bold text-xs text-on-surface-variant/40 hover:text-primary hover:bg-surface-container rounded-xl"
+            >
+              {duplicating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={toggleLike}
               className={cn(
                 "font-bold text-xs transition-all duration-300 rounded-xl",
@@ -314,7 +606,7 @@ export function TaskDetailPanel({
             <Button
               variant="ghost"
               size="sm"
-              onClick={handleDelete}
+              onClick={() => setShowDeleteConfirm(true)}
               disabled={deleting}
               className="font-bold text-xs text-red-500/40 hover:text-red-600 hover:bg-red-50 rounded-xl"
             >
@@ -328,20 +620,37 @@ export function TaskDetailPanel({
           {/* Status & Title */}
           <div className="space-y-6">
             <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleToggleDone}
+                disabled={saving}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest transition-all outline-none focus:ring-2 focus:ring-primary/10 disabled:opacity-60",
+                  status === "DONE"
+                    ? "bg-green-100 text-green-700"
+                    : "bg-surface-container-high text-on-surface-variant shadow-sm hover:text-primary"
+                )}
+                aria-label={status === "DONE" ? "Mark task as not done" : "Mark task as done"}
+              >
+                {status === "DONE" ? (
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                ) : (
+                  <Circle className="h-3.5 w-3.5" />
+                )}
+                {status === "DONE" ? "Done" : "Mark done"}
+              </button>
               <select
-                value={status}
-                onChange={(e) => {
-                  const newStatus = e.target.value as any
-                  setStatus(newStatus)
-                  saveTask({ status: newStatus })
-                }}
+                value={currentTask.taskListId}
+                onChange={(e) => handleSectionSelect(e.target.value)}
                 className={cn(
                   "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border-none cursor-pointer focus:ring-2 focus:ring-primary/10 transition-all outline-none",
                   status === "DONE" ? "bg-green-100 text-green-700" : "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
                 )}
               >
-                {STATUS_OPTIONS.map(opt => (
-                  <option key={opt.value} value={opt.value} className="bg-surface text-on-surface">{opt.label}</option>
+                {projectSections.map((section) => (
+                  <option key={section.id} value={section.id} className="bg-surface text-on-surface">
+                    {section.name}
+                  </option>
                 ))}
               </select>
               <select
@@ -397,8 +706,16 @@ export function TaskDetailPanel({
                   className="absolute top-full left-0 mt-2 w-64 bg-surface-container-lowest rounded-2xl shadow-2xl border border-on-surface-variant/5 z-20 p-2 animate-scale-in"
                 >
                   <p className="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/30 px-3 py-2">Select Personnel</p>
+                  <div className="px-2 pb-2">
+                    <Input
+                      value={memberSearch}
+                      onChange={(e) => setMemberSearch(e.target.value)}
+                      placeholder="Search personnel..."
+                      className="h-10 rounded-xl border-on-surface-variant/10 bg-surface-container-low px-3 text-xs font-semibold"
+                    />
+                  </div>
                   <div className="max-h-48 overflow-y-auto space-y-1">
-                    {projectMembers.map((member) => {
+                    {filteredProjectMembers.map((member) => {
                       const isAssigned = currentTask.assignees.some(a => a.id === member.id)
                       return (
                         <button
@@ -418,6 +735,9 @@ export function TaskDetailPanel({
                     {projectMembers.length === 0 && (
                       <p className="text-[10px] text-on-surface-variant/40 text-center py-4">No operatives found</p>
                     )}
+                    {projectMembers.length > 0 && filteredProjectMembers.length === 0 && (
+                      <p className="text-[10px] text-on-surface-variant/40 text-center py-4">No personnel match your search</p>
+                    )}
                   </div>
                 </div>
               )}
@@ -430,21 +750,168 @@ export function TaskDetailPanel({
                 </p>
                 {dueDate && (
                   <button 
-                    onClick={() => { setDueDate(""); saveTask({ dueDate: null }) }}
+                    onClick={() => { setDueDate(null); saveTask({ dueDate: null }) }}
                     className="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/20 hover:text-red-500 transition-colors"
                   >
                     Clear
                   </button>
                 )}
               </div>
-              <input
-                type="date"
+              <DateTimePicker
                 value={dueDate}
-                onChange={(e) => {
-                  setDueDate(e.target.value)
-                  saveTask({ dueDate: e.target.value || null })
+                onChange={(nextValue) => {
+                  setDueDate(nextValue)
+                  saveTask({ dueDate: nextValue })
                 }}
-                className="w-full bg-surface-container-low border-none rounded-lg px-3 py-2 text-xs font-bold text-on-surface focus:ring-2 focus:ring-primary/5 transition-all outline-none"
+              />
+            </div>
+
+            <div
+              ref={projectSelectorRef}
+              className="relative col-span-2 bg-surface-container-lowest p-5 rounded-2xl shadow-sm border border-on-surface-variant/5 group hover:ring-2 hover:ring-primary/5 transition-all"
+            >
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/30 flex items-center gap-2">
+                    <FolderPlus className="h-3 w-3" /> Also In Projects
+                  </p>
+                  <p className="mt-2 text-xs text-on-surface-variant/45">
+                    Mention another division by linking this task to another project in the same workspace.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowProjectSelector((prev) => !prev)}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-surface-container-low text-on-surface-variant/40 transition-all hover:bg-surface-container hover:text-primary"
+                  aria-label="Link this task to another project"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {taskProjectsList.map((taskProject) => {
+                  const isCurrentViewProject =
+                    (currentTask.projectId || currentTask.viewProjectId) === taskProject.projectId
+
+                  return (
+                    <div
+                      key={taskProject.projectId}
+                      className={cn(
+                        "flex items-center gap-2 rounded-xl border px-3 py-2 shadow-sm",
+                        isCurrentViewProject
+                          ? "border-primary/20 bg-primary/5"
+                          : "border-on-surface-variant/5 bg-surface-container-low"
+                      )}
+                    >
+                      <span
+                        className="h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: taskProject.project.color }}
+                      />
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-on-surface truncate">
+                          {taskProject.project.name}
+                        </p>
+                        <p className="text-[10px] text-on-surface-variant/45">
+                          {taskProject.isPrimary ? "Primary project" : `In ${taskProject.taskListName}`}
+                        </p>
+                      </div>
+                      {taskProject.isPrimary && (
+                        <span className="rounded-full bg-primary/10 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-primary">
+                          Primary
+                        </span>
+                      )}
+                      {!taskProject.isPrimary && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleUnlinkProject(
+                              taskProject.projectId,
+                              taskProject.project.name,
+                              taskProject.isPrimary
+                            )
+                          }
+                          disabled={unlinkingProjectId === taskProject.projectId}
+                          className="rounded-lg p-1 text-on-surface-variant/30 transition-colors hover:bg-red-50 hover:text-red-500"
+                          aria-label={`Remove ${taskProject.project.name}`}
+                        >
+                          {unlinkingProjectId === taskProject.projectId ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <X className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {showProjectSelector && (
+                <div
+                  className="absolute left-5 right-5 top-[calc(100%+8px)] z-20 rounded-2xl border border-on-surface-variant/5 bg-surface-container-lowest p-3 shadow-2xl"
+                >
+                  <p className="px-2 py-2 text-[9px] font-black uppercase tracking-widest text-on-surface-variant/30">
+                    Link Project
+                  </p>
+                  <div className="px-2 pb-3">
+                    <Input
+                      value={projectSearch}
+                      onChange={(event) => setProjectSearch(event.target.value)}
+                      placeholder="Search project or division..."
+                      className="h-10 rounded-xl border-on-surface-variant/10 bg-surface-container-low px-3 text-xs font-semibold"
+                    />
+                  </div>
+                  <div className="max-h-52 space-y-1 overflow-y-auto">
+                    {filteredAvailableProjects.map((project) => (
+                      <button
+                        key={project.id}
+                        type="button"
+                        onClick={() => handleLinkProject(project)}
+                        disabled={linkingProjectId === project.id}
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-all hover:bg-surface-container-low"
+                      >
+                        <span
+                          className="h-2.5 w-2.5 rounded-full"
+                          style={{ backgroundColor: project.color }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-bold text-on-surface">
+                            {project.name}
+                          </p>
+                          <p className="text-[10px] text-on-surface-variant/45">
+                            Default section: {project.defaultTaskListName}
+                          </p>
+                        </div>
+                        {linkingProjectId === project.id && (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                        )}
+                      </button>
+                    ))}
+                    {availableProjects.length === 0 && (
+                      <p className="py-4 text-center text-[10px] text-on-surface-variant/40">
+                        No other projects available in this workspace.
+                      </p>
+                    )}
+                    {availableProjects.length > 0 && filteredAvailableProjects.length === 0 && (
+                      <p className="py-4 text-center text-[10px] text-on-surface-variant/40">
+                        No projects match your search.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="col-span-2">
+              <CustomFields
+                taskId={currentTask.id}
+                projectId={
+                  currentTask.viewProjectId ||
+                  currentTask.projectId ||
+                  currentTask.primaryProjectId ||
+                  initialTask.projectId
+                }
               />
             </div>
           </div>
@@ -470,6 +937,7 @@ export function TaskDetailPanel({
           <div className="space-y-6">
             <div className="flex items-center p-1 bg-surface-container-high rounded-xl w-fit">
               {[
+                { id: "attachments", label: "Attachments", icon: Paperclip },
                 { id: "comments", label: "Communication", icon: MessageSquare },
                 { id: "subtasks", label: "Execution", icon: ListTodo },
                 { id: "activity", label: "Protocol", icon: Activity },
@@ -511,6 +979,7 @@ export function TaskDetailPanel({
                   </button>
                 </div>
               )}
+              {activeTab === "attachments" && <TaskAttachments taskId={currentTask.id} />}
               {activeTab === "activity" && <TaskActivity taskId={currentTask.id} />}
             </div>
           </div>
@@ -524,6 +993,17 @@ export function TaskDetailPanel({
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        title="Delete task?"
+        description={`Delete "${currentTask.title}" permanently? This action cannot be undone.`}
+        confirmLabel="Delete task"
+        icon={<Trash2 className="h-5 w-5" />}
+        isLoading={deleting}
+        onConfirm={handleDelete}
+      />
     </>
   )
 }

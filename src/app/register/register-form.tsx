@@ -46,7 +46,7 @@ export function RegisterForm() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true)
     try {
-      const response = await fetch("/api/register", {
+      const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
@@ -58,9 +58,15 @@ export function RegisterForm() {
         })
         router.push("/login")
       } else {
-        const data = await response.json()
+        const contentType = response.headers.get("content-type") || ""
+        const data = contentType.includes("application/json")
+          ? await response.json()
+          : null
         toast.error("Provisioning Failed", {
-          description: data.message || "An error occurred during identity setup.",
+          description:
+            data?.error ||
+            data?.message ||
+            "An error occurred during identity setup.",
         })
       }
     } catch (error) {

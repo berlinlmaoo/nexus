@@ -12,6 +12,7 @@ import {
   File,
   Trash2,
   Download,
+  Eye,
   Loader2,
   X,
   AlertCircle,
@@ -22,6 +23,13 @@ import { cn } from "@/lib/utils"
 import { NasBrowserDialog } from "@/components/nas/nas-browser-dialog"
 import type { NasFileItem } from "@/components/nas/file-browser"
 import { DrivePickerDialog } from "@/components/drive/drive-picker-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 interface Attachment {
   id: string
@@ -30,6 +38,14 @@ interface Attachment {
   mimeType: string
   size: number
   nasPath?: string
+}
+
+function resolveAttachmentUrl(url: string) {
+  if (url.startsWith("/api/files/")) return url
+  if (url.startsWith("/uploads/")) {
+    return `/api/files/${url.replace(/^\/uploads\//, "")}`
+  }
+  return url
 }
 
 function formatFileSize(bytes: number): string {
@@ -49,10 +65,15 @@ function getFileIcon(mimeType: string) {
   return File
 }
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+function isPreviewableFile(mimeType: string) {
+  return mimeType.startsWith("image/") || mimeType.includes("pdf")
+}
+
+const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 
 export function TaskAttachments({ taskId }: { taskId: string }) {
   const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null)
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -109,12 +130,8 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
   const uploadFile = useCallback(
     async (file: globalThis.File) => {
       if (file.size > MAX_FILE_SIZE) {
-        setError(`File "${file.name}" exceeds 5MB limit`)
-        return
+        return `File "${file.name}" exceeds 50MB limit`
       }
-
-      setError(null)
-      setUploading(true)
 
       try {
         const formData = new FormData()
@@ -129,26 +146,53 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
         if (res.ok) {
           const attachment = await res.json()
           setAttachments((prev) => [...prev, attachment])
+          return null
         } else {
-          setError("Upload failed. Please try again.")
+          const data = await res.json().catch(() => null)
+          return data?.error || `Upload failed for "${file.name}". Please try again.`
         }
       } catch {
-        setError("Upload failed. Please try again.")
-      } finally {
-        setUploading(false)
+        return `Upload failed for "${file.name}". Please try again.`
       }
     },
     [taskId]
+  )
+
+  const uploadFiles = useCallback(
+    async (files: globalThis.File[]) => {
+      if (files.length === 0) return
+
+      setError(null)
+      setUploading(true)
+
+      const errors: string[] = []
+
+      try {
+        for (const file of files) {
+          const uploadError = await uploadFile(file)
+          if (uploadError) {
+            errors.push(uploadError)
+          }
+        }
+      } finally {
+        setUploading(false)
+      }
+
+      if (errors.length > 0) {
+        setError(errors[0])
+      }
+    },
+    [uploadFile]
   )
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault()
       setDragOver(false)
-      const file = e.dataTransfer.files[0]
-      if (file) uploadFile(file)
+      const files = Array.from(e.dataTransfer.files)
+      if (files.length > 0) void uploadFiles(files)
     },
-    [uploadFile]
+    [uploadFiles]
   )
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -163,11 +207,11 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
 
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0]
-      if (file) uploadFile(file)
+      const files = Array.from(e.target.files || [])
+      if (files.length > 0) void uploadFiles(files)
       if (fileInputRef.current) fileInputRef.current.value = ""
     },
-    [uploadFile]
+    [uploadFiles]
   )
 
   const deleteAttachment = async (id: string) => {
@@ -203,6 +247,7 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
         <input
           ref={fileInputRef}
           type="file"
+          multiple
           className="hidden"
           onChange={handleFileSelect}
         />
@@ -218,7 +263,7 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
               Drop a file here or click to upload
             </span>
             <span className="text-[10px] text-muted-foreground/60">
-              Max 5MB per file
+              Max 50MB per file
             </span>
           </div>
         )}
@@ -240,6 +285,8 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
         {attachments.map((attachment) => {
           const IconComponent = getFileIcon(attachment.mimeType)
           const isImage = attachment.mimeType.startsWith("image/")
+          const isPreviewable = isPreviewableFile(attachment.mimeType)
+          const attachmentUrl = resolveAttachmentUrl(attachment.url)
 
           return (
             <motion.div
@@ -250,10 +297,18 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
               transition={{ duration: 0.2 }}
               className="overflow-hidden"
             >
-              <div className="flex items-center gap-2 text-sm py-1.5 px-2 rounded-md bg-muted/50 group">
+              <div
+                className={cn(
+                  "flex items-center gap-2 text-sm py-1.5 px-2 rounded-md bg-muted/50 group transition-colors",
+                  isPreviewable && "cursor-pointer hover:bg-muted"
+                )}
+                onClick={() => {
+                  if (isPreviewable) setPreviewAttachment(attachment)
+                }}
+              >
                 {isImage ? (
                   <img
-                    src={attachment.url}
+                    src={attachmentUrl}
                     alt={attachment.filename}
                     className="h-8 w-8 rounded object-cover shrink-0"
                   />
@@ -266,10 +321,24 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
                   </p>
                   <p className="text-[10px] text-muted-foreground">
                     {formatFileSize(attachment.size)}
+                    {isPreviewable ? " · Preview available" : ""}
                   </p>
                 </div>
+                {isPreviewable && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setPreviewAttachment(attachment)
+                    }}
+                    className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label={`Preview ${attachment.filename}`}
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </button>
+                )}
                 <a
-                  href={attachment.url}
+                  href={attachmentUrl}
                   download={attachment.filename}
                   onClick={(e) => e.stopPropagation()}
                   className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
@@ -407,6 +476,43 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
         onOpenChange={setDriveOpen}
         onSelect={handleDriveSelect}
       />
+
+      <Dialog
+        open={Boolean(previewAttachment)}
+        onOpenChange={(open) => {
+          if (!open) setPreviewAttachment(null)
+        }}
+      >
+        <DialogContent className="max-w-5xl overflow-hidden rounded-[2rem] border-none p-0 shadow-2xl">
+          {previewAttachment && (
+            <>
+              <DialogHeader className="border-b px-6 py-5">
+                <DialogTitle className="truncate text-lg font-black tracking-tight text-primary">
+                  {previewAttachment.filename}
+                </DialogTitle>
+                <DialogDescription>
+                  {previewAttachment.mimeType} · {formatFileSize(previewAttachment.size)}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="max-h-[75vh] overflow-auto bg-surface-container-low px-4 py-4 sm:px-6 sm:py-6">
+                {previewAttachment.mimeType.startsWith("image/") ? (
+                  <img
+                    src={resolveAttachmentUrl(previewAttachment.url)}
+                    alt={previewAttachment.filename}
+                    className="mx-auto h-auto max-h-[68vh] w-auto max-w-full rounded-2xl border bg-white object-contain shadow-sm"
+                  />
+                ) : previewAttachment.mimeType.includes("pdf") ? (
+                  <iframe
+                    src={resolveAttachmentUrl(previewAttachment.url)}
+                    title={previewAttachment.filename}
+                    className="h-[68vh] w-full rounded-2xl border bg-white"
+                  />
+                ) : null}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

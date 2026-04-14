@@ -47,6 +47,7 @@ export const updateTaskSchema = z.object({
   dueDate: z.string().nullable().optional(),
   startDate: z.string().nullable().optional(),
   tags: z.array(z.string().max(50)).max(20).optional(),
+  projectContextId: z.string().cuid().optional(),
   taskListId: z.string().cuid().optional(),
   position: z.number().int().min(0).optional(),
   assigneeIds: z.array(z.string().cuid()).max(50).optional(),
@@ -105,6 +106,33 @@ export const createGoalSchema = z.object({
   dueDate: z.string().datetime().nullable().optional(),
   workspaceId: z.string().cuid("Invalid workspace ID"),
   parentId: z.string().cuid().nullable().optional(),
+})
+
+// ── Master Calendar ────────────────────────────────────────────
+
+export const createMasterCalendarEventSchema = z.object({
+  teamId: z.string().cuid("Invalid team ID"),
+  title: z.string().min(1, "Title is required").max(300),
+  date: z.string().min(1, "Date is required"),
+  isAllDay: z.boolean().optional(),
+  startTime: z.string().nullable().optional(),
+  endTime: z.string().nullable().optional(),
+  attendeeIds: z.array(z.string().cuid()).max(50).optional(),
+  location: z.string().max(300).nullable().optional(),
+  description: z.string().max(5000).nullable().optional(),
+})
+
+export const updateMasterCalendarEventSchema = z.object({
+  teamId: z.string().cuid("Invalid team ID").optional(),
+  title: z.string().min(1, "Title is required").max(300).optional(),
+  date: z.string().min(1, "Date is required").optional(),
+  isAllDay: z.boolean().optional(),
+  startTime: z.string().nullable().optional(),
+  endTime: z.string().nullable().optional(),
+  attendeeIds: z.array(z.string().cuid()).max(50).optional(),
+  location: z.string().max(300).nullable().optional(),
+  description: z.string().max(5000).nullable().optional(),
+  status: z.enum(["ACTIVE", "CANCELLED"]).optional(),
 })
 
 // ── Automations ─────────────────────────────────────────────────

@@ -1,7 +1,80 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
-import { checkProjectAccess } from "@/lib/rbac"
+import { checkProjectAccess, checkWorkspaceRoutingAccess } from "@/lib/rbac"
+
+const DEFAULT_TASK_LIST_ALIASES = ["to do", "todo", "backlog"]
+
+function getDefaultTaskList(taskLists: Array<{ id: string; name: string; position: number }>) {
+  if (taskLists.length === 0) return null
+
+  const normalized = taskLists
+    .slice()
+    .sort((a, b) => a.position - b.position)
+
+  return (
+    normalized.find((taskList) =>
+      DEFAULT_TASK_LIST_ALIASES.includes(taskList.name.toLowerCase().trim())
+    ) ?? normalized[0]
+  )
+}
+
+async function loadTaskContext(taskId: string) {
+  return prisma.task.findUnique({
+    where: { id: taskId },
+    include: {
+      taskList: {
+        include: {
+          project: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+              icon: true,
+              workspaceId: true,
+            },
+          },
+        },
+      },
+      taskProjects: {
+        include: {
+          project: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+              icon: true,
+            },
+          },
+          taskList: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  })
+}
+
+async function ensureTaskAccess(userId: string, taskId: string) {
+  const task = await loadTaskContext(taskId)
+  if (!task) return { task: null, allowed: false }
+
+  const projectIds = [
+    task.taskList.projectId,
+    ...task.taskProjects.map((taskProject) => taskProject.projectId),
+  ]
+
+  for (const projectId of Array.from(new Set(projectIds))) {
+    const { allowed } = await checkProjectAccess(userId, projectId, ["MEMBER"])
+    if (allowed) return { task, allowed: true }
+  }
+
+  return { task, allowed: false }
+}
 
 export async function GET(
   _request: NextRequest,
@@ -11,39 +84,77 @@ export async function GET(
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const taskProjects = await prisma.taskProject.findMany({
-      where: { taskId: params.taskId },
-      include: {
-        project: { select: { id: true, name: true, color: true, icon: true } },
-        taskList: { select: { id: true, name: true } },
-      },
-      orderBy: { createdAt: "asc" },
-    })
+    const { task, allowed } = await ensureTaskAccess(session.user.id, params.taskId)
+    if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 })
+    if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    // Also include the primary project (from task.taskList)
-    const task = await prisma.task.findUnique({
-      where: { id: params.taskId },
-      include: {
-        taskList: {
-          include: { project: { select: { id: true, name: true, color: true, icon: true } } },
+    const { allowed: canRouteWithinWorkspace } = await checkWorkspaceRoutingAccess(
+      session.user.id,
+      task.taskList.project.workspaceId
+    )
+    if (!canRouteWithinWorkspace) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    const excludedProjectIds = [
+      task.taskList.projectId,
+      ...task.taskProjects.map((taskProject) => taskProject.projectId),
+    ]
+
+    const availableProjects = await prisma.project.findMany({
+      where: {
+        workspaceId: task.taskList.project.workspaceId,
+        id: { notIn: excludedProjectIds },
+      },
+      select: {
+        id: true,
+        name: true,
+        color: true,
+        icon: true,
+        taskLists: {
+          select: {
+            id: true,
+            name: true,
+            position: true,
+          },
+          orderBy: { position: "asc" },
         },
       },
+      orderBy: { name: "asc" },
     })
 
     return NextResponse.json({
-      primaryProject: task ? {
+      primaryProject: {
         projectId: task.taskList.projectId,
-        project: task.taskList.project,
+        project: {
+          id: task.taskList.project.id,
+          name: task.taskList.project.name,
+          color: task.taskList.project.color,
+          icon: task.taskList.project.icon,
+        },
         taskListId: task.taskListId,
         taskListName: task.taskList.name,
-      } : null,
-      additionalProjects: taskProjects.map((tp) => ({
-        id: tp.id,
-        projectId: tp.projectId,
-        project: tp.project,
-        taskListId: tp.taskListId,
-        taskListName: tp.taskList.name,
+      },
+      additionalProjects: task.taskProjects.map((taskProject) => ({
+        id: taskProject.id,
+        projectId: taskProject.projectId,
+        project: taskProject.project,
+        taskListId: taskProject.taskListId,
+        taskListName: taskProject.taskList.name,
       })),
+      availableProjects: availableProjects.flatMap((project) => {
+        const defaultTaskList = getDefaultTaskList(project.taskLists)
+        if (!defaultTaskList) return []
+
+        return [{
+          id: project.id,
+          name: project.name,
+          color: project.color,
+          icon: project.icon,
+          defaultTaskListId: defaultTaskList.id,
+          defaultTaskListName: defaultTaskList.name,
+        }]
+      }),
     })
   } catch (error) {
     console.error("Error fetching task projects:", error)
@@ -62,29 +173,18 @@ export async function POST(
     const body = await request.json()
     const { projectId, taskListId } = body
 
-    if (!projectId || !taskListId) {
-      return NextResponse.json({ error: "projectId and taskListId are required" }, { status: 400 })
+    if (!projectId) {
+      return NextResponse.json({ error: "projectId is required" }, { status: 400 })
     }
 
-    // Verify task exists
-    const task = await prisma.task.findUnique({ where: { id: params.taskId } })
+    const { task, allowed } = await ensureTaskAccess(session.user.id, params.taskId)
     if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 })
+    if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    // Check user has access to the target project
-    const { allowed } = await checkProjectAccess(session.user.id, projectId, ["MEMBER"])
-    if (!allowed) {
-      return NextResponse.json({ error: "Forbidden: MEMBER role or higher required" }, { status: 403 })
+    if (projectId === task.taskList.projectId) {
+      return NextResponse.json({ error: "Task is already in this project" }, { status: 409 })
     }
 
-    // Verify taskList belongs to project
-    const taskList = await prisma.taskList.findFirst({
-      where: { id: taskListId, projectId },
-    })
-    if (!taskList) {
-      return NextResponse.json({ error: "TaskList not found in the specified project" }, { status: 404 })
-    }
-
-    // Check not already added
     const existing = await prisma.taskProject.findUnique({
       where: { taskId_projectId: { taskId: params.taskId, projectId } },
     })
@@ -92,11 +192,52 @@ export async function POST(
       return NextResponse.json({ error: "Task is already in this project" }, { status: 409 })
     }
 
+    const targetProject = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: {
+        id: true,
+        workspaceId: true,
+        taskLists: {
+          select: {
+            id: true,
+            name: true,
+            position: true,
+          },
+          orderBy: { position: "asc" },
+        },
+      },
+    })
+
+    if (!targetProject) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 })
+    }
+
+    const { allowed: canRouteWithinWorkspace } = await checkWorkspaceRoutingAccess(
+      session.user.id,
+      task.taskList.project.workspaceId
+    )
+    if (!canRouteWithinWorkspace) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    if (targetProject.workspaceId !== task.taskList.project.workspaceId) {
+      return NextResponse.json({ error: "Task can only be linked within the same workspace" }, { status: 400 })
+    }
+
+    const resolvedTaskList = taskListId
+      ? targetProject.taskLists.find((taskList) => taskList.id === taskListId)
+      : getDefaultTaskList(targetProject.taskLists)
+
+    if (!resolvedTaskList) {
+      return NextResponse.json({ error: "Target project has no task lists available" }, { status: 400 })
+    }
+
     const taskProject = await prisma.taskProject.create({
       data: {
         taskId: params.taskId,
         projectId,
-        taskListId,
+        taskListId: resolvedTaskList.id,
+        position: task.position,
       },
       include: {
         project: { select: { id: true, name: true, color: true, icon: true } },
@@ -126,17 +267,37 @@ export async function DELETE(
       return NextResponse.json({ error: "projectId is required" }, { status: 400 })
     }
 
+    const { task, allowed } = await ensureTaskAccess(session.user.id, params.taskId)
+    if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 })
+    if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
+    if (projectId === task.taskList.projectId) {
+      return NextResponse.json({ error: "Primary project cannot be removed" }, { status: 400 })
+    }
+
+    const targetProject = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { workspaceId: true },
+    })
+
+    if (!targetProject) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 })
+    }
+
+    const { allowed: canRouteWithinWorkspace } = await checkWorkspaceRoutingAccess(
+      session.user.id,
+      task.taskList.project.workspaceId
+    )
+    if (!canRouteWithinWorkspace || targetProject.workspaceId !== task.taskList.project.workspaceId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
     const taskProject = await prisma.taskProject.findUnique({
       where: { taskId_projectId: { taskId: params.taskId, projectId } },
     })
 
     if (!taskProject) {
       return NextResponse.json({ error: "Task is not in this project" }, { status: 404 })
-    }
-
-    const { allowed } = await checkProjectAccess(session.user.id, projectId, ["MEMBER"])
-    if (!allowed) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
     await prisma.taskProject.delete({

@@ -58,7 +58,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
 
   return (
     <div
-      className="group relative bg-surface-container-lowest p-8 rounded-[2.5rem] shadow-sm border border-on-surface-variant/5 cursor-pointer transition-all duration-500 hover:shadow-2xl hover:shadow-primary/5 hover:-translate-y-2 overflow-hidden"
+      className="group relative cursor-pointer overflow-hidden rounded-[2rem] border border-on-surface-variant/5 bg-surface-container-lowest p-5 shadow-sm transition-all duration-500 hover:-translate-y-1 hover:shadow-2xl hover:shadow-primary/5 sm:rounded-[2.5rem] sm:p-8 sm:hover:-translate-y-2"
       onClick={() => router.push(`/projects/${project.id}`)}
     >
       {/* Background Accent Gradient */}
@@ -67,11 +67,11 @@ export function ProjectCard({ project }: ProjectCardProps) {
         style={{ backgroundColor: project.color }}
       />
 
-      <div className="relative space-y-8">
+      <div className="relative space-y-5 sm:space-y-8">
         {/* Header */}
         <div className="flex items-start justify-between">
           <div 
-            className="h-14 w-14 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/5 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3"
+            className="flex h-12 w-12 items-center justify-center rounded-2xl shadow-lg shadow-primary/5 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3 sm:h-14 sm:w-14"
             style={{ backgroundColor: `${project.color}15` }}
           >
             {isUploadedIcon(project.icon) ? (
@@ -91,7 +91,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
 
         {/* Title & Desc */}
         <div className="space-y-2">
-          <h3 className="text-2xl font-headline font-black text-primary tracking-tight group-hover:text-tertiary-new transition-colors">
+          <h3 className="text-xl font-headline font-black tracking-tight text-primary transition-colors group-hover:text-tertiary-new sm:text-2xl">
             {project.name}
           </h3>
           <p className="text-sm text-on-surface-variant/60 font-medium line-clamp-2 leading-relaxed">
@@ -117,8 +117,8 @@ export function ProjectCard({ project }: ProjectCardProps) {
         </div>
 
         {/* Footer Meta */}
-        <div className="flex items-center justify-between pt-2 border-t border-on-surface-variant/5">
-          <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between gap-3 border-t border-on-surface-variant/5 pt-2">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
             <div className="flex -space-x-2.5">
               {project.members.slice(0, 3).map((member) => (
                 <UserAvatar

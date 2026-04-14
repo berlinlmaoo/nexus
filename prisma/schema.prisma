@@ -46,6 +46,8 @@ model User {
   sessions         UserSession[]
   workflowBundles    WorkflowBundle[]
   proofAnnotations   ProofAnnotation[]
+  teamCalendarEvents TeamCalendarEvent[]         @relation("TeamCalendarEventCreator")
+  teamCalendarEventAttendances TeamCalendarEventAttendee[]
 }
 
 model Workspace {
@@ -64,6 +66,7 @@ model Workspace {
   docTemplates    DocTemplate[]
   ssoConfig       SsoConfig?
   workflowBundles WorkflowBundle[]
+  teamCalendarEvents TeamCalendarEvent[]
 }
 
 model WorkspaceMember {
@@ -86,6 +89,7 @@ model Project {
   description String?
   color       String   @default("#7B2FBE")
   icon        String   @default("folder")
+  enableTaskBatchDuplicate Boolean @default(false)
   status      ProjectStatus @default(ACTIVE)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -414,6 +418,7 @@ model CustomField {
   name    String
   type    CustomFieldType @default(TEXT)
   options Json?
+  position Int            @default(0)
 
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -477,6 +482,49 @@ model Team {
 
   members  TeamMember[]
   projects TeamProject[]
+  calendarEvents TeamCalendarEvent[]
+}
+
+model TeamCalendarEvent {
+  id          String                  @id @default(cuid())
+  title       String
+  description String?
+  location    String?
+  startsAt    DateTime?
+  endsAt      DateTime?
+  isAllDay    Boolean                 @default(false)
+  status      TeamCalendarEventStatus @default(ACTIVE)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  teamId      String
+  team        Team                    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  createdById String
+  createdBy   User                    @relation("TeamCalendarEventCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  attendees   TeamCalendarEventAttendee[]
+
+  @@index([teamId, startsAt])
+  @@index([workspaceId, startsAt])
+  @@index([status])
+}
+
+model TeamCalendarEventAttendee {
+  id        String            @id @default(cuid())
+  createdAt DateTime          @default(now())
+
+  eventId   String
+  event     TeamCalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([userId])
 }
 
 model TeamProject {
@@ -504,6 +552,11 @@ model TeamMember {
 enum TeamRole {
   LEAD
   MEMBER
+}
+
+enum TeamCalendarEventStatus {
+  ACTIVE
+  CANCELLED
 }
 
 model ProjectPage {
@@ -584,6 +637,11 @@ enum CustomFieldType {
   NUMBER
   DATE
   DROPDOWN
+  SELECT
+  MULTI_SELECT
+  STATUS
+  CREATED
+  PLACE
   PEOPLE
   CHECKBOX
   RATING

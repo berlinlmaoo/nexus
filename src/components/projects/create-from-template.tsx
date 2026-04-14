@@ -56,6 +56,8 @@ interface ProjectTemplate {
     customFields?: Array<{
       name: string
       type: string
+      position?: number
+      options?: unknown
     }>
   }
 }
@@ -147,6 +149,21 @@ export function CreateFromTemplateDialog({
       if (!res.ok) throw new Error("Failed to create project")
 
       const project = await res.json()
+
+      if (selectedTemplate.structure.customFields?.length) {
+        for (const field of selectedTemplate.structure.customFields) {
+          await fetch("/api/custom-fields", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: field.name,
+              type: field.type,
+              options: field.options,
+              projectId: project.id,
+            }),
+          })
+        }
+      }
 
       // The project is created with default task lists (To Do, In Progress, Done).
       // If the template has different sections, we could create additional task lists.

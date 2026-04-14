@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     const filePath = path.join(uploadDir, fileName)
     await writeFile(filePath, buffer)
 
-    const urlPath = `/api/files/project-icons/${fileName}`
+    const urlPath = `/api/files/project-icons/${fileName}?v=${Date.now()}`
 
     logAudit({ action: "update", entityType: "project_icon", entityId: projectId, userId: session.user.id!, request })
 

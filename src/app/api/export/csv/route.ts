@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
+import { formatCustomFieldValueForExport, normalizeCustomFieldType } from '@/lib/custom-fields'
 
 function escapeCSV(value: string | null | undefined): string {
   if (!value) return ''
@@ -59,7 +60,7 @@ export async function GET(req: Request) {
         },
         taskList: { select: { name: true } },
         customFieldValues: {
-          include: { customField: { select: { name: true } } },
+          include: { customField: { select: { name: true, type: true } } },
         },
       },
       orderBy: { createdAt: 'asc' },
@@ -69,6 +70,7 @@ export async function GET(req: Request) {
     const customFieldNames = new Set<string>()
     for (const task of tasks) {
       for (const cfv of task.customFieldValues) {
+        if (!normalizeCustomFieldType(cfv.customField.type)) continue
         customFieldNames.add(cfv.customField.name)
       }
     }
@@ -93,7 +95,12 @@ export async function GET(req: Request) {
       const assignees = task.assignees.map((a) => a.user.name).join('; ')
       const customFieldMap = new Map<string, string>()
       for (const cfv of task.customFieldValues) {
-        customFieldMap.set(cfv.customField.name, cfv.value)
+        const normalizedType = normalizeCustomFieldType(cfv.customField.type)
+        if (!normalizedType) continue
+        customFieldMap.set(
+          cfv.customField.name,
+          formatCustomFieldValueForExport(normalizedType, cfv.value)
+        )
       }
 
       const row = [
