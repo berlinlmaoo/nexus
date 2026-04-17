@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import {
   ResponsiveGridLayout,
   useContainerWidth,
@@ -261,6 +261,8 @@ export function WidgetGrid({ data, loading }: WidgetGridProps) {
   const [widgets, setWidgets] = useState<WidgetConfig[]>(DEFAULT_WIDGETS)
   const [layouts, setLayouts] = useState<Layouts>(DEFAULT_LAYOUTS)
   const [mounted, setMounted] = useState(false)
+  const persistPendingRef = useRef(false)
+  const persistTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const saved = loadLayout()
@@ -287,11 +289,32 @@ export function WidgetGrid({ data, loading }: WidgetGridProps) {
   const handleLayoutChange = useCallback(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (_currentLayout: any, allLayouts: Layouts) => {
+      persistPendingRef.current = true
       setLayouts(allLayouts)
-      persistLayout(widgets, allLayouts)
     },
-    [widgets, persistLayout]
+    []
   )
+
+  useEffect(() => {
+    if (!mounted || !persistPendingRef.current) return
+
+    if (persistTimeoutRef.current) {
+      clearTimeout(persistTimeoutRef.current)
+    }
+
+    persistTimeoutRef.current = setTimeout(() => {
+      persistLayout(widgets, layouts)
+      persistPendingRef.current = false
+      persistTimeoutRef.current = null
+    }, 350)
+
+    return () => {
+      if (persistTimeoutRef.current) {
+        clearTimeout(persistTimeoutRef.current)
+        persistTimeoutRef.current = null
+      }
+    }
+  }, [layouts, mounted, persistLayout, widgets])
 
   const handleRemoveWidget = useCallback(
     (widgetId: string) => {

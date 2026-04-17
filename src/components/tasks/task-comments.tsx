@@ -635,8 +635,41 @@ export function TaskComments({ taskId, currentUserId: propUserId, projectMembers
   }, [fetchComments])
 
   useEffect(() => {
-    const interval = setInterval(fetchComments, 30_000)
-    return () => clearInterval(interval)
+    let interval: ReturnType<typeof setInterval> | null = null
+
+    const stopPolling = () => {
+      if (interval) {
+        clearInterval(interval)
+        interval = null
+      }
+    }
+
+    const startPolling = () => {
+      if (document.hidden || interval) return
+      interval = setInterval(() => {
+        if (!document.hidden) {
+          fetchComments()
+        }
+      }, 30_000)
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopPolling()
+        return
+      }
+
+      fetchComments()
+      startPolling()
+    }
+
+    startPolling()
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      stopPolling()
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
   }, [fetchComments])
 
   const handleSubmit = async (content: string) => {

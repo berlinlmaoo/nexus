@@ -1,13 +1,18 @@
 "use client"
 
-import { useState } from "react"
+import dynamic from "next/dynamic"
 import { useAppStore } from "@/stores/app-store"
-import { GideonPanel } from "./gideon-panel"
 import { GideonButton } from "./gideon-button"
 import { AnimatePresence, motion } from "framer-motion"
 
+const GideonPanel = dynamic(
+  () => import("./gideon-panel").then((mod) => mod.GideonPanel),
+  { ssr: false }
+)
+
 export function GideonChat() {
-  const { gideonOpen, toggleGideon } = useAppStore()
+  const gideonOpen = useAppStore((state) => state.gideonOpen)
+  const toggleGideon = useAppStore((state) => state.toggleGideon)
 
   return (
     <div className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 z-50 flex flex-col items-end gap-4 md:bottom-6 md:right-6">

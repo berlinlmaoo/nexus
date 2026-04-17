@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useRef, useMemo } from "react"
+import { memo, useState, useCallback, useRef, useMemo } from "react"
 import {
   DragDropContext,
   Droppable,
@@ -13,19 +13,16 @@ import {
   Plus,
   Calendar,
   ListTree,
-  MoreHorizontal,
   ChevronRight,
   ChevronDown,
   Tag,
   AlertTriangle,
   Loader2,
 } from "lucide-react"
-import { format, isPast, isToday } from "date-fns"
 import { cn } from "@/lib/utils"
 import { formatTaskDueDate } from "@/lib/task-date-format"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
-import { ProjectIcon, isUploadedIcon } from "@/components/projects/project-icon"
 import { type TaskCardData } from "./task-card"
 
 const COLUMNS: {
@@ -60,6 +57,55 @@ interface KanbanViewProps {
   defaultTaskListId?: string
 }
 
+interface KanbanTaskCardProps {
+  task: TaskCardData
+  isDragging: boolean
+  onOpenTask: (task: TaskCardData) => void
+}
+
+const KanbanTaskCard = memo(function KanbanTaskCard({
+  task,
+  isDragging,
+  onOpenTask,
+}: KanbanTaskCardProps) {
+  const handleOpen = useCallback(() => {
+    onOpenTask(task)
+  }, [onOpenTask, task])
+
+  return (
+    <div
+      onClick={handleOpen}
+      className={cn(
+        "bg-surface-container-lowest p-4 rounded-xl shadow-sm border border-transparent hover:ring-2 hover:ring-primary/5 transition-all duration-200 group cursor-grab active:cursor-grabbing",
+        isDragging && "shadow-2xl shadow-primary/20 ring-2 ring-primary/10 rotate-2 scale-105"
+      )}
+    >
+      <div className="space-y-4">
+        <div className="space-y-1">
+          {task.isCrossProject && task.primaryProjectName && (
+            <p className="text-[10px] font-medium text-on-surface-variant/50">
+              From {task.primaryProjectName}
+            </p>
+          )}
+          <h4 className="text-sm font-bold text-primary leading-snug group-hover:text-tertiary-new transition-colors line-clamp-2">{task.title}</h4>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {task.priority !== "NONE" && <span className={cn("px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md", PRIORITY_BADGES[task.priority].cls)}>{task.priority}</span>}
+        </div>
+        <div className="flex items-center justify-between pt-1">
+          <div className="flex items-center gap-3 text-on-surface-variant/40">
+            {task.dueDate && <div className="flex items-center gap-1 text-[10px] font-bold"><Calendar className="h-3.5 w-3.5" /><span>{formatTaskDueDate(task.dueDate)}</span></div>}
+            {(task.subtaskCount ?? 0) > 0 && <div className="flex items-center gap-1 text-[10px] font-bold"><ListTree className="h-3.5 w-3.5" /><span>{task.subtaskDoneCount}/{task.subtaskCount}</span></div>}
+          </div>
+          <div className="flex -space-x-2">
+            {task.assignees.map((a) => <UserAvatar key={a.id} user={{ name: a.name, image: a.avatar }} size="xs" className="h-6 w-6 border-2 border-surface-container-lowest ring-1 ring-on-surface-variant/5" />)}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+})
+
 export function KanbanView({
   tasks,
   sections = [],
@@ -86,17 +132,6 @@ export function KanbanView({
   const [creatingSection, setCreatingSection] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const sectionInputRef = useRef<HTMLInputElement>(null)
-  const sectionTaskMap = useMemo(
-    () =>
-      new Map(
-        sections.map((section) => [
-          section.id,
-          section.tasks.slice().sort((a, b) => a.position - b.position),
-        ])
-      ),
-    [sections]
-  )
-
   const columns = useMemo(() => {
     if (groupBy === "status") {
       return COLUMNS.map(col => ({
@@ -135,40 +170,52 @@ export function KanbanView({
     }))
   }, [swimLaneMode, tasks])
 
-  const getTasksForLaneAndColumn = useCallback(
-    (laneId: string, columnId: string) => {
-      return tasks
-        .filter((t) => {
-          // Filter by Column (either status or section)
-          if (groupBy === "status") {
-            if (t.status !== columnId) return false
-          } else {
-            const columnTasks = sectionTaskMap.get(columnId) ?? []
-            if (!columnTasks.some((task) => task.id === t.id)) return false
-          }
+  const taskBuckets = useMemo(() => {
+    const buckets = new Map<string, TaskCardData[]>()
+    const columnCounts = new Map<string, number>()
+    const sectionIdByTask = new Map<string, string>()
 
-          // Filter by Swimlane
-          if (swimLaneMode === "none") return true
-          if (swimLaneMode === "assignee") {
-            if (laneId === "__unassigned__") return t.assignees.length === 0
-            return t.assignees.some((a) => a.id === laneId)
-          }
-          return t.priority === laneId
-        })
-        .sort((a, b) => a.position - b.position)
-    },
-    [groupBy, sectionTaskMap, swimLaneMode, tasks]
-  )
+    sections.forEach((section) => {
+      section.tasks.forEach((task) => {
+        sectionIdByTask.set(task.id, section.id)
+      })
+    })
 
-  const getColumnCount = useCallback(
-    (columnId: string) => {
-      if (groupBy === "status") {
-        return tasks.filter((t) => t.status === columnId).length
-      }
-      return (sectionTaskMap.get(columnId) ?? []).length
-    },
-    [groupBy, sectionTaskMap, tasks]
-  )
+    tasks.forEach((task) => {
+      const columnId =
+        groupBy === "status"
+          ? task.status
+          : sectionIdByTask.get(task.id)
+
+      if (!columnId) return
+
+      columnCounts.set(columnId, (columnCounts.get(columnId) ?? 0) + 1)
+
+      const laneIds =
+        swimLaneMode === "none"
+          ? ["__all__"]
+          : swimLaneMode === "assignee"
+            ? (task.assignees.length > 0 ? task.assignees.map((assignee) => assignee.id) : ["__unassigned__"])
+            : [task.priority]
+
+      laneIds.forEach((laneId) => {
+        const bucketKey = `${laneId}::${columnId}`
+        const bucket = buckets.get(bucketKey)
+
+        if (bucket) {
+          bucket.push(task)
+        } else {
+          buckets.set(bucketKey, [task])
+        }
+      })
+    })
+
+    buckets.forEach((bucket) => {
+      bucket.sort((a, b) => a.position - b.position)
+    })
+
+    return { buckets, columnCounts }
+  }, [groupBy, sections, swimLaneMode, tasks])
 
   const handleDragEnd = useCallback(
     (result: DropResult) => {
@@ -197,13 +244,18 @@ export function KanbanView({
     if (!newTitle.trim() || !projectId) return
     setCreating(true)
     try {
-      const body: any = {
+      const body: {
+        title: string
+        projectId: string
+        status?: TaskCardData["status"]
+        taskListId?: string
+      } = {
         title: newTitle.trim(),
         projectId,
       }
       
       if (groupBy === "status") {
-        body.status = columnId
+        body.status = columnId as TaskCardData["status"]
         body.taskListId = defaultTaskListId
       } else {
         body.taskListId = columnId
@@ -431,10 +483,10 @@ export function KanbanView({
 
                 {!isLaneCollapsed && (
                   <div className="flex gap-6 overflow-x-auto pb-6 scrollbar-hide min-h-[400px]">
-                    {columns.map((column, colIndex) => {
+                    {columns.map((column) => {
                       const isCollapsed = collapsedColumns.has(column.id)
-                      const colTasks = getTasksForLaneAndColumn(lane.id, column.id)
-                      const totalColCount = getColumnCount(column.id)
+                      const colTasks = taskBuckets.buckets.get(`${lane.id}::${column.id}`) ?? []
+                      const totalColCount = taskBuckets.columnCounts.get(column.id) ?? 0
                       const wipLimit = wipLimits[column.id] || 0
                       const isOverWip = wipLimit > 0 && totalColCount > wipLimit
 
@@ -496,34 +548,12 @@ export function KanbanView({
                                         ref={provided.innerRef}
                                         {...provided.draggableProps}
                                         {...provided.dragHandleProps}
-                                        onClick={() => onTaskClick(task)}
-                                        className={cn(
-                                          "bg-surface-container-lowest p-4 rounded-xl shadow-sm border border-transparent hover:ring-2 hover:ring-primary/5 transition-all duration-200 group cursor-grab active:cursor-grabbing",
-                                          snapshot.isDragging && "shadow-2xl shadow-primary/20 ring-2 ring-primary/10 rotate-2 scale-105"
-                                        )}
                                       >
-                                        <div className="space-y-4">
-                                          <div className="space-y-1">
-                                            {task.isCrossProject && task.primaryProjectName && (
-                                              <p className="text-[10px] font-medium text-on-surface-variant/50">
-                                                From {task.primaryProjectName}
-                                              </p>
-                                            )}
-                                            <h4 className="text-sm font-bold text-primary leading-snug group-hover:text-tertiary-new transition-colors line-clamp-2">{task.title}</h4>
-                                          </div>
-                                          <div className="flex flex-wrap gap-2">
-                                            {task.priority !== "NONE" && <span className={cn("px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md", PRIORITY_BADGES[task.priority].cls)}>{task.priority}</span>}
-                                          </div>
-                                          <div className="flex items-center justify-between pt-1">
-                                            <div className="flex items-center gap-3 text-on-surface-variant/40">
-                                              {task.dueDate && <div className="flex items-center gap-1 text-[10px] font-bold"><Calendar className="h-3.5 w-3.5" /><span>{formatTaskDueDate(task.dueDate)}</span></div>}
-                                              {(task.subtaskCount ?? 0) > 0 && <div className="flex items-center gap-1 text-[10px] font-bold"><ListTree className="h-3.5 w-3.5" /><span>{task.subtaskDoneCount}/{task.subtaskCount}</span></div>}
-                                            </div>
-                                            <div className="flex -space-x-2">
-                                              {task.assignees.map((a) => <UserAvatar key={a.id} user={{ name: a.name, image: a.avatar }} size="xs" className="h-6 w-6 border-2 border-surface-container-lowest ring-1 ring-on-surface-variant/5" />)}
-                                            </div>
-                                          </div>
-                                        </div>
+                                        <KanbanTaskCard
+                                          task={task}
+                                          isDragging={snapshot.isDragging}
+                                          onOpenTask={onTaskClick}
+                                        />
                                       </div>
                                     )}
                                   </Draggable>

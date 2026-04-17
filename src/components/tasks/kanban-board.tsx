@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useRef } from "react"
+import { memo, useState, useCallback, useRef, useMemo, useEffect, useTransition } from "react"
 import {
   DragDropContext,
   Droppable,
@@ -11,7 +11,6 @@ import { TaskCard, type TaskCardData } from "./task-card"
 import { cn } from "@/lib/utils"
 import { Plus, Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { motion, AnimatePresence } from "framer-motion"
 
 const COLUMNS: {
   id: TaskCardData["status"]
@@ -32,6 +31,33 @@ interface KanbanBoardProps {
   defaultTaskListId?: string
 }
 
+interface KanbanBoardTaskCardProps {
+  task: TaskCardData
+  index: number
+  isDragging: boolean
+  onOpenTask: (task: TaskCardData) => void
+}
+
+const KanbanBoardTaskCard = memo(function KanbanBoardTaskCard({
+  task,
+  index,
+  isDragging,
+  onOpenTask,
+}: KanbanBoardTaskCardProps) {
+  const handleOpen = useCallback(() => {
+    onOpenTask(task)
+  }, [onOpenTask, task])
+
+  return (
+    <TaskCard
+      task={task}
+      onClick={handleOpen}
+      isDragging={isDragging}
+      index={index}
+    />
+  )
+})
+
 export function KanbanBoard({
   tasks,
   onTaskClick,
@@ -40,22 +66,37 @@ export function KanbanBoard({
   defaultTaskListId,
 }: KanbanBoardProps) {
   const router = useRouter()
+  const [, startTransition] = useTransition()
   const [localTasks, setLocalTasks] = useState<TaskCardData[]>(tasks)
   const [addingTo, setAddingTo] = useState<string | null>(null)
   const [newTitle, setNewTitle] = useState("")
   const [creating, setCreating] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const lastSyncedSignatureRef = useRef("")
 
-  // Sync when tasks prop changes
-  if (tasks !== localTasks && JSON.stringify(tasks) !== JSON.stringify(localTasks)) {
+  const tasksSignature = useMemo(
+    () =>
+      tasks
+        .map((task) => `${task.id}:${task.status}:${task.position}:${task.taskListId}:${task.title}:${task.dueDate ?? ""}`)
+        .join("|"),
+    [tasks]
+  )
+
+  useEffect(() => {
+    if (lastSyncedSignatureRef.current === tasksSignature) return
+    lastSyncedSignatureRef.current = tasksSignature
     setLocalTasks(tasks)
-  }
+  }, [tasks, tasksSignature])
 
-  const getColumnTasks = useCallback(
-    (status: TaskCardData["status"]) =>
-      localTasks
-        .filter((t) => t.status === status)
-        .sort((a, b) => a.position - b.position),
+  const columnEntries = useMemo(
+    () =>
+      COLUMNS.map((column, index) => ({
+        ...column,
+        index,
+        tasks: localTasks
+          .filter((task) => task.status === column.id)
+          .sort((a, b) => a.position - b.position),
+      })),
     [localTasks]
   )
 
@@ -100,7 +141,9 @@ export function KanbanBoard({
       if (res.ok) {
         setNewTitle("")
         setAddingTo(null)
-        router.refresh()
+        startTransition(() => {
+          router.refresh()
+        })
       }
     } catch (error) {
       console.error("Failed to create task:", error)
@@ -109,22 +152,22 @@ export function KanbanBoard({
     }
   }
 
-  const startAdding = (columnId: string) => {
+  const startAdding = useCallback((columnId: string) => {
     setAddingTo(columnId)
     setNewTitle("")
     setTimeout(() => inputRef.current?.focus(), 50)
-  }
+  }, [])
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
       <div className="flex gap-4 overflow-x-auto pb-4">
-        {COLUMNS.map((column, colIndex) => {
-          const columnTasks = getColumnTasks(column.id)
+        {columnEntries.map((column) => {
+          const columnTasks = column.tasks
           return (
             <div
               key={column.id}
               className="flex-shrink-0 w-72 flex flex-col animate-fade-in-up"
-              style={{ animationDelay: `${colIndex * 75}ms` }}
+              style={{ animationDelay: `${column.index * 75}ms` }}
             >
               {/* Column header */}
               <div className="flex items-center gap-2 mb-3 px-1">
@@ -161,11 +204,11 @@ export function KanbanBoard({
                             {...provided.dragHandleProps}
                             className="transition-transform duration-150"
                           >
-                            <TaskCard
+                            <KanbanBoardTaskCard
                               task={task}
-                              onClick={() => onTaskClick(task)}
                               isDragging={snapshot.isDragging}
                               index={index}
+                              onOpenTask={onTaskClick}
                             />
                           </div>
                         )}
@@ -181,48 +224,41 @@ export function KanbanBoard({
                     )}
 
                     {/* Inline quick-add */}
-                    <AnimatePresence>
-                      {addingTo === column.id && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: "auto" }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="rounded-lg border bg-background p-2 shadow-sm">
-                            <input
-                              ref={inputRef}
-                              type="text"
-                              placeholder="Task title..."
-                              value={newTitle}
-                              onChange={(e) => setNewTitle(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" && newTitle.trim()) {
-                                  handleQuickAdd(column.id)
-                                }
-                                if (e.key === "Escape") {
-                                  setAddingTo(null)
-                                  setNewTitle("")
-                                }
-                              }}
-                              onBlur={() => {
-                                if (!newTitle.trim()) {
-                                  setAddingTo(null)
-                                }
-                              }}
-                              disabled={creating}
-                              className="w-full text-sm bg-transparent outline-none placeholder:text-muted-foreground"
-                            />
-                            {creating && (
-                              <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                                Creating...
-                              </div>
-                            )}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                    {addingTo === column.id && (
+                      <div className="overflow-hidden animate-fade-in">
+                        <div className="rounded-lg border bg-background p-2 shadow-sm">
+                          <input
+                            ref={inputRef}
+                            type="text"
+                            placeholder="Task title..."
+                            value={newTitle}
+                            onChange={(e) => setNewTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && newTitle.trim()) {
+                                handleQuickAdd(column.id)
+                              }
+                              if (e.key === "Escape") {
+                                setAddingTo(null)
+                                setNewTitle("")
+                              }
+                            }}
+                            onBlur={() => {
+                              if (!newTitle.trim()) {
+                                setAddingTo(null)
+                              }
+                            }}
+                            disabled={creating}
+                            className="w-full text-sm bg-transparent outline-none placeholder:text-muted-foreground"
+                          />
+                          {creating && (
+                            <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Creating...
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Add button */}
                     {addingTo !== column.id && projectId && defaultTaskListId && (

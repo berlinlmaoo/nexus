@@ -32,6 +32,7 @@ import {
   ArchiveRestore,
   Shield,
   CalendarDays,
+  X,
 } from "lucide-react"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -227,7 +228,8 @@ export function Sidebar({ user }: SidebarProps) {
   const [insightsOpen, setInsightsOpen] = useState(true)
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({})
   const [projectPages, setProjectPages] = useState<Record<string, ProjectPage[]>>({})
-  const { sidebarOpen, toggleSidebar } = useAppStore()
+  const sidebarOpen = useAppStore((state) => state.sidebarOpen)
+  const toggleSidebar = useAppStore((state) => state.toggleSidebar)
   const [sidebarWidth, setSidebarWidth] = useState(260)
   const [isResizing, setIsResizing] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
@@ -452,36 +454,48 @@ export function Sidebar({ user }: SidebarProps) {
     await signOut({ callbackUrl: "/login" })
   }, [])
 
-  if (!sidebarOpen) return null
-
-  const effectiveWidth = isClient && isCollapsed ? 56 : sidebarWidth
+  const isMobileViewport = isClient ? window.innerWidth < 768 : false
+  const renderCollapsed = !isMobileViewport && isCollapsed
+  const effectiveWidth = isMobileViewport ? Math.min(320, window.innerWidth - 24) : renderCollapsed ? 56 : sidebarWidth
 
   return (
     <aside
       ref={sidebarRef}
-      className="hidden md:flex h-screen flex-col bg-surface-container-low text-on-surface select-none border-r border-on-surface-variant/5 shrink-0 transition-all duration-300 ease-in-out"
+      className={cn(
+        "fixed inset-y-0 left-0 z-[60] flex flex-col overflow-hidden border-r border-on-surface-variant/5 bg-surface-container-low text-on-surface select-none shadow-2xl transition-all duration-300 ease-in-out md:relative md:z-auto md:h-screen md:shadow-none",
+        sidebarOpen ? "translate-x-0" : "-translate-x-full md:hidden"
+      )}
       style={{ width: `${effectiveWidth}px` }}
     >
-      <div className="flex items-center justify-between px-4 pt-6 pb-2">
-        {!isCollapsed ? (
+      <div className="flex items-center justify-between px-3 pt-3 pb-2 md:px-4 md:pt-6">
+        {!renderCollapsed ? (
           <>
             <Link href="/dashboard" className="flex items-center gap-2.5 group">
               <Image 
                 src="/logos/nexus-icon-black.png" 
                 alt="NEXUS" 
-                width={28} 
-                height={28} 
+                width={24} 
+                height={24} 
                 className="object-contain transition-transform duration-500 group-hover:rotate-12"
               />
-              <span className="text-lg font-headline font-black tracking-[0.2em] text-on-surface uppercase">NEXUS</span>
+              <span className="text-base font-headline font-black tracking-[0.18em] text-on-surface uppercase md:text-lg">NEXUS</span>
             </Link>
-            <button
-              onClick={toggleCollapse}
-              className="rounded-md p-1.5 text-on-surface-variant/40 hover:bg-surface-container-high hover:text-on-surface transition-colors"
-              title="Collapse sidebar"
-            >
-              <PanelLeftClose className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={toggleCollapse}
+                className="hidden rounded-md p-1.5 text-on-surface-variant/40 transition-colors hover:bg-surface-container-high hover:text-on-surface md:inline-flex"
+                title="Collapse sidebar"
+              >
+                <PanelLeftClose className="h-4 w-4" />
+              </button>
+              <button
+                onClick={toggleSidebar}
+                className="inline-flex rounded-md p-1.5 text-on-surface-variant/40 transition-colors hover:bg-surface-container-high hover:text-on-surface md:hidden"
+                title="Close sidebar"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </>
         ) : (
           <div className="flex flex-col items-center w-full gap-4">
@@ -496,7 +510,7 @@ export function Sidebar({ user }: SidebarProps) {
             </Link>
             <button
               onClick={toggleCollapse}
-              className="rounded-md p-1.5 text-on-surface-variant/40 hover:bg-surface-container-high hover:text-on-surface transition-colors"
+              className="rounded-md p-1.5 text-on-surface-variant/40 transition-colors hover:bg-surface-container-high hover:text-on-surface"
               title="Expand sidebar"
             >
               <PanelLeft className="h-4 w-4" />
@@ -506,11 +520,14 @@ export function Sidebar({ user }: SidebarProps) {
       </div>
 
       {/* Quick Create button */}
-      {!isCollapsed ? (
-        <div className="px-4 pb-4 pt-2">
+      {!renderCollapsed ? (
+        <div className="px-3 pb-3 pt-1 md:px-4 md:pb-4 md:pt-2">
           <Link
             href="/projects"
-            className="flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 hover:shadow-lg hover:translate-y-[-1px] transition-all duration-200 w-full px-4 py-2.5 text-sm font-bold shadow-md"
+            onClick={() => {
+              if (window.innerWidth < 768) toggleSidebar()
+            }}
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-[13px] font-bold text-primary-foreground shadow-md transition-all duration-200 hover:translate-y-[-1px] hover:opacity-90 hover:shadow-lg md:py-2.5 md:text-sm"
           >
             <Plus className="h-4 w-4" />
             Quick Add
@@ -520,7 +537,10 @@ export function Sidebar({ user }: SidebarProps) {
         <div className="flex justify-center pb-4 pt-2">
           <Link
             href="/projects"
-            className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:opacity-90 hover:shadow-lg transition-all shadow-md"
+            onClick={() => {
+              if (window.innerWidth < 768) toggleSidebar()
+            }}
+            className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md transition-all hover:opacity-90 hover:shadow-lg"
             title="Quick Add"
           >
             <Plus className="h-4 w-4" />
@@ -529,7 +549,7 @@ export function Sidebar({ user }: SidebarProps) {
       )}
 
       {/* Main nav */}
-      <nav className="flex-1 overflow-y-auto px-2 space-y-0.5 scrollbar-hide">
+      <nav className="scrollbar-hide flex-1 overflow-y-auto px-2 pb-3 space-y-0.5 md:pb-0">
         {/* Top nav: Home, My Tasks, Inbox */}
         <div>
           {topNavItems.map((item) => {
@@ -539,8 +559,11 @@ export function Sidebar({ user }: SidebarProps) {
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={() => {
+                  if (window.innerWidth < 768) toggleSidebar()
+                }}
                 className={cn(
-                  "group flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-semibold transition-all duration-200",
+                  "group flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition-all duration-200 md:gap-3 md:py-2 md:text-[13px]",
                   isActive
                     ? "bg-surface-container-high text-primary shadow-sm"
                     : "text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
@@ -564,14 +587,14 @@ export function Sidebar({ user }: SidebarProps) {
         </div>
 
         {/* Divider */}
-        <div className="mx-3 my-4 h-[1px] bg-on-surface-variant/5" />
+        <div className="mx-3 my-3 h-[1px] bg-on-surface-variant/5 md:my-4" />
 
         {/* Insights section */}
-        {!isCollapsed && (
+        {!renderCollapsed && (
           <div className="mb-4">
             <button
               onClick={() => setInsightsOpen(!insightsOpen)}
-              className="flex w-full items-center justify-between px-3 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-on-surface-variant/40 hover:text-on-surface-variant/70 transition-colors"
+              className="flex w-full items-center justify-between px-3 py-1 text-[9px] font-bold uppercase tracking-[0.1em] text-on-surface-variant/40 transition-colors hover:text-on-surface-variant/70 md:text-[10px]"
             >
               <span>Insights</span>
               {insightsOpen ? (
@@ -590,8 +613,11 @@ export function Sidebar({ user }: SidebarProps) {
                     <Link
                       key={item.href}
                       href={item.href}
+                      onClick={() => {
+                        if (window.innerWidth < 768) toggleSidebar()
+                      }}
                       className={cn(
-                        "group flex items-center gap-3 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-all duration-200",
+                        "group flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition-all duration-200 md:gap-3 md:text-[13px]",
                         isActive
                           ? "bg-surface-container-high text-primary"
                           : "text-on-surface-variant/80 hover:bg-surface-container hover:text-on-surface"
@@ -613,7 +639,7 @@ export function Sidebar({ user }: SidebarProps) {
         )}
 
         {/* Collapsed mode: show insight icons */}
-        {isCollapsed && (
+        {renderCollapsed && (
           <div className="space-y-0.5 mb-2 px-1.5">
             {insightsItems.map((item) => {
               const isActive =
@@ -638,11 +664,11 @@ export function Sidebar({ user }: SidebarProps) {
         )}
 
         {/* Favorites section */}
-        {!isCollapsed && favorites.length > 0 && (
+        {!renderCollapsed && favorites.length > 0 && (
           <div className="mb-4">
             <button
               onClick={() => setFavoritesOpen(!favoritesOpen)}
-              className="flex w-full items-center justify-between px-3 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-on-surface-variant/40 hover:text-on-surface-variant/70 transition-colors"
+              className="flex w-full items-center justify-between px-3 py-1 text-[9px] font-bold uppercase tracking-[0.1em] text-on-surface-variant/40 transition-colors hover:text-on-surface-variant/70 md:text-[10px]"
             >
               <span className="flex items-center gap-1.5">
                 <Star className="h-3 w-3 text-yellow-500/60" />
@@ -662,8 +688,11 @@ export function Sidebar({ user }: SidebarProps) {
                       <Link
                         key={fav.id}
                         href={`/projects/${project.id}`}
+                        onClick={() => {
+                          if (window.innerWidth < 768) toggleSidebar()
+                        }}
                         className={cn(
-                          "group flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] transition-all duration-200",
+                          "group flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-[12px] transition-all duration-200 md:text-[13px]",
                           isActive
                             ? "bg-surface-container-high text-primary"
                             : "text-on-surface-variant/80 hover:bg-surface-container hover:text-on-surface"
@@ -681,11 +710,11 @@ export function Sidebar({ user }: SidebarProps) {
         )}
 
         {/* Projects section */}
-        {!isCollapsed ? (
+        {!renderCollapsed ? (
           <div className="mb-4">
             <button
               onClick={() => setProjectsOpen(!projectsOpen)}
-              className="flex w-full items-center justify-between px-3 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-on-surface-variant/40 hover:text-on-surface-variant/70 transition-colors"
+              className="flex w-full items-center justify-between px-3 py-1 text-[9px] font-bold uppercase tracking-[0.1em] text-on-surface-variant/40 transition-colors hover:text-on-surface-variant/70 md:text-[10px]"
             >
               <span>Projects</span>
               <div className="flex items-center gap-1">
@@ -741,8 +770,11 @@ export function Sidebar({ user }: SidebarProps) {
                         </button>
                         <Link
                           href={`/projects/${project.id}`}
+                          onClick={() => {
+                            if (window.innerWidth < 768) toggleSidebar()
+                          }}
                           className={cn(
-                            "flex flex-1 items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] transition-all duration-200 min-w-0",
+                            "flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] transition-all duration-200 md:gap-2.5 md:text-[13px]",
                             isProjectActive
                               ? "bg-surface-container-high text-primary shadow-sm"
                               : "text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
@@ -819,8 +851,11 @@ export function Sidebar({ user }: SidebarProps) {
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={() => {
+                  if (window.innerWidth < 768) toggleSidebar()
+                }}
                 className={cn(
-                  "group flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-200",
+                  "group flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition-all duration-200 md:gap-3 md:py-2 md:text-[13px]",
                   isActive
                     ? "bg-surface-container-high text-primary"
                     : "text-on-surface-variant/80 hover:bg-surface-container hover:text-on-surface"
@@ -841,9 +876,9 @@ export function Sidebar({ user }: SidebarProps) {
       </nav>
 
       {/* User section */}
-      <div className="p-4">
-        {!isCollapsed ? (
-          <div className="flex items-center gap-3 rounded-xl bg-surface-container px-3 py-2.5 transition-all duration-200 hover:bg-surface-container-high group">
+      <div className="hidden p-3 md:block md:p-4">
+        {!renderCollapsed ? (
+          <div className="group flex items-center gap-3 rounded-xl bg-surface-container px-3 py-2.5 transition-all duration-200 hover:bg-surface-container-high">
             <UserAvatar
               user={{ name: user.name, image: user.image }}
               size="sm"
@@ -885,7 +920,7 @@ export function Sidebar({ user }: SidebarProps) {
       </div>
 
       {/* Resize handle */}
-      {!isCollapsed && (
+      {!renderCollapsed && (
         <div
           className={cn(
             "absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-white/10 transition-colors",

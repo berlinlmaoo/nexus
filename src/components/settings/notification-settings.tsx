@@ -6,13 +6,16 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import { Bell, Mail, MessageSquare, Hash, Loader2 } from "lucide-react"
+import { Bell, Mail, MessageSquare, Hash, Loader2, MonitorSpeaker, Volume2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
 interface NotifPrefs {
   emailEnabled: boolean
   waEnabled: boolean
   slackEnabled: boolean
+  desktopEnabled: boolean
+  desktopSoundEnabled: boolean
   waPhone: string | null
   slackWebhook: string | null
   taskAssigned: boolean
@@ -70,6 +73,8 @@ export function NotificationSettings() {
     emailEnabled: true,
     waEnabled: false,
     slackEnabled: false,
+    desktopEnabled: false,
+    desktopSoundEnabled: true,
     waPhone: null,
     slackWebhook: null,
     taskAssigned: true,
@@ -81,6 +86,7 @@ export function NotificationSettings() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [sendingTest, setSendingTest] = useState(false)
 
   useEffect(() => {
     fetch("/api/notifications/preferences")
@@ -112,6 +118,40 @@ export function NotificationSettings() {
 
   const toggle = (key: keyof NotifPrefs) => {
     setPrefs((p) => ({ ...p, [key]: !p[key] }))
+  }
+
+  const toggleDesktopNotifications = async () => {
+    if (!prefs.desktopEnabled && typeof window !== "undefined" && "Notification" in window) {
+      const permission = await Notification.requestPermission()
+
+      if (permission !== "granted") {
+        toast.error("Desktop notification permission was not granted")
+        return
+      }
+    }
+
+    toggle("desktopEnabled")
+  }
+
+  const sendTestNotification = async () => {
+    setSendingTest(true)
+
+    try {
+      const response = await fetch("/api/notifications/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to send test notification")
+      }
+
+      toast.success("Test notification sent. Check the bell, toast card, and desktop notification.")
+    } catch {
+      toast.error("Failed to send test notification")
+    } finally {
+      setSendingTest(false)
+    }
   }
 
   if (loading) {
@@ -180,6 +220,22 @@ export function NotificationSettings() {
               />
             </div>
           )}
+          <Separator />
+          <ToggleRow
+            icon={<MonitorSpeaker className="h-4 w-4" />}
+            label="Desktop Notifications"
+            description="Show browser notification cards for new alerts"
+            checked={prefs.desktopEnabled}
+            onChange={toggleDesktopNotifications}
+          />
+          <Separator />
+          <ToggleRow
+            icon={<Volume2 className="h-4 w-4" />}
+            label="Notification Sound"
+            description="Play a sound when a new real-time notification arrives"
+            checked={prefs.desktopSoundEnabled}
+            onChange={() => toggle("desktopSoundEnabled")}
+          />
         </CardContent>
       </Card>
 
@@ -202,6 +258,13 @@ export function NotificationSettings() {
 
       <Button className="bg-foreground text-background hover:bg-foreground/90" onClick={handleSave} disabled={saving}>
         {saving ? "Saving..." : saved ? "Saved" : "Save Preferences"}
+      </Button>
+      <Button
+        variant="outline"
+        onClick={sendTestNotification}
+        disabled={sendingTest}
+      >
+        {sendingTest ? "Sending test..." : "Send Test Notification"}
       </Button>
     </>
   )

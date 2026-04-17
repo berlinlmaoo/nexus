@@ -90,6 +90,8 @@ model Project {
   color       String   @default("#7B2FBE")
   icon        String   @default("folder")
   enableTaskBatchDuplicate Boolean @default(false)
+  autoAssignEnabled Boolean @default(false)
+  autoAssignAssigneeIds String[] @default([])
   status      ProjectStatus @default(ACTIVE)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -799,6 +801,8 @@ model NotificationPreference {
   emailEnabled      Boolean  @default(true)
   waEnabled         Boolean  @default(false)
   slackEnabled      Boolean  @default(false)
+  desktopEnabled    Boolean  @default(false)
+  desktopSoundEnabled Boolean @default(true)
   waPhone           String?
   slackWebhook      String?
   taskAssigned      Boolean  @default(true)

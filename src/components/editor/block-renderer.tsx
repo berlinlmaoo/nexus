@@ -1,9 +1,8 @@
 "use client"
 
-import { useState, useRef, useEffect, useCallback, type KeyboardEvent, type FormEvent } from "react"
+import { useState, useRef, useEffect, useCallback, useLayoutEffect, type KeyboardEvent, type FormEvent } from "react"
 import { cn } from "@/lib/utils"
 import type { Block, BlockType } from "./types"
-import { createBlock } from "./types"
 import {
   GripVertical,
   Plus,
@@ -25,6 +24,7 @@ interface BlockRendererProps {
   onUpdate: (id: string, updates: Partial<Block>) => void
   onDelete: (id: string) => void
   onInsertAfter: (id: string, type?: BlockType) => void
+  onSplitBlock: (id: string, beforeContent: string, afterContent: string, type?: BlockType) => void
   onMergeWithPrevious: (id: string) => void
   onIndent: (id: string) => void
   onOutdent: (id: string) => void
@@ -37,6 +37,45 @@ interface BlockRendererProps {
   simplified?: boolean
 }
 
+function getCaretCharacterOffset(root: HTMLElement): number | null {
+  const selection = window.getSelection()
+  if (!selection || !selection.isCollapsed || selection.rangeCount === 0) return null
+
+  const range = selection.getRangeAt(0).cloneRange()
+  range.selectNodeContents(root)
+  range.setEnd(selection.anchorNode ?? root, selection.anchorOffset)
+  return range.toString().length
+}
+
+function setCaretCharacterOffset(root: HTMLElement, targetOffset: number) {
+  const selection = window.getSelection()
+  if (!selection) return
+
+  const range = document.createRange()
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  let currentOffset = 0
+  let currentNode = walker.nextNode()
+
+  while (currentNode) {
+    const textLength = currentNode.textContent?.length ?? 0
+    if (currentOffset + textLength >= targetOffset) {
+      range.setStart(currentNode, Math.max(0, targetOffset - currentOffset))
+      range.collapse(true)
+      selection.removeAllRanges()
+      selection.addRange(range)
+      return
+    }
+
+    currentOffset += textLength
+    currentNode = walker.nextNode()
+  }
+
+  range.selectNodeContents(root)
+  range.collapse(false)
+  selection.removeAllRanges()
+  selection.addRange(range)
+}
+
 export function BlockRenderer({
   block,
   index,
@@ -45,6 +84,7 @@ export function BlockRenderer({
   onUpdate,
   onDelete,
   onInsertAfter,
+  onSplitBlock,
   onMergeWithPrevious,
   onIndent,
   onOutdent,
@@ -57,10 +97,28 @@ export function BlockRenderer({
   simplified,
 }: BlockRendererProps) {
   const contentRef = useRef<HTMLDivElement>(null)
+  const caretOffsetRef = useRef<number | null>(null)
   const [imageUrlInput, setImageUrlInput] = useState("")
   const [showImageInput, setShowImageInput] = useState(false)
 
   const isFocused = focusedBlockId === block.id
+
+  useLayoutEffect(() => {
+    const el = contentRef.current
+    if (!el) return
+
+    const normalizedCurrentHtml = el.innerHTML === "<br>" ? "" : el.innerHTML
+    const normalizedNextHtml = block.content || ""
+
+    if (normalizedCurrentHtml !== normalizedNextHtml) {
+      const nextCaretOffset = isFocused ? caretOffsetRef.current : null
+      el.innerHTML = normalizedNextHtml
+
+      if (isFocused && nextCaretOffset !== null) {
+        setCaretCharacterOffset(el, nextCaretOffset)
+      }
+    }
+  }, [block.content, isFocused])
 
   useEffect(() => {
     if (isFocused && contentRef.current && document.activeElement !== contentRef.current) {
@@ -99,27 +157,21 @@ export function BlockRenderer({
           beforeDiv.appendChild(preRange.cloneContents())
           const afterDiv = document.createElement("div")
           afterDiv.appendChild(afterRange.cloneContents())
-          onUpdate(block.id, { content: beforeDiv.innerHTML })
-          onInsertAfter(block.id, block.type === "todo" ? "todo" : block.type === "bulleted_list" ? "bulleted_list" : block.type === "numbered_list" ? "numbered_list" : "text")
-          // The new block's content will be set via the afterDiv content
-          // We need a slight delay for the new block to mount
-          setTimeout(() => {
-            const focusedEl = document.querySelector('[data-block-focused="true"] [contenteditable]') as HTMLElement
-            if (focusedEl) {
-              focusedEl.innerHTML = afterDiv.innerHTML
-              // Place cursor at start
-              const r = document.createRange()
-              const s = window.getSelection()
-              if (focusedEl.childNodes.length > 0) {
-                r.setStart(focusedEl, 0)
-              } else {
-                r.setStart(focusedEl, 0)
-              }
-              r.collapse(true)
-              s?.removeAllRanges()
-              s?.addRange(r)
-            }
-          }, 0)
+          const nextType =
+            block.type === "todo"
+              ? "todo"
+              : block.type === "bulleted_list"
+                ? "bulleted_list"
+                : block.type === "numbered_list"
+                  ? "numbered_list"
+                  : "text"
+
+          onSplitBlock(
+            block.id,
+            beforeDiv.innerHTML === "<br>" ? "" : beforeDiv.innerHTML,
+            afterDiv.innerHTML === "<br>" ? "" : afterDiv.innerHTML,
+            nextType
+          )
         } else {
           onInsertAfter(block.id)
         }
@@ -128,10 +180,8 @@ export function BlockRenderer({
       if (e.key === "Backspace") {
         const el = contentRef.current
         if (el) {
-          const sel = window.getSelection()
-          const isAtStart =
-            sel && sel.isCollapsed && sel.anchorOffset === 0 && sel.anchorNode === el ||
-            sel && sel.isCollapsed && sel.anchorOffset === 0 && sel.anchorNode === el.firstChild
+          const caretOffset = getCaretCharacterOffset(el)
+          const isAtStart = caretOffset === 0
           const isEmpty = el.textContent === "" || el.innerHTML === "" || el.innerHTML === "<br>"
           if (isEmpty || isAtStart) {
             e.preventDefault()
@@ -150,13 +200,14 @@ export function BlockRenderer({
         return
       }
     },
-    [block.id, block.type, onUpdate, onInsertAfter, onMergeWithPrevious, onIndent, onOutdent]
+    [block.id, block.type, onInsertAfter, onMergeWithPrevious, onIndent, onOutdent, onSplitBlock]
   )
 
   const handleInput = useCallback(
     (e: FormEvent<HTMLDivElement>) => {
       const el = e.currentTarget
       const html = el.innerHTML
+      caretOffsetRef.current = getCaretCharacterOffset(el)
       // Detect "/" typed as only content
       if (html === "/" || html === "<br>/") {
         const rect = el.getBoundingClientRect()
@@ -207,7 +258,7 @@ export function BlockRenderer({
     onInput: handleInput,
     onSelect: handleSelect,
     onFocus: () => onFocus(block.id),
-    dangerouslySetInnerHTML: { __html: block.content },
+    ...(editable ? {} : { dangerouslySetInnerHTML: { __html: block.content } }),
     "data-placeholder": block.type === "text" ? "Type '/' for commands..." : "",
   }
 
@@ -310,7 +361,7 @@ export function BlockRenderer({
           </div>
         )
       case "code":
-        return <CodeBlock block={block} editable={editable} onUpdate={onUpdate} onKeyDown={handleKeyDown} onFocus={() => onFocus(block.id)} />
+        return <CodeBlock block={block} editable={editable} onUpdate={onUpdate} onFocus={() => onFocus(block.id)} />
       case "divider":
         return <hr className="border-border my-1" />
       case "image":
@@ -408,6 +459,7 @@ export function BlockRenderer({
                       onUpdate={onUpdate}
                       onDelete={onDelete}
                       onInsertAfter={onInsertAfter}
+                      onSplitBlock={onSplitBlock}
                       onMergeWithPrevious={onMergeWithPrevious}
                       onIndent={onIndent}
                       onOutdent={onOutdent}
@@ -529,13 +581,11 @@ function CodeBlock({
   block,
   editable,
   onUpdate,
-  onKeyDown,
   onFocus,
 }: {
   block: Block
   editable: boolean
   onUpdate: (id: string, updates: Partial<Block>) => void
-  onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => void
   onFocus: () => void
 }) {
   const codeRef = useRef<HTMLElement>(null)

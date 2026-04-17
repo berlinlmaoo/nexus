@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useRef, useEffect } from "react"
+import { memo, useState, useCallback, useRef, useEffect, useMemo, type MouseEvent } from "react"
 import {
   DragDropContext,
   Droppable,
@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/dialog"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { useRouter } from "next/navigation"
-import { format, isPast, isToday } from "date-fns"
+import { isPast, isToday } from "date-fns"
 import { toast } from "sonner"
 import { formatTaskDueDate } from "@/lib/task-date-format"
 
@@ -68,14 +68,208 @@ function sortTasksDoneLast(tasks: TaskCardData[]) {
   })
 }
 
+interface BoardTaskCardProps {
+  task: TaskCardData
+  hydrated: boolean
+  isSelected: boolean
+  isDragging: boolean
+  isDuplicating: boolean
+  isDeleting: boolean
+  enableTaskBatchDuplicate: boolean
+  onOpenTask: (task: TaskCardData) => void
+  onToggleSelection: (taskId: string) => void
+  onToggleStatus: (taskId: string, newStatus: TaskCardData["status"]) => void
+  onDuplicateTask: (task: TaskCardData) => void
+  onRequestDeleteTask: (task: TaskCardData) => void
+}
+
+const BoardTaskCard = memo(function BoardTaskCard({
+  task,
+  hydrated,
+  isSelected,
+  isDragging,
+  isDuplicating,
+  isDeleting,
+  enableTaskBatchDuplicate,
+  onOpenTask,
+  onToggleSelection,
+  onToggleStatus,
+  onDuplicateTask,
+  onRequestDeleteTask,
+}: BoardTaskCardProps) {
+  const isOverdue =
+    hydrated &&
+    task.dueDate &&
+    isPast(new Date(task.dueDate)) &&
+    !isToday(new Date(task.dueDate)) &&
+    task.status !== "DONE"
+  const isDone = task.status === "DONE"
+
+  const handleOpen = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    if (enableTaskBatchDuplicate && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault()
+      onToggleSelection(task.id)
+      return
+    }
+
+    onOpenTask(task)
+  }, [enableTaskBatchDuplicate, onOpenTask, onToggleSelection, task])
+
+  const handleToggleDone = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation()
+    onToggleStatus(task.id, isDone ? "TODO" : "DONE")
+  }, [isDone, onToggleStatus, task.id])
+
+  const handleDuplicate = useCallback(() => {
+    onDuplicateTask(task)
+  }, [onDuplicateTask, task])
+
+  const handleDelete = useCallback(() => {
+    onRequestDeleteTask(task)
+  }, [onRequestDeleteTask, task])
+
+  return (
+    <div
+      className={cn(
+        "group/task relative rounded-lg border bg-card p-3 cursor-pointer transition-all duration-150",
+        "hover:shadow-md",
+        isSelected && "border-primary/30 bg-primary/5 ring-2 ring-primary/20 shadow-md",
+        isDragging && "shadow-xl ring-1 ring-border"
+      )}
+      onClick={handleOpen}
+    >
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            onClick={(event) => event.stopPropagation()}
+            className="absolute right-2 top-2 rounded-md p-1 text-muted-foreground opacity-100 transition-opacity hover:bg-muted/60 hover:text-foreground"
+            aria-label="Task actions"
+          >
+            {isDuplicating || isDeleting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            )}
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44" onClick={(event) => event.stopPropagation()}>
+          <DropdownMenuItem onClick={handleDuplicate}>
+            <Copy className="mr-2 h-3.5 w-3.5" />
+            Duplicate task
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={handleDelete}
+            className="text-red-600 focus:text-red-600"
+          >
+            <Trash2 className="mr-2 h-3.5 w-3.5" />
+            Delete task
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <div className="px-0">
+        {task.isCrossProject && task.primaryProjectName && (
+          <p className="mb-1 text-[10px] font-medium text-muted-foreground/80">
+            From {task.primaryProjectName}
+          </p>
+        )}
+        <div className="flex items-start gap-2">
+          <button
+            type="button"
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={handleToggleDone}
+            className="mt-0.5 shrink-0 rounded-full text-muted-foreground transition-colors hover:text-foreground"
+            aria-label={isDone ? "Mark task as not done" : "Mark task as done"}
+            title={isDone ? "Mark as not done" : "Mark as done"}
+          >
+            {isDone ? (
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+            ) : (
+              <Circle className="h-4 w-4 opacity-70" />
+            )}
+          </button>
+          <p
+            className={cn(
+              "pr-8 text-[13px] font-medium leading-snug line-clamp-2",
+              isDone ? "text-muted-foreground/70 line-through" : "text-foreground"
+            )}
+          >
+            {task.title}
+          </p>
+        </div>
+      </div>
+
+      {task.customFieldChips && task.customFieldChips.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5 pl-6">
+          {task.customFieldChips.slice(0, 3).map((chip) => (
+            <span
+              key={chip.id}
+              className="inline-flex items-center rounded-full bg-muted/70 px-2 py-1 text-[10px] font-semibold text-muted-foreground"
+              title={`${chip.fieldName}: ${chip.label}`}
+            >
+              {chip.label}
+            </span>
+          ))}
+          {task.customFieldChips.length > 3 && (
+            <span
+              className="inline-flex items-center rounded-full bg-muted/50 px-2 py-1 text-[10px] font-semibold text-muted-foreground/80"
+              title={task.customFieldChips.slice(3).map((chip) => `${chip.fieldName}: ${chip.label}`).join(", ")}
+            >
+              +{task.customFieldChips.length - 3}
+            </span>
+          )}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between mt-3">
+        <div className="flex items-center gap-2">
+          {hydrated && task.dueDate && (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 text-[11px]",
+                isOverdue ? "text-red-600 font-medium" : "text-muted-foreground"
+              )}
+            >
+              <Calendar className="h-3 w-3" />
+              {formatTaskDueDate(task.dueDate)}
+            </span>
+          )}
+          {task.priority !== "NONE" && PRIORITY_COLORS[task.priority] && (
+            <span className="inline-flex items-center gap-1">
+              <span className={cn("h-2 w-2 rounded-full", PRIORITY_COLORS[task.priority])} />
+              <span className="text-[10px] text-muted-foreground capitalize">{task.priority.charAt(0) + task.priority.slice(1).toLowerCase()}</span>
+            </span>
+          )}
+        </div>
+
+        {task.assignees.length > 0 && (
+          <div className="flex -space-x-1">
+            {task.assignees.slice(0, 2).map((a) => (
+              <UserAvatar
+                key={a.id}
+                user={{ name: a.name, avatar: a.avatar }}
+                size="xs"
+                className="h-6 w-6 border border-background"
+              />
+            ))}
+            {task.assignees.length > 2 && (
+              <div className="flex h-6 w-6 items-center justify-center rounded-full border border-background bg-muted text-[8px] font-medium text-muted-foreground">
+                +{task.assignees.length - 2}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+})
+
 export function BoardView({
-  tasks,
   sections,
   onTaskClick,
   onStatusChange,
   onSectionChange,
   projectId,
-  defaultTaskListId,
   enableTaskBatchDuplicate = false,
 }: BoardViewProps) {
   const router = useRouter()
@@ -83,6 +277,7 @@ export function BoardView({
   const [newTitle, setNewTitle] = useState("")
   const [creating, setCreating] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const quickAddInFlightRef = useRef(false)
   const [renamingColumn, setRenamingColumn] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState("")
   const [showAddSection, setShowAddSection] = useState(false)
@@ -90,16 +285,28 @@ export function BoardView({
   const [creatingSec, setCreatingSec] = useState(false)
   const [deletingColumn, setDeletingColumn] = useState<string | null>(null)
   const [duplicatingTaskId, setDuplicatingTaskId] = useState<string | null>(null)
+  const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null)
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set())
   const [showBulkDuplicateDialog, setShowBulkDuplicateDialog] = useState(false)
   const [bulkDuplicateDueDate, setBulkDuplicateDueDate] = useState<string | null>(null)
   const [bulkDuplicating, setBulkDuplicating] = useState(false)
   const [confirmDeleteColumn, setConfirmDeleteColumn] = useState<{ id: string; name: string } | null>(null)
+  const [confirmDeleteTask, setConfirmDeleteTask] = useState<{ id: string; title: string } | null>(null)
+  const [hydrated, setHydrated] = useState(false)
   const sectionInputRef = useRef<HTMLInputElement>(null)
   const renameInputRef = useRef<HTMLInputElement>(null)
 
   // Use sections as columns (Asana-style)
-  const columns = sections || []
+  const columns = useMemo(() => sections ?? [], [sections])
+  const columnEntries = useMemo(
+    () =>
+      columns.map((column, index) => ({
+        ...column,
+        index,
+        sortedTasks: sortTasksDoneLast(column.tasks),
+      })),
+    [columns]
+  )
   const selectedTasks = columns.flatMap((column) =>
     column.tasks.filter((task) => selectedTaskIds.has(task.id))
   )
@@ -124,7 +331,8 @@ export function BoardView({
   )
 
   const handleQuickAdd = async (sectionId: string) => {
-    if (!newTitle.trim() || !projectId) return
+    if (!newTitle.trim() || !projectId || quickAddInFlightRef.current) return
+    quickAddInFlightRef.current = true
     setCreating(true)
     try {
       const res = await fetch("/api/tasks", {
@@ -144,6 +352,7 @@ export function BoardView({
     } catch (error) {
       console.error("Failed to create task:", error)
     } finally {
+      quickAddInFlightRef.current = false
       setCreating(false)
     }
   }
@@ -221,7 +430,7 @@ export function BoardView({
     }
   }
 
-  const handleDuplicateTask = async (task: TaskCardData) => {
+  const handleDuplicateTask = useCallback(async (task: TaskCardData) => {
     if (!enableTaskBatchDuplicate) {
       setDuplicatingTaskId(task.id)
       try {
@@ -248,16 +457,38 @@ export function BoardView({
     setSelectedTaskIds(new Set([task.id]))
     setBulkDuplicateDueDate(task.dueDate ?? null)
     setShowBulkDuplicateDialog(true)
-  }
+  }, [enableTaskBatchDuplicate, router])
 
-  const toggleTaskSelection = (taskId: string) => {
+  const handleDeleteTask = useCallback(async (taskId: string) => {
+    setDeletingTaskId(taskId)
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: "DELETE",
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || "Failed to delete task")
+      }
+
+      toast.success("Task deleted")
+      router.refresh()
+    } catch (error) {
+      console.error("Failed to delete task:", error)
+      toast.error(error instanceof Error ? error.message : "Failed to delete task")
+    } finally {
+      setDeletingTaskId(null)
+    }
+  }, [router])
+
+  const toggleTaskSelection = useCallback((taskId: string) => {
     setSelectedTaskIds((prev) => {
       const next = new Set(prev)
       if (next.has(taskId)) next.delete(taskId)
       else next.add(taskId)
       return next
     })
-  }
+  }, [])
 
   const clearSelectedTasks = () => {
     setSelectedTaskIds(new Set())
@@ -313,6 +544,10 @@ export function BoardView({
       setDuplicatingTaskId(null)
     }
   }
+
+  useEffect(() => {
+    setHydrated(true)
+  }, [])
 
   useEffect(() => {
     if (!renamingColumn) return
@@ -378,7 +613,7 @@ export function BoardView({
 
       <DragDropContext onDragEnd={handleDragEnd}>
         <div className="flex gap-3 pb-4 overflow-x-auto min-w-0 w-full h-full px-3 pt-3">
-        {columns.map((column) => (
+        {columnEntries.map((column) => (
           <div
             key={column.id}
             className="flex-1 min-w-[250px] flex flex-col"
@@ -387,12 +622,12 @@ export function BoardView({
             <div className="group/col flex items-center justify-between mb-2 px-1">
               <div className="flex items-center gap-2 min-w-0 flex-1">
                 {/* Reorder arrows */}
-                {projectId && columns.length > 1 && (
+                {projectId && columnEntries.length > 1 && (
                   <div className="flex flex-col opacity-0 group-hover/col:opacity-100 transition-opacity">
-                    {columns.indexOf(column) > 0 && (
+                    {column.index > 0 && (
                       <button
                         className="text-muted-foreground/40 hover:text-muted-foreground p-0"
-                        onClick={() => handleReorderColumn(column.id, columns.indexOf(column) - 1)}
+                        onClick={() => handleReorderColumn(column.id, column.index - 1)}
                         title="Move left"
                       >
                         <GripVertical className="h-3.5 w-3.5" />
@@ -447,21 +682,21 @@ export function BoardView({
                       <Pencil className="h-3.5 w-3.5 mr-2" />
                       Rename Section
                     </DropdownMenuItem>
-                    {columns.indexOf(column) > 0 && (
+                    {column.index > 0 && (
                       <DropdownMenuItem
-                        onClick={() => handleReorderColumn(column.id, columns.indexOf(column) - 1)}
+                        onClick={() => handleReorderColumn(column.id, column.index - 1)}
                       >
                         Move Left
                       </DropdownMenuItem>
                     )}
-                    {columns.indexOf(column) < columns.length - 1 && (
+                    {column.index < columnEntries.length - 1 && (
                       <DropdownMenuItem
-                        onClick={() => handleReorderColumn(column.id, columns.indexOf(column) + 1)}
+                        onClick={() => handleReorderColumn(column.id, column.index + 1)}
                       >
                         Move Right
                       </DropdownMenuItem>
                     )}
-                    {columns.length > 1 && (
+                    {columnEntries.length > 1 && (
                       <DropdownMenuItem
                         className="text-red-600 focus:text-red-600"
                         disabled={deletingColumn === column.id}
@@ -489,14 +724,7 @@ export function BoardView({
                       : "bg-transparent"
                   )}
                 >
-                  {sortTasksDoneLast(column.tasks).map((task, index) => {
-                    const isOverdue =
-                      task.dueDate &&
-                      isPast(new Date(task.dueDate)) &&
-                      !isToday(new Date(task.dueDate)) &&
-                      task.status !== "DONE"
-                    const isDone = task.status === "DONE"
-
+                  {column.sortedTasks.map((task, index) => {
                     return (
                       <Draggable key={task.id} draggableId={task.id} index={index} isDragDisabled={Boolean(column.isTemporary || task.isCrossProject)}>
                         {(provided, snapshot) => (
@@ -505,145 +733,22 @@ export function BoardView({
                             {...provided.draggableProps}
                             {...provided.dragHandleProps}
                           >
-                            <div
-                              className={cn(
-                                "group/task relative rounded-lg border bg-card p-3 cursor-pointer transition-all duration-150",
-                                "hover:shadow-md",
-                                selectedTaskIds.has(task.id) && "border-primary/30 bg-primary/5 ring-2 ring-primary/20 shadow-md",
-                                snapshot.isDragging && "shadow-xl ring-1 ring-border"
-                              )}
-                              onClick={(event) => {
-                                if (enableTaskBatchDuplicate && (event.metaKey || event.ctrlKey)) {
-                                  event.preventDefault()
-                                  toggleTaskSelection(task.id)
-                                  return
-                                }
-                                onTaskClick(task)
-                              }}
-                            >
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <button
-                                    onClick={(event) => event.stopPropagation()}
-                                    className="absolute right-2 top-2 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted/60 hover:text-foreground group-hover/task:opacity-100"
-                                    aria-label="Task actions"
-                                  >
-                                    {duplicatingTaskId === task.id ? (
-                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                    ) : (
-                                      <MoreHorizontal className="h-3.5 w-3.5" />
-                                    )}
-                                  </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-44" onClick={(event) => event.stopPropagation()}>
-                                  <DropdownMenuItem onClick={() => handleDuplicateTask(task)}>
-                                    <Copy className="mr-2 h-3.5 w-3.5" />
-                                    Duplicate task
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-
-                              {/* Spacer — status badge removed (card is already in correct column) */}
-
-                              {/* Task name */}
-                              <div className="px-0">
-                                {task.isCrossProject && task.primaryProjectName && (
-                                  <p className="mb-1 text-[10px] font-medium text-muted-foreground/80">
-                                    From {task.primaryProjectName}
-                                  </p>
-                                )}
-                                <div className="flex items-start gap-2">
-                                  <button
-                                    type="button"
-                                    onMouseDown={(event) => event.stopPropagation()}
-                                    onClick={(event) => {
-                                      event.stopPropagation()
-                                      onStatusChange(task.id, isDone ? "TODO" : "DONE")
-                                    }}
-                                    className="mt-0.5 shrink-0 rounded-full text-muted-foreground transition-colors hover:text-foreground"
-                                    aria-label={isDone ? "Mark task as not done" : "Mark task as done"}
-                                    title={isDone ? "Mark as not done" : "Mark as done"}
-                                  >
-                                    {isDone ? (
-                                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                                    ) : (
-                                      <Circle className="h-4 w-4 opacity-70" />
-                                    )}
-                                  </button>
-                                  <p
-                                    className={cn(
-                                      "pr-8 text-[13px] font-medium leading-snug line-clamp-2",
-                                      isDone ? "text-muted-foreground/70 line-through" : "text-foreground"
-                                    )}
-                                  >
-                                    {task.title}
-                                  </p>
-                                </div>
-                              </div>
-
-                              {task.customFieldChips && task.customFieldChips.length > 0 && (
-                                <div className="mt-2 flex flex-wrap gap-1.5 pl-6">
-                                  {task.customFieldChips.slice(0, 3).map((chip) => (
-                                    <span
-                                      key={chip.id}
-                                      className="inline-flex items-center rounded-full bg-muted/70 px-2 py-1 text-[10px] font-semibold text-muted-foreground"
-                                      title={`${chip.fieldName}: ${chip.label}`}
-                                    >
-                                      {chip.label}
-                                    </span>
-                                  ))}
-                                  {task.customFieldChips.length > 3 && (
-                                    <span
-                                      className="inline-flex items-center rounded-full bg-muted/50 px-2 py-1 text-[10px] font-semibold text-muted-foreground/80"
-                                      title={task.customFieldChips.slice(3).map((chip) => `${chip.fieldName}: ${chip.label}`).join(", ")}
-                                    >
-                                      +{task.customFieldChips.length - 3}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-
-                              {/* Bottom: date + priority pill + avatar */}
-                              <div className="flex items-center justify-between mt-3">
-                                <div className="flex items-center gap-2">
-                                  {task.dueDate && (
-                                    <span
-                                      className={cn(
-                                        "inline-flex items-center gap-1 text-[11px]",
-                                        isOverdue ? "text-red-600 font-medium" : "text-muted-foreground"
-                                      )}
-                                    >
-                                      <Calendar className="h-3 w-3" />
-                                      {formatTaskDueDate(task.dueDate)}
-                                    </span>
-                                  )}
-                                  {task.priority !== "NONE" && PRIORITY_COLORS[task.priority] && (
-                                    <span className="inline-flex items-center gap-1">
-                                      <span className={cn("h-2 w-2 rounded-full", PRIORITY_COLORS[task.priority])} />
-                                      <span className="text-[10px] text-muted-foreground capitalize">{task.priority.charAt(0) + task.priority.slice(1).toLowerCase()}</span>
-                                    </span>
-                                  )}
-                                </div>
-
-                                {task.assignees.length > 0 && (
-                                  <div className="flex -space-x-1">
-                                    {task.assignees.slice(0, 2).map((a) => (
-                                      <UserAvatar
-                                        key={a.id}
-                                        user={{ name: a.name, avatar: a.avatar }}
-                                        size="xs"
-                                        className="h-6 w-6 border border-background"
-                                      />
-                                    ))}
-                                    {task.assignees.length > 2 && (
-                                      <div className="flex h-6 w-6 items-center justify-center rounded-full border border-background bg-muted text-[8px] font-medium text-muted-foreground">
-                                        +{task.assignees.length - 2}
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
+                            <BoardTaskCard
+                              task={task}
+                              hydrated={hydrated}
+                            isSelected={selectedTaskIds.has(task.id)}
+                            isDragging={snapshot.isDragging}
+                            isDuplicating={duplicatingTaskId === task.id}
+                            isDeleting={deletingTaskId === task.id}
+                            enableTaskBatchDuplicate={enableTaskBatchDuplicate}
+                            onOpenTask={onTaskClick}
+                            onToggleSelection={toggleTaskSelection}
+                            onToggleStatus={onStatusChange}
+                            onDuplicateTask={handleDuplicateTask}
+                            onRequestDeleteTask={(taskToDelete) => {
+                              setConfirmDeleteTask({ id: taskToDelete.id, title: taskToDelete.title })
+                            }}
+                          />
                           </div>
                         )}
                       </Draggable>
@@ -671,7 +776,15 @@ export function BoardView({
                           if (e.key === "Enter" && newTitle.trim()) handleQuickAdd(column.id)
                           if (e.key === "Escape") { setAddingTo(null); setNewTitle("") }
                         }}
-                        onBlur={() => { if (!newTitle.trim()) setAddingTo(null) }}
+                        onBlur={() => {
+                          if (creating || quickAddInFlightRef.current) return
+                          if (newTitle.trim()) {
+                            void handleQuickAdd(column.id)
+                            return
+                          }
+
+                          setAddingTo(null)
+                        }}
                         disabled={creating}
                         className="w-full text-[13px] bg-transparent outline-none placeholder:text-muted-foreground/50"
                       />
@@ -760,6 +873,27 @@ export function BoardView({
           if (!confirmDeleteColumn) return
           await handleDeleteColumn(confirmDeleteColumn.id)
           setConfirmDeleteColumn(null)
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!confirmDeleteTask}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDeleteTask(null)
+        }}
+        title="Delete task?"
+        description={
+          confirmDeleteTask
+            ? `Delete "${confirmDeleteTask.title}" permanently? This action cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete task"
+        icon={<Trash2 className="h-5 w-5" />}
+        isLoading={deletingTaskId === confirmDeleteTask?.id}
+        onConfirm={async () => {
+          if (!confirmDeleteTask) return
+          await handleDeleteTask(confirmDeleteTask.id)
+          setConfirmDeleteTask(null)
         }}
       />
 

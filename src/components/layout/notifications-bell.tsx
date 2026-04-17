@@ -5,6 +5,7 @@ import { Bell, CheckCheck, ExternalLink } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import { useSocket } from "@/hooks/use-socket"
+import { toast } from "sonner"
 
 interface Notification {
   id: string
@@ -15,6 +16,12 @@ interface Notification {
   createdAt: string
   taskId: string | null
   projectId: string | null
+  link?: string | null
+}
+
+interface NotificationPrefs {
+  desktopEnabled: boolean
+  desktopSoundEnabled: boolean
 }
 
 interface NotificationsBellProps {
@@ -26,7 +33,14 @@ export function NotificationsBell({ userId, userName }: NotificationsBellProps) 
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [open, setOpen] = useState(false)
+  const [prefs, setPrefs] = useState<NotificationPrefs>({
+    desktopEnabled: false,
+    desktopSoundEnabled: true,
+  })
   const ref = useRef<HTMLDivElement>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const knownNotificationIdsRef = useRef<Set<string>>(new Set())
+  const hasBootstrappedRef = useRef(false)
 
   // Socket connection for real-time notifications
   const { on, connected } = useSocket({
@@ -36,22 +50,162 @@ export function NotificationsBell({ userId, userName }: NotificationsBellProps) 
     enabled: !!userId,
   })
 
-  const fetchNotifications = useCallback(() => {
-    fetch("/api/notifications")
+  const openNotification = useCallback((notification: Notification) => {
+    if (!notification.link) return
+    window.location.href = notification.link
+  }, [])
+
+  const playNotificationSound = useCallback(async () => {
+    if (typeof window === "undefined") return
+
+    try {
+      const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      if (!AudioContextCtor) return
+
+      const audioContext = audioContextRef.current ?? new AudioContextCtor()
+      audioContextRef.current = audioContext
+
+      if (audioContext.state === "suspended") {
+        await audioContext.resume()
+      }
+
+      const oscillator = audioContext.createOscillator()
+      const gainNode = audioContext.createGain()
+
+      oscillator.type = "sine"
+      oscillator.frequency.setValueAtTime(880, audioContext.currentTime)
+      gainNode.gain.setValueAtTime(0.0001, audioContext.currentTime)
+      gainNode.gain.exponentialRampToValueAtTime(0.08, audioContext.currentTime + 0.01)
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.22)
+
+      oscillator.connect(gainNode)
+      gainNode.connect(audioContext.destination)
+      oscillator.start(audioContext.currentTime)
+      oscillator.stop(audioContext.currentTime + 0.24)
+    } catch {
+      // Ignore sound playback issues silently.
+    }
+  }, [])
+
+  const showDesktopNotification = useCallback((notification: Notification) => {
+    if (typeof window === "undefined" || !("Notification" in window)) return
+    if (!prefs.desktopEnabled || Notification.permission !== "granted") return
+
+    const browserNotification = new Notification(notification.title, {
+      body: notification.message,
+      icon: "/logos/nexus-icon-black.png",
+      tag: notification.id,
+    })
+
+    browserNotification.onclick = () => {
+      window.focus()
+      openNotification(notification)
+      browserNotification.close()
+    }
+  }, [openNotification, prefs.desktopEnabled])
+
+  const showNotificationCard = useCallback((notification: Notification) => {
+    toast(notification.title, {
+      description: notification.message,
+      action: notification.link
+        ? {
+            label: "Open",
+            onClick: () => openNotification(notification),
+          }
+        : undefined,
+    })
+  }, [openNotification])
+
+  const notifyIncomingNotification = useCallback((notification: Notification) => {
+    if (knownNotificationIdsRef.current.has(notification.id)) {
+      return
+    }
+
+    knownNotificationIdsRef.current.add(notification.id)
+    showNotificationCard(notification)
+    showDesktopNotification(notification)
+
+    if (prefs.desktopSoundEnabled) {
+      void playNotificationSound()
+    }
+  }, [playNotificationSound, prefs.desktopSoundEnabled, showDesktopNotification, showNotificationCard])
+
+  const fetchNotifications = useCallback(async (options?: { alertNew?: boolean }) => {
+    fetch("/api/notifications", {
+      cache: "no-store",
+      credentials: "include",
+    })
       .then(r => r.json())
       .then(data => {
-        setNotifications(data.notifications || [])
+        const nextNotifications = (data.notifications || []) as Notification[]
+        setNotifications(nextNotifications)
         setUnreadCount(data.unreadCount || 0)
+
+        const knownIds = knownNotificationIdsRef.current
+        const nextIds = new Set<string>()
+
+        for (const notification of nextNotifications) {
+          nextIds.add(notification.id)
+        }
+
+        if (!hasBootstrappedRef.current) {
+          knownNotificationIdsRef.current = nextIds
+          hasBootstrappedRef.current = true
+          return
+        }
+
+        if (options?.alertNew) {
+          const unseenNotifications = nextNotifications
+            .filter((notification) => !knownIds.has(notification.id))
+            .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+
+          unseenNotifications.forEach((notification) => notifyIncomingNotification(notification))
+        }
+
+        knownNotificationIdsRef.current = nextIds
+      })
+      .catch(() => {})
+  }, [notifyIncomingNotification])
+
+  const fetchPrefs = useCallback(() => {
+    fetch("/api/notifications/preferences", {
+      cache: "no-store",
+      credentials: "include",
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        setPrefs({
+          desktopEnabled: Boolean(data.desktopEnabled),
+          desktopSoundEnabled: data.desktopSoundEnabled ?? true,
+        })
       })
       .catch(() => {})
   }, [])
 
   // Initial fetch + polling fallback (extended to 60s since we have sockets)
   useEffect(() => {
-    fetchNotifications()
-    const interval = setInterval(fetchNotifications, 60000)
-    return () => clearInterval(interval)
-  }, [fetchNotifications])
+    void fetchNotifications()
+    fetchPrefs()
+    const interval = setInterval(() => {
+      void fetchNotifications({ alertNew: true })
+    }, 5000)
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void fetchNotifications({ alertNew: true })
+        fetchPrefs()
+      }
+    }
+
+    window.addEventListener("focus", handleVisibilityChange)
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener("focus", handleVisibilityChange)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
+  }, [fetchNotifications, fetchPrefs])
 
   // Real-time: listen for new notifications via socket
   useEffect(() => {
@@ -59,12 +213,38 @@ export function NotificationsBell({ userId, userName }: NotificationsBellProps) 
 
     const unsub = on("new-notification", (notification: unknown) => {
       const n = notification as Notification
-      setNotifications(prev => [n, ...prev].slice(0, 50))
-      setUnreadCount(prev => prev + 1)
+      setNotifications(prev => {
+        const existing = prev.filter((item) => item.id !== n.id)
+        return [n, ...existing].slice(0, 50)
+      })
+      setUnreadCount(prev => (n.read ? prev : prev + 1))
+      notifyIncomingNotification(n)
     })
 
     return unsub
-  }, [connected, on])
+  }, [connected, notifyIncomingNotification, on])
+
+  useEffect(() => {
+    const unlockAudio = () => {
+      const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      if (!AudioContextCtor) return
+
+      const audioContext = audioContextRef.current ?? new AudioContextCtor()
+      audioContextRef.current = audioContext
+
+      if (audioContext.state === "suspended") {
+        void audioContext.resume()
+      }
+    }
+
+    window.addEventListener("pointerdown", unlockAudio, { once: true })
+    window.addEventListener("keydown", unlockAudio, { once: true })
+
+    return () => {
+      window.removeEventListener("pointerdown", unlockAudio)
+      window.removeEventListener("keydown", unlockAudio)
+    }
+  }, [])
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

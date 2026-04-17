@@ -36,7 +36,8 @@ interface HeaderProps {
 }
 
 export function Header({ title, breadcrumbs, user, children }: HeaderProps) {
-  const { toggleSidebar, sidebarOpen } = useAppStore()
+  const toggleSidebar = useAppStore((state) => state.toggleSidebar)
+  const sidebarOpen = useAppStore((state) => state.sidebarOpen)
   const router = useRouter()
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
@@ -48,17 +49,17 @@ export function Header({ title, breadcrumbs, user, children }: HeaderProps) {
 
   return (
     <>
-      <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-on-surface-variant/5 bg-surface/95 px-3 backdrop-blur-xl shrink-0 sm:px-6">
+      <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-on-surface-variant/5 bg-surface/95 px-2.5 backdrop-blur-xl shrink-0 sm:h-16 sm:px-6">
         {/* Left: hamburger + breadcrumb */}
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
           <button
             onClick={toggleSidebar}
             className={cn(
-              "rounded-xl p-2 text-on-surface-variant/60 hover:bg-surface-container-high transition-all duration-200",
+              "rounded-xl p-1.5 text-on-surface-variant/60 hover:bg-surface-container-high transition-all duration-200 sm:p-2",
               sidebarOpen ? "md:hidden" : ""
             )}
           >
-            <Menu className="h-5 w-5" />
+            <Menu className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
           </button>
 
           {breadcrumbs && breadcrumbs.length > 0 ? (
@@ -89,7 +90,7 @@ export function Header({ title, breadcrumbs, user, children }: HeaderProps) {
               ))}
             </nav>
           ) : title ? (
-            <h1 className="truncate text-sm font-headline font-extrabold text-primary tracking-tight sm:text-base">{title}</h1>
+            <h1 className="truncate text-[13px] font-headline font-extrabold text-primary tracking-tight sm:text-base">{title}</h1>
           ) : null}
         </div>
 
@@ -101,7 +102,7 @@ export function Header({ title, breadcrumbs, user, children }: HeaderProps) {
         )}
 
         {/* Right: search + actions + user */}
-        <div className="ml-3 flex shrink-0 items-center gap-1 sm:gap-2">
+        <div className="ml-2 flex shrink-0 items-center gap-0.5 sm:ml-3 sm:gap-2">
           {/* Search trigger */}
           <button
             onClick={() => {
@@ -122,9 +123,9 @@ export function Header({ title, breadcrumbs, user, children }: HeaderProps) {
             onClick={() => {
               window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))
             }}
-            className="rounded-xl p-2 text-on-surface-variant/60 hover:bg-surface-container-high transition-all sm:hidden"
+            className="rounded-xl p-1.5 text-on-surface-variant/60 hover:bg-surface-container-high transition-all sm:hidden"
           >
-            <Search className="h-5 w-5" />
+            <Search className="h-4.5 w-4.5" />
           </button>
 
           {/* Notifications */}

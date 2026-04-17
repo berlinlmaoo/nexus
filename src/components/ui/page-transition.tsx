@@ -1,6 +1,6 @@
 "use client"
 
-import { motion, AnimatePresence } from "framer-motion"
+import { useEffect, useState } from "react"
 import { usePathname } from "next/navigation"
 
 interface PageTransitionProps {
@@ -9,18 +9,36 @@ interface PageTransitionProps {
 
 export function PageTransition({ children }: PageTransitionProps) {
   const pathname = usePathname()
+  const [reduceMotion, setReduceMotion] = useState(false)
+  const [visible, setVisible] = useState(true)
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)")
+    const syncPreference = () => setReduceMotion(mediaQuery.matches)
+
+    syncPreference()
+    mediaQuery.addEventListener("change", syncPreference)
+
+    return () => mediaQuery.removeEventListener("change", syncPreference)
+  }, [])
+
+  useEffect(() => {
+    if (reduceMotion) {
+      setVisible(true)
+      return
+    }
+
+    setVisible(false)
+    const frame = requestAnimationFrame(() => setVisible(true))
+
+    return () => cancelAnimationFrame(frame)
+  }, [pathname, reduceMotion])
 
   return (
-    <AnimatePresence mode="wait" initial={false}>
-      <motion.div
-        key={pathname}
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -4 }}
-        transition={{ duration: 0.2, ease: "easeOut" }}
-      >
-        {children}
-      </motion.div>
-    </AnimatePresence>
+    <div
+      className={`transition-[opacity,transform] duration-200 ease-out ${visible ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"}`}
+    >
+      {children}
+    </div>
   )
 }
