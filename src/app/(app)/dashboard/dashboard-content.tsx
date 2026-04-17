@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { WidgetGrid } from "@/components/dashboard/widget-grid"
 import { DashboardSkeleton } from "@/components/ui/skeleton"
 import { Plus, X, Loader2, ArrowRight, CheckCircle2, Calendar, Circle, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -48,7 +47,6 @@ interface ProjectOption {
   id: string
   name: string
   color: string
-  taskLists: Array<{ id: string; name: string }>
 }
 
 const getGreeting = () => {
@@ -68,6 +66,8 @@ export function DashboardContent({ userName }: { userName: string }) {
   const [selectedTaskList, setSelectedTaskList] = useState("")
   const [taskPriority, setTaskPriority] = useState("MEDIUM")
   const [projects, setProjects] = useState<ProjectOption[]>([])
+  const [projectTaskLists, setProjectTaskLists] = useState<Record<string, Array<{ id: string; name: string }>>>({})
+  const [taskListsLoading, setTaskListsLoading] = useState(false)
   const [creating, setCreating] = useState(false)
   const [completingIds, setCompletingIds] = useState<Set<string>>(new Set())
 
@@ -94,28 +94,60 @@ export function DashboardContent({ userName }: { userName: string }) {
     setSelectedProject("")
     setSelectedTaskList("")
     setTaskPriority("MEDIUM")
+
+    if (projects.length > 0) {
+      return
+    }
+
     try {
       const res = await fetch("/api/projects")
       if (res.ok) {
         const data = await res.json()
         const projectList = Array.isArray(data) ? data : data.projects ?? []
-        const withTaskLists = await Promise.all(
-          projectList.slice(0, 20).map(async (p: { id: string; name: string; color: string }) => {
-            try {
-              const tlRes = await fetch(`/api/projects/${p.id}/task-lists`)
-              const tls = tlRes.ok ? await tlRes.json() : []
-              return { ...p, taskLists: Array.isArray(tls) ? tls : [] }
-            } catch {
-              return { ...p, taskLists: [] }
-            }
-          })
-        )
-        setProjects(withTaskLists)
+        setProjects(projectList.slice(0, 20))
       }
     } catch {
       setProjects([])
     }
-  }, [])
+  }, [projects.length])
+
+  useEffect(() => {
+    if (!quickCreateOpen || !selectedProject || projectTaskLists[selectedProject]) return
+
+    const controller = new AbortController()
+    let cancelled = false
+
+    setTaskListsLoading(true)
+
+    fetch(`/api/projects/${selectedProject}/task-lists`, { signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((taskLists) => {
+        if (cancelled) return
+
+        setProjectTaskLists((prev) => ({
+          ...prev,
+          [selectedProject]: Array.isArray(taskLists) ? taskLists : [],
+        }))
+      })
+      .catch((error) => {
+        if (cancelled || error instanceof DOMException) return
+
+        setProjectTaskLists((prev) => ({
+          ...prev,
+          [selectedProject]: [],
+        }))
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setTaskListsLoading(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [projectTaskLists, quickCreateOpen, selectedProject])
 
   const createTask = useCallback(async () => {
     if (!taskTitle.trim() || !selectedTaskList) return
@@ -207,7 +239,7 @@ export function DashboardContent({ userName }: { userName: string }) {
     }
   }, [data?.tasks, markProjectDirty, router])
 
-  const selectedProjectData = projects.find((p) => p.id === selectedProject)
+  const selectedProjectTaskLists = selectedProject ? (projectTaskLists[selectedProject] ?? []) : []
   const greeting = getGreeting()
 
   if (loading) {
@@ -466,11 +498,13 @@ export function DashboardContent({ userName }: { userName: string }) {
                 <select
                   value={selectedTaskList}
                   onChange={(e) => setSelectedTaskList(e.target.value)}
-                  disabled={!selectedProjectData}
+                  disabled={!selectedProject || taskListsLoading}
                   className="w-full h-14 rounded-2xl bg-surface-container-low border-none px-4 text-sm font-bold text-on-surface focus:ring-2 focus:ring-primary/5 outline-none appearance-none disabled:opacity-30 cursor-pointer"
                 >
-                  <option value="" className="bg-surface-container-lowest text-on-surface">Select sector...</option>
-                  {selectedProjectData?.taskLists.map((tl) => (
+                  <option value="" className="bg-surface-container-lowest text-on-surface">
+                    {taskListsLoading ? "Loading sectors..." : "Select sector..."}
+                  </option>
+                  {selectedProjectTaskLists.map((tl) => (
                     <option key={tl.id} value={tl.id} className="bg-surface-container-lowest text-on-surface">{tl.name}</option>
                   ))}
                 </select>

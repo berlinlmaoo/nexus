@@ -1,7 +1,11 @@
 import { format } from "date-fns"
 import {
+  formatCreatedFieldValue,
+  formatCustomFieldNumberValue,
+  normalizeCustomFieldOptions,
   normalizeCustomFieldType,
   parseCustomFieldValue,
+  type CustomFieldOptionConfig,
   type SupportedCustomFieldType,
 } from "@/lib/custom-fields"
 
@@ -20,9 +24,11 @@ export function buildTaskCardCustomFieldChips(
     customField: {
       name: string
       type: string
+      options?: CustomFieldOptionConfig | null | unknown
     }
   }>,
-  taskCreatedAt?: Date | string | null
+  taskCreatedAt?: Date | string | null,
+  taskCreatorName?: string | null
 ): TaskCardCustomFieldChip[] {
   const chips: TaskCardCustomFieldChip[] = []
 
@@ -32,6 +38,7 @@ export function buildTaskCardCustomFieldChips(
 
     const parsed = parseCustomFieldValue(normalizedType, fieldValue.value, taskCreatedAt)
     const fieldName = fieldValue.customField.name
+    const fieldOptions = normalizeCustomFieldOptions(normalizedType, fieldValue.customField.options)
 
     if (Array.isArray(parsed)) {
       for (const option of parsed.filter(Boolean)) {
@@ -63,7 +70,16 @@ export function buildTaskCardCustomFieldChips(
     if (!raw) continue
 
     let label = raw
-    if ((normalizedType === "DATE" || normalizedType === "CREATED") && !Number.isNaN(new Date(raw).getTime())) {
+    if (normalizedType === "NUMBER") {
+      label = formatCustomFieldNumberValue(raw, fieldOptions)
+    }
+    if (normalizedType === "CREATED") {
+      label = formatCreatedFieldValue(raw, {
+        userName: taskCreatorName || "Unknown",
+        timestamp: raw,
+      })
+    }
+    if (normalizedType === "DATE" && !Number.isNaN(new Date(raw).getTime())) {
       const date = new Date(raw)
       label = date.getHours() !== 0 || date.getMinutes() !== 0
         ? format(date, "MMM d • HH:mm")

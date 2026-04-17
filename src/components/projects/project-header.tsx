@@ -4,10 +4,12 @@ import { useState, useRef, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { UserAvatar } from "@/components/ui/user-avatar"
 import {
   Smile,
   Palette,
@@ -15,12 +17,11 @@ import {
   Check,
   Pencil,
   Upload,
-  X,
   Loader2,
   Trash2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { ProjectIcon, isUploadedIcon } from "./project-icon"
+import { isUploadedIcon } from "./project-icon"
 import { ProjectCustomFieldsManager } from "./project-custom-fields-manager"
 
 interface ProjectHeaderProps {
@@ -31,6 +32,14 @@ interface ProjectHeaderProps {
     color: string
     icon: string
     enableTaskBatchDuplicate: boolean
+    autoAssignEnabled: boolean
+    autoAssignAssigneeIds: string[]
+    members: {
+      id: string
+      name: string
+      avatar: string | null
+      role: string
+    }[]
   }
   onProjectChange?: (project: {
     id: string
@@ -39,6 +48,8 @@ interface ProjectHeaderProps {
     color: string
     icon: string
     enableTaskBatchDuplicate: boolean
+    autoAssignEnabled: boolean
+    autoAssignAssigneeIds: string[]
   }) => void
 }
 
@@ -86,8 +97,11 @@ export function ProjectHeader({ project, onProjectChange }: ProjectHeaderProps) 
   const [selectedIcon, setSelectedIcon] = useState(project.icon || "folder")
   const [selectedColor, setSelectedColor] = useState(project.color)
   const [enableTaskBatchDuplicate, setEnableTaskBatchDuplicate] = useState(project.enableTaskBatchDuplicate)
+  const [autoAssignEnabled, setAutoAssignEnabled] = useState(project.autoAssignEnabled)
+  const [autoAssignAssigneeIds, setAutoAssignAssigneeIds] = useState(project.autoAssignAssigneeIds)
+  const [autoAssignError, setAutoAssignError] = useState<string | null>(null)
   const [coverGradient, setCoverGradient] = useState(PRESET_GRADIENTS[0])
-  const [coverImage, setCoverImage] = useState<string | null>(null)
+  const [coverImage] = useState<string | null>(null)
 
   // Upload state
   const [uploading, setUploading] = useState(false)
@@ -103,9 +117,20 @@ export function ProjectHeader({ project, onProjectChange }: ProjectHeaderProps) 
     setSelectedIcon(project.icon || "folder")
     setSelectedColor(project.color)
     setEnableTaskBatchDuplicate(project.enableTaskBatchDuplicate)
-  }, [project.name, project.description, project.icon, project.color, project.enableTaskBatchDuplicate])
+    setAutoAssignEnabled(project.autoAssignEnabled)
+    setAutoAssignAssigneeIds(project.autoAssignAssigneeIds)
+    setAutoAssignError(null)
+  }, [
+    project.name,
+    project.description,
+    project.icon,
+    project.color,
+    project.enableTaskBatchDuplicate,
+    project.autoAssignEnabled,
+    project.autoAssignAssigneeIds,
+  ])
 
-  const updateProject = async (updates: Record<string, string | boolean | null>) => {
+  const updateProject = async (updates: Record<string, string | boolean | string[] | null>) => {
     try {
       const res = await fetch(`/api/projects/${project.id}`, {
         method: "PATCH",
@@ -124,6 +149,8 @@ export function ProjectHeader({ project, onProjectChange }: ProjectHeaderProps) 
         color: updatedProject.color ?? project.color,
         icon: updatedProject.icon ?? project.icon,
         enableTaskBatchDuplicate: updatedProject.enableTaskBatchDuplicate ?? project.enableTaskBatchDuplicate,
+        autoAssignEnabled: updatedProject.autoAssignEnabled ?? project.autoAssignEnabled,
+        autoAssignAssigneeIds: updatedProject.autoAssignAssigneeIds ?? project.autoAssignAssigneeIds,
       }
 
       onProjectChange?.(nextProject)
@@ -157,6 +184,35 @@ export function ProjectHeader({ project, onProjectChange }: ProjectHeaderProps) 
   const handleBatchDuplicateToggle = (checked: boolean) => {
     setEnableTaskBatchDuplicate(checked)
     updateProject({ enableTaskBatchDuplicate: checked })
+  }
+
+  const handleAutoAssignToggle = async (checked: boolean) => {
+    if (checked && autoAssignAssigneeIds.length === 0) {
+      setAutoAssignError("Select at least one project member before enabling auto assign.")
+      return
+    }
+
+    setAutoAssignError(null)
+    setAutoAssignEnabled(checked)
+    await updateProject({ autoAssignEnabled: checked })
+  }
+
+  const handleAutoAssignMemberToggle = async (memberId: string, checked: boolean) => {
+    const nextAssigneeIds = checked
+      ? [...autoAssignAssigneeIds, memberId]
+      : autoAssignAssigneeIds.filter((id) => id !== memberId)
+
+    const dedupedAssigneeIds = Array.from(new Set(nextAssigneeIds))
+    const nextEnabled = dedupedAssigneeIds.length > 0
+
+    setAutoAssignError(null)
+    setAutoAssignAssigneeIds(dedupedAssigneeIds)
+    setAutoAssignEnabled(nextEnabled)
+
+    await updateProject({
+      autoAssignEnabled: nextEnabled,
+      autoAssignAssigneeIds: dedupedAssigneeIds,
+    })
   }
 
   const handleNameSave = () => {
@@ -565,6 +621,79 @@ export function ProjectHeader({ project, onProjectChange }: ProjectHeaderProps) 
             onCheckedChange={handleBatchDuplicateToggle}
             aria-label="Enable task batch duplicate"
           />
+        </div>
+      </div>
+
+      <div className="rounded-2xl border bg-card/80 px-4 py-4 shadow-sm">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-foreground">Auto assign</p>
+            <p className="text-xs text-muted-foreground">
+              Automatically assign selected project members to newly created tasks in this project.
+            </p>
+            <p className="text-[11px] text-muted-foreground/80">
+              Only applies to new tasks created in this project. If someone chooses assignees manually while creating a task, auto assign will be skipped.
+            </p>
+          </div>
+          <Switch
+            checked={autoAssignEnabled}
+            onCheckedChange={handleAutoAssignToggle}
+            aria-label="Enable auto assign for new tasks"
+            disabled={!autoAssignEnabled && autoAssignAssigneeIds.length === 0}
+          />
+        </div>
+
+        <div className="mt-4 space-y-3">
+          <div className="rounded-xl border border-dashed bg-background/70 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Default Assignees
+            </p>
+            <div className="mt-3 grid gap-2">
+              {project.members.map((member) => {
+                const checked = autoAssignAssigneeIds.includes(member.id)
+
+                return (
+                  <label
+                    key={member.id}
+                    className={cn(
+                      "flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 transition-colors",
+                      checked ? "border-foreground/20 bg-muted/50" : "border-border bg-background hover:bg-muted/30"
+                    )}
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(value) => handleAutoAssignMemberToggle(member.id, value === true)}
+                      aria-label={`Auto assign ${member.name}`}
+                    />
+                    <UserAvatar user={{ name: member.name, avatar: member.avatar }} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-foreground">{member.name}</p>
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{member.role}</p>
+                    </div>
+                    {checked && (
+                      <span className="rounded-full bg-foreground px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-background">
+                        Default
+                      </span>
+                    )}
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+
+          {autoAssignError ? (
+            <p className="text-xs text-red-500">{autoAssignError}</p>
+          ) : autoAssignAssigneeIds.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Select at least one project member to enable auto assign.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {autoAssignEnabled
+                ? `${autoAssignAssigneeIds.length} default assignee${autoAssignAssigneeIds.length > 1 ? "s" : ""} will be added to new tasks automatically.`
+                : "Default assignees are saved, but auto assign is currently turned off. Turn on the toggle to activate it."}
+            </p>
+          )}
         </div>
       </div>
 

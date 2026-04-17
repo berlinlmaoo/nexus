@@ -4,6 +4,10 @@ import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { checkProjectAccess, isSystemAdminUser } from "@/lib/rbac"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
+import {
+  normalizeAutoAssignConfig,
+  ProjectAutoAssignConfigError,
+} from "@/lib/project-auto-assign"
 
 async function canManageProject(userId: string, projectId: string) {
   if (await isSystemAdminUser(userId)) {
@@ -107,10 +111,25 @@ export async function PATCH(
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const body = await request.json()
-    const { name, description, color, icon, status, enableTaskBatchDuplicate } = body
+    const {
+      name,
+      description,
+      color,
+      icon,
+      status,
+      enableTaskBatchDuplicate,
+      autoAssignEnabled,
+      autoAssignAssigneeIds,
+    } = body
 
     const existing = await prisma.project.findUnique({
       where: { id: params.projectId },
+      select: {
+        id: true,
+        members: {
+          select: { userId: true },
+        },
+      },
     })
 
     if (!existing) {
@@ -122,6 +141,29 @@ export async function PATCH(
       return NextResponse.json({ error: "Forbidden: LEAD role required to update projects" }, { status: 403 })
     }
 
+    let normalizedAutoAssignConfig:
+      | { autoAssignEnabled: boolean; autoAssignAssigneeIds: string[] }
+      | undefined
+
+    if (autoAssignEnabled !== undefined || autoAssignAssigneeIds !== undefined) {
+      try {
+        normalizedAutoAssignConfig = normalizeAutoAssignConfig(
+          {
+            autoAssignEnabled,
+            autoAssignAssigneeIds,
+          },
+          {
+            memberIds: existing.members.map((member) => member.userId),
+          }
+        )
+      } catch (error) {
+        if (error instanceof ProjectAutoAssignConfigError) {
+          return NextResponse.json({ error: error.message }, { status: 400 })
+        }
+        throw error
+      }
+    }
+
     const project = await prisma.project.update({
       where: { id: params.projectId },
       data: {
@@ -131,6 +173,7 @@ export async function PATCH(
         ...(icon !== undefined && { icon }),
         ...(status !== undefined && { status }),
         ...(enableTaskBatchDuplicate !== undefined && { enableTaskBatchDuplicate }),
+        ...(normalizedAutoAssignConfig && normalizedAutoAssignConfig),
       },
       include: {
         taskLists: true,

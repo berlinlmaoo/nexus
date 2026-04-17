@@ -14,7 +14,13 @@ import {
   CommandList,
 } from "@/components/ui/command"
 import {
+  type CreatedFieldMetadata,
   CustomFieldOptionConfig,
+  formatCreatedFieldTimestamp,
+  formatCustomFieldNumberValue,
+  formatCreatedFieldValue,
+  getNumberCustomFieldFormat,
+  normalizeCustomFieldNumberInput,
   type PlaceFieldValue,
   type SupportedCustomFieldType,
 } from "@/lib/custom-fields"
@@ -34,11 +40,13 @@ import { toast } from "sonner"
 
 interface CustomFieldRecord {
   id: string
+  projectId: string
   name: string
   type: SupportedCustomFieldType
   position: number
   options: CustomFieldOptionConfig | null
   value: string | string[] | PlaceFieldValue
+  createdMeta?: CreatedFieldMetadata | null
 }
 
 const FIELD_ICONS: Record<SupportedCustomFieldType, typeof Hash> = {
@@ -161,24 +169,133 @@ function MultiValueSelect({
   )
 }
 
-export function CustomFields({ taskId, projectId }: { taskId: string; projectId: string }) {
+function NumberFieldInput({
+  field,
+  value,
+  onChange,
+  onCommit,
+}: {
+  field: CustomFieldRecord
+  value: string
+  onChange: (value: string) => void
+  onCommit: (value: string) => void
+}) {
+  const [draft, setDraft] = useState(value)
+  const [focused, setFocused] = useState(false)
+  const numberFormat = getNumberCustomFieldFormat(field.options)
+
+  useEffect(() => {
+    if (!focused) {
+      setDraft(value)
+    }
+  }, [focused, value])
+
+  const handleFocus = () => {
+    setFocused(true)
+    if (numberFormat === "currency-idr") {
+      setDraft(normalizeCustomFieldNumberInput(draft, field.options))
+    }
+  }
+
+  const handleChange = (nextValue: string) => {
+    const normalizedValue = normalizeCustomFieldNumberInput(nextValue, field.options)
+    setDraft(normalizedValue)
+    onChange(normalizedValue)
+  }
+
+  const handleBlur = () => {
+    const normalizedValue = normalizeCustomFieldNumberInput(draft, field.options)
+    setFocused(false)
+    setDraft(normalizedValue)
+    onCommit(normalizedValue)
+  }
+
+  const displayValue =
+    numberFormat === "currency-idr" && !focused
+      ? formatCustomFieldNumberValue(draft, field.options)
+      : draft
+
+  return (
+    <div className="space-y-2">
+      <Input
+        type="text"
+        inputMode={numberFormat === "currency-idr" ? "numeric" : "decimal"}
+        value={displayValue}
+        onFocus={handleFocus}
+        onChange={(event) => handleChange(event.target.value)}
+        onBlur={handleBlur}
+        placeholder={numberFormat === "currency-idr" ? "Masukkan nominal rupiah..." : "Enter a number..."}
+        className="h-11 rounded-xl"
+      />
+      {numberFormat === "currency-idr" && draft && (
+        <p className="text-[11px] text-on-surface-variant/45">
+          Disimpan sebagai nominal Rupiah.
+        </p>
+      )}
+    </div>
+  )
+}
+
+export function CustomFields({
+  taskId,
+  projectIds,
+  projects = [],
+}: {
+  taskId: string
+  projectIds: string[]
+  projects?: Array<{ id: string; name: string; color?: string }>
+}) {
   const [fields, setFields] = useState<CustomFieldRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [savingFieldId, setSavingFieldId] = useState<string | null>(null)
 
+  const uniqueProjectIds = useMemo(
+    () => Array.from(new Set(projectIds.filter(Boolean))),
+    [projectIds]
+  )
+
+  const projectMetaById = useMemo(
+    () =>
+      new Map(
+        projects.map((project) => [
+          project.id,
+          {
+            name: project.name,
+            color: project.color,
+          },
+        ])
+      ),
+    [projects]
+  )
+
   const fetchFields = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/custom-fields?projectId=${projectId}&taskId=${taskId}`)
-      const data = await res.json()
-      setFields(Array.isArray(data.fields) ? data.fields : [])
+      if (uniqueProjectIds.length === 0) {
+        setFields([])
+        return
+      }
+
+      const responses = await Promise.all(
+        uniqueProjectIds.map(async (projectId) => {
+          const res = await fetch(`/api/custom-fields?projectId=${projectId}&taskId=${taskId}`)
+          if (!res.ok) {
+            throw new Error(`Failed to load custom fields for project ${projectId}`)
+          }
+
+          const data = await res.json()
+          return Array.isArray(data.fields) ? data.fields : []
+        })
+      )
+
+      setFields(responses.flat())
     } catch (error) {
       console.error("Failed to load task custom fields:", error)
       toast.error("Failed to load custom fields")
     } finally {
       setLoading(false)
     }
-  }, [projectId, taskId])
+  }, [taskId, uniqueProjectIds])
 
   useEffect(() => {
     fetchFields()
@@ -205,7 +322,13 @@ export function CustomFields({ taskId, projectId }: { taskId: string; projectId:
       const data = await res.json()
       setFields((prev) =>
         prev.map((field) =>
-          field.id === fieldId ? { ...field, value: data.fieldValue.value } : field
+          field.id === fieldId
+            ? {
+                ...field,
+                value: data.fieldValue.value,
+                createdMeta: data.fieldValue.createdMeta ?? field.createdMeta ?? null,
+              }
+            : field
         )
       )
     } catch (error) {
@@ -217,10 +340,18 @@ export function CustomFields({ taskId, projectId }: { taskId: string; projectId:
     }
   }
 
-  const sortedFields = useMemo(
-    () => [...fields].sort((a, b) => a.position - b.position),
-    [fields]
-  )
+  const sortedFields = useMemo(() => {
+    const projectOrder = new Map(uniqueProjectIds.map((projectId, index) => [projectId, index]))
+
+    return [...fields].sort((a, b) => {
+      const projectIndexA = projectOrder.get(a.projectId) ?? Number.MAX_SAFE_INTEGER
+      const projectIndexB = projectOrder.get(b.projectId) ?? Number.MAX_SAFE_INTEGER
+
+      if (projectIndexA !== projectIndexB) return projectIndexA - projectIndexB
+      if (a.position !== b.position) return a.position - b.position
+      return a.name.localeCompare(b.name)
+    })
+  }, [fields, uniqueProjectIds])
 
   if (loading) {
     return (
@@ -241,7 +372,7 @@ export function CustomFields({ taskId, projectId }: { taskId: string; projectId:
           Custom Fields
         </p>
         <p className="mt-3 text-sm text-on-surface-variant/45">
-          No custom fields configured for this project yet.
+          No custom fields configured for the linked projects yet.
         </p>
       </div>
     )
@@ -277,6 +408,9 @@ export function CustomFields({ taskId, projectId }: { taskId: string; projectId:
             typeof field.value === "object" && field.value !== null && !Array.isArray(field.value)
               ? (field.value as PlaceFieldValue)
               : { label: "", mapUrl: "" }
+          const createdLabel = formatCreatedFieldValue(singleValue, field.createdMeta)
+          const createdTimestamp =
+            field.createdMeta?.timestamp || (singleValue ? String(singleValue) : "")
 
           return (
             <div
@@ -293,22 +427,33 @@ export function CustomFields({ taskId, projectId }: { taskId: string; projectId:
                     {field.type.replaceAll("_", " ")}
                   </p>
                 </div>
+                {uniqueProjectIds.length > 1 && projectMetaById.get(field.projectId) && (
+                  <span
+                    className="ml-auto inline-flex items-center gap-1 rounded-full border border-on-surface-variant/10 px-2 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-on-surface-variant/45"
+                  >
+                    {projectMetaById.get(field.projectId)?.color && (
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ backgroundColor: projectMetaById.get(field.projectId)?.color }}
+                      />
+                    )}
+                    {projectMetaById.get(field.projectId)?.name}
+                  </span>
+                )}
               </div>
 
               {field.type === "NUMBER" && (
-                <Input
-                  type="number"
+                <NumberFieldInput
+                  field={field}
                   value={singleValue}
-                  onChange={(event) =>
+                  onChange={(value) =>
                     setFields((prev) =>
                       prev.map((item) =>
-                        item.id === field.id ? { ...item, value: event.target.value } : item
+                        item.id === field.id ? { ...item, value } : item
                       )
                     )
                   }
-                  onBlur={(event) => updateFieldValue(field.id, event.target.value)}
-                  placeholder="Enter a number..."
-                  className="h-11 rounded-xl"
+                  onCommit={(value) => updateFieldValue(field.id, value)}
                 />
               )}
 
@@ -328,7 +473,7 @@ export function CustomFields({ taskId, projectId }: { taskId: string; projectId:
                 />
               )}
 
-              {(field.type === "DATE" || field.type === "CREATED") && (
+              {field.type === "DATE" && (
                 <div className="space-y-2">
                   <DateTimePicker
                     value={singleValue || null}
@@ -337,6 +482,24 @@ export function CustomFields({ taskId, projectId }: { taskId: string; projectId:
                   {singleValue && (
                     <p className="text-[11px] text-on-surface-variant/45">
                       {format(new Date(singleValue), "dd MMM yyyy • HH:mm")}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {field.type === "CREATED" && (
+                <div className="rounded-2xl border border-on-surface-variant/5 bg-surface-container-low px-4 py-3">
+                  <p className="text-sm font-semibold text-on-surface">
+                    {field.createdMeta?.userName || "Unknown"}
+                  </p>
+                  {createdTimestamp && (
+                    <p className="mt-1 text-xs text-on-surface-variant/50">
+                      {formatCreatedFieldTimestamp(createdTimestamp)}
+                    </p>
+                  )}
+                  {createdLabel && (
+                    <p className="mt-3 text-[11px] font-medium text-on-surface-variant/40">
+                      Request history is captured automatically from the task creator.
                     </p>
                   )}
                 </div>

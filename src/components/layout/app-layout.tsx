@@ -1,16 +1,30 @@
 "use client"
 
+import dynamic from "next/dynamic"
 import { Suspense, useEffect } from "react"
 import { Sidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
 import { LoadingBar } from "@/components/layout/loading-bar"
+import { DesktopNotificationPrompt } from "@/components/layout/desktop-notification-prompt"
 import { PageTransition } from "@/components/ui/page-transition"
-import { GideonChat } from "@/components/gideon/gideon-chat"
-import { MobileNav } from "@/components/layout/mobile-nav"
-import { SearchDialog } from "@/components/layout/search-dialog"
 import { ShortcutsHelpProvider } from "@/components/layout/shortcuts-help"
 import { useAppStore } from "@/stores/app-store"
 import { cn } from "@/lib/utils"
+
+const GideonChat = dynamic(
+  () => import("@/components/gideon/gideon-chat").then((mod) => mod.GideonChat),
+  { ssr: false }
+)
+
+const MobileNav = dynamic(
+  () => import("@/components/layout/mobile-nav").then((mod) => mod.MobileNav),
+  { ssr: false }
+)
+
+const SearchDialog = dynamic(
+  () => import("@/components/layout/search-dialog").then((mod) => mod.SearchDialog),
+  { ssr: false }
+)
 
 interface Breadcrumb {
   label: string
@@ -31,7 +45,8 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children, title, breadcrumbs, user }: AppLayoutProps) {
-  const { sidebarOpen, toggleSidebar } = useAppStore()
+  const sidebarOpen = useAppStore((state) => state.sidebarOpen)
+  const toggleSidebar = useAppStore((state) => state.toggleSidebar)
 
   // Auto-collapse sidebar on mobile
   useEffect(() => {
@@ -53,11 +68,12 @@ export function AppLayout({ children, title, breadcrumbs, user }: AppLayoutProps
         <Suspense fallback={null}>
           <LoadingBar />
         </Suspense>
+        <DesktopNotificationPrompt />
 
         {/* Mobile overlay */}
         {sidebarOpen && (
           <div
-            className="fixed inset-0 z-30 bg-primary/20 backdrop-blur-sm md:hidden"
+            className="fixed inset-0 z-50 bg-primary/20 backdrop-blur-sm md:hidden"
             onClick={toggleSidebar}
           />
         )}
@@ -67,8 +83,8 @@ export function AppLayout({ children, title, breadcrumbs, user }: AppLayoutProps
         <div className="flex flex-1 flex-col min-w-0 bg-surface relative">
           <Header title={title} breadcrumbs={breadcrumbs} user={user} />
 
-          <main className="flex-1 overflow-y-auto overflow-x-hidden pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-0 scroll-smooth">
-            <div className="mx-auto max-w-[1600px] px-4 py-4 sm:px-6 sm:py-6 md:p-12">
+          <main className="flex-1 overflow-y-auto overflow-x-hidden pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0 scroll-smooth">
+            <div className="mx-auto max-w-[1600px] px-3 py-3 sm:px-6 sm:py-6 md:p-12">
               <PageTransition>
                 {children}
               </PageTransition>
@@ -76,8 +92,12 @@ export function AppLayout({ children, title, breadcrumbs, user }: AppLayoutProps
           </main>
         </div>
 
-        <GideonChat />
-        <MobileNav />
+        <div className={cn(sidebarOpen && "hidden md:block")}>
+          <GideonChat />
+        </div>
+        <div className={cn(sidebarOpen && "hidden md:block")}>
+          <MobileNav />
+        </div>
         <SearchDialog />
       </div>
     </ShortcutsHelpProvider>

@@ -1,12 +1,13 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { memo, useCallback, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   DragDropContext,
   Droppable,
   Draggable,
   type DropResult,
+  type DraggableProvidedDragHandleProps,
 } from "@hello-pangea/dnd"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { PriorityBadge } from "./priority-badge"
@@ -19,7 +20,7 @@ import {
   Calendar,
   GripVertical,
 } from "lucide-react"
-import { format, isPast, isToday } from "date-fns"
+import { isPast, isToday } from "date-fns"
 import { cn } from "@/lib/utils"
 import { formatTaskDueDate } from "@/lib/task-date-format"
 
@@ -48,6 +49,126 @@ function sortTasksDoneLast(tasks: TaskCardData[]) {
   })
 }
 
+interface TaskListRowProps {
+  task: TaskCardData
+  isDragging: boolean
+  isTemporary: boolean
+  dragHandleProps?: DraggableProvidedDragHandleProps | null
+  onOpenTask: (task: TaskCardData) => void
+  onToggleStatus: (taskId: string, done: boolean) => void
+  onCelebrate: () => void
+}
+
+const TaskListRow = memo(function TaskListRow({
+  task,
+  isDragging,
+  isTemporary,
+  dragHandleProps,
+  onOpenTask,
+  onToggleStatus,
+  onCelebrate,
+}: TaskListRowProps) {
+  const isDone = task.status === "DONE"
+  const isOverdue =
+    task.dueDate &&
+    isPast(new Date(task.dueDate)) &&
+    !isToday(new Date(task.dueDate)) &&
+    !isDone
+
+  const handleOpen = useCallback(() => {
+    onOpenTask(task)
+  }, [onOpenTask, task])
+
+  const handleToggleStatus = useCallback((checked: boolean) => {
+    onToggleStatus(task.id, checked)
+    if (checked) onCelebrate()
+  }, [onCelebrate, onToggleStatus, task.id])
+
+  return (
+    <div
+      className={cn(
+        "group grid grid-cols-[32px_32px_1fr_120px_100px_120px] gap-0 items-center h-12 cursor-pointer transition-all duration-200 text-[13px] rounded-xl mb-1",
+        isDragging ? "z-50 shadow-2xl bg-surface-container-lowest ring-2 ring-primary/5 scale-[1.02]" : "hover:bg-surface-container-low"
+      )}
+      onClick={handleOpen}
+    >
+      <div className="flex items-center justify-center h-full">
+        <div
+          {...dragHandleProps}
+          className={cn(
+            "text-on-surface-variant/30 hover:text-primary transition-all",
+            isTemporary ? "opacity-0" : "opacity-0 group-hover:opacity-100"
+          )}
+        >
+          <GripVertical className="h-4 w-4" />
+        </div>
+      </div>
+
+      <div className="flex items-center justify-center h-full">
+        <div className="scale-90" onClick={(event) => event.stopPropagation()}>
+          <AnimatedCheckbox
+            checked={isDone}
+            onChange={handleToggleStatus}
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 min-w-0 px-3 h-full">
+        <div className="min-w-0">
+          {task.isCrossProject && task.primaryProjectName && (
+            <p className="truncate text-[10px] font-medium text-on-surface-variant/50">
+              From {task.primaryProjectName}
+            </p>
+          )}
+          <span
+            className={cn(
+              "text-[14px] font-medium transition-all duration-300 truncate block",
+              isDone ? "text-on-surface-variant/40 line-through" : "text-on-surface"
+            )}
+          >
+            {task.title}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex items-center px-3 h-full justify-center">
+        {task.assignees.length > 0 ? (
+          <div className="flex -space-x-2">
+            {task.assignees.slice(0, 3).map((assignee) => (
+              <UserAvatar
+                key={assignee.id || `${task.id}-${assignee.name}`}
+                user={{ name: assignee.name, image: assignee.avatar }}
+                size="xs"
+                className="h-6 w-6 border-2 border-surface shadow-sm ring-1 ring-on-surface-variant/5"
+              />
+            ))}
+          </div>
+        ) : (
+          <span className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/20 group-hover:opacity-100 opacity-0 transition-opacity">None</span>
+        )}
+      </div>
+
+      <div className="flex items-center px-3 h-full justify-center">
+        <PriorityBadge priority={task.priority} className="text-[10px] uppercase font-black tracking-widest border-none shadow-none bg-transparent" />
+      </div>
+
+      <div className="flex items-center px-3 h-full pr-6 justify-center">
+        {task.dueDate ? (
+          <div className={cn(
+            "flex items-center gap-1.5 text-[11px] font-bold",
+            isOverdue ? "text-red-600" : "text-on-surface-variant/40"
+          )}>
+            <Calendar className="h-3.5 w-3.5" />
+            <span>{formatTaskDueDate(task.dueDate)}</span>
+          </div>
+        ) : (
+          <span className="text-on-surface-variant/10 text-[11px] font-bold">---</span>
+        )}
+      </div>
+    </div>
+  )
+})
+
 export function TaskListView({
   sections,
   onTaskClick,
@@ -64,14 +185,29 @@ export function TaskListView({
   const [creatingSection, setCreatingSection] = useState(false)
   const sectionInputRef = useRef<HTMLInputElement>(null)
 
-  const toggleSection = (sectionId: string) => {
-    const next = new Set(collapsedSections)
-    if (next.has(sectionId)) next.delete(sectionId)
-    else next.add(sectionId)
-    setCollapsedSections(next)
-  }
+  const sectionEntries = useMemo(
+    () =>
+      sections.map((section) => ({
+        ...section,
+        sortedTasks: sortTasksDoneLast(section.tasks),
+      })),
+    [sections]
+  )
 
-  const handleDragEnd = (result: DropResult) => {
+  const toggleSection = useCallback((sectionId: string) => {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev)
+      if (next.has(sectionId)) next.delete(sectionId)
+      else next.add(sectionId)
+      return next
+    })
+  }, [])
+
+  const triggerCelebration = useCallback(() => {
+    setCelebration(true)
+  }, [])
+
+  const handleDragEnd = useCallback((result: DropResult) => {
     const { draggableId, destination, source } = result
     if (!destination) return
     if (
@@ -88,7 +224,7 @@ export function TaskListView({
     if (onMoveTask) {
       onMoveTask(draggableId, destination.droppableId, destination.index)
     }
-  }
+  }, [onMoveTask, sections])
 
   const handleCreateSection = async () => {
     if (!newSectionName.trim() || !projectId) return
@@ -115,7 +251,7 @@ export function TaskListView({
     <div className="w-full space-y-8 animate-fade-in px-4 pb-24 md:px-6 lg:px-8">
       <DragDropContext onDragEnd={handleDragEnd}>
         <div className="space-y-10">
-          {sections.map((section) => {
+          {sectionEntries.map((section) => {
             const isCollapsed = collapsedSections.has(section.id)
             return (
               <div key={section.id} className="space-y-6">
@@ -174,107 +310,26 @@ export function TaskListView({
                               No tasks in this sanctuary.
                             </div>
                           ) : (
-                            sortTasksDoneLast(section.tasks).map((task, index) => {
-                              const isDone = task.status === "DONE"
-                              const isOverdue =
-                                task.dueDate &&
-                                isPast(new Date(task.dueDate)) &&
-                                !isToday(new Date(task.dueDate)) &&
-                                !isDone
-
-                              return (
+                            section.sortedTasks.map((task, index) => (
                                 <Draggable key={task.id} draggableId={task.id} index={index} isDragDisabled={Boolean(section.isTemporary || task.isCrossProject)}>
                                   {(provided, snapshot) => (
                                     <div
                                       ref={provided.innerRef}
                                       {...provided.draggableProps}
-                                      className={cn(
-                                        "group grid grid-cols-[32px_32px_1fr_120px_100px_120px] gap-0 items-center h-12 cursor-pointer transition-all duration-200 text-[13px] rounded-xl mb-1",
-                                        snapshot.isDragging ? "z-50 shadow-2xl bg-surface-container-lowest ring-2 ring-primary/5 scale-[1.02]" : "hover:bg-surface-container-low"
-                                      )}
-                                      onClick={() => onTaskClick(task)}
                                     >
-                                      <div className="flex items-center justify-center h-full">
-                                        <div
-                                          {...provided.dragHandleProps}
-                                          className="opacity-0 group-hover:opacity-100 text-on-surface-variant/30 hover:text-primary transition-all"
-                                        >
-                                          <GripVertical className="h-4 w-4" />
-                                        </div>
-                                      </div>
-
-                                      <div className="flex items-center justify-center h-full">
-                                        <div className="scale-90" onClick={(e) => e.stopPropagation()}>
-                                          <AnimatedCheckbox
-                                            checked={isDone}
-                                            onChange={(checked) => {
-                                              onToggleStatus(task.id, checked)
-                                              if (checked) setCelebration(true)
-                                            }}
-                                          />
-                                        </div>
-                                      </div>
-
-                                      <div className="flex items-center gap-3 min-w-0 px-3 h-full">
-                                        <div className="min-w-0">
-                                          {task.isCrossProject && task.primaryProjectName && (
-                                            <p className="truncate text-[10px] font-medium text-on-surface-variant/50">
-                                              From {task.primaryProjectName}
-                                            </p>
-                                          )}
-                                          <span
-                                            className={cn(
-                                              "text-[14px] font-medium transition-all duration-300 truncate block",
-                                              isDone ? "text-on-surface-variant/40 line-through" : "text-on-surface"
-                                            )}
-                                          >
-                                            {task.title}
-                                          </span>
-                                        </div>
-                                      </div>
-
-                                      <div className="flex items-center px-3 h-full justify-center">
-                                        {task.assignees.length > 0 ? (
-                                          <div className="flex -space-x-2">
-                                            {task.assignees.slice(0, 3).map((a: any) => {
-                                              const userData = a.user || a
-                                              return (
-                                                <UserAvatar 
-                                                  key={userData.id || Math.random()} 
-                                                  user={{ name: userData.name, image: userData.avatar }} 
-                                                  size="xs" 
-                                                  className="h-6 w-6 border-2 border-surface shadow-sm ring-1 ring-on-surface-variant/5" 
-                                                />
-                                              )
-                                            })}
-                                          </div>
-                                        ) : (
-                                          <span className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/20 group-hover:opacity-100 opacity-0 transition-opacity">None</span>
-                                        )}
-                                      </div>
-
-                                      <div className="flex items-center px-3 h-full justify-center">
-                                        <PriorityBadge priority={task.priority} className="text-[10px] uppercase font-black tracking-widest border-none shadow-none bg-transparent" />
-                                      </div>
-
-                                      <div className="flex items-center px-3 h-full pr-6 justify-center">
-                                        {task.dueDate ? (
-                                          <div className={cn(
-                                            "flex items-center gap-1.5 text-[11px] font-bold",
-                                            isOverdue ? "text-red-600" : "text-on-surface-variant/40"
-                                          )}>
-                                            <Calendar className="h-3.5 w-3.5" />
-                                            <span>{formatTaskDueDate(task.dueDate)}</span>
-                                          </div>
-                                        ) : (
-                                          <span className="text-on-surface-variant/10 text-[11px] font-bold">---</span>
-                                        )}
-                                      </div>
+                                      <TaskListRow
+                                        task={task}
+                                        isDragging={snapshot.isDragging}
+                                        isTemporary={Boolean(section.isTemporary || task.isCrossProject)}
+                                        dragHandleProps={provided.dragHandleProps}
+                                        onOpenTask={onTaskClick}
+                                        onToggleStatus={onToggleStatus}
+                                        onCelebrate={triggerCelebration}
+                                      />
                                     </div>
                                   )}
                                 </Draggable>
-                              )
-                            })
+                            ))
                           )}
                           {provided.placeholder}
                         </div>

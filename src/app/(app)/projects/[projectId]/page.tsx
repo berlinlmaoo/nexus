@@ -24,6 +24,7 @@ function serializePrimaryTask(
     position: number
     taskListId: string
     createdAt: Date
+    creator: { name: string }
     assignees: { user: { id: string; name: string; avatar: string | null } }[]
     subtasks: { id: string; status: string }[]
     customFieldValues: {
@@ -32,6 +33,7 @@ function serializePrimaryTask(
       customField: {
         name: string
         type: string
+        options?: unknown
       }
     }[]
   },
@@ -60,7 +62,7 @@ function serializePrimaryTask(
       name: a.user.name,
       avatar: a.user.avatar,
     })),
-    customFieldChips: buildTaskCardCustomFieldChips(task.customFieldValues, task.createdAt),
+    customFieldChips: buildTaskCardCustomFieldChips(task.customFieldValues, task.createdAt, task.creator.name),
     subtaskCount: task.subtasks.length,
     subtaskDoneCount: task.subtasks.filter((s) => s.status === "DONE").length,
   }
@@ -81,16 +83,18 @@ function serializeLinkedTask(
       tags: string[]
       position: number
       createdAt: Date
+      creator: { name: string }
       assignees: { user: { id: string; name: string; avatar: string | null } }[]
       subtasks: { id: string; status: string }[]
       customFieldValues: {
         customFieldId: string
         value: string
-        customField: {
-          name: string
-          type: string
-        }
-      }[]
+      customField: {
+        name: string
+        type: string
+        options?: unknown
+      }
+    }[]
       taskList: {
         projectId: string
         project: { id: string; name: string }
@@ -122,7 +126,11 @@ function serializeLinkedTask(
       name: a.user.name,
       avatar: a.user.avatar,
     })),
-    customFieldChips: buildTaskCardCustomFieldChips(taskProject.task.customFieldValues, taskProject.task.createdAt),
+    customFieldChips: buildTaskCardCustomFieldChips(
+      taskProject.task.customFieldValues,
+      taskProject.task.createdAt,
+      taskProject.task.creator.name
+    ),
     subtaskCount: taskProject.task.subtasks.length,
     subtaskDoneCount: taskProject.task.subtasks.filter((s) => s.status === "DONE").length,
   }
@@ -171,12 +179,18 @@ export default async function ProjectDetailPage({
               subtasks: {
                 select: { id: true, status: true },
               },
+              creator: {
+                select: {
+                  name: true,
+                },
+              },
               customFieldValues: {
                 include: {
                   customField: {
                     select: {
                       name: true,
                       type: true,
+                      options: true,
                     },
                   },
                 },
@@ -203,12 +217,18 @@ export default async function ProjectDetailPage({
                   subtasks: {
                     select: { id: true, status: true },
                   },
+                  creator: {
+                    select: {
+                      name: true,
+                    },
+                  },
                   customFieldValues: {
                     include: {
                       customField: {
                         select: {
                           name: true,
                           type: true,
+                          options: true,
                         },
                       },
                     },
@@ -253,6 +273,8 @@ export default async function ProjectDetailPage({
     color: project.color,
     icon: project.icon,
     enableTaskBatchDuplicate: project.enableTaskBatchDuplicate,
+    autoAssignEnabled: project.autoAssignEnabled,
+    autoAssignAssigneeIds: project.autoAssignAssigneeIds,
     members: project.members.map((m) => ({
       id: m.user.id,
       name: m.user.name,

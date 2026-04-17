@@ -37,25 +37,33 @@ export function SearchDialog() {
   }, [])
 
   useEffect(() => {
-    if (query.length < 2) {
+    if (!open || query.length < 2) {
       setResults({ projects: [], tasks: [] })
       return
     }
 
+    const controller = new AbortController()
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`)
+        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`, {
+          signal: controller.signal,
+        })
         if (res.ok) {
           const data = await res.json()
           setResults(data)
         }
       } catch (err) {
-        console.error("Search failed:", err)
+        if (!(err instanceof DOMException)) {
+          console.error("Search failed:", err)
+        }
       }
     }, 300)
 
-    return () => clearTimeout(timer)
-  }, [query])
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
+  }, [open, query])
 
   const runCommand = useCallback((command: () => void) => {
     setOpen(false)

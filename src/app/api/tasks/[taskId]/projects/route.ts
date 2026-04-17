@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { checkProjectAccess, checkWorkspaceRoutingAccess } from "@/lib/rbac"
+import { seedTaskCustomFieldValues } from "@/lib/custom-field-sync"
+import { resolveAutoAssignAssigneeIds } from "@/lib/project-auto-assign"
 
 const DEFAULT_TASK_LIST_ALIASES = ["to do", "todo", "backlog"]
 
@@ -197,6 +199,13 @@ export async function POST(
       select: {
         id: true,
         workspaceId: true,
+        autoAssignEnabled: true,
+        autoAssignAssigneeIds: true,
+        members: {
+          select: {
+            userId: true,
+          },
+        },
         taskLists: {
           select: {
             id: true,
@@ -245,7 +254,45 @@ export async function POST(
       },
     })
 
-    return NextResponse.json(taskProject, { status: 201 })
+    await seedTaskCustomFieldValues(params.taskId, projectId, task.createdAt)
+
+    const autoAssignAssigneeIds = resolveAutoAssignAssigneeIds({
+      requestedAssigneeIds: [],
+      autoAssignEnabled: targetProject.autoAssignEnabled,
+      autoAssignAssigneeIds: targetProject.autoAssignAssigneeIds,
+      validProjectMemberIds: targetProject.members.map((member) => member.userId),
+    })
+
+    if (autoAssignAssigneeIds.length > 0) {
+      await prisma.taskAssignee.createMany({
+        data: autoAssignAssigneeIds.map((userId) => ({
+          taskId: params.taskId,
+          userId,
+        })),
+        skipDuplicates: true,
+      })
+    }
+
+    const taskAssignees = await prisma.taskAssignee.findMany({
+      where: { taskId: params.taskId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            avatar: true,
+          },
+        },
+      },
+    })
+
+    return NextResponse.json(
+      {
+        taskProject,
+        taskAssignees,
+      },
+      { status: 201 }
+    )
   } catch (error) {
     console.error("Error adding task to project:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

@@ -1,5 +1,6 @@
 "use client"
 
+import dynamic from "next/dynamic"
 import { useState, useCallback, useMemo, lazy, Suspense, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -7,7 +8,6 @@ import { Button } from "@/components/ui/button"
 import { SkeletonList, SkeletonKanban } from "@/components/ui/skeleton"
 import { TaskListView } from "@/components/tasks/task-list-view"
 import { CreateTaskDialog } from "@/components/tasks/create-task-dialog"
-import { TaskDetailPanel } from "@/components/tasks/task-detail-panel"
 import { AddPageDialog } from "@/components/projects/add-page-dialog"
 import { BlockEditor } from "@/components/editor/block-editor"
 import type { TaskCardData } from "@/components/tasks/task-card"
@@ -23,6 +23,10 @@ import { useAppStore } from "@/stores/app-store"
 
 const KanbanView = lazy(() => import("@/components/tasks/kanban-view").then(m => ({ default: m.KanbanView })))
 const CalendarView = lazy(() => import("@/components/tasks/calendar-view").then(m => ({ default: m.CalendarView })))
+const TaskDetailPanel = dynamic(
+  () => import("@/components/tasks/task-detail-panel").then((mod) => mod.TaskDetailPanel),
+  { ssr: false }
+)
 
 interface PageData {
   id: string

@@ -1,12 +1,12 @@
 "use client"
 
+import dynamic from "next/dynamic"
 import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { Button } from "@/components/ui/button"
 import { PriorityBadge } from "./priority-badge"
 import { StatusBadge } from "./status-badge"
-import { TaskDetailPanel } from "./task-detail-panel"
 import type { TaskCardData } from "./task-card"
 import {
   CheckCircle2,
@@ -19,6 +19,11 @@ import {
 } from "lucide-react"
 import { format, isPast, isToday } from "date-fns"
 import { cn } from "@/lib/utils"
+
+const TaskDetailPanel = dynamic(
+  () => import("./task-detail-panel").then((mod) => mod.TaskDetailPanel),
+  { ssr: false }
+)
 
 interface ProjectGroup {
   id: string

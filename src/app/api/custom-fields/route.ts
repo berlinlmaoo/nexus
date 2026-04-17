@@ -6,6 +6,7 @@ import { checkProjectAccess } from "@/lib/rbac"
 import type { InputJsonValue } from "@prisma/client/runtime/client"
 import {
   coerceCustomFieldValueForType,
+  type CreatedFieldMetadata,
   type CustomFieldOptionConfig,
   type PlaceFieldValue,
   type SupportedCustomFieldType,
@@ -18,11 +19,13 @@ import { seedTaskCustomFieldValues } from "@/lib/custom-field-sync"
 
 interface CustomFieldResponseItem {
   id: string
+  projectId: string
   name: string
   type: SupportedCustomFieldType
   position: number
   options: CustomFieldOptionConfig | null
   value: string | string[] | PlaceFieldValue | null
+  createdMeta?: CreatedFieldMetadata | null
 }
 
 async function requireProjectMember(userId: string, projectId: string) {
@@ -50,6 +53,7 @@ export async function GET(req: NextRequest) {
     }
 
     let taskCreatedAt: Date | null = null
+    let taskCreatorName: string | null = null
     if (taskId) {
       const task = await prisma.task.findFirst({
         where: {
@@ -59,7 +63,14 @@ export async function GET(req: NextRequest) {
             { taskProjects: { some: { projectId } } },
           ],
         },
-        select: { createdAt: true },
+        select: {
+          createdAt: true,
+          creator: {
+            select: {
+              name: true,
+            },
+          },
+        },
       })
 
       if (!task) {
@@ -67,6 +78,7 @@ export async function GET(req: NextRequest) {
       }
 
       taskCreatedAt = task.createdAt
+      taskCreatorName = task.creator.name
       await seedTaskCustomFieldValues(taskId, projectId, task.createdAt)
     }
 
@@ -87,7 +99,7 @@ export async function GET(req: NextRequest) {
         })
 
     const normalizedFields = fields
-      .map((field) => {
+      .map((field: any) => {
         const normalizedType = normalizeCustomFieldType(field.type)
         if (!normalizedType) return null
 
@@ -97,6 +109,7 @@ export async function GET(req: NextRequest) {
 
         return {
           id: field.id,
+          projectId,
           name: field.name,
           type: normalizedType,
           position: field.position,
@@ -104,9 +117,17 @@ export async function GET(req: NextRequest) {
           value: taskId
             ? parseCustomFieldValue(normalizedType, currentValue, taskCreatedAt)
             : null,
+          ...(taskId && normalizedType === "CREATED"
+            ? {
+                createdMeta: {
+                  userName: taskCreatorName || "Unknown",
+                  timestamp: taskCreatedAt?.toISOString() || "",
+                },
+              }
+            : {}),
         }
       })
-      .filter((field): field is CustomFieldResponseItem => field !== null)
+      .filter((field: CustomFieldResponseItem | null): field is CustomFieldResponseItem => field !== null)
 
     return NextResponse.json({ fields: normalizedFields })
   } catch (error) {
@@ -270,12 +291,25 @@ export async function PATCH(req: NextRequest) {
             { taskProjects: { some: { projectId: existingField.projectId } } },
           ],
         },
-        select: { id: true, createdAt: true },
+        select: {
+          id: true,
+          createdAt: true,
+          creator: {
+            select: {
+              name: true,
+            },
+          },
+        },
       })
 
       if (!task) {
         return NextResponse.json({ error: "Task not found in this project" }, { status: 404 })
       }
+
+      const serializedValue =
+        normalizedType === "CREATED"
+          ? serializeCustomFieldValue(normalizedType, undefined, task.createdAt)
+          : serializeCustomFieldValue(normalizedType, value, task.createdAt)
 
       const fieldValue = await prisma.customFieldValue.upsert({
         where: {
@@ -285,12 +319,12 @@ export async function PATCH(req: NextRequest) {
           },
         },
         update: {
-          value: serializeCustomFieldValue(normalizedType, value, task.createdAt),
+          value: serializedValue,
         },
         create: {
           customFieldId: id,
           taskId,
-          value: serializeCustomFieldValue(normalizedType, value, task.createdAt),
+          value: serializedValue,
         },
       })
 
@@ -308,13 +342,21 @@ export async function PATCH(req: NextRequest) {
         fieldValue: {
           id: fieldValue.id,
           value: parseCustomFieldValue(normalizedType, fieldValue.value, task.createdAt),
+          ...(normalizedType === "CREATED"
+            ? {
+                createdMeta: {
+                  userName: task.creator.name,
+                  timestamp: task.createdAt.toISOString(),
+                },
+              }
+            : {}),
         },
       })
     }
 
     const previousFieldType = normalizeCustomFieldType(existingField.type)
 
-    const updatedField = await prisma.$transaction(async (tx) => {
+    const updatedField = await prisma.$transaction(async (tx: any) => {
       const nextField = await tx.customField.update({
         where: { id },
         data: {

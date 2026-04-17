@@ -1,25 +1,15 @@
 "use client"
 
+import dynamic from "next/dynamic"
 import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { DateTimePicker } from "@/components/ui/date-time-picker"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
 import { UserAvatar } from "@/components/ui/user-avatar"
-import { PriorityBadge } from "./priority-badge"
-import { StatusBadge } from "./status-badge"
-import { TimeTracker } from "./time-tracker"
-import { CustomFields } from "./custom-fields"
-import { TaskDependencies } from "./task-dependencies"
-import { TaskActivity } from "./task-activity"
-import { TaskAttachments } from "./task-attachments"
-import { TaskComments } from "./task-comments"
-import { TaskRelations } from "./task-relations"
 import type { TaskCardData } from "./task-card"
-import { BlockEditor, type Block, parseDescriptionToBlocks, serializeBlocksForTask } from "@/components/editor"
+import { type Block, blocksToPlainText, parseDescriptionToBlocks, serializeBlocksForTask } from "@/components/editor"
 import {
   X,
   Loader2,
@@ -55,6 +45,32 @@ import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
+function PanelSectionSkeleton({ className = "min-h-[240px]" }: { className?: string }) {
+  return (
+    <div className={cn("animate-pulse rounded-2xl bg-surface-container-low", className)} />
+  )
+}
+
+const CustomFields = dynamic(
+  () => import("./custom-fields").then((mod) => mod.CustomFields),
+  { ssr: false, loading: () => <PanelSectionSkeleton className="min-h-[180px]" /> }
+)
+
+const TaskActivity = dynamic(
+  () => import("./task-activity").then((mod) => mod.TaskActivity),
+  { ssr: false, loading: () => <PanelSectionSkeleton /> }
+)
+
+const TaskAttachments = dynamic(
+  () => import("./task-attachments").then((mod) => mod.TaskAttachments),
+  { ssr: false, loading: () => <PanelSectionSkeleton /> }
+)
+
+const TaskComments = dynamic(
+  () => import("./task-comments").then((mod) => mod.TaskComments),
+  { ssr: false, loading: () => <PanelSectionSkeleton /> }
+)
+
 interface Subtask {
   id: string
   title: string
@@ -71,10 +87,16 @@ interface ActivityLogEntry {
   user: { name: string }
 }
 
+interface ProjectMemberOption {
+  id: string
+  name: string
+  avatar: string | null
+}
+
 interface TaskDetailPanelProps {
   task: TaskCardData
   onClose: () => void
-  onUpdate?: () => void
+  onUpdate?: (updates?: Partial<TaskCardData>) => void
 }
 
 const STATUS_SECTION_ALIASES: Record<TaskCardData["status"], string[]> = {
@@ -98,6 +120,11 @@ export function TaskDetailPanel({
   onClose,
   onUpdate,
 }: TaskDetailPanelProps) {
+  const getDescriptionText = useCallback(
+    (value: string | null) => blocksToPlainText(parseDescriptionToBlocks(value)),
+    []
+  )
+
   const getStatusFromSectionName = (sectionName: string): TaskCardData["status"] | undefined => {
     const normalizedName = sectionName.toLowerCase().trim()
 
@@ -114,8 +141,12 @@ export function TaskDetailPanel({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const [title, setTitle] = useState(initialTask.title)
-  const [description, setDescription] = useState(initialTask.description || "")
+  const [description, setDescription] = useState(() => getDescriptionText(initialTask.description))
+  const descriptionTextareaRef = useRef<HTMLTextAreaElement>(null)
   const descriptionBlocksRef = useRef<Block[]>(parseDescriptionToBlocks(initialTask.description))
+  const syncedTaskIdRef = useRef(initialTask.id)
+  const descriptionSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingDescriptionRef = useRef<string | null>(null)
   const [status, setStatus] = useState(initialTask.status)
   const [priority, setPriority] = useState(initialTask.priority)
   const [dueDate, setDueDate] = useState<string | null>(initialTask.dueDate ?? null)
@@ -129,7 +160,7 @@ export function TaskDetailPanel({
   const [isFollowing, setIsFollowing] = useState(false)
   const [liked, setLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(0)
-  const [projectMembers, setProjectMembers] = useState<any[]>([])
+  const [projectMembers, setProjectMembers] = useState<ProjectMemberOption[]>([])
   const [projectSections, setProjectSections] = useState<Array<{ id: string; name: string }>>([])
   const [showMemberSelector, setShowMemberSelector] = useState(false)
   const [memberSearch, setMemberSearch] = useState("")
@@ -174,15 +205,51 @@ export function TaskDetailPanel({
     setAvailableProjects(Array.isArray(data.availableProjects) ? data.availableProjects : [])
   }, [currentTask.id])
 
+  const refreshTaskSnapshot = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/tasks/${currentTask.id}`)
+      if (!response.ok) throw new Error("Failed to refresh task")
+
+      const data = await response.json()
+      const nextAssignees = Array.isArray(data.assignees)
+        ? data.assignees.map((assignee: any) => ({
+            id: assignee.user?.id ?? assignee.id,
+            name: assignee.user?.name ?? assignee.name,
+            avatar: assignee.user?.avatar ?? assignee.avatar ?? null,
+          }))
+        : currentTask.assignees
+
+      setCurrentTask((prev) => ({
+        ...prev,
+        assignees: nextAssignees,
+      }))
+      onUpdate?.({ assignees: nextAssignees })
+    } catch (error) {
+      console.error(error)
+    }
+  }, [currentTask.assignees, currentTask.id, onUpdate])
+
   useEffect(() => {
+    if (syncedTaskIdRef.current === initialTask.id) return
+
+    syncedTaskIdRef.current = initialTask.id
     setCurrentTask(initialTask)
     setTitle(initialTask.title)
-    setDescription(initialTask.description || "")
+    setDescription(getDescriptionText(initialTask.description))
+    descriptionBlocksRef.current = parseDescriptionToBlocks(initialTask.description)
     setStatus(initialTask.status)
     setPriority(initialTask.priority)
     setDueDate(initialTask.dueDate ?? null)
     setTags(initialTask.tags)
-  }, [initialTask])
+  }, [getDescriptionText, initialTask])
+
+  useEffect(() => {
+    return () => {
+      if (descriptionSaveTimeoutRef.current) {
+        clearTimeout(descriptionSaveTimeoutRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (!currentTask.id) return
@@ -195,15 +262,55 @@ export function TaskDetailPanel({
         const taskLists = Array.isArray(data?.taskLists)
           ? data.taskLists.map((taskList: any) => ({ id: taskList.id, name: taskList.name }))
           : []
-        const members = Array.isArray(data?.members)
-          ? data.members.map((member: any) => member.user)
-          : []
 
         setProjectSections(taskLists)
-        setProjectMembers(members)
       })
       .catch(() => {})
   }, [currentTask.id, currentTask.projectId, currentTask.viewProjectId, currentTask.primaryProjectId])
+
+  useEffect(() => {
+    const linkedProjectIds = Array.from(new Set(taskProjectsList.map((taskProject) => taskProject.projectId)))
+
+    if (linkedProjectIds.length === 0) {
+      setProjectMembers([])
+      return
+    }
+
+    let cancelled = false
+
+    Promise.all(
+      linkedProjectIds.map(async (projectId) => {
+        const response = await fetch(`/api/projects/${projectId}`)
+        if (!response.ok) return []
+
+        const data = await response.json()
+        return Array.isArray(data?.members)
+          ? data.members.map((member: any) => member.user)
+          : []
+      })
+    )
+      .then((memberGroups) => {
+        if (cancelled) return
+
+        const dedupedMembers = Array.from(
+          new Map(
+            memberGroups
+              .flat()
+              .filter((member): member is ProjectMemberOption => Boolean(member?.id))
+              .map((member) => [member.id, member])
+          ).values()
+        )
+
+        setProjectMembers(dedupedMembers)
+      })
+      .catch(() => {
+        if (!cancelled) setProjectMembers([])
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [taskProjectsList])
 
   // Handle click outside member selector
   useEffect(() => {
@@ -296,6 +403,7 @@ export function TaskDetailPanel({
     const currentIds = currentTask.assignees.map(a => a.id)
     const isAssigned = currentIds.includes(memberId)
     const member = projectMembers.find(m => m.id === memberId)
+    if (!isAssigned && !member) return
     
     setSaving(true)
     try {
@@ -305,13 +413,19 @@ export function TaskDetailPanel({
         body: JSON.stringify({ userId: memberId }),
       })
       if (res.ok) {
+        const assigneeToAdd = member
+          ? { id: member.id, name: member.name, avatar: member.avatar }
+          : null
+
         // Optimistic UI update
         const newAssignees = isAssigned 
           ? currentTask.assignees.filter(a => a.id !== memberId)
-          : [...currentTask.assignees, { id: member.id, name: member.name, avatar: member.avatar }]
+          : assigneeToAdd
+            ? [...currentTask.assignees, assigneeToAdd]
+            : currentTask.assignees
         
         setCurrentTask(prev => ({ ...prev, assignees: newAssignees }))
-        onUpdate?.()
+        onUpdate?.({ assignees: newAssignees })
       }
     } catch (e) {
       console.error(e)
@@ -334,7 +448,7 @@ export function TaskDetailPanel({
     loadTaskProjects().catch(() => {})
   }, [loadTaskProjects])
 
-  const saveTask = async (updates: Partial<TaskCardData>) => {
+  const saveTask = useCallback(async (updates: Partial<TaskCardData>) => {
     setSaving(true)
     try {
       await fetch(`/api/tasks/${currentTask.id}`, {
@@ -346,13 +460,37 @@ export function TaskDetailPanel({
         }),
       })
       setCurrentTask(prev => ({ ...prev, ...updates }))
-      onUpdate?.()
+      onUpdate?.(updates)
     } catch (e) {
       console.error(e)
     } finally {
       setSaving(false)
     }
-  }
+  }, [currentTask.id, currentTask.primaryProjectId, currentTask.projectId, currentTask.viewProjectId, onUpdate])
+
+  const scheduleDescriptionSave = useCallback((nextDescriptionText: string) => {
+    const nextBlocks = parseDescriptionToBlocks(nextDescriptionText)
+    descriptionBlocksRef.current = nextBlocks
+    const serializedDescription = serializeBlocksForTask(nextBlocks)
+
+    pendingDescriptionRef.current = serializedDescription
+
+    if (descriptionSaveTimeoutRef.current) {
+      clearTimeout(descriptionSaveTimeoutRef.current)
+    }
+
+    descriptionSaveTimeoutRef.current = setTimeout(() => {
+      const latestDescription = pendingDescriptionRef.current
+      descriptionSaveTimeoutRef.current = null
+
+      if (latestDescription === null || latestDescription === currentTask.description) {
+        return
+      }
+
+      pendingDescriptionRef.current = null
+      void saveTask({ description: latestDescription })
+    }, 600)
+  }, [currentTask.description, saveTask])
 
   const handleSectionSelect = async (sectionId: string) => {
     const selectedSection = projectSections.find((section) => section.id === sectionId)
@@ -452,6 +590,7 @@ export function TaskDetailPanel({
       toast.success(`Task now appears in ${project.name}`)
       setShowProjectSelector(false)
       await loadTaskProjects()
+      await refreshTaskSnapshot()
       onUpdate?.()
       router.refresh()
     } catch (error) {
@@ -488,6 +627,7 @@ export function TaskDetailPanel({
       }
 
       await loadTaskProjects()
+      await refreshTaskSnapshot()
       router.refresh()
     } catch (error) {
       console.error(error)
@@ -550,31 +690,31 @@ export function TaskDetailPanel({
         onClick={onClose}
       />
 
-      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-2xl bg-surface-container-highest shadow-2xl shadow-primary/20 animate-slide-in-right flex flex-col border-l border-on-surface-variant/5">
+      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-2xl animate-slide-in-right flex-col border-l border-on-surface-variant/5 bg-surface-container-highest shadow-2xl shadow-primary/20">
         {/* Header Toolbar */}
-        <div className="flex items-center justify-between px-8 py-6 bg-surface-container-highest/80 backdrop-blur-md sticky top-0 z-10">
-          <div className="flex items-center gap-3">
+        <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 bg-surface-container-highest/80 px-4 py-4 backdrop-blur-md sm:px-8 sm:py-6">
+          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
             <button
               onClick={onClose}
-              className="h-10 w-10 flex items-center justify-center rounded-xl bg-surface-container-high text-on-surface-variant/60 hover:text-primary hover:bg-surface-container transition-all"
+              className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-container-high text-on-surface-variant/60 transition-all hover:bg-surface-container hover:text-primary"
             >
               <X className="h-5 w-5" />
             </button>
-            <div className="h-8 w-[1px] bg-on-surface-variant/10 mx-1" />
-            <div className="flex items-center gap-2">
+            <div className="mx-1 hidden h-8 w-[1px] bg-on-surface-variant/10 sm:block" />
+            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
               {taskProjectsList.map((tp) => (
                 <div 
                   key={tp.projectId}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container-lowest shadow-sm ring-1 ring-on-surface-variant/5"
+                  className="flex shrink-0 items-center gap-2 rounded-lg bg-surface-container-lowest px-3 py-1.5 shadow-sm ring-1 ring-on-surface-variant/5"
                 >
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: tp.project.color }} />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-primary">{tp.project.name}</span>
+                  <span className="max-w-[160px] truncate text-[10px] font-black uppercase tracking-widest text-primary sm:max-w-none">{tp.project.name}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex w-full items-center justify-end gap-2 sm:w-auto sm:gap-3">
             <Button
               variant="ghost"
               size="sm"
@@ -616,10 +756,10 @@ export function TaskDetailPanel({
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto px-8 pb-12 space-y-10 scrollbar-hide">
+        <div className="scrollbar-hide flex-1 space-y-8 overflow-y-auto px-4 pb-24 sm:space-y-10 sm:px-8 sm:pb-12">
           {/* Status & Title */}
-          <div className="space-y-6">
-            <div className="flex items-center gap-3">
+          <div className="space-y-5 sm:space-y-6">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <button
                 type="button"
                 onClick={handleToggleDone}
@@ -672,14 +812,14 @@ export function TaskDetailPanel({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               onBlur={() => saveTask({ title })}
-              className="w-full bg-transparent border-none p-0 text-4xl font-headline font-black text-on-surface tracking-tight leading-tight focus:ring-0 placeholder:text-on-surface-variant/10 resize-none h-auto outline-none"
+              className="h-auto w-full resize-none border-none bg-transparent p-0 text-3xl font-black leading-tight tracking-tight text-on-surface outline-none placeholder:text-on-surface-variant/10 focus:ring-0 sm:text-4xl"
               placeholder="Designation Required"
               rows={2}
             />
           </div>
 
           {/* Metadata Cards */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="bg-surface-container-lowest p-5 rounded-2xl shadow-sm border border-on-surface-variant/5 group hover:ring-2 hover:ring-primary/5 transition-all relative">
               <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/30 mb-4 flex items-center gap-2">
                 <User className="h-3 w-3" /> Assigned Personnel
@@ -703,7 +843,7 @@ export function TaskDetailPanel({
               {showMemberSelector && (
                 <div 
                   ref={memberSelectorRef}
-                  className="absolute top-full left-0 mt-2 w-64 bg-surface-container-lowest rounded-2xl shadow-2xl border border-on-surface-variant/5 z-20 p-2 animate-scale-in"
+                  className="absolute left-0 top-full z-20 mt-2 w-full rounded-2xl border border-on-surface-variant/5 bg-surface-container-lowest p-2 shadow-2xl animate-scale-in sm:w-64"
                 >
                   <p className="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/30 px-3 py-2">Select Personnel</p>
                   <div className="px-2 pb-2">
@@ -768,7 +908,7 @@ export function TaskDetailPanel({
 
             <div
               ref={projectSelectorRef}
-              className="relative col-span-2 bg-surface-container-lowest p-5 rounded-2xl shadow-sm border border-on-surface-variant/5 group hover:ring-2 hover:ring-primary/5 transition-all"
+              className="relative col-span-1 rounded-2xl border border-on-surface-variant/5 bg-surface-container-lowest p-5 shadow-sm transition-all group hover:ring-2 hover:ring-primary/5 sm:col-span-2"
             >
               <div className="flex items-start justify-between gap-4 mb-4">
                 <div>
@@ -849,7 +989,7 @@ export function TaskDetailPanel({
 
               {showProjectSelector && (
                 <div
-                  className="absolute left-5 right-5 top-[calc(100%+8px)] z-20 rounded-2xl border border-on-surface-variant/5 bg-surface-container-lowest p-3 shadow-2xl"
+                  className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 rounded-2xl border border-on-surface-variant/5 bg-surface-container-lowest p-3 shadow-2xl sm:left-5 sm:right-5"
                 >
                   <p className="px-2 py-2 text-[9px] font-black uppercase tracking-widest text-on-surface-variant/30">
                     Link Project
@@ -903,39 +1043,51 @@ export function TaskDetailPanel({
               )}
             </div>
 
-            <div className="col-span-2">
+            <div className="col-span-1 sm:col-span-2">
               <CustomFields
                 taskId={currentTask.id}
-                projectId={
-                  currentTask.viewProjectId ||
-                  currentTask.projectId ||
-                  currentTask.primaryProjectId ||
-                  initialTask.projectId
-                }
+                projectIds={taskProjectsList.map((taskProject) => taskProject.projectId)}
+                projects={taskProjectsList.map((taskProject) => ({
+                  id: taskProject.projectId,
+                  name: taskProject.project.name,
+                  color: taskProject.project.color,
+                }))}
               />
             </div>
           </div>
 
           {/* Intelligence/Description */}
-          <div className="bg-surface-container-lowest p-8 rounded-[2rem] shadow-sm border border-on-surface-variant/5">
+          <div className="rounded-[2rem] border border-on-surface-variant/5 bg-surface-container-lowest p-5 shadow-sm sm:p-8">
             <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/30 mb-6 flex items-center gap-2">
               <Activity className="h-3 w-3" /> Core Intelligence
             </p>
             <div className="prose prose-slate max-w-none prose-p:text-on-surface-variant/80 prose-p:leading-relaxed prose-p:text-sm">
-              <BlockEditor
-                initialBlocks={descriptionBlocksRef.current}
-                onChange={(blocks) => {
-                  descriptionBlocksRef.current = blocks
-                  saveTask({ description: serializeBlocksForTask(blocks) })
+              <textarea
+                key={currentTask.id}
+                ref={descriptionTextareaRef}
+                value={description}
+                onChange={(event) => {
+                  setDescription(event.target.value)
+                  scheduleDescriptionSave(event.target.value)
                 }}
-                editable={true}
+                placeholder="Write core intelligence..."
+                dir="ltr"
+                spellCheck={true}
+                autoCapitalize="off"
+                autoCorrect="off"
+                style={{
+                  direction: "ltr",
+                  unicodeBidi: "plaintext",
+                  textAlign: "left",
+                }}
+                className="min-h-[320px] w-full resize-y rounded-2xl border border-on-surface-variant/10 bg-white px-4 py-4 text-sm leading-7 text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/30 focus:border-primary/30 focus:ring-2 focus:ring-primary/10"
               />
             </div>
           </div>
 
           {/* Tab Selection */}
           <div className="space-y-6">
-            <div className="flex items-center p-1 bg-surface-container-high rounded-xl w-fit">
+            <div className="flex w-full items-center overflow-x-auto rounded-xl bg-surface-container-high p-1 sm:w-fit">
               {[
                 { id: "attachments", label: "Attachments", icon: Paperclip },
                 { id: "comments", label: "Communication", icon: MessageSquare },
@@ -946,7 +1098,7 @@ export function TaskDetailPanel({
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-lg text-[11px] font-black uppercase tracking-widest transition-all duration-300",
+                    "flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-all duration-300 sm:px-4 sm:text-[11px]",
                     activeTab === tab.id
                       ? "bg-surface-container-lowest text-primary shadow-sm shadow-primary/5"
                       : "text-on-surface-variant/40 hover:text-on-surface-variant/70"
@@ -958,7 +1110,7 @@ export function TaskDetailPanel({
               ))}
             </div>
 
-            <div className="bg-surface-container-lowest rounded-[2rem] p-8 shadow-sm border border-on-surface-variant/5 min-h-[300px]">
+            <div className="min-h-[300px] rounded-[2rem] border border-on-surface-variant/5 bg-surface-container-lowest p-5 shadow-sm sm:p-8">
               {activeTab === "comments" && <TaskComments taskId={currentTask.id} currentUserId={currentUser.id} />}
               {activeTab === "subtasks" && (
                 <div className="space-y-6">
