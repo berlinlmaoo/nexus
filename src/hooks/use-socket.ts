@@ -11,6 +11,25 @@ interface UseSocketOptions {
   enabled?: boolean
 }
 
+let socketServerReadyPromise: Promise<void> | null = null
+
+async function ensureSocketServer() {
+  if (!socketServerReadyPromise) {
+    socketServerReadyPromise = fetch("/api/socket")
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to initialize socket server")
+        }
+      })
+      .catch((error) => {
+        socketServerReadyPromise = null
+        throw error
+      })
+  }
+
+  return socketServerReadyPromise
+}
+
 export function useSocket({
   room,
   userId,
@@ -24,35 +43,42 @@ export function useSocket({
   useEffect(() => {
     if (!enabled || !room || !userId) return
 
+    let cancelled = false
+
     // Initialize socket connection
     const initSocket = async () => {
-      // Ping the pages API route to ensure the server is initialized
-      await fetch("/api/socket")
+      try {
+        await ensureSocketServer()
 
-      const socket = io({
-        path: "/api/socket",
-        transports: ["polling", "websocket"],
-      })
+        if (cancelled) return
 
-      socketRef.current = socket
-
-      socket.on("connect", () => {
-        setConnected(true)
-        socket.emit("join-room", {
-          room,
-          userId,
-          name: userName,
-          avatar: userAvatar,
+        const socket = io({
+          path: "/api/socket",
+          transports: ["polling", "websocket"],
         })
-      })
 
-      socket.on("disconnect", () => {
-        setConnected(false)
-      })
+        socketRef.current = socket
 
-      socket.on("connect_error", () => {
+        socket.on("connect", () => {
+          setConnected(true)
+          socket.emit("join-room", {
+            room,
+            userId,
+            name: userName,
+            avatar: userAvatar,
+          })
+        })
+
+        socket.on("disconnect", () => {
+          setConnected(false)
+        })
+
+        socket.on("connect_error", () => {
+          setConnected(false)
+        })
+      } catch {
         setConnected(false)
-      })
+      }
     }
 
     initSocket()
@@ -63,6 +89,7 @@ export function useSocket({
     }, 30000)
 
     return () => {
+      cancelled = true
       clearInterval(heartbeat)
       if (socketRef.current) {
         socketRef.current.emit("leave-room", room)

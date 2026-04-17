@@ -151,6 +151,28 @@ export function BlockEditor({
     [updateBlocks]
   )
 
+  const handleSplitBlock = useCallback(
+    (
+      id: string,
+      beforeContent: string,
+      afterContent: string,
+      type: BlockType = "text"
+    ) => {
+      const current = blocksRef.current
+      const idx = current.findIndex((b) => b.id === id)
+      if (idx < 0) return
+
+      const nextBlock = createBlock(type, afterContent)
+      const newBlocks = [...current]
+      newBlocks[idx] = { ...newBlocks[idx], content: beforeContent }
+      newBlocks.splice(idx + 1, 0, nextBlock)
+
+      updateBlocks(newBlocks)
+      setFocusedBlockId(nextBlock.id)
+    },
+    [updateBlocks]
+  )
+
   const handleMergeWithPrevious = useCallback(
     (id: string) => {
       const current = blocksRef.current
@@ -368,6 +390,7 @@ export function BlockEditor({
               onUpdate={handleUpdateBlock}
               onDelete={handleDeleteBlock}
               onInsertAfter={handleInsertAfter}
+              onSplitBlock={handleSplitBlock}
               onMergeWithPrevious={handleMergeWithPrevious}
               onIndent={handleIndent}
               onOutdent={handleOutdent}

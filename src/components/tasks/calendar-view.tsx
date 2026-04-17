@@ -111,9 +111,7 @@ export function CalendarView({
 
   const calendarDays = useMemo(() => {
     try {
-      const days = eachDayOfInterval(visibleRange)
-      console.log("Calendar days generated:", days.length)
-      return days
+      return eachDayOfInterval(visibleRange)
     } catch (err) {
       console.error("Error generating calendar days:", err)
       return []
@@ -121,7 +119,6 @@ export function CalendarView({
   }, [visibleRange])
 
   const tasksByDate = useMemo(() => {
-    console.log("Processing tasks for calendar:", tasks?.length)
     const map: Record<string, TaskCardData[]> = {}
     if (!tasks) return map
     tasks.forEach((task) => {

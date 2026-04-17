@@ -7,9 +7,11 @@ import { executeAutomations } from "@/lib/automation-engine"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import { emitTaskCreated } from "@/lib/socket-emitter"
 import type { Prisma } from "@/generated/prisma/client"
+import { TaskPriority, TaskStatus } from "@/generated/prisma"
 import { createTaskSchema, validateBody } from "@/lib/validations"
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit"
 import { seedTaskCustomFieldValues } from "@/lib/custom-field-sync"
+import { resolveAutoAssignAssigneeIds } from "@/lib/project-auto-assign"
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,6 +28,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search")
 
     const where: Prisma.TaskWhereInput = {}
+    const andClauses: Prisma.TaskWhereInput[] = []
 
     if (!isSystemAdmin) {
       const workspaceMemberships = await prisma.workspaceMember.findMany({
@@ -73,7 +76,7 @@ export async function GET(request: NextRequest) {
       if (accessScopes.length === 1) {
         Object.assign(where, accessScopes[0])
       } else {
-        where.OR = accessScopes
+        andClauses.push({ OR: accessScopes })
       }
     }
 
@@ -87,19 +90,43 @@ export async function GET(request: NextRequest) {
       where.taskListId = taskListId
     }
     if (status) {
-      where.status = status as Prisma.EnumTaskStatusFilter["equals"]
+      const statuses = status
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean) as TaskStatus[]
+
+      if (statuses.length === 1) {
+        where.status = statuses[0]
+      } else if (statuses.length > 1) {
+        where.status = { in: statuses }
+      }
     }
     if (priority) {
-      where.priority = priority as Prisma.EnumTaskPriorityFilter["equals"]
+      const priorities = priority
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean) as TaskPriority[]
+
+      if (priorities.length === 1) {
+        where.priority = priorities[0]
+      } else if (priorities.length > 1) {
+        where.priority = { in: priorities }
+      }
     }
     if (assigneeId) {
       where.assignees = { some: { userId: assigneeId } }
     }
     if (search) {
-      where.OR = [
-        { title: { contains: search, mode: "insensitive" } },
-        { description: { contains: search, mode: "insensitive" } },
-      ]
+      andClauses.push({
+        OR: [
+          { title: { contains: search, mode: "insensitive" } },
+          { description: { contains: search, mode: "insensitive" } },
+        ],
+      })
+    }
+
+    if (andClauses.length > 0) {
+      where.AND = andClauses
     }
 
     const tasks = await prisma.task.findMany({
@@ -141,7 +168,20 @@ export async function POST(request: NextRequest) {
 
     const taskList = await prisma.taskList.findUnique({
       where: { id: taskListId },
-      include: { project: true },
+      include: {
+        project: {
+          select: {
+            id: true,
+            autoAssignEnabled: true,
+            autoAssignAssigneeIds: true,
+            members: {
+              select: {
+                userId: true,
+              },
+            },
+          },
+        },
+      },
     })
 
     if (!taskList) {
@@ -152,6 +192,13 @@ export async function POST(request: NextRequest) {
     if (!allowed) {
       return NextResponse.json({ error: "Forbidden: MEMBER role or higher required to create tasks" }, { status: 403 })
     }
+
+    const finalAssigneeIds = resolveAutoAssignAssigneeIds({
+      requestedAssigneeIds: assigneeIds,
+      autoAssignEnabled: taskList.project.autoAssignEnabled,
+      autoAssignAssigneeIds: taskList.project.autoAssignAssigneeIds,
+      validProjectMemberIds: taskList.project.members.map((member) => member.userId),
+    })
 
     const userId = session.user.id
 
@@ -166,9 +213,9 @@ export async function POST(request: NextRequest) {
         dueDate: dueDate ? new Date(dueDate) : undefined,
         tags: tags || [],
         parentId,
-        assignees: assigneeIds?.length
+        assignees: finalAssigneeIds.length
           ? {
-              create: assigneeIds.map((uid: string) => ({ userId: uid })),
+              create: finalAssigneeIds.map((uid: string) => ({ userId: uid })),
             }
           : undefined,
       },
@@ -201,7 +248,7 @@ export async function POST(request: NextRequest) {
       taskId: task.id,
       userId,
       projectId: taskList.projectId,
-      assigneeIds: assigneeIds || [],
+      assigneeIds: finalAssigneeIds,
     }).catch(() => {})
 
     dispatchWebhookEvent("task.created", {

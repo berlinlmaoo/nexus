@@ -9,13 +9,22 @@ export const SUPPORTED_CUSTOM_FIELD_TYPES = [
 ] as const
 
 export type SupportedCustomFieldType = (typeof SUPPORTED_CUSTOM_FIELD_TYPES)[number]
+export type NumberCustomFieldFormat = "plain" | "currency-idr"
+export type CustomFieldDisplayFormat = "name-and-map-link" | "currency-idr"
 
 export interface CustomFieldOptionConfig {
   options?: string[]
   defaultSource?: "taskCreatedAt"
   editable?: boolean
-  format?: "name-and-map-link"
+  format?: CustomFieldDisplayFormat
 }
+
+export interface CreatedFieldMetadata {
+  userName: string
+  timestamp: string
+}
+
+const CREATED_FIELD_TIMEZONE = "Asia/Jakarta"
 
 export interface PlaceFieldValue {
   label: string
@@ -41,6 +50,22 @@ export function normalizeCustomFieldOptions(
   type: SupportedCustomFieldType,
   options: unknown
 ): CustomFieldOptionConfig | null {
+  if (type === "NUMBER") {
+    const rawFormat =
+      typeof options === "string"
+        ? options
+        : typeof (options as { format?: unknown } | null)?.format === "string"
+          ? String((options as { format: string }).format)
+          : ""
+
+    const normalizedFormat = rawFormat.toLowerCase().trim()
+    if (normalizedFormat === "currency-idr" || normalizedFormat === "idr" || normalizedFormat === "rupiah") {
+      return { format: "currency-idr" }
+    }
+
+    return null
+  }
+
   if (type === "SELECT" || type === "MULTI_SELECT" || type === "STATUS") {
     const rawOptions = Array.isArray(options)
       ? options
@@ -64,7 +89,7 @@ export function normalizeCustomFieldOptions(
   if (type === "CREATED") {
     return {
       defaultSource: "taskCreatedAt",
-      editable: true,
+      editable: false,
     }
   }
 
@@ -219,4 +244,86 @@ export function formatCustomFieldValueForExport(
     return [place.label, place.mapUrl].filter(Boolean).join(" - ")
   }
   return parsed
+}
+
+export function getNumberCustomFieldFormat(options: CustomFieldOptionConfig | null | undefined): NumberCustomFieldFormat {
+  return options?.format === "currency-idr" ? "currency-idr" : "plain"
+}
+
+export function normalizeCustomFieldNumberInput(
+  value: string | null | undefined,
+  options: CustomFieldOptionConfig | null | undefined
+): string {
+  const raw = String(value ?? "")
+
+  if (getNumberCustomFieldFormat(options) === "currency-idr") {
+    return raw.replace(/\D+/g, "")
+  }
+
+  return raw
+}
+
+export function formatCreatedFieldValue(
+  value: string | null | undefined,
+  metadata?: CreatedFieldMetadata | null
+): string {
+  const timestamp = String(value ?? metadata?.timestamp ?? "").trim()
+  const actorName = String(metadata?.userName ?? "").trim()
+
+  if (!timestamp) {
+    return actorName || ""
+  }
+
+  const date = new Date(timestamp)
+  const timeLabel = Number.isNaN(date.getTime())
+    ? timestamp
+    : formatCreatedFieldTimestamp(timestamp)
+
+  return actorName ? `${actorName} • ${timeLabel}` : timeLabel
+}
+
+export function formatCreatedFieldTimestamp(value: string | null | undefined): string {
+  const timestamp = String(value ?? "").trim()
+  if (!timestamp) return ""
+
+  const date = new Date(timestamp)
+  if (Number.isNaN(date.getTime())) {
+    return timestamp
+  }
+
+  const formatter = new Intl.DateTimeFormat("en-GB", {
+    timeZone: CREATED_FIELD_TIMEZONE,
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  })
+
+  const parts = formatter.formatToParts(date)
+  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+
+  return `${lookup.day} ${lookup.month} ${lookup.year} • ${lookup.hour}:${lookup.minute}`
+}
+
+export function formatCustomFieldNumberValue(
+  value: string | number | null | undefined,
+  options: CustomFieldOptionConfig | null | undefined
+): string {
+  const raw = String(value ?? "").trim()
+  if (!raw) return ""
+
+  if (getNumberCustomFieldFormat(options) === "currency-idr") {
+    const digits = normalizeCustomFieldNumberInput(raw, options)
+    if (!digits) return ""
+
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      maximumFractionDigits: 0,
+    }).format(Number(digits))
+  }
+
+  return raw
 }

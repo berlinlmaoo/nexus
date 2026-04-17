@@ -111,8 +111,41 @@ export function TaskActivity({ taskId }: TaskActivityProps) {
 
   // Auto-refresh every 30 seconds
   useEffect(() => {
-    const interval = setInterval(fetchActivities, 30_000)
-    return () => clearInterval(interval)
+    let interval: ReturnType<typeof setInterval> | null = null
+
+    const stopPolling = () => {
+      if (interval) {
+        clearInterval(interval)
+        interval = null
+      }
+    }
+
+    const startPolling = () => {
+      if (document.hidden || interval) return
+      interval = setInterval(() => {
+        if (!document.hidden) {
+          fetchActivities()
+        }
+      }, 30_000)
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopPolling()
+        return
+      }
+
+      fetchActivities()
+      startPolling()
+    }
+
+    startPolling()
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      stopPolling()
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
   }, [fetchActivities])
 
   if (loading) {

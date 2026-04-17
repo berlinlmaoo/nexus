@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useCallback } from "react"
+import { startTransition, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useSocket } from "./use-socket"
 
@@ -43,10 +43,32 @@ export function useRealtimeProject({
   })
 
   const router = useRouter()
+  const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const refresh = useCallback(() => {
-    router.refresh()
+    startTransition(() => {
+      router.refresh()
+    })
   }, [router])
+
+  const scheduleRefresh = useCallback(() => {
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current)
+    }
+
+    refreshTimeoutRef.current = setTimeout(() => {
+      refresh()
+      refreshTimeoutRef.current = null
+    }, 250)
+  }, [refresh])
+
+  useEffect(() => {
+    return () => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (!connected || !enabled) return
@@ -58,7 +80,7 @@ export function useRealtimeProject({
         if (onTaskCreated) {
           onTaskCreated(task as Record<string, unknown>)
         } else {
-          refresh()
+          scheduleRefresh()
         }
       })
     )
@@ -68,7 +90,7 @@ export function useRealtimeProject({
         if (onTaskUpdated) {
           onTaskUpdated(task as Record<string, unknown>)
         } else {
-          refresh()
+          scheduleRefresh()
         }
       })
     )
@@ -78,7 +100,7 @@ export function useRealtimeProject({
         if (onTaskDeleted) {
           onTaskDeleted(data as { taskId: string })
         } else {
-          refresh()
+          scheduleRefresh()
         }
       })
     )
@@ -88,7 +110,7 @@ export function useRealtimeProject({
         if (onCommentAdded) {
           onCommentAdded(data as { taskId: string; comment: Record<string, unknown> })
         } else {
-          refresh()
+          scheduleRefresh()
         }
       })
     )
@@ -96,7 +118,7 @@ export function useRealtimeProject({
     return () => {
       unsubs.forEach((unsub) => unsub())
     }
-  }, [connected, enabled, on, onTaskCreated, onTaskUpdated, onTaskDeleted, onCommentAdded, refresh])
+  }, [connected, enabled, on, onTaskCreated, onTaskUpdated, onTaskDeleted, onCommentAdded, scheduleRefresh])
 
   return { connected }
 }

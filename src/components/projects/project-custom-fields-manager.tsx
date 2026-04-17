@@ -6,8 +6,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import {
+  formatCustomFieldNumberValue,
+  getNumberCustomFieldFormat,
   normalizeCustomFieldOptions,
   SUPPORTED_CUSTOM_FIELD_TYPES,
+  type CustomFieldOptionConfig,
+  type NumberCustomFieldFormat,
   type SupportedCustomFieldType,
 } from "@/lib/custom-fields"
 import {
@@ -31,9 +35,7 @@ interface ManagedField {
   name: string
   type: SupportedCustomFieldType
   position: number
-  options: {
-    options?: string[]
-  } | null
+  options: CustomFieldOptionConfig | null
 }
 
 const TYPE_META: Record<
@@ -85,12 +87,28 @@ function supportsOptions(type: SupportedCustomFieldType) {
   return type === "SELECT" || type === "MULTI_SELECT" || type === "STATUS"
 }
 
+function supportsConfiguration(type: SupportedCustomFieldType) {
+  return supportsOptions(type) || type === "NUMBER"
+}
+
 function extractOptions(options: ManagedField["options"]) {
   return options?.options ?? []
 }
 
-function buildOptions(type: SupportedCustomFieldType, values: string[]) {
-  return normalizeCustomFieldOptions(type, { options: values })
+function buildOptions(
+  type: SupportedCustomFieldType,
+  {
+    options = [],
+    numberFormat = "plain",
+  }: {
+    options?: string[]
+    numberFormat?: NumberCustomFieldFormat
+  } = {}
+) {
+  return normalizeCustomFieldOptions(type, {
+    ...(options.length > 0 ? { options } : {}),
+    ...(type === "NUMBER" && numberFormat !== "plain" ? { format: numberFormat } : {}),
+  })
 }
 
 function normalizeOptionLabel(value: string) {
@@ -245,14 +263,59 @@ function OptionBuilder({
   )
 }
 
+function NumberFormatPicker({
+  value,
+  onChange,
+}: {
+  value: NumberCustomFieldFormat
+  onChange: (value: NumberCustomFieldFormat) => void
+}) {
+  return (
+    <div className="grid gap-2 sm:grid-cols-2">
+      <button
+        type="button"
+        onClick={() => onChange("plain")}
+        className={cn(
+          "rounded-xl border px-3 py-3 text-left transition-all",
+          value === "plain"
+            ? "border-foreground bg-foreground text-background shadow-sm"
+            : "border-border/80 bg-background hover:border-foreground/20 hover:bg-muted/50"
+        )}
+      >
+        <p className="text-sm font-semibold">Plain number</p>
+        <p className={cn("mt-1 text-xs", value === "plain" ? "text-background/75" : "text-muted-foreground")}>
+          Keep the field as a regular number.
+        </p>
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("currency-idr")}
+        className={cn(
+          "rounded-xl border px-3 py-3 text-left transition-all",
+          value === "currency-idr"
+            ? "border-foreground bg-foreground text-background shadow-sm"
+            : "border-border/80 bg-background hover:border-foreground/20 hover:bg-muted/50"
+        )}
+      >
+        <p className="text-sm font-semibold">Rupiah (IDR)</p>
+        <p className={cn("mt-1 text-xs", value === "currency-idr" ? "text-background/75" : "text-muted-foreground")}>
+          Show the value as Indonesian currency with `Rp`.
+        </p>
+      </button>
+    </div>
+  )
+}
+
 function FieldPreview({
   type,
   name,
   options,
+  numberFormat,
 }: {
   type: SupportedCustomFieldType
   name: string
   options: string[]
+  numberFormat: NumberCustomFieldFormat
 }) {
   return (
     <div className="rounded-2xl border border-border/80 bg-background/80 p-4">
@@ -290,7 +353,9 @@ function FieldPreview({
 
       {type === "NUMBER" && (
         <div className="rounded-xl border border-border/80 bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-          0
+          {numberFormat === "currency-idr"
+            ? formatCustomFieldNumberValue("1250000", { format: "currency-idr" })
+            : "1250000"}
         </div>
       )}
 
@@ -325,6 +390,7 @@ export function ProjectCustomFieldsManager({ projectId }: { projectId: string })
   const [draftType, setDraftType] = useState<SupportedCustomFieldType>("SELECT")
   const [draftOptionInput, setDraftOptionInput] = useState("")
   const [draftOptionList, setDraftOptionList] = useState<string[]>([])
+  const [draftNumberFormat, setDraftNumberFormat] = useState<NumberCustomFieldFormat>("plain")
   const [creating, setCreating] = useState(false)
 
   const [fieldOptionInputs, setFieldOptionInputs] = useState<Record<string, string>>({})
@@ -353,8 +419,8 @@ export function ProjectCustomFieldsManager({ projectId }: { projectId: string })
 
   const hasFields = fields.length > 0
   const draftOptions = useMemo(
-    () => buildOptions(draftType, draftOptionList),
-    [draftOptionList, draftType]
+    () => buildOptions(draftType, { options: draftOptionList, numberFormat: draftNumberFormat }),
+    [draftNumberFormat, draftOptionList, draftType]
   )
 
   const resetDraft = () => {
@@ -362,6 +428,7 @@ export function ProjectCustomFieldsManager({ projectId }: { projectId: string })
     setDraftType("SELECT")
     setDraftOptionInput("")
     setDraftOptionList([])
+    setDraftNumberFormat("plain")
   }
 
   const createField = async () => {
@@ -378,7 +445,7 @@ export function ProjectCustomFieldsManager({ projectId }: { projectId: string })
         body: JSON.stringify({
           name: draftName.trim(),
           type: draftType,
-          options: supportsOptions(draftType) ? draftOptions : undefined,
+          options: supportsConfiguration(draftType) ? draftOptions : undefined,
           projectId,
         }),
       })
@@ -414,7 +481,7 @@ export function ProjectCustomFieldsManager({ projectId }: { projectId: string })
           id: field.id,
           name: field.name.trim(),
           type: field.type,
-          options: supportsOptions(field.type) ? field.options : undefined,
+          options: supportsConfiguration(field.type) ? field.options : undefined,
         }),
       })
 
@@ -511,7 +578,10 @@ export function ProjectCustomFieldsManager({ projectId }: { projectId: string })
         field.id === fieldId
           ? {
               ...field,
-              options: buildOptions(field.type, nextOptions),
+              options: buildOptions(field.type, {
+                options: nextOptions,
+                numberFormat: getNumberCustomFieldFormat(field.options),
+              }),
             }
           : field
       )
@@ -575,6 +645,18 @@ export function ProjectCustomFieldsManager({ projectId }: { projectId: string })
               />
             )}
 
+            {draftType === "NUMBER" && (
+              <div className="space-y-3">
+                <Label className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">
+                  Number Format
+                </Label>
+                <NumberFormatPicker
+                  value={draftNumberFormat}
+                  onChange={setDraftNumberFormat}
+                />
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-border/80 bg-background/80 px-4 py-3">
               <p className="text-sm text-muted-foreground">
                 {selectedDraftMeta.description}
@@ -599,6 +681,7 @@ export function ProjectCustomFieldsManager({ projectId }: { projectId: string })
             type={draftType}
             name={draftName}
             options={draftOptionList}
+            numberFormat={draftNumberFormat}
           />
         </div>
       </div>
@@ -616,6 +699,7 @@ export function ProjectCustomFieldsManager({ projectId }: { projectId: string })
         ) : (
           fields.map((field, index) => {
             const options = extractOptions(field.options)
+            const numberFormat = getNumberCustomFieldFormat(field.options)
             const meta = TYPE_META[field.type]
             const Icon = meta.icon
 
@@ -694,7 +778,9 @@ export function ProjectCustomFieldsManager({ projectId }: { projectId: string })
                         value={field.type}
                         onChange={(nextType) => {
                           const nextOptions = supportsOptions(nextType)
-                            ? buildOptions(nextType, options)
+                            ? buildOptions(nextType, { options })
+                            : nextType === "NUMBER"
+                              ? buildOptions(nextType, { numberFormat: "plain" })
                             : null
                           setFields((prev) =>
                             prev.map((item) =>
@@ -736,6 +822,29 @@ export function ProjectCustomFieldsManager({ projectId }: { projectId: string })
                           updateFieldOptionList(field.id, removeOptionFromList(options, value))
                         }
                       />
+                    )}
+
+                    {field.type === "NUMBER" && (
+                      <div className="space-y-3">
+                        <Label className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">
+                          Number Format
+                        </Label>
+                        <NumberFormatPicker
+                          value={numberFormat}
+                          onChange={(nextFormat) =>
+                            setFields((prev) =>
+                              prev.map((item) =>
+                                item.id === field.id
+                                  ? {
+                                      ...item,
+                                      options: buildOptions(item.type, { numberFormat: nextFormat }),
+                                    }
+                                  : item
+                              )
+                            )
+                          }
+                        />
+                      </div>
                     )}
 
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-border/80 bg-muted/20 px-4 py-3">
