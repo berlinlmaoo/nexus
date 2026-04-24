@@ -8,6 +8,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { EmptyTeams } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Users, Plus, FolderKanban, UserPlus, LinkIcon, ShieldCheck, Loader2, Trash2, Search, Check, ChevronsUpDown } from 'lucide-react'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { ProjectIcon } from '@/components/projects/project-icon'
@@ -21,6 +28,7 @@ interface TeamProject {
 interface TeamMember {
   id: string
   role: string
+  isAttendancePrimary?: boolean
   user: { id: string; name: string; email: string; avatar?: string | null }
 }
 
@@ -28,8 +36,12 @@ interface Team {
   id: string
   name: string
   color: string
+  attendanceShiftOverrideEnabled?: boolean
+  attendanceShiftStartTime?: string | null
+  attendanceShiftEndTime?: string | null
   workspaceId: string
   canManage: boolean
+  canManageAttendanceSettings?: boolean
   isPrimaryTeam?: boolean
   members: TeamMember[]
   projects: TeamProject[]
@@ -53,12 +65,18 @@ interface ProjectOption {
   status: string
 }
 
+const TIME_OPTIONS = Array.from({ length: 24 * 4 }, (_, index) => {
+  const hours = Math.floor(index / 4)
+  const minutes = (index % 4) * 15
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+})
+
 export default function TeamsPage() {
   const [teams, setTeams] = useState<Team[]>([])
   const [memberOptionsByTeam, setMemberOptionsByTeam] = useState<Record<string, MemberOption[]>>({})
   const [projectOptionsByTeam, setProjectOptionsByTeam] = useState<Record<string, ProjectOption[]>>({})
   const [newTeamName, setNewTeamName] = useState('')
-  const [newTeamColor, setNewTeamColor] = useState('#0c1427')
+  const [newTeamColor] = useState('#0c1427')
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [isCreatingTeam, setIsCreatingTeam] = useState(false)
@@ -68,6 +86,11 @@ export default function TeamsPage() {
   const [projectSearchByTeam, setProjectSearchByTeam] = useState<Record<string, string>>({})
   const [memberPickerOpenByTeam, setMemberPickerOpenByTeam] = useState<Record<string, boolean>>({})
   const [projectPickerOpenByTeam, setProjectPickerOpenByTeam] = useState<Record<string, boolean>>({})
+  const [teamShiftDrafts, setTeamShiftDrafts] = useState<Record<string, {
+    enabled: boolean
+    start: string
+    end: string
+  }>>({})
   const [activeAction, setActiveAction] = useState<string | null>(null)
   const [pendingMemberRemoval, setPendingMemberRemoval] = useState<{
     teamId: string
@@ -144,6 +167,18 @@ export default function TeamsPage() {
       }
 
       setTeams(normalizedTeams)
+      setTeamShiftDrafts(
+        Object.fromEntries(
+          normalizedTeams.map((team) => [
+            team.id,
+            {
+              enabled: Boolean(team.attendanceShiftOverrideEnabled),
+              start: team.attendanceShiftStartTime || '09:00',
+              end: team.attendanceShiftEndTime || '18:00',
+            },
+          ])
+        )
+      )
       setMemberOptionsByTeam(nextMembersByTeam)
       setProjectOptionsByTeam(nextProjectsByTeam)
     } catch (error) {
@@ -188,7 +223,7 @@ export default function TeamsPage() {
 
   const runTeamAction = async (
     actionKey: string,
-    body: Record<string, string | string[]>,
+    body: Record<string, unknown>,
     successMessage: string
   ) => {
     setActiveAction(actionKey)
@@ -225,6 +260,27 @@ export default function TeamsPage() {
     if (didAdd) {
       setMemberDrafts((prev) => ({ ...prev, [teamId]: [] }))
     }
+  }
+
+  const handleSaveAttendanceShift = async (teamId: string) => {
+    const draft = teamShiftDrafts[teamId]
+    if (!draft) return
+    await runTeamAction(`attendance-shift-${teamId}`, {
+      action: 'update-attendance-shift',
+      teamId,
+      attendanceShiftOverrideEnabled: draft.enabled,
+      attendanceShiftStartTime: draft.start,
+      attendanceShiftEndTime: draft.end,
+    }, 'Attendance shift updated')
+  }
+
+  const handleSetAttendancePrimary = async (teamId: string, userId: string, isAttendancePrimary: boolean) => {
+    await runTeamAction(`attendance-primary-${teamId}-${userId}`, {
+      action: 'set-attendance-primary',
+      teamId,
+      userId,
+      isAttendancePrimary,
+    }, isAttendancePrimary ? 'Primary attendance team updated' : 'Primary attendance team removed')
   }
 
   const confirmRemoveMember = async () => {
@@ -384,6 +440,11 @@ export default function TeamsPage() {
             const selectedMemberIds = memberDrafts[team.id] || []
             const selectedMembers = availableMembers.filter((member) => selectedMemberIds.includes(member.userId))
             const selectedProject = availableProjects.find((project) => project.id === projectDrafts[team.id])
+            const shiftDraft = teamShiftDrafts[team.id] ?? {
+              enabled: Boolean(team.attendanceShiftOverrideEnabled),
+              start: team.attendanceShiftStartTime || '09:00',
+              end: team.attendanceShiftEndTime || '18:00',
+            }
 
             return (
               <div
@@ -434,6 +495,116 @@ export default function TeamsPage() {
                   )}
                 </div>
 
+                <div className="rounded-[1.5rem] bg-surface-container-low/40 p-4 sm:rounded-[1.75rem] sm:p-6">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="space-y-2">
+                      <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-on-surface-variant/30">
+                        <ShieldCheck className="h-3 w-3" />
+                        Attendance Shift Override
+                      </p>
+                      <p className="text-xs text-on-surface-variant/45">
+                        Override hanya untuk jam masuk dan pulang. Grace minutes, workdays, dan timezone tetap ikut office.
+                      </p>
+                    </div>
+                    <div className="rounded-full bg-surface-container-lowest px-3 py-1 text-[10px] font-black uppercase tracking-widest text-on-surface-variant/50">
+                      {shiftDraft.enabled ? 'Enabled' : 'Office default'}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <label className="flex items-center gap-3 rounded-2xl bg-surface-container-lowest px-4 py-3 text-sm font-bold text-on-surface">
+                      <input
+                        type="checkbox"
+                        checked={shiftDraft.enabled}
+                        disabled={!team.canManageAttendanceSettings}
+                        onChange={(e) =>
+                          setTeamShiftDrafts((prev) => ({
+                            ...prev,
+                            [team.id]: {
+                              ...shiftDraft,
+                              enabled: e.target.checked,
+                            },
+                          }))
+                        }
+                      />
+                      Enable team shift
+                    </label>
+                    <Select
+                      value={shiftDraft.start}
+                      disabled={!team.canManageAttendanceSettings || !shiftDraft.enabled}
+                      onValueChange={(value) =>
+                        setTeamShiftDrafts((prev) => ({
+                          ...prev,
+                          [team.id]: {
+                            ...shiftDraft,
+                            start: value,
+                          },
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="h-11 rounded-2xl border-none bg-surface-container-lowest px-4 text-sm font-bold text-on-surface">
+                        <SelectValue placeholder="Shift start" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-80 rounded-2xl border-none bg-surface-container-lowest shadow-2xl">
+                        {TIME_OPTIONS.map((time) => (
+                          <SelectItem
+                            key={`${team.id}-start-${time}`}
+                            value={time}
+                            className="rounded-xl py-2 text-sm font-bold"
+                          >
+                            {time}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={shiftDraft.end}
+                      disabled={!team.canManageAttendanceSettings || !shiftDraft.enabled}
+                      onValueChange={(value) =>
+                        setTeamShiftDrafts((prev) => ({
+                          ...prev,
+                          [team.id]: {
+                            ...shiftDraft,
+                            end: value,
+                          },
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="h-11 rounded-2xl border-none bg-surface-container-lowest px-4 text-sm font-bold text-on-surface">
+                        <SelectValue placeholder="Shift end" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-80 rounded-2xl border-none bg-surface-container-lowest shadow-2xl">
+                        {TIME_OPTIONS.map((time) => (
+                          <SelectItem
+                            key={`${team.id}-end-${time}`}
+                            value={time}
+                            className="rounded-xl py-2 text-sm font-bold"
+                          >
+                            {time}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {team.canManageAttendanceSettings && (
+                    <div className="mt-4">
+                      <Button
+                        type="button"
+                        onClick={() => handleSaveAttendanceShift(team.id)}
+                        disabled={activeAction === `attendance-shift-${team.id}` || (shiftDraft.enabled && (!shiftDraft.start || !shiftDraft.end))}
+                        className="h-11 rounded-2xl bg-primary px-5 text-xs font-black uppercase tracking-widest text-primary-foreground"
+                      >
+                        {activeAction === `attendance-shift-${team.id}` ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          'Save Attendance Shift'
+                        )}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                   <div className="space-y-4 rounded-[1.5rem] bg-surface-container-low/40 p-4 sm:rounded-[1.75rem] sm:p-6">
                     <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-on-surface-variant/30">
@@ -444,32 +615,63 @@ export default function TeamsPage() {
                     <div className="space-y-3">
                       {team.members.length > 0 ? (
                         team.members.map((member) => (
-                          <div key={member.id} className="flex flex-col gap-3 rounded-2xl bg-surface-container-lowest px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div className="flex min-w-0 items-center gap-3">
+                          <div
+                            key={member.id}
+                            className="space-y-3 rounded-2xl bg-surface-container-lowest px-4 py-3"
+                          >
+                            <div className="flex min-w-0 items-start gap-3">
                               <UserAvatar user={{ name: member.user.name, avatar: member.user.avatar }} size="sm" />
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-bold text-on-surface">{member.user.name}</p>
-                                <p className="truncate text-xs text-on-surface-variant/50">{member.user.email}</p>
+                              <div className="min-w-0 flex-1 space-y-1">
+                                <p className="break-words text-sm font-black leading-tight text-on-surface">
+                                  {member.user.name}
+                                </p>
+                                <p className="break-all text-[11px] font-medium leading-tight text-on-surface-variant/70">
+                                  {member.user.email}
+                                </p>
                               </div>
                             </div>
-                            <div className="flex items-center justify-between gap-2 sm:justify-end">
-                              <span className="rounded-full bg-surface-container px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-on-surface-variant/60">
-                                {member.role}
-                              </span>
-                              {team.canManage && !team.isPrimaryTeam && (
-                                <button
-                                  onClick={() => setPendingMemberRemoval({
-                                    teamId: team.id,
-                                    userId: member.user.id,
-                                    memberName: member.user.name,
-                                  })}
-                                  disabled={activeAction === `remove-member-${team.id}-${member.user.id}`}
-                                  className="rounded-xl p-2 text-on-surface-variant/30 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-                                  title="Remove member"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              )}
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="rounded-full bg-surface-container px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-on-surface-variant/60">
+                                  {member.role}
+                                </span>
+                                {member.isAttendancePrimary && (
+                                  <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-primary">
+                                    Primary Attendance Team
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                                {team.canManageAttendanceSettings && (
+                                  <button
+                                    onClick={() => handleSetAttendancePrimary(team.id, member.user.id, !member.isAttendancePrimary)}
+                                    disabled={activeAction === `attendance-primary-${team.id}-${member.user.id}`}
+                                    className="rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
+                                  >
+                                    {activeAction === `attendance-primary-${team.id}-${member.user.id}` ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : member.isAttendancePrimary ? (
+                                      'Unset Primary'
+                                    ) : (
+                                      'Set Primary'
+                                    )}
+                                  </button>
+                                )}
+                                {team.canManage && !team.isPrimaryTeam && (
+                                  <button
+                                    onClick={() => setPendingMemberRemoval({
+                                      teamId: team.id,
+                                      userId: member.user.id,
+                                      memberName: member.user.name,
+                                    })}
+                                    disabled={activeAction === `remove-member-${team.id}-${member.user.id}`}
+                                    className="rounded-xl p-2 text-on-surface-variant/30 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                                    title="Remove member"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
                         ))

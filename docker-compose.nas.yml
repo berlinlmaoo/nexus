@@ -4,6 +4,11 @@ x-app-env: &app-env
   AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in .env.docker.nas}
   NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
   AUTH_TRUST_HOST: ${AUTH_TRUST_HOST:-true}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASS: ${SMTP_PASS:-}
+  SMTP_FROM: ${SMTP_FROM:-NEXUS <noreply@localhost>}
 
 services:
   bootstrap:
@@ -32,6 +37,7 @@ services:
       - "${APP_PORT:-3000}:3000"
     volumes:
       - task_attachments:/app/public/uploads/attachments
+      - attendance_photos:/app/public/uploads/attendance
       - project_icons:/app/public/uploads/project-icons
     environment: *app-env
     depends_on:
@@ -53,4 +59,5 @@ services:
 
 volumes:
   task_attachments:
+  attendance_photos:
   project_icons:

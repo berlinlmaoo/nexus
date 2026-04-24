@@ -4,6 +4,9 @@ x-app-env: &app-env
   AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in .env.docker}
   NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
   AUTH_TRUST_HOST: ${AUTH_TRUST_HOST:-true}
+  SMTP_HOST: ${SMTP_HOST:-mailpit}
+  SMTP_PORT: ${SMTP_PORT:-1025}
+  SMTP_FROM: ${SMTP_FROM:-NEXUS <noreply@localhost>}
 
 services:
   db:
@@ -38,6 +41,13 @@ services:
       db:
         condition: service_healthy
 
+  mailpit:
+    image: axllent/mailpit:v1.24
+    restart: always
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+
   app:
     build:
       context: .
@@ -45,12 +55,17 @@ services:
     restart: always
     ports:
       - "${APP_PORT:-3000}:3000"
+    volumes:
+      - attendance_photos:/app/public/uploads/attendance
     environment: *app-env
     depends_on:
       db:
         condition: service_healthy
       bootstrap:
         condition: service_completed_successfully
+      mailpit:
+        condition: service_started
 
 volumes:
   db_data:
+  attendance_photos:

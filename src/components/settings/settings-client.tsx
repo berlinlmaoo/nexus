@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useRef, useCallback } from "react"
-import { User, Building2, Palette, Camera, X, Loader2, Sun, Moon, Monitor, Bell, Mail, Shield, Webhook, Upload, Users, Lock, Trash2, Crown, ChevronRight, Activity, Share2 } from "lucide-react"
+import { useState } from "react"
+import type { LucideIcon } from "lucide-react"
+import { User, Building2, Camera, Loader2, Bell, Webhook, Upload, Users, Lock, ChevronRight, Activity } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useRouter } from "next/navigation"
-import { useTheme } from "@/components/layout/theme-provider"
 import { AuditLogViewer } from "./audit-log-viewer"
 import { WebhooksManager } from "./webhooks-manager"
 import { ImportWizard } from "./import-wizard"
@@ -13,27 +13,29 @@ import { PasswordChangeSection } from "./password-change"
 import { WorkspaceMembersSection } from "./workspace-members"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
+import { AttendanceSettingsSection } from "./attendance-settings"
 
 interface SettingsClientProps {
   user: { id: string; name: string; email: string; avatar: string | null; role?: string }
   workspace: { id: string; name: string; slug: string } | null
   isAdmin?: boolean
+  canAccessAttendanceSettings?: boolean
   workspaceRole?: string | null
 }
 
-type SettingsTab = "profile" | "security" | "members" | "notifications" | "webhooks" | "import" | "audit"
+type SettingsTab = "profile" | "security" | "members" | "attendance" | "notifications" | "webhooks" | "import" | "audit"
 
-export function SettingsClient({ user, workspace, isAdmin, workspaceRole }: SettingsClientProps) {
+export function SettingsClient({ user, workspace, isAdmin, canAccessAttendanceSettings }: SettingsClientProps) {
   const router = useRouter()
-  const { theme, setTheme } = useTheme()
   const [activeTab, setActiveTab] = useState<SettingsTab>("profile")
   const [name, setName] = useState(user.name)
   const [saving, setSaving] = useState(false)
 
-  const tabs: { id: SettingsTab; label: string; icon: any }[] = [
+  const tabs: { id: SettingsTab; label: string; icon: LucideIcon }[] = [
     { id: "profile", label: "Identity", icon: User },
     { id: "security", label: "Security", icon: Lock },
     { id: "members", label: "Operatives", icon: Users },
+    ...(canAccessAttendanceSettings && workspace ? [{ id: "attendance" as SettingsTab, label: "Attendance", icon: Building2 }] : []),
     { id: "notifications", label: "Intelligence", icon: Bell },
     { id: "webhooks", label: "Webhooks", icon: Webhook },
     { id: "import", label: "Migration", icon: Upload },
@@ -172,6 +174,7 @@ export function SettingsClient({ user, workspace, isAdmin, workspaceRole }: Sett
                   />
                 </div>
               )}
+              {activeTab === "attendance" && <AttendanceSettingsSection workspace={workspace} />}
               {activeTab === "notifications" && <NotificationSettings />}
               {activeTab === "webhooks" && <WebhooksManager />}
               {activeTab === "import" && <ImportWizard />}

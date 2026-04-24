@@ -48,6 +48,11 @@ model User {
   proofAnnotations   ProofAnnotation[]
   teamCalendarEvents TeamCalendarEvent[]         @relation("TeamCalendarEventCreator")
   teamCalendarEventAttendances TeamCalendarEventAttendee[]
+  emailOtps          EmailOtpVerification[]
+  attendanceRecords  AttendanceRecord[]
+  attendanceCorrections AttendanceRecord[] @relation("AttendanceRecordCorrectedBy")
+  attendanceRequests AttendanceRequest[] @relation("AttendanceRequestUser")
+  reviewedAttendanceRequests AttendanceRequest[] @relation("AttendanceRequestReviewedBy")
 }
 
 model Workspace {
@@ -67,12 +72,16 @@ model Workspace {
   ssoConfig       SsoConfig?
   workflowBundles WorkflowBundle[]
   teamCalendarEvents TeamCalendarEvent[]
+  officeLocations    OfficeLocation[]
+  attendanceRecords  AttendanceRecord[]
+  attendanceRequests AttendanceRequest[]
 }
 
 model WorkspaceMember {
-  id          String        @id @default(cuid())
-  role        WorkspaceRole @default(MEMBER)
-  joinedAt    DateTime      @default(now())
+  id             String           @id @default(cuid())
+  role           WorkspaceRole    @default(MEMBER)
+  attendanceRole AttendanceRole   @default(NONE)
+  joinedAt       DateTime         @default(now())
 
   userId      String
   workspaceId String
@@ -475,9 +484,12 @@ model Notification {
 }
 
 model Team {
-  id    String  @id @default(cuid())
-  name  String
-  color String  @default("#7B2FBE")
+  id                             String  @id @default(cuid())
+  name                           String
+  color                          String  @default("#7B2FBE")
+  attendanceShiftOverrideEnabled Boolean @default(false)
+  attendanceShiftStartTime       String?
+  attendanceShiftEndTime         String?
 
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -485,6 +497,7 @@ model Team {
   members  TeamMember[]
   projects TeamProject[]
   calendarEvents TeamCalendarEvent[]
+  attendanceRequests AttendanceRequest[]
 }
 
 model TeamCalendarEvent {
@@ -538,9 +551,112 @@ model TeamProject {
   @@unique([teamId, projectId])
 }
 
+model OfficeLocation {
+  id                     String   @id @default(cuid())
+  name                   String
+  address                String?
+  latitude               Float
+  longitude              Float
+  radiusMeters           Int
+  timezone               String   @default("Asia/Jakarta")
+  workdays               Int[]    @default([1, 2, 3, 4, 5, 6, 7])
+  shiftStartTime         String   @default("09:00")
+  shiftEndTime           String   @default("18:00")
+  lateGraceMinutes       Int      @default(15)
+  earlyLeaveGraceMinutes Int      @default(0)
+  isActive               Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  attendanceRecords AttendanceRecord[]
+
+  @@index([workspaceId, isActive])
+}
+
+model AttendanceRecord {
+  id                    String           @id @default(cuid())
+  attendanceDate        DateTime
+  checkInAt             DateTime?
+  checkOutAt            DateTime?
+  effectiveShiftSource  AttendanceShiftSource @default(OFFICE)
+  effectiveTeamId       String?
+  effectiveTeamName     String?
+  effectiveShiftStartTime String?
+  effectiveShiftEndTime String?
+  checkInStatus         AttendanceCheckInStatus?
+  checkOutStatus        AttendanceCheckOutStatus?
+  lateMinutes           Int              @default(0)
+  earlyLeaveMinutes     Int              @default(0)
+  workedMinutes         Int              @default(0)
+  checkInLat            Float?
+  checkInLng            Float?
+  checkOutLat           Float?
+  checkOutLng           Float?
+  checkInAddress        String?
+  checkOutAddress       String?
+  checkInPhotoUrl       String?
+  checkOutPhotoUrl      String?
+  checkInDistanceMeters Float?
+  checkOutDistanceMeters Float?
+  notes                 String?
+  status                AttendanceStatus @default(CHECKED_IN)
+  correctedAt           DateTime?
+  correctionReason      String?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  userId          String
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  correctedById   String?
+  correctedBy     User?          @relation("AttendanceRecordCorrectedBy", fields: [correctedById], references: [id], onDelete: SetNull)
+  workspaceId     String
+  workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  officeLocationId String
+  officeLocation  OfficeLocation @relation(fields: [officeLocationId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, workspaceId, attendanceDate])
+  @@index([workspaceId, attendanceDate])
+  @@index([officeLocationId, attendanceDate])
+  @@index([status, attendanceDate])
+}
+
+model AttendanceRequest {
+  id                    String                    @id @default(cuid())
+  startDate             DateTime
+  endDate               DateTime
+  type                  AttendanceRequestType
+  status                AttendanceRequestStatus   @default(PENDING)
+  reason                String
+  reviewNote            String?
+  approvalSource        AttendanceApprovalSource?
+  supportingDocumentUrl String?
+  supportingDocumentName String?
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+  reviewedAt            DateTime?
+
+  userId                String
+  user                  User                      @relation("AttendanceRequestUser", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedById          String?
+  reviewedBy            User?                     @relation("AttendanceRequestReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  workspaceId           String
+  workspace             Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  teamId                String?
+  team                  Team?                     @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, status, startDate])
+  @@index([userId, startDate])
+  @@index([teamId, status])
+}
+
 model TeamMember {
-  id   String   @id @default(cuid())
-  role TeamRole @default(MEMBER)
+  id                           String   @id @default(cuid())
+  role                         TeamRole @default(MEMBER)
+  isAttendancePrimary          Boolean  @default(false)
+  attendancePrimaryWorkspaceId String?
 
   teamId String
   team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
@@ -549,6 +665,7 @@ model TeamMember {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, userId])
+  @@unique([userId, attendancePrimaryWorkspaceId])
 }
 
 enum TeamRole {
@@ -590,6 +707,53 @@ enum WorkspaceRole {
   OWNER
   ADMIN
   MEMBER
+}
+
+enum AttendanceRole {
+  NONE
+  SUPERVISOR
+}
+
+enum AttendanceStatus {
+  CHECKED_IN
+  COMPLETED
+  INCOMPLETE
+}
+
+enum AttendanceShiftSource {
+  OFFICE
+  TEAM
+}
+
+enum AttendanceCheckInStatus {
+  ON_TIME
+  LATE
+}
+
+enum AttendanceCheckOutStatus {
+  ON_TIME
+  EARLY_LEAVE
+  OVERTIME
+}
+
+enum AttendanceRequestType {
+  LEAVE
+  SICK
+  PERMIT
+  DAY_OFF
+}
+
+enum AttendanceRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELED
+}
+
+enum AttendanceApprovalSource {
+  ADMIN
+  ATTENDANCE_SUPERVISOR
+  TEAM_HEAD
 }
 
 enum ProjectRole {
@@ -680,6 +844,11 @@ enum PortfolioStatus {
   AT_RISK
   OFF_TRACK
   COMPLETED
+}
+
+enum OtpPurpose {
+  SIGNUP
+  PASSWORD_RESET
 }
 
 // ─── PHASE 1A MODELS ─────────────────────────────────────────
@@ -903,6 +1072,28 @@ model InviteToken {
   inviter   User        @relation(fields: [inviterId], references: [id])
 
   @@index([token])
+  @@index([email])
+}
+
+model EmailOtpVerification {
+  id                String     @id @default(cuid())
+  email             String
+  purpose           OtpPurpose
+  codeHash          String
+  name              String?
+  passwordHash      String?
+  attempts          Int        @default(0)
+  expiresAt         DateTime
+  resendAvailableAt DateTime
+  consumedAt        DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  userId            String?
+  user              User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([email, purpose])
+  @@index([expiresAt])
   @@index([email])
 }
 

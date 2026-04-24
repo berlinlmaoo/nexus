@@ -1,5 +1,10 @@
 import type { NextAuthConfig } from 'next-auth'
 
+const trustHost = (process.env.AUTH_TRUST_HOST ?? 'true').toLowerCase() !== 'false'
+const useSecureCookies =
+  process.env.NODE_ENV === 'production' ||
+  (process.env.NEXTAUTH_URL?.startsWith('https://') ?? false)
+
 /**
  * Edge-safe auth config (no Prisma / Node-only modules).
  * Used by `middleware.ts`. Session JWT is still verified with AUTH_SECRET.
@@ -8,8 +13,8 @@ import type { NextAuthConfig } from 'next-auth'
  * bundle inlines it; otherwise assertConfig fails with MissingSecret → ?error=Configuration.
  */
 export const authConfig = {
-  trustHost: true,
-  useSecureCookies: false,
+  trustHost,
+  useSecureCookies,
   secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
   providers: [],
   session: {

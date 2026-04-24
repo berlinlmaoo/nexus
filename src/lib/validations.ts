@@ -13,6 +13,118 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 })
 
+export const verifySignupOtpSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  code: z.string().regex(/^\d{6}$/, "OTP code must be 6 digits"),
+})
+
+export const resendSignupOtpSchema = z.object({
+  email: z.string().email("Invalid email address"),
+})
+
+export const requestPasswordResetSchema = z.object({
+  email: z.string().email("Invalid email address"),
+})
+
+export const verifyPasswordResetSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  code: z.string().regex(/^\d{6}$/, "OTP code must be 6 digits"),
+  password: z.string().min(8, "Password must be at least 8 characters").max(128),
+})
+
+export const resendPasswordResetSchema = z.object({
+  email: z.string().email("Invalid email address"),
+})
+
+// ── Attendance ──────────────────────────────────────────────────
+
+export const createOfficeLocationSchema = z.object({
+  name: z.string().min(1, "Office name is required").max(120),
+  address: z.string().max(300).optional().nullable(),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  radiusMeters: z.number().int().min(10).max(5000),
+  timezone: z.string().min(1).max(100).optional(),
+  workdays: z.array(z.number().int().min(1).max(7)).min(1).max(7).optional(),
+  shiftStartTime: z.string().regex(/^\d{2}:\d{2}$/, "Invalid shift start time").optional(),
+  shiftEndTime: z.string().regex(/^\d{2}:\d{2}$/, "Invalid shift end time").optional(),
+  lateGraceMinutes: z.number().int().min(0).max(180).optional(),
+  earlyLeaveGraceMinutes: z.number().int().min(0).max(180).optional(),
+  isActive: z.boolean().optional(),
+})
+
+export const updateOfficeLocationSchema = z.object({
+  name: z.string().min(1).max(120).optional(),
+  address: z.string().max(300).optional().nullable(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  radiusMeters: z.number().int().min(10).max(5000).optional(),
+  timezone: z.string().min(1).max(100).optional(),
+  workdays: z.array(z.number().int().min(1).max(7)).min(1).max(7).optional(),
+  shiftStartTime: z.string().regex(/^\d{2}:\d{2}$/, "Invalid shift start time").optional(),
+  shiftEndTime: z.string().regex(/^\d{2}:\d{2}$/, "Invalid shift end time").optional(),
+  lateGraceMinutes: z.number().int().min(0).max(180).optional(),
+  earlyLeaveGraceMinutes: z.number().int().min(0).max(180).optional(),
+  isActive: z.boolean().optional(),
+})
+
+export const attendanceActionSchema = z.object({
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+  notes: z.string().max(500).optional(),
+})
+
+export const attendanceHistoryQuerySchema = z.object({
+  scope: z.enum(["me", "workspace"]).optional(),
+  officeLocationId: z.string().cuid().optional(),
+  userId: z.string().cuid().optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+  month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+  status: z.enum(["CHECKED_IN", "COMPLETED", "INCOMPLETE"]).optional(),
+  checkInStatus: z.enum(["ON_TIME", "LATE"]).optional(),
+  checkOutStatus: z.enum(["ON_TIME", "EARLY_LEAVE", "OVERTIME"]).optional(),
+  isCorrected: z.enum(["true", "false"]).optional(),
+  attendanceDayType: z.enum(["PRESENT", "LEAVE_APPROVED", "SICK_APPROVED", "PERMIT_APPROVED", "DAY_OFF_APPROVED", "ABSENT"]).optional(),
+  requestType: z.enum(["LEAVE", "SICK", "PERMIT", "DAY_OFF"]).optional(),
+  requestStatus: z.enum(["PENDING", "APPROVED", "REJECTED", "CANCELED"]).optional(),
+  format: z.enum(["json", "csv", "xlsx"]).optional(),
+})
+
+export const reverseGeocodeQuerySchema = z.object({
+  lat: z.coerce.number().min(-90).max(90),
+  lng: z.coerce.number().min(-180).max(180),
+})
+
+export const attendanceCorrectionSchema = z.object({
+  officeLocationId: z.string().cuid().optional(),
+  checkInAt: z.string().datetime().nullable().optional(),
+  checkOutAt: z.string().datetime().nullable().optional(),
+  notes: z.string().max(500).nullable().optional(),
+  correctionReason: z.string().min(3, "Correction reason is required").max(500).nullable().optional(),
+})
+
+export const attendanceRequestCreateSchema = z.object({
+  type: z.enum(["LEAVE", "SICK", "PERMIT", "DAY_OFF"]),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid start date"),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid end date"),
+  reason: z.string().min(3, "Reason is required").max(1000),
+})
+
+export const attendanceRequestPatchSchema = z.object({
+  action: z.enum(["approve", "reject", "cancel"]),
+  reviewNote: z.string().max(1000).nullable().optional(),
+})
+
+export const attendanceRequestQuerySchema = z.object({
+  scope: z.enum(["me", "approvals", "workspace"]).optional(),
+  month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+  userId: z.string().cuid().optional(),
+  teamId: z.string().cuid().optional(),
+  type: z.enum(["LEAVE", "SICK", "PERMIT", "DAY_OFF"]).optional(),
+  status: z.enum(["PENDING", "APPROVED", "REJECTED", "CANCELED"]).optional(),
+})
+
 // ── Tasks ───────────────────────────────────────────────────────
 
 export const createTaskSchema = z.object({

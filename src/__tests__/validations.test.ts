@@ -2,6 +2,15 @@ import { describe, it, expect } from 'vitest'
 import {
   registerSchema,
   loginSchema,
+  verifySignupOtpSchema,
+  resendSignupOtpSchema,
+  requestPasswordResetSchema,
+  verifyPasswordResetSchema,
+  resendPasswordResetSchema,
+  createOfficeLocationSchema,
+  updateOfficeLocationSchema,
+  attendanceActionSchema,
+  attendanceHistoryQuerySchema,
   createTaskSchema,
   updateTaskSchema,
   createProjectSchema,
@@ -70,6 +79,142 @@ describe('loginSchema', () => {
     const result = loginSchema.safeParse({
       email: 'berlin@patsgroup.id',
       password: '',
+    })
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('verifySignupOtpSchema', () => {
+  it('accepts a valid six-digit OTP payload', () => {
+    const result = verifySignupOtpSchema.safeParse({
+      email: 'berlin@patsgroup.id',
+      code: '123456',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects OTP codes that are not six digits', () => {
+    const result = verifySignupOtpSchema.safeParse({
+      email: 'berlin@patsgroup.id',
+      code: '12345',
+    })
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('resendSignupOtpSchema', () => {
+  it('accepts a valid resend payload', () => {
+    const result = resendSignupOtpSchema.safeParse({
+      email: 'berlin@patsgroup.id',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects invalid email for resend', () => {
+    const result = resendSignupOtpSchema.safeParse({
+      email: 'not-an-email',
+    })
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('password reset schemas', () => {
+  it('accepts a valid password reset request payload', () => {
+    const result = requestPasswordResetSchema.safeParse({
+      email: 'berlin@patsgroup.id',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('accepts a valid password reset verify payload', () => {
+    const result = verifyPasswordResetSchema.safeParse({
+      email: 'berlin@patsgroup.id',
+      code: '123456',
+      password: 'newsecurepass123',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects a password reset verify payload with invalid OTP', () => {
+    const result = verifyPasswordResetSchema.safeParse({
+      email: 'berlin@patsgroup.id',
+      code: '12345',
+      password: 'newsecurepass123',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('accepts a valid password reset resend payload', () => {
+    const result = resendPasswordResetSchema.safeParse({
+      email: 'berlin@patsgroup.id',
+    })
+    expect(result.success).toBe(true)
+  })
+})
+
+describe('attendance schemas', () => {
+  it('accepts a valid office location payload', () => {
+    const result = createOfficeLocationSchema.safeParse({
+      name: 'Main HQ',
+      latitude: -6.20876,
+      longitude: 106.8456,
+      radiusMeters: 100,
+      isActive: true,
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects office radius below minimum', () => {
+    const result = createOfficeLocationSchema.safeParse({
+      name: 'Main HQ',
+      latitude: -6.20876,
+      longitude: 106.8456,
+      radiusMeters: 5,
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('accepts partial office updates', () => {
+    const result = updateOfficeLocationSchema.safeParse({
+      radiusMeters: 250,
+      isActive: false,
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('accepts a valid attendance action payload', () => {
+    const result = attendanceActionSchema.safeParse({
+      lat: -6.2,
+      lng: 106.8,
+      notes: 'Field visit completed',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects invalid attendance coordinates', () => {
+    const result = attendanceActionSchema.safeParse({
+      lat: -120,
+      lng: 106.8,
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('accepts a valid attendance history query payload', () => {
+    const result = attendanceHistoryQuerySchema.safeParse({
+      scope: 'workspace',
+      officeLocationId: 'clxxxxxxxxxxxxxxxxxxxxxxxxx',
+      userId: 'clyyyyyyyyyyyyyyyyyyyyyyyyy',
+      dateFrom: '2026-04-18',
+      dateTo: '2026-04-18',
+      format: 'csv',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects invalid attendance history query payload', () => {
+    const result = attendanceHistoryQuerySchema.safeParse({
+      scope: 'workspace',
+      officeLocationId: 'not-a-cuid',
     })
     expect(result.success).toBe(false)
   })

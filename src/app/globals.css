@@ -207,3 +207,4 @@
   background: hsl(0 0% 98% / 0.05);
   border-color: hsl(0 0% 98% / 0.2);
 }
+@import "leaflet/dist/leaflet.css";

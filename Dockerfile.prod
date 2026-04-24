@@ -1,0 +1,63 @@
+FROM node:20-alpine AS deps
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci --legacy-peer-deps
+
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+ARG DATABASE_URL=postgresql://nexus_user:change-me@postgres:5432/nexus_db?schema=public
+ARG AUTH_SECRET=build-time-auth-secret
+ARG NEXTAUTH_URL=https://nexus.patsgroup.id
+
+ENV DATABASE_URL=$DATABASE_URL
+ENV AUTH_SECRET=$AUTH_SECRET
+ENV NEXTAUTH_SECRET=$AUTH_SECRET
+ENV NEXTAUTH_URL=$NEXTAUTH_URL
+ENV NEXT_PUBLIC_APP_URL=$NEXTAUTH_URL
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_OPTIONS=--max-old-space-size=4096
+
+RUN npx prisma generate
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+
+RUN apk add --no-cache dumb-init ca-certificates tzdata
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/src/generated/prisma ./src/generated/prisma
+COPY --chown=nextjs:nodejs healthcheck.sh /app/healthcheck.sh
+
+RUN mkdir -p /app/public/uploads/attachments \
+    /app/public/uploads/attendance \
+    /app/public/uploads/avatars \
+    /app/public/uploads/project-icons \
+    /app/.next && \
+    chmod +x /app/healthcheck.sh && \
+    chown -R nextjs:nodejs /app
+
+USER nextjs
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=5 CMD ["/app/healthcheck.sh", "container"]
+
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["node", "server.js"]

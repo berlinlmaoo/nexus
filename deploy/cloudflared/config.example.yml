@@ -1,0 +1,10 @@
+tunnel: REPLACE_WITH_CLOUDFLARE_TUNNEL_ID
+credentials-file: /Users/YOUR_MAC_USER/.cloudflared/REPLACE_WITH_CLOUDFLARE_TUNNEL_ID.json
+
+ingress:
+  - hostname: nexus.patsgroup.id
+    service: http://127.0.0.1:3000
+    originRequest:
+      httpHostHeader: nexus.patsgroup.id
+      connectTimeout: 30s
+  - service: http_status:404

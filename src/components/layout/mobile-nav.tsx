@@ -2,12 +2,13 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, CheckSquare, FolderKanban, Inbox, Settings } from "lucide-react"
+import { LayoutDashboard, CheckSquare, FolderKanban, Settings, Clock3, Inbox } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const tabs = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Home" },
   { href: "/my-tasks", icon: CheckSquare, label: "Tasks" },
+  { href: "/attendance", icon: Clock3, label: "Attendance" },
   { href: "/projects", icon: FolderKanban, label: "Projects" },
   { href: "/inbox", icon: Inbox, label: "Inbox" },
   { href: "/settings", icon: Settings, label: "Settings" },

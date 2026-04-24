@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
-import { Prisma } from '@/generated/prisma'
+import { OtpPurpose, Prisma } from '@/generated/prisma'
 import prisma from '@/lib/prisma'
-import { logAudit } from '@/lib/audit'
 import { canonicalEmail } from '@/lib/email-auth'
 import { registerSchema, validateBody } from '@/lib/validations'
-import { checkRateLimit, rateLimitResponse } from '@/lib/rate-limit'
-import { ensureUserInPrimaryWorkspaceTeam } from '@/lib/primary-team'
-import { syncTeamMemberAccess } from '@/lib/team-sync'
+import { checkRateLimit, checkRateLimitByKey, rateLimitResponse } from '@/lib/rate-limit'
+import {
+  OTP_EXPIRES_IN_MINUTES,
+  OTP_RESEND_COOLDOWN_SECONDS,
+  getEmailOtp,
+  isOtpResendCoolingDown,
+  secondsUntil,
+  upsertEmailOtp,
+} from '@/lib/auth-otp'
+import { sendEmail, signupOtpEmail } from '@/lib/email'
 
 /** Prisma 7 + bundlers can duplicate the error class; use `code` + `meta` duck-typing. */
 function prismaKnownRequestMeta(error: unknown): {
@@ -35,7 +41,7 @@ function prismaKnownRequestMeta(error: unknown): {
 
 export async function POST(request: NextRequest) {
   try {
-    // Rate limit: 5 registrations per 15 minutes per IP
+    // Rate limit: 5 registration OTP requests per 15 minutes per IP
     const { allowed, resetAt } = checkRateLimit(request, undefined, { limit: 5, windowSeconds: 900 })
     if (!allowed) return rateLimitResponse(resetAt)
 
@@ -45,6 +51,12 @@ export async function POST(request: NextRequest) {
 
     const { name, password } = validation.data
     const email = canonicalEmail(validation.data.email)
+
+    const emailLimit = checkRateLimitByKey(`otp:signup:request:${request.nextUrl.pathname}`, email, {
+      limit: 3,
+      windowSeconds: 900,
+    })
+    if (!emailLimit.allowed) return rateLimitResponse(emailLimit.resetAt)
 
     const existingUser = await prisma.user.findFirst({
       where: { email: { equals: email, mode: 'insensitive' } },
@@ -57,38 +69,67 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const hashedPassword = await bcrypt.hash(password, 12)
-
-    const { user, primaryTeamId } = await prisma.$transaction(async (tx) => {
-      const createdUser = await tx.user.create({
-        data: {
-          name,
-          email,
-          password: hashedPassword,
+    const pendingVerification = await getEmailOtp(email, OtpPurpose.SIGNUP)
+    if (
+      pendingVerification &&
+      !pendingVerification.consumedAt &&
+      isOtpResendCoolingDown(pendingVerification.resendAvailableAt)
+    ) {
+      return NextResponse.json(
+        {
+          error: 'Please wait before requesting another verification code.',
+          retryAfterSeconds: secondsUntil(pendingVerification.resendAvailableAt),
         },
-      })
+        { status: 429 }
+      )
+    }
 
-      const { team } = await ensureUserInPrimaryWorkspaceTeam(tx, createdUser.id)
-
-      return { user: createdUser, primaryTeamId: team.id }
+    const hashedPassword = await bcrypt.hash(password, 12)
+    const { code, verification } = await upsertEmailOtp({
+      email,
+      purpose: OtpPurpose.SIGNUP,
+      name,
+      passwordHash: hashedPassword,
     })
 
-    await syncTeamMemberAccess(primaryTeamId, user.id)
-
-    await logAudit({
-      action: 'create',
-      entityType: 'user',
-      entityId: user.id,
-      entityName: name,
-      userId: user.id,
-      request,
+    const emailSent = await sendEmail({
+      ...signupOtpEmail({
+        recipientName: name,
+        otpCode: code,
+        expiresInMinutes: OTP_EXPIRES_IN_MINUTES,
+      }),
+      to: email,
     })
 
-    // Return user without password
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password: _pw, ...userWithoutPassword } = user
+    if (!emailSent) {
+      await prisma.emailOtpVerification.delete({
+        where: {
+          email_purpose: {
+            email,
+            purpose: OtpPurpose.SIGNUP,
+          },
+        },
+      }).catch(() => null)
 
-    return NextResponse.json(userWithoutPassword, { status: 201 })
+      return NextResponse.json(
+        {
+          error:
+            'Verification email could not be delivered. Configure SMTP or Mailpit before requesting access.',
+        },
+        { status: 503 }
+      )
+    }
+
+    return NextResponse.json(
+      {
+        ok: true,
+        email,
+        expiresInSeconds: OTP_EXPIRES_IN_MINUTES * 60,
+        resendCooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
+        verificationId: verification.id,
+      },
+      { status: 200 }
+    )
   } catch (error) {
     console.error('Registration error:', error)
 

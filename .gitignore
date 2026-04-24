@@ -37,5 +37,16 @@ next-env.d.ts
 
 /src/generated/prisma
 .env
+.env.production
+.env.production.*
 .env.docker
 .env.docker.nas
+
+# local runtime data
+/var/
+/backups/
+*.sql
+*.sql.gz
+*.sqlite
+*.sqlite3
+postgres-data/

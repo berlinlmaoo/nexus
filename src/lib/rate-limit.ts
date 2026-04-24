@@ -22,6 +22,10 @@ interface RateLimitOptions {
   windowSeconds?: number
 }
 
+function normalizeCustomKey(key: string): string {
+  return key.trim().toLowerCase()
+}
+
 function getClientKey(req: NextRequest, userId?: string): string {
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
@@ -37,6 +41,22 @@ export function checkRateLimit(
 ): { allowed: boolean; remaining: number; resetAt: number } {
   const { limit = 60, windowSeconds = 60 } = options
   const key = `${req.nextUrl.pathname}:${getClientKey(req, userId)}`
+  return checkRateLimitForKey(key, options)
+}
+
+export function checkRateLimitByKey(
+  scope: string,
+  key: string,
+  options: RateLimitOptions = {}
+): { allowed: boolean; remaining: number; resetAt: number } {
+  return checkRateLimitForKey(`${scope}:${normalizeCustomKey(key)}`, options)
+}
+
+function checkRateLimitForKey(
+  key: string,
+  options: RateLimitOptions = {}
+): { allowed: boolean; remaining: number; resetAt: number } {
+  const { limit = 60, windowSeconds = 60 } = options
   const now = Date.now()
   const windowMs = windowSeconds * 1000
 
