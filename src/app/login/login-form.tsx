@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import Link from "next/link"
+import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -31,8 +32,11 @@ export function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const callbackUrl = searchParams?.get("callbackUrl") || "/dashboard"
+  const registered = searchParams?.get("registered")
+  const passwordReset = searchParams?.get("passwordReset")
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [hasShownStatusToast, setHasShownStatusToast] = useState(false)
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -41,6 +45,25 @@ export function LoginForm() {
       password: "",
     },
   })
+
+  useEffect(() => {
+    if (hasShownStatusToast) return
+
+    if (registered === "true") {
+      toast.success("Identity Verified", {
+        description: "Your operative profile is ready. Continue with login.",
+      })
+      setHasShownStatusToast(true)
+      return
+    }
+
+    if (passwordReset === "true") {
+      toast.success("Password Reset Complete", {
+        description: "Your new access cipher is active. Continue with login.",
+      })
+      setHasShownStatusToast(true)
+    }
+  }, [registered, passwordReset, hasShownStatusToast])
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true)
@@ -119,8 +142,17 @@ export function LoginForm() {
                   </FormControl>
                   <FormMessage className="text-[10px] font-bold text-error ml-1" />
                 </FormItem>
-              )}
-            />
+                )}
+              />
+
+              <div className="flex justify-end">
+                <Link
+                  href="/forgot-password"
+                  className="text-[11px] font-black uppercase tracking-[0.18em] text-primary/70 transition-colors hover:text-primary"
+                >
+                  Reset Password
+                </Link>
+              </div>
           </div>
 
           <Button

@@ -63,6 +63,7 @@ export async function GET(req: NextRequest) {
         email: string
         avatar: string | null
         role: string
+        attendanceRole: string
         joinedAt: Date
       }>
       availableUsers?: Array<{
@@ -81,6 +82,7 @@ export async function GET(req: NextRequest) {
         email: m.user.email,
         avatar: m.user.avatar,
         role: m.role,
+        attendanceRole: m.attendanceRole,
         joinedAt: m.joinedAt,
       })),
     }
@@ -123,7 +125,7 @@ export async function POST(req: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { email, role = 'MEMBER', workspaceId } = await req.json()
+    const { email, role = 'MEMBER', attendanceRole = 'NONE', workspaceId } = await req.json()
 
     const currentMember = await getWorkspaceAndRole(session.user.id, workspaceId)
     if (!currentMember) return NextResponse.json({ error: 'No workspace found' }, { status: 404 })
@@ -161,13 +163,14 @@ export async function POST(req: NextRequest) {
         userId: user.id,
         workspaceId: currentMember.workspaceId,
         role,
+        attendanceRole,
       },
       include: {
         user: { select: { id: true, name: true, email: true, avatar: true } },
       },
     })
 
-    logAudit({ action: "create", entityType: "workspace_member", entityId: newMember.id, entityName: email, userId: session.user.id, request: req, metadata: { role, workspaceId: currentMember.workspaceId } })
+    logAudit({ action: "create", entityType: "workspace_member", entityId: newMember.id, entityName: email, userId: session.user.id, request: req, metadata: { role, attendanceRole, workspaceId: currentMember.workspaceId } })
 
     return NextResponse.json({
       member: {
@@ -177,6 +180,7 @@ export async function POST(req: NextRequest) {
         email: newMember.user.email,
         avatar: newMember.user.avatar,
         role: newMember.role,
+        attendanceRole: newMember.attendanceRole,
         joinedAt: newMember.joinedAt,
       },
     }, { status: 201 })
@@ -191,7 +195,7 @@ export async function PATCH(req: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { memberId, role, workspaceId } = await req.json()
+    const { memberId, role, attendanceRole, workspaceId } = await req.json()
 
     const currentMember = await getWorkspaceAndRole(session.user.id, workspaceId)
     if (!currentMember) return NextResponse.json({ error: 'No workspace found' }, { status: 404 })
@@ -199,9 +203,12 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Only owners and admins can change roles' }, { status: 403 })
     }
 
-    if (!memberId || !role) return NextResponse.json({ error: 'memberId and role are required' }, { status: 400 })
-    if (!['OWNER', 'ADMIN', 'MEMBER'].includes(role)) {
+    if (!memberId) return NextResponse.json({ error: 'memberId is required' }, { status: 400 })
+    if (role !== undefined && !['OWNER', 'ADMIN', 'MEMBER'].includes(role)) {
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
+    }
+    if (attendanceRole !== undefined && !['NONE', 'SUPERVISOR'].includes(attendanceRole)) {
+      return NextResponse.json({ error: 'Invalid attendance role' }, { status: 400 })
     }
 
     // Prevent non-owners from assigning OWNER role
@@ -219,13 +226,16 @@ export async function PATCH(req: NextRequest) {
 
     const updated = await prisma.workspaceMember.update({
       where: { id: memberId },
-      data: { role },
+      data: {
+        ...(role !== undefined ? { role } : {}),
+        ...(attendanceRole !== undefined ? { attendanceRole } : {}),
+      },
       include: {
         user: { select: { id: true, name: true, email: true, avatar: true } },
       },
     })
 
-    logAudit({ action: "update", entityType: "workspace_member", entityId: memberId, userId: session.user.id, request: req, metadata: { newRole: role } })
+    logAudit({ action: "update", entityType: "workspace_member", entityId: memberId, userId: session.user.id, request: req, metadata: { newRole: role, attendanceRole } })
 
     return NextResponse.json({
       member: {
@@ -235,6 +245,7 @@ export async function PATCH(req: NextRequest) {
         email: updated.user.email,
         avatar: updated.user.avatar,
         role: updated.role,
+        attendanceRole: updated.attendanceRole,
         joinedAt: updated.joinedAt,
       },
     })

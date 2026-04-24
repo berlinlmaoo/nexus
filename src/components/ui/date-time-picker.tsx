@@ -27,12 +27,17 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
+import type { PopoverContentProps } from "@radix-ui/react-popover"
 
 interface DateTimePickerProps {
   value: string | null
   onChange: (value: string | null) => void
   className?: string
   variant?: "popover" | "inline"
+  popoverAlign?: PopoverContentProps["align"]
+  popoverSide?: PopoverContentProps["side"]
+  popoverSideOffset?: number
+  popoverAvoidCollisions?: boolean
 }
 
 const QUICK_TIME_OPTIONS = [
@@ -59,6 +64,10 @@ export function DateTimePicker({
   onChange,
   className,
   variant = "popover",
+  popoverAlign = "end",
+  popoverSide = "bottom",
+  popoverSideOffset = 10,
+  popoverAvoidCollisions = true,
 }: DateTimePickerProps) {
   const selectedDate = useMemo(() => (value ? new Date(value) : null), [value])
   const [open, setOpen] = useState(false)
@@ -359,8 +368,10 @@ export function DateTimePicker({
       </PopoverTrigger>
 
       <PopoverContent
-        align="end"
-        sideOffset={10}
+        align={popoverAlign}
+        side={popoverSide}
+        sideOffset={popoverSideOffset}
+        avoidCollisions={popoverAvoidCollisions}
         className="w-[360px] rounded-[1.75rem] border border-on-surface-variant/10 bg-surface-container-lowest p-4 shadow-2xl shadow-primary/10"
       >
         {pickerContent}

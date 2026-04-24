@@ -74,6 +74,7 @@ interface ProjectPage {
 const topNavItems = [
   { label: "Home", href: "/dashboard", icon: Home },
   { label: "My Tasks", href: "/my-tasks", icon: CheckSquare, badge: true },
+  { label: "Attendance", href: "/attendance", icon: Clock },
   { label: "Inbox", href: "/inbox", icon: Inbox, badge: true },
   { label: "Team Calendar", href: "/master-calendar", icon: CalendarDays },
 ]

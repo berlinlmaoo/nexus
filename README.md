@@ -132,6 +132,12 @@ Edit `.env` and fill in your values. See `.env.example` for all required variabl
 - `GOOGLE_DRIVE_*` — Google Drive integration
 - `WA_WEBHOOK_URL` / `SLACK_WEBHOOK_URL` — Messaging notifications
 
+For local OTP email testing, Mailpit is the recommended free setup:
+- `SMTP_HOST=mailpit`
+- `SMTP_PORT=1025`
+- `SMTP_FROM=NEXUS <noreply@localhost>`
+- Mail inbox UI: [http://localhost:8025](http://localhost:8025)
+
 ### 3. Set Up Database
 
 ```bash
@@ -168,6 +174,10 @@ Open your configured URL (default: [http://localhost:3000](http://localhost:3000
 cp .env.docker.example .env.docker
 docker compose --env-file .env.docker up -d --build
 ```
+
+This local Docker stack includes Mailpit for OTP/email testing:
+- SMTP: `localhost:1025`
+- Inbox UI: [http://localhost:8025](http://localhost:8025)
 
 This stack starts PostgreSQL, runs `prisma db push`, then launches the app on port `3000`.
 

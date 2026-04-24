@@ -1,0 +1,124 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nexus-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      TZ: ${APP_TIMEZONE:-Asia/Jakarta}
+      PGTZ: ${APP_TIMEZONE:-Asia/Jakarta}
+    volumes:
+      - ${NEXUS_DATA_DIR:-./var}/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - nexus_internal
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      target: builder
+      args:
+        DATABASE_URL: ${DATABASE_URL}
+        AUTH_SECRET: ${AUTH_SECRET}
+        NEXTAUTH_URL: ${NEXTAUTH_URL}
+    image: nexus-app-migrate:prod
+    restart: "no"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      AUTH_SECRET: ${AUTH_SECRET}
+      NEXTAUTH_SECRET: ${AUTH_SECRET}
+      NEXTAUTH_URL: ${NEXTAUTH_URL}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://nexus.patsgroup.id}
+      AUTH_TRUST_HOST: ${AUTH_TRUST_HOST:-true}
+    command: ["sh", "-c", "./scripts/prisma-deploy.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - nexus_internal
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      args:
+        DATABASE_URL: ${DATABASE_URL}
+        AUTH_SECRET: ${AUTH_SECRET}
+        NEXTAUTH_URL: ${NEXTAUTH_URL}
+    image: nexus-app:prod
+    container_name: nexus-app
+    restart: unless-stopped
+    init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      DATABASE_URL: ${DATABASE_URL}
+      AUTH_SECRET: ${AUTH_SECRET}
+      NEXTAUTH_SECRET: ${AUTH_SECRET}
+      NEXTAUTH_URL: ${NEXTAUTH_URL}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://nexus.patsgroup.id}
+      AUTH_TRUST_HOST: ${AUTH_TRUST_HOST:-true}
+      APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Jakarta}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DB_POOL_MAX: ${DB_POOL_MAX:-20}
+      DB_IDLE_TIMEOUT: ${DB_IDLE_TIMEOUT:-30000}
+      DB_CONNECT_TIMEOUT: ${DB_CONNECT_TIMEOUT:-5000}
+      REDIS_URL: ${REDIS_URL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-NEXUS <noreply@patsgroup.id>}
+      SMTP_HELO_NAME: ${SMTP_HELO_NAME:-nexus.patsgroup.id}
+      ATTENDANCE_SILENT_CORRECTION_ADMINS: ${ATTENDANCE_SILENT_CORRECTION_ADMINS:-}
+      WA_WEBHOOK_URL: ${WA_WEBHOOK_URL:-}
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+      GOOGLE_DRIVE_CLIENT_ID: ${GOOGLE_DRIVE_CLIENT_ID:-}
+      GOOGLE_DRIVE_CLIENT_SECRET: ${GOOGLE_DRIVE_CLIENT_SECRET:-}
+      GOOGLE_DRIVE_REDIRECT_URI: ${GOOGLE_DRIVE_REDIRECT_URI:-}
+      GOOGLE_DRIVE_API_KEY: ${GOOGLE_DRIVE_API_KEY:-}
+      NAS_HOST: ${NAS_HOST:-}
+      NAS_PORT: ${NAS_PORT:-}
+      NAS_PROTOCOL: ${NAS_PROTOCOL:-}
+      NAS_ALLOWED_PATHS: ${NAS_ALLOWED_PATHS:-}
+      NAS_USERNAME: ${NAS_USERNAME:-}
+      NAS_PASSWORD: ${NAS_PASSWORD:-}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    volumes:
+      - ${NEXUS_DATA_DIR:-./var}/uploads/attachments:/app/public/uploads/attachments
+      - ${NEXUS_DATA_DIR:-./var}/uploads/attendance:/app/public/uploads/attendance
+      - ${NEXUS_DATA_DIR:-./var}/uploads/avatars:/app/public/uploads/avatars
+      - ${NEXUS_DATA_DIR:-./var}/uploads/project-icons:/app/public/uploads/project-icons
+    networks:
+      - nexus_internal
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "10"
+
+networks:
+  nexus_internal:
+    driver: bridge

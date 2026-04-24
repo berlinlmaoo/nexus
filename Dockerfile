@@ -38,6 +38,7 @@ COPY --from=builder /app/public ./public
 
 RUN mkdir .next
 RUN mkdir -p public/uploads/attachments
+RUN mkdir -p public/uploads/attendance
 RUN mkdir -p public/uploads/project-icons
 RUN chown -R nextjs:nodejs .next public/uploads
 

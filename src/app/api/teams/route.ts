@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { Prisma } from '@/generated/prisma'
 import prisma from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { syncTeamProjectAccess, syncTeamMemberAccess, revokeTeamProjectAccess, revokeTeamMemberAccess } from '@/lib/team-sync'
@@ -13,6 +14,9 @@ async function getTeamContext(teamId: string, actorId: string) {
     select: {
       id: true,
       name: true,
+      attendanceShiftOverrideEnabled: true,
+      attendanceShiftStartTime: true,
+      attendanceShiftEndTime: true,
       workspaceId: true,
       workspace: {
         select: {
@@ -34,7 +38,7 @@ async function getTeamContext(teamId: string, actorId: string) {
         workspaceId: team.workspaceId,
       },
     },
-    select: { role: true },
+    select: { role: true, attendanceRole: true },
   })
 
   const isSystemAdmin = await isSystemAdminUser(actorId)
@@ -44,8 +48,15 @@ async function getTeamContext(teamId: string, actorId: string) {
         (workspaceMembership.role === 'OWNER' ||
           workspaceMembership.role === 'ADMIN'))
   )
+  const canManageAttendanceSettings = Boolean(
+    isSystemAdmin ||
+      (workspaceMembership &&
+        (workspaceMembership.role === 'OWNER' ||
+          workspaceMembership.role === 'ADMIN' ||
+          workspaceMembership.attendanceRole === 'SUPERVISOR'))
+  )
 
-  return { team, workspaceMembership, canManage, isSystemAdmin }
+  return { team, workspaceMembership, canManage, canManageAttendanceSettings, isSystemAdmin }
 }
 
 function normalizeTeamName(name: string) {
@@ -61,7 +72,7 @@ export async function GET() {
 
     const workspaceMemberships = await prisma.workspaceMember.findMany({
       where: { userId: user.id },
-      select: { workspaceId: true, role: true },
+      select: { workspaceId: true, role: true, attendanceRole: true },
     })
 
     const adminWorkspaceIds = workspaceMemberships
@@ -72,12 +83,19 @@ export async function GET() {
       .filter((membership) => membership.role === 'MEMBER')
       .map((membership) => membership.workspaceId)
 
-    const teamScopes: any[] = []
+    const attendanceSupervisorWorkspaceIds = workspaceMemberships
+      .filter((membership) => membership.attendanceRole === 'SUPERVISOR')
+      .map((membership) => membership.workspaceId)
+
+    const teamScopes: Prisma.TeamWhereInput[] = []
     if (isSystemAdmin) {
       teamScopes.push({})
     }
     if (adminWorkspaceIds.length > 0) {
       teamScopes.push({ workspaceId: { in: adminWorkspaceIds } })
+    }
+    if (attendanceSupervisorWorkspaceIds.length > 0) {
+      teamScopes.push({ workspaceId: { in: attendanceSupervisorWorkspaceIds } })
     }
     if (memberWorkspaceIds.length > 0) {
       teamScopes.push({
@@ -138,6 +156,8 @@ export async function GET() {
       ...team,
       isPrimaryTeam: isPrimaryWorkspace(team.workspace) && isPrimaryTeamName(team.name),
       canManage: isSystemAdmin || adminWorkspaceIds.includes(team.workspaceId),
+      canManageAttendanceSettings:
+        isSystemAdmin || adminWorkspaceIds.includes(team.workspaceId) || attendanceSupervisorWorkspaceIds.includes(team.workspaceId),
     }))
 
     return NextResponse.json(teams)
@@ -272,6 +292,7 @@ export async function POST(req: NextRequest) {
         data: requestedUserIds.map((memberId) => ({
           teamId,
           userId: memberId,
+          isAttendancePrimary: false,
         })),
         skipDuplicates: true,
       })
@@ -370,6 +391,125 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ deleted: true })
     }
 
+    if (body.action === 'update-attendance-shift') {
+      const { teamId, attendanceShiftOverrideEnabled, attendanceShiftStartTime, attendanceShiftEndTime } = body
+      if (!teamId) {
+        return NextResponse.json({ error: 'teamId is required' }, { status: 400 })
+      }
+
+      const { team, canManageAttendanceSettings } = await getTeamContext(teamId, user.id)
+      if (!team || !canManageAttendanceSettings) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+
+      if (
+        attendanceShiftOverrideEnabled &&
+        (
+          typeof attendanceShiftStartTime !== 'string' ||
+          typeof attendanceShiftEndTime !== 'string' ||
+          !/^\d{2}:\d{2}$/.test(attendanceShiftStartTime) ||
+          !/^\d{2}:\d{2}$/.test(attendanceShiftEndTime)
+        )
+      ) {
+        return NextResponse.json({ error: 'Valid team shift start and end time are required' }, { status: 400 })
+      }
+
+      const updatedTeam = await prisma.team.update({
+        where: { id: teamId },
+        data: {
+          attendanceShiftOverrideEnabled: Boolean(attendanceShiftOverrideEnabled),
+          attendanceShiftStartTime: attendanceShiftOverrideEnabled ? attendanceShiftStartTime : null,
+          attendanceShiftEndTime: attendanceShiftOverrideEnabled ? attendanceShiftEndTime : null,
+        },
+      })
+
+      logAudit({
+        action: "update",
+        entityType: "team_attendance_shift",
+        entityId: updatedTeam.id,
+        entityName: updatedTeam.name,
+        userId: user.id,
+        request: req,
+        metadata: {
+          attendanceShiftOverrideEnabled: updatedTeam.attendanceShiftOverrideEnabled,
+          attendanceShiftStartTime: updatedTeam.attendanceShiftStartTime,
+          attendanceShiftEndTime: updatedTeam.attendanceShiftEndTime,
+        },
+      })
+
+      return NextResponse.json({ team: updatedTeam })
+    }
+
+    if (body.action === 'set-attendance-primary') {
+      const { teamId, userId, isAttendancePrimary } = body
+      if (!teamId || !userId || typeof isAttendancePrimary !== 'boolean') {
+        return NextResponse.json({ error: 'teamId, userId, and isAttendancePrimary are required' }, { status: 400 })
+      }
+
+      const { team, canManageAttendanceSettings } = await getTeamContext(teamId, user.id)
+      if (!team || !canManageAttendanceSettings) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+
+      const membership = await prisma.teamMember.findUnique({
+        where: {
+          teamId_userId: {
+            teamId,
+            userId,
+          },
+        },
+      })
+
+      if (!membership) {
+        return NextResponse.json({ error: 'Team member not found' }, { status: 404 })
+      }
+
+      await prisma.$transaction(async (tx) => {
+        if (isAttendancePrimary) {
+          await tx.teamMember.updateMany({
+            where: {
+              userId,
+              attendancePrimaryWorkspaceId: team.workspaceId,
+            },
+            data: {
+              isAttendancePrimary: false,
+              attendancePrimaryWorkspaceId: null,
+            },
+          })
+        }
+
+        await tx.teamMember.update({
+          where: {
+            teamId_userId: {
+              teamId,
+              userId,
+            },
+          },
+          data: {
+            isAttendancePrimary,
+            attendancePrimaryWorkspaceId: isAttendancePrimary ? team.workspaceId : null,
+          },
+        })
+      })
+
+      logAudit({
+        action: "update",
+        entityType: "team_member_attendance_primary",
+        entityId: `${teamId}:${userId}`,
+        entityName: `${team.name}:${userId}`,
+        userId: user.id,
+        request: req,
+        metadata: {
+          teamId,
+          memberId: userId,
+          workspaceId: team.workspaceId,
+          isAttendancePrimary,
+        },
+      })
+
+      return NextResponse.json({ updated: true })
+    }
+
     // Default: create team
     const { name, color } = body
     if (!name) return NextResponse.json({ error: 'Team name is required' }, { status: 400 })
@@ -412,7 +552,7 @@ export async function POST(req: NextRequest) {
           name,
           color: color || '#18181B',
           workspaceId: workspace.id,
-          members: { create: { userId: user.id } }
+          members: { create: { userId: user.id, isAttendancePrimary: false } }
         },
         include: {
           members: { include: { user: { select: { id: true, name: true, email: true, avatar: true } } } },
@@ -443,7 +583,7 @@ export async function POST(req: NextRequest) {
         name: name.trim(),
         color: color || '#18181B',
         workspaceId: membership.workspaceId,
-        members: { create: { userId: user.id } }
+        members: { create: { userId: user.id, isAttendancePrimary: false } }
       },
       include: {
         members: { include: { user: { select: { id: true, name: true, email: true, avatar: true } } } },

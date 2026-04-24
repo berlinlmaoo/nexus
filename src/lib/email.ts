@@ -2,20 +2,43 @@ import nodemailer from "nodemailer"
 
 const smtpConfigured = !!(
   process.env.SMTP_HOST &&
-  process.env.SMTP_PORT &&
-  process.env.SMTP_USER &&
-  process.env.SMTP_PASS
+  process.env.SMTP_PORT
 )
 
 function createTransporter() {
   if (!smtpConfigured) return null
+  const smtpUser = process.env.SMTP_USER
+  const smtpPass = process.env.SMTP_PASS
+  const smtpHost = process.env.SMTP_HOST!
+  const smtpPort = parseInt(process.env.SMTP_PORT!, 10)
+  const smtpHeloName =
+    process.env.SMTP_HELO_NAME ||
+    (() => {
+      if (process.env.NEXTAUTH_URL) {
+        try {
+          return new URL(process.env.NEXTAUTH_URL).hostname
+        } catch {
+          // Ignore malformed NEXTAUTH_URL and fall back to SMTP host.
+        }
+      }
+      return smtpHost
+    })()
+
   return nodemailer.createTransport({
-    host: process.env.SMTP_HOST!,
-    port: parseInt(process.env.SMTP_PORT!, 10),
-    secure: parseInt(process.env.SMTP_PORT!, 10) === 465,
-    auth: {
-      user: process.env.SMTP_USER!,
-      pass: process.env.SMTP_PASS!,
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpPort === 465,
+    requireTLS: smtpPort === 587,
+    name: smtpHeloName,
+    auth:
+      smtpUser && smtpPass
+        ? {
+            user: smtpUser,
+            pass: smtpPass,
+          }
+        : undefined,
+    tls: {
+      servername: smtpHost,
     },
   })
 }
@@ -147,6 +170,46 @@ export function projectInviteEmail(data: {
         metaRow("Project", data.projectName) +
         metaRow("Role", data.role) +
         button("Open Project", `${baseUrl}/projects/${data.projectId}`)
+    ),
+  }
+}
+
+export function signupOtpEmail(data: {
+  recipientName: string
+  otpCode: string
+  expiresInMinutes: number
+}): EmailPayload {
+  return {
+    to: "",
+    subject: `Your NEXUS verification code: ${data.otpCode}`,
+    html: wrapHtml(
+      "Verify Your Email",
+      paragraph(`Hi ${data.recipientName},`) +
+        paragraph("Use the verification code below to complete your NEXUS registration.") +
+        `<div style="margin:20px 0;padding:18px 20px;background:#f4f4f5;border:1px solid #e4e4e7;border-radius:10px;text-align:center;">
+          <p style="margin:0;font-size:28px;line-height:1;font-weight:800;letter-spacing:0.24em;color:#18181b;">${data.otpCode}</p>
+        </div>` +
+        paragraph(`This code expires in ${data.expiresInMinutes} minutes. If you did not request access, you can ignore this email.`)
+    ),
+  }
+}
+
+export function passwordResetOtpEmail(data: {
+  recipientName: string
+  otpCode: string
+  expiresInMinutes: number
+}): EmailPayload {
+  return {
+    to: "",
+    subject: `Your NEXUS password reset code: ${data.otpCode}`,
+    html: wrapHtml(
+      "Reset Your Password",
+      paragraph(`Hi ${data.recipientName},`) +
+        paragraph("Use the verification code below to authorize a password reset for your NEXUS account.") +
+        `<div style="margin:20px 0;padding:18px 20px;background:#f4f4f5;border:1px solid #e4e4e7;border-radius:10px;text-align:center;">
+          <p style="margin:0;font-size:28px;line-height:1;font-weight:800;letter-spacing:0.24em;color:#18181b;">${data.otpCode}</p>
+        </div>` +
+        paragraph(`This code expires in ${data.expiresInMinutes} minutes. If you did not request a password reset, you can ignore this email.`)
     ),
   }
 }

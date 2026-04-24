@@ -73,7 +73,7 @@ export default async function RegisterPage() {
         <div className="mx-auto w-full max-w-md space-y-8 animate-fade-in py-6 pt-14 sm:space-y-10 sm:py-12 sm:pt-10 lg:pt-0">
           <div className="space-y-2">
             <h3 className="text-3xl font-headline font-black text-primary tracking-tight sm:text-4xl">Request Entry</h3>
-            <p className="text-sm font-medium text-on-surface-variant/60 sm:text-base">Provision your operative profile within the system.</p>
+            <p className="text-sm font-medium text-on-surface-variant/60 sm:text-base">Provision your operative profile and verify access through a one-time code sent to your email.</p>
           </div>
 
           <RegisterForm />
