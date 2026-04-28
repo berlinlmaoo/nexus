@@ -1,13 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock prisma before importing rbac
-vi.mock('@/lib/prisma', () => ({
-  default: {
+vi.mock('@/lib/prisma', () => {
+  const mockPrisma = {
+    user: {
+      findUnique: vi.fn(),
+    },
     projectMember: {
       findUnique: vi.fn(),
     },
-  },
-}))
+    project: {
+      findUnique: vi.fn(),
+    },
+    $transaction: vi.fn((queries) => Promise.all(queries)),
+  }
+  return { default: mockPrisma }
+})
 
 import { checkProjectAccess } from '@/lib/rbac'
 import prisma from '@/lib/prisma'

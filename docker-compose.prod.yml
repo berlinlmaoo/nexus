@@ -106,6 +106,8 @@ services:
       NAS_USERNAME: ${NAS_USERNAME:-}
       NAS_PASSWORD: ${NAS_PASSWORD:-}
       SENTRY_DSN: ${SENTRY_DSN:-}
+      NEXUS_GIDEON_SERVICE_TOKEN: ${NEXUS_GIDEON_SERVICE_TOKEN:-}
+      NEXUS_GIDEON_ACTOR_EMAIL: ${NEXUS_GIDEON_ACTOR_EMAIL:-}
     volumes:
       - ${NEXUS_DATA_DIR:-./var}/uploads/attachments:/app/public/uploads/attachments
       - ${NEXUS_DATA_DIR:-./var}/uploads/attendance:/app/public/uploads/attendance
