@@ -433,6 +433,8 @@ export function PageViewClient({ page, tasks }: PageViewClientProps) {
           projectId={page.project.id}
           taskLists={page.project.taskLists}
           defaultTaskListId={defaultTaskListId}
+          open={createDialogOpen}
+          onOpenChange={setCreateDialogOpen}
           onCreated={() => { setCreateDialogOpen(false); router.refresh() }}
         >
           <span />

@@ -199,6 +199,7 @@ export const updateProjectSchema = z.object({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   icon: z.string().max(50).optional(),
   status: z.enum(["ACTIVE", "ARCHIVED", "COMPLETED"]).optional(),
+  folderId: z.string().min(1).nullable().optional(),
   enableTaskBatchDuplicate: z.boolean().optional(),
   autoAssignEnabled: z.boolean().optional(),
   autoAssignAssigneeIds: z.array(z.string().cuid()).max(50).optional(),

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { checkProjectAccess } from "@/lib/rbac"
+import { generateUniqueFormSlug } from "@/lib/form-slugs"
 
 export async function GET(
   request: NextRequest,
@@ -23,6 +25,9 @@ export async function GET(
 
     if (!form) return NextResponse.json({ error: "Form not found" }, { status: 404 })
 
+    const { allowed } = await checkProjectAccess(session.user.id, form.projectId, ["MEMBER"])
+    if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
     return NextResponse.json(form)
   } catch (error) {
     console.error("Error fetching form:", error)
@@ -42,10 +47,23 @@ export async function PATCH(
     const body = await request.json()
     const { name, description, fields, isPublic } = body
 
+    const existing = await prisma.form.findUnique({
+      where: { id: formId },
+      select: { id: true, name: true, slug: true, projectId: true },
+    })
+
+    if (!existing) return NextResponse.json({ error: "Form not found" }, { status: 404 })
+
+    const { allowed } = await checkProjectAccess(session.user.id, existing.projectId, ["MEMBER"])
+    if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
+    const slug = existing.slug ?? await generateUniqueFormSlug(prisma, name ?? existing.name, existing.id)
+
     const form = await prisma.form.update({
       where: { id: formId },
       data: {
         ...(name !== undefined && { name }),
+        ...(!existing.slug && { slug }),
         ...(description !== undefined && { description }),
         ...(fields !== undefined && { fields }),
         ...(isPublic !== undefined && { isPublic }),
@@ -70,6 +88,16 @@ export async function DELETE(
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const { formId } = await params
+
+    const existing = await prisma.form.findUnique({
+      where: { id: formId },
+      select: { projectId: true },
+    })
+
+    if (!existing) return NextResponse.json({ error: "Form not found" }, { status: 404 })
+
+    const { allowed } = await checkProjectAccess(session.user.id, existing.projectId, ["MEMBER"])
+    if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     await prisma.form.delete({ where: { id: formId } })
 

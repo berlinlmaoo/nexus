@@ -24,6 +24,7 @@ import { formatTaskDueDate } from "@/lib/task-date-format"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { type TaskCardData } from "./task-card"
+import { TaskCustomFieldChip } from "./task-custom-field-chip"
 
 const COLUMNS: {
   id: TaskCardData["status"]
@@ -91,6 +92,17 @@ const KanbanTaskCard = memo(function KanbanTaskCard({
         </div>
         <div className="flex flex-wrap gap-2">
           {task.priority !== "NONE" && <span className={cn("px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md", PRIORITY_BADGES[task.priority].cls)}>{task.priority}</span>}
+          {task.customFieldChips?.slice(0, 3).map((chip) => (
+            <TaskCustomFieldChip key={chip.id} chip={chip} className="max-w-[150px] text-[9px]" />
+          ))}
+          {(task.customFieldChips?.length ?? 0) > 3 && (
+            <span
+              className="inline-flex items-center rounded-full bg-surface-container px-2 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-on-surface-variant/50"
+              title={task.customFieldChips?.slice(3).map((chip) => `${chip.fieldName}: ${chip.label}`).join(", ")}
+            >
+              +{(task.customFieldChips?.length ?? 0) - 3}
+            </span>
+          )}
         </div>
         <div className="flex items-center justify-between pt-1">
           <div className="flex items-center gap-3 text-on-surface-variant/40">

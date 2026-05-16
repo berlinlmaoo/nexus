@@ -21,6 +21,11 @@ interface FormBranding {
   headerImage?: string
 }
 
+interface TaskListOption {
+  id: string
+  name: string
+}
+
 interface FormData {
   id: string
   name: string
@@ -28,6 +33,7 @@ interface FormData {
   fields: FormField[]
   isPublic: boolean
   branding?: FormBranding | null
+  taskLists?: TaskListOption[]
 }
 
 export default function PublicFormPage() {
@@ -81,6 +87,7 @@ export default function PublicFormPage() {
       formDescription={form.description}
       fields={form.fields as BuilderFormField[]}
       branding={form.branding}
+      taskLists={form.taskLists ?? []}
     />
   )
 }

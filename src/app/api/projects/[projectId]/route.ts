@@ -8,6 +8,7 @@ import {
   normalizeAutoAssignConfig,
   ProjectAutoAssignConfigError,
 } from "@/lib/project-auto-assign"
+import { syncProjectLinkedTeamAccess } from "@/lib/team-sync"
 
 async function canManageProject(userId: string, projectId: string) {
   if (await isSystemAdminUser(userId)) {
@@ -59,6 +60,8 @@ export async function GET(
   try {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    await syncProjectLinkedTeamAccess(params.projectId)
 
     const project = await prisma.project.findUnique({
       where: { id: params.projectId },
@@ -117,6 +120,7 @@ export async function PATCH(
       color,
       icon,
       status,
+      folderId,
       enableTaskBatchDuplicate,
       autoAssignEnabled,
       autoAssignAssigneeIds,
@@ -126,6 +130,7 @@ export async function PATCH(
       where: { id: params.projectId },
       select: {
         id: true,
+        workspaceId: true,
         members: {
           select: { userId: true },
         },
@@ -164,6 +169,17 @@ export async function PATCH(
       }
     }
 
+    if (folderId !== undefined && folderId !== null) {
+      const folder = await prisma.projectFolder.findUnique({
+        where: { id: folderId },
+        select: { workspaceId: true },
+      })
+
+      if (!folder || folder.workspaceId !== existing.workspaceId) {
+        return NextResponse.json({ error: "Folder must belong to the same workspace as the project" }, { status: 400 })
+      }
+    }
+
     const project = await prisma.project.update({
       where: { id: params.projectId },
       data: {
@@ -172,6 +188,7 @@ export async function PATCH(
         ...(color !== undefined && { color }),
         ...(icon !== undefined && { icon }),
         ...(status !== undefined && { status }),
+        ...(folderId !== undefined && { folderId }),
         ...(enableTaskBatchDuplicate !== undefined && { enableTaskBatchDuplicate }),
         ...(normalizedAutoAssignConfig && normalizedAutoAssignConfig),
       },

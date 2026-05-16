@@ -19,6 +19,7 @@ import {
   formatCreatedFieldTimestamp,
   formatCustomFieldNumberValue,
   formatCreatedFieldValue,
+  getCustomStatusToneClassName,
   getNumberCustomFieldFormat,
   normalizeCustomFieldNumberInput,
   type PlaceFieldValue,
@@ -63,6 +64,11 @@ function hasOptions(field: CustomFieldRecord) {
   return field.type === "SELECT" || field.type === "MULTI_SELECT" || field.type === "STATUS"
 }
 
+function getSelectOptionTemplate(field: CustomFieldRecord, value: string) {
+  if (field.type !== "SELECT") return ""
+  return String(field.options?.optionTemplates?.[value] ?? "").trim()
+}
+
 function SingleValueSelect({
   field,
   value,
@@ -81,8 +87,15 @@ function SingleValueSelect({
         <button
           type="button"
           className={cn(
-            "flex h-11 w-full items-center justify-between rounded-xl border border-input bg-background px-3 text-left text-sm font-medium outline-none transition-all",
-            selectedValue ? "text-foreground" : "text-muted-foreground"
+            "flex h-11 w-full items-center justify-between rounded-xl border px-3 text-left text-sm font-medium outline-none transition-all",
+            field.type === "STATUS" && selectedValue
+              ? getCustomStatusToneClassName(selectedValue)
+              : "border-input bg-background",
+            field.type === "STATUS" && selectedValue
+              ? ""
+              : selectedValue
+                ? "text-foreground"
+                : "text-muted-foreground"
           )}
         >
           <span className="truncate">{selectedValue || "Select an option..."}</span>
@@ -96,9 +109,20 @@ function SingleValueSelect({
             <CommandEmpty>No option found.</CommandEmpty>
             <CommandGroup>
               {options.map((option) => (
-                <CommandItem key={option} value={option} onSelect={() => onChange(option)}>
+                <CommandItem
+                  key={option}
+                  value={option}
+                  onSelect={() => onChange(field.type === "SELECT" && selectedValue === option ? "" : option)}
+                >
                   <Check className={cn("mr-2 h-4 w-4", selectedValue === option ? "opacity-100" : "opacity-0")} />
-                  {option}
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-1 text-xs font-semibold",
+                      field.type === "STATUS" && getCustomStatusToneClassName(option)
+                    )}
+                  >
+                    {option}
+                  </span>
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -236,14 +260,167 @@ function NumberFieldInput({
   )
 }
 
+export function TaskHeaderStatusFields({
+  taskId,
+  projectIds,
+  onChanged,
+}: {
+  taskId: string
+  projectIds: string[]
+  onChanged?: () => void
+}) {
+  const [fields, setFields] = useState<CustomFieldRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [savingFieldId, setSavingFieldId] = useState<string | null>(null)
+
+  const uniqueProjectIds = useMemo(
+    () => Array.from(new Set(projectIds.filter(Boolean))),
+    [projectIds]
+  )
+
+  const fetchStatusFields = useCallback(async () => {
+    setLoading(true)
+    try {
+      if (uniqueProjectIds.length === 0) {
+        setFields([])
+        return
+      }
+
+      const responses = await Promise.all(
+        uniqueProjectIds.map(async (projectId) => {
+          const res = await fetch(`/api/custom-fields?projectId=${projectId}&taskId=${taskId}`, {
+            cache: "no-store",
+          })
+          if (!res.ok) {
+            throw new Error(`Failed to load status fields for project ${projectId}`)
+          }
+
+          const data = await res.json()
+          return Array.isArray(data.fields) ? data.fields : []
+        })
+      )
+
+      setFields(responses.flat().filter((field: CustomFieldRecord) => field.type === "STATUS"))
+    } catch (error) {
+      console.error("Failed to load task status fields:", error)
+      setFields([])
+    } finally {
+      setLoading(false)
+    }
+  }, [taskId, uniqueProjectIds])
+
+  useEffect(() => {
+    fetchStatusFields()
+  }, [fetchStatusFields])
+
+  const updateStatusValue = async (fieldId: string, value: string) => {
+    setSavingFieldId(fieldId)
+    try {
+      const res = await fetch("/api/custom-fields", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: fieldId,
+          taskId,
+          value,
+        }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error || "Failed to update status")
+      }
+
+      const data = await res.json()
+      setFields((prev) =>
+        prev.map((field) =>
+          field.id === fieldId
+            ? {
+                ...field,
+                value: typeof data.fieldValue?.value === "string" ? data.fieldValue.value : value,
+              }
+            : field
+        )
+      )
+      onChanged?.()
+    } catch (error) {
+      console.error("Failed to update task custom status:", error)
+      toast.error(error instanceof Error ? error.message : "Failed to update status")
+      fetchStatusFields()
+    } finally {
+      setSavingFieldId(null)
+    }
+  }
+
+  if (loading || fields.length === 0) return null
+
+  return (
+    <>
+      {fields.map((field) => {
+        const options = field.options?.options ?? []
+        const selectedValue = typeof field.value === "string" ? field.value : ""
+        const isSaving = savingFieldId === field.id
+
+        return (
+          <Popover key={field.id}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                disabled={isSaving}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest transition-all outline-none focus:ring-2 focus:ring-primary/10 disabled:opacity-60",
+                  selectedValue
+                    ? getCustomStatusToneClassName(selectedValue)
+                    : "border-on-surface-variant/10 bg-surface-container-high text-on-surface-variant/55"
+                )}
+                title={field.name}
+              >
+                {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ListFilter className="h-3.5 w-3.5" />}
+                <span>{selectedValue || field.name}</span>
+                <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-[240px] p-0">
+              <Command>
+                <CommandInput placeholder={`Search ${field.name.toLowerCase()}...`} />
+                <CommandList>
+                  <CommandEmpty>No status found.</CommandEmpty>
+                  <CommandGroup>
+                    {options.map((option) => (
+                      <CommandItem
+                        key={option}
+                        value={option}
+                        onSelect={() => updateStatusValue(field.id, option)}
+                      >
+                        <Check className={cn("mr-2 h-4 w-4", selectedValue === option ? "opacity-100" : "opacity-0")} />
+                        <span className={cn("rounded-full px-2 py-1 text-xs font-semibold", getCustomStatusToneClassName(option))}>
+                          {option}
+                        </span>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        )
+      })}
+    </>
+  )
+}
+
 export function CustomFields({
   taskId,
   projectIds,
   projects = [],
+  onSelectTemplate,
+  onChanged,
 }: {
   taskId: string
   projectIds: string[]
   projects?: Array<{ id: string; name: string; color?: string }>
+  onSelectTemplate?: (template: string, meta: { fieldName: string; option: string }) => void
+  onChanged?: () => void
 }) {
   const [fields, setFields] = useState<CustomFieldRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -302,6 +479,7 @@ export function CustomFields({
   }, [fetchFields])
 
   const updateFieldValue = async (fieldId: string, value: unknown) => {
+    const targetField = fields.find((field) => field.id === fieldId) ?? null
     setSavingFieldId(fieldId)
     try {
       const res = await fetch("/api/custom-fields", {
@@ -331,6 +509,16 @@ export function CustomFields({
             : field
         )
       )
+      onChanged?.()
+      if (targetField && typeof value === "string") {
+        const template = getSelectOptionTemplate(targetField, value)
+        if (template) {
+          onSelectTemplate?.(template, {
+            fieldName: targetField.name,
+            option: value,
+          })
+        }
+      }
     } catch (error) {
       console.error("Failed to update custom field value:", error)
       toast.error(error instanceof Error ? error.message : "Failed to update custom field")

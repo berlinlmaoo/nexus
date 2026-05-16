@@ -11,6 +11,7 @@ import {
   Lock,
   Loader2,
   ClipboardList,
+  Trash2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -21,6 +22,7 @@ import { FormSubmissions } from "@/components/forms/form-submissions"
 interface Form {
   id: string
   name: string
+  slug?: string | null
   description: string | null
   fields: FormField[]
   isPublic: boolean
@@ -37,6 +39,7 @@ export default function FormsPage() {
   const [loading, setLoading] = useState(true)
   const [selectedForm, setSelectedForm] = useState<Form | null>(null)
   const [isCreating, setIsCreating] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const fetchForms = useCallback(async () => {
     try {
@@ -78,6 +81,30 @@ export default function FormsPage() {
     setSelectedForm(form)
   }
 
+  const handleDeleteForm = async () => {
+    if (!selectedForm) return
+
+    const confirmed = window.confirm(
+      `Delete form "${selectedForm.name}"? This will also remove its submission history.`
+    )
+    if (!confirmed) return
+
+    try {
+      setIsDeleting(true)
+      const res = await fetch(`/api/forms/${selectedForm.id}`, { method: "DELETE" })
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        throw new Error(data?.error ?? "Failed to delete form")
+      }
+      handleBack()
+      fetchForms()
+    } catch {
+      // silently handle, matching the page's existing fetch behavior
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   return (
     <div className="h-full flex flex-col">
       <AnimatePresence mode="wait">
@@ -102,6 +129,23 @@ export default function FormsPage() {
               <h1 className="text-xl font-semibold text-white">
                 {isCreating ? "New Form" : selectedForm?.name}
               </h1>
+              {selectedForm && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDeleteForm}
+                  disabled={isDeleting}
+                  className="ml-auto border-red-500/40 bg-red-500/10 text-red-200 hover:bg-red-500/20 hover:text-red-100"
+                >
+                  {isDeleting ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="mr-2 h-4 w-4" />
+                  )}
+                  Delete form
+                </Button>
+              )}
             </div>
 
             <FormBuilder

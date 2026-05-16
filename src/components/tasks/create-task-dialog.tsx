@@ -33,6 +33,8 @@ interface CreateTaskDialogProps {
   projectId: string
   taskLists: TaskListOption[]
   defaultTaskListId?: string
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
   children?: React.ReactNode
   onCreated?: () => void
 }
@@ -56,13 +58,21 @@ export function CreateTaskDialog({
   projectId,
   taskLists,
   defaultTaskListId,
+  open,
+  onOpenChange,
   children,
   onCreated,
 }: CreateTaskDialogProps) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [members, setMembers] = useState<Member[]>([])
+  const isControlled = open !== undefined
+  const dialogOpen = isControlled ? open : internalOpen
+  const setDialogOpen = (nextOpen: boolean) => {
+    if (!isControlled) setInternalOpen(nextOpen)
+    onOpenChange?.(nextOpen)
+  }
 
   // Form state
   const [title, setTitle] = useState("")
@@ -78,13 +88,34 @@ export function CreateTaskDialog({
   const [tags, setTags] = useState<string[]>([])
 
   useEffect(() => {
-    if (open) {
-      fetch(`/api/members?projectId=${projectId}`)
+    if (dialogOpen) {
+      fetch(`/api/projects/${projectId}`)
         .then((res) => res.json())
-        .then((data) => setMembers(data.members || []))
-        .catch(console.error)
+        .then((data) => {
+          const projectMembers = Array.isArray(data?.members)
+            ? data.members
+                .map((member: any) => member?.user ?? member)
+                .filter((member: any): member is Member => Boolean(member?.id))
+                .map((member: any) => ({
+                  id: member.id,
+                  name: member.name || member.email || "Unnamed member",
+                  avatar: member.avatar || member.image || null,
+                }))
+            : []
+
+          setMembers(projectMembers)
+        })
+        .catch((error) => {
+          console.error("Failed to load project members:", error)
+          setMembers([])
+        })
     }
-  }, [open, projectId])
+  }, [dialogOpen, projectId])
+
+  useEffect(() => {
+    if (!dialogOpen) return
+    setTaskListId(defaultTaskListId || taskLists[0]?.id || "")
+  }, [defaultTaskListId, dialogOpen, taskLists])
 
   const handleAddTag = () => {
     const tag = tagInput.trim()
@@ -141,7 +172,7 @@ export function CreateTaskDialog({
       })
 
       if (res.ok) {
-        setOpen(false)
+        setDialogOpen(false)
         resetForm()
         onCreated?.()
         router.refresh()
@@ -154,7 +185,7 @@ export function CreateTaskDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
       <DialogTrigger asChild>
         {children || (
           <Button>
@@ -328,7 +359,7 @@ export function CreateTaskDialog({
             <Button
               type="button"
               variant="outline"
-              onClick={() => setOpen(false)}
+              onClick={() => setDialogOpen(false)}
             >
               Cancel
             </Button>

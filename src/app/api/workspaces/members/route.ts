@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { logAudit } from '@/lib/audit'
+import { isSystemAdminUser } from '@/lib/rbac'
 
 async function canManageTeamInWorkspace(userId: string, workspaceId: string, teamId?: string) {
   if (!teamId) return false
@@ -44,6 +45,7 @@ export async function GET(req: NextRequest) {
 
     const member = await getWorkspaceAndRole(session.user.id, requestedWorkspaceId)
     if (!member) return NextResponse.json({ error: 'No workspace found' }, { status: 404 })
+    const isSystemAdmin = await isSystemAdminUser(session.user.id)
 
     const members = await prisma.workspaceMember.findMany({
       where: { workspaceId: member.workspaceId },
@@ -88,6 +90,7 @@ export async function GET(req: NextRequest) {
     }
 
     const canSeeRegistered =
+      isSystemAdmin ||
       member.role === 'OWNER' ||
       member.role === 'ADMIN' ||
       await canManageTeamInWorkspace(session.user.id, member.workspaceId, teamId)
@@ -129,7 +132,8 @@ export async function POST(req: NextRequest) {
 
     const currentMember = await getWorkspaceAndRole(session.user.id, workspaceId)
     if (!currentMember) return NextResponse.json({ error: 'No workspace found' }, { status: 404 })
-    if (currentMember.role !== 'OWNER' && currentMember.role !== 'ADMIN') {
+    const isSystemAdmin = await isSystemAdminUser(session.user.id)
+    if (!isSystemAdmin && currentMember.role !== 'OWNER' && currentMember.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Only owners and admins can invite members' }, { status: 403 })
     }
 
@@ -199,7 +203,8 @@ export async function PATCH(req: NextRequest) {
 
     const currentMember = await getWorkspaceAndRole(session.user.id, workspaceId)
     if (!currentMember) return NextResponse.json({ error: 'No workspace found' }, { status: 404 })
-    if (currentMember.role !== 'OWNER' && currentMember.role !== 'ADMIN') {
+    const isSystemAdmin = await isSystemAdminUser(session.user.id)
+    if (!isSystemAdmin && currentMember.role !== 'OWNER' && currentMember.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Only owners and admins can change roles' }, { status: 403 })
     }
 
@@ -263,7 +268,8 @@ export async function DELETE(req: NextRequest) {
     const requestedWorkspaceId = req.nextUrl.searchParams.get('workspaceId') || undefined
     const currentMember = await getWorkspaceAndRole(session.user.id, requestedWorkspaceId)
     if (!currentMember) return NextResponse.json({ error: 'No workspace found' }, { status: 404 })
-    if (currentMember.role !== 'OWNER' && currentMember.role !== 'ADMIN') {
+    const isSystemAdmin = await isSystemAdminUser(session.user.id)
+    if (!isSystemAdmin && currentMember.role !== 'OWNER' && currentMember.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Only owners and admins can remove members' }, { status: 403 })
     }
 

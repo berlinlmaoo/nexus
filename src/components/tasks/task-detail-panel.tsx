@@ -56,6 +56,11 @@ const CustomFields = dynamic(
   { ssr: false, loading: () => <PanelSectionSkeleton className="min-h-[180px]" /> }
 )
 
+const TaskHeaderStatusFields = dynamic(
+  () => import("./custom-fields").then((mod) => mod.TaskHeaderStatusFields),
+  { ssr: false }
+)
+
 const TaskActivity = dynamic(
   () => import("./task-activity").then((mod) => mod.TaskActivity),
   { ssr: false, loading: () => <PanelSectionSkeleton /> }
@@ -492,6 +497,34 @@ export function TaskDetailPanel({
     }, 600)
   }, [currentTask.description, saveTask])
 
+  const applySelectTemplateToCoreIntelligence = useCallback((
+    template: string,
+    meta: { fieldName: string; option: string }
+  ) => {
+    const cleanTemplate = template.trim()
+    if (!cleanTemplate) return
+
+    const nextDescription = description.trim()
+      ? description.includes(cleanTemplate)
+        ? description
+        : `${description.trimEnd()}\n\n${cleanTemplate}`
+      : cleanTemplate
+
+    if (nextDescription === description) {
+      toast.info("Core Intelligence template already exists")
+      return
+    }
+
+    setDescription(nextDescription)
+    scheduleDescriptionSave(nextDescription)
+    requestAnimationFrame(() => {
+      descriptionTextareaRef.current?.focus()
+    })
+    toast.success("Core Intelligence template inserted", {
+      description: `${meta.fieldName}: ${meta.option}`,
+    })
+  }, [description, scheduleDescriptionSave])
+
   const handleSectionSelect = async (sectionId: string) => {
     const selectedSection = projectSections.find((section) => section.id === sectionId)
     if (!selectedSection) return
@@ -806,6 +839,14 @@ export function TaskDetailPanel({
                   <option key={opt.value} value={opt.value} className="bg-surface text-on-surface">{opt.label}</option>
                 ))}
               </select>
+              <TaskHeaderStatusFields
+                taskId={currentTask.id}
+                projectIds={taskProjectsList.map((taskProject) => taskProject.projectId)}
+                onChanged={() => {
+                  onUpdate?.()
+                  router.refresh()
+                }}
+              />
             </div>
 
             <textarea
@@ -1052,6 +1093,8 @@ export function TaskDetailPanel({
                   name: taskProject.project.name,
                   color: taskProject.project.color,
                 }))}
+                onSelectTemplate={applySelectTemplateToCoreIntelligence}
+                onChanged={() => onUpdate?.()}
               />
             </div>
           </div>

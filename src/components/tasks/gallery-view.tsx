@@ -8,6 +8,7 @@ import type { TaskCardData } from "./task-card"
 import { Calendar, Plus } from "lucide-react"
 import { format, isPast, isToday } from "date-fns"
 import { cn } from "@/lib/utils"
+import { TaskCustomFieldChip } from "./task-custom-field-chip"
 
 interface GalleryViewProps {
   tasks: TaskCardData[]
@@ -97,6 +98,22 @@ const GalleryTaskCard = memo(function GalleryTaskCard({
             ))}
             {task.tags.length > 2 && (
               <span className="text-[10px] text-muted-foreground">+{task.tags.length - 2}</span>
+            )}
+          </div>
+        )}
+
+        {task.customFieldChips && task.customFieldChips.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {task.customFieldChips.slice(0, 3).map((chip) => (
+              <TaskCustomFieldChip key={chip.id} chip={chip} className="max-w-[140px]" />
+            ))}
+            {task.customFieldChips.length > 3 && (
+              <span
+                className="inline-flex items-center rounded-full bg-muted/50 px-2 py-1 text-[10px] font-semibold text-muted-foreground/80"
+                title={task.customFieldChips.slice(3).map((chip) => `${chip.fieldName}: ${chip.label}`).join(", ")}
+              >
+                +{task.customFieldChips.length - 3}
+              </span>
             )}
           </div>
         )}

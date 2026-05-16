@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import bcrypt from 'bcryptjs'
 import { Prisma } from '@/generated/prisma'
 import prisma from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -7,6 +8,7 @@ import { logAudit } from '@/lib/audit'
 import { getPrimaryWorkspaceDefaults } from '@/lib/workspace-defaults'
 import { isPrimaryTeamName, isPrimaryWorkspace } from '@/lib/primary-team'
 import { isSystemAdminUser } from '@/lib/rbac'
+import { canonicalEmail } from '@/lib/email-auth'
 
 async function getTeamContext(teamId: string, actorId: string) {
   const team = await prisma.team.findUnique({
@@ -61,6 +63,17 @@ async function getTeamContext(teamId: string, actorId: string) {
 
 function normalizeTeamName(name: string) {
   return name.trim().toLowerCase()
+}
+
+function normalizeRequestedEmails(value: unknown) {
+  const rawEmails = Array.isArray(value) ? value : typeof value === 'string' ? [value] : []
+  return Array.from(
+    new Set(
+      rawEmails
+        .map((email) => canonicalEmail(String(email)))
+        .filter((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    )
+  )
 }
 
 export async function GET() {
@@ -249,7 +262,7 @@ export async function POST(req: NextRequest) {
 
     // Handle add/remove member actions
     if (body.action === 'add-member') {
-      const { teamId, userId, userIds } = body
+      const { teamId, userId, userIds, email, emails } = body
       const requestedUserIds = Array.from(
         new Set(
           (Array.isArray(userIds) ? userIds : userId ? [userId] : []).filter(
@@ -257,10 +270,11 @@ export async function POST(req: NextRequest) {
           )
         )
       )
+      const requestedEmails = normalizeRequestedEmails(emails ?? email)
 
-      if (!teamId || requestedUserIds.length === 0) {
-        console.warn('Teams POST add-member validation failed', { teamId, memberId: userId, memberIds: userIds, actorId: user.id })
-        return NextResponse.json({ error: 'teamId and at least one userId are required' }, { status: 400 })
+      if (!teamId || (requestedUserIds.length === 0 && requestedEmails.length === 0)) {
+        console.warn('Teams POST add-member validation failed', { teamId, memberId: userId, memberIds: userIds, emails: requestedEmails, actorId: user.id })
+        return NextResponse.json({ error: 'teamId and at least one userId or email are required' }, { status: 400 })
       }
 
       const { team, canManage } = await getTeamContext(teamId, user.id)
@@ -269,18 +283,45 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
 
-      const targetUsers = await prisma.user.findMany({
+      const usersById = requestedUserIds.length > 0 ? await prisma.user.findMany({
         where: { id: { in: requestedUserIds } },
         select: { id: true, name: true, email: true, avatar: true },
-      })
+      }) : []
 
-      if (targetUsers.length !== requestedUserIds.length) {
+      if (usersById.length !== requestedUserIds.length) {
         console.warn('Teams POST add-member user missing', { teamId, memberIds: requestedUserIds, actorId: user.id })
         return NextResponse.json({ error: 'One or more users were not found' }, { status: 404 })
       }
 
+      const usersByEmail = []
+      for (const requestedEmail of requestedEmails) {
+        let targetUser = await prisma.user.findFirst({
+          where: { email: { equals: requestedEmail, mode: 'insensitive' } },
+          select: { id: true, name: true, email: true, avatar: true },
+        })
+
+        if (!targetUser) {
+          const temporaryPassword = await bcrypt.hash(Math.random().toString(36).slice(2) + 'Aa1!', 12)
+          targetUser = await prisma.user.create({
+            data: {
+              email: requestedEmail,
+              name: requestedEmail.split('@')[0],
+              password: temporaryPassword,
+            },
+            select: { id: true, name: true, email: true, avatar: true },
+          })
+        }
+
+        usersByEmail.push(targetUser)
+      }
+
+      const targetUsers = Array.from(
+        new Map([...usersById, ...usersByEmail].map((targetUser) => [targetUser.id, targetUser])).values()
+      )
+      const targetUserIds = targetUsers.map((targetUser) => targetUser.id)
+
       await prisma.workspaceMember.createMany({
-        data: requestedUserIds.map((memberId) => ({
+        data: targetUserIds.map((memberId) => ({
           userId: memberId,
           workspaceId: team.workspaceId,
           role: 'MEMBER',
@@ -289,7 +330,7 @@ export async function POST(req: NextRequest) {
       })
 
       await prisma.teamMember.createMany({
-        data: requestedUserIds.map((memberId) => ({
+        data: targetUserIds.map((memberId) => ({
           teamId,
           userId: memberId,
           isAttendancePrimary: false,
@@ -297,7 +338,7 @@ export async function POST(req: NextRequest) {
         skipDuplicates: true,
       })
 
-      for (const memberId of requestedUserIds) {
+      for (const memberId of targetUserIds) {
         await syncTeamMemberAccess(teamId, memberId)
         logAudit({
           action: "create",
@@ -306,7 +347,7 @@ export async function POST(req: NextRequest) {
           entityName: `${teamId}:${memberId}`,
           userId: user.id,
           request: req,
-          metadata: { teamId, memberId },
+          metadata: { teamId, memberId, invitedByEmail: requestedEmails.length > 0 },
         })
       }
 

@@ -73,6 +73,21 @@ export async function syncTeamProjectAccess(teamId: string, projectId: string, d
 }
 
 /**
+ * Self-heal project access for every team currently linked to a project.
+ * Useful for older data created before team-project propagation was strict.
+ */
+export async function syncProjectLinkedTeamAccess(projectId: string, db: DbClient = prisma): Promise<void> {
+  const linkedTeams = await db.teamProject.findMany({
+    where: { projectId },
+    select: { teamId: true },
+  })
+
+  for (const linkedTeam of linkedTeams) {
+    await syncTeamProjectAccess(linkedTeam.teamId, projectId, db)
+  }
+}
+
+/**
  * Grant a single user MEMBER access to all projects linked to `teamId`.
  */
 export async function syncTeamMemberAccess(teamId: string, userId: string, db: DbClient = prisma): Promise<void> {

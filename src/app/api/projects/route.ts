@@ -238,7 +238,7 @@ export async function POST(request: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const body = await request.json()
-    const { name, description, color, icon, workspaceId } = body
+    const { name, description, color, icon, workspaceId, folderId } = body
 
     if (!name || !workspaceId) {
       return NextResponse.json({ error: "Name and workspaceId are required" }, { status: 400 })
@@ -254,6 +254,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden: you are not a member of this workspace" }, { status: 403 })
     }
 
+    if (folderId) {
+      const folder = await prisma.projectFolder.findUnique({
+        where: { id: folderId },
+        select: { workspaceId: true },
+      })
+
+      if (!folder || folder.workspaceId !== workspaceId) {
+        return NextResponse.json({ error: "Folder must belong to the same workspace as the project" }, { status: 400 })
+      }
+    }
+
     const project = await prisma.project.create({
       data: {
         name,
@@ -261,6 +272,7 @@ export async function POST(request: NextRequest) {
         color,
         icon,
         workspaceId,
+        ...(folderId && { folderId }),
         members: {
           create: {
             userId,

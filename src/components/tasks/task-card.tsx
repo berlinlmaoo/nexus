@@ -4,9 +4,10 @@ import { Card } from "@/components/ui/card"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { PriorityBadge } from "./priority-badge"
 import { Calendar, Tag, Diamond, ShieldCheck, Repeat } from "lucide-react"
-import { format, isPast, isToday } from "date-fns"
+import { isPast, isToday } from "date-fns"
 import { cn } from "@/lib/utils"
 import { formatTaskDueDate } from "@/lib/task-date-format"
+import { TaskCustomFieldChip } from "./task-custom-field-chip"
 
 export interface TaskCardData {
   id: string
@@ -39,6 +40,7 @@ export interface TaskCardData {
     fieldName: string
     fieldType: "NUMBER" | "SELECT" | "MULTI_SELECT" | "STATUS" | "DATE" | "CREATED" | "PLACE"
     label: string
+    value?: string
   }[]
   subtaskCount?: number
   subtaskDoneCount?: number
@@ -122,6 +124,22 @@ export function TaskCard({ task, onClick, isDragging, index = 0 }: TaskCardProps
             {task.tags.length > 3 && (
               <span className="text-[10px] text-muted-foreground px-1">
                 +{task.tags.length - 3}
+              </span>
+            )}
+          </div>
+        )}
+
+        {task.customFieldChips && task.customFieldChips.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {task.customFieldChips.slice(0, 3).map((chip) => (
+              <TaskCustomFieldChip key={chip.id} chip={chip} className="max-w-[140px]" />
+            ))}
+            {task.customFieldChips.length > 3 && (
+              <span
+                className="inline-flex items-center rounded-full bg-muted/50 px-2 py-1 text-[10px] font-semibold text-muted-foreground/80"
+                title={task.customFieldChips.slice(3).map((chip) => `${chip.fieldName}: ${chip.label}`).join(", ")}
+              >
+                +{task.customFieldChips.length - 3}
               </span>
             )}
           </div>

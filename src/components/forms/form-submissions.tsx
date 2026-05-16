@@ -131,7 +131,7 @@ export function FormSubmissions({ formId, fields }: FormSubmissionsProps) {
                     key={field.id ?? field.name}
                     className="px-4 py-3 text-zinc-700"
                   >
-                    {renderCellValue(submission.data[field.name])}
+                    {renderCellValue(submission.data[field.id] ?? submission.data[field.name])}
                   </td>
                 ))}
                 <td className="px-4 py-3 text-zinc-400 whitespace-nowrap">
@@ -158,7 +158,7 @@ function downloadCsv(fields: FormField[], submissions: Submission[]) {
   const headers = [...fields.map((f) => f.name), "Submitted"]
   const rows = submissions.map((s) => [
     ...fields.map((f) => {
-      const val = s.data[f.name]
+      const val = s.data[f.id] ?? s.data[f.name]
       if (val === null || val === undefined) return ""
       if (typeof val === "object") return JSON.stringify(val)
       return String(val)

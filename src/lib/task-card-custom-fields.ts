@@ -1,4 +1,3 @@
-import { format } from "date-fns"
 import {
   formatCreatedFieldValue,
   formatCustomFieldNumberValue,
@@ -8,6 +7,7 @@ import {
   type CustomFieldOptionConfig,
   type SupportedCustomFieldType,
 } from "@/lib/custom-fields"
+import { formatTaskDateTime } from "@/lib/task-date-format"
 
 export interface TaskCardCustomFieldChip {
   id: string
@@ -15,6 +15,7 @@ export interface TaskCardCustomFieldChip {
   fieldName: string
   fieldType: SupportedCustomFieldType
   label: string
+  value: string
 }
 
 export function buildTaskCardCustomFieldChips(
@@ -48,6 +49,7 @@ export function buildTaskCardCustomFieldChips(
           fieldName,
           fieldType: normalizedType,
           label: option,
+          value: option,
         })
       }
       continue
@@ -61,6 +63,7 @@ export function buildTaskCardCustomFieldChips(
           fieldName,
           fieldType: normalizedType,
           label: parsed.label.trim(),
+          value: parsed.label.trim(),
         })
       }
       continue
@@ -80,10 +83,7 @@ export function buildTaskCardCustomFieldChips(
       })
     }
     if (normalizedType === "DATE" && !Number.isNaN(new Date(raw).getTime())) {
-      const date = new Date(raw)
-      label = date.getHours() !== 0 || date.getMinutes() !== 0
-        ? format(date, "MMM d • HH:mm")
-        : format(date, "MMM d")
+      label = formatTaskDateTime(raw)
     }
 
     chips.push({
@@ -92,6 +92,7 @@ export function buildTaskCardCustomFieldChips(
       fieldName,
       fieldType: normalizedType,
       label,
+      value: raw,
     })
   }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -65,6 +65,11 @@ interface ProjectOption {
   status: string
 }
 
+interface FetchDataOptions {
+  showLoading?: boolean
+  preserveScroll?: boolean
+}
+
 const TIME_OPTIONS = Array.from({ length: 24 * 4 }, (_, index) => {
   const hours = Math.floor(index / 4)
   const minutes = (index % 4) * 15
@@ -80,8 +85,11 @@ export default function TeamsPage() {
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [isCreatingTeam, setIsCreatingTeam] = useState(false)
+  const [expandedTeamIds, setExpandedTeamIds] = useState<Record<string, boolean>>({})
   const [memberDrafts, setMemberDrafts] = useState<Record<string, string[]>>({})
+  const [memberEmailDrafts, setMemberEmailDrafts] = useState<Record<string, string>>({})
   const [projectDrafts, setProjectDrafts] = useState<Record<string, string>>({})
+  const [teamSearchQuery, setTeamSearchQuery] = useState('')
   const [memberSearchByTeam, setMemberSearchByTeam] = useState<Record<string, string>>({})
   const [projectSearchByTeam, setProjectSearchByTeam] = useState<Record<string, string>>({})
   const [memberPickerOpenByTeam, setMemberPickerOpenByTeam] = useState<Record<string, boolean>>({})
@@ -108,8 +116,11 @@ export default function TeamsPage() {
   } | null>(null)
   const canCreateTeams = teams.some((team) => team.canManage)
 
-  const fetchData = useCallback(async () => {
-    setLoading(true)
+  const fetchData = useCallback(async (options: FetchDataOptions = {}) => {
+    const { showLoading = true, preserveScroll = false } = options
+    const scrollY = preserveScroll && typeof window !== 'undefined' ? window.scrollY : null
+
+    if (showLoading) setLoading(true)
     try {
       const teamsRes = await fetch('/api/teams', { cache: 'no-store' })
       const teamsData = teamsRes.ok ? await teamsRes.json() : []
@@ -181,13 +192,19 @@ export default function TeamsPage() {
       )
       setMemberOptionsByTeam(nextMembersByTeam)
       setProjectOptionsByTeam(nextProjectsByTeam)
+
+      if (scrollY !== null) {
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: scrollY, left: 0, behavior: 'auto' })
+        })
+      }
     } catch (error) {
       console.error('Failed to fetch team data:', error)
       setTeams([])
       setMemberOptionsByTeam({})
       setProjectOptionsByTeam({})
     } finally {
-      setLoading(false)
+      if (showLoading) setLoading(false)
     }
   }, [])
 
@@ -234,7 +251,7 @@ export default function TeamsPage() {
         body: JSON.stringify(body),
       })
       if (res.ok) {
-        await fetchData()
+        await fetchData({ showLoading: false, preserveScroll: true })
         toast.success(successMessage)
         return true
       }
@@ -251,14 +268,17 @@ export default function TeamsPage() {
 
   const handleAddMember = async (teamId: string) => {
     const userIds = memberDrafts[teamId] || []
-    if (userIds.length === 0) return
+    const email = (memberEmailDrafts[teamId] || '').trim()
+    if (userIds.length === 0 && !email) return
     const didAdd = await runTeamAction(`add-member-${teamId}`, {
       action: 'add-member',
       teamId,
       userIds,
-    }, userIds.length === 1 ? 'Member added to team' : `${userIds.length} members added to team`)
+      email: email || undefined,
+    }, userIds.length + (email ? 1 : 0) === 1 ? 'Member added to team' : `${userIds.length + (email ? 1 : 0)} members added to team`)
     if (didAdd) {
       setMemberDrafts((prev) => ({ ...prev, [teamId]: [] }))
+      setMemberEmailDrafts((prev) => ({ ...prev, [teamId]: '' }))
     }
   }
 
@@ -348,6 +368,32 @@ export default function TeamsPage() {
     return 99
   }, [])
 
+  const filteredTeams = useMemo(() => {
+    const query = teamSearchQuery.trim().toLowerCase()
+    if (!query) return teams
+
+    return teams
+      .map((team, index) => {
+        const searchableTargets = [
+          team.name,
+          ...team.members.flatMap((member) => [member.user.name, member.user.email]),
+          ...team.projects.map((teamProject) => teamProject.project.name),
+        ]
+
+        const score = Math.min(
+          ...searchableTargets.map((target) => getSearchScore(String(target || '').toLowerCase(), query))
+        )
+
+        return { team, index, score }
+      })
+      .filter(({ score }) => score < 99)
+      .sort((a, b) => {
+        if (a.score !== b.score) return a.score - b.score
+        return a.index - b.index
+      })
+      .map(({ team }) => team)
+  }, [getSearchScore, teamSearchQuery, teams])
+
   return (
     <div className="mx-auto max-w-[1600px] space-y-8 animate-fade-in pb-24 sm:space-y-10">
       <div className="flex flex-col gap-4 sm:gap-8 md:flex-row md:items-end md:justify-between">
@@ -390,6 +436,34 @@ export default function TeamsPage() {
         )}
       </div>
 
+      {!loading && teams.length > 0 && (
+        <div className="rounded-[2rem] border border-on-surface-variant/5 bg-surface-container-lowest p-3 shadow-sm sm:p-4">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant/35" />
+            <Input
+              value={teamSearchQuery}
+              onChange={(event) => setTeamSearchQuery(event.target.value)}
+              placeholder="Search teams, members, emails, or linked projects..."
+              className="h-12 rounded-2xl border-none bg-surface-container-low px-11 text-sm font-bold text-on-surface placeholder:text-on-surface-variant/30"
+            />
+            {teamSearchQuery.trim() && (
+              <button
+                type="button"
+                onClick={() => setTeamSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-xl px-3 py-1 text-[10px] font-black uppercase tracking-widest text-on-surface-variant/45 transition-colors hover:bg-surface-container hover:text-primary"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <p className="mt-2 px-1 text-[11px] font-bold text-on-surface-variant/45">
+            {teamSearchQuery.trim()
+              ? `${filteredTeams.length} of ${teams.length} teams match your search.`
+              : 'Search is scoped to this Teams page.'}
+          </p>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center py-24">
           <Loader2 className="h-8 w-8 animate-spin text-primary/30" />
@@ -398,9 +472,17 @@ export default function TeamsPage() {
         <div className="rounded-[2rem] border border-on-surface-variant/5 bg-surface-container-lowest p-5 sm:rounded-[2.5rem] sm:p-8">
           <EmptyTeams onAdd={canCreateTeams ? () => setIsOpen(true) : undefined} />
         </div>
+      ) : filteredTeams.length === 0 ? (
+        <div className="rounded-[2rem] border border-dashed border-on-surface-variant/10 bg-surface-container-lowest p-10 text-center sm:rounded-[2.5rem]">
+          <Search className="mx-auto mb-4 h-8 w-8 text-on-surface-variant/20" />
+          <h2 className="font-headline text-xl font-black text-primary">No teams found</h2>
+          <p className="mt-2 text-sm font-medium text-on-surface-variant/50">
+            Try another team name, member email, or linked project.
+          </p>
+        </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:gap-8 xl:grid-cols-2">
-          {teams.map((team) => {
+          {filteredTeams.map((team) => {
             const workspaceMembers = memberOptionsByTeam[team.id] || []
             const workspaceProjects = projectOptionsByTeam[team.id] || []
 
@@ -439,12 +521,17 @@ export default function TeamsPage() {
               .map(({ project }) => project)
             const selectedMemberIds = memberDrafts[team.id] || []
             const selectedMembers = availableMembers.filter((member) => selectedMemberIds.includes(member.userId))
+            const memberEmailDraft = memberEmailDrafts[team.id] || ''
+            const hasMemberEmailDraft = memberEmailDraft.trim().length > 0
             const selectedProject = availableProjects.find((project) => project.id === projectDrafts[team.id])
             const shiftDraft = teamShiftDrafts[team.id] ?? {
               enabled: Boolean(team.attendanceShiftOverrideEnabled),
               start: team.attendanceShiftStartTime || '09:00',
               end: team.attendanceShiftEndTime || '18:00',
             }
+            const isTeamExpanded = Boolean(expandedTeamIds[team.id])
+            const visibleMembers = team.members.slice(0, 4)
+            const visibleProjects = team.projects.slice(0, 3)
 
             return (
               <div
@@ -495,6 +582,85 @@ export default function TeamsPage() {
                   )}
                 </div>
 
+                <div className="grid grid-cols-1 gap-3 rounded-[1.5rem] bg-surface-container-low/30 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:rounded-[1.75rem]">
+                  <div className="min-w-0 space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-surface-container-lowest px-3 py-1 text-[10px] font-black uppercase tracking-widest text-on-surface-variant/55">
+                        Shift {shiftDraft.enabled ? `${shiftDraft.start}-${shiftDraft.end}` : 'office default'}
+                      </span>
+                      {team.canManageAttendanceSettings && (
+                        <span className="rounded-full bg-primary/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-primary">
+                          Attendance editable
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="min-w-0 rounded-2xl bg-surface-container-lowest px-4 py-3">
+                        <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-on-surface-variant/35">
+                          Members
+                        </p>
+                        {visibleMembers.length > 0 ? (
+                          <div className="flex min-w-0 items-center gap-2">
+                            <div className="flex -space-x-2">
+                              {visibleMembers.map((member) => (
+                                <UserAvatar
+                                  key={member.id}
+                                  user={{ name: member.user.name, avatar: member.user.avatar }}
+                                  size="xs"
+                                  className="border-2 border-surface-container-lowest"
+                                />
+                              ))}
+                            </div>
+                            <span className="truncate text-xs font-bold text-on-surface-variant/60">
+                              {visibleMembers.map((member) => member.user.name).join(', ')}
+                              {team.members.length > visibleMembers.length ? ` +${team.members.length - visibleMembers.length}` : ''}
+                            </span>
+                          </div>
+                        ) : (
+                          <p className="text-xs font-medium text-on-surface-variant/40">No members yet</p>
+                        )}
+                      </div>
+
+                      <div className="min-w-0 rounded-2xl bg-surface-container-lowest px-4 py-3">
+                        <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-on-surface-variant/35">
+                          Projects
+                        </p>
+                        {visibleProjects.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {visibleProjects.map((teamProject) => (
+                              <span
+                                key={teamProject.id}
+                                className="inline-flex max-w-full items-center gap-2 rounded-full bg-surface-container px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-on-surface-variant/60"
+                              >
+                                <ProjectIcon icon={teamProject.project.icon} color={teamProject.project.color} size="sm" variant="lucide" />
+                                <span className="truncate">{teamProject.project.name}</span>
+                              </span>
+                            ))}
+                            {team.projects.length > visibleProjects.length && (
+                              <span className="rounded-full bg-surface-container px-2.5 py-1 text-[10px] font-black text-on-surface-variant/50">
+                                +{team.projects.length - visibleProjects.length}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs font-medium text-on-surface-variant/40">No linked projects yet</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setExpandedTeamIds((prev) => ({ ...prev, [team.id]: !prev[team.id] }))}
+                    className="inline-flex h-11 items-center justify-center rounded-2xl bg-primary px-5 text-[10px] font-black uppercase tracking-[0.18em] text-primary-foreground shadow-lg shadow-primary/10 transition-all hover:-translate-y-0.5 active:scale-95"
+                  >
+                    {isTeamExpanded ? 'Hide details' : 'Manage details'}
+                  </button>
+                </div>
+
+                {isTeamExpanded && (
+                  <>
                 <div className="rounded-[1.5rem] bg-surface-container-low/40 p-4 sm:rounded-[1.75rem] sm:p-6">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="space-y-2">
@@ -810,16 +976,33 @@ export default function TeamsPage() {
                         </Popover>
                         <Button
                           onClick={() => handleAddMember(team.id)}
-                          disabled={!team.canManage || availableMembers.length === 0 || selectedMemberIds.length === 0 || activeAction === `add-member-${team.id}`}
+                          disabled={!team.canManage || (selectedMemberIds.length === 0 && !hasMemberEmailDraft) || activeAction === `add-member-${team.id}`}
                           className="h-11 rounded-2xl bg-primary px-5 text-xs font-black uppercase tracking-widest text-primary-foreground sm:min-w-[120px]"
                         >
                           {activeAction === `add-member-${team.id}`
                             ? <Loader2 className="h-4 w-4 animate-spin" />
-                            : selectedMemberIds.length > 1
-                            ? `Add ${selectedMemberIds.length}`
+                            : selectedMemberIds.length + (hasMemberEmailDraft ? 1 : 0) > 1
+                            ? `Add ${selectedMemberIds.length + (hasMemberEmailDraft ? 1 : 0)}`
                             : 'Add'}
                         </Button>
                       </div>
+                      {team.canManage && (
+                        <div className="space-y-2">
+                          <label className="ml-1 text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/35">
+                            Add by email
+                          </label>
+                          <Input
+                            type="email"
+                            value={memberEmailDraft}
+                            onChange={(event) => setMemberEmailDrafts((prev) => ({ ...prev, [team.id]: event.target.value }))}
+                            placeholder="newuser@email.com"
+                            className="h-11 rounded-2xl border-none bg-surface-container-lowest px-4 text-sm font-bold text-on-surface placeholder:text-on-surface-variant/25"
+                          />
+                          <p className="text-[11px] font-medium text-on-surface-variant/45">
+                            Kalau email belum ada di Nexus, sistem akan buat user placeholder lalu masukin ke workspace dan team ini.
+                          </p>
+                        </div>
+                      )}
                       {selectedMembers.length > 0 && (
                         <div className="flex flex-wrap gap-2">
                           {selectedMembers.map((member) => (
@@ -985,6 +1168,8 @@ export default function TeamsPage() {
                     </div>
                   </div>
                 </div>
+                  </>
+                )}
               </div>
             )
           })}
