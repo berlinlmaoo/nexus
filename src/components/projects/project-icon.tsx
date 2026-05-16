@@ -42,6 +42,10 @@ export function isUploadedIcon(icon: string): boolean {
   return icon.startsWith("/")
 }
 
+function isInlineEmojiIcon(icon: string): boolean {
+  return Boolean(icon && /[^\u0000-\u007f]/.test(icon))
+}
+
 interface ProjectIconProps {
   icon: string
   color?: string
@@ -96,7 +100,7 @@ export function ProjectIcon({ icon, color, size = "md", variant = "emoji", class
 
   return (
     <span className={cn("flex items-center justify-center flex-shrink-0", cfg.container, cfg.text, className)}>
-      {EMOJI_MAP[icon] || "📁"}
+      {EMOJI_MAP[icon] || (isInlineEmojiIcon(icon) ? icon : "📁")}
     </span>
   )
 }

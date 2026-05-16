@@ -23,6 +23,7 @@ import {
 import { cn } from "@/lib/utils"
 import { isUploadedIcon } from "./project-icon"
 import { ProjectCustomFieldsManager } from "./project-custom-fields-manager"
+import { ProjectFormsManager } from "./project-forms-manager"
 
 interface ProjectHeaderProps {
   project: {
@@ -698,6 +699,7 @@ export function ProjectHeader({ project, onProjectChange }: ProjectHeaderProps) 
       </div>
 
       <ProjectCustomFieldsManager projectId={project.id} />
+      <ProjectFormsManager projectId={project.id} />
     </div>
   )
 }

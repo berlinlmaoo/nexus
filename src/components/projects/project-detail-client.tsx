@@ -75,11 +75,50 @@ const TaskDetailPanel = dynamic(
   }
 )
 
+const OPTION_CUSTOM_FIELD_FILTER_TYPES = new Set(["SELECT", "STATUS", "MULTI_SELECT"])
+const DATE_CUSTOM_FIELD_FILTER_TYPES = new Set(["DATE", "CREATED"])
+const FILTERABLE_CUSTOM_FIELD_TYPES = new Set([
+  "SELECT",
+  "STATUS",
+  "MULTI_SELECT",
+  "DATE",
+  "CREATED",
+])
+
+function getCustomFieldDateKey(value: string | null | undefined) {
+  if (!value) return ""
+
+  const parsedDate = new Date(value)
+  if (Number.isNaN(parsedDate.getTime())) return ""
+
+  return [
+    parsedDate.getFullYear(),
+    String(parsedDate.getMonth() + 1).padStart(2, "0"),
+    String(parsedDate.getDate()).padStart(2, "0"),
+  ].join("-")
+}
+
 interface ProjectMember {
   id: string
   name: string
   avatar: string | null
   role: string
+}
+
+interface SelectCustomFieldFilter {
+  id: string
+  name: string
+  type: string
+  options: string[]
+}
+
+interface CustomFieldApiItem {
+  id: string
+  name: string
+  type?: string
+  options?: {
+    options?: unknown[]
+  } | null
 }
 
 interface TaskListData {
@@ -235,6 +274,9 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
   const [priorityFilter, setPriorityFilter] = useState<string>("ALL")
   const [assigneeFilter, setAssigneeFilter] = useState<string>("ALL")
   const [sprintFilter, setSprintFilter] = useState<string>("ALL")
+  const [customFieldFilters, setCustomFieldFilters] = useState<Record<string, string>>({})
+  const [calendarDateFieldVisibility, setCalendarDateFieldVisibility] = useState<Record<string, boolean>>({})
+  const [selectCustomFields, setSelectCustomFields] = useState<SelectCustomFieldFilter[]>([])
   const [showFilters, setShowFilters] = useState(false)
 
   // Sprints for filter
@@ -320,6 +362,76 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       .catch(() => {})
   }, [project.id])
 
+  const loadSelectCustomFields = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/custom-fields?projectId=${project.id}`, {
+        cache: "no-store",
+      })
+      if (!res.ok) return
+
+      const data = await res.json()
+      const fields: CustomFieldApiItem[] = Array.isArray(data.fields) ? data.fields : []
+      const selectFields = fields
+        .filter((field) => field.type && FILTERABLE_CUSTOM_FIELD_TYPES.has(field.type))
+        .map((field) => ({
+          id: field.id,
+          name: field.name,
+          type: field.type ?? "",
+          options: Array.isArray(field.options?.options)
+            ? field.options.options.map((option) => String(option).trim()).filter(Boolean)
+            : [],
+        }))
+        .filter((field: SelectCustomFieldFilter) =>
+          DATE_CUSTOM_FIELD_FILTER_TYPES.has(field.type) || field.options.length > 0
+        )
+
+      setSelectCustomFields(selectFields)
+      setCustomFieldFilters((prev) => {
+        const activeFieldIds = new Set(selectFields.map((field) => field.id))
+        return Object.fromEntries(
+          Object.entries(prev).filter(([fieldId, value]) => activeFieldIds.has(fieldId) && value && value !== "ALL")
+        )
+      })
+      setCalendarDateFieldVisibility((prev) => {
+        return Object.fromEntries(
+          selectFields
+            .filter((field) => DATE_CUSTOM_FIELD_FILTER_TYPES.has(field.type))
+            .map((field) => [field.id, prev[field.id] ?? true])
+        )
+      })
+    } catch (error) {
+      console.error("Failed to load select custom fields:", error)
+    }
+  }, [project.id])
+
+  useEffect(() => {
+    loadSelectCustomFields()
+  }, [loadSelectCustomFields])
+
+  useEffect(() => {
+    if (!showProjectSettings) {
+      loadSelectCustomFields()
+    }
+  }, [loadSelectCustomFields, showProjectSettings])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const handleCustomFieldsChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ projectId?: string }>).detail
+      if (detail?.projectId !== project.id) return
+
+      startTransition(() => {
+        loadSelectCustomFields()
+      })
+    }
+
+    window.addEventListener("nexus:custom-fields-changed", handleCustomFieldsChanged as EventListener)
+    return () => {
+      window.removeEventListener("nexus:custom-fields-changed", handleCustomFieldsChanged as EventListener)
+    }
+  }, [loadSelectCustomFields, project.id])
+
   // Search
   const [searchQuery, setSearchQuery] = useState("")
   const deferredSearchQuery = useDeferredValue(searchQuery)
@@ -399,6 +511,26 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       const sprintTasks = sprintTaskMap[sprintFilter]
       if (sprintTasks && !sprintTasks.has(task.id)) return false
     }
+    const activeCustomFilters = Object.entries(customFieldFilters).filter(([, value]) => value && value !== "ALL")
+    if (activeCustomFilters.length > 0) {
+      const chips = task.customFieldChips ?? []
+      const fieldsById = new Map(selectCustomFields.map((field) => [field.id, field]))
+      const matchesAllCustomFields = activeCustomFilters.every(([fieldId, value]) => {
+        const field = fieldsById.get(fieldId)
+
+        if (field && DATE_CUSTOM_FIELD_FILTER_TYPES.has(field.type)) {
+          return chips.some(
+            (chip) =>
+              chip.fieldId === fieldId &&
+              DATE_CUSTOM_FIELD_FILTER_TYPES.has(chip.fieldType) &&
+              getCustomFieldDateKey(chip.value || chip.label) === value
+          )
+        }
+
+        return chips.some((chip) => chip.fieldId === fieldId && chip.label === value)
+      })
+      if (!matchesAllCustomFields) return false
+    }
     if (deferredSearchQuery.trim()) {
       const q = deferredSearchQuery.toLowerCase()
       if (
@@ -410,7 +542,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       }
     }
     return true
-  }, [assigneeFilter, deferredSearchQuery, isVisibleLinkedTask, priorityFilter, sprintFilter, sprintTaskMap, statusFilter])
+  }, [assigneeFilter, customFieldFilters, deferredSearchQuery, isVisibleLinkedTask, priorityFilter, selectCustomFields, sprintFilter, sprintTaskMap, statusFilter])
 
   // Filter + search
   const filteredTasks = useMemo(() => {
@@ -495,7 +627,19 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
     priorityFilter !== "ALL",
     assigneeFilter !== "ALL",
     sprintFilter !== "ALL",
-  ].filter(Boolean).length
+  ].filter(Boolean).length +
+    Object.values(customFieldFilters).filter((value) => value && value !== "ALL").length
+
+  const visibleCalendarDateSources = useMemo(
+    () =>
+      selectCustomFields
+        .filter((field) => DATE_CUSTOM_FIELD_FILTER_TYPES.has(field.type) && calendarDateFieldVisibility[field.id] !== false)
+        .map((field) => ({
+          fieldId: field.id,
+          fieldName: field.name,
+        })),
+    [calendarDateFieldVisibility, selectCustomFields]
+  )
 
   const handleTaskClick = useCallback((task: TaskCardData) => {
     setSelectedTask(task)
@@ -981,8 +1125,24 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
           <StatusUpdatesButton projectId={project.id} />
           <SavedFilters
             projectId={project.id}
-            currentFilters={{ status: statusFilter, priority: priorityFilter, assignee: assigneeFilter, sort: sortMode, group: groupMode, search: searchQuery }}
-            onApply={(filters) => { setStatusFilter(filters.status); setPriorityFilter(filters.priority); setAssigneeFilter(filters.assignee); setSortMode(filters.sort as SortMode); setGroupMode(filters.group as GroupMode); setSearchQuery(filters.search) }}
+            currentFilters={{
+              status: statusFilter,
+              priority: priorityFilter,
+              assignee: assigneeFilter,
+              sort: sortMode,
+              group: groupMode,
+              search: searchQuery,
+              customFields: customFieldFilters,
+            }}
+            onApply={(filters) => {
+              setStatusFilter(filters.status)
+              setPriorityFilter(filters.priority)
+              setAssigneeFilter(filters.assignee)
+              setSortMode(filters.sort as SortMode)
+              setGroupMode(filters.group as GroupMode)
+              setSearchQuery(filters.search)
+              setCustomFieldFilters(filters.customFields ?? {})
+            }}
           />
         </div>
       </div>
@@ -1019,8 +1179,72 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
               </select>
             </div>
           )}
+          {selectCustomFields.map((field) => (
+            <div
+              key={field.id}
+              className="flex min-w-[170px] flex-1 items-center gap-2 sm:min-w-0 sm:flex-none"
+            >
+              <span className="max-w-[110px] truncate text-[11px] font-medium text-muted-foreground">
+                {field.name}:
+              </span>
+              {DATE_CUSTOM_FIELD_FILTER_TYPES.has(field.type) ? (
+                <button
+                  type="button"
+                  className={cn(
+                    "inline-flex h-9 flex-1 items-center justify-center rounded border px-3 text-xs font-semibold transition-colors sm:h-6 sm:flex-none",
+                    calendarDateFieldVisibility[field.id] !== false
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-border bg-background text-muted-foreground hover:text-foreground"
+                  )}
+                  onClick={() => {
+                    setCalendarDateFieldVisibility((prev) => ({
+                      ...prev,
+                      [field.id]: !prev[field.id],
+                    }))
+                  }}
+                  title={`Toggle ${field.name} on the calendar`}
+                >
+                  {calendarDateFieldVisibility[field.id] !== false ? "Shown" : "Hidden"}
+                </button>
+              ) : (
+                <select
+                  className="h-9 flex-1 rounded border bg-background px-2 text-xs sm:h-6 sm:flex-none"
+                  value={customFieldFilters[field.id] ?? "ALL"}
+                  onChange={(event) => {
+                    const nextValue = event.target.value
+                    setCustomFieldFilters((prev) => {
+                      const next = { ...prev }
+                      if (nextValue === "ALL") {
+                        delete next[field.id]
+                      } else {
+                        next[field.id] = nextValue
+                      }
+                      return next
+                    })
+                  }}
+                  title={`Filter by ${field.name}`}
+                >
+                  <option value="ALL">All {field.name}</option>
+                  {field.options.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          ))}
           {activeFilterCount > 0 && (
-            <button className="text-xs text-muted-foreground transition-colors hover:text-foreground sm:ml-auto" onClick={() => { setStatusFilter("ALL"); setPriorityFilter("ALL"); setAssigneeFilter("ALL"); setSprintFilter("ALL") }}>
+            <button
+              className="text-xs text-muted-foreground transition-colors hover:text-foreground sm:ml-auto"
+              onClick={() => {
+                setStatusFilter("ALL")
+                setPriorityFilter("ALL")
+                setAssigneeFilter("ALL")
+                setSprintFilter("ALL")
+                setCustomFieldFilters({})
+              }}
+            >
               Clear all
             </button>
           )}
@@ -1107,6 +1331,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
                 onTaskDateChange={handleTaskDateChange}
                 projectId={project.id}
                 defaultTaskListId={defaultTaskListId}
+                customDateSources={visibleCalendarDateSources}
               />
             </ErrorBoundary>
           </Suspense>
@@ -1164,6 +1389,11 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
         projectId={project.id}
         taskLists={project.taskLists.map((tl) => ({ id: tl.id, name: tl.name }))}
         defaultTaskListId={createTaskListId}
+        open={createDialogOpen}
+        onOpenChange={(open) => {
+          setCreateDialogOpen(open)
+          if (!open) setCreateTaskListId(undefined)
+        }}
         onCreated={() => { setCreateTaskListId(undefined); setCreateDialogOpen(false) }}
       >
         <button className="fixed bottom-20 md:bottom-6 right-24 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-foreground text-background shadow-lg hover:bg-foreground/90 transition-all duration-200 hover:scale-105 hover:shadow-xl active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">

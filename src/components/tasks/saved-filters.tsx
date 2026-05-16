@@ -25,6 +25,7 @@ interface SavedFilter {
     sort: string
     group: string
     search: string
+    customFields?: Record<string, string>
   }
 }
 
@@ -37,6 +38,7 @@ interface SavedFiltersProps {
     sort: string
     group: string
     search: string
+    customFields?: Record<string, string>
   }
   onApply: (filters: SavedFilter["filters"]) => void
 }
@@ -155,7 +157,13 @@ export function SavedFilters({
   function handleShare(filter: SavedFilter) {
     const params = new URLSearchParams()
     Object.entries(filter.filters).forEach(([key, value]) => {
-      if (value) params.set(key, value)
+      if (!value) return
+      if (key === "customFields" && typeof value === "object") {
+        const serialized = JSON.stringify(value)
+        if (serialized !== "{}") params.set(key, serialized)
+        return
+      }
+      if (typeof value === "string") params.set(key, value)
     })
     const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`
     navigator.clipboard.writeText(url).then(() => {
@@ -172,6 +180,8 @@ export function SavedFilters({
     if (f.search) parts.push(`"${f.search}"`)
     if (f.sort) parts.push(`sort: ${f.sort}`)
     if (f.group) parts.push(`group: ${f.group}`)
+    const customFilterCount = Object.values(f.customFields ?? {}).filter(Boolean).length
+    if (customFilterCount > 0) parts.push(`${customFilterCount} custom`)
     return parts.length > 0 ? parts.join(" / ") : "No filters"
   }
 

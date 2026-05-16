@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { notifyProjectInvite } from "@/lib/notification-service"
 import { logAudit } from "@/lib/audit"
+import { syncProjectLinkedTeamAccess } from "@/lib/team-sync"
 
 export async function GET(
   _request: NextRequest,
@@ -11,6 +12,8 @@ export async function GET(
   try {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    await syncProjectLinkedTeamAccess(params.projectId)
 
     const members = await prisma.projectMember.findMany({
       where: { projectId: params.projectId },

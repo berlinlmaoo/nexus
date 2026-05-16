@@ -157,8 +157,102 @@ type GeoState = {
   lat: number
   lng: number
   accuracy: number | null
+  capturedAt: number
 }
 const ATTENDANCE_TIMEZONE = "Asia/Jakarta"
+const GPS_FRESHNESS_MS = 3 * 60 * 1000
+
+const GEOLOCATION_ERROR_MESSAGES: Record<number, string> = {
+  1: "Browser denied location access for this tab. If Nexus is already allowed, fully reload this page or reopen Safari, then tap Capture GPS again.",
+  2: "GPS signal is unavailable right now. Move near a window or open area, then try Capture GPS again.",
+  3: "GPS capture timed out. Keep Safari open on this page and try again.",
+}
+
+function isGeolocationPositionError(error: unknown): error is GeolocationPositionError {
+  return typeof error === "object" && error !== null && "code" in error
+}
+
+function getGeolocationErrorMessage(error: unknown) {
+  if (isGeolocationPositionError(error)) {
+    return GEOLOCATION_ERROR_MESSAGES[error.code] || error.message || "Unable to resolve location"
+  }
+
+  return error instanceof Error ? error.message : "Unable to resolve location"
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
+async function getGeolocationPermissionState(): Promise<PermissionState | "unsupported" | "unknown"> {
+  if (typeof navigator === "undefined" || !navigator.permissions?.query) {
+    return "unsupported"
+  }
+
+  try {
+    const status = await navigator.permissions.query({
+      name: "geolocation" as PermissionName,
+    })
+    return status.state
+  } catch {
+    return "unknown"
+  }
+}
+
+function getCurrentPosition(options: PositionOptions) {
+  return new Promise<GeolocationPosition>((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, options)
+  })
+}
+
+function watchPositionOnce(options: PositionOptions, targetAccuracyMeters = 150) {
+  return new Promise<GeolocationPosition>((resolve, reject) => {
+    let bestPosition: GeolocationPosition | null = null
+    let watchId: number | null = null
+    let settled = false
+
+    const settle = (callback: () => void) => {
+      if (settled) return
+      settled = true
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId)
+      }
+      callback()
+    }
+
+    const timeout = window.setTimeout(() => {
+      settle(() => {
+        if (bestPosition) {
+          resolve(bestPosition)
+          return
+        }
+
+        reject(new Error("GPS capture timed out. Keep Safari open on this page and try again."))
+      })
+    }, options.timeout ?? 25000)
+
+    watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const accuracy = position.coords.accuracy ?? Number.POSITIVE_INFINITY
+        const bestAccuracy = bestPosition?.coords.accuracy ?? Number.POSITIVE_INFINITY
+
+        if (!bestPosition || accuracy < bestAccuracy) {
+          bestPosition = position
+        }
+
+        if (accuracy <= targetAccuracyMeters) {
+          window.clearTimeout(timeout)
+          settle(() => resolve(position))
+        }
+      },
+      (error) => {
+        window.clearTimeout(timeout)
+        settle(() => reject(error))
+      },
+      options
+    )
+  })
+}
 
 const currentMonthKey = new Date().toLocaleDateString("en-CA", {
   timeZone: ATTENDANCE_TIMEZONE,
@@ -226,6 +320,13 @@ function attendanceMetricVariant(status: AttendanceRecord["checkInStatus"] | Att
   return "outline" as const
 }
 
+function shouldUseNativeCameraPicker() {
+  if (typeof navigator === "undefined") return false
+  const userAgent = navigator.userAgent || ""
+  const isTouchDevice = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches
+  return isTouchDevice || /iPad|iPhone|iPod|Android/i.test(userAgent)
+}
+
 async function parseResponseError(response: Response) {
   try {
     const payload = await response.json()
@@ -239,6 +340,7 @@ async function parseResponseError(response: Response) {
 
 export function AttendancePageClient({ user, workspace }: AttendancePageClientProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
   const requestDocumentInputRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -265,6 +367,7 @@ export function AttendancePageClient({ user, workspace }: AttendancePageClientPr
   })
   const [requestDocument, setRequestDocument] = useState<File | null>(null)
   const [geoState, setGeoState] = useState<GeoState | null>(null)
+  const [locationCapturing, setLocationCapturing] = useState(false)
   const [locationMessage, setLocationMessage] = useState("Current location not captured yet.")
   const [historyFilters, setHistoryFilters] = useState({
     month: currentMonthKey,
@@ -373,40 +476,129 @@ export function AttendancePageClient({ user, workspace }: AttendancePageClientPr
     }
   }, [stopCamera])
 
+  useEffect(() => {
+    if (!cameraOpen || !streamRef.current || !videoRef.current) return
+
+    try {
+      videoRef.current.srcObject = streamRef.current
+      const playPromise = videoRef.current.play()
+      if (playPromise) {
+        void playPromise.catch(() => {
+          setCameraError("Camera preview could not start. Please use the camera upload fallback.")
+        })
+      }
+    } catch {
+      setCameraError("Camera preview could not start. Please use the camera upload fallback.")
+    }
+  }, [cameraOpen])
+
   const captureLocation = useCallback(async () => {
     if (typeof window === "undefined" || !("geolocation" in navigator)) {
       throw new Error("Location services are not available on this device")
     }
 
+    setLocationCapturing(true)
     setLocationMessage("Resolving your live GPS location...")
 
-    const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0,
-      })
-    })
+    try {
+      let position: GeolocationPosition
+      const permissionState = await getGeolocationPermissionState()
+      if (permissionState === "denied") {
+        setLocationMessage("Safari reports location as denied for this tab. Trying a fresh GPS request anyway...")
+      }
 
-    const nextGeoState = {
-      lat: position.coords.latitude,
-      lng: position.coords.longitude,
-      accuracy: position.coords.accuracy ?? null,
+      try {
+        position = await getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: 20000,
+          maximumAge: 0,
+        })
+      } catch (firstError) {
+        if (isGeolocationPositionError(firstError) && firstError.code === firstError.PERMISSION_DENIED) {
+          setLocationMessage("Safari denied the high-accuracy request. Trying a lower-accuracy permission refresh...")
+
+          try {
+            await wait(700)
+            position = await getCurrentPosition({
+              enableHighAccuracy: false,
+              timeout: 12000,
+              maximumAge: 120000,
+            })
+          } catch (permissionRetryError) {
+            throw permissionRetryError
+          }
+        } else {
+          setLocationMessage("GPS is taking longer than usual. Trying Safari-compatible live tracking...")
+
+          try {
+            position = await watchPositionOnce({
+              enableHighAccuracy: true,
+              timeout: 30000,
+              maximumAge: 0,
+            })
+          } catch (secondError) {
+            if (isGeolocationPositionError(secondError) && secondError.code === secondError.PERMISSION_DENIED) {
+              setLocationMessage("Safari denied live GPS tracking. Trying lower-accuracy GPS fallback...")
+
+              await wait(700)
+              position = await getCurrentPosition({
+                enableHighAccuracy: false,
+                timeout: 12000,
+                maximumAge: 120000,
+              })
+            } else {
+              setLocationMessage("Trying a lower-accuracy GPS fallback...")
+              position = await getCurrentPosition({
+                enableHighAccuracy: false,
+                timeout: 15000,
+                maximumAge: 60000,
+              })
+            }
+          }
+        }
+      }
+
+      const lat = position.coords.latitude
+      const lng = position.coords.longitude
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        throw new Error("Browser returned an invalid GPS coordinate. Please try Capture GPS again.")
+      }
+
+      const nextGeoState = {
+        lat,
+        lng,
+        accuracy: position.coords.accuracy ?? null,
+        capturedAt: Date.now(),
+      }
+
+      setGeoState(nextGeoState)
+      setLocationMessage(
+        `GPS ready at ${nextGeoState.lat.toFixed(5)}, ${nextGeoState.lng.toFixed(5)}${
+          nextGeoState.accuracy ? ` (accuracy ~${Math.round(nextGeoState.accuracy)}m)` : ""
+        }`
+      )
+
+      return nextGeoState
+    } catch (error) {
+      const message = getGeolocationErrorMessage(error)
+      setLocationMessage(message)
+      throw new Error(message)
+    } finally {
+      setLocationCapturing(false)
     }
-
-    setGeoState(nextGeoState)
-    setLocationMessage(
-      `GPS ready at ${nextGeoState.lat.toFixed(5)}, ${nextGeoState.lng.toFixed(5)}${
-        nextGeoState.accuracy ? ` (accuracy ~${Math.round(nextGeoState.accuracy)}m)` : ""
-      }`
-    )
-
-    return nextGeoState
   }, [])
 
   const handlePickSelfie = useCallback(async () => {
+    if (shouldUseNativeCameraPicker()) {
+      setCameraError(null)
+      stopCamera()
+      cameraInputRef.current?.click()
+      return
+    }
+
     if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      fileInputRef.current?.click()
+      cameraInputRef.current?.click()
       return
     }
 
@@ -425,61 +617,77 @@ export function AttendancePageClient({ user, workspace }: AttendancePageClientPr
 
       streamRef.current = mediaStream
       setCameraOpen(true)
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream
-        await videoRef.current.play().catch(() => undefined)
-      }
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
           : "Camera access could not be started. You can still upload a selfie manually."
       setCameraError(message)
-      fileInputRef.current?.click()
+      cameraInputRef.current?.click()
     } finally {
       setCameraStarting(false)
     }
-  }, [])
+  }, [stopCamera])
 
   const captureSelfieFromCamera = useCallback(async () => {
-    const video = videoRef.current
-    if (!video) {
-      toastError("Camera preview is not ready yet")
-      return
+    try {
+      const video = videoRef.current
+      if (!video || video.readyState < 2) {
+        toastError("Camera preview is not ready yet")
+        return
+      }
+
+      const width = video.videoWidth || 1280
+      const height = video.videoHeight || 720
+      const canvas = document.createElement("canvas")
+      canvas.width = width
+      canvas.height = height
+
+      const context = canvas.getContext("2d")
+      if (!context) {
+        toastError("Failed to prepare camera capture")
+        return
+      }
+
+      context.drawImage(video, 0, 0, width, height)
+
+      const blob = await new Promise<Blob | null>((resolve) => {
+        if (canvas.toBlob) {
+          canvas.toBlob(resolve, "image/jpeg", 0.92)
+          return
+        }
+
+        fetch(canvas.toDataURL("image/jpeg", 0.92))
+          .then((response) => response.blob())
+          .then(resolve)
+          .catch(() => resolve(null))
+      })
+
+      if (!blob) {
+        toastError("Failed to capture selfie from camera")
+        return
+      }
+
+      const file = new File([blob], `attendance-selfie-${Date.now()}.jpg`, {
+        type: "image/jpeg",
+        lastModified: Date.now(),
+      })
+
+      setSelectedFile(file)
+      stopCamera()
+      toastSuccess("Selfie captured from camera")
+    } catch {
+      toastError("Camera capture failed. Please use Upload file instead.")
+      stopCamera()
     }
+  }, [stopCamera])
 
-    const width = video.videoWidth || 1280
-    const height = video.videoHeight || 720
-    const canvas = document.createElement("canvas")
-    canvas.width = width
-    canvas.height = height
-
-    const context = canvas.getContext("2d")
-    if (!context) {
-      toastError("Failed to prepare camera capture")
-      return
-    }
-
-    context.drawImage(video, 0, 0, width, height)
-
-    const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, "image/jpeg", 0.92)
-    })
-
-    if (!blob) {
-      toastError("Failed to capture selfie from camera")
-      return
-    }
-
-    const file = new File([blob], `attendance-selfie-${Date.now()}.jpg`, {
-      type: "image/jpeg",
-      lastModified: Date.now(),
-    })
-
+  const handleSelfieFileChange = useCallback((file: File | null) => {
     setSelectedFile(file)
-    stopCamera()
-    toastSuccess("Selfie captured from laptop camera")
+    if (file) {
+      setCameraError(null)
+      stopCamera()
+    }
   }, [stopCamera])
 
   const clearCapture = useCallback(() => {
@@ -512,7 +720,8 @@ export function AttendancePageClient({ user, workspace }: AttendancePageClientPr
 
       setSubmittingAction(action)
       try {
-        const currentLocation = geoState ?? (await captureLocation())
+        const hasFreshLocation = geoState && Date.now() - geoState.capturedAt <= GPS_FRESHNESS_MS
+        const currentLocation = hasFreshLocation ? geoState : await captureLocation()
 
         const formData = new FormData()
         formData.append("selfie", selectedFile)
@@ -905,35 +1114,33 @@ export function AttendancePageClient({ user, workspace }: AttendancePageClientPr
                     variant="outline"
                     className="h-11 rounded-2xl px-5 text-xs font-black uppercase tracking-[0.18em]"
                     onClick={() => void captureLocation().catch((error: unknown) => {
-                      const message =
-                        typeof error === "object" &&
-                        error !== null &&
-                        "code" in error
-                          ? "Location access was denied or timed out"
-                          : error instanceof Error
-                            ? error.message
-                            : "Unable to resolve location"
+                      const message = getGeolocationErrorMessage(error)
                       setLocationMessage(message)
                       toastError(message)
                     })}
-                    disabled={!workspace || actionLocked}
+                    disabled={!workspace || actionLocked || locationCapturing}
                   >
-                    <LocateFixed className="mr-2 h-4 w-4" />
-                    Capture GPS
+                    {locationCapturing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LocateFixed className="mr-2 h-4 w-4" />}
+                    {locationCapturing ? "Capturing GPS" : "Capture GPS"}
                   </Button>
                 </div>
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="user"
+                  className="hidden"
+                  onChange={(event) => {
+                    handleSelfieFileChange(event.target.files?.[0] ?? null)
+                  }}
+                />
                 <input
                   ref={fileInputRef}
                   type="file"
                   accept="image/*"
                   className="hidden"
                   onChange={(event) => {
-                    const file = event.target.files?.[0] ?? null
-                    setSelectedFile(file)
-                    if (file) {
-                      setCameraError(null)
-                      stopCamera()
-                    }
+                    handleSelfieFileChange(event.target.files?.[0] ?? null)
                   }}
                 />
               </div>

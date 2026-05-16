@@ -4,8 +4,19 @@ vi.mock('@/lib/gideon-service-auth', () => ({
   authenticateGideonService: vi.fn(),
 }))
 
-vi.mock('@/lib/prisma', () => ({
-  default: {
+vi.mock('@/lib/notification-service', () => ({
+  notifyTaskAssigned: vi.fn(),
+  notifyTaskCompleted: vi.fn(),
+  notifyCommentAdded: vi.fn(),
+}))
+
+const { mockTransaction } = vi.hoisted(() => ({
+  mockTransaction: vi.fn(),
+}))
+
+vi.mock('@/lib/prisma', () => {
+  const prismaMock = {
+    $transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback(prismaMock)),
     project: {
       findMany: vi.fn(),
       findUnique: vi.fn(),
@@ -16,13 +27,39 @@ vi.mock('@/lib/prisma', () => ({
     projectMember: {
       findMany: vi.fn(),
     },
+    taskList: {
+      findFirst: vi.fn(),
+    },
     task: {
       findMany: vi.fn(),
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
       count: vi.fn(),
       groupBy: vi.fn(),
     },
-  },
-}))
+    taskAssignee: {
+      deleteMany: vi.fn(),
+      createMany: vi.fn(),
+    },
+    comment: {
+      create: vi.fn(),
+    },
+    customField: {
+      findMany: vi.fn(),
+    },
+    customFieldValue: {
+      createMany: vi.fn(),
+      upsert: vi.fn(),
+    },
+    activityLog: {
+      create: vi.fn(),
+    },
+  }
+  mockTransaction.mockImplementation(prismaMock.$transaction)
+  return { default: prismaMock }
+})
 
 import prisma from '@/lib/prisma'
 import { authenticateGideonService } from '@/lib/gideon-service-auth'
@@ -34,8 +71,20 @@ const mockProjectFindUnique = vi.mocked(prisma.project.findUnique)
 const mockWorkspaceMemberFindMany = vi.mocked(prisma.workspaceMember.findMany)
 const mockProjectMemberFindMany = vi.mocked(prisma.projectMember.findMany)
 const mockTaskFindMany = vi.mocked(prisma.task.findMany)
+const mockTaskFindFirst = vi.mocked(prisma.task.findFirst)
+const mockTaskFindUnique = vi.mocked(prisma.task.findUnique)
+const mockTaskCreate = vi.mocked(prisma.task.create)
+const mockTaskUpdate = vi.mocked(prisma.task.update)
 const mockTaskCount = vi.mocked(prisma.task.count)
 const mockTaskGroupBy = vi.mocked(prisma.task.groupBy)
+const mockTaskListFindFirst = vi.mocked(prisma.taskList.findFirst)
+const mockTaskAssigneeDeleteMany = vi.mocked(prisma.taskAssignee.deleteMany)
+const mockTaskAssigneeCreateMany = vi.mocked(prisma.taskAssignee.createMany)
+const mockCommentCreate = vi.mocked(prisma.comment.create)
+const mockCustomFieldFindMany = vi.mocked(prisma.customField.findMany)
+const mockCustomFieldValueCreateMany = vi.mocked(prisma.customFieldValue.createMany)
+const mockCustomFieldValueUpsert = vi.mocked(prisma.customFieldValue.upsert)
+const mockActivityLogCreate = vi.mocked(prisma.activityLog.create)
 
 function toolRequest(body: unknown) {
   return new Request('http://localhost/api/gideon/tools', {
@@ -165,6 +214,93 @@ describe('POST /api/gideon/tools', () => {
         byPriority: { HIGH: 3, LOW: 7 },
       }),
     })
+  })
+
+  it('creates tasks with task list resolution and read-back verification', async () => {
+    const taskList = { id: 'list-1', name: 'Backlog', projectId: 'project-1', project: { id: 'project-1', name: 'Ops', status: 'ACTIVE' } }
+    const createdTask = {
+      id: 'task-1',
+      title: 'New GIDEON task',
+      description: null,
+      status: 'TODO',
+      priority: 'HIGH',
+      dueDate: null,
+      tags: [],
+      taskList,
+      assignees: [],
+      creator: { id: 'actor-1', name: 'GIDEON', email: 'gideon@patsgroup.id' },
+    }
+    mockProjectFindUnique.mockResolvedValue({ id: 'project-1', name: 'Ops', status: 'ACTIVE' } as never)
+    mockTaskListFindFirst.mockResolvedValue(taskList as never)
+    mockTaskCreate.mockResolvedValue(createdTask as never)
+    mockTaskFindUnique.mockResolvedValue(createdTask as never)
+    mockCustomFieldFindMany.mockResolvedValue([] as never)
+    mockCustomFieldValueCreateMany.mockResolvedValue({ count: 0 } as never)
+    mockActivityLogCreate.mockResolvedValue({ id: 'log-1' } as never)
+
+    const response = await POST(toolRequest({ action: 'create_task', input: { projectId: 'project-1', title: 'New GIDEON task', priority: 'HIGH' } }))
+    const body = await json(response)
+
+    expect(response.status).toBe(200)
+    expect(mockTaskCreate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ title: 'New GIDEON task', priority: 'HIGH', taskListId: 'list-1' }) }))
+    expect(mockTaskFindUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'task-1' } }))
+    expect(body).toEqual({ ok: true, data: expect.objectContaining({ id: 'task-1', title: 'New GIDEON task' }) })
+  })
+
+  it('updates tasks in a transaction and verifies the updated task', async () => {
+    const existingTask = {
+      id: 'task-1',
+      title: 'Do thing',
+      description: null,
+      status: 'TODO',
+      priority: 'MEDIUM',
+      dueDate: null,
+      tags: [],
+      taskList: { id: 'list-1', name: 'Backlog', projectId: 'project-1', project: { id: 'project-1', name: 'Ops', status: 'ACTIVE' } },
+      assignees: [{ user: { id: 'user-1', name: 'Berlin', email: 'berlin@example.com', avatar: null } }],
+      creator: { id: 'actor-1', name: 'GIDEON', email: 'gideon@patsgroup.id' },
+    }
+    const updatedTask = { ...existingTask, status: 'DONE', priority: 'HIGH' }
+    mockTaskFindFirst.mockResolvedValue(existingTask as never)
+    mockTaskUpdate.mockResolvedValue(updatedTask as never)
+    mockTaskFindUnique.mockResolvedValue(updatedTask as never)
+    mockTaskAssigneeDeleteMany.mockResolvedValue({ count: 1 } as never)
+    mockTaskAssigneeCreateMany.mockResolvedValue({ count: 1 } as never)
+    mockActivityLogCreate.mockResolvedValue({ id: 'log-1' } as never)
+
+    const response = await POST(toolRequest({ action: 'update_task', input: { taskId: 'task-1', status: 'DONE', priority: 'HIGH', assigneeIds: ['user-1'] } }))
+    const body = await json(response)
+
+    expect(response.status).toBe(200)
+    expect(mockTaskUpdate).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'task-1' }, data: expect.objectContaining({ status: 'DONE', priority: 'HIGH' }) }))
+    expect(mockTaskAssigneeDeleteMany).toHaveBeenCalledWith({ where: { taskId: 'task-1' } })
+    expect(body).toEqual({ ok: true, data: expect.objectContaining({ id: 'task-1', status: 'DONE', priority: 'HIGH' }) })
+  })
+
+  it('adds task comments and returns the created comment', async () => {
+    const task = {
+      id: 'task-1',
+      title: 'Do thing',
+      description: null,
+      status: 'TODO',
+      priority: 'MEDIUM',
+      dueDate: null,
+      tags: [],
+      taskList: { id: 'list-1', name: 'Backlog', projectId: 'project-1', project: { id: 'project-1', name: 'Ops', status: 'ACTIVE' } },
+      assignees: [],
+      creator: { id: 'actor-1', name: 'GIDEON', email: 'gideon@patsgroup.id' },
+    }
+    const comment = { id: 'comment-1', content: 'Progress noted', createdAt: new Date('2026-04-28T00:00:00.000Z'), user: { id: 'actor-1', name: 'GIDEON', email: 'gideon@patsgroup.id' } }
+    mockTaskFindFirst.mockResolvedValue(task as never)
+    mockCommentCreate.mockResolvedValue(comment as never)
+    mockActivityLogCreate.mockResolvedValue({ id: 'log-1' } as never)
+
+    const response = await POST(toolRequest({ action: 'add_task_comment', input: { taskId: 'task-1', content: 'Progress noted' } }))
+    const body = await json(response)
+
+    expect(response.status).toBe(200)
+    expect(mockCommentCreate).toHaveBeenCalledWith(expect.objectContaining({ data: { taskId: 'task-1', userId: 'actor-1', content: 'Progress noted' } }))
+    expect(body).toEqual({ ok: true, data: { task: expect.objectContaining({ id: 'task-1' }), comment: { ...comment, createdAt: '2026-04-28T00:00:00.000Z' } } })
   })
 
   it('rejects unknown actions', async () => {

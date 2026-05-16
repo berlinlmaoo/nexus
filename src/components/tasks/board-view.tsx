@@ -12,7 +12,7 @@ import { DateTimePicker } from "@/components/ui/date-time-picker"
 import { Button } from "@/components/ui/button"
 import type { TaskCardData } from "./task-card"
 import { cn } from "@/lib/utils"
-import { Plus, Loader2, Calendar, MoreHorizontal, Pencil, Trash2, GripVertical, Copy, CheckCircle2, Circle } from "lucide-react"
+import { Plus, Loader2, Calendar, MoreHorizontal, Pencil, Trash2, GripVertical, Copy, CheckCircle2, Circle, Palette, X } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,6 +32,7 @@ import { useRouter } from "next/navigation"
 import { isPast, isToday } from "date-fns"
 import { toast } from "sonner"
 import { formatTaskDueDate } from "@/lib/task-date-format"
+import { TaskCustomFieldChip } from "./task-custom-field-chip"
 
 const PRIORITY_COLORS: Record<string, string> = {
   URGENT: "bg-red-500",
@@ -39,6 +40,73 @@ const PRIORITY_COLORS: Record<string, string> = {
   MEDIUM: "bg-yellow-500",
   LOW: "bg-blue-400",
   NONE: "",
+}
+
+type BoardColorSource = "status" | "priority" | "assignee" | "task_list" | "custom_field"
+
+type BoardColorRule = {
+  id: string
+  source: BoardColorSource
+  customFieldId?: string
+  value: string
+  color: string
+}
+
+type BoardColorPreset = {
+  name: string
+  value: string
+  border: string
+  text: string
+}
+
+const BOARD_COLOR_PRESETS: BoardColorPreset[] = [
+  { name: "Sky", value: "#dbeafe", border: "#60a5fa", text: "#1e3a8a" },
+  { name: "Emerald", value: "#dcfce7", border: "#34d399", text: "#14532d" },
+  { name: "Amber", value: "#fef3c7", border: "#f59e0b", text: "#78350f" },
+  { name: "Rose", value: "#ffe4e6", border: "#fb7185", text: "#881337" },
+  { name: "Violet", value: "#ede9fe", border: "#8b5cf6", text: "#4c1d95" },
+  { name: "Slate", value: "#e2e8f0", border: "#94a3b8", text: "#0f172a" },
+]
+
+function generateRuleId() {
+  return Math.random().toString(36).slice(2, 10)
+}
+
+function getBoardColorStorageKey(projectId?: string) {
+  return `nexus:calendar-color-rules:${projectId ?? "global"}`
+}
+
+function getRuleValueForTask(task: TaskCardData, rule: BoardColorRule) {
+  switch (rule.source) {
+    case "status":
+      return [task.status]
+    case "priority":
+      return [task.priority]
+    case "assignee":
+      return task.assignees.map((assignee) => assignee.id)
+    case "task_list":
+      return [task.taskListId]
+    case "custom_field":
+      return (task.customFieldChips ?? [])
+        .filter((chip) => chip.fieldId === rule.customFieldId)
+        .flatMap((chip) => [chip.value ?? "", chip.label])
+        .filter(Boolean)
+    default:
+      return []
+  }
+}
+
+function getRuleOptionLabel(task: TaskCardData, source: BoardColorSource, value: string, customFieldId?: string) {
+  if (source === "assignee") {
+    return task.assignees.find((assignee) => assignee.id === value)?.name ?? value
+  }
+  if (source === "custom_field") {
+    return task.customFieldChips?.find((chip) => chip.fieldId === customFieldId && (chip.value === value || chip.label === value))?.label ?? value
+  }
+  if (source === "task_list") {
+    return task.taskListId === value ? (task.taskListName ?? value) : value
+  }
+  return value.replace(/_/g, " ")
 }
 
 interface Section {
@@ -76,6 +144,7 @@ interface BoardTaskCardProps {
   isDuplicating: boolean
   isDeleting: boolean
   enableTaskBatchDuplicate: boolean
+  colorPreset?: BoardColorPreset | null
   onOpenTask: (task: TaskCardData) => void
   onToggleSelection: (taskId: string) => void
   onToggleStatus: (taskId: string, newStatus: TaskCardData["status"]) => void
@@ -91,6 +160,7 @@ const BoardTaskCard = memo(function BoardTaskCard({
   isDuplicating,
   isDeleting,
   enableTaskBatchDuplicate,
+  colorPreset,
   onOpenTask,
   onToggleSelection,
   onToggleStatus,
@@ -136,6 +206,11 @@ const BoardTaskCard = memo(function BoardTaskCard({
         isSelected && "border-primary/30 bg-primary/5 ring-2 ring-primary/20 shadow-md",
         isDragging && "shadow-xl ring-1 ring-border"
       )}
+      style={colorPreset ? {
+        backgroundColor: colorPreset.value,
+        borderColor: colorPreset.border,
+        color: colorPreset.text,
+      } : undefined}
       onClick={handleOpen}
     >
       <DropdownMenu>
@@ -143,6 +218,7 @@ const BoardTaskCard = memo(function BoardTaskCard({
           <button
             onClick={(event) => event.stopPropagation()}
             className="absolute right-2 top-2 rounded-md p-1 text-muted-foreground opacity-100 transition-opacity hover:bg-muted/60 hover:text-foreground"
+            style={colorPreset ? { color: colorPreset.text } : undefined}
             aria-label="Task actions"
           >
             {isDuplicating || isDeleting ? (
@@ -191,7 +267,8 @@ const BoardTaskCard = memo(function BoardTaskCard({
           <p
             className={cn(
               "pr-8 text-[13px] font-medium leading-snug line-clamp-2",
-              isDone ? "text-muted-foreground/70 line-through" : "text-foreground"
+              colorPreset && "text-inherit",
+              isDone ? "text-muted-foreground/70 line-through" : !colorPreset && "text-foreground"
             )}
           >
             {task.title}
@@ -202,13 +279,7 @@ const BoardTaskCard = memo(function BoardTaskCard({
       {task.customFieldChips && task.customFieldChips.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5 pl-6">
           {task.customFieldChips.slice(0, 3).map((chip) => (
-            <span
-              key={chip.id}
-              className="inline-flex items-center rounded-full bg-muted/70 px-2 py-1 text-[10px] font-semibold text-muted-foreground"
-              title={`${chip.fieldName}: ${chip.label}`}
-            >
-              {chip.label}
-            </span>
+            <TaskCustomFieldChip key={chip.id} chip={chip} className="max-w-[150px]" />
           ))}
           {task.customFieldChips.length > 3 && (
             <span
@@ -227,7 +298,8 @@ const BoardTaskCard = memo(function BoardTaskCard({
             <span
               className={cn(
                 "inline-flex items-center gap-1 text-[11px]",
-                isOverdue ? "text-red-600 font-medium" : "text-muted-foreground"
+                colorPreset && "text-inherit",
+                isOverdue ? "text-red-600 font-medium" : !colorPreset && "text-muted-foreground"
               )}
             >
               <Calendar className="h-3 w-3" />
@@ -293,6 +365,8 @@ export function BoardView({
   const [confirmDeleteColumn, setConfirmDeleteColumn] = useState<{ id: string; name: string } | null>(null)
   const [confirmDeleteTask, setConfirmDeleteTask] = useState<{ id: string; title: string } | null>(null)
   const [hydrated, setHydrated] = useState(false)
+  const [colorPanelOpen, setColorPanelOpen] = useState(false)
+  const [colorRules, setColorRules] = useState<BoardColorRule[]>([])
   const sectionInputRef = useRef<HTMLInputElement>(null)
   const renameInputRef = useRef<HTMLInputElement>(null)
 
@@ -310,6 +384,86 @@ export function BoardView({
   const selectedTasks = columns.flatMap((column) =>
     column.tasks.filter((task) => selectedTaskIds.has(task.id))
   )
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(getBoardColorStorageKey(projectId))
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        setColorRules(parsed.filter((rule) => rule?.id && rule?.source && rule?.color))
+      }
+    } catch (error) {
+      console.error("Failed to load board color rules:", error)
+    }
+  }, [projectId])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(getBoardColorStorageKey(projectId), JSON.stringify(colorRules))
+    } catch (error) {
+      console.error("Failed to save board color rules:", error)
+    }
+  }, [colorRules, projectId])
+
+  const customColorFields = useMemo(() => {
+    const fields = new Map<string, { fieldId: string; fieldName: string }>()
+    for (const column of columns) {
+      for (const task of column.tasks) {
+        for (const chip of task.customFieldChips ?? []) {
+          if (chip.fieldType === "SELECT" || chip.fieldType === "MULTI_SELECT" || chip.fieldType === "STATUS" || chip.fieldType === "PLACE") {
+            fields.set(chip.fieldId, { fieldId: chip.fieldId, fieldName: chip.fieldName })
+          }
+        }
+      }
+    }
+    return Array.from(fields.values())
+  }, [columns])
+
+  const allBoardTasks = useMemo(
+    () => columns.flatMap((column) => column.tasks),
+    [columns]
+  )
+
+  const getRuleValues = useCallback((rule: BoardColorRule) => {
+    const values = new Map<string, string>()
+
+    for (const task of allBoardTasks) {
+      for (const value of getRuleValueForTask(task, rule)) {
+        if (!value) continue
+        values.set(value, getRuleOptionLabel(task, rule.source, value, rule.customFieldId))
+      }
+    }
+
+    if (rule.source === "status") {
+      return [
+        { value: "TODO", label: "To do" },
+        { value: "IN_PROGRESS", label: "In progress" },
+        { value: "IN_REVIEW", label: "In review" },
+        { value: "DONE", label: "Done" },
+        { value: "CANCELLED", label: "Cancelled" },
+      ]
+    }
+
+    if (rule.source === "priority") {
+      return [
+        { value: "URGENT", label: "Urgent" },
+        { value: "HIGH", label: "High" },
+        { value: "MEDIUM", label: "Medium" },
+        { value: "LOW", label: "Low" },
+        { value: "NONE", label: "None" },
+      ]
+    }
+
+    return Array.from(values.entries()).map(([value, label]) => ({ value, label }))
+  }, [allBoardTasks])
+
+  const getTaskColorRule = useCallback((task: TaskCardData) => {
+    return colorRules.find((rule) => {
+      if (!rule.value) return false
+      return getRuleValueForTask(task, rule).includes(rule.value)
+    })
+  }, [colorRules])
 
   const handleDragEnd = useCallback(
     (result: DropResult) => {
@@ -329,6 +483,39 @@ export function BoardView({
     },
     [columns, onSectionChange]
   )
+
+  const handleAddColorRule = () => {
+    setColorRules((prev) => [
+      ...prev,
+      {
+        id: generateRuleId(),
+        source: "status",
+        value: "TODO",
+        color: BOARD_COLOR_PRESETS[0].value,
+      },
+    ])
+  }
+
+  const updateColorRule = (ruleId: string, patch: Partial<BoardColorRule>) => {
+    setColorRules((prev) =>
+      prev.map((rule) => {
+        if (rule.id !== ruleId) return rule
+
+        const nextRule = { ...rule, ...patch }
+        if (patch.source && patch.source !== "custom_field") {
+          delete nextRule.customFieldId
+        }
+        if (patch.source || patch.customFieldId) {
+          nextRule.value = ""
+        }
+        return nextRule
+      })
+    )
+  }
+
+  const removeColorRule = (ruleId: string) => {
+    setColorRules((prev) => prev.filter((rule) => rule.id !== ruleId))
+  }
 
   const handleQuickAdd = async (sectionId: string) => {
     if (!newTitle.trim() || !projectId || quickAddInFlightRef.current) return
@@ -611,6 +798,150 @@ export function BoardView({
         )
       )}
 
+      <div className="mb-3 flex items-center justify-end px-3">
+        <button
+          type="button"
+          onClick={() => setColorPanelOpen((open) => !open)}
+          className={cn(
+            "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-black uppercase tracking-widest transition-colors",
+            colorPanelOpen
+              ? "bg-primary text-primary-foreground"
+              : "bg-surface-container-low text-on-surface-variant/60 hover:bg-surface-container"
+          )}
+        >
+          <Palette className="h-3.5 w-3.5" />
+          Colors
+        </button>
+      </div>
+
+      {colorPanelOpen && (
+        <div className="mx-3 mb-4 rounded-[1.75rem] border border-on-surface-variant/10 bg-surface-container-lowest p-4 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-on-surface-variant/35">
+                Conditional color
+              </p>
+              <h3 className="mt-1 text-lg font-headline font-black text-primary">
+                Board card colors
+              </h3>
+              <p className="mt-1 max-w-2xl text-xs font-medium text-on-surface-variant/50">
+                Rule ini shared dengan Calendar view, jadi kategori warna tetap konsisten antar view.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleAddColorRule}
+                className="inline-flex items-center gap-2 rounded-2xl bg-primary px-4 py-2 text-[10px] font-black uppercase tracking-widest text-primary-foreground"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                New color setting
+              </button>
+              <button
+                type="button"
+                onClick={() => setColorPanelOpen(false)}
+                className="rounded-2xl p-2 text-on-surface-variant/40 transition-colors hover:bg-surface-container hover:text-primary"
+                aria-label="Close color settings"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {colorRules.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-on-surface-variant/10 px-4 py-5 text-sm font-medium text-on-surface-variant/45">
+                Belum ada rule warna. Tambah rule untuk highlight card berdasarkan status, priority, assignee, section, atau custom field.
+              </div>
+            ) : (
+              colorRules.map((rule) => {
+                const sourceOptions: { value: BoardColorSource; label: string }[] = [
+                  { value: "status", label: "Status" },
+                  { value: "priority", label: "Priority" },
+                  { value: "assignee", label: "Assignee" },
+                  { value: "task_list", label: "Section" },
+                  { value: "custom_field", label: "Custom field" },
+                ]
+                const valueOptions = getRuleValues(rule)
+
+                return (
+                  <div key={rule.id} className="grid gap-3 rounded-2xl bg-surface-container-low p-3 lg:grid-cols-[150px_180px_minmax(180px,1fr)_minmax(180px,1fr)_auto] lg:items-center">
+                    <select
+                      value={rule.source}
+                      onChange={(event) => updateColorRule(rule.id, { source: event.target.value as BoardColorSource })}
+                      className="h-10 rounded-xl border-none bg-surface-container-lowest px-3 text-xs font-bold text-on-surface"
+                    >
+                      {sourceOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+
+                    {rule.source === "custom_field" ? (
+                      <select
+                        value={rule.customFieldId || ""}
+                        onChange={(event) => updateColorRule(rule.id, { customFieldId: event.target.value })}
+                        className="h-10 rounded-xl border-none bg-surface-container-lowest px-3 text-xs font-bold text-on-surface"
+                      >
+                        <option value="">Select field</option>
+                        {customColorFields.map((field) => (
+                          <option key={field.fieldId} value={field.fieldId}>
+                            {field.fieldName}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="hidden lg:block" />
+                    )}
+
+                    <select
+                      value={rule.value}
+                      onChange={(event) => updateColorRule(rule.id, { value: event.target.value })}
+                      disabled={rule.source === "custom_field" && !rule.customFieldId}
+                      className="h-10 rounded-xl border-none bg-surface-container-lowest px-3 text-xs font-bold text-on-surface disabled:opacity-50"
+                    >
+                      <option value="">Select value</option>
+                      {valueOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {BOARD_COLOR_PRESETS.map((preset) => (
+                        <button
+                          key={preset.value}
+                          type="button"
+                          onClick={() => updateColorRule(rule.id, { color: preset.value })}
+                          className={cn(
+                            "h-8 w-8 rounded-full border-2 transition-transform hover:scale-110",
+                            rule.color === preset.value ? "border-primary" : "border-transparent"
+                          )}
+                          style={{ backgroundColor: preset.value }}
+                          aria-label={`Use ${preset.name}`}
+                          title={preset.name}
+                        />
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => removeColorRule(rule.id)}
+                      className="inline-flex h-10 items-center justify-center rounded-xl px-3 text-red-500 transition-colors hover:bg-red-50"
+                      aria-label="Remove color rule"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+      )}
+
       <DragDropContext onDragEnd={handleDragEnd}>
         <div className="flex gap-3 pb-4 overflow-x-auto min-w-0 w-full h-full px-3 pt-3">
         {columnEntries.map((column) => (
@@ -725,6 +1056,11 @@ export function BoardView({
                   )}
                 >
                   {column.sortedTasks.map((task, index) => {
+                    const colorRule = getTaskColorRule(task)
+                    const colorPreset = colorRule
+                      ? BOARD_COLOR_PRESETS.find((preset) => preset.value === colorRule.color)
+                      : null
+
                     return (
                       <Draggable key={task.id} draggableId={task.id} index={index} isDragDisabled={Boolean(column.isTemporary || task.isCrossProject)}>
                         {(provided, snapshot) => (
@@ -741,6 +1077,7 @@ export function BoardView({
                             isDuplicating={duplicatingTaskId === task.id}
                             isDeleting={deletingTaskId === task.id}
                             enableTaskBatchDuplicate={enableTaskBatchDuplicate}
+                            colorPreset={colorPreset}
                             onOpenTask={onTaskClick}
                             onToggleSelection={toggleTaskSelection}
                             onToggleStatus={onStatusChange}

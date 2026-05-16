@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { checkProjectAccess } from "@/lib/rbac"
+import { generateUniqueFormSlug } from "@/lib/form-slugs"
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,13 +13,29 @@ export async function GET(request: NextRequest) {
     const projectId = request.nextUrl.searchParams.get("projectId")
     if (!projectId) return NextResponse.json({ error: "projectId is required" }, { status: 400 })
 
+    const { allowed } = await checkProjectAccess(session.user.id, projectId, ["MEMBER"])
+    if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
     const forms = await prisma.form.findMany({
       where: { projectId },
       include: { _count: { select: { submissions: true } } },
       orderBy: { createdAt: "desc" },
     })
 
-    return NextResponse.json(forms)
+    const formsWithSlugs = await Promise.all(
+      forms.map(async (form) => {
+        if (form.slug) return form
+
+        const slug = await generateUniqueFormSlug(prisma, form.name, form.id)
+        return prisma.form.update({
+          where: { id: form.id },
+          data: { slug },
+          include: { _count: { select: { submissions: true } } },
+        })
+      })
+    )
+
+    return NextResponse.json(formsWithSlugs)
   } catch (error) {
     console.error("Error fetching forms:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -35,8 +53,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "name, projectId, and fields are required" }, { status: 400 })
     }
 
+    const { allowed } = await checkProjectAccess(session.user.id, projectId, ["MEMBER"])
+    if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
+    const slug = await generateUniqueFormSlug(prisma, name)
+
     const form = await prisma.form.create({
-      data: { name, description, fields, isPublic: isPublic ?? false, projectId },
+      data: {
+        name,
+        slug,
+        description,
+        fields,
+        isPublic: isPublic ?? false,
+        projectId,
+      },
       include: { _count: { select: { submissions: true } } },
     })
 

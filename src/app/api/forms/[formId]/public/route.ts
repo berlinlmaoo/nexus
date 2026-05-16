@@ -8,8 +8,13 @@ export async function GET(
   try {
     const { formId } = await params
 
-    const form = await prisma.form.findUnique({
-      where: { id: formId },
+    const form = await prisma.form.findFirst({
+      where: {
+        OR: [
+          { id: formId },
+          { slug: formId },
+        ],
+      },
       select: {
         id: true,
         name: true,
@@ -17,6 +22,14 @@ export async function GET(
         fields: true,
         branding: true,
         isPublic: true,
+        project: {
+          select: {
+            taskLists: {
+              orderBy: { position: "asc" },
+              select: { id: true, name: true },
+            },
+          },
+        },
       },
     })
 
@@ -28,7 +41,11 @@ export async function GET(
       return NextResponse.json({ error: "This form is not publicly accessible" }, { status: 403 })
     }
 
-    return NextResponse.json(form)
+    return NextResponse.json({
+      ...form,
+      taskLists: form.project.taskLists,
+      project: undefined,
+    })
   } catch (error) {
     console.error("Error fetching public form:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

@@ -11,9 +11,11 @@ export const SUPPORTED_CUSTOM_FIELD_TYPES = [
 export type SupportedCustomFieldType = (typeof SUPPORTED_CUSTOM_FIELD_TYPES)[number]
 export type NumberCustomFieldFormat = "plain" | "currency-idr"
 export type CustomFieldDisplayFormat = "name-and-map-link" | "currency-idr"
+export type CustomStatusTone = "yellow" | "green" | "red" | "gray" | "blue"
 
 export interface CustomFieldOptionConfig {
   options?: string[]
+  optionTemplates?: Record<string, string>
   defaultSource?: "taskCreatedAt"
   editable?: boolean
   format?: CustomFieldDisplayFormat
@@ -72,6 +74,12 @@ export function normalizeCustomFieldOptions(
       : Array.isArray((options as { options?: unknown[] } | null)?.options)
         ? (options as { options: unknown[] }).options
         : []
+    const rawOptionTemplates =
+      typeof (options as { optionTemplates?: unknown } | null)?.optionTemplates === "object" &&
+      (options as { optionTemplates?: unknown } | null)?.optionTemplates !== null &&
+      !Array.isArray((options as { optionTemplates?: unknown } | null)?.optionTemplates)
+        ? ((options as { optionTemplates: Record<string, unknown> }).optionTemplates)
+        : {}
 
     const normalizedOptions = rawOptions
       .map((option) => String(option).trim())
@@ -79,11 +87,26 @@ export function normalizeCustomFieldOptions(
 
     if (type === "STATUS" && normalizedOptions.length === 0) {
       return {
-        options: ["Not started", "In progress", "Blocked", "Done"],
+        options: ["On Progress", "Done"],
       }
     }
 
-    return { options: normalizedOptions }
+    if (type !== "SELECT") {
+      return { options: normalizedOptions }
+    }
+
+    const optionTemplates = normalizedOptions.reduce<Record<string, string>>((acc, option) => {
+      const template = String(rawOptionTemplates[option] ?? "").trim()
+      if (template) {
+        acc[option] = template
+      }
+      return acc
+    }, {})
+
+    return {
+      options: normalizedOptions,
+      ...(Object.keys(optionTemplates).length > 0 ? { optionTemplates } : {}),
+    }
   }
 
   if (type === "CREATED") {
@@ -261,6 +284,55 @@ export function normalizeCustomFieldNumberInput(
   }
 
   return raw
+}
+
+export function getCustomStatusTone(value: string | null | undefined): CustomStatusTone {
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+
+  if (!normalized) return "gray"
+
+  if (
+    normalized === "done" ||
+    normalized === "complete" ||
+    normalized === "completed" ||
+    normalized === "selesai"
+  ) {
+    return "green"
+  }
+
+  if (
+    normalized === "on progress" ||
+    normalized === "in progress" ||
+    normalized === "progress" ||
+    normalized === "ongoing" ||
+    normalized === "sedang berjalan"
+  ) {
+    return "yellow"
+  }
+
+  if (normalized === "blocked" || normalized === "stuck" || normalized === "terhambat") {
+    return "red"
+  }
+
+  if (normalized === "not started" || normalized === "todo" || normalized === "to do") {
+    return "gray"
+  }
+
+  return "blue"
+}
+
+export function getCustomStatusToneClassName(value: string | null | undefined): string {
+  const tone = getCustomStatusTone(value)
+
+  if (tone === "green") return "border-emerald-200 bg-emerald-100 text-emerald-800"
+  if (tone === "yellow") return "border-amber-200 bg-amber-100 text-amber-800"
+  if (tone === "red") return "border-red-200 bg-red-100 text-red-700"
+  if (tone === "blue") return "border-sky-200 bg-sky-100 text-sky-700"
+  return "border-border/80 bg-muted/70 text-muted-foreground"
 }
 
 export function formatCreatedFieldValue(

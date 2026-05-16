@@ -23,6 +23,7 @@ import {
 import { isPast, isToday } from "date-fns"
 import { cn } from "@/lib/utils"
 import { formatTaskDueDate } from "@/lib/task-date-format"
+import { TaskCustomFieldChip } from "./task-custom-field-chip"
 
 interface TaskListSection {
   id: string
@@ -40,6 +41,12 @@ interface TaskListViewProps {
   projectId?: string
 }
 
+interface CustomFieldColumn {
+  fieldId: string
+  fieldName: string
+  fieldType: NonNullable<TaskCardData["customFieldChips"]>[number]["fieldType"]
+}
+
 function sortTasksDoneLast(tasks: TaskCardData[]) {
   return [...tasks].sort((a, b) => {
     const aDone = a.status === "DONE"
@@ -54,6 +61,8 @@ interface TaskListRowProps {
   isDragging: boolean
   isTemporary: boolean
   dragHandleProps?: DraggableProvidedDragHandleProps | null
+  customFieldColumns: CustomFieldColumn[]
+  gridTemplateColumns: string
   onOpenTask: (task: TaskCardData) => void
   onToggleStatus: (taskId: string, done: boolean) => void
   onCelebrate: () => void
@@ -64,6 +73,8 @@ const TaskListRow = memo(function TaskListRow({
   isDragging,
   isTemporary,
   dragHandleProps,
+  customFieldColumns,
+  gridTemplateColumns,
   onOpenTask,
   onToggleStatus,
   onCelebrate,
@@ -87,9 +98,10 @@ const TaskListRow = memo(function TaskListRow({
   return (
     <div
       className={cn(
-        "group grid grid-cols-[32px_32px_1fr_120px_100px_120px] gap-0 items-center h-12 cursor-pointer transition-all duration-200 text-[13px] rounded-xl mb-1",
+        "group grid gap-0 items-center min-h-12 cursor-pointer transition-all duration-200 text-[13px] rounded-xl mb-1",
         isDragging ? "z-50 shadow-2xl bg-surface-container-lowest ring-2 ring-primary/5 scale-[1.02]" : "hover:bg-surface-container-low"
       )}
+      style={{ gridTemplateColumns }}
       onClick={handleOpen}
     >
       <div className="flex items-center justify-center h-full">
@@ -130,6 +142,20 @@ const TaskListRow = memo(function TaskListRow({
           </span>
         </div>
       </div>
+
+      {customFieldColumns.map((column) => {
+        const chip = task.customFieldChips?.find((taskChip) => taskChip.fieldId === column.fieldId)
+
+        return (
+          <div key={column.fieldId} className="flex min-w-0 items-center justify-center px-2 py-2">
+            {chip ? (
+              <TaskCustomFieldChip chip={chip} className="max-w-full text-[9px]" />
+            ) : (
+              <span className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/15">---</span>
+            )}
+          </div>
+        )
+      })}
 
       <div className="flex items-center px-3 h-full justify-center">
         {task.assignees.length > 0 ? (
@@ -192,6 +218,45 @@ export function TaskListView({
         sortedTasks: sortTasksDoneLast(section.tasks),
       })),
     [sections]
+  )
+
+  const customFieldColumns = useMemo<CustomFieldColumn[]>(() => {
+    const columns = new Map<string, CustomFieldColumn>()
+
+    for (const section of sections) {
+      for (const task of section.tasks) {
+        for (const chip of task.customFieldChips ?? []) {
+          if (!columns.has(chip.fieldId)) {
+            columns.set(chip.fieldId, {
+              fieldId: chip.fieldId,
+              fieldName: chip.fieldName,
+              fieldType: chip.fieldType,
+            })
+          }
+        }
+      }
+    }
+
+    return Array.from(columns.values())
+  }, [sections])
+
+  const gridTemplateColumns = useMemo(
+    () =>
+      [
+        "32px",
+        "32px",
+        "minmax(280px, 1fr)",
+        ...customFieldColumns.map(() => "minmax(130px, 170px)"),
+        "120px",
+        "100px",
+        "120px",
+      ].join(" "),
+    [customFieldColumns]
+  )
+
+  const tableMinWidth = useMemo(
+    () => 684 + customFieldColumns.length * 140,
+    [customFieldColumns.length]
   )
 
   const toggleSection = useCallback((sectionId: string) => {
@@ -278,7 +343,12 @@ export function TaskListView({
                   </div>
                   {!section.isTemporary && (
                     <button 
-                      onClick={() => onAddTask(section.id)}
+                      type="button"
+                      onClick={(event) => {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        onAddTask(section.id)
+                      }}
                       className="flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest text-on-surface-variant/40 hover:text-primary hover:bg-surface-container-low transition-all duration-300"
                     >
                       <Plus className="h-4 w-4" />
@@ -289,52 +359,70 @@ export function TaskListView({
 
                 {!isCollapsed && (
                   <>
-                    {/* Task Table Headers */}
-                    <div className="grid grid-cols-[32px_32px_1fr_120px_100px_120px] gap-0 items-center px-2 mb-2 border-b border-on-surface-variant/5 pb-3">
-                      <div className="col-span-2" />
-                      <span className="text-[10px] font-black uppercase tracking-[0.15em] text-on-surface-variant/20 pl-3">Designation</span>
-                      <span className="text-[10px] font-black uppercase tracking-[0.15em] text-on-surface-variant/20 text-center">Resources</span>
-                      <span className="text-[10px] font-black uppercase tracking-[0.15em] text-on-surface-variant/20 text-center">Priority</span>
-                      <span className="text-[10px] font-black uppercase tracking-[0.15em] text-on-surface-variant/20 text-center">Timeline</span>
-                    </div>
-
-                    <Droppable droppableId={section.id}>
-                      {(provided) => (
+                    <div className="overflow-x-auto pb-2">
+                      <div style={{ minWidth: tableMinWidth }}>
+                        {/* Task Table Headers */}
                         <div
-                          {...provided.droppableProps}
-                          ref={provided.innerRef}
-                          className="space-y-1 min-h-[20px]"
+                          className="grid gap-0 items-center px-2 mb-2 border-b border-on-surface-variant/5 pb-3"
+                          style={{ gridTemplateColumns }}
                         >
-                          {section.tasks.length === 0 ? (
-                            <div className="py-12 text-center text-on-surface-variant/20 italic text-sm bg-surface-container-low/10 rounded-[2rem] border-2 border-dashed border-on-surface-variant/5">
-                              No tasks in this sanctuary.
-                            </div>
-                          ) : (
-                            section.sortedTasks.map((task, index) => (
-                                <Draggable key={task.id} draggableId={task.id} index={index} isDragDisabled={Boolean(section.isTemporary || task.isCrossProject)}>
-                                  {(provided, snapshot) => (
-                                    <div
-                                      ref={provided.innerRef}
-                                      {...provided.draggableProps}
-                                    >
-                                      <TaskListRow
-                                        task={task}
-                                        isDragging={snapshot.isDragging}
-                                        isTemporary={Boolean(section.isTemporary || task.isCrossProject)}
-                                        dragHandleProps={provided.dragHandleProps}
-                                        onOpenTask={onTaskClick}
-                                        onToggleStatus={onToggleStatus}
-                                        onCelebrate={triggerCelebration}
-                                      />
-                                    </div>
-                                  )}
-                                </Draggable>
-                            ))
-                          )}
-                          {provided.placeholder}
+                          <div className="col-span-2" />
+                          <span className="text-[10px] font-black uppercase tracking-[0.15em] text-on-surface-variant/20 pl-3">Designation</span>
+                          {customFieldColumns.map((column) => (
+                            <span
+                              key={column.fieldId}
+                              className="truncate px-2 text-center text-[10px] font-black uppercase tracking-[0.15em] text-on-surface-variant/20"
+                              title={column.fieldName}
+                            >
+                              {column.fieldName}
+                            </span>
+                          ))}
+                          <span className="text-[10px] font-black uppercase tracking-[0.15em] text-on-surface-variant/20 text-center">Resources</span>
+                          <span className="text-[10px] font-black uppercase tracking-[0.15em] text-on-surface-variant/20 text-center">Priority</span>
+                          <span className="text-[10px] font-black uppercase tracking-[0.15em] text-on-surface-variant/20 text-center">Timeline</span>
                         </div>
-                      )}
-                    </Droppable>
+
+                        <Droppable droppableId={section.id}>
+                          {(provided) => (
+                            <div
+                              {...provided.droppableProps}
+                              ref={provided.innerRef}
+                              className="space-y-1 min-h-[20px]"
+                            >
+                              {section.tasks.length === 0 ? (
+                                <div className="py-12 text-center text-on-surface-variant/20 italic text-sm bg-surface-container-low/10 rounded-[2rem] border-2 border-dashed border-on-surface-variant/5">
+                                  No tasks in this sanctuary.
+                                </div>
+                              ) : (
+                                section.sortedTasks.map((task, index) => (
+                                    <Draggable key={task.id} draggableId={task.id} index={index} isDragDisabled={Boolean(section.isTemporary || task.isCrossProject)}>
+                                      {(provided, snapshot) => (
+                                        <div
+                                          ref={provided.innerRef}
+                                          {...provided.draggableProps}
+                                        >
+                                          <TaskListRow
+                                            task={task}
+                                            isDragging={snapshot.isDragging}
+                                            isTemporary={Boolean(section.isTemporary || task.isCrossProject)}
+                                            dragHandleProps={provided.dragHandleProps}
+                                            customFieldColumns={customFieldColumns}
+                                            gridTemplateColumns={gridTemplateColumns}
+                                            onOpenTask={onTaskClick}
+                                            onToggleStatus={onToggleStatus}
+                                            onCelebrate={triggerCelebration}
+                                          />
+                                        </div>
+                                      )}
+                                    </Draggable>
+                                ))
+                              )}
+                              {provided.placeholder}
+                            </div>
+                          )}
+                        </Droppable>
+                      </div>
+                    </div>
                   </>
                 )}
               </div>

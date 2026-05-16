@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { createPortal } from "react-dom"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { signOut } from "next-auth/react"
+import Image from "next/image"
 import {
   Home,
   CheckSquare,
@@ -33,6 +34,10 @@ import {
   Shield,
   CalendarDays,
   X,
+  Folder,
+  FolderPlus,
+  ImagePlus,
+  Loader2,
 } from "lucide-react"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -40,7 +45,6 @@ import { cn } from "@/lib/utils"
 import { useAppStore } from "@/stores/app-store"
 import { ProjectIcon } from "@/components/projects/project-icon"
 import { toastError, toastSuccess } from "@/lib/toast"
-import Image from "next/image"
 
 interface SidebarProps {
   user: {
@@ -57,6 +61,40 @@ interface Project {
   color: string
   icon: string
   status?: string
+  workspaceId?: string
+  folderId?: string | null
+}
+
+interface ProjectFolder {
+  id: string
+  name: string
+  icon?: string
+  color: string
+  position: number
+  workspaceId: string
+}
+
+const FOLDER_ICON_ALLOWED_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/svg+xml", "image/webp"]
+const FOLDER_ICON_MAX_SIZE = 5 * 1024 * 1024
+
+function isUploadedFolderIcon(icon?: string | null) {
+  return Boolean(icon?.startsWith("/"))
+}
+
+function FolderIconPreview({ icon, className }: { icon?: string | null; className?: string }) {
+  if (isUploadedFolderIcon(icon) && icon) {
+    return (
+      <span className={cn("relative block overflow-hidden rounded-md", className)}>
+        <Image src={icon} alt="Folder icon" fill className="object-cover" sizes="24px" unoptimized />
+      </span>
+    )
+  }
+
+  return (
+    <span className={cn("flex items-center justify-center", className)}>
+      {icon || "📁"}
+    </span>
+  )
 }
 
 interface ProjectUpdatedDetail {
@@ -225,7 +263,9 @@ export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [projects, setProjects] = useState<Project[]>([])
+  const [projectFolders, setProjectFolders] = useState<ProjectFolder[]>([])
   const [projectsOpen, setProjectsOpen] = useState(true)
+  const [projectFolderOpen, setProjectFolderOpen] = useState<Record<string, boolean>>({})
   const [insightsOpen, setInsightsOpen] = useState(true)
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({})
   const [projectPages, setProjectPages] = useState<Record<string, ProjectPage[]>>({})
@@ -240,6 +280,19 @@ export function Sidebar({ user }: SidebarProps) {
   const [confirmDeleteProject, setConfirmDeleteProject] = useState<{ id: string; name: string } | null>(null)
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
+  const [showCreateFolder, setShowCreateFolder] = useState(false)
+  const [newFolderName, setNewFolderName] = useState("")
+  const [newFolderIcon, setNewFolderIcon] = useState("📁")
+  const [creatingFolder, setCreatingFolder] = useState(false)
+  const [editingFolder, setEditingFolder] = useState<ProjectFolder | null>(null)
+  const [editFolderName, setEditFolderName] = useState("")
+  const [editFolderIcon, setEditFolderIcon] = useState("📁")
+  const [updatingFolder, setUpdatingFolder] = useState(false)
+  const [folderIconUploadFile, setFolderIconUploadFile] = useState<File | null>(null)
+  const [folderIconUploadPreview, setFolderIconUploadPreview] = useState<string | null>(null)
+  const [folderIconUploadError, setFolderIconUploadError] = useState<string | null>(null)
+  const [folderIconUploading, setFolderIconUploading] = useState(false)
+  const folderIconInputRef = useRef<HTMLInputElement>(null)
   const [isClient, setIsClient] = useState(false)
   const sidebarRef = useRef<HTMLDivElement>(null)
 
@@ -255,12 +308,23 @@ export function Sidebar({ user }: SidebarProps) {
 
   const RECENTS_KEY = "nexus-recent-projects"
 
+  const fetchProjectFolders = useCallback(() => {
+    fetch("/api/project-folders", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setProjectFolders(Array.isArray(data) ? data : []))
+      .catch(() => setProjectFolders([]))
+  }, [])
+
   useEffect(() => {
     fetch("/api/projects")
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => setProjects(Array.isArray(data) ? data : data.projects ?? []))
       .catch(() => setProjects([]))
   }, [])
+
+  useEffect(() => {
+    fetchProjectFolders()
+  }, [fetchProjectFolders])
 
   useEffect(() => {
     const handleProjectUpdated = (event: Event) => {
@@ -340,8 +404,13 @@ export function Sidebar({ user }: SidebarProps) {
     if (match) {
       const pid = match[1]
       setExpandedProjects((prev) => ({ ...prev, [pid]: true }))
+
+      const project = projects.find((p) => p.id === pid)
+      if (project?.folderId) {
+        setProjectFolderOpen((prev) => ({ ...prev, [project.folderId!]: true }))
+      }
     }
-  }, [pathname])
+  }, [pathname, projects])
 
   const fetchPages = useCallback((projectId: string) => {
     if (projectPages[projectId]) return
@@ -418,6 +487,205 @@ export function Sidebar({ user }: SidebarProps) {
     }
   }, [router])
 
+  const visibleProjects = useMemo(
+    () => projects.filter((project) => showArchived || project.status !== "ARCHIVED"),
+    [projects, showArchived]
+  )
+
+  const folderIds = useMemo(
+    () => new Set(projectFolders.map((folder) => folder.id)),
+    [projectFolders]
+  )
+
+  const foldersWithProjects = useMemo(
+    () =>
+      projectFolders.map((folder) => ({
+        ...folder,
+        projects: visibleProjects.filter((project) => project.folderId === folder.id),
+      })),
+    [projectFolders, visibleProjects]
+  )
+
+  const unfiledProjects = useMemo(
+    () => visibleProjects.filter((project) => !project.folderId || !folderIds.has(project.folderId)),
+    [folderIds, visibleProjects]
+  )
+
+  const handleCreateFolder = useCallback(async () => {
+    const name = newFolderName.trim()
+    const workspaceId = projects.find((project) => project.workspaceId)?.workspaceId ?? projectFolders[0]?.workspaceId
+
+    if (!name) {
+      toastError("Folder name is required")
+      return
+    }
+
+    if (!workspaceId) {
+      toastError("Create a project first before creating folders")
+      return
+    }
+
+    try {
+      setCreatingFolder(true)
+      const res = await fetch("/api/project-folders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, icon: newFolderIcon.trim() || "📁", workspaceId }),
+      })
+      const data = await res.json().catch(() => null)
+
+      if (!res.ok) {
+        toastError(data?.error || "Failed to create folder")
+        return
+      }
+
+      setProjectFolders((prev) => [...prev, data])
+      setProjectFolderOpen((prev) => ({ ...prev, [data.id]: true }))
+      setNewFolderName("")
+      setNewFolderIcon("📁")
+      setShowCreateFolder(false)
+      toastSuccess("Folder created")
+    } catch {
+      toastError("Failed to create folder")
+    } finally {
+      setCreatingFolder(false)
+    }
+  }, [newFolderIcon, newFolderName, projectFolders, projects])
+
+  const openEditFolder = useCallback((folder: ProjectFolder) => {
+    setEditingFolder(folder)
+    setEditFolderName(folder.name)
+    setEditFolderIcon(folder.icon || "📁")
+    setFolderIconUploadFile(null)
+    setFolderIconUploadPreview(null)
+    setFolderIconUploadError(null)
+  }, [])
+
+  const handleFolderIconFileSelect = useCallback((file: File) => {
+    setFolderIconUploadError(null)
+
+    if (!FOLDER_ICON_ALLOWED_TYPES.includes(file.type)) {
+      setFolderIconUploadError("Format harus PNG, JPG, SVG, atau WEBP")
+      return
+    }
+
+    if (file.size > FOLDER_ICON_MAX_SIZE) {
+      setFolderIconUploadError("File terlalu besar. Maksimal 5MB")
+      return
+    }
+
+    setFolderIconUploadFile(file)
+    const reader = new FileReader()
+    reader.onload = (event) => setFolderIconUploadPreview(event.target?.result as string)
+    reader.readAsDataURL(file)
+  }, [])
+
+  const clearFolderIconUpload = useCallback(() => {
+    setFolderIconUploadFile(null)
+    setFolderIconUploadPreview(null)
+    setFolderIconUploadError(null)
+    if (folderIconInputRef.current) folderIconInputRef.current.value = ""
+  }, [])
+
+  const handleUploadFolderIcon = useCallback(async () => {
+    if (!editingFolder || !folderIconUploadFile) return null
+
+    setFolderIconUploading(true)
+    setFolderIconUploadError(null)
+    try {
+      const formData = new FormData()
+      formData.append("file", folderIconUploadFile)
+      formData.append("folderId", editingFolder.id)
+
+      const res = await fetch("/api/upload/folder-icon", {
+        method: "POST",
+        body: formData,
+      })
+      const data = await res.json().catch(() => null)
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Upload failed")
+      }
+
+      clearFolderIconUpload()
+      return data.url as string
+    } catch (error) {
+      setFolderIconUploadError(error instanceof Error ? error.message : "Upload failed")
+      return null
+    } finally {
+      setFolderIconUploading(false)
+    }
+  }, [clearFolderIconUpload, editingFolder, folderIconUploadFile])
+
+  const handleUpdateFolder = useCallback(async () => {
+    if (!editingFolder) return
+
+    const name = editFolderName.trim()
+    let icon = editFolderIcon.trim() || "📁"
+
+    if (!name) {
+      toastError("Folder name is required")
+      return
+    }
+
+    try {
+      setUpdatingFolder(true)
+      if (folderIconUploadFile) {
+        const uploadedUrl = await handleUploadFolderIcon()
+        if (!uploadedUrl) return
+        icon = uploadedUrl
+      }
+
+      const res = await fetch(`/api/project-folders/${editingFolder.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, icon }),
+      })
+      const data = await res.json().catch(() => null)
+
+      if (!res.ok) {
+        toastError(data?.error || "Failed to update folder")
+        return
+      }
+
+      setProjectFolders((prev) =>
+        prev.map((folder) => folder.id === editingFolder.id ? { ...folder, ...data } : folder)
+      )
+      setEditingFolder(null)
+      toastSuccess("Folder updated")
+    } catch {
+      toastError("Failed to update folder")
+    } finally {
+      setUpdatingFolder(false)
+    }
+  }, [editFolderIcon, editFolderName, editingFolder, folderIconUploadFile, handleUploadFolderIcon])
+
+  const handleMoveProjectToFolder = useCallback(async (projectId: string, folderId: string | null) => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderId }),
+      })
+      const data = await res.json().catch(() => null)
+
+      if (!res.ok) {
+        toastError(data?.error || "Failed to move project")
+        return
+      }
+
+      setProjects((prev) =>
+        prev.map((project) => project.id === projectId ? { ...project, folderId } : project)
+      )
+      if (folderId) {
+        setProjectFolderOpen((prev) => ({ ...prev, [folderId]: true }))
+      }
+      toastSuccess(folderId ? "Project moved to folder" : "Project moved out of folder")
+    } catch {
+      toastError("Failed to move project")
+    }
+  }, [])
+
   useEffect(() => {
     Object.entries(expandedProjects).forEach(([pid, open]) => {
       if (open) fetchPages(pid)
@@ -458,6 +726,81 @@ export function Sidebar({ user }: SidebarProps) {
   const isMobileViewport = isClient ? window.innerWidth < 768 : false
   const renderCollapsed = !isMobileViewport && isCollapsed
   const effectiveWidth = isMobileViewport ? Math.min(320, window.innerWidth - 24) : renderCollapsed ? 56 : sidebarWidth
+
+  const renderProjectItem = (project: Project) => {
+    const isProjectActive = pathname?.startsWith(`/projects/${project.id}`) ?? false
+    const isExpanded = expandedProjects[project.id] || false
+    const pages = projectPages[project.id] || []
+
+    return (
+      <div key={project.id}>
+        <div
+          className="flex items-center group"
+          onContextMenu={(e) => {
+            e.preventDefault()
+            setProjectMenu({ x: e.clientX, y: e.clientY, projectId: project.id })
+          }}
+        >
+          <button
+            onClick={() => toggleProject(project.id)}
+            className="flex h-6 w-5 shrink-0 items-center justify-center text-on-surface-variant/30 hover:text-on-surface transition-colors"
+          >
+            {isExpanded ? (
+              <ChevronDown className="h-3 w-3" />
+            ) : (
+              <ChevronRight className="h-3 w-3" />
+            )}
+          </button>
+          <Link
+            href={`/projects/${project.id}`}
+            onClick={() => {
+              if (window.innerWidth < 768) toggleSidebar()
+            }}
+            className={cn(
+              "flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] transition-all duration-200 md:gap-2.5 md:text-[13px]",
+              isProjectActive
+                ? "bg-surface-container-high text-primary shadow-sm"
+                : "text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+            )}
+          >
+            <ProjectIcon icon={project.icon} color={project.color} size="sm" className="h-4 w-4" />
+            <span className={cn("truncate font-headline tracking-tight", project.status === "ARCHIVED" && "opacity-50")}>{project.name}</span>
+          </Link>
+          <button
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              const rect = e.currentTarget.getBoundingClientRect()
+              setProjectMenu({
+                x: Math.max(12, rect.right - 160),
+                y: rect.bottom + 6,
+                projectId: project.id,
+              })
+            }}
+            className="mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-on-surface-variant/30 opacity-0 transition-all hover:bg-surface-container hover:text-on-surface group-hover:opacity-100"
+            title="Project options"
+          >
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        {isExpanded && (
+          <div className="ml-5 mt-0.5 space-y-0 border-l border-on-surface-variant/10 pl-1">
+            {pages.map((page) => (
+              <PageTreeItem
+                key={page.id}
+                page={page}
+                projectId={project.id}
+                pathname={pathname ?? ''}
+                onDelete={(pageId) => handleDeletePage(project.id, pageId)}
+                onDuplicate={(pageId) => handleDuplicatePage(project.id, pageId)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <aside
@@ -719,6 +1062,18 @@ export function Sidebar({ user }: SidebarProps) {
             >
               <span>Projects</span>
               <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setShowCreateFolder(true)
+                  }}
+                  className="rounded p-0.5 hover:bg-surface-container-high transition-colors"
+                  title="Create project folder"
+                >
+                  <FolderPlus className="h-3 w-3" />
+                </button>
                 <Link
                   href="/projects"
                   onClick={(e) => e.stopPropagation()}
@@ -740,85 +1095,74 @@ export function Sidebar({ user }: SidebarProps) {
                 projectsOpen ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
               )}
             >
-              {projects.filter(p => showArchived || p.status !== "ARCHIVED").length === 0 ? (
+              {visibleProjects.length === 0 && projectFolders.length === 0 ? (
                 <p className="px-3 py-2 text-xs text-on-surface-variant/40 italic">
                   No projects yet
                 </p>
               ) : (
-                projects.filter(p => showArchived || p.status !== "ARCHIVED").map((project) => {
-                  const isProjectActive = pathname?.startsWith(`/projects/${project.id}`) ?? false
-                  const isExpanded = expandedProjects[project.id] || false
-                  const pages = projectPages[project.id] || []
+                <>
+                  {foldersWithProjects.map((folder) => {
+                    const isFolderOpen = projectFolderOpen[folder.id] ?? true
+                    const hasActiveProject = folder.projects.some((project) => pathname?.startsWith(`/projects/${project.id}`))
 
-                  return (
-                    <div key={project.id}>
-                      <div
-                        className="flex items-center group"
-                        onContextMenu={(e) => {
-                          e.preventDefault()
-                          setProjectMenu({ x: e.clientX, y: e.clientY, projectId: project.id })
-                        }}
-                      >
-                        <button
-                          onClick={() => toggleProject(project.id)}
-                          className="flex h-6 w-5 shrink-0 items-center justify-center text-on-surface-variant/30 hover:text-on-surface transition-colors"
-                        >
-                          {isExpanded ? (
-                            <ChevronDown className="h-3 w-3" />
-                          ) : (
-                            <ChevronRight className="h-3 w-3" />
-                          )}
-                        </button>
-                        <Link
-                          href={`/projects/${project.id}`}
-                          onClick={() => {
-                            if (window.innerWidth < 768) toggleSidebar()
-                          }}
+                    return (
+                      <div key={folder.id} className="space-y-0.5">
+                        <div
                           className={cn(
-                            "flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] transition-all duration-200 md:gap-2.5 md:text-[13px]",
-                            isProjectActive
-                              ? "bg-surface-container-high text-primary shadow-sm"
-                              : "text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+                            "group flex w-full items-center rounded-lg text-[12px] font-black uppercase tracking-[0.12em] transition-all duration-200 md:text-[13px]",
+                            hasActiveProject ? "bg-surface-container-high text-primary" : "text-on-surface-variant/80 hover:bg-surface-container hover:text-on-surface"
                           )}
-                        >
-                          <ProjectIcon icon={project.icon} color={project.color} size="sm" className="h-4 w-4" />
-                          <span className={cn("truncate font-headline tracking-tight", project.status === "ARCHIVED" && "opacity-50")}>{project.name}</span>
-                        </Link>
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            const rect = e.currentTarget.getBoundingClientRect()
-                            setProjectMenu({
-                              x: Math.max(12, rect.right - 160),
-                              y: rect.bottom + 6,
-                              projectId: project.id,
-                            })
+                          onContextMenu={(event) => {
+                            event.preventDefault()
+                            openEditFolder(folder)
                           }}
-                          className="mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-on-surface-variant/30 opacity-0 transition-all hover:bg-surface-container hover:text-on-surface group-hover:opacity-100"
-                          title="Project options"
                         >
-                          <MoreHorizontal className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-
-                      {isExpanded && (
-                        <div className="ml-5 mt-0.5 space-y-0 border-l border-on-surface-variant/10 pl-1">
-                          {pages.map((page) => (
-                            <PageTreeItem
-                              key={page.id}
-                              page={page}
-                              projectId={project.id}
-                              pathname={pathname ?? ''}
-                              onDelete={(pageId) => handleDeletePage(project.id, pageId)}
-                              onDuplicate={(pageId) => handleDuplicatePage(project.id, pageId)}
-                            />
-                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setProjectFolderOpen((prev) => ({ ...prev, [folder.id]: !(prev[folder.id] ?? true) }))}
+                            className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
+                          >
+                            {isFolderOpen ? (
+                              <ChevronDown className="h-3 w-3 shrink-0 text-on-surface-variant/40" />
+                            ) : (
+                              <ChevronRight className="h-3 w-3 shrink-0 text-on-surface-variant/40" />
+                            )}
+                            <FolderIconPreview icon={folder.icon || (isFolderOpen ? "📂" : "📁")} className="h-4 w-4 shrink-0 text-sm" />
+                            <span className="truncate">{folder.name}</span>
+                          </button>
+                          <span className="mr-1 rounded-full bg-surface-container-high px-1.5 py-0.5 text-[9px] font-bold text-on-surface-variant/50">
+                            {folder.projects.length}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              openEditFolder(folder)
+                            }}
+                            className="mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-on-surface-variant/30 opacity-0 transition-all hover:bg-surface-container-high hover:text-on-surface group-hover:opacity-100"
+                            title="Edit folder"
+                          >
+                            <MoreHorizontal className="h-3.5 w-3.5" />
+                          </button>
                         </div>
-                      )}
-                    </div>
-                  )
-                })
+
+                        {isFolderOpen && (
+                          <div className="ml-3 border-l border-on-surface-variant/10 pl-1.5">
+                            {folder.projects.length > 0 ? (
+                              folder.projects.map((project) => renderProjectItem(project))
+                            ) : (
+                              <p className="px-3 py-1.5 text-[11px] italic text-on-surface-variant/35">
+                                Folder kosong
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+
+                  {unfiledProjects.map((project) => renderProjectItem(project))}
+                </>
               )}
             </div>
           </div>
@@ -931,20 +1275,181 @@ export function Sidebar({ user }: SidebarProps) {
         />
       )}
 
+      {showCreateFolder && isClient && createPortal(
+        <>
+          <div className="fixed inset-0 z-50 bg-primary/20 backdrop-blur-sm" onClick={() => setShowCreateFolder(false)} />
+          <form
+            onSubmit={(event) => {
+              event.preventDefault()
+              handleCreateFolder()
+            }}
+            className="fixed left-1/2 top-1/2 z-50 w-[min(360px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-surface-container-lowest p-6 shadow-2xl shadow-primary/20"
+          >
+            <div className="mb-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-on-surface-variant/35">
+                Project folder
+              </p>
+              <h3 className="mt-1 text-xl font-black tracking-tight text-primary">Create folder</h3>
+              <p className="mt-1 text-xs font-medium leading-relaxed text-on-surface-variant/55">
+                Folder ini akan muncul di sidebar untuk grouping project dalam workspace.
+              </p>
+            </div>
+            <input
+              value={newFolderName}
+              onChange={(event) => setNewFolderName(event.target.value)}
+              autoFocus
+              placeholder="Contoh: JAGAIN"
+              className="w-full rounded-xl border border-on-surface-variant/10 bg-surface-container px-4 py-3 text-sm font-bold text-on-surface outline-none transition-all placeholder:text-on-surface-variant/35 focus:border-primary/30 focus:bg-surface-container-lowest focus:ring-4 focus:ring-primary/10"
+            />
+            <div className="mt-3 flex gap-3">
+              <input
+                value={newFolderIcon}
+                onChange={(event) => setNewFolderIcon(event.target.value)}
+                placeholder="📁"
+                className="w-20 rounded-xl border border-on-surface-variant/10 bg-surface-container px-4 py-3 text-center text-lg font-bold text-on-surface outline-none transition-all placeholder:text-on-surface-variant/35 focus:border-primary/30 focus:bg-surface-container-lowest focus:ring-4 focus:ring-primary/10"
+                aria-label="Folder icon"
+              />
+              <div className="flex flex-1 items-center rounded-xl bg-surface-container px-4 text-xs font-semibold leading-relaxed text-on-surface-variant/55">
+                Isi emoji/icon folder, misalnya 📁, 🎬, ⚖️, 💼.
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowCreateFolder(false)}
+                className="rounded-xl px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-on-surface-variant/60 transition-colors hover:bg-surface-container"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={creatingFolder || !newFolderName.trim()}
+                className="rounded-xl bg-primary px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-primary-foreground shadow-lg shadow-primary/15 transition-all hover:translate-y-[-1px] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {creatingFolder ? "Creating..." : "Create folder"}
+              </button>
+            </div>
+          </form>
+        </>,
+        document.body
+      )}
+
+      {editingFolder && isClient && createPortal(
+        <>
+          <div className="fixed inset-0 z-50 bg-primary/20 backdrop-blur-sm" onClick={() => setEditingFolder(null)} />
+          <form
+            onSubmit={(event) => {
+              event.preventDefault()
+              handleUpdateFolder()
+            }}
+            className="fixed left-1/2 top-1/2 z-50 w-[min(380px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-surface-container-lowest p-6 shadow-2xl shadow-primary/20"
+          >
+            <div className="mb-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-on-surface-variant/35">
+                Folder settings
+              </p>
+              <h3 className="mt-1 text-xl font-black tracking-tight text-primary">Edit folder</h3>
+              <p className="mt-1 text-xs font-medium leading-relaxed text-on-surface-variant/55">
+                Ubah nama dan icon folder yang tampil di sidebar project.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => folderIconInputRef.current?.click()}
+                className="relative flex h-[58px] w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-on-surface-variant/10 bg-surface-container text-lg font-bold text-on-surface transition-all hover:bg-surface-container-high focus:outline-none focus:ring-4 focus:ring-primary/10"
+                title="Upload folder icon"
+              >
+                {folderIconUploadPreview ? (
+                  <Image src={folderIconUploadPreview} alt="Folder icon preview" fill className="object-cover" unoptimized />
+                ) : (
+                  <FolderIconPreview icon={editFolderIcon} className="h-9 w-9 text-2xl" />
+                )}
+                <span className="absolute bottom-1 right-1 rounded-full bg-primary p-1 text-primary-foreground shadow-md">
+                  <ImagePlus className="h-3 w-3" />
+                </span>
+              </button>
+              <input
+                ref={folderIconInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/jpg,image/svg+xml,image/webp"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  if (file) handleFolderIconFileSelect(file)
+                }}
+              />
+              <input
+                value={editFolderName}
+                onChange={(event) => setEditFolderName(event.target.value)}
+                autoFocus
+                placeholder="Folder name"
+                className="min-w-0 flex-1 rounded-xl border border-on-surface-variant/10 bg-surface-container px-4 py-3 text-sm font-bold text-on-surface outline-none transition-all placeholder:text-on-surface-variant/35 focus:border-primary/30 focus:bg-surface-container-lowest focus:ring-4 focus:ring-primary/10"
+              />
+            </div>
+            <div className="mt-3 rounded-xl bg-surface-container px-4 py-3 text-xs font-semibold leading-relaxed text-on-surface-variant/55">
+              Klik icon untuk upload PNG/JPG/SVG/WEBP. Kalau mau emoji, isi manual di bawah.
+            </div>
+            <input
+              value={isUploadedFolderIcon(editFolderIcon) ? "" : editFolderIcon}
+              onChange={(event) => {
+                setEditFolderIcon(event.target.value)
+                clearFolderIconUpload()
+              }}
+              placeholder="Emoji icon, contoh 📁"
+              className="mt-3 w-full rounded-xl border border-on-surface-variant/10 bg-surface-container px-4 py-3 text-sm font-bold text-on-surface outline-none transition-all placeholder:text-on-surface-variant/35 focus:border-primary/30 focus:bg-surface-container-lowest focus:ring-4 focus:ring-primary/10"
+              aria-label="Emoji folder icon"
+            />
+            {folderIconUploadFile && (
+              <button
+                type="button"
+                onClick={clearFolderIconUpload}
+                className="mt-2 text-xs font-bold text-on-surface-variant/50 hover:text-primary"
+              >
+                Remove selected upload
+              </button>
+            )}
+            {folderIconUploadError && (
+              <p className="mt-2 text-xs font-bold text-red-500">{folderIconUploadError}</p>
+            )}
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setEditingFolder(null)}
+                className="rounded-xl px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-on-surface-variant/60 transition-colors hover:bg-surface-container"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={updatingFolder || folderIconUploading || !editFolderName.trim()}
+                className="rounded-xl bg-primary px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-primary-foreground shadow-lg shadow-primary/15 transition-all hover:translate-y-[-1px] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {updatingFolder || folderIconUploading ? (
+                  <span className="inline-flex items-center gap-2"><Loader2 className="h-3 w-3 animate-spin" /> Saving...</span>
+                ) : "Save folder"}
+              </button>
+            </div>
+          </form>
+        </>,
+        document.body
+      )}
+
       {/* Project context menu */}
       {projectMenu && createPortal(
         <>
           <div className="fixed inset-0 z-50" onClick={() => setProjectMenu(null)} />
           <div
-            className="fixed z-50 rounded-lg border border-white/10 bg-[#2e2f31] p-1 shadow-lg min-w-[160px]"
+            className="fixed z-50 max-h-[70vh] min-w-[190px] overflow-y-auto rounded-lg border border-white/10 bg-[#2e2f31] p-1 shadow-lg"
             style={{
-              left: Math.min(projectMenu.x, window.innerWidth - 170),
-              top: Math.min(projectMenu.y, window.innerHeight - 140),
+              left: Math.min(projectMenu.x, window.innerWidth - 200),
+              top: Math.min(projectMenu.y, window.innerHeight - 260),
             }}
           >
             {(() => {
               const p = projects.find((p) => p.id === projectMenu.projectId)
               const isArchived = p?.status === "ARCHIVED"
+              const availableFolders = projectFolders.filter((folder) => !p?.workspaceId || folder.workspaceId === p.workspaceId)
               return (
                 <>
                   <button
@@ -980,6 +1485,36 @@ export function Sidebar({ user }: SidebarProps) {
                     <Copy className="h-3.5 w-3.5" />
                     Duplicate
                   </button>
+                  <div className="my-1 h-px bg-white/10" />
+                  <p className="px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-sidebar-text/45">
+                    Move to folder
+                  </p>
+                  <button
+                    onClick={async () => {
+                      await handleMoveProjectToFolder(projectMenu.projectId, null)
+                      setProjectMenu(null)
+                    }}
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-sidebar-text hover:bg-zinc-700 transition-colors"
+                  >
+                    <Folder className="h-3.5 w-3.5" />
+                    No folder
+                    {!p?.folderId && <span className="ml-auto text-[10px] text-sidebar-text/50">Current</span>}
+                  </button>
+                  {availableFolders.map((folder) => (
+                    <button
+                      key={folder.id}
+                      onClick={async () => {
+                        await handleMoveProjectToFolder(projectMenu.projectId, folder.id)
+                        setProjectMenu(null)
+                      }}
+                      className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-sidebar-text hover:bg-zinc-700 transition-colors"
+                    >
+                      <Folder className="h-3.5 w-3.5" style={{ color: folder.color }} />
+                      <span className="truncate">{folder.name}</span>
+                      {p?.folderId === folder.id && <span className="ml-auto text-[10px] text-sidebar-text/50">Current</span>}
+                    </button>
+                  ))}
+                  <div className="my-1 h-px bg-white/10" />
                   <button
                     onClick={() => {
                       if (p) setConfirmDeleteProject({ id: p.id, name: p.name })

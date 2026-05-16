@@ -65,6 +65,7 @@ model Workspace {
 
   members         WorkspaceMember[]
   projects        Project[]
+  projectFolders  ProjectFolder[]
   goals           Goal[]
   teams           Team[]
   portfolios      Portfolio[]
@@ -75,6 +76,7 @@ model Workspace {
   officeLocations    OfficeLocation[]
   attendanceRecords  AttendanceRecord[]
   attendanceRequests AttendanceRequest[]
+  customFieldLibraries CustomFieldLibrary[]
 }
 
 model WorkspaceMember {
@@ -108,12 +110,16 @@ model Project {
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
+  folderId String?
+  folder   ProjectFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
   members        ProjectMember[]
   taskLists      TaskList[]
   activityLogs   ActivityLog[]
   sprints        Sprint[]
   automations    Automation[]
   customFields   CustomField[]
+  customFieldLibraries CustomFieldLibrary[]
   docs           Doc[]
   forms          Form[]
   statusUpdates  StatusUpdate[]
@@ -138,6 +144,24 @@ model ProjectMember {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([userId, projectId])
+}
+
+model ProjectFolder {
+  id        String   @id @default(cuid())
+  name      String
+  icon      String   @default("📁")
+  color     String   @default("#111827")
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  projects Project[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, position])
 }
 
 model TaskList {
@@ -434,7 +458,32 @@ model CustomField {
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
+  libraryId String?
+  library   CustomFieldLibrary? @relation(fields: [libraryId], references: [id], onDelete: SetNull)
+
   values CustomFieldValue[]
+
+  @@index([libraryId])
+}
+
+model CustomFieldLibrary {
+  id        String          @id @default(cuid())
+  name      String
+  type      CustomFieldType @default(TEXT)
+  options   Json?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  sourceProjectId String?
+  sourceProject   Project? @relation(fields: [sourceProjectId], references: [id], onDelete: SetNull)
+
+  fields CustomField[]
+
+  @@index([workspaceId])
+  @@index([sourceProjectId])
 }
 
 model CustomFieldValue {
@@ -890,6 +939,7 @@ model ProofAnnotation {
 model Form {
   id          String   @id @default(cuid())
   name        String
+  slug        String?  @unique
   description String?
   fields      Json
   branding    Json?    // { logoUrl, primaryColor, backgroundColor, headerImage }

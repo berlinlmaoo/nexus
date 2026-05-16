@@ -3,8 +3,10 @@
 import { signIn } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { createLogger } from '@/lib/logger'
+import { canonicalEmail } from '@/lib/email-auth'
 
 const log = createLogger('login')
+const FALLBACK_REDIRECT = '/dashboard'
 
 function isNextRedirectError(e: unknown): boolean {
   return (
@@ -17,8 +19,12 @@ function isNextRedirectError(e: unknown): boolean {
 }
 
 export async function loginAction(formData: FormData) {
-  const email = String(formData.get('email') ?? '').trim()
+  const email = canonicalEmail(String(formData.get('email') ?? ''))
   const password = String(formData.get('password') ?? '')
+  const requestedCallbackUrl = String(formData.get('callbackUrl') ?? FALLBACK_REDIRECT)
+  const redirectTo = requestedCallbackUrl.startsWith('/') && !requestedCallbackUrl.startsWith('//')
+    ? requestedCallbackUrl
+    : FALLBACK_REDIRECT
 
   if (!email || !password) {
     redirect('/login?error=missing')
@@ -28,13 +34,13 @@ export async function loginAction(formData: FormData) {
     await signIn('credentials', {
       email,
       password,
-      redirectTo: '/dashboard',
+      redirectTo,
     })
   } catch (e) {
     if (isNextRedirectError(e)) {
       throw e
     }
     log.error('signIn failed', { error: String(e) })
-    redirect('/login?error=Configuration')
+    redirect('/login?error=CredentialsSignin')
   }
 }
