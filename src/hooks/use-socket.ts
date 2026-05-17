@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, useCallback } from "react"
 import { io, Socket } from "socket.io-client"
 
+type SocketTransport = "polling" | "websocket"
+
 interface UseSocketOptions {
   room: string
   userId: string
@@ -12,6 +14,25 @@ interface UseSocketOptions {
 }
 
 let socketServerReadyPromise: Promise<void> | null = null
+
+function getSocketTransports(): SocketTransport[] {
+  const configuredTransports = process.env.NEXT_PUBLIC_SOCKET_TRANSPORTS?.split(",")
+    .map((transport) => transport.trim())
+    .filter((transport): transport is SocketTransport =>
+      transport === "polling" || transport === "websocket"
+    )
+
+  if (configuredTransports?.length) {
+    return configuredTransports
+  }
+
+  // Cloudflare Tunnel can surface noisy browser warnings when a page closes
+  // while Socket.IO is upgrading from polling to websocket. Polling keeps
+  // realtime features reliable in production; dev still tests both paths.
+  return process.env.NODE_ENV === "production"
+    ? ["polling"]
+    : ["polling", "websocket"]
+}
 
 async function ensureSocketServer() {
   if (!socketServerReadyPromise) {
@@ -52,9 +73,14 @@ export function useSocket({
 
         if (cancelled) return
 
+        const transports = getSocketTransports()
+        const canUpgradeToWebSocket =
+          transports.includes("polling") && transports.includes("websocket")
+
         const socket = io({
           path: "/api/socket",
-          transports: ["polling", "websocket"],
+          transports,
+          upgrade: canUpgradeToWebSocket,
         })
 
         socketRef.current = socket
