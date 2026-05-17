@@ -16,7 +16,7 @@ interface SocketWithIO extends NetSocket {
   server: SocketServer
 }
 
-interface NextApiResponseWithSocket extends NextApiResponse {
+export interface NextApiResponseWithSocket extends NextApiResponse {
   socket: SocketWithIO
 }
 
@@ -25,12 +25,12 @@ const ALLOWED_ORIGINS = [
   process.env.NEXT_PUBLIC_APP_URL,
 ].filter(Boolean) as string[]
 
-export default function handler(
+export function initializeSocketServer(
   _req: NextApiRequest,
   res: NextApiResponseWithSocket
 ) {
   if (res.socket.server.io) {
-    res.end()
+    res.status(204).end()
     return
   }
 
@@ -244,5 +244,12 @@ export default function handler(
   })
 
   res.socket.server.io = io
-  res.end()
+  res.status(204).end()
+}
+
+export default function handler(
+  req: NextApiRequest,
+  res: NextApiResponseWithSocket
+) {
+  initializeSocketServer(req, res)
 }
