@@ -265,7 +265,7 @@ export function WorkspaceMembersSection({ canManage, currentUserId }: { canManag
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative min-w-[260px]">
+          <div className="relative w-full sm:min-w-[260px]">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant/35" />
             <Input
               value={search}
@@ -467,7 +467,7 @@ export function WorkspaceMembersSection({ canManage, currentUserId }: { canManag
               </DialogHeader>
 
               <div className="mt-6 flex flex-col gap-6 sm:flex-row sm:items-start">
-                <div className="space-y-3">
+                <div className="flex flex-col items-start gap-3 sm:block sm:space-y-3">
                   <UserAvatar
                     user={{
                       name: editName || editMember.name,
@@ -507,12 +507,12 @@ export function WorkspaceMembersSection({ canManage, currentUserId }: { canManag
                     <Input value={members.find((member) => member.id === editMember.memberId)?.email ?? ""} disabled className="h-12 rounded-2xl border-none bg-surface-container px-5 text-sm font-bold text-on-surface-variant/45" />
                   </div>
 
-                  <div className="flex flex-wrap gap-3">
+                  <div className="grid gap-3 sm:flex sm:flex-wrap">
                     <Button
                       type="button"
                       onClick={handleSaveEdit}
                       disabled={savingEdit}
-                      className="h-11 rounded-2xl bg-primary px-5 text-xs font-black uppercase tracking-[0.18em] text-primary-foreground"
+                      className="h-11 w-full rounded-2xl bg-primary px-5 text-xs font-black uppercase tracking-[0.18em] text-primary-foreground sm:w-auto"
                     >
                       {savingEdit ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                       Save Changes
@@ -521,7 +521,7 @@ export function WorkspaceMembersSection({ canManage, currentUserId }: { canManag
                       type="button"
                       variant="outline"
                       onClick={closeEditDialog}
-                      className="h-11 rounded-2xl px-5 text-xs font-black uppercase tracking-[0.18em]"
+                      className="h-11 w-full rounded-2xl px-5 text-xs font-black uppercase tracking-[0.18em] sm:w-auto"
                     >
                       Cancel
                     </Button>

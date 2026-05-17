@@ -164,7 +164,7 @@ export function GalleryView({ tasks, onTaskClick }: GalleryViewProps) {
   )
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
       {taskEntries.map(({ task, animationDelayMs }) => (
         <GalleryTaskCard
           key={task.id}
@@ -176,7 +176,7 @@ export function GalleryView({ tasks, onTaskClick }: GalleryViewProps) {
 
       {/* + New card */}
       <div
-        className="rounded-xl border-2 border-dashed bg-muted/30 flex flex-col items-center justify-center min-h-[200px] cursor-pointer hover:border-border hover:bg-muted/50 transition-all duration-200 group"
+        className="flex min-h-[160px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed bg-muted/30 transition-all duration-200 hover:border-border hover:bg-muted/50 sm:min-h-[200px] group"
         style={{ animationDelay: `${Math.min(tasks.length, 8) * 40}ms` }}
       >
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted group-hover:bg-muted transition-colors">

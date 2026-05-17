@@ -19,7 +19,7 @@ export default async function ForgotPasswordPage() {
   if (session) redirect("/dashboard")
 
   return (
-    <div className="relative min-h-screen flex items-stretch bg-surface overflow-hidden">
+    <div className="relative flex min-h-[100svh] items-stretch overflow-hidden bg-surface">
       <div className="hidden lg:flex w-1/2 bg-primary relative flex-col justify-between p-16 overflow-hidden">
         <div className="absolute inset-0 opacity-20">
           <div className="absolute top-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-white/10 blur-[120px] animate-pulse" />
@@ -57,7 +57,7 @@ export default async function ForgotPasswordPage() {
         </div>
       </div>
 
-      <div className="relative flex flex-1 flex-col justify-center bg-surface px-5 py-8 sm:px-10 sm:py-12 lg:px-24 xl:px-32">
+      <div className="mobile-scroll-area relative flex flex-1 flex-col justify-center overflow-y-auto bg-surface px-5 py-8 sm:px-10 sm:py-12 lg:px-24 xl:px-32">
         <div className="absolute left-5 top-6 lg:hidden sm:left-10 sm:top-10">
           <Image
             src="/logos/nexus-logo-mono.png"

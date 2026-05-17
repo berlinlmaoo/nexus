@@ -83,6 +83,7 @@ export function CreateTaskDialog({
     defaultTaskListId || taskLists[0]?.id || ""
   )
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([])
+  const [assigneeSearch, setAssigneeSearch] = useState("")
   const [dueDate, setDueDate] = useState("")
   const [tagInput, setTagInput] = useState("")
   const [tags, setTags] = useState<string[]>([])
@@ -144,10 +145,17 @@ export function CreateTaskDialog({
     setPriority("MEDIUM")
     setTaskListId(defaultTaskListId || taskLists[0]?.id || "")
     setSelectedAssignees([])
+    setAssigneeSearch("")
     setDueDate("")
     setTags([])
     setTagInput("")
   }
+
+  const filteredMembers = members.filter((member) => {
+    const query = assigneeSearch.trim().toLowerCase()
+    if (!query) return true
+    return member.name.toLowerCase().includes(query)
+  })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -194,7 +202,7 @@ export function CreateTaskDialog({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[560px] max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-h-[calc(100dvh_-_1rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] overflow-y-auto sm:max-w-[560px]">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>Create New Task</DialogTitle>
@@ -227,11 +235,11 @@ export function CreateTaskDialog({
             </div>
 
             {/* Status + Priority row */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="grid gap-2">
                 <Label>Status</Label>
                 <select
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18181B] focus-visible:ring-offset-2"
+                  className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18181B] focus-visible:ring-offset-2 sm:h-10"
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
                 >
@@ -246,7 +254,7 @@ export function CreateTaskDialog({
               <div className="grid gap-2">
                 <Label>Priority</Label>
                 <select
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18181B] focus-visible:ring-offset-2"
+                  className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18181B] focus-visible:ring-offset-2 sm:h-10"
                   value={priority}
                   onChange={(e) => setPriority(e.target.value)}
                 >
@@ -263,7 +271,7 @@ export function CreateTaskDialog({
             <div className="grid gap-2">
               <Label>Task List</Label>
               <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18181B] focus-visible:ring-offset-2"
+                className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#18181B] focus-visible:ring-offset-2 sm:h-10"
                 value={taskListId}
                 onChange={(e) => setTaskListId(e.target.value)}
               >
@@ -289,13 +297,21 @@ export function CreateTaskDialog({
             {/* Assignees */}
             <div className="grid gap-2">
               <Label>Assignees</Label>
-              <div className="flex flex-wrap gap-2">
-                {members.map((member) => (
+              {members.length > 6 && (
+                <Input
+                  value={assigneeSearch}
+                  onChange={(event) => setAssigneeSearch(event.target.value)}
+                  placeholder="Search member..."
+                  className="h-11 sm:h-10"
+                />
+              )}
+              <div className="mobile-scroll-area flex max-h-48 flex-wrap gap-2 overflow-y-auto rounded-2xl border border-input/60 bg-background p-2 sm:max-h-40">
+                {filteredMembers.map((member) => (
                   <button
                     key={member.id}
                     type="button"
                     className={cn(
-                      "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors",
+                      "touch-target flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors sm:min-h-0",
                       selectedAssignees.includes(member.id)
                         ? "border-[#18181B] bg-[#18181B]/10 text-[#18181B]"
                         : "border-input hover:border-[#18181B]/50"
@@ -310,13 +326,18 @@ export function CreateTaskDialog({
                     No members found
                   </span>
                 )}
+                {members.length > 0 && filteredMembers.length === 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    No members match your search
+                  </span>
+                )}
               </div>
             </div>
 
             {/* Tags */}
             <div className="grid gap-2">
               <Label>Tags</Label>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Input
                   placeholder="Add a tag..."
                   value={tagInput}
@@ -333,6 +354,7 @@ export function CreateTaskDialog({
                   variant="outline"
                   size="sm"
                   onClick={handleAddTag}
+                  className="h-11 w-full sm:h-9 sm:w-auto"
                 >
                   Add
                 </Button>
@@ -355,15 +377,16 @@ export function CreateTaskDialog({
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="sticky bottom-0 -mx-5 bg-surface-container-lowest px-5 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3 sm:static sm:mx-0 sm:bg-transparent sm:p-0">
             <Button
               type="button"
               variant="outline"
               onClick={() => setDialogOpen(false)}
+              className="h-11 w-full sm:h-10 sm:w-auto"
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={loading || !title.trim()}>
+            <Button type="submit" disabled={loading || !title.trim()} className="h-11 w-full sm:h-10 sm:w-auto">
               {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Create Task
             </Button>

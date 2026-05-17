@@ -494,18 +494,18 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
                   {previewAttachment.mimeType} · {formatFileSize(previewAttachment.size)}
                 </DialogDescription>
               </DialogHeader>
-              <div className="max-h-[75vh] overflow-auto bg-surface-container-low px-4 py-4 sm:px-6 sm:py-6">
+              <div className="mobile-scroll-area max-h-[calc(100dvh_-_8rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] overflow-auto bg-surface-container-low px-4 py-4 sm:px-6 sm:py-6">
                 {previewAttachment.mimeType.startsWith("image/") ? (
                   <img
                     src={resolveAttachmentUrl(previewAttachment.url)}
                     alt={previewAttachment.filename}
-                    className="mx-auto h-auto max-h-[68vh] w-auto max-w-full rounded-2xl border bg-white object-contain shadow-sm"
+                    className="mx-auto h-auto max-h-[calc(100dvh_-_10rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] w-auto max-w-full rounded-2xl border bg-white object-contain shadow-sm"
                   />
                 ) : previewAttachment.mimeType.includes("pdf") ? (
                   <iframe
                     src={resolveAttachmentUrl(previewAttachment.url)}
                     title={previewAttachment.filename}
-                    className="h-[68vh] w-full rounded-2xl border bg-white"
+                    className="h-[calc(100dvh_-_10rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] w-full rounded-2xl border bg-white"
                   />
                 ) : null}
               </div>

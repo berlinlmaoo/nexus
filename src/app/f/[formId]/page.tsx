@@ -61,7 +61,7 @@ export default function PublicFormPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-50">
+      <div className="flex min-h-[100svh] items-center justify-center bg-zinc-50">
         <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
       </div>
     )
@@ -69,7 +69,7 @@ export default function PublicFormPage() {
 
   if (error || !form) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-4">
+      <div className="flex min-h-[100svh] items-center justify-center bg-zinc-50 p-4">
         <div className="w-full max-w-lg rounded-xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
           <h2 className="text-xl font-semibold text-zinc-900">Form Not Available</h2>
           <p className="mt-2 text-sm text-zinc-500">

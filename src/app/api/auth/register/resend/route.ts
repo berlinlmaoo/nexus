@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic"
+
 import { NextRequest, NextResponse } from "next/server"
 import { OtpPurpose } from "@/generated/prisma"
 import prisma from "@/lib/prisma"

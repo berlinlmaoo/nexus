@@ -806,7 +806,7 @@ export function Sidebar({ user }: SidebarProps) {
     <aside
       ref={sidebarRef}
       className={cn(
-        "fixed inset-y-0 left-0 z-[60] flex flex-col overflow-hidden border-r border-on-surface-variant/5 bg-surface-container-low text-on-surface select-none shadow-2xl transition-all duration-300 ease-in-out md:relative md:z-auto md:h-screen md:shadow-none",
+        "fixed inset-y-0 left-0 z-[60] flex max-h-[100dvh] flex-col overflow-hidden border-r border-on-surface-variant/5 bg-surface-container-low text-on-surface select-none shadow-2xl transition-all duration-300 ease-in-out md:relative md:z-auto md:h-[100dvh] md:shadow-none",
         sidebarOpen ? "translate-x-0" : "-translate-x-full md:hidden"
       )}
       style={{ width: `${effectiveWidth}px` }}
@@ -1056,11 +1056,19 @@ export function Sidebar({ user }: SidebarProps) {
         {/* Projects section */}
         {!renderCollapsed ? (
           <div className="mb-4">
-            <button
-              onClick={() => setProjectsOpen(!projectsOpen)}
-              className="flex w-full items-center justify-between px-3 py-1 text-[9px] font-bold uppercase tracking-[0.1em] text-on-surface-variant/40 transition-colors hover:text-on-surface-variant/70 md:text-[10px]"
-            >
-              <span>Projects</span>
+            <div className="flex w-full items-center justify-between px-3 py-1 text-[9px] font-bold uppercase tracking-[0.1em] text-on-surface-variant/40 transition-colors hover:text-on-surface-variant/70 md:text-[10px]">
+              <button
+                type="button"
+                onClick={() => setProjectsOpen(!projectsOpen)}
+                className="flex min-w-0 flex-1 items-center gap-1 text-left uppercase tracking-[0.1em]"
+              >
+                <span>Projects</span>
+                {projectsOpen ? (
+                  <ChevronDown className="h-3 w-3" />
+                ) : (
+                  <ChevronRight className="h-3 w-3" />
+                )}
+              </button>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
@@ -1081,13 +1089,8 @@ export function Sidebar({ user }: SidebarProps) {
                 >
                   <Plus className="h-3 w-3" />
                 </Link>
-                {projectsOpen ? (
-                  <ChevronDown className="h-3 w-3" />
-                ) : (
-                  <ChevronRight className="h-3 w-3" />
-                )}
               </div>
-            </button>
+            </div>
 
             <div
               className={cn(
@@ -1283,7 +1286,7 @@ export function Sidebar({ user }: SidebarProps) {
               event.preventDefault()
               handleCreateFolder()
             }}
-            className="fixed left-1/2 top-1/2 z-50 w-[min(360px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-surface-container-lowest p-6 shadow-2xl shadow-primary/20"
+            className="fixed left-1/2 top-1/2 z-50 w-[min(360px,calc(100vw_-_32px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-surface-container-lowest p-6 shadow-2xl shadow-primary/20"
           >
             <div className="mb-5">
               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-on-surface-variant/35">
@@ -1342,7 +1345,7 @@ export function Sidebar({ user }: SidebarProps) {
               event.preventDefault()
               handleUpdateFolder()
             }}
-            className="fixed left-1/2 top-1/2 z-50 w-[min(380px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-surface-container-lowest p-6 shadow-2xl shadow-primary/20"
+            className="fixed left-1/2 top-1/2 z-50 w-[min(380px,calc(100vw_-_32px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-surface-container-lowest p-6 shadow-2xl shadow-primary/20"
           >
             <div className="mb-5">
               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-on-surface-variant/35">

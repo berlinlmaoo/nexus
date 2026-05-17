@@ -40,11 +40,11 @@ export function DrivePickerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+      <DialogContent className="flex max-h-[calc(100dvh_-_1rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] max-w-2xl flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        <div className="flex-1 overflow-y-auto">
+        <div className="mobile-scroll-area flex-1 overflow-y-auto">
           <DriveBrowser selectable onSelect={handleSelect} />
         </div>
       </DialogContent>

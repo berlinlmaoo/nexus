@@ -97,10 +97,10 @@ export function CreateProjectDialog({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[540px] rounded-[3rem] border-none shadow-2xl p-10 bg-surface-container-highest overflow-hidden">
+      <DialogContent className="overflow-y-auto rounded-[2rem] border-none bg-surface-container-highest p-5 shadow-2xl sm:max-w-[540px] sm:rounded-[3rem] sm:p-10">
         <div className="absolute top-0 right-0 w-48 h-48 bg-primary/[0.03] rounded-full blur-[80px] -mr-24 -mt-24" />
         
-        <form onSubmit={handleSubmit} className="relative z-10 space-y-10">
+        <form onSubmit={handleSubmit} className="relative z-10 space-y-7 sm:space-y-10">
           <DialogHeader className="space-y-3">
             <div className="h-12 w-12 rounded-2xl bg-primary flex items-center justify-center text-primary-foreground shadow-lg shadow-primary/20 mb-2">
               <Sparkles className="h-6 w-6" />
@@ -131,7 +131,7 @@ export function CreateProjectDialog({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-8">
+            <div className="grid gap-6 sm:grid-cols-2 sm:gap-8">
               <div className="space-y-4">
                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/40 ml-1">Protocol Color</label>
                 <div className="flex flex-wrap gap-2">
@@ -176,11 +176,11 @@ export function CreateProjectDialog({
             </div>
           </div>
 
-          <div className="flex gap-3 pt-4">
+          <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:pt-4">
             <Button
               type="button"
               variant="ghost"
-              className="flex-1 h-14 rounded-2xl font-black text-xs uppercase tracking-widest text-on-surface-variant/40 hover:bg-surface-container transition-all"
+              className="h-14 flex-1 rounded-2xl font-black text-xs uppercase tracking-widest text-on-surface-variant/40 transition-all hover:bg-surface-container"
               onClick={() => setOpen(false)}
             >
               Abort
@@ -188,7 +188,7 @@ export function CreateProjectDialog({
             <Button 
               type="submit" 
               disabled={loading || !name.trim()}
-              className="flex-[2] h-14 bg-primary text-primary-foreground rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-primary/10 transition-all hover:shadow-2xl active:scale-95"
+              className="h-14 flex-[2] rounded-2xl bg-primary text-xs font-black uppercase tracking-[0.2em] text-primary-foreground shadow-xl shadow-primary/10 transition-all hover:shadow-2xl active:scale-95"
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Deploy Initiative"}
             </Button>

@@ -986,11 +986,11 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                         updateField(field.id, { name: e.target.value })
                       }
                       placeholder="Field name"
-                      className="min-w-0 flex-1 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                      className="min-w-0 flex-1 basis-[calc(100%_-_2.5rem)] rounded-md border border-zinc-200 bg-white px-2.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 sm:basis-auto sm:py-1.5"
                     />
 
                     {/* Type selector */}
-                    <div className="relative">
+                    <div className="relative w-full sm:w-auto">
                       <FieldTypeIcon className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
                       <select
                         value={field.type}
@@ -1009,7 +1009,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                             setExpandedFieldId(field.id)
                           }
                         }}
-                        className="h-8 appearance-none rounded-md border border-zinc-200 bg-white py-1 pl-7 pr-7 text-sm text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                        className="h-10 w-full appearance-none rounded-md border border-zinc-200 bg-white py-1 pl-7 pr-7 text-sm text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 sm:h-8 sm:w-auto"
                       >
                         {FIELD_TYPES.map((ft) => (
                           <option key={ft.value} value={ft.value}>
@@ -1054,7 +1054,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                           })
                         }
                         className={cn(
-                          "inline-flex h-8 items-center gap-1.5 rounded-md border px-2 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-900",
+                          "inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-md border px-2 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-900 sm:h-8 sm:w-auto",
                           field.attachmentEnabled
                             ? "border-zinc-900 bg-zinc-900 text-white"
                             : "border-zinc-200 bg-white text-zinc-500 hover:text-zinc-900"
@@ -1103,7 +1103,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                             : {}),
                         })
                       }}
-                      className="h-8 max-w-[220px] rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                      className="h-10 w-full rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 sm:h-8 sm:max-w-[220px]"
                       aria-label="Task mapping"
                     >
                       <option value="none">No mapping</option>
@@ -1131,7 +1131,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                         onClick={() =>
                           setExpandedFieldId(isExpanded ? null : field.id)
                         }
-                        className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                        className="touch-target rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-zinc-900 sm:min-h-0 sm:min-w-0"
                         aria-label="Edit options"
                       >
                         <ChevronDown
@@ -1147,7 +1147,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                     <button
                       type="button"
                       onClick={() => duplicateField(field.id)}
-                      className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                      className="touch-target rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-900 sm:min-h-0 sm:min-w-0"
                       aria-label="Duplicate field"
                     >
                       <Copy className="h-4 w-4" />
@@ -1157,7 +1157,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                     <button
                       type="button"
                       onClick={() => removeField(field.id)}
-                      className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                      className="touch-target rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-zinc-900 sm:min-h-0 sm:min-w-0"
                       aria-label="Delete field"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -1212,7 +1212,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                   {/* Choice options editor */}
                   {isChoiceField(field.type) && isExpanded && (
                     <div className="border-t border-zinc-100 px-3 py-2.5">
-                      <div className="mb-2 flex items-center justify-between gap-2">
+                      <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                           <label className="block text-xs font-medium text-zinc-500">
                             {field.type === "multi_select" ? "Multi-select options" : "Dropdown options"}
@@ -1221,7 +1221,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                             Optional: enable branch questions to add follow-up fields per answer.
                           </p>
                         </div>
-                        <div className="flex flex-wrap items-center justify-end gap-2">
+                        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
                           <button
                             type="button"
                             role="switch"
@@ -1230,7 +1230,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                               updateField(field.id, { branchEnabled: !field.branchEnabled })
                             }
                             className={cn(
-                              "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-900",
+                              "inline-flex h-10 items-center justify-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-900 sm:h-auto",
                               field.branchEnabled
                                 ? "border-zinc-900 bg-zinc-900 text-white"
                                 : "border-zinc-200 bg-white text-zinc-500 hover:text-zinc-900"
@@ -1242,7 +1242,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                           <button
                             type="button"
                             onClick={() => addDropdownOption(field.id)}
-                            className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                            className="inline-flex h-10 items-center justify-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-900 sm:h-auto"
                           >
                             <Plus className="h-3 w-3" />
                             Add option
@@ -1252,7 +1252,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                       <div className="space-y-2">
                         {(field.options ?? []).length > 0 ? (
                           (field.options ?? []).map((option, optionIndex) => (
-                            <div key={`${field.id}-option-${optionIndex}`} className="flex items-center gap-2">
+                            <div key={`${field.id}-option-${optionIndex}`} className="flex flex-col gap-2 sm:flex-row sm:items-center">
                               <input
                                 type="text"
                                 value={option}
@@ -1260,14 +1260,14 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                                   updateDropdownOption(field.id, optionIndex, e.target.value)
                                 }
                                 placeholder={`Option ${optionIndex + 1}`}
-                                className="block min-w-0 flex-1 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                                className="block min-w-0 flex-1 rounded-md border border-zinc-200 bg-white px-2.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 sm:py-1.5"
                               />
                               {field.branchEnabled && (
                                 <button
                                   type="button"
                                   onClick={() => addBranchField(field.id, option)}
                                   disabled={!option.trim()}
-                                  className="inline-flex h-8 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 text-xs font-medium text-zinc-600 hover:border-zinc-900 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-40"
+                                  className="inline-flex h-10 items-center justify-center gap-1 rounded-md border border-zinc-200 bg-white px-2 text-xs font-medium text-zinc-600 hover:border-zinc-900 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-40 sm:h-8"
                                   title="Add a follow-up question shown only for this answer"
                                 >
                                   <GitBranch className="h-3 w-3" />
@@ -1277,7 +1277,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                               <button
                                 type="button"
                                 onClick={() => removeDropdownOption(field.id, optionIndex)}
-                                className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                                className="touch-target self-end rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-zinc-900 sm:self-auto sm:min-h-0 sm:min-w-0"
                                 aria-label={`Delete option ${optionIndex + 1}`}
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -1299,7 +1299,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                   )}
 
                   <div className="border-t border-zinc-100 px-3 py-2.5">
-                    <div className="mb-2 flex items-center justify-between gap-2">
+                    <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <span className="flex items-center gap-1.5 text-xs font-medium text-zinc-500">
                           <GitBranch className="h-3 w-3" />
@@ -1312,7 +1312,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                       <button
                         type="button"
                         onClick={() => addRoutingRule(field.id)}
-                        className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                        className="inline-flex h-10 items-center justify-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-900 sm:h-auto"
                       >
                         <Plus className="h-3 w-3" />
                         Add rule
@@ -1333,7 +1333,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                               <button
                                 type="button"
                                 onClick={() => removeRoutingRule(field.id, rule.id)}
-                                className="rounded p-0.5 text-zinc-400 hover:text-red-600"
+                                className="touch-target rounded p-0.5 text-zinc-400 hover:text-red-600 sm:min-h-0 sm:min-w-0"
                                 aria-label="Delete automation rule"
                               >
                                 <X className="h-3.5 w-3.5" />
@@ -1350,7 +1350,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                                     operator: e.target.value as FormFieldCondition["operator"],
                                   })
                                 }
-                                className="h-8 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                                className="h-10 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 sm:h-8"
                               >
                                 {CONDITION_OPERATORS.map((op) => (
                                   <option key={op.value} value={op.value}>
@@ -1366,10 +1366,10 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                                     updateRoutingRule(field.id, rule.id, { value: e.target.value })
                                   }
                                   placeholder="Value, e.g. Fotografer"
-                                  className="h-8 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                                  className="h-10 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 sm:h-8"
                                 />
                               ) : (
-                                <div className="h-8 rounded-md border border-zinc-100 bg-white px-2 py-2 text-xs text-zinc-400">
+                                <div className="h-10 rounded-md border border-zinc-100 bg-white px-2 py-2 text-xs text-zinc-400 sm:h-8">
                                   No value needed
                                 </div>
                               )}
@@ -1389,7 +1389,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                                     targetUserIds: undefined,
                                   })
                                 }
-                                className="h-8 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                                className="h-10 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 sm:h-8"
                               >
                                 {ROUTING_ACTIONS.map((action) => (
                                   <option key={action.value} value={action.value}>
@@ -1405,7 +1405,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                                       targetTaskListId: e.target.value || undefined,
                                     })
                                   }
-                                  className="h-8 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                                  className="h-10 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 sm:h-8"
                                 >
                                   <option value="">Select section...</option>
                                   {taskLists.map((taskList) => (
@@ -1417,7 +1417,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                               ) : (
                                 <div className="rounded-md border border-zinc-200 bg-white p-2">
                                   {projectMembers.length > 0 ? (
-                                    <div className="max-h-36 space-y-1 overflow-y-auto pr-1">
+                                    <div className="mobile-scroll-area max-h-44 space-y-1 overflow-y-auto pr-1 sm:max-h-36">
                                       {projectMembers.map((member) => {
                                         const selectedIds = getRuleTargetUserIds(rule)
                                         const selected = selectedIds.includes(member.userId)
@@ -1426,7 +1426,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                                           <label
                                             key={member.userId}
                                             className={cn(
-                                              "flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors",
+                                              "touch-target flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors sm:min-h-0",
                                               selected ? "bg-zinc-900 text-white" : "text-zinc-700 hover:bg-zinc-50"
                                             )}
                                           >
@@ -1493,7 +1493,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                           <X className="h-3.5 w-3.5" />
                         </button>
                       </div>
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(8rem,auto)]">
                         <select
                           value={field.showIf.fieldId}
                           onChange={(e) =>
@@ -1504,7 +1504,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                               },
                             })
                           }
-                          className="h-7 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                          className="h-10 min-w-0 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 sm:h-7"
                         >
                           <option value="">Select field...</option>
                           {fields
@@ -1526,7 +1526,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                               },
                             })
                           }
-                          className="h-7 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                          className="h-10 min-w-0 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 sm:h-7"
                         >
                           {CONDITION_OPERATORS.map((op) => (
                             <option key={op.value} value={op.value}>
@@ -1548,7 +1548,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                                 })
                               }
                               placeholder="Value"
-                              className="h-7 w-32 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                              className="h-10 w-full rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 sm:h-7 sm:w-32"
                             />
                           )}
                       </div>
@@ -1566,7 +1566,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                             },
                           })
                         }
-                        className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-600"
+                        className="touch-target flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-600 sm:min-h-0"
                       >
                         <GitBranch className="h-3 w-3" />
                         Add condition
@@ -1602,7 +1602,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="inline-flex items-center gap-2 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:ring-offset-2 disabled:opacity-50"
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:ring-offset-2 disabled:opacity-50 sm:w-auto"
         >
           {saving ? (
             <Loader2 className="h-4 w-4 animate-spin" />

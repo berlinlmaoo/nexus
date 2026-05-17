@@ -723,13 +723,14 @@ export function TaskDetailPanel({
         onClick={onClose}
       />
 
-      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-2xl animate-slide-in-right flex-col border-l border-on-surface-variant/5 bg-surface-container-highest shadow-2xl shadow-primary/20">
+      <div className="fixed inset-x-0 bottom-0 z-50 flex h-[min(96dvh,900px)] w-full animate-slide-in-right flex-col rounded-t-[2rem] border-t border-on-surface-variant/5 bg-surface-container-highest shadow-2xl shadow-primary/20 sm:inset-x-auto sm:inset-y-0 sm:right-0 sm:h-auto sm:max-w-2xl sm:rounded-none sm:border-l sm:border-t-0">
         {/* Header Toolbar */}
-        <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 bg-surface-container-highest/80 px-4 py-4 backdrop-blur-md sm:px-8 sm:py-6">
+        <div className="safe-area-top sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 bg-surface-container-highest/85 px-4 py-4 backdrop-blur-md sm:px-8 sm:py-6">
           <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
             <button
               onClick={onClose}
-              className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-container-high text-on-surface-variant/60 transition-all hover:bg-surface-container hover:text-primary"
+              className="touch-target flex items-center justify-center rounded-xl bg-surface-container-high text-on-surface-variant/60 transition-all hover:bg-surface-container hover:text-primary sm:h-10 sm:w-10"
+              aria-label="Close task detail"
             >
               <X className="h-5 w-5" />
             </button>
@@ -789,7 +790,7 @@ export function TaskDetailPanel({
         </div>
 
         {/* Scrollable Content */}
-        <div className="scrollbar-hide flex-1 space-y-8 overflow-y-auto px-4 pb-24 sm:space-y-10 sm:px-8 sm:pb-12">
+        <div className="mobile-scroll-area scrollbar-hide flex-1 space-y-8 overflow-y-auto px-4 pb-[calc(7rem_+_env(safe-area-inset-bottom))] sm:space-y-10 sm:px-8 sm:pb-12">
           {/* Status & Title */}
           <div className="space-y-5 sm:space-y-6">
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -798,7 +799,7 @@ export function TaskDetailPanel({
                 onClick={handleToggleDone}
                 disabled={saving}
                 className={cn(
-                  "inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest transition-all outline-none focus:ring-2 focus:ring-primary/10 disabled:opacity-60",
+                  "touch-target inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest transition-all outline-none focus:ring-2 focus:ring-primary/10 disabled:opacity-60 sm:min-h-0",
                   status === "DONE"
                     ? "bg-green-100 text-green-700"
                     : "bg-surface-container-high text-on-surface-variant shadow-sm hover:text-primary"
@@ -816,7 +817,7 @@ export function TaskDetailPanel({
                 value={currentTask.taskListId}
                 onChange={(e) => handleSectionSelect(e.target.value)}
                 className={cn(
-                  "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border-none cursor-pointer focus:ring-2 focus:ring-primary/10 transition-all outline-none",
+                  "min-h-11 rounded-full border-none px-3 py-1 text-[10px] font-black uppercase tracking-widest cursor-pointer transition-all outline-none focus:ring-2 focus:ring-primary/10 sm:min-h-0",
                   status === "DONE" ? "bg-green-100 text-green-700" : "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
                 )}
               >
@@ -833,7 +834,7 @@ export function TaskDetailPanel({
                   setPriority(newPriority)
                   saveTask({ priority: newPriority })
                 }}
-                className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border-none bg-surface-container-high text-on-surface-variant cursor-pointer focus:ring-2 focus:ring-primary/10 transition-all outline-none"
+                className="min-h-11 rounded-full border-none bg-surface-container-high px-3 py-1 text-[10px] font-black uppercase tracking-widest text-on-surface-variant cursor-pointer transition-all outline-none focus:ring-2 focus:ring-primary/10 sm:min-h-0"
               >
                 {PRIORITY_OPTIONS.map(opt => (
                   <option key={opt.value} value={opt.value} className="bg-surface text-on-surface">{opt.label}</option>
@@ -853,7 +854,7 @@ export function TaskDetailPanel({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               onBlur={() => saveTask({ title })}
-              className="h-auto w-full resize-none border-none bg-transparent p-0 text-3xl font-black leading-tight tracking-tight text-on-surface outline-none placeholder:text-on-surface-variant/10 focus:ring-0 sm:text-4xl"
+              className="h-auto w-full resize-none border-none bg-transparent p-0 text-2xl font-black leading-tight tracking-tight text-on-surface outline-none placeholder:text-on-surface-variant/10 focus:ring-0 sm:text-4xl"
               placeholder="Designation Required"
               rows={2}
             />
@@ -874,7 +875,8 @@ export function TaskDetailPanel({
                 ))}
                 <button 
                   onClick={() => setShowMemberSelector(!showMemberSelector)}
-                  className="h-7 w-7 rounded-lg bg-surface-container-low flex items-center justify-center text-on-surface-variant/20 hover:text-primary hover:bg-surface-container transition-all"
+                  className="touch-target flex items-center justify-center rounded-lg bg-surface-container-low text-on-surface-variant/30 transition-all hover:bg-surface-container hover:text-primary sm:h-7 sm:w-7 sm:min-h-0 sm:min-w-0"
+                  aria-label="Add assignee"
                 >
                   <Plus className="h-4 w-4" />
                 </button>
@@ -884,7 +886,7 @@ export function TaskDetailPanel({
               {showMemberSelector && (
                 <div 
                   ref={memberSelectorRef}
-                  className="absolute left-0 top-full z-20 mt-2 w-full rounded-2xl border border-on-surface-variant/5 bg-surface-container-lowest p-2 shadow-2xl animate-scale-in sm:w-64"
+                  className="fixed inset-x-3 bottom-[calc(5.25rem_+_env(safe-area-inset-bottom))] top-auto z-20 max-h-[55dvh] overflow-hidden rounded-2xl border border-on-surface-variant/5 bg-surface-container-lowest p-2 shadow-2xl animate-scale-in sm:absolute sm:inset-x-auto sm:bottom-auto sm:left-0 sm:top-full sm:mt-2 sm:max-h-none sm:w-64"
                 >
                   <p className="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/30 px-3 py-2">Select Personnel</p>
                   <div className="px-2 pb-2">
@@ -1030,7 +1032,7 @@ export function TaskDetailPanel({
 
               {showProjectSelector && (
                 <div
-                  className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 rounded-2xl border border-on-surface-variant/5 bg-surface-container-lowest p-3 shadow-2xl sm:left-5 sm:right-5"
+                className="fixed inset-x-3 bottom-[calc(5.25rem_+_env(safe-area-inset-bottom))] top-auto z-20 max-h-[55dvh] overflow-hidden rounded-2xl border border-on-surface-variant/5 bg-surface-container-lowest p-3 shadow-2xl sm:absolute sm:bottom-auto sm:left-5 sm:right-5 sm:top-[calc(100%_+_8px)] sm:max-h-none"
                 >
                   <p className="px-2 py-2 text-[9px] font-black uppercase tracking-widest text-on-surface-variant/30">
                     Link Project
@@ -1182,7 +1184,7 @@ export function TaskDetailPanel({
 
         {/* Sync Status */}
         {saving && (
-          <div className="absolute bottom-8 right-8 bg-primary text-primary-foreground px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-2 animate-pulse ring-4 ring-primary/10">
+          <div className="absolute bottom-[calc(1.5rem_+_env(safe-area-inset-bottom))] right-4 flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-primary-foreground shadow-2xl ring-4 ring-primary/10 animate-pulse sm:bottom-8 sm:right-8">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             <span className="text-[10px] font-black uppercase tracking-[0.2em]">Synchronizing</span>
           </div>

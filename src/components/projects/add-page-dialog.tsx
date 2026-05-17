@@ -114,7 +114,7 @@ export function AddPageDialog({
                 {showEmojiPicker && (
                   <>
                     <div className="fixed inset-0 z-50" onClick={() => setShowEmojiPicker(false)} />
-                    <div className="absolute left-0 top-full z-50 mt-1 grid grid-cols-8 gap-1 rounded-lg border bg-background p-2 shadow-lg">
+                    <div className="absolute left-0 top-full z-50 mt-1 grid max-w-[calc(100vw_-_2rem)] grid-cols-6 gap-1 rounded-lg border bg-background p-2 shadow-lg sm:grid-cols-8">
                       {EMOJI_OPTIONS.map((emoji) => (
                         <button
                           key={emoji}
@@ -144,13 +144,13 @@ export function AddPageDialog({
           {/* Page Type */}
           <div className="space-y-2">
             <Label>Page Type</Label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid gap-2 sm:grid-cols-2">
               {PAGE_TYPES.map((pt) => (
                 <button
                   key={pt.type}
                   onClick={() => handleTypeSelect(pt.type, pt.icon)}
                   className={cn(
-                    "flex items-start gap-3 rounded-lg border p-3 text-left transition-all duration-150",
+                    "touch-target flex items-start gap-3 rounded-lg border p-3 text-left transition-all duration-150 sm:min-h-0",
                     selectedType === pt.type
                       ? "border-foreground bg-muted"
                       : "border-border hover:border-border hover:bg-muted/50"

@@ -26,12 +26,12 @@ const columnColors: Record<string, string> = {
 
 export function TaskBoard({ columns, onTaskClick, onAddTask }: TaskBoardProps) {
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4">
+    <div className="mobile-horizontal-scroll flex gap-4 overflow-x-auto pb-4">
       {columns.map((col) => (
         <div
           key={col.id}
           className={cn(
-            'flex w-[300px] min-w-[300px] flex-col rounded-lg border border-t-4 bg-muted/30',
+            'flex w-[min(82vw,300px)] min-w-[min(82vw,300px)] flex-col rounded-lg border border-t-4 bg-muted/30 sm:w-[300px] sm:min-w-[300px]',
             columnColors[col.name] || 'border-t-gray-300'
           )}
         >

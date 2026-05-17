@@ -102,7 +102,7 @@ function SingleValueSelect({
           <ChevronDown className="h-4 w-4 text-muted-foreground" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[260px] p-0">
+      <PopoverContent align="start" className="w-[calc(100vw_-_2rem)] max-w-[260px] p-0">
         <Command>
           <CommandInput placeholder={`Search ${field.name.toLowerCase()}...`} />
           <CommandList>
@@ -173,7 +173,7 @@ function MultiValueSelect({
           <ChevronDown className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[280px] p-0">
+      <PopoverContent align="start" className="w-[calc(100vw_-_2rem)] max-w-[280px] p-0">
         <Command>
           <CommandInput placeholder={`Search ${field.name.toLowerCase()}...`} />
           <CommandList>
@@ -380,7 +380,7 @@ export function TaskHeaderStatusFields({
                 <ChevronDown className="h-3.5 w-3.5 opacity-60" />
               </button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="w-[240px] p-0">
+            <PopoverContent align="start" className="w-[calc(100vw_-_2rem)] max-w-[240px] p-0">
               <Command>
                 <CommandInput placeholder={`Search ${field.name.toLowerCase()}...`} />
                 <CommandList>

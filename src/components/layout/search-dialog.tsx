@@ -72,19 +72,19 @@ export function SearchDialog() {
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
-      <div className="bg-surface-container-highest overflow-hidden border-none shadow-2xl shadow-primary/20 rounded-[2.5rem]">
-        <div className="px-8 pt-8 pb-4 flex items-center gap-4">
-          <div className="h-12 w-12 rounded-2xl bg-surface-container flex items-center justify-center text-on-surface-variant/40">
-            <Search className="h-6 w-6" />
+      <div className="overflow-hidden rounded-[2rem] border-none bg-surface-container-highest shadow-2xl shadow-primary/20 sm:rounded-[2.5rem]">
+        <div className="flex items-center gap-3 px-4 pb-3 pt-5 sm:gap-4 sm:px-8 sm:pb-4 sm:pt-8">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-surface-container text-on-surface-variant/40 sm:h-12 sm:w-12">
+            <Search className="h-5 w-5 sm:h-6 sm:w-6" />
           </div>
           <CommandInput
             placeholder="Search designating protocols..."
             onValueChange={setQuery}
-            className="h-16 bg-transparent border-none text-2xl font-headline font-black text-primary placeholder:text-on-surface-variant/10 focus:ring-0"
+            className="h-12 border-none bg-transparent text-lg font-headline font-black text-primary placeholder:text-on-surface-variant/10 focus:ring-0 sm:h-16 sm:text-2xl"
           />
         </div>
 
-        <CommandList className="max-h-[500px] px-4 pb-8 scrollbar-hide">
+        <CommandList className="mobile-scroll-area max-h-[calc(100dvh_-_10rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] px-3 pb-[max(env(safe-area-inset-bottom),1.5rem)] scrollbar-hide sm:max-h-[500px] sm:px-4 sm:pb-8">
           <CommandEmpty className="py-12 text-center">
             <div className="w-16 h-16 rounded-3xl bg-surface-container mx-auto flex items-center justify-center text-on-surface-variant/10 mb-4">
               <Search className="h-8 w-8" />

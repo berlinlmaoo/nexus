@@ -55,11 +55,21 @@
   html {
     color-scheme: light;
     background-color: hsl(var(--background));
+    height: 100%;
+    overscroll-behavior-y: none;
+    -webkit-text-size-adjust: 100%;
   }
   body {
     @apply bg-background text-foreground font-body;
     color-scheme: light;
     background-color: hsl(var(--background));
+    min-height: 100%;
+    min-height: 100svh;
+    overflow-x: hidden;
+    overscroll-behavior-y: none;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
   }
   input,
   textarea,
@@ -68,6 +78,46 @@
     color-scheme: light;
   }
   h1, h2, h3, h4, h5, h6 { @apply font-headline font-extrabold tracking-tight; }
+}
+
+@media (max-width: 768px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+@layer utilities {
+  .safe-area-x {
+    padding-left: max(env(safe-area-inset-left), 0px);
+    padding-right: max(env(safe-area-inset-right), 0px);
+  }
+
+  .safe-area-top {
+    padding-top: max(env(safe-area-inset-top), 0px);
+  }
+
+  .safe-area-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom), 0px);
+  }
+
+  .mobile-scroll-area {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    scroll-padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+  }
+
+  .mobile-horizontal-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+  }
+
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }
 
 /* Hide scrollbar utility */

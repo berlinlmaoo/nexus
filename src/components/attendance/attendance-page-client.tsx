@@ -866,7 +866,7 @@ export function AttendancePageClient({ user, workspace }: AttendancePageClientPr
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 pb-24">
+    <div className="mx-auto max-w-7xl space-y-5 pb-24 sm:space-y-6">
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-3">
           <Badge variant="outline" className="rounded-full px-3 py-1 text-[10px] tracking-[0.22em]">
@@ -933,7 +933,7 @@ export function AttendancePageClient({ user, workspace }: AttendancePageClientPr
             </div>
             <Button
               variant="outline"
-              className="h-11 rounded-2xl px-5 text-xs font-black uppercase tracking-[0.18em]"
+              className="touch-target w-full rounded-2xl px-5 text-xs font-black uppercase tracking-[0.18em] sm:h-11 sm:w-auto"
               onClick={() => void fetchAttendanceData(true)}
               disabled={refreshing}
             >
@@ -1024,24 +1024,24 @@ export function AttendancePageClient({ user, workspace }: AttendancePageClientPr
                         autoPlay
                         muted
                         playsInline
-                        className="h-64 w-full bg-black object-cover"
+                        className="h-56 w-full bg-black object-cover sm:h-64"
                       />
                       <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-center justify-between gap-3 bg-gradient-to-t from-black/70 via-black/20 to-transparent p-4">
                         <p className="text-xs font-black uppercase tracking-[0.18em] text-white/90">
                           Laptop camera is live
                         </p>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex sm:flex-wrap">
                           <Button
                             type="button"
                             variant="outline"
-                            className="h-10 rounded-2xl border-white/20 bg-white/10 px-4 text-[11px] font-black uppercase tracking-[0.18em] text-white hover:bg-white/15"
+                            className="touch-target rounded-2xl border-white/20 bg-white/10 px-4 text-[11px] font-black uppercase tracking-[0.18em] text-white hover:bg-white/15 sm:h-10 sm:min-h-0"
                             onClick={stopCamera}
                           >
                             Cancel
                           </Button>
                           <Button
                             type="button"
-                            className="h-10 rounded-2xl bg-white px-4 text-[11px] font-black uppercase tracking-[0.18em] text-black hover:bg-white/90"
+                            className="touch-target rounded-2xl bg-white px-4 text-[11px] font-black uppercase tracking-[0.18em] text-black hover:bg-white/90 sm:h-10 sm:min-h-0"
                             onClick={() => void captureSelfieFromCamera()}
                           >
                             Capture now
@@ -1056,7 +1056,7 @@ export function AttendancePageClient({ user, workspace }: AttendancePageClientPr
                       width={1200}
                       height={900}
                       unoptimized
-                      className="h-64 w-full object-cover"
+                      className="h-56 w-full object-cover sm:h-64"
                     />
                   ) : latestPhoto ? (
                     <Image
@@ -1064,10 +1064,10 @@ export function AttendancePageClient({ user, workspace }: AttendancePageClientPr
                       alt="Latest attendance capture"
                       width={1200}
                       height={900}
-                      className="h-64 w-full object-cover"
+                      className="h-56 w-full object-cover sm:h-64"
                     />
                   ) : (
-                    <div className="flex h-64 flex-col items-center justify-center gap-3 px-6 text-center text-on-surface-variant/50">
+                    <div className="flex h-56 flex-col items-center justify-center gap-3 px-6 text-center text-on-surface-variant/50 sm:h-64">
                       <Camera className="h-10 w-10" />
                       <div>
                         <p className="text-sm font-bold text-on-surface">Selfie capture required</p>
@@ -1085,10 +1085,10 @@ export function AttendancePageClient({ user, workspace }: AttendancePageClientPr
                   </div>
                 ) : null}
 
-                <div className="flex flex-wrap gap-3">
+                <div className="grid gap-3 sm:flex sm:flex-wrap">
                   <Button
                     type="button"
-                    className="h-11 rounded-2xl px-5 text-xs font-black uppercase tracking-[0.18em]"
+                    className="touch-target rounded-2xl px-5 text-xs font-black uppercase tracking-[0.18em] sm:h-11"
                     onClick={handlePickSelfie}
                     disabled={!workspace || actionLocked || cameraStarting}
                   >
@@ -1102,7 +1102,7 @@ export function AttendancePageClient({ user, workspace }: AttendancePageClientPr
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-11 rounded-2xl px-5 text-xs font-black uppercase tracking-[0.18em]"
+                    className="touch-target rounded-2xl px-5 text-xs font-black uppercase tracking-[0.18em] sm:h-11"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={!workspace || actionLocked}
                   >
@@ -1112,7 +1112,7 @@ export function AttendancePageClient({ user, workspace }: AttendancePageClientPr
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-11 rounded-2xl px-5 text-xs font-black uppercase tracking-[0.18em]"
+                    className="touch-target rounded-2xl px-5 text-xs font-black uppercase tracking-[0.18em] sm:h-11"
                     onClick={() => void captureLocation().catch((error: unknown) => {
                       const message = getGeolocationErrorMessage(error)
                       setLocationMessage(message)
@@ -1191,10 +1191,10 @@ export function AttendancePageClient({ user, workspace }: AttendancePageClientPr
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-3">
+                <div className="grid gap-3 sm:flex sm:flex-wrap">
                   <Button
                     type="button"
-                    className="h-12 rounded-2xl px-6 text-xs font-black uppercase tracking-[0.18em]"
+                    className="touch-target rounded-2xl px-6 text-xs font-black uppercase tracking-[0.18em] sm:h-12"
                     onClick={() => void submitAttendance(nextAction)}
                     disabled={
                       !workspace ||
@@ -1215,7 +1215,7 @@ export function AttendancePageClient({ user, workspace }: AttendancePageClientPr
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-12 rounded-2xl px-6 text-xs font-black uppercase tracking-[0.18em]"
+                    className="touch-target rounded-2xl px-6 text-xs font-black uppercase tracking-[0.18em] sm:h-12"
                     onClick={clearCapture}
                     disabled={!selectedFile && !notes}
                   >
@@ -1268,7 +1268,7 @@ export function AttendancePageClient({ user, workspace }: AttendancePageClientPr
                     <Button
                       type="button"
                       variant="outline"
-                      className="h-11 flex-1 rounded-2xl px-4 text-[11px] font-black uppercase tracking-[0.18em]"
+                      className="touch-target flex-1 rounded-2xl px-4 text-[11px] font-black uppercase tracking-[0.18em] sm:h-11"
                       onClick={() => requestDocumentInputRef.current?.click()}
                     >
                       <Paperclip className="mr-2 h-4 w-4" />
@@ -1278,7 +1278,7 @@ export function AttendancePageClient({ user, workspace }: AttendancePageClientPr
                       <Button
                         type="button"
                         variant="outline"
-                        className="h-11 rounded-2xl px-4"
+                        className="touch-target rounded-2xl px-4 sm:h-11"
                         onClick={() => {
                           setRequestDocument(null)
                           if (requestDocumentInputRef.current) requestDocumentInputRef.current.value = ""
@@ -1338,17 +1338,17 @@ export function AttendancePageClient({ user, workspace }: AttendancePageClientPr
                 />
               </div>
 
-              <div className="flex flex-wrap gap-3">
+              <div className="grid gap-3 sm:flex sm:flex-wrap">
                 <Button
                   type="button"
-                  className="h-11 rounded-2xl px-5 text-xs font-black uppercase tracking-[0.18em]"
+                  className="touch-target rounded-2xl px-5 text-xs font-black uppercase tracking-[0.18em] sm:h-11"
                   onClick={() => void submitAttendanceRequest()}
                   disabled={submittingRequest || !requestForm.reason.trim() || !requestForm.startDate || !requestForm.endDate}
                 >
                   {submittingRequest ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarDays className="mr-2 h-4 w-4" />}
                   Submit request
                 </Button>
-                <Button type="button" variant="outline" className="h-11 rounded-2xl px-5 text-xs font-black uppercase tracking-[0.18em]" onClick={clearRequestDraft}>
+                <Button type="button" variant="outline" className="touch-target rounded-2xl px-5 text-xs font-black uppercase tracking-[0.18em] sm:h-11" onClick={clearRequestDraft}>
                   Clear draft
                 </Button>
               </div>

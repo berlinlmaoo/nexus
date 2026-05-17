@@ -154,7 +154,7 @@ export function ShortcutsHelp({ open, onOpenChange }: ShortcutsHelpProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <AnimatePresence>
         {open && (
-          <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto" asChild>
+          <DialogContent className="max-h-[calc(100dvh_-_1rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] overflow-y-auto sm:max-w-lg" asChild>
             <motion.div
               variants={fadeVariants}
               initial="hidden"

@@ -171,13 +171,13 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: any[]; projects
           </p>
         </div>
         
-        <div className="flex w-full flex-wrap items-center gap-3 rounded-2xl bg-surface-container-low p-1.5 md:w-auto md:flex-nowrap">
+        <div className="flex w-full flex-wrap items-center gap-2 rounded-2xl bg-surface-container-low p-1.5 md:w-auto md:flex-nowrap">
           <div className="flex min-w-0 flex-1 items-center gap-2 px-3 md:flex-none">
             <ArrowUpDown className="h-3.5 w-3.5 text-on-surface-variant/40" />
             <select 
               value={sortBy} 
               onChange={(e) => setSortBy(e.target.value as SortBy)}
-              className="bg-transparent border-none text-[11px] font-black uppercase tracking-widest text-on-surface-variant/60 focus:ring-0 cursor-pointer"
+              className="min-h-10 flex-1 cursor-pointer border-none bg-transparent text-[11px] font-black uppercase tracking-widest text-on-surface-variant/60 focus:ring-0 md:min-h-0"
             >
               <option value="dueDate">Timeline</option>
               <option value="priority">Priority</option>
@@ -186,7 +186,7 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: any[]; projects
             </select>
           </div>
           <div className="hidden h-6 w-[1px] bg-on-surface-variant/10 md:block" />
-          <button className="flex items-center gap-2 rounded-xl px-4 py-2 text-[11px] font-black uppercase tracking-widest text-primary transition-all hover:bg-surface-container">
+          <button className="touch-target flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2 text-[11px] font-black uppercase tracking-widest text-primary transition-all hover:bg-surface-container md:min-h-0 md:flex-none">
             <Filter className="h-3.5 w-3.5" /> Filter
           </button>
         </div>
@@ -213,7 +213,7 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: any[]; projects
               </div>
               <button 
                 onClick={() => setInlineAdding(section.name)}
-                className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2 text-[11px] font-black uppercase tracking-widest text-on-surface-variant/40 transition-all hover:bg-surface-container-low hover:text-primary sm:w-auto"
+                className="touch-target flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2 text-[11px] font-black uppercase tracking-widest text-on-surface-variant/40 transition-all hover:bg-surface-container-low hover:text-primary sm:min-h-0 sm:w-auto"
               >
                 <Plus className="h-4 w-4" /> New Tactical
               </button>
@@ -234,7 +234,7 @@ export function MyTasksClient({ tasks, projects = [] }: { tasks: any[]; projects
                         <div className="flex items-center justify-center sm:h-full">
                           <button
                             className={cn(
-                              "flex h-5 w-5 items-center justify-center rounded-full border-2 transition-all duration-300",
+                              "flex h-7 w-7 items-center justify-center rounded-full border-2 transition-all duration-300 sm:h-5 sm:w-5",
                               completingTasks.has(task.id) ? "border-primary/20" : "border-on-surface-variant/20 hover:border-primary"
                             )}
                             onClick={(e) => quickComplete(task.id, e)}

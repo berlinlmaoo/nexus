@@ -84,7 +84,7 @@ export function NasBrowserDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) resetState(); onOpenChange(o) }}>
-      <DialogContent className="max-w-3xl h-[600px] flex flex-col p-0 gap-0">
+      <DialogContent className="flex h-[min(600px,calc(100dvh_-_1rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom)))] max-w-3xl flex-col gap-0 p-0">
         {/* Header */}
         <DialogHeader className="px-4 pt-4 pb-0">
           <DialogTitle className="text-sm font-semibold">{title}</DialogTitle>
@@ -118,7 +118,7 @@ export function NasBrowserDialog({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-hidden flex">
+        <div className="flex flex-1 overflow-hidden">
           {activeTab === "browse" ? (
             <>
               {/* File browser */}
@@ -136,7 +136,7 @@ export function NasBrowserDialog({
 
               {/* Preview sidebar */}
               {previewFile && (
-                <div className="w-64 p-3 overflow-y-auto">
+                <div className="mobile-scroll-area hidden w-64 overflow-y-auto p-3 sm:block">
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-xs font-medium text-muted-foreground">Preview</span>
                     <button
@@ -151,7 +151,7 @@ export function NasBrowserDialog({
               )}
             </>
           ) : (
-            <div className="flex-1 p-4 overflow-y-auto">
+            <div className="mobile-scroll-area flex-1 overflow-y-auto p-4">
               <FileUploader
                 folderPath={currentFolder}
                 onUploadComplete={handleUploadComplete}
@@ -161,7 +161,7 @@ export function NasBrowserDialog({
         </div>
 
         {/* Footer */}
-        <div className="border-t px-4 py-3 flex items-center justify-between">
+        <div className="flex flex-col gap-3 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <span className="text-[10px] text-muted-foreground">
             {selectedFiles.length > 0
               ? `${selectedFiles.length} file${selectedFiles.length > 1 ? "s" : ""} selected`
@@ -171,7 +171,7 @@ export function NasBrowserDialog({
             <Button
               variant="outline"
               size="sm"
-              className="h-8 text-xs"
+              className="h-10 flex-1 text-xs sm:h-8 sm:flex-none"
               onClick={() => { resetState(); onOpenChange(false) }}
             >
               Cancel
@@ -179,7 +179,7 @@ export function NasBrowserDialog({
             {(mode === "select" || mode === "attach") && (
               <Button
                 size="sm"
-                className="h-8 text-xs"
+                className="h-10 flex-1 text-xs sm:h-8 sm:flex-none"
                 disabled={selectedFiles.length === 0}
                 onClick={handleConfirmSelect}
               >

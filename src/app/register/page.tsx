@@ -19,7 +19,7 @@ export default async function RegisterPage() {
   if (session) redirect("/dashboard")
 
   return (
-    <div className="relative min-h-screen flex items-stretch bg-surface overflow-hidden">
+    <div className="relative flex min-h-[100svh] items-stretch overflow-hidden bg-surface">
       {/* Left Branding Side (Desktop) */}
       <div className="hidden lg:flex w-1/2 bg-primary relative flex-col justify-between p-16 overflow-hidden">
         <div className="absolute inset-0 opacity-20">
@@ -59,7 +59,7 @@ export default async function RegisterPage() {
       </div>
 
       {/* Right Register Side */}
-      <div className="relative flex flex-1 flex-col justify-center overflow-y-auto bg-surface px-5 py-8 sm:px-10 sm:py-12 lg:px-24 xl:px-32">
+      <div className="mobile-scroll-area relative flex flex-1 flex-col justify-center overflow-y-auto bg-surface px-5 py-8 sm:px-10 sm:py-12 lg:px-24 xl:px-32">
         {/* Mobile Header */}
         <div className="absolute left-5 top-6 lg:hidden sm:left-10 sm:top-10">
           <Link href="/" className="flex items-center">

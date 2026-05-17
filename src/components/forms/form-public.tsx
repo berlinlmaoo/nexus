@@ -198,7 +198,7 @@ export function FormPublic({
 
   if (isSubmitted) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-4">
+      <div className="flex min-h-[100svh] items-center justify-center bg-zinc-50 p-4">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -222,7 +222,7 @@ export function FormPublic({
 
   return (
     <div
-      className="flex min-h-screen items-center justify-center bg-zinc-50 p-4"
+      className="mobile-scroll-area flex min-h-[100svh] items-center justify-center overflow-y-auto bg-zinc-50 p-4"
       style={bgColor ? { backgroundColor: bgColor } : undefined}
     >
       <motion.div

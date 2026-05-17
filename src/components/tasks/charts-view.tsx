@@ -154,7 +154,7 @@ export function ChartsView({ tasks, members = [] }: ChartsViewProps) {
           className="rounded-xl border bg-background p-5"
         >
           <h3 className="text-sm font-semibold mb-4">Tasks by Status</h3>
-          <div className="h-[250px]">
+          <div className="h-[220px] sm:h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={statusData} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
@@ -179,7 +179,7 @@ export function ChartsView({ tasks, members = [] }: ChartsViewProps) {
           className="rounded-xl border bg-background p-5"
         >
           <h3 className="text-sm font-semibold mb-4">Tasks by Priority</h3>
-          <div className="h-[250px]">
+          <div className="h-[220px] sm:h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -215,7 +215,7 @@ export function ChartsView({ tasks, members = [] }: ChartsViewProps) {
           className="rounded-xl border bg-background p-5"
         >
           <h3 className="text-sm font-semibold mb-4">Tasks Completed Over Time</h3>
-          <div className="h-[250px]">
+          <div className="h-[220px] sm:h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={completionData} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
@@ -249,7 +249,7 @@ export function ChartsView({ tasks, members = [] }: ChartsViewProps) {
           className="rounded-xl border bg-background p-5"
         >
           <h3 className="text-sm font-semibold mb-4">Tasks by Assignee</h3>
-          <div className="h-[250px]">
+          <div className="h-[220px] sm:h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={assigneeData}
@@ -274,7 +274,7 @@ export function ChartsView({ tasks, members = [] }: ChartsViewProps) {
       </div>
 
       {/* Summary stats row */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-5">
         {[
           { label: "Total", value: tasks.length, color: "text-foreground" },
           { label: "Done", value: tasks.filter((t) => t.status === "DONE").length, color: "text-green-600" },
