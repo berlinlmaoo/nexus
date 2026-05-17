@@ -1125,7 +1125,7 @@ export function TaskDetailPanel({
                   unicodeBidi: "plaintext",
                   textAlign: "left",
                 }}
-                className="min-h-[320px] w-full resize-y rounded-2xl border border-on-surface-variant/10 bg-white px-4 py-4 text-sm leading-7 text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/30 focus:border-primary/30 focus:ring-2 focus:ring-primary/10"
+                className="min-h-[320px] w-full resize-y rounded-2xl border border-on-surface-variant/10 bg-surface-container-lowest px-4 py-4 text-sm leading-7 text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/30 focus:border-primary/30 focus:ring-2 focus:ring-primary/10"
               />
             </div>
           </div>

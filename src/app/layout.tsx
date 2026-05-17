@@ -17,6 +17,23 @@ const inter = Inter({
   weight: ["300", "400", "500", "600"],
 })
 
+const themeInitScript = `
+(function() {
+  try {
+    var storedTheme = localStorage.getItem("nexus-theme");
+    var theme = storedTheme === "light" || storedTheme === "dark" || storedTheme === "system" ? storedTheme : "system";
+    var resolvedTheme = theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : theme === "dark" ? "dark" : "light";
+    var root = document.documentElement;
+    root.classList.remove("light", "dark");
+    root.classList.add(resolvedTheme);
+    root.dataset.theme = theme;
+    root.style.colorScheme = resolvedTheme;
+  } catch (error) {
+    document.documentElement.classList.add("light");
+  }
+})();
+`
+
 export const metadata: Metadata = {
   metadataBase: new URL("https://nexus.patsgroup.id"),
   title: "NEXUS - Navigation & Execution Hub for Unified Strategy",
@@ -59,10 +76,11 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`light ${manrope.variable} ${inter.variable}`}
+      className={`${manrope.variable} ${inter.variable}`}
       suppressHydrationWarning
     >
       <body className="font-body antialiased bg-background text-foreground">
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <ThemeProvider>
           <TooltipProvider delayDuration={200}>
             {children}

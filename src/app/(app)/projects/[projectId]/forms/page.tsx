@@ -183,10 +183,10 @@ export default function FormsPage() {
             className="flex flex-col gap-6"
           >
             <div className="flex items-center justify-between">
-              <h1 className="text-xl font-semibold text-white">Forms</h1>
+              <h1 className="text-xl font-semibold text-on-surface">Forms</h1>
               <Button
                 onClick={handleNewForm}
-                className="bg-white text-black hover:bg-zinc-200"
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 New Form

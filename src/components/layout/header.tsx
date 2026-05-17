@@ -3,10 +3,11 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Search, ChevronRight, Menu, User, LogOut, Settings, Moon, Sun, Star } from "lucide-react"
+import { Search, ChevronRight, Menu, User, LogOut, Settings } from "lucide-react"
 import { signOut } from "next-auth/react"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { NotificationsBell } from "@/components/layout/notifications-bell"
+import { ThemeToggle } from "@/components/layout/theme-toggle"
 import { useAppStore } from "@/stores/app-store"
 import { cn } from "@/lib/utils"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -129,6 +130,8 @@ export function Header({ title, breadcrumbs, user, children }: HeaderProps) {
           >
             <Search className="h-4.5 w-4.5" />
           </button>
+
+          <ThemeToggle />
 
           {/* Notifications */}
           <NotificationsBell userId={user?.id} userName={user?.name} />
