@@ -4,7 +4,6 @@
 
 @layer base {
   :root {
-    color-scheme: light;
     --background: 210 20% 98%; /* #f7f9fb */
     --foreground: 200 10% 10%;
     --card: 0 0% 100%;
@@ -25,43 +24,89 @@
     --input: 210 10% 90% / 0.5;
     --ring: 222 53% 10%;
     --radius: 0.75rem;
+
+    --primary-container: 222 29% 18%;
+    --primary-on-container: 226 15% 59%;
+    --surface: 210 20% 98%;
+    --surface-variant: 200 8% 89%;
+    --surface-dim: 210 4% 85%;
+    --surface-bright: 210 20% 98%;
+    --surface-container-lowest: 0 0% 100%;
+    --surface-container-low: 210 18% 96%;
+    --surface-container: 210 12% 93%;
+    --surface-container-high: 210 9% 91%;
+    --surface-container-highest: 200 8% 89%;
+    --on-surface: 200 10% 10%;
+    --on-surface-variant: 220 5% 28%;
+    --secondary-new: 216 19% 39%;
+    --secondary-new-container: 211 78% 90%;
+    --secondary-new-on-container: 216 18% 40%;
+    --tertiary-new: 203 100% 7%;
+    --tertiary-new-container: 200 100% 13%;
+    --tertiary-new-on-container: 198 100% 43%;
   }
 
   .dark {
-    --background: 222 53% 5%;
-    --foreground: 210 40% 98%;
-    --card: 222 53% 8%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222 53% 8%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222 53% 10%;
-    --secondary: 215 20% 65%;
-    --secondary-foreground: 222 53% 5%;
-    --muted: 222 53% 12%;
-    --muted-foreground: 215 20% 75%;
-    --accent: 222 53% 15%;
-    --accent-foreground: 210 40% 98%;
+    --background: 222 35% 6%;
+    --foreground: 210 32% 96%;
+    --card: 222 32% 10%;
+    --card-foreground: 210 32% 96%;
+    --popover: 222 32% 10%;
+    --popover-foreground: 210 32% 96%;
+    --primary: 210 32% 96%;
+    --primary-foreground: 222 35% 7%;
+    --secondary: 215 20% 68%;
+    --secondary-foreground: 222 35% 7%;
+    --muted: 222 28% 15%;
+    --muted-foreground: 217 16% 72%;
+    --accent: 222 28% 16%;
+    --accent-foreground: 210 32% 96%;
     --destructive: 0 62% 30%;
     --destructive-foreground: 210 40% 98%;
-    --border: 222 53% 15% / 0.5;
-    --input: 222 53% 15% / 0.5;
+    --border: 220 22% 24% / 0.58;
+    --input: 220 22% 24% / 0.72;
     --ring: 210 40% 98%;
+
+    --primary-container: 214 30% 92%;
+    --primary-on-container: 222 20% 17%;
+    --surface: 222 35% 6%;
+    --surface-variant: 220 24% 20%;
+    --surface-dim: 222 35% 5%;
+    --surface-bright: 220 22% 16%;
+    --surface-container-lowest: 224 42% 8%;
+    --surface-container-low: 223 35% 10%;
+    --surface-container: 222 32% 12%;
+    --surface-container-high: 221 28% 16%;
+    --surface-container-highest: 220 24% 20%;
+    --on-surface: 210 32% 96%;
+    --on-surface-variant: 217 16% 72%;
+    --secondary-new: 214 23% 72%;
+    --secondary-new-container: 218 25% 18%;
+    --secondary-new-on-container: 214 35% 88%;
+    --tertiary-new: 198 100% 78%;
+    --tertiary-new-container: 202 70% 18%;
+    --tertiary-new-on-container: 197 100% 84%;
   }
 }
 
 @layer base {
   * { @apply border-border; }
   html {
-    color-scheme: light;
+    color-scheme: light dark;
     background-color: hsl(var(--background));
     height: 100%;
     overscroll-behavior-y: none;
     -webkit-text-size-adjust: 100%;
   }
+  html.light {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
   body {
     @apply bg-background text-foreground font-body;
-    color-scheme: light;
+    color-scheme: inherit;
     background-color: hsl(var(--background));
     min-height: 100%;
     min-height: 100svh;
@@ -75,7 +120,7 @@
   textarea,
   select,
   button {
-    color-scheme: light;
+    color-scheme: inherit;
   }
   h1, h2, h3, h4, h5, h6 { @apply font-headline font-extrabold tracking-tight; }
 }
@@ -167,7 +212,7 @@
 .skeleton-shimmer {
   position: relative;
   overflow: hidden;
-  background: hsl(240 4.8% 95.9%);
+  background: hsl(var(--surface-container-high));
   border-radius: 0.375rem;
 }
 .skeleton-shimmer::after {
@@ -178,7 +223,7 @@
   background: linear-gradient(
     90deg,
     transparent,
-    hsl(0 0% 100% / 0.4),
+    hsl(var(--surface-container-lowest) / 0.55),
     transparent
   );
   animation: shimmer 1.5s infinite;

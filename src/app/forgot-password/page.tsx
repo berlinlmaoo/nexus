@@ -64,7 +64,7 @@ export default async function ForgotPasswordPage() {
             alt="NEXUS"
             width={120}
             height={40}
-            className="object-contain"
+            className="object-contain dark:invert"
           />
         </div>
 

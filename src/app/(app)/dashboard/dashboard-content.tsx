@@ -428,7 +428,7 @@ export function DashboardContent({ userName }: { userName: string }) {
             
             {data?.activity.slice(0, 5).map((act) => (
               <div key={act.id} className="relative group">
-                <div className="absolute -left-[32px] top-1.5 z-10 hidden h-4 w-4 rounded-full border-2 border-primary bg-white shadow-sm transition-transform group-hover:scale-125 sm:block"></div>
+                <div className="absolute -left-[32px] top-1.5 z-10 hidden h-4 w-4 rounded-full border-2 border-primary bg-surface-container-lowest shadow-sm transition-transform group-hover:scale-125 sm:block"></div>
                 <div className="flex gap-3 sm:gap-6">
                   <UserAvatar user={{ name: act.user.name, image: act.user.avatar }} size="sm" className="shadow-lg shadow-primary/5" />
                   <div className="space-y-2 flex-1">
