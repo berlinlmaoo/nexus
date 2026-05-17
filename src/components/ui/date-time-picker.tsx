@@ -372,7 +372,7 @@ export function DateTimePicker({
         side={popoverSide}
         sideOffset={popoverSideOffset}
         avoidCollisions={popoverAvoidCollisions}
-        className="w-[360px] rounded-[1.75rem] border border-on-surface-variant/10 bg-surface-container-lowest p-4 shadow-2xl shadow-primary/10"
+        className="w-[calc(100vw_-_2rem)] max-w-[360px] rounded-[1.75rem] border border-on-surface-variant/10 bg-surface-container-lowest p-4 shadow-2xl shadow-primary/10"
       >
         {pickerContent}
       </PopoverContent>

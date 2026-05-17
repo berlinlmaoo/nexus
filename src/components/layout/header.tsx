@@ -49,15 +49,16 @@ export function Header({ title, breadcrumbs, user, children }: HeaderProps) {
 
   return (
     <>
-      <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-on-surface-variant/5 bg-surface/95 px-2.5 backdrop-blur-xl shrink-0 sm:h-16 sm:px-6">
+      <header className="safe-area-top sticky top-0 z-40 flex min-h-14 shrink-0 items-center justify-between border-b border-on-surface-variant/5 bg-surface/92 px-2.5 backdrop-blur-xl sm:min-h-16 sm:px-6">
         {/* Left: hamburger + breadcrumb */}
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
           <button
             onClick={toggleSidebar}
             className={cn(
-              "rounded-xl p-1.5 text-on-surface-variant/60 hover:bg-surface-container-high transition-all duration-200 sm:p-2",
+              "touch-target inline-flex items-center justify-center rounded-xl text-on-surface-variant/60 transition-all duration-200 hover:bg-surface-container-high sm:h-10 sm:w-10",
               sidebarOpen ? "md:hidden" : ""
             )}
+            aria-label={sidebarOpen ? "Close navigation" : "Open navigation"}
           >
             <Menu className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
           </button>
@@ -123,7 +124,8 @@ export function Header({ title, breadcrumbs, user, children }: HeaderProps) {
             onClick={() => {
               window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))
             }}
-            className="rounded-xl p-1.5 text-on-surface-variant/60 hover:bg-surface-container-high transition-all sm:hidden"
+            className="touch-target inline-flex items-center justify-center rounded-xl text-on-surface-variant/60 transition-all hover:bg-surface-container-high sm:hidden"
+            aria-label="Search workspace"
           >
             <Search className="h-4.5 w-4.5" />
           </button>
@@ -143,7 +145,7 @@ export function Header({ title, breadcrumbs, user, children }: HeaderProps) {
                   />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="mt-2 w-64 max-w-[calc(100vw-1rem)] rounded-xl border-none p-2 shadow-2xl shadow-primary/10">
+              <DropdownMenuContent align="end" className="mt-2 w-64 max-w-[calc(100vw_-_1rem)] rounded-xl border-none p-2 shadow-2xl shadow-primary/10">
                 <div className="px-3 py-3 mb-1">
                   <p className="text-sm font-headline font-bold text-primary">{user.name}</p>
                   <p className="text-xs text-on-surface-variant truncate">{user.email}</p>

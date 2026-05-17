@@ -1896,7 +1896,7 @@ export function AttendanceSettingsSection({ workspace }: AttendanceSettingsSecti
       </div>
 
       <Dialog open={Boolean(selectedRecapRecord)} onOpenChange={(open) => !open && setSelectedRecapRecord(null)}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto rounded-[2rem] border-none bg-surface-container-lowest p-0 shadow-2xl sm:max-w-4xl">
+        <DialogContent className="max-h-[calc(100dvh_-_1rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] overflow-y-auto rounded-[2rem] border-none bg-surface-container-lowest p-0 shadow-2xl sm:max-w-4xl">
           {selectedRecapRecord ? (
             <div className="p-6 sm:p-8">
               <DialogHeader className="space-y-3 text-left">

@@ -465,7 +465,7 @@ export function MasterCalendarPageClient({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <Popover open={teamPickerOpen} onOpenChange={setTeamPickerOpen}>
               <PopoverTrigger asChild>
-                <Button variant="outline" className="justify-between rounded-2xl px-4">
+                <Button variant="outline" className="w-full justify-between rounded-2xl px-4 sm:w-auto">
                   <span className="truncate">
                     {selectedTeam ? selectedTeam.name : "Select team"}
                   </span>
@@ -475,7 +475,7 @@ export function MasterCalendarPageClient({
                   />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="end" className="w-[320px] rounded-2xl border-none p-0 shadow-2xl">
+              <PopoverContent align="end" className="w-[calc(100vw_-_2rem)] max-w-[320px] rounded-2xl border-none p-0 shadow-2xl">
                 <Command>
                   <CommandInput placeholder="Search team..." />
                   <CommandList>
@@ -756,7 +756,7 @@ export function MasterCalendarPageClient({
                         />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent align="start" className="w-[320px] rounded-2xl border-none p-0 shadow-2xl">
+                    <PopoverContent align="start" className="w-[calc(100vw_-_2rem)] max-w-[320px] rounded-2xl border-none p-0 shadow-2xl">
                       <Command>
                         <CommandInput placeholder="Search team..." />
                         <CommandList>
@@ -886,7 +886,7 @@ export function MasterCalendarPageClient({
                       <Users2 className="ml-3 h-4 w-4 text-on-surface-variant/40" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent align="start" className="w-[360px] rounded-2xl border-none p-0 shadow-2xl">
+                  <PopoverContent align="start" className="w-[calc(100vw_-_2rem)] max-w-[360px] rounded-2xl border-none p-0 shadow-2xl">
                     <Command>
                       <CommandInput placeholder="Search team member..." />
                       <CommandList>

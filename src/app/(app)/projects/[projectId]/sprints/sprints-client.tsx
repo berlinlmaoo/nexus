@@ -187,14 +187,14 @@ export function SprintsClient({
         </button>
       </div>
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Sprints</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage sprint cycles and track progress</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-foreground text-background hover:bg-foreground/90">
+            <Button className="h-11 w-full bg-foreground text-background hover:bg-foreground/90 sm:w-auto">
               <Plus className="h-4 w-4 mr-2" /> New Sprint
             </Button>
           </DialogTrigger>
@@ -207,7 +207,7 @@ export function SprintsClient({
                 <Label>Sprint Name</Label>
                 <Input placeholder="Sprint 1..." value={name} onChange={e => setName(e.target.value)} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Start Date</Label>
                   <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
@@ -296,9 +296,9 @@ export function SprintsClient({
                       </div>
                       <div className="relative">
                         {addingTask === sprint.id ? (
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                             <select
-                              className="h-8 rounded-md border border-input bg-background px-2 text-xs min-w-[200px]"
+                              className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm sm:h-8 sm:min-w-[200px] sm:text-xs"
                               onChange={e => { if (e.target.value) addTaskToSprint(sprint.id, e.target.value) }}
                               defaultValue=""
                             >
@@ -307,7 +307,7 @@ export function SprintsClient({
                                 <option key={t.id} value={t.id}>{t.title}</option>
                               ))}
                             </select>
-                            <Button size="sm" variant="ghost" onClick={() => setAddingTask(null)}>Cancel</Button>
+                            <Button size="sm" variant="ghost" className="w-full sm:w-auto" onClick={() => setAddingTask(null)}>Cancel</Button>
                           </div>
                         ) : (
                           <Button size="sm" variant="outline" onClick={() => setAddingTask(sprint.id)} disabled={availableTasks.length === 0}>
@@ -369,7 +369,7 @@ export function SprintsClient({
               What should happen to the {completionDialog?.incompleteTasks.length} incomplete task{completionDialog?.incompleteTasks.length !== 1 ? 's' : ''}?
             </p>
 
-            <div className="max-h-36 overflow-y-auto space-y-1.5 rounded-md border p-2">
+            <div className="mobile-scroll-area max-h-44 space-y-1.5 overflow-y-auto rounded-md border p-2 sm:max-h-36">
               {completionDialog?.incompleteTasks.map(task => (
                 <div key={task.id} className="flex items-center gap-2 text-sm py-1">
                   <div className="h-2 w-2 rounded-full bg-amber-400 shrink-0" />

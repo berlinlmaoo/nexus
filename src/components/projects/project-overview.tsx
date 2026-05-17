@@ -513,7 +513,7 @@ export function ProjectOverview({ project }: ProjectOverviewProps) {
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute bottom-full left-1/2 z-20 mb-4 w-[calc(100vw-3rem)] max-w-sm -translate-x-1/2 rounded-[2rem] border-none bg-surface-container-highest p-3 shadow-2xl shadow-primary/20"
+              className="absolute bottom-full left-1/2 z-20 mb-4 w-[calc(100vw_-_3rem)] max-w-sm -translate-x-1/2 rounded-[2rem] border-none bg-surface-container-highest p-3 shadow-2xl shadow-primary/20"
             >
               <div className="grid grid-cols-1 gap-1">
                 {SECTION_TYPES.map(({ type, label, icon: Icon }) => (
@@ -589,7 +589,7 @@ function StatsSection({
 
   return (
       <div className="space-y-6 sm:space-y-8">
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 md:grid-cols-4">
         {stats.map((stat) => {
           const Icon = stat.icon
           return (

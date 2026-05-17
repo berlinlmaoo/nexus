@@ -94,7 +94,7 @@ function ActionDropdown({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 8, scale: 0.95 }}
         transition={{ duration: 0.15 }}
-        className="bg-background border border-border rounded-lg shadow-xl p-1 min-w-[160px]"
+        className="min-w-[min(12rem,calc(100vw_-_2rem))] rounded-lg border border-border bg-background p-1 shadow-xl"
       >
         {children}
       </motion.div>
@@ -353,6 +353,7 @@ export function BatchActionsBar({
             <Button
               variant="outline"
               onClick={() => setShowDeleteDialog(false)}
+              className="h-11 w-full sm:w-auto"
             >
               Cancel
             </Button>
@@ -362,6 +363,7 @@ export function BatchActionsBar({
                 onAction({ type: "delete" })
                 setShowDeleteDialog(false)
               }}
+              className="h-11 w-full sm:w-auto"
             >
               Delete {count} task{count !== 1 ? "s" : ""}
             </Button>

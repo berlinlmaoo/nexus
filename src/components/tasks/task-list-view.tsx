@@ -98,7 +98,7 @@ const TaskListRow = memo(function TaskListRow({
   return (
     <div
       className={cn(
-        "group grid gap-0 items-center min-h-12 cursor-pointer transition-all duration-200 text-[13px] rounded-xl mb-1",
+        "group grid min-h-14 cursor-pointer items-center gap-0 rounded-xl mb-1 text-[13px] transition-all duration-200 sm:min-h-12",
         isDragging ? "z-50 shadow-2xl bg-surface-container-lowest ring-2 ring-primary/5 scale-[1.02]" : "hover:bg-surface-container-low"
       )}
       style={{ gridTemplateColumns }}
@@ -313,7 +313,7 @@ export function TaskListView({
   }
 
   return (
-    <div className="w-full space-y-8 animate-fade-in px-4 pb-24 md:px-6 lg:px-8">
+    <div className="w-full space-y-8 animate-fade-in px-3 pb-24 sm:px-4 md:px-6 lg:px-8">
       <DragDropContext onDragEnd={handleDragEnd}>
         <div className="space-y-10">
           {sectionEntries.map((section) => {
@@ -321,9 +321,9 @@ export function TaskListView({
             return (
               <div key={section.id} className="space-y-6">
                 {/* Section Header */}
-                <div className="flex items-center justify-between px-2">
+                <div className="flex items-center justify-between gap-3 px-1 sm:px-2">
                   <div 
-                    className="flex items-center gap-4 group cursor-pointer"
+                    className="group flex min-w-0 cursor-pointer items-center gap-3 sm:gap-4"
                     onClick={() => toggleSection(section.id)}
                   >
                     <div className="h-8 w-8 rounded-xl bg-surface-container flex items-center justify-center text-primary transition-all group-hover:bg-primary group-hover:text-primary-foreground shadow-sm">
@@ -342,14 +342,14 @@ export function TaskListView({
                     )}
                   </div>
                   {!section.isTemporary && (
-                    <button 
+                    <button
                       type="button"
                       onClick={(event) => {
                         event.preventDefault()
                         event.stopPropagation()
                         onAddTask(section.id)
                       }}
-                      className="flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest text-on-surface-variant/40 hover:text-primary hover:bg-surface-container-low transition-all duration-300"
+                      className="touch-target flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-black uppercase tracking-widest text-on-surface-variant/60 transition-all duration-300 hover:bg-surface-container-low hover:text-primary sm:min-h-0 sm:px-4"
                     >
                       <Plus className="h-4 w-4" />
                       New Task
@@ -359,7 +359,7 @@ export function TaskListView({
 
                 {!isCollapsed && (
                   <>
-                    <div className="overflow-x-auto pb-2">
+                    <div className="mobile-horizontal-scroll overflow-x-auto pb-2">
                       <div style={{ minWidth: tableMinWidth }}>
                         {/* Task Table Headers */}
                         <div

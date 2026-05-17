@@ -943,11 +943,11 @@ export function BoardView({
       )}
 
       <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="flex gap-3 pb-4 overflow-x-auto min-w-0 w-full h-full px-3 pt-3">
+        <div className="mobile-horizontal-scroll flex h-full min-w-0 w-full gap-3 overflow-x-auto px-3 pb-4 pt-3">
         {columnEntries.map((column) => (
           <div
             key={column.id}
-            className="flex-1 min-w-[250px] flex flex-col"
+            className="flex w-[min(82vw,280px)] flex-shrink-0 scroll-ml-3 scroll-mx-3 flex-col sm:w-auto sm:min-w-[250px] sm:flex-1"
           >
             {/* Column header */}
             <div className="group/col flex items-center justify-between mb-2 px-1">
@@ -999,7 +999,7 @@ export function BoardView({
               {projectId && !column.isTemporary && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="opacity-0 group-hover/col:opacity-100 p-1 rounded hover:bg-muted/60 transition-opacity text-muted-foreground shrink-0">
+                    <button className="touch-target shrink-0 rounded p-1 text-muted-foreground opacity-100 transition-opacity hover:bg-muted/60 sm:min-h-0 sm:min-w-0 sm:opacity-0 sm:group-hover/col:opacity-100">
                       <MoreHorizontal className="h-3.5 w-3.5" />
                     </button>
                   </DropdownMenuTrigger>
@@ -1150,7 +1150,7 @@ export function BoardView({
         ))}
         {/* Add Section column */}
         {projectId && (
-          <div className="flex-shrink-0 w-72 flex flex-col">
+          <div className="flex w-[min(82vw,18rem)] flex-shrink-0 flex-col sm:w-72">
             {showAddSection ? (
               <div className="rounded-lg border bg-card p-2.5">
                 <input
@@ -1181,7 +1181,7 @@ export function BoardView({
                   setAddingSectionName("")
                   setTimeout(() => sectionInputRef.current?.focus(), 50)
                 }}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/30 transition-colors border border-dashed border-border/50"
+                className="touch-target flex items-center gap-1.5 rounded-lg border border-dashed border-border/50 px-3 py-2 text-[13px] text-muted-foreground/50 transition-colors hover:bg-muted/30 hover:text-muted-foreground"
               >
                 <Plus className="h-3.5 w-3.5" />
                 Add Section

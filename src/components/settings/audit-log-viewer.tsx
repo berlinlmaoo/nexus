@@ -249,8 +249,8 @@ export function AuditLogViewer() {
         )}
 
         {/* Table */}
-        <div className="border rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="mobile-horizontal-scroll overflow-x-auto rounded-lg border">
+          <table className="min-w-[760px] w-full text-sm">
             <thead>
               <tr className="border-b bg-zinc-50 dark:bg-zinc-900/50">
                 <th className="w-8 px-3 py-2" />

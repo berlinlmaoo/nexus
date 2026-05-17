@@ -1,4 +1,4 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Manrope, Inter } from "next/font/google"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { ThemeProvider } from "@/components/layout/theme-provider"
@@ -18,9 +18,20 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://nexus.patsgroup.id"),
   title: "NEXUS - Navigation & Execution Hub for Unified Strategy",
   description:
     "NEXUS is a modern project management platform for agile teams to plan, track, and deliver work efficiently.",
+  applicationName: "NEXUS",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "NEXUS",
+  },
+  formatDetection: {
+    telephone: false,
+  },
   icons: {
     icon: [
       { url: "/favicon.png", type: "image/png" },
@@ -30,6 +41,14 @@ export const metadata: Metadata = {
       { url: "/logos/nexus-icon-black.png", type: "image/png" },
     ],
   },
+}
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: "cover",
+  themeColor: "#f7f9fb",
 }
 
 export default function RootLayout({
@@ -48,7 +67,13 @@ export default function RootLayout({
           <TooltipProvider delayDuration={200}>
             {children}
             <Toaster 
-              position="bottom-right" 
+              position="bottom-right"
+              mobileOffset={{
+                bottom: "calc(5.75rem + env(safe-area-inset-bottom))",
+                left: "0.75rem",
+                right: "0.75rem",
+              }}
+              offset={{ bottom: "1.5rem", right: "1.5rem" }}
               expand={false}
               visibleToasts={5}
               richColors 

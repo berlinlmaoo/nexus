@@ -503,8 +503,8 @@ export function ReportDashboard() {
         </CardHeader>
         <CardContent>
           {data.workloadHeatmap.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div className="mobile-horizontal-scroll overflow-x-auto">
+              <table className="min-w-[620px] w-full text-sm">
                 <thead>
                   <tr>
                     <th className="text-left py-2 px-3 font-medium text-muted-foreground w-32">Member</th>

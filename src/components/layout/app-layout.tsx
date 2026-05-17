@@ -64,7 +64,7 @@ export function AppLayout({ children, title, breadcrumbs, user }: AppLayoutProps
 
   return (
     <ShortcutsHelpProvider>
-      <div className="flex h-screen overflow-hidden bg-surface">
+      <div className="flex h-[100dvh] min-h-[100svh] overflow-hidden bg-surface safe-area-x">
         <Suspense fallback={null}>
           <LoadingBar />
         </Suspense>
@@ -80,10 +80,10 @@ export function AppLayout({ children, title, breadcrumbs, user }: AppLayoutProps
 
         <Sidebar user={user} />
 
-        <div className="flex flex-1 flex-col min-w-0 bg-surface relative">
+        <div className="relative flex min-w-0 flex-1 flex-col bg-surface">
           <Header title={title} breadcrumbs={breadcrumbs} user={user} />
 
-          <main className="flex-1 overflow-y-auto overflow-x-hidden pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0 scroll-smooth">
+          <main className="mobile-scroll-area flex-1 overflow-y-auto overflow-x-hidden pb-[calc(5.5rem_+_env(safe-area-inset-bottom))] scroll-smooth md:pb-0">
             <div className="mx-auto max-w-[1600px] px-3 py-3 sm:px-6 sm:py-6 md:p-12">
               <PageTransition>
                 {children}

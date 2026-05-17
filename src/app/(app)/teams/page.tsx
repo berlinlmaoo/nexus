@@ -895,7 +895,7 @@ export default function TeamsPage() {
                               <ChevronsUpDown className="ml-3 h-4 w-4 shrink-0 text-on-surface-variant/35" />
                             </button>
                           </PopoverTrigger>
-                          <PopoverContent align="start" className="w-[360px] rounded-2xl border-none p-2 shadow-2xl">
+                          <PopoverContent align="start" className="w-[calc(100vw_-_2rem)] max-w-[360px] rounded-2xl border-none p-2 shadow-2xl">
                             <div className="space-y-2">
                               <div className="relative">
                                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant/35" />
@@ -906,7 +906,7 @@ export default function TeamsPage() {
                                   className="h-10 rounded-xl border-on-surface-variant/10 bg-surface-container-low pl-9 text-sm font-medium"
                                 />
                               </div>
-                              <div className="max-h-64 space-y-1 overflow-y-auto">
+                              <div className="mobile-scroll-area max-h-[45dvh] space-y-1 overflow-y-auto sm:max-h-64">
                                 {filteredMembers.map((member) => (
                                   <button
                                     key={member.userId}
@@ -921,7 +921,7 @@ export default function TeamsPage() {
                                       })
                                     }}
                                     className={cn(
-                                      'flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors',
+                                      'touch-target flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors sm:min-h-0',
                                       selectedMemberIds.includes(member.userId)
                                         ? 'bg-primary/5 text-primary'
                                         : 'hover:bg-surface-container-low'
@@ -944,7 +944,7 @@ export default function TeamsPage() {
                                   </p>
                                 )}
                               </div>
-                              <div className="flex items-center justify-between gap-2 border-t border-on-surface-variant/5 px-1 pt-2">
+                              <div className="flex flex-col gap-2 border-t border-on-surface-variant/5 px-1 pt-2 sm:flex-row sm:items-center sm:justify-between">
                                 <p className="text-[11px] font-medium text-on-surface-variant/45">
                                   {selectedMemberIds.length} selected
                                 </p>
@@ -953,7 +953,7 @@ export default function TeamsPage() {
                                     type="button"
                                     variant="ghost"
                                     size="sm"
-                                    className="h-8 rounded-xl px-3 text-[11px] font-bold"
+                                    className="h-10 flex-1 rounded-xl px-3 text-[11px] font-bold sm:h-8 sm:flex-none"
                                     onClick={() => setMemberDrafts((prev) => ({ ...prev, [team.id]: [] }))}
                                   >
                                     Clear
@@ -961,7 +961,7 @@ export default function TeamsPage() {
                                   <Button
                                     type="button"
                                     size="sm"
-                                    className="h-8 rounded-xl px-3 text-[11px] font-bold"
+                                    className="h-10 flex-1 rounded-xl px-3 text-[11px] font-bold sm:h-8 sm:flex-none"
                                     onClick={() => {
                                       setMemberPickerOpenByTeam((prev) => ({ ...prev, [team.id]: false }))
                                       setMemberSearchByTeam((prev) => ({ ...prev, [team.id]: '' }))
@@ -977,7 +977,7 @@ export default function TeamsPage() {
                         <Button
                           onClick={() => handleAddMember(team.id)}
                           disabled={!team.canManage || (selectedMemberIds.length === 0 && !hasMemberEmailDraft) || activeAction === `add-member-${team.id}`}
-                          className="h-11 rounded-2xl bg-primary px-5 text-xs font-black uppercase tracking-widest text-primary-foreground sm:min-w-[120px]"
+                          className="h-11 w-full rounded-2xl bg-primary px-5 text-xs font-black uppercase tracking-widest text-primary-foreground sm:w-auto sm:min-w-[120px]"
                         >
                           {activeAction === `add-member-${team.id}`
                             ? <Loader2 className="h-4 w-4 animate-spin" />
@@ -1112,7 +1112,7 @@ export default function TeamsPage() {
                               <ChevronsUpDown className="ml-3 h-4 w-4 shrink-0 text-on-surface-variant/35" />
                             </button>
                           </PopoverTrigger>
-                          <PopoverContent align="start" className="w-[360px] rounded-2xl border-none p-2 shadow-2xl">
+                          <PopoverContent align="start" className="w-[calc(100vw_-_2rem)] max-w-[360px] rounded-2xl border-none p-2 shadow-2xl">
                             <div className="space-y-2">
                               <div className="relative">
                                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-on-surface-variant/35" />
@@ -1123,7 +1123,7 @@ export default function TeamsPage() {
                                   className="h-10 rounded-xl border-on-surface-variant/10 bg-surface-container-low pl-9 text-sm font-medium"
                                 />
                               </div>
-                              <div className="max-h-64 space-y-1 overflow-y-auto">
+                              <div className="mobile-scroll-area max-h-[45dvh] space-y-1 overflow-y-auto sm:max-h-64">
                                 {filteredProjects.map((project) => (
                                   <button
                                     key={project.id}
@@ -1134,7 +1134,7 @@ export default function TeamsPage() {
                                       setProjectSearchByTeam((prev) => ({ ...prev, [team.id]: '' }))
                                     }}
                                     className={cn(
-                                      'flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors',
+                                      'touch-target flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors sm:min-h-0',
                                       projectDrafts[team.id] === project.id
                                         ? 'bg-primary/5 text-primary'
                                         : 'hover:bg-surface-container-low'
@@ -1160,7 +1160,7 @@ export default function TeamsPage() {
                         <Button
                           onClick={() => handleLinkProject(team.id)}
                           disabled={!team.canManage || availableProjects.length === 0 || !projectDrafts[team.id] || activeAction === `link-project-${team.id}`}
-                          className="h-11 rounded-2xl bg-primary px-5 text-xs font-black uppercase tracking-widest text-primary-foreground"
+                          className="h-11 w-full rounded-2xl bg-primary px-5 text-xs font-black uppercase tracking-widest text-primary-foreground sm:w-auto"
                         >
                           {activeAction === `link-project-${team.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Link'}
                         </Button>

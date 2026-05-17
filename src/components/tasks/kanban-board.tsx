@@ -160,13 +160,13 @@ export function KanbanBoard({
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
-      <div className="flex gap-4 overflow-x-auto pb-4">
+      <div className="mobile-horizontal-scroll flex gap-4 overflow-x-auto pb-4">
         {columnEntries.map((column) => {
           const columnTasks = column.tasks
           return (
             <div
               key={column.id}
-              className="flex-shrink-0 w-72 flex flex-col animate-fade-in-up"
+              className="flex w-[min(82vw,18rem)] flex-shrink-0 flex-col animate-fade-in-up sm:w-72"
               style={{ animationDelay: `${column.index * 75}ms` }}
             >
               {/* Column header */}
@@ -185,7 +185,7 @@ export function KanbanBoard({
                     ref={provided.innerRef}
                     {...provided.droppableProps}
                     className={cn(
-                      "flex-1 space-y-2 rounded-lg p-2 min-h-[200px] transition-all duration-300",
+                      "min-h-[160px] flex-1 space-y-2 rounded-lg p-2 transition-all duration-300 sm:min-h-[200px]",
                       snapshot.isDraggingOver
                         ? "bg-muted border-2 border-dashed border-muted-foreground/40 shadow-inner"
                         : "bg-muted/30 border-2 border-transparent"

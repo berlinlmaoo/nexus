@@ -93,7 +93,7 @@ export function AddWidgetDialog({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3 max-h-[400px] overflow-y-auto py-1">
+        <div className="mobile-scroll-area grid max-h-[calc(100dvh_-_12rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] grid-cols-1 gap-3 overflow-y-auto py-1 sm:max-h-[400px] sm:grid-cols-2">
           {entries.map(([type, entry]) => {
             const Icon = ICON_MAP[entry.icon] || CheckSquare
             const isActive = activeTypes.has(type)
@@ -103,7 +103,7 @@ export function AddWidgetDialog({
                 key={type}
                 onClick={() => onAdd(type)}
                 className={cn(
-                  "flex flex-col items-start gap-2 rounded-lg border p-3 text-left transition-all hover:shadow-md",
+                  "touch-target flex flex-col items-start gap-2 rounded-lg border p-3 text-left transition-all hover:shadow-md sm:min-h-0",
                   isActive && "border-border bg-zinc-50 dark:bg-zinc-900"
                 )}
               >

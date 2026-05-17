@@ -521,11 +521,11 @@ export function CalendarView({
   }
 
   return (
-    <div className="max-w-[1400px] mx-auto w-full space-y-10 animate-fade-in">
+    <div className="mx-auto w-full max-w-[1400px] space-y-6 animate-fade-in sm:space-y-10">
       {/* Calendar Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end md:gap-6">
         <div className="space-y-2">
-          <h2 className="text-5xl font-headline font-black tracking-tighter text-primary lowercase first-letter:uppercase">
+          <h2 className="text-3xl font-headline font-black tracking-tighter text-primary lowercase first-letter:uppercase sm:text-5xl">
             {headerLabel}
           </h2>
           <div className="flex items-center gap-3">
@@ -538,12 +538,12 @@ export function CalendarView({
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4">
           <Button
             type="button"
             variant="ghost"
             className={cn(
-              "h-10 rounded-xl px-4 text-[11px] font-black uppercase tracking-widest",
+              "touch-target rounded-xl px-4 text-[11px] font-black uppercase tracking-widest sm:h-10 sm:min-h-0",
               colorPanelOpen
                 ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
                 : "hover:bg-surface-container-low text-on-surface-variant/60"
@@ -553,7 +553,7 @@ export function CalendarView({
             <Palette className="mr-2 h-4 w-4" />
             Colors
           </Button>
-          <div className="flex items-center p-1 bg-surface-container-low rounded-xl">
+          <div className="mobile-horizontal-scroll flex max-w-full items-center overflow-x-auto rounded-xl bg-surface-container-low p-1 hide-scrollbar">
             {[
               { id: "week" as const, label: "Week" },
               { id: "month" as const, label: "Month" },
@@ -564,7 +564,7 @@ export function CalendarView({
                 type="button"
                 onClick={() => handleModeChange(view.id)}
                 className={cn(
-                  "px-5 py-2 text-[11px] font-black uppercase tracking-widest rounded-lg transition-all duration-200",
+                  "touch-target shrink-0 rounded-lg px-4 py-2 text-[11px] font-black uppercase tracking-widest transition-all duration-200 sm:min-h-0 sm:px-5",
                   displayMode === view.id
                     ? "bg-surface-container-lowest text-primary shadow-sm shadow-primary/5"
                     : "text-on-surface-variant/40 hover:text-primary"
@@ -575,18 +575,18 @@ export function CalendarView({
             ))}
           </div>
           
-          <div className="flex items-center gap-1 ml-2">
+          <div className="ml-0 flex items-center gap-1 sm:ml-2">
             <Button
               variant="ghost"
               size="icon"
-              className="h-10 w-10 rounded-xl hover:bg-surface-container-low text-on-surface-variant/60"
+              className="touch-target rounded-xl text-on-surface-variant/60 hover:bg-surface-container-low sm:h-10 sm:w-10"
               onClick={handleNavigatePrevious}
             >
               <ChevronLeft className="h-5 w-5" />
             </Button>
             <Button
               variant="ghost"
-              className="h-10 px-4 font-black text-[11px] uppercase tracking-widest rounded-xl hover:bg-surface-container-low text-on-surface-variant/60"
+              className="touch-target rounded-xl px-4 text-[11px] font-black uppercase tracking-widest text-on-surface-variant/60 hover:bg-surface-container-low sm:h-10 sm:min-h-0"
               onClick={() => setCurrentDate(new Date())}
             >
               Today
@@ -594,7 +594,7 @@ export function CalendarView({
             <Button
               variant="ghost"
               size="icon"
-              className="h-10 w-10 rounded-xl hover:bg-surface-container-low text-on-surface-variant/60"
+              className="touch-target rounded-xl text-on-surface-variant/60 hover:bg-surface-container-low sm:h-10 sm:w-10"
               onClick={handleNavigateNext}
             >
               <ChevronRight className="h-5 w-5" />
@@ -624,7 +624,7 @@ export function CalendarView({
               <div className="flex items-center gap-2">
                 <Button
                   type="button"
-                  className="h-10 rounded-xl bg-primary px-4 text-xs font-black uppercase tracking-widest text-primary-foreground"
+                  className="touch-target rounded-xl bg-primary px-4 text-xs font-black uppercase tracking-widest text-primary-foreground sm:h-10 sm:min-h-0"
                   onClick={handleAddColorRule}
                 >
                   <Plus className="mr-2 h-4 w-4" />
@@ -735,13 +735,13 @@ export function CalendarView({
       </AnimatePresence>
 
       {/* Calendar Grid Container */}
-      <div className="bg-surface-container-lowest rounded-[32px] shadow-2xl shadow-primary/5 border border-on-surface-variant/5 overflow-hidden">
+      <div className="mobile-horizontal-scroll overflow-x-auto overflow-y-hidden rounded-[32px] border border-on-surface-variant/5 bg-surface-container-lowest shadow-2xl shadow-primary/5">
         {/* Week Day Headers */}
-        <div className="grid grid-cols-7 border-b border-on-surface-variant/5 bg-surface-container-low/30">
+        <div className="grid min-w-[760px] grid-cols-7 border-b border-on-surface-variant/5 bg-surface-container-low/30">
           {weekDays.map((day) => (
             <div
               key={day}
-              className="py-6 text-center text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/40"
+              className="py-4 text-center text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/40 sm:py-6"
             >
               {day}
             </div>
@@ -749,7 +749,7 @@ export function CalendarView({
         </div>
 
         {/* Days Grid */}
-        <div className="grid grid-cols-7 divide-x divide-y divide-on-surface-variant/5 border-on-surface-variant/5">
+        <div className="grid min-w-[760px] grid-cols-7 divide-x divide-y divide-on-surface-variant/5 border-on-surface-variant/5">
           {calendarDays.map((day, idx) => {
             const key = format(day, "yyyy-MM-dd")
             const dayOccurrences = tasksByDate[key] || []
@@ -764,7 +764,7 @@ export function CalendarView({
               <div
                 key={key}
                 className={cn(
-                  "min-h-[160px] p-4 cursor-pointer transition-all duration-300 group/cell relative",
+                  "group/cell relative min-h-[132px] cursor-pointer p-2.5 transition-all duration-300 sm:min-h-[160px] sm:p-4",
                   !inMonth && "bg-surface-container-low/20 opacity-30",
                   isSelected && "bg-primary/[0.02]",
                   dropTargetDate === key && "bg-primary/[0.06] ring-2 ring-inset ring-primary/15",
@@ -906,7 +906,7 @@ export function CalendarView({
                           onClick={(event) => handleDuplicateTask(event, task)}
                           disabled={duplicatingTaskId === task.id}
                           draggable={false}
-                          className="ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-surface-container-lowest/70 text-on-surface-variant/45 opacity-0 transition-all hover:bg-surface-container-lowest hover:text-primary group-hover/task:opacity-100 disabled:opacity-60"
+                          className="ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-container-lowest/70 text-on-surface-variant/55 opacity-100 transition-all hover:bg-surface-container-lowest hover:text-primary group-hover/task:opacity-100 disabled:opacity-60 sm:h-6 sm:w-6 sm:opacity-0"
                           title="Duplicate task"
                         >
                           {duplicatingTaskId === task.id ? (

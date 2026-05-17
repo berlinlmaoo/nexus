@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic"
+
 import { mkdir, writeFile } from "fs/promises"
 import path from "path"
 import { NextRequest, NextResponse } from "next/server"

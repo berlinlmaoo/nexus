@@ -440,7 +440,7 @@ export function KanbanView({
               <AlertTriangle className="h-3 w-3 mr-2" /> WIP
             </Button>
             {showWipConfig && (
-              <div className="absolute left-0 top-full mt-2 z-50 rounded-xl bg-surface-container-lowest p-4 shadow-2xl shadow-primary/10 border border-on-surface-variant/5 min-w-[220px] animate-scale-in">
+              <div className="absolute left-0 top-full z-50 mt-2 min-w-[min(14rem,calc(100vw_-_2rem))] rounded-xl border border-on-surface-variant/5 bg-surface-container-lowest p-4 shadow-2xl shadow-primary/10 animate-scale-in">
                 <p className="text-[10px] font-black uppercase tracking-[0.15em] text-on-surface-variant/40 mb-4">WIP Configuration</p>
                 <div className="space-y-3">
                   {columns.map((col) => (

@@ -888,11 +888,11 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
   ]
 
   return (
-    <div className="flex h-full min-w-0 flex-col">
+    <div className="flex h-full min-h-0 min-w-0 flex-col">
       {/* ── Asana-style compact header: tabs left, actions right ── */}
-      <div className="border-b bg-background shrink-0">
+      <div className="shrink-0 border-b bg-background">
         {/* Left: project name + view tabs */}
-        <div className="flex min-w-0 items-center overflow-x-auto hide-scrollbar">
+        <div className="mobile-horizontal-scroll flex min-w-0 items-center overflow-x-auto hide-scrollbar">
           {/* Project indicator */}
           <div className="flex shrink-0 items-center gap-2 border-r px-3 py-2 sm:pl-4 sm:pr-3">
             <div
@@ -911,7 +911,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
               <button
                 key={tab.id}
                 className={cn(
-                  "flex items-center gap-1.5 whitespace-nowrap border-b-2 -mb-px px-2.5 py-3 text-[11px] font-medium transition-all duration-150 sm:px-3 sm:text-[13px]",
+                  "touch-target flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap border-b-2 -mb-px px-2.5 py-3 text-[11px] font-medium transition-all duration-150 sm:min-h-0 sm:px-3 sm:text-[13px]",
                   viewMode === tab.id
                     ? "border-foreground text-foreground"
                     : "border-transparent text-muted-foreground hover:text-foreground"
@@ -930,7 +930,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
           <button
             onClick={() => setShowProjectSettings((prev) => !prev)}
             className={cn(
-              "flex min-h-9 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+              "touch-target flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors sm:min-h-9",
               showProjectSettings
                 ? "bg-muted text-foreground"
                 : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
@@ -955,7 +955,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
                 </div>
               )}
             </div>
-            <button className="flex min-h-9 items-center gap-1 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-colors hover:bg-foreground/90">
+            <button className="touch-target flex items-center gap-1 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-colors hover:bg-foreground/90 sm:min-h-9">
               <UserPlus className="h-3 w-3" />
               <span>Share</span>
             </button>
@@ -964,13 +964,13 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       </div>
 
       <Dialog open={showProjectSettings} onOpenChange={setShowProjectSettings}>
-        <DialogContent className="max-w-3xl overflow-hidden rounded-[2rem] border-none p-0 shadow-2xl">
+        <DialogContent className="w-[calc(100vw_-_1rem)] max-w-3xl overflow-hidden rounded-[2rem] border-none p-0 shadow-2xl">
           <DialogHeader className="border-b px-6 py-5">
             <DialogTitle className="text-xl font-headline font-black tracking-tight text-primary">
               Customize Project
             </DialogTitle>
           </DialogHeader>
-          <div className="max-h-[80vh] overflow-y-auto pb-4">
+          <div className="mobile-scroll-area max-h-[calc(100dvh_-_7rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] overflow-y-auto pb-4">
             <ProjectHeader
               project={{
                 id: projectMeta.id,
@@ -990,7 +990,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
       </Dialog>
 
       {/* ── Toolbar: search, filter, sort, group, add task ── */}
-      <div className="flex flex-wrap items-center gap-2 border-b bg-background px-3 py-2 shrink-0 sm:flex-nowrap sm:overflow-x-auto sm:gap-1.5 hide-scrollbar">
+      <div className="mobile-horizontal-scroll flex shrink-0 flex-wrap items-center gap-2 overflow-x-auto border-b bg-background px-3 py-2 sm:flex-nowrap sm:gap-1.5 hide-scrollbar">
         {/* Add task */}
         <CreateTaskDialog
           projectId={project.id}
@@ -998,7 +998,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
           defaultTaskListId={defaultTaskListId}
           onCreated={refreshProject}
         >
-          <button className="flex min-h-9 items-center gap-1 rounded-lg bg-muted/40 px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted/70 sm:min-h-0 sm:bg-transparent sm:px-2 sm:py-1">
+          <button className="touch-target flex items-center gap-1 rounded-lg bg-muted/40 px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted/70 sm:min-h-0 sm:bg-transparent sm:px-2 sm:py-1">
             <Plus className="h-3.5 w-3.5" />
             Add task
           </button>
@@ -1007,7 +1007,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
         <div className="hidden h-4 w-px bg-border sm:block" />
 
         {/* Search */}
-        <div className="relative min-w-0 flex-1 basis-[calc(100%-0.5rem)] sm:basis-auto sm:flex-none">
+        <div className="relative min-w-0 flex-1 basis-[calc(100%_-_0.5rem)] sm:basis-auto sm:flex-none">
           <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
@@ -1026,7 +1026,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
         {/* Filter */}
         <button
           className={cn(
-            "flex min-h-9 items-center gap-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors sm:min-h-0 sm:px-2 sm:py-1",
+            "touch-target flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors sm:min-h-0 sm:px-2 sm:py-1",
             showFilters ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
           )}
           onClick={() => setShowFilters(!showFilters)}
@@ -1045,7 +1045,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
           <DropdownMenuTrigger asChild>
             <button
               className={cn(
-                "flex min-h-9 items-center gap-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors sm:min-h-0 sm:px-2 sm:py-1",
+                "touch-target flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors sm:min-h-0 sm:px-2 sm:py-1",
                 "text-muted-foreground hover:text-foreground hover:bg-muted/50"
               )}
             >
@@ -1079,7 +1079,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
           <DropdownMenuTrigger asChild>
             <button
               className={cn(
-                "flex min-h-9 items-center gap-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors sm:min-h-0 sm:px-2 sm:py-1",
+                "touch-target flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors sm:min-h-0 sm:px-2 sm:py-1",
                 "text-muted-foreground hover:text-foreground hover:bg-muted/50"
               )}
             >
@@ -1111,10 +1111,10 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
         <div className="hidden h-4 w-px bg-border sm:block" />
 
         {/* Quick links */}
-        <Link href={`/projects/${project.id}/sprints`} className="flex min-h-9 items-center gap-1 rounded-lg px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground sm:min-h-0 sm:px-2 sm:py-1">
+        <Link href={`/projects/${project.id}/sprints`} className="touch-target flex items-center gap-1 rounded-lg px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground sm:min-h-0 sm:px-2 sm:py-1">
           <Zap className="h-3 w-3" /> Sprints
         </Link>
-        <Link href={`/projects/${project.id}/automations`} className="flex min-h-9 items-center gap-1 rounded-lg px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground sm:min-h-0 sm:px-2 sm:py-1">
+        <Link href={`/projects/${project.id}/automations`} className="touch-target flex items-center gap-1 rounded-lg px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground sm:min-h-0 sm:px-2 sm:py-1">
           <Workflow className="h-3 w-3" /> Rules
         </Link>
 
@@ -1253,7 +1253,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
 
       {/* ── View content (full remaining height) ── */}
       <div className={cn(
-        "flex-1 overflow-auto min-w-0",
+        "mobile-scroll-area min-w-0 flex-1 overflow-auto",
         ["overview", "charts", "feed", "gallery"].includes(viewMode) && "p-4"
       )}>
         {viewMode === "overview" && (

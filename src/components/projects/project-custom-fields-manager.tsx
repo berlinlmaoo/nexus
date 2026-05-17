@@ -177,7 +177,7 @@ function FieldTypePicker({
   onChange: (value: SupportedCustomFieldType) => void
 }) {
   return (
-    <div className="grid grid-cols-2 gap-2 2xl:grid-cols-3">
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 2xl:grid-cols-3">
       {SUPPORTED_CUSTOM_FIELD_TYPES.map((type) => {
         const meta = TYPE_META[type]
         const Icon = meta.icon

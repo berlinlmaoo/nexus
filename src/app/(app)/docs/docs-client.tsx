@@ -116,7 +116,7 @@ export function DocsPageClient({
   // Wiki mode
   if (viewMode === "wiki" && wikiProjectId) {
     return (
-      <div className="h-[calc(100vh-3.5rem)]">
+      <div className="h-[calc(100dvh_-_3.5rem)]">
         {/* Top bar */}
         <div className="flex items-center justify-between px-4 py-2 border-b bg-background">
           <div className="flex items-center gap-3">

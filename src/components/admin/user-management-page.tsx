@@ -427,7 +427,7 @@ export function UserManagementPage({ currentUserName }: UserManagementPageProps)
                 <Button
                   onClick={() => void fetchUserDetail(user.id)}
                   disabled={detailLoading && selectedUserId === user.id}
-                  className="h-11 rounded-2xl bg-primary px-5 text-xs font-black uppercase tracking-widest text-primary-foreground"
+                  className="h-11 w-full rounded-2xl bg-primary px-5 text-xs font-black uppercase tracking-widest text-primary-foreground sm:w-auto"
                 >
                   {detailLoading && selectedUserId === user.id ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -499,7 +499,7 @@ export function UserManagementPage({ currentUserName }: UserManagementPageProps)
                       <Button
                         onClick={() => void handleSystemRoleSave()}
                         disabled={activeAction === "system-role" || pendingSystemRole === selectedUser.role}
-                        className="h-11 rounded-2xl bg-primary px-5 text-xs font-black uppercase tracking-widest text-primary-foreground"
+                        className="h-11 w-full rounded-2xl bg-primary px-5 text-xs font-black uppercase tracking-widest text-primary-foreground sm:w-auto"
                       >
                         {activeAction === "system-role" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
                       </Button>
@@ -540,7 +540,7 @@ export function UserManagementPage({ currentUserName }: UserManagementPageProps)
                         <Button
                           onClick={() => void handleAddWorkspaceMembership()}
                           disabled={activeAction === "add-workspace" || !pendingWorkspaceId}
-                          className="h-11 rounded-2xl bg-primary px-5 text-xs font-black uppercase tracking-widest text-primary-foreground"
+                          className="h-11 w-full rounded-2xl bg-primary px-5 text-xs font-black uppercase tracking-widest text-primary-foreground sm:w-auto"
                         >
                           {activeAction === "add-workspace" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
                         </Button>

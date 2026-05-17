@@ -312,13 +312,13 @@ export function CreateFromTemplateDialog({
               </div>
 
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={handleBack}>
+                <Button type="button" variant="outline" onClick={handleBack} className="h-11 w-full sm:w-auto">
                   Back
                 </Button>
                 <Button
                   onClick={handleCreate}
                   disabled={creating || !projectName.trim()}
-                  className="bg-foreground hover:bg-foreground/90"
+                  className="h-11 w-full bg-foreground hover:bg-foreground/90 sm:w-auto"
                 >
                   {creating ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -362,7 +362,7 @@ export function CreateFromTemplateDialog({
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+                  <div className="mobile-scroll-area max-h-[calc(100dvh_-_13rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] space-y-2 overflow-y-auto pr-1 sm:max-h-[360px]">
                     {templates.map((template) => (
                       <motion.div
                         key={template.id}
@@ -404,7 +404,7 @@ export function CreateFromTemplateDialog({
                             </div>
                             <button
                               onClick={(e) => handleDelete(e, template.id)}
-                              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/60 opacity-0 group-hover:opacity-100 hover:bg-muted hover:text-muted-foreground transition-all duration-200"
+                              className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground/60 opacity-100 transition-all duration-200 hover:bg-muted hover:text-muted-foreground sm:h-7 sm:w-7 sm:opacity-0 sm:group-hover:opacity-100"
                               title="Delete template"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -423,6 +423,7 @@ export function CreateFromTemplateDialog({
                     type="button"
                     variant="outline"
                     onClick={() => setOpen(false)}
+                    className="h-11 w-full sm:w-auto"
                   >
                     Cancel
                   </Button>

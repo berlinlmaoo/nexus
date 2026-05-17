@@ -244,13 +244,14 @@ export function SaveTemplateDialog({
                 type="button"
                 variant="outline"
                 onClick={() => setOpen(false)}
+                className="h-11 w-full sm:w-auto"
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleSave}
                 disabled={loading || !name.trim()}
-                className="bg-foreground hover:bg-foreground/90"
+                className="h-11 w-full bg-foreground hover:bg-foreground/90 sm:w-auto"
               >
                 {loading ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
