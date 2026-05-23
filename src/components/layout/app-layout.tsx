@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
 import { LoadingBar } from "@/components/layout/loading-bar"
 import { DesktopNotificationPrompt } from "@/components/layout/desktop-notification-prompt"
+import { PhoneNumberPrompt } from "@/components/layout/phone-number-prompt"
 import { PageTransition } from "@/components/ui/page-transition"
 import { ShortcutsHelpProvider } from "@/components/layout/shortcuts-help"
 import { useAppStore } from "@/stores/app-store"
@@ -40,6 +41,7 @@ interface AppLayoutProps {
     name: string
     email: string
     image?: string | null
+    phoneNumber?: string | null
     canAccessUserManagement?: boolean
   }
 }
@@ -69,6 +71,7 @@ export function AppLayout({ children, title, breadcrumbs, user }: AppLayoutProps
           <LoadingBar />
         </Suspense>
         <DesktopNotificationPrompt />
+        <PhoneNumberPrompt userId={user.id} initialPhoneNumber={user.phoneNumber ?? null} />
 
         {/* Mobile overlay */}
         {sidebarOpen && (
@@ -80,11 +83,11 @@ export function AppLayout({ children, title, breadcrumbs, user }: AppLayoutProps
 
         <Sidebar user={user} />
 
-        <div className="relative flex min-w-0 flex-1 flex-col bg-surface">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-surface">
           <Header title={title} breadcrumbs={breadcrumbs} user={user} />
 
-          <main className="mobile-scroll-area flex-1 overflow-y-auto overflow-x-hidden pb-[calc(5.5rem_+_env(safe-area-inset-bottom))] scroll-smooth md:pb-0">
-            <div className="mx-auto max-w-[1600px] px-3 py-3 sm:px-6 sm:py-6 md:p-12">
+          <main className="mobile-scroll-area min-h-0 flex-1 overflow-auto pb-[calc(5.5rem_+_env(safe-area-inset-bottom))] scroll-smooth md:pb-0">
+            <div className="mx-auto min-h-full min-w-0 max-w-[1600px] px-3 py-3 sm:px-6 sm:py-6 md:p-12">
               <PageTransition>
                 {children}
               </PageTransition>

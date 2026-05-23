@@ -17,9 +17,29 @@ const formSchema = z.object({
   }),
 })
 
+const DASHBOARD_HOSTS = new Set([
+  "dashboard.nexus.patsgroup.id",
+  "dashboard-nexus.patsgroup.id",
+])
+
+function isDashboardHost() {
+  if (typeof window === "undefined") return false
+  return DASHBOARD_HOSTS.has(window.location.hostname.toLowerCase())
+}
+
+function getCallbackUrl(requestedCallbackUrl: string | null | undefined) {
+  const fallback = isDashboardHost() ? "/ops-dashboard" : "/dashboard"
+
+  if (!requestedCallbackUrl) return fallback
+  if (!requestedCallbackUrl.startsWith("/") || requestedCallbackUrl.startsWith("//")) return fallback
+  if (isDashboardHost() && requestedCallbackUrl === "/dashboard") return "/ops-dashboard"
+
+  return requestedCallbackUrl
+}
+
 export function LoginForm() {
   const searchParams = useSearchParams()
-  const callbackUrl = searchParams?.get("callbackUrl") || "/dashboard"
+  const callbackUrl = getCallbackUrl(searchParams?.get("callbackUrl"))
   const registered = searchParams?.get("registered")
   const passwordReset = searchParams?.get("passwordReset")
   const loginError = searchParams?.get("error")

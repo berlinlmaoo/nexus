@@ -13,6 +13,7 @@ model User {
   email          String            @unique
   password       String?
   avatar         String?
+  phoneNumber    String?
   role           SystemRole        @default(MEMBER)
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt

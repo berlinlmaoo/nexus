@@ -217,7 +217,12 @@ describe('POST /api/gideon/tools', () => {
   })
 
   it('creates tasks with task list resolution and read-back verification', async () => {
-    const taskList = { id: 'list-1', name: 'Backlog', projectId: 'project-1', project: { id: 'project-1', name: 'Ops', status: 'ACTIVE' } }
+    const taskList = {
+      id: 'list-1',
+      name: 'Backlog',
+      projectId: 'project-1',
+      project: { id: 'project-1', name: 'Ops', status: 'ACTIVE', autoAssignEnabled: false, autoAssignAssigneeIds: [], members: [] },
+    }
     const createdTask = {
       id: 'task-1',
       title: 'New GIDEON task',

@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState, useCallback, useRef, useEffect, useMemo, type MouseEvent } from "react"
+import { memo, useState, useCallback, useRef, useEffect, useMemo, type MouseEvent, type WheelEvent } from "react"
 import {
   DragDropContext,
   Droppable,
@@ -754,8 +754,42 @@ export function BoardView({
     setBulkDuplicateDueDate(null)
   }, [enableTaskBatchDuplicate])
 
+  const handleBoardWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
+    if (event.ctrlKey) return
+
+    const scrollArea = event.currentTarget
+    const maxTop = scrollArea.scrollHeight - scrollArea.clientHeight
+    const maxLeft = scrollArea.scrollWidth - scrollArea.clientWidth
+    if (maxTop <= 0 && maxLeft <= 0) return
+
+    const wantsHorizontal = event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)
+    let consumed = false
+
+    if (wantsHorizontal && maxLeft > 0) {
+      const previousLeft = scrollArea.scrollLeft
+      const nextLeft = Math.max(0, Math.min(maxLeft, previousLeft + (event.deltaX || event.deltaY)))
+      scrollArea.scrollLeft = nextLeft
+      consumed = nextLeft !== previousLeft
+    } else if (maxTop > 0) {
+      const previousTop = scrollArea.scrollTop
+      const nextTop = Math.max(0, Math.min(maxTop, previousTop + event.deltaY))
+      scrollArea.scrollTop = nextTop
+      consumed = nextTop !== previousTop
+    } else if (maxLeft > 0) {
+      const previousLeft = scrollArea.scrollLeft
+      const nextLeft = Math.max(0, Math.min(maxLeft, previousLeft + event.deltaY + event.deltaX))
+      scrollArea.scrollLeft = nextLeft
+      consumed = nextLeft !== previousLeft
+    }
+
+    if (consumed) {
+      event.preventDefault()
+      event.stopPropagation()
+    }
+  }, [])
+
   return (
-    <>
+    <div className="flex h-[calc(100dvh-21rem)] min-h-[420px] min-w-0 flex-col overflow-hidden">
       {enableTaskBatchDuplicate && (
         selectedTasks.length > 0 ? (
           <div className="sticky top-0 z-20 mb-3 flex items-center justify-between gap-3 rounded-2xl border border-primary/10 bg-background/90 px-4 py-3 shadow-lg backdrop-blur">
@@ -943,7 +977,11 @@ export function BoardView({
       )}
 
       <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="mobile-horizontal-scroll flex h-full min-w-0 w-full gap-3 overflow-x-auto px-3 pb-4 pt-3">
+        <div
+          className="mobile-scroll-area flex min-h-0 min-w-0 flex-1 gap-3 overflow-auto overscroll-contain px-3 pb-4 pt-3"
+          onWheelCapture={handleBoardWheel}
+          data-board-scroll-area
+        >
         {columnEntries.map((column) => (
           <div
             key={column.id}
@@ -1282,6 +1320,6 @@ export function BoardView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   )
 }

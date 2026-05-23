@@ -268,6 +268,7 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
     autoAssignEnabled: project.autoAssignEnabled,
     autoAssignAssigneeIds: project.autoAssignAssigneeIds,
   })
+  const isFinanceProject = projectMeta.name.toLowerCase().includes("finance")
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>("ALL")
@@ -927,6 +928,15 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
 
         {/* Right: members + share */}
         <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 sm:justify-end sm:pr-4 sm:pl-0 sm:py-0">
+          {isFinanceProject && (
+            <Link
+              href={`/projects/${project.id}/finance-dashboard`}
+              className="touch-target flex items-center gap-1.5 rounded-md bg-emerald-500/10 px-2.5 py-1.5 text-xs font-bold text-emerald-700 transition-colors hover:bg-emerald-500/15 dark:text-emerald-300 sm:min-h-9"
+            >
+              <BarChart3 className="h-3.5 w-3.5" />
+              <span>Finance Dashboard</span>
+            </Link>
+          )}
           <button
             onClick={() => setShowProjectSettings((prev) => !prev)}
             className={cn(
@@ -1253,7 +1263,8 @@ export function ProjectDetailClient({ project, currentUser }: ProjectDetailClien
 
       {/* ── View content (full remaining height) ── */}
       <div className={cn(
-        "mobile-scroll-area min-w-0 flex-1 overflow-auto",
+        "min-h-0 min-w-0 flex-1",
+        viewMode === "board" ? "overflow-hidden" : "overflow-auto",
         ["overview", "charts", "feed", "gallery"].includes(viewMode) && "p-4"
       )}>
         {viewMode === "overview" && (

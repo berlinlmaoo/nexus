@@ -9,6 +9,7 @@ import {
   statusUpdateEmail,
 } from "@/lib/email"
 import { createLogger } from "@/lib/logger"
+import { normalizeIndonesianPhoneNumber } from "@/lib/phone-number"
 
 const log = createLogger("notifications")
 
@@ -98,19 +99,63 @@ async function getBatchPrefs(userIds: string[]): Promise<Map<string, NotifPrefs>
   return map
 }
 
+function whatsappChatIdFromPhone(phone: string): string | null {
+  const normalized = normalizeIndonesianPhoneNumber(phone)
+  if (!normalized) return null
+  const digits = normalized.replace(/\D/g, "")
+  if (!digits) return null
+  return `${digits}@s.whatsapp.net`
+}
+
+function shouldUseHermesBridge(webhookUrl: string): boolean {
+  try {
+    const url = new URL(webhookUrl)
+    return url.pathname.replace(/\/+$/, "").endsWith("/send")
+  } catch {
+    return false
+  }
+}
+
+function envFlagEnabled(name: string, defaultValue = true): boolean {
+  const raw = process.env[name]
+  if (raw === undefined || raw === "") return defaultValue
+  return !["0", "false", "no", "off"].includes(raw.toLowerCase())
+}
+
 async function sendWA(phone: string, message: string) {
-  const webhookUrl = process.env.WA_WEBHOOK_URL
-  if (!webhookUrl) {
-    log.warn("WA webhook not configured", { message })
+  const webhookUrl =
+    process.env.WA_WEBHOOK_URL ||
+    process.env.HERMES_WA_BRIDGE_URL ||
+    "http://host.docker.internal:3001/send"
+
+  const chatId = whatsappChatIdFromPhone(phone)
+  if (!chatId) {
+    log.warn("WA phone invalid, skipping notification", { phone })
     return
   }
+
+  const useHermesBridge = shouldUseHermesBridge(webhookUrl)
+  const body = useHermesBridge ? { chatId, message } : { phone, message }
+
   try {
-    await fetch(webhookUrl, {
+    const res = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone, message }),
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10000),
     })
-    log.info("WA message sent", { phone })
+
+    if (!res.ok) {
+      const response = await res.text().catch(() => "")
+      log.error("WA delivery failed", {
+        phone,
+        status: res.status,
+        response: response.slice(0, 300),
+      })
+      return
+    }
+
+    log.info("WA message sent", { phone, via: useHermesBridge ? "hermes_bridge" : "webhook" })
   } catch (error) {
     log.error("WA delivery failed", { error: String(error) })
   }
@@ -171,7 +216,7 @@ export async function notifyTaskAssigned(data: {
 
   const user = await prisma.user.findUnique({
     where: { id: data.assigneeId },
-    select: { name: true, email: true },
+    select: { name: true, email: true, phoneNumber: true },
   })
   if (!user) return
 
@@ -204,9 +249,15 @@ export async function notifyTaskAssigned(data: {
   }
 
   // WA
-  if (prefs.waEnabled && prefs.waPhone) {
+  // Phase 1 default: NEXUS assignment notifications should reach assignees on WA
+  // when a usable phone number exists. Users can still override the number via
+  // NotificationPreference.waPhone; ops can kill-switch this default with
+  // NEXUS_WA_TASK_ASSIGNMENTS_DEFAULT_ENABLED=false.
+  const assignmentWaDefaultEnabled = envFlagEnabled("NEXUS_WA_TASK_ASSIGNMENTS_DEFAULT_ENABLED", true)
+  const waRecipient = prefs.waPhone || user.phoneNumber
+  if (prefs.taskAssigned && waRecipient && (prefs.waEnabled || assignmentWaDefaultEnabled)) {
     await sendWA(
-      prefs.waPhone,
+      waRecipient,
       `[NEXUS] ${data.assignedByName} assigned you "${data.taskTitle}" in ${data.projectName}`
     )
   }

@@ -61,17 +61,15 @@ export async function POST(
       },
     })
 
-    // Send notification to the assignee (don't block the response)
-    if (userId !== session.user.id) {
-      notifyTaskAssigned({
-        assigneeId: userId,
-        taskId: params.taskId,
-        taskTitle: task.title,
-        projectName: task.taskList.project.name,
-        projectId: task.taskList.projectId,
-        assignedByName: session.user.name || "Someone",
-      }).catch((err) => console.error("Notification error:", err))
-    }
+    // Send notification to the assignee, including self-assignment (don't block the response)
+    notifyTaskAssigned({
+      assigneeId: userId,
+      taskId: params.taskId,
+      taskTitle: task.title,
+      projectName: task.taskList.project.name,
+      projectId: task.taskList.projectId,
+      assignedByName: session.user.name || "Someone",
+    }).catch((err) => console.error("Notification error:", err))
 
     logAudit({ action: "create", entityType: "task_assignee", entityId: params.taskId, entityName: task.title, userId: session.user.id!, request, metadata: { assigneeUserId: userId } })
 

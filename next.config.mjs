@@ -53,6 +53,7 @@ const nextConfig = {
       '@prisma/adapter-pg',
       'pg',
       'bcryptjs',
+      'googleapis',
     ],
   },
 };
