@@ -36,7 +36,7 @@ export function PageTransition({ children }: PageTransitionProps) {
 
   return (
     <div
-      className={`transition-[opacity,transform] duration-200 ease-out ${visible ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"}`}
+      className={`min-h-full transition-[opacity,transform] duration-200 ease-out ${visible ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"}`}
     >
       {children}
     </div>

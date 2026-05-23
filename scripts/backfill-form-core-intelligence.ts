@@ -39,9 +39,22 @@ function normalizeValueList(value: unknown) {
   return [normalizeText(value)]
 }
 
-function evaluateCondition(field: IntakeFormField, data: Record<string, unknown>) {
+function getConditionFieldValue(
+  condition: NonNullable<IntakeFormField["showIf"]>,
+  data: Record<string, unknown>,
+  fieldsById?: Map<string, IntakeFormField>
+) {
+  const conditionField = fieldsById?.get(condition.fieldId)
+  return data[condition.fieldId] ?? (conditionField ? data[conditionField.name] : undefined)
+}
+
+function evaluateCondition(
+  field: IntakeFormField,
+  data: Record<string, unknown>,
+  fieldsById?: Map<string, IntakeFormField>
+) {
   if (!field.showIf) return true
-  const fieldValues = normalizeValueList(data[field.showIf.fieldId])
+  const fieldValues = normalizeValueList(getConditionFieldValue(field.showIf, data, fieldsById))
   const fieldValue = fieldValues.join(", ")
   const expected = String(field.showIf.value ?? "")
 
@@ -61,9 +74,49 @@ function evaluateCondition(field: IntakeFormField, data: Record<string, unknown>
   }
 }
 
+function getVisibleFields(fields: IntakeFormField[], data: Record<string, unknown>) {
+  const fieldsById = new Map(fields.map((field) => [field.id, field]))
+  const visibilityCache = new Map<string, boolean>()
+
+  const isVisible = (field: IntakeFormField, trail = new Set<string>()): boolean => {
+    const cached = visibilityCache.get(field.id)
+    if (cached !== undefined) return cached
+
+    if (trail.has(field.id)) {
+      visibilityCache.set(field.id, false)
+      return false
+    }
+
+    if (!evaluateCondition(field, data, fieldsById)) {
+      visibilityCache.set(field.id, false)
+      return false
+    }
+
+    const parentId = field.showIf?.fieldId
+    if (!parentId) {
+      visibilityCache.set(field.id, true)
+      return true
+    }
+
+    const parent = fieldsById.get(parentId)
+    if (!parent) {
+      visibilityCache.set(field.id, true)
+      return true
+    }
+
+    const nextTrail = new Set(trail)
+    nextTrail.add(field.id)
+    const visible = isVisible(parent, nextTrail)
+    visibilityCache.set(field.id, visible)
+    return visible
+  }
+
+  return fields.filter((field) => isVisible(field))
+}
+
 function buildSubmissionSummary(fields: IntakeFormField[], data: Record<string, unknown>) {
   return fields
-    .filter((field) => field.mapping?.target !== "task_title" && field.mapping?.target !== "task_description")
+    .filter((field) => field.mapping?.target !== "task_description")
     .map((field) => {
       const value = normalizeText(getFieldValue(data, field))
       return value ? `- ${field.name}: ${value}` : null
@@ -78,7 +131,7 @@ function buildTaskDescriptionFromFields(fields: IntakeFormField[], data: Record<
     .map((field) => {
       const value = normalizeText(getFieldValue(data, field))
       if (!value) return null
-      return descriptionFields.length === 1 ? value : `${field.name}:\n${value}`
+      return `${field.name}:\n${value}`
     })
     .filter(Boolean)
 
@@ -109,7 +162,7 @@ async function main() {
     for (const submission of form.submissions) {
       if (!submission.task) continue
       const data = submission.data as Record<string, unknown>
-      const visibleFields = fields.filter((field) => evaluateCondition(field, data))
+      const visibleFields = getVisibleFields(fields, data)
       const descriptionFromField = buildTaskDescriptionFromFields(visibleFields, data)
       const summary = buildSubmissionSummary(visibleFields, data)
       const nextDescription = [

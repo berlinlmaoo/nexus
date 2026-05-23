@@ -3,6 +3,7 @@ import Link from "next/link"
 import { LoginForm } from "./login-form"
 import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
+import { headers } from "next/headers"
 import { Suspense } from "react"
 import { Loader2 } from "lucide-react"
 import Image from "next/image"
@@ -16,9 +17,33 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 export const fetchCache = "force-no-store"
 
-export default async function LoginPage() {
+const DASHBOARD_HOSTS = new Set([
+  "dashboard.nexus.patsgroup.id",
+  "dashboard-nexus.patsgroup.id",
+])
+
+function getCurrentHost() {
+  const headerList = headers()
+  const forwardedHost = headerList.get("x-forwarded-host")?.split(",")[0]?.trim()
+  return (forwardedHost ?? headerList.get("host"))?.split(":")[0]?.toLowerCase()
+}
+
+function getSafeCallbackUrl(value: unknown, fallback = "/dashboard") {
+  if (typeof value !== "string") return fallback
+  if (!value.startsWith("/") || value.startsWith("//")) return fallback
+  return value
+}
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams?: { callbackUrl?: string }
+}) {
   const session = await auth()
-  if (session) redirect("/dashboard")
+  const host = getCurrentHost()
+  const fallbackCallbackUrl = host && DASHBOARD_HOSTS.has(host) ? "/ops-dashboard" : "/dashboard"
+
+  if (session) redirect(getSafeCallbackUrl(searchParams?.callbackUrl, fallbackCallbackUrl))
 
   return (
     <div className="relative flex min-h-[100svh] items-stretch overflow-hidden bg-surface">

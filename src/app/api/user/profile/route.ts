@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { isLikelyPhoneNumber, normalizeIndonesianPhoneNumber } from "@/lib/phone-number"
 
 export async function GET() {
   try {
@@ -14,7 +15,7 @@ export async function GET() {
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { id: true, name: true, email: true, avatar: true, dndUntil: true },
+      select: { id: true, name: true, email: true, avatar: true, phoneNumber: true, dndUntil: true },
     })
 
     if (!user) {
@@ -39,11 +40,23 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, dndUntil } = body
+    const { name, phoneNumber, dndUntil } = body
 
-    const data: { name?: string; dndUntil?: Date | null } = {}
+    const data: { name?: string; phoneNumber?: string | null; dndUntil?: Date | null } = {}
     if (typeof name === "string" && name.trim()) {
       data.name = name.trim()
+    }
+    if (phoneNumber !== undefined) {
+      if (phoneNumber === null || phoneNumber === "") {
+        data.phoneNumber = null
+      } else if (typeof phoneNumber === "string" && isLikelyPhoneNumber(phoneNumber)) {
+        data.phoneNumber = normalizeIndonesianPhoneNumber(phoneNumber)
+      } else {
+        return NextResponse.json(
+          { error: "Enter a valid Indonesian WhatsApp number, for example +6281234567890." },
+          { status: 400 }
+        )
+      }
     }
     if (dndUntil !== undefined) {
       data.dndUntil = dndUntil ? new Date(dndUntil) : null
@@ -59,7 +72,7 @@ export async function PATCH(request: NextRequest) {
     const user = await prisma.user.update({
       where: { id: session.user.id },
       data,
-      select: { id: true, name: true, email: true, avatar: true, dndUntil: true },
+      select: { id: true, name: true, email: true, avatar: true, phoneNumber: true, dndUntil: true },
     })
 
     logAudit({ action: "update", entityType: "user_profile", entityId: session.user.id, userId: session.user.id, request })

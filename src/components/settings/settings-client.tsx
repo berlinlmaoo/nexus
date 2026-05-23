@@ -14,9 +14,11 @@ import { WorkspaceMembersSection } from "./workspace-members"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { AttendanceSettingsSection } from "./attendance-settings"
+import { isLikelyPhoneNumber, normalizeIndonesianPhoneNumber } from "@/lib/phone-number"
+import { toast } from "sonner"
 
 interface SettingsClientProps {
-  user: { id: string; name: string; email: string; avatar: string | null; role?: string }
+  user: { id: string; name: string; email: string; avatar: string | null; phoneNumber?: string | null; role?: string }
   workspace: { id: string; name: string; slug: string } | null
   isAdmin?: boolean
   canAccessAttendanceSettings?: boolean
@@ -29,6 +31,7 @@ export function SettingsClient({ user, workspace, isAdmin, canAccessAttendanceSe
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<SettingsTab>("profile")
   const [name, setName] = useState(user.name)
+  const [phoneNumber, setPhoneNumber] = useState(user.phoneNumber ?? "")
   const [saving, setSaving] = useState(false)
 
   const tabs: { id: SettingsTab; label: string; icon: LucideIcon }[] = [
@@ -43,15 +46,34 @@ export function SettingsClient({ user, workspace, isAdmin, canAccessAttendanceSe
   ]
 
   const handleSaveProfile = async () => {
+    if (phoneNumber.trim() && !isLikelyPhoneNumber(phoneNumber)) {
+      toast.error("Nomor WhatsApp belum valid", {
+        description: "Pakai format 0812..., 62812..., atau +62812...",
+      })
+      return
+    }
+
     setSaving(true)
     try {
       const res = await fetch("/api/user/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim() }),
+        body: JSON.stringify({
+          name: name.trim(),
+          phoneNumber: phoneNumber.trim() ? phoneNumber : null,
+        }),
       })
-      if (res.ok) router.refresh()
-    } catch (error) { console.error(error) } finally { setSaving(false) }
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null)
+        throw new Error(payload?.error ?? "Failed to update profile")
+      }
+      toast.success("Identity updated")
+      router.refresh()
+    } catch (error) {
+      toast.error("Failed to update identity", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      })
+    } finally { setSaving(false) }
   }
 
   return (
@@ -131,9 +153,25 @@ export function SettingsClient({ user, workspace, isAdmin, canAccessAttendanceSe
                         className="w-full h-14 bg-surface-container-low/50 border-none rounded-2xl px-6 text-sm font-bold text-on-surface-variant/40 cursor-not-allowed"
                       />
                     </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/40 ml-1">WhatsApp Number</label>
+                      <input
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        inputMode="tel"
+                        autoComplete="tel"
+                        placeholder="081234567890"
+                        className="w-full h-14 bg-surface-container-low border-none rounded-2xl px-6 text-sm font-bold text-on-surface placeholder:text-on-surface-variant/30 focus:ring-4 focus:ring-primary/5 transition-all"
+                      />
+                      <p className="ml-1 text-xs font-medium text-on-surface-variant/50">
+                        {phoneNumber.trim() && isLikelyPhoneNumber(phoneNumber)
+                          ? `Akan disimpan sebagai ${normalizeIndonesianPhoneNumber(phoneNumber)}`
+                          : "Dipakai nanti untuk WhatsApp AI agent dan notifikasi operasional."}
+                      </p>
+                    </div>
                     <Button 
                       onClick={handleSaveProfile} 
-                      disabled={saving || name.trim() === user.name}
+                      disabled={saving || (name.trim() === user.name && phoneNumber.trim() === (user.phoneNumber ?? ""))}
                       className="h-12 w-full rounded-2xl bg-primary px-8 text-xs font-black uppercase tracking-widest text-primary-foreground shadow-lg shadow-primary/10 transition-all hover:-translate-y-1 active:scale-95 sm:h-14 sm:w-auto"
                     >
                       {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : "Update Identity"}

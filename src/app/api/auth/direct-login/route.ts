@@ -12,12 +12,21 @@ const log = createLogger('direct-login')
 const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
 const FALLBACK_REDIRECT = '/dashboard'
 
+function getRequestHost(request: NextRequest) {
+  const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim()
+  return (forwardedHost ?? request.headers.get('host'))?.split(':')[0]?.toLowerCase()
+}
+
+function getRequestOrigin(request: NextRequest) {
+  const host = getRequestHost(request)
+  const protocol = request.headers.get('x-forwarded-proto') ?? 'https'
+  return host ? `${protocol}://${host}` : request.nextUrl.origin
+}
+
 function getTrustedOrigins(request: NextRequest) {
   const origins = new Set<string>()
   const configuredUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL
-  const forwardedHost = request.headers.get('x-forwarded-host')
-  const host = forwardedHost ?? request.headers.get('host')
-  const protocol = request.headers.get('x-forwarded-proto') ?? 'https'
+  const requestOrigin = getRequestOrigin(request)
 
   if (configuredUrl) {
     try {
@@ -27,9 +36,9 @@ function getTrustedOrigins(request: NextRequest) {
     }
   }
 
-  if (host) {
-    origins.add(`${protocol}://${host}`)
-    origins.add(`https://${host}`)
+  origins.add(requestOrigin)
+  if (requestOrigin.startsWith('http://')) {
+    origins.add(requestOrigin.replace('http://', 'https://'))
   }
 
   return origins

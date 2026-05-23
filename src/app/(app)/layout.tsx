@@ -20,7 +20,7 @@ export default async function AppGroupLayout({
 
   const dbUser = await prisma.user.findUnique({
     where: { id: session.user.id! },
-    select: { name: true, email: true, avatar: true },
+    select: { name: true, email: true, avatar: true, phoneNumber: true },
   })
   const adminAccess = await getAdminAccessContext(session.user.id!)
 
@@ -33,6 +33,7 @@ export default async function AppGroupLayout({
     name: dbUser.name ?? session.user.name ?? "User",
     email: dbUser.email ?? session.user.email ?? "",
     image: dbUser.avatar ?? null,
+    phoneNumber: dbUser.phoneNumber ?? null,
     canAccessUserManagement: adminAccess.canAccessUserManagement,
   }
 

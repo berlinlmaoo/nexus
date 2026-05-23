@@ -14,6 +14,7 @@ import { createTaskSchema, validateBody } from "@/lib/validations"
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit"
 import { seedTaskCustomFieldValues } from "@/lib/custom-field-sync"
 import { resolveAutoAssignAssigneeIds } from "@/lib/project-auto-assign"
+import { notifyTaskAssigned } from "@/lib/notification-service"
 
 export async function GET(request: NextRequest) {
   try {
@@ -174,6 +175,7 @@ export async function POST(request: NextRequest) {
         project: {
           select: {
             id: true,
+            name: true,
             autoAssignEnabled: true,
             autoAssignAssigneeIds: true,
             members: {
@@ -242,6 +244,17 @@ export async function POST(request: NextRequest) {
         projectId: taskList.projectId,
       },
     })
+
+    await Promise.all(finalAssigneeIds.map((assigneeId) =>
+      notifyTaskAssigned({
+        assigneeId,
+        taskId: task.id,
+        taskTitle: task.title,
+        projectName: taskList.project.name,
+        projectId: taskList.projectId,
+        assignedByName: session.user.name || "Someone",
+      })
+    ))
 
     logAudit({ action: "create", entityType: "task", entityId: task.id, entityName: title, userId, request })
 

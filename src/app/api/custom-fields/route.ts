@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
-import { checkProjectAccess } from "@/lib/rbac"
+import { checkProjectAccess, checkWorkspaceRoutingAccess } from "@/lib/rbac"
 import type { InputJsonValue } from "@prisma/client/runtime/client"
 import {
   coerceCustomFieldValueForType,
@@ -37,6 +37,35 @@ async function requireProjectMember(userId: string, projectId: string) {
   return checkProjectAccess(userId, projectId, ["MEMBER"])
 }
 
+async function canAccessTaskCustomFields(
+  userId: string,
+  projectId: string,
+  taskId?: string | null
+): Promise<boolean> {
+  const directAccess = await requireProjectMember(userId, projectId)
+  if (directAccess.allowed) return true
+  if (!taskId) return false
+
+  const project = await getProjectWorkspace(projectId)
+  if (!project) return false
+
+  const task = await prisma.task.findFirst({
+    where: {
+      id: taskId,
+      OR: [
+        { taskList: { projectId } },
+        { taskProjects: { some: { projectId } } },
+      ],
+    },
+    select: { id: true },
+  })
+
+  if (!task) return false
+
+  const { allowed } = await checkWorkspaceRoutingAccess(userId, project.workspaceId)
+  return allowed
+}
+
 async function getProjectWorkspace(projectId: string) {
   return prisma.project.findUnique({
     where: { id: projectId },
@@ -60,7 +89,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "projectId required" }, { status: 400 })
     }
 
-    const { allowed } = await requireProjectMember(session.user.id, projectId)
+    const allowed = await canAccessTaskCustomFields(session.user.id, projectId, taskId)
     if (!allowed) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
@@ -405,14 +434,21 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Custom field not found" }, { status: 404 })
     }
 
-    const { allowed } = await requireProjectMember(session.user.id, existingField.projectId)
-    if (!allowed) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
-
     const normalizedType = normalizeCustomFieldType(type ?? existingField.type)
     if (!normalizedType) {
       return NextResponse.json({ error: "Unsupported custom field type" }, { status: 400 })
+    }
+
+    if (taskId) {
+      const allowed = await canAccessTaskCustomFields(session.user.id, existingField.projectId, taskId)
+      if (!allowed) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      }
+    } else {
+      const { allowed } = await requireProjectMember(session.user.id, existingField.projectId)
+      if (!allowed) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      }
     }
 
     const normalizedOptionsJson =

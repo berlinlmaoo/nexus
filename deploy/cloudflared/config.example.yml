@@ -7,4 +7,14 @@ ingress:
     originRequest:
       httpHostHeader: nexus.patsgroup.id
       connectTimeout: 30s
+  - hostname: dashboard.nexus.patsgroup.id
+    service: http://127.0.0.1:3000
+    originRequest:
+      httpHostHeader: dashboard.nexus.patsgroup.id
+      connectTimeout: 30s
+  - hostname: dashboard-nexus.patsgroup.id
+    service: http://127.0.0.1:3000
+    originRequest:
+      httpHostHeader: dashboard-nexus.patsgroup.id
+      connectTimeout: 30s
   - service: http_status:404

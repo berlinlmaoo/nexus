@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma'
 import { authenticateGideonService } from '@/lib/gideon-service-auth'
 import { notifyCommentAdded, notifyTaskAssigned, notifyTaskCompleted } from '@/lib/notification-service'
 import { normalizeCustomFieldNumberInput, normalizeCustomFieldOptions, normalizeCustomFieldType, serializeCustomFieldValue } from '@/lib/custom-fields'
+import { resolveAutoAssignAssigneeIds } from '@/lib/project-auto-assign'
 import type { Prisma, ProjectStatus, TaskPriority, TaskStatus, User } from '@/generated/prisma/client'
 
 type GideonAction =
@@ -391,7 +392,21 @@ async function resolveTaskList(actor: User, input: Record<string, unknown>, stat
               },
             }),
       },
-      select: { id: true, name: true, projectId: true, project: { select: { id: true, name: true, status: true } } },
+      select: {
+        id: true,
+        name: true,
+        projectId: true,
+        project: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            autoAssignEnabled: true,
+            autoAssignAssigneeIds: true,
+            members: { select: { userId: true } },
+          },
+        },
+      },
     })
     if (!taskList) throw new Error('Task list not found or not accessible')
     return taskList
@@ -404,7 +419,21 @@ async function resolveTaskList(actor: User, input: Record<string, unknown>, stat
   for (const name of preferredNames) {
     const taskList = await prisma.taskList.findFirst({
       where: { projectId, name: { equals: name, mode: 'insensitive' } },
-      select: { id: true, name: true, projectId: true, project: { select: { id: true, name: true, status: true } } },
+      select: {
+        id: true,
+        name: true,
+        projectId: true,
+        project: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            autoAssignEnabled: true,
+            autoAssignAssigneeIds: true,
+            members: { select: { userId: true } },
+          },
+        },
+      },
     })
     if (taskList) return taskList
   }
@@ -412,7 +441,21 @@ async function resolveTaskList(actor: User, input: Record<string, unknown>, stat
   const fallback = await prisma.taskList.findFirst({
     where: { projectId },
     orderBy: { position: 'asc' },
-    select: { id: true, name: true, projectId: true, project: { select: { id: true, name: true, status: true } } },
+    select: {
+      id: true,
+      name: true,
+      projectId: true,
+      project: {
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          autoAssignEnabled: true,
+          autoAssignAssigneeIds: true,
+          members: { select: { userId: true } },
+        },
+      },
+    },
   })
   if (!fallback) throw new Error('No task list found for project')
   return fallback
@@ -518,8 +561,14 @@ async function createTask(actor: User, input: Record<string, unknown>) {
   const status = asTaskStatus(input.status) || 'TODO'
   const priority = asTaskPriority(input.priority) || 'MEDIUM'
   const dueDate = asDate(input.dueDate)
-  const assigneeIds = asStringArray(input.assigneeIds)
+  const requestedAssigneeIds = asStringArray(input.assigneeIds)
   const taskList = await resolveTaskList(actor, input, status)
+  const assigneeIds = resolveAutoAssignAssigneeIds({
+    requestedAssigneeIds,
+    autoAssignEnabled: taskList.project.autoAssignEnabled,
+    autoAssignAssigneeIds: taskList.project.autoAssignAssigneeIds,
+    validProjectMemberIds: taskList.project.members.map((member) => member.userId),
+  })
   const customFieldUpdates = await resolveCustomFieldUpdates(actor, taskList.projectId, input)
 
   const task = await prisma.$transaction(async (tx) => {
@@ -532,7 +581,7 @@ async function createTask(actor: User, input: Record<string, unknown>) {
         dueDate: dueDate === undefined ? null : dueDate,
         taskListId: taskList.id,
         creatorId: actor.id,
-        ...(assigneeIds ? { assignees: { create: assigneeIds.map((userId) => ({ userId })) } } : {}),
+        ...(assigneeIds.length > 0 ? { assignees: { create: assigneeIds.map((userId) => ({ userId })) } } : {}),
       },
       include: taskInclude,
     })
@@ -553,18 +602,16 @@ async function createTask(actor: User, input: Record<string, unknown>) {
     return created
   })
 
-  if (assigneeIds) {
-    await Promise.all(assigneeIds.map((assigneeId) =>
-      notifyTaskAssigned({
-        assigneeId,
-        taskId: task.id,
-        taskTitle: task.title,
-        projectName: taskList.project.name,
-        projectId: taskList.projectId,
-        assignedByName: actor.name,
-      })
-    ))
-  }
+  await Promise.all(assigneeIds.map((assigneeId) =>
+    notifyTaskAssigned({
+      assigneeId,
+      taskId: task.id,
+      taskTitle: task.title,
+      projectName: taskList.project.name,
+      projectId: taskList.projectId,
+      assignedByName: actor.name,
+    })
+  ))
 
   const verified = await prisma.task.findUnique({ where: { id: task.id }, include: taskInclude })
   return serializeTask(verified || task)
