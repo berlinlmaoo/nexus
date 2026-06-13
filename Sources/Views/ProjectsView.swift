@@ -41,7 +41,14 @@ struct ProjectsView: View {
                     .background(NX.violet.opacity(0.1), in: Capsule())
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    ForEach(projects) { ProjectCard(project: $0) }
+                    ForEach(projects) { p in
+                        NavigationLink {
+                            ProjectBoardView(projectId: p.id, projectName: p.name)
+                        } label: {
+                            ProjectCard(project: p)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
                 .padding(16)
             }

@@ -62,6 +62,14 @@ struct APIClient {
         try await run(makeRequest("/api/projects"), decode: [Project].self)
     }
 
+    func project(_ id: String) async throws -> ProjectDetail {
+        try await run(makeRequest("/api/projects/\(id)"), decode: ProjectDetail.self)
+    }
+
+    func taskDetail(_ id: String) async throws -> TaskDetail {
+        try await run(makeRequest("/api/tasks/\(id)"), decode: TaskDetail.self)
+    }
+
     // MARK: - Dashboard
 
     func profile() async throws -> ProfileResponse {
