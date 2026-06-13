@@ -62,6 +62,11 @@ struct MoreView: View {
                         } label: {
                             Label("Leaderboard", systemImage: "trophy.fill")
                         }
+                        NavigationLink {
+                            MessagesView()
+                        } label: {
+                            Label("Messages", systemImage: "bubble.left.and.bubble.right.fill")
+                        }
                     }
                     Section {
                         if let s = auth.session {

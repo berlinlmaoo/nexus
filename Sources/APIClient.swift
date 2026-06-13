@@ -111,6 +111,23 @@ struct APIClient {
         (try await run(makeRequest("/api/gamification/leaderboard"), decode: LeaderboardResponse.self)).rows ?? []
     }
 
+    func conversations() async throws -> [Conversation] {
+        (try await run(makeRequest("/api/conversations"), decode: ConversationsResponse.self)).conversations ?? []
+    }
+
+    func conversationMessages(_ id: String) async throws -> [ChatMessage] {
+        (try await run(makeRequest("/api/conversations/\(id)/messages"), decode: MessagesResponse.self)).messages ?? []
+    }
+
+    @discardableResult
+    func sendMessage(_ conversationId: String, content: String) async throws -> Bool {
+        var req = makeRequest("/api/conversations/\(conversationId)/messages", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["content": content])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+
     func notifications() async throws -> NotificationsResponse {
         try await run(makeRequest("/api/notifications"), decode: NotificationsResponse.self)
     }
