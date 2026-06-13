@@ -57,6 +57,11 @@ struct MoreView: View {
                         } label: {
                             Label("Absensi", systemImage: "clock.badge.checkmark.fill")
                         }
+                        NavigationLink {
+                            LeaderboardView()
+                        } label: {
+                            Label("Leaderboard", systemImage: "trophy.fill")
+                        }
                     }
                     Section {
                         if let s = auth.session {

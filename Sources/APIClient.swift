@@ -107,6 +107,10 @@ struct APIClient {
         (try await run(makeRequest("/api/notifications"), decode: UnreadResponse.self)).unreadCount ?? 0
     }
 
+    func leaderboard() async throws -> [LeaderboardRow] {
+        (try await run(makeRequest("/api/gamification/leaderboard"), decode: LeaderboardResponse.self)).rows ?? []
+    }
+
     func notifications() async throws -> NotificationsResponse {
         try await run(makeRequest("/api/notifications"), decode: NotificationsResponse.self)
     }

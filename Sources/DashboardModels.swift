@@ -72,6 +72,20 @@ struct WorkspaceInfo: Decodable, Sendable {
     let workspaceId: String
 }
 
+/// GET /api/gamification/leaderboard.
+struct LeaderboardRow: Decodable, Identifiable, Sendable {
+    let userId: String
+    let name: String?
+    let avatar: String?
+    let totalXp: Int
+    let level: Int
+    let levelName: String?
+    let atBottom: Bool?
+    var id: String { userId }
+    var initial: String { String((name ?? "?").first ?? "?").uppercased() }
+}
+struct LeaderboardResponse: Decodable, Sendable { let rows: [LeaderboardRow]? }
+
 /// Inbox notification (GET /api/notifications).
 struct NexusNotification: Decodable, Identifiable, Sendable {
     let id: String
