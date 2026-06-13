@@ -1,0 +1,37 @@
+# XcodeGen spec — regenerate the Xcode project anytime with:  xcodegen generate
+# (run from apps/nexus-ios). The .xcodeproj is NOT committed; this file is the source of truth.
+name: NEXUS
+options:
+  bundleIdPrefix: id.patsgroup
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"            # Swift 5 language mode — smoother first build (no strict-concurrency friction)
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: ""           # ← set your Apple ID team in Xcode → Signing & Capabilities
+    GENERATE_INFOPLIST_FILE: YES
+    # Permission strings (attendance selfie + geofence + receipt photos) — embedded into Info.plist:
+    INFOPLIST_KEY_NSCameraUsageDescription: "NEXUS butuh kamera buat selfie absensi."
+    INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "NEXUS butuh lokasi buat verifikasi absen di area kantor."
+    INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "NEXUS butuh galeri buat lampirin nota/foto pengeluaran."
+    INFOPLIST_KEY_UILaunchScreen_Generation: YES
+    INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
+    INFOPLIST_KEY_UIStatusBarStyle: UIStatusBarStyleDefault
+
+targets:
+  NEXUS:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: id.patsgroup.nexus
+        PRODUCT_NAME: NEXUS
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
