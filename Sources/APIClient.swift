@@ -243,6 +243,11 @@ struct APIClient {
         try await run(makeRequest("/api/attendance/today"), decode: AttendanceToday.self)
     }
 
+    func attendanceHistory(scope: String, month: String) async throws -> [AttendanceRow] {
+        let path = "/api/attendance/history?scope=\(enc(scope))&month=\(enc(month))"
+        return (try await run(makeRequest(path), decode: AttendanceHistoryResponse.self)).all
+    }
+
     func checkIn(lat: Double, lng: Double, selfie: Data, notes: String? = nil) async throws -> AttendanceOutcome {
         var fields = ["lat": String(lat), "lng": String(lng)]
         if let notes, !notes.isEmpty { fields["notes"] = notes }
