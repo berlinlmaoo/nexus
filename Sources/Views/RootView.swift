@@ -77,6 +77,23 @@ struct MoreView: View {
                         } label: {
                             Label("Forms", systemImage: "doc.text.fill")
                         }
+                        NavigationLink {
+                            ReportsView()
+                        } label: {
+                            Label("Reports", systemImage: "chart.bar.fill")
+                        }
+                        NavigationLink {
+                            TeamsView()
+                        } label: {
+                            Label("Teams", systemImage: "person.3.fill")
+                        }
+                    }
+                    Section {
+                        NavigationLink {
+                            SettingsView()
+                        } label: {
+                            Label("Tuning Room", systemImage: "gearshape.fill")
+                        }
                     }
                     Section {
                         if let s = auth.session {

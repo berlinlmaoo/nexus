@@ -121,6 +121,21 @@ struct APIClient {
         try await run(makeRequest("/api/forms?projectId=\(projectId)"), decode: [NexusForm].self)
     }
 
+    func reports(days: Int) async throws -> Reports {
+        try await run(makeRequest("/api/reports?days=\(days)"), decode: Reports.self)
+    }
+    func teams() async throws -> [Team] {
+        try await run(makeRequest("/api/teams"), decode: [Team].self)
+    }
+    @discardableResult
+    func updateProfile(name: String) async throws -> Bool {
+        var req = makeRequest("/api/user/profile", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["name": name])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+
     func conversations() async throws -> [Conversation] {
         (try await run(makeRequest("/api/conversations"), decode: ConversationsResponse.self)).conversations ?? []
     }

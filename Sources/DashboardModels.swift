@@ -67,9 +67,10 @@ struct SuccessResponse: Decodable, Sendable {
     let success: Bool?
 }
 
-/// GET /api/workspaces/members — caller's workspace id (for creating projects) + member pool.
+/// GET /api/workspaces/members — caller's workspace id (for creating projects) + caller's org role.
 struct WorkspaceInfo: Decodable, Sendable {
     let workspaceId: String
+    let role: String?
 }
 
 /// GET /api/gamification/leaderboard.
