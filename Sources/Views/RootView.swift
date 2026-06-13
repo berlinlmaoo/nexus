@@ -87,12 +87,32 @@ struct MoreView: View {
                         } label: {
                             Label("Teams", systemImage: "person.3.fill")
                         }
+                        NavigationLink {
+                            RoomBookingView()
+                        } label: {
+                            Label("Room Booking", systemImage: "door.left.hand.open")
+                        }
+                        NavigationLink {
+                            TeamCalendarView()
+                        } label: {
+                            Label("Team Calendar", systemImage: "calendar")
+                        }
                     }
                     Section {
                         NavigationLink {
                             SettingsView()
                         } label: {
                             Label("Tuning Room", systemImage: "gearshape.fill")
+                        }
+                        NavigationLink {
+                            AdminView()
+                        } label: {
+                            Label("Control Room", systemImage: "shield.fill")
+                        }
+                        NavigationLink {
+                            SocialView()
+                        } label: {
+                            Label("Social Approvals", systemImage: "megaphone.fill")
                         }
                     }
                     Section {

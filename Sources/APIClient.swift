@@ -23,7 +23,18 @@ struct APIClient {
     static let shared = APIClient()
 
     private func makeRequest(_ path: String, method: String = "GET", authed: Bool = true) -> URLRequest {
-        var req = URLRequest(url: Config.baseURL.appendingPathComponent(path))
+        // Build the URL via URLComponents so a "?query" in `path` stays a real query string.
+        // (URL.appendingPathComponent percent-encodes "?" into "%3F", breaking the route → 404.)
+        let url: URL
+        if let q = path.firstIndex(of: "?") {
+            var comps = URLComponents(url: Config.baseURL, resolvingAgainstBaseURL: false)!
+            comps.path = String(path[..<q])
+            comps.percentEncodedQuery = String(path[path.index(after: q)...])
+            url = comps.url ?? Config.baseURL.appendingPathComponent(path)
+        } else {
+            url = Config.baseURL.appendingPathComponent(path)
+        }
+        var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         if authed, let session = Keychain.load() {
@@ -127,6 +138,21 @@ struct APIClient {
     func teams() async throws -> [Team] {
         try await run(makeRequest("/api/teams"), decode: [Team].self)
     }
+    func roomBookings(start: String, end: String) async throws -> [RoomBooking] {
+        let path = "/api/room-bookings?rangeStart=\(enc(start))&rangeEnd=\(enc(end))"
+        return (try await run(makeRequest(path), decode: RoomBookingsResponse.self)).bookings ?? []
+    }
+    func masterCalendar(teamId: String, start: String, end: String) async throws -> [CalendarEvent] {
+        let path = "/api/master-calendar?teamId=\(enc(teamId))&rangeStart=\(enc(start))&rangeEnd=\(enc(end))"
+        return (try await run(makeRequest(path), decode: CalendarResponse.self)).events ?? []
+    }
+    func bufferDrafts() async throws -> BufferResponse {
+        try await run(makeRequest("/api/buffer/drafts"), decode: BufferResponse.self)
+    }
+    func roster() async throws -> WorkspaceRoster {
+        try await run(makeRequest("/api/workspaces/members"), decode: WorkspaceRoster.self)
+    }
+    private func enc(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? s }
     @discardableResult
     func updateProfile(name: String) async throws -> Bool {
         var req = makeRequest("/api/user/profile", method: "PATCH")
