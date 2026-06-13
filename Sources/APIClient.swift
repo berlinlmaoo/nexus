@@ -110,11 +110,38 @@ struct APIClient {
         return true
     }
 
+    /// PATCH /api/tasks/{id} with arbitrary fields (title/status/priority/dueDate/description).
+    @discardableResult
+    func updateTask(_ id: String, _ fields: [String: Any]) async throws -> Bool {
+        var req = makeRequest("/api/tasks/\(id)", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: fields)
+        _ = try await run(req, decode: SuccessResponse.self)  // returns the task; SuccessResponse ignores it
+        return true
+    }
+
     @discardableResult
     func setTaskStatus(taskId: String, status: String) async throws -> Bool {
-        var req = makeRequest("/api/tasks/\(taskId)", method: "PATCH")
+        try await updateTask(taskId, ["status": status])
+    }
+
+    /// POST /api/tasks — create a task (or a subtask when parentId is set).
+    @discardableResult
+    func createTask(projectId: String, taskListId: String, title: String, parentId: String? = nil, status: String = "TODO") async throws -> Bool {
+        var body: [String: Any] = ["projectId": projectId, "taskListId": taskListId, "title": title, "status": status]
+        if let parentId { body["parentId"] = parentId }
+        var req = makeRequest("/api/tasks", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["status": status])
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+
+    @discardableResult
+    func addComment(taskId: String, content: String) async throws -> Bool {
+        var req = makeRequest("/api/tasks/\(taskId)/comments", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["content": content])
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }

@@ -60,6 +60,15 @@ struct TaskDetail: Decodable, Sendable {
     let subtasks: [SubDetail]?
     let comments: [Comment]?
     let parent: ParentRef?
+    let taskList: TaskListInfo?
+
+    struct TaskListInfo: Decodable, Sendable {
+        let id: String?
+        let project: ProjectRef?
+        struct ProjectRef: Decodable, Sendable { let id: String? }
+    }
+    var taskListId: String? { taskList?.id }
+    var projectId: String? { taskList?.project?.id }
 
     struct SubDetail: Decodable, Identifiable, Sendable {
         let id: String

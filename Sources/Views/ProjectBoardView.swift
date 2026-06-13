@@ -28,7 +28,10 @@ struct ProjectBoardView: View {
             } else if let lanes = detail?.taskLists, !lanes.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 14) {
-                        ForEach(lanes) { lane in LaneColumn(lane: lane) { openTaskId = $0 } }
+                        ForEach(lanes) { lane in
+                            LaneColumn(lane: lane, onOpen: { openTaskId = $0 },
+                                       onAddTask: { title in await addTask(laneId: lane.id, title: title) })
+                        }
                     }
                     .padding(16)
                 }
@@ -54,11 +57,23 @@ struct ProjectBoardView: View {
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? "Gagal memuat board." }
         loading = false
     }
+
+    private func addTask(laneId: String, title: String) async {
+        let t = title.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty else { return }
+        try? await APIClient.shared.createTask(projectId: projectId, taskListId: laneId, title: t)
+        await load()
+    }
 }
 
 struct LaneColumn: View {
     let lane: ProjectDetail.Lane
     let onOpen: (String) -> Void
+    let onAddTask: (String) async -> Void
+    @State private var composing = false
+    @State private var newTitle = ""
+    @State private var adding = false
+    @FocusState private var focused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -73,17 +88,56 @@ struct LaneColumn: View {
             ForEach(lane.tasks ?? []) { task in
                 Button { onOpen(task.id) } label: { BoardCard(task: task) }.buttonStyle(.plain)
             }
-            if (lane.tasks ?? []).isEmpty {
+            if (lane.tasks ?? []).isEmpty && !composing {
                 Text("Kosong").font(NXFont.text(12)).foregroundStyle(NX.mutedFg.opacity(0.6))
                     .frame(maxWidth: .infinity).padding(.vertical, 18)
                     .background(NX.card.opacity(0.5), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [5])))
+            }
+
+            if composing {
+                VStack(spacing: 8) {
+                    TextField("Judul task…", text: $newTitle, axis: .vertical)
+                        .font(NXFont.text(14)).focused($focused).lineLimit(3)
+                        .padding(10).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.violet.opacity(0.5)))
+                        .onSubmit(submit)
+                    HStack(spacing: 8) {
+                        Button("Batal") { composing = false; newTitle = "" }
+                            .font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                        Spacer()
+                        Button(action: submit) {
+                            HStack(spacing: 4) { if adding { ProgressView().scaleEffect(0.7) }; Text("Tambah") }
+                                .font(NXFont.text(13, .bold)).foregroundStyle(.white)
+                                .padding(.horizontal, 14).padding(.vertical, 7)
+                                .background(NX.violet, in: Capsule())
+                        }
+                        .disabled(newTitle.trimmingCharacters(in: .whitespaces).isEmpty || adding)
+                    }
+                }
+            } else {
+                Button { composing = true; focused = true } label: {
+                    HStack(spacing: 6) { Image(systemName: "plus"); Text("Tambah task") }
+                        .font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                        .frame(maxWidth: .infinity).padding(.vertical, 10)
+                        .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }.buttonStyle(.plain)
             }
         }
         .frame(width: 290)
         .padding(12)
         .background(NX.card.opacity(0.6), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(NX.border))
+    }
+
+    private func submit() {
+        let t = newTitle.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty, !adding else { return }
+        adding = true
+        Task {
+            await onAddTask(t)
+            newTitle = ""; composing = false; adding = false
+        }
     }
 }
 
