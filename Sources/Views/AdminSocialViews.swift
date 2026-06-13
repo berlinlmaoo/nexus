@@ -157,6 +157,9 @@ struct RoleChip: View {
 
 /// Port of social.tsx: Buffer draft review queue. Read-only on native — approve/schedule/reject
 /// (outward-facing publishing) stay on desktop. Gated to One Above All like the web.
+///
+/// NOTE: intentionally NOT wired into the More tab (deferred per user, 2026-06-14). Kept ready —
+/// re-add a `NavigationLink { SocialView() }` in RootView's More section to bring it back.
 struct SocialView: View {
     @Environment(AuthStore.self) private var auth
     @State private var role: String?

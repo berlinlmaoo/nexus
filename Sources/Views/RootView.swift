@@ -109,11 +109,6 @@ struct MoreView: View {
                         } label: {
                             Label("Control Room", systemImage: "shield.fill")
                         }
-                        NavigationLink {
-                            SocialView()
-                        } label: {
-                            Label("Social Approvals", systemImage: "megaphone.fill")
-                        }
                     }
                     Section {
                         if let s = auth.session {
