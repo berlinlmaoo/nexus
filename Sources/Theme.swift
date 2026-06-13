@@ -66,14 +66,14 @@ enum Brand {
     static let success = NX.success
 }
 
-/// Typography. SF Pro stands in for Plus Jakarta Sans (display, geometric — NOT rounded) and Inter
-/// (body) — swap to `Font.custom("PlusJakartaSans-Bold"/"Inter", size:)` once the .ttf are bundled.
+/// Typography — the REAL web fonts, bundled: Plus Jakarta Sans (display) + Inter (body).
+/// Registered at launch by FontLoader; variable-weight axis driven via `.weight()`.
 enum NXFont {
     static func display(_ size: CGFloat, _ weight: Font.Weight = .bold) -> Font {
-        .system(size: size, weight: weight, design: .default)
+        .custom("Plus Jakarta Sans", size: size).weight(weight)
     }
     static func text(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight)
+        .custom("Inter", size: size).weight(weight)
     }
 }
 

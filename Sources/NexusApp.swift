@@ -5,7 +5,10 @@ import UIKit
 struct NexusApp: App {
     @State private var auth = AuthStore()
 
-    init() { Self.configureAppearance() }
+    init() {
+        FontLoader.registerAll()
+        Self.configureAppearance()
+    }
 
     var body: some Scene {
         WindowGroup {
