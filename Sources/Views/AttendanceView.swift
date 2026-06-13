@@ -23,10 +23,10 @@ struct AttendanceView: View {
     struct Banner: Identifiable { let id = UUID(); let text: String; let good: Bool }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                NX.background.ignoresSafeArea()
-                ScrollView {
+        // No NavigationStack here — presented inside the More tab's stack.
+        ZStack {
+            NX.background.ignoresSafeArea()
+            ScrollView {
                     VStack(spacing: 16) {
                         if loading {
                             ProgressView().tint(NX.violet).padding(.top, 60)
@@ -62,7 +62,7 @@ struct AttendanceView: View {
                 .ignoresSafeArea()
             }
             .sheet(isPresented: $showOffsiteSheet) { offsiteSheet }
-        }
+            .navigationBarTitleDisplayMode(.inline)
     }
 
     // MARK: - subviews

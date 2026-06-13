@@ -62,6 +62,24 @@ struct APIClient {
         try await run(makeRequest("/api/projects"), decode: [Project].self)
     }
 
+    // MARK: - Dashboard
+
+    func profile() async throws -> ProfileResponse {
+        try await run(makeRequest("/api/user/profile"), decode: ProfileResponse.self)
+    }
+
+    func gamification() async throws -> Gamification {
+        try await run(makeRequest("/api/gamification/me"), decode: Gamification.self)
+    }
+
+    func myTasks(assigneeId: String) async throws -> [MissionTask] {
+        try await run(makeRequest("/api/tasks?assigneeId=\(assigneeId)"), decode: [MissionTask].self)
+    }
+
+    func unreadCount() async throws -> Int {
+        (try await run(makeRequest("/api/notifications"), decode: UnreadResponse.self)).unreadCount ?? 0
+    }
+
     // MARK: - Attendance
 
     func attendanceToday() async throws -> AttendanceToday {
