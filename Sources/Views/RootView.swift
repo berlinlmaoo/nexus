@@ -67,6 +67,16 @@ struct MoreView: View {
                         } label: {
                             Label("Messages", systemImage: "bubble.left.and.bubble.right.fill")
                         }
+                        NavigationLink {
+                            DocsView()
+                        } label: {
+                            Label("Docs", systemImage: "book.fill")
+                        }
+                        NavigationLink {
+                            FormsView()
+                        } label: {
+                            Label("Forms", systemImage: "doc.text.fill")
+                        }
                     }
                     Section {
                         if let s = auth.session {

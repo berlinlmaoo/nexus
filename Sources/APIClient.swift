@@ -111,6 +111,16 @@ struct APIClient {
         (try await run(makeRequest("/api/gamification/leaderboard"), decode: LeaderboardResponse.self)).rows ?? []
     }
 
+    func docs() async throws -> [Doc] {
+        (try await run(makeRequest("/api/docs"), decode: DocsResponse.self)).docs ?? []
+    }
+    func doc(_ id: String) async throws -> Doc {
+        (try await run(makeRequest("/api/docs/\(id)"), decode: DocResponse.self)).doc
+    }
+    func forms(projectId: String) async throws -> [NexusForm] {
+        try await run(makeRequest("/api/forms?projectId=\(projectId)"), decode: [NexusForm].self)
+    }
+
     func conversations() async throws -> [Conversation] {
         (try await run(makeRequest("/api/conversations"), decode: ConversationsResponse.self)).conversations ?? []
     }
