@@ -9,9 +9,9 @@ struct RootView: View {
             TabView {
                 DashboardView()
                     .tabItem { Label("Home", systemImage: "house.fill") }
-                ComingSoonView(title: "Tasks", systemImage: "checklist")
+                TasksView()
                     .tabItem { Label("Tasks", systemImage: "checklist") }
-                ComingSoonView(title: "Inbox", systemImage: "tray.fill")
+                InboxView()
                     .tabItem { Label("Inbox", systemImage: "tray.fill") }
                 ProjectsView()
                     .tabItem { Label("Projects", systemImage: "rectangle.stack.fill") }

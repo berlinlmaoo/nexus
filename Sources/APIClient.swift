@@ -72,12 +72,43 @@ struct APIClient {
         try await run(makeRequest("/api/gamification/me"), decode: Gamification.self)
     }
 
-    func myTasks(assigneeId: String) async throws -> [MissionTask] {
-        try await run(makeRequest("/api/tasks?assigneeId=\(assigneeId)"), decode: [MissionTask].self)
+    func myTasks(assigneeId: String) async throws -> [MyTask] {
+        try await run(makeRequest("/api/tasks?assigneeId=\(assigneeId)"), decode: [MyTask].self)
     }
 
     func unreadCount() async throws -> Int {
         (try await run(makeRequest("/api/notifications"), decode: UnreadResponse.self)).unreadCount ?? 0
+    }
+
+    func notifications() async throws -> NotificationsResponse {
+        try await run(makeRequest("/api/notifications"), decode: NotificationsResponse.self)
+    }
+
+    @discardableResult
+    func markNotificationRead(id: String) async throws -> Bool {
+        var req = makeRequest("/api/notifications", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["id": id])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+
+    @discardableResult
+    func markAllNotificationsRead() async throws -> Bool {
+        var req = makeRequest("/api/notifications", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["markAllRead": true])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+
+    @discardableResult
+    func setTaskStatus(taskId: String, status: String) async throws -> Bool {
+        var req = makeRequest("/api/tasks/\(taskId)", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["status": status])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
     }
 
     // MARK: - Attendance
