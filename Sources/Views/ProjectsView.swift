@@ -58,7 +58,7 @@ struct ProjectsView: View {
                         } label: {
                             ProjectCard(project: p)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(PressableCardStyle())
                     }
                 }
                 .padding(16)
@@ -172,9 +172,18 @@ struct CreateProjectSheet: View {
 
 /// Faithful port of the web ProjectCard: icon tile + name + description + status chip,
 /// Cards/Done/Lanes metrics, "mission energy" progress bar, member avatars + deadline.
+/// Press-scale for a whole card used as a NavigationLink/Button label. Lives in a ButtonStyle so
+/// the tap still reaches the NavigationLink (an inline `onLongPressGesture` would swallow it).
+struct PressableCardStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
 struct ProjectCard: View {
     let project: Project
-    @State private var pressed = false
 
     private var accent: Color { Color(hex: project.color ?? "#a168be") }
     private var done: Int { 0 }   // completed count not in the list endpoint (matches web's 0 for fresh)
@@ -266,9 +275,6 @@ struct ProjectCard: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .nexusShadowSoft()
-        .scaleEffect(pressed ? 0.98 : 1)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: pressed)
-        .onLongPressGesture(minimumDuration: 0, pressing: { pressed = $0 }, perform: {})
     }
 
     private func metric(_ label: String, _ value: String) -> some View {

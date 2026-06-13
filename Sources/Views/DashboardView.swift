@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DashboardView: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var profile: AppUser?
     @State private var game: Gamification?
     @State private var projectCount = 0
@@ -9,7 +10,27 @@ struct DashboardView: View {
     @State private var unread = 0
     @State private var loaded = false
 
+    // stat-card morph (web StatCardButton/StatCardModal — shared-id hero)
+    @State private var projectsList: [Project] = []
+    @State private var tasksList: [MyTask] = []
+    @State private var activeStat: Int?
+    @Namespace private var statNS
+
     private var name: String { profile?.name ?? auth.session?.userName ?? "Commander" }
+
+    private struct StatDatum {
+        let value: Int; let total: Int?; let label: String; let icon: String
+        let from: String; let to: String; let glow: String
+    }
+    private var statData: [StatDatum] {
+        [
+            .init(value: projectCount, total: nil, label: "Projects", icon: "rectangle.stack.fill", from: "#c4b5fd", to: "#7c3aed", glow: "#a78bfa"),
+            .init(value: mission.done, total: mission.total, label: "Your Mission", icon: "checklist", from: "#6ee7b7", to: "#059669", glow: "#34d399"),
+            .init(value: game?.questsDone ?? 0, total: game?.questList.count ?? 0, label: "Monthly Quests", icon: "sparkles", from: "#fcd34d", to: "#ea580c", glow: "#fbbf24"),
+        ]
+    }
+    private var statSpring: Animation { reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.42, dampingFraction: 0.82) }
+    private func toggleStat(_ i: Int?) { withAnimation(statSpring) { activeStat = i } }
 
     var body: some View {
         NavigationStack {
@@ -29,6 +50,7 @@ struct DashboardView: View {
                     .padding(16)
                 }
                 .overlay(alignment: .bottomTrailing) { oracleFab.padding(20) }
+                .overlay { statModal }
             }
             .navigationBarHidden(true)
             .task { if !loaded { await load() } }
@@ -117,12 +139,89 @@ struct DashboardView: View {
 
     private var statCards: some View {
         HStack(spacing: 12) {
-            StatCardView(value: projectCount, total: nil, label: "Projects", icon: "rectangle.stack.fill",
-                         from: "#c4b5fd", to: "#7c3aed", glow: "#a78bfa")
-            StatCardView(value: mission.done, total: mission.total, label: "Your Mission", icon: "checklist",
-                         from: "#6ee7b7", to: "#059669", glow: "#34d399")
-            StatCardView(value: game?.questsDone ?? 0, total: game?.questList.count ?? 0, label: "Monthly Quests", icon: "sparkles",
-                         from: "#fcd34d", to: "#ea580c", glow: "#fbbf24")
+            ForEach(Array(statData.enumerated()), id: \.offset) { i, d in
+                Button { toggleStat(i) } label: {
+                    StatCardView(value: d.value, total: d.total, label: d.label, icon: d.icon, from: d.from, to: d.to, glow: d.glow)
+                        .modifier(MatchedCard(id: i, ns: statNS, isSource: activeStat != i, enabled: !reduceMotion))
+                }
+                .buttonStyle(PressableCardStyle())
+                .opacity(activeStat == i ? 0 : 1)
+            }
+        }
+    }
+
+    // MARK: stat-card morph modal
+
+    @ViewBuilder private var statModal: some View {
+        if let a = activeStat, a < statData.count {
+            ZStack {
+                Color.black.opacity(0.5).ignoresSafeArea()
+                    .background(.ultraThinMaterial.opacity(0.001))
+                    .transition(.opacity)
+                    .onTapGesture { toggleStat(nil) }
+                statModalCard(a)
+                    .padding(.horizontal, 18)
+            }
+            .zIndex(20)
+        }
+    }
+
+    private func statModalCard(_ a: Int) -> some View {
+        let d = statData[a]
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 14) {
+                Image(systemName: d.icon).font(.system(size: 26, weight: .bold)).foregroundStyle(.white)
+                    .frame(width: 56, height: 56).background(.white.opacity(0.25), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .firstTextBaseline, spacing: 0) {
+                        Text("\(d.value)").font(NXFont.display(38, .bold)).foregroundStyle(.white)
+                        if let t = d.total { Text("/\(t)").font(NXFont.display(24, .bold)).foregroundStyle(.white.opacity(0.7)) }
+                    }
+                    Text(d.label).font(NXFont.text(14, .medium)).foregroundStyle(.white.opacity(0.9))
+                }
+                Spacer()
+                Button { toggleStat(nil) } label: {
+                    Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
+                        .frame(width: 32, height: 32).background(.white.opacity(0.22), in: Circle())
+                }.buttonStyle(.plain)
+            }
+            ScrollView { statDetail(a).padding(2) }.frame(maxHeight: 320)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity)
+        .background(
+            LinearGradient(colors: [Color(hex: d.from), Color(hex: d.to)], startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: RoundedRectangle(cornerRadius: 28, style: .continuous)
+        )
+        .modifier(MatchedCard(id: a, ns: statNS, isSource: true, enabled: !reduceMotion))
+        .shadow(color: Color(hex: d.glow).opacity(0.5), radius: 24, y: 12)
+        .transition(reduceMotion ? .opacity.combined(with: .scale(scale: 0.96)) : .identity)
+    }
+
+    @ViewBuilder private func statDetail(_ a: Int) -> some View {
+        switch a {
+        case 0: detailList(projectsList.map { ($0.name, $0.statusLabel) }, empty: "Belum ada project.")
+        case 1: detailList(tasksList.map { ($0.title ?? "Untitled", $0.isDone ? "Done" : "Open") }, empty: "Belum ada task aktif.")
+        default: detailList((game?.questList ?? []).map { ($0.title, "\($0.progress)/\($0.target) · +\($0.xpReward) XP") }, empty: "Belum ada quest.")
+        }
+    }
+
+    private func detailList(_ items: [(String, String)], empty: String) -> some View {
+        VStack(spacing: 8) {
+            if items.isEmpty {
+                Text(empty).font(NXFont.text(13)).foregroundStyle(.white.opacity(0.85))
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
+            } else {
+                ForEach(Array(items.prefix(40).enumerated()), id: \.offset) { _, it in
+                    HStack(spacing: 8) {
+                        Text(it.0).font(NXFont.text(13, .semibold)).foregroundStyle(.white).lineLimit(1)
+                        Spacer(minLength: 8)
+                        Text(it.1).font(NXFont.text(11, .semibold)).foregroundStyle(.white.opacity(0.8)).fixedSize()
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 10)
+                    .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+            }
         }
     }
 
@@ -215,13 +314,30 @@ struct DashboardView: View {
         let prof = await p
         profile = prof?.user
         game = await g
-        projectCount = (await projs)?.count ?? 0
+        projectsList = (await projs) ?? []
+        projectCount = projectsList.count
         unread = (await unreadN) ?? 0
 
         if let myId = prof?.user.id, let tasks = try? await APIClient.shared.myTasks(assigneeId: myId) {
+            tasksList = tasks
             mission = (tasks.filter(\.isDone).count, tasks.count)
         }
         loaded = true
+    }
+}
+
+/// Conditionally applies a shared-id hero `matchedGeometryEffect` (skipped under Reduce Motion).
+struct MatchedCard: ViewModifier {
+    let id: Int
+    let ns: Namespace.ID
+    let isSource: Bool
+    let enabled: Bool
+    func body(content: Content) -> some View {
+        if enabled {
+            content.matchedGeometryEffect(id: "stat-\(id)", in: ns, isSource: isSource)
+        } else {
+            content
+        }
     }
 }
 
