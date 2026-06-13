@@ -15,6 +15,7 @@ struct TaskDetailView: View {
     @State private var newSubtask = ""
     @State private var showDuePicker = false
     @State private var dueValue = Date()
+    @State private var showAssignee = false
 
     private let statuses = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"]
     private let priorities = ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"]
@@ -124,12 +125,17 @@ struct TaskDetailView: View {
 
     private func metaRow(_ t: TaskDetail) -> some View {
         HStack(spacing: 20) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("ASSIGNED").font(NXFont.text(10, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
-                if let names = t.assignees?.compactMap({ $0.user?.name }), !names.isEmpty {
-                    Text(names.joined(separator: ", ")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                } else { Text("Unassigned").font(NXFont.text(13)).foregroundStyle(NX.mutedFg) }
-            }
+            Button { showAssignee = true } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 4) {
+                        Text("ASSIGNED").font(NXFont.text(10, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
+                        Image(systemName: "pencil").font(.system(size: 9, weight: .bold)).foregroundStyle(NX.violet)
+                    }
+                    if let names = t.assignees?.compactMap({ $0.user?.name }), !names.isEmpty {
+                        Text(names.joined(separator: ", ")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    } else { Text("Unassigned").font(NXFont.text(13)).foregroundStyle(NX.violet) }
+                }
+            }.buttonStyle(.plain)
             VStack(alignment: .leading, spacing: 4) {
                 Text("DUE").font(NXFont.text(10, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
                 Text(dueText(t.dueDate)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
@@ -137,6 +143,13 @@ struct TaskDetailView: View {
             Spacer()
         }
         .padding(14).nexusCard(padding: 14, radius: 18)
+        .sheet(isPresented: $showAssignee) {
+            AssigneePicker(
+                projectId: t.projectId,
+                current: Set((t.assignees ?? []).compactMap { $0.user?.id }),
+                onSave: { ids in await update(t, ["assigneeIds": Array(ids)]) }
+            )
+        }
     }
 
     private func descriptionCard(_ t: TaskDetail) -> some View {
@@ -287,5 +300,70 @@ struct TaskDetailView: View {
         let d = p.date(from: iso) ?? { let q = ISO8601DateFormatter(); q.formatOptions = [.withInternetDateTime]; return q.date(from: iso) }()
         guard let d else { return "" }
         let f = DateFormatter(); f.dateFormat = "d MMM, HH:mm"; f.locale = Locale(identifier: "id_ID"); return f.string(from: d)
+    }
+}
+
+/// Assign / unassign task members from the project's member pool. Commits the full assigneeIds set.
+struct AssigneePicker: View {
+    let projectId: String?
+    let current: Set<String>
+    let onSave: (Set<String>) async -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var members: [ProjectDetail.ProjectMember] = []
+    @State private var selected: Set<String> = []
+    @State private var loading = true
+    @State private var saving = false
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                NX.background.ignoresSafeArea()
+                if loading {
+                    ProgressView().tint(NX.violet)
+                } else if members.isEmpty {
+                    Text("Belum ada member di project ini.").font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+                } else {
+                    List {
+                        ForEach(members) { m in
+                            Button { toggle(m.uid) } label: {
+                                HStack(spacing: 12) {
+                                    Text(m.initial).font(NXFont.text(13, .black)).foregroundStyle(NX.violet)
+                                        .frame(width: 34, height: 34).background(NX.accentBg, in: Circle())
+                                    Text(m.displayName).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
+                                    Spacer()
+                                    if selected.contains(m.uid) {
+                                        Image(systemName: "checkmark.circle.fill").foregroundStyle(NX.violet)
+                                    } else {
+                                        Image(systemName: "circle").foregroundStyle(NX.mutedFg.opacity(0.4))
+                                    }
+                                }
+                            }.buttonStyle(.plain)
+                        }
+                    }
+                    .scrollContentBackground(.hidden)
+                }
+            }
+            .navigationTitle("Assign ke")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { Button("Batal") { dismiss() } }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { Task { saving = true; await onSave(selected); dismiss() } } label: {
+                        if saving { ProgressView() } else { Text("Simpan").bold() }
+                    }.disabled(saving)
+                }
+            }
+            .task { await load() }
+        }
+    }
+
+    private func toggle(_ id: String) {
+        if selected.contains(id) { selected.remove(id) } else { selected.insert(id) }
+    }
+    private func load() async {
+        selected = current
+        guard let pid = projectId else { loading = false; return }
+        members = (try? await APIClient.shared.project(pid).members) ?? []
+        loading = false
     }
 }

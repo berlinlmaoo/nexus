@@ -8,11 +8,21 @@ struct ProjectDetail: Decodable, Sendable {
     let color: String?
     let icon: String?
     let taskLists: [Lane]?
+    let members: [ProjectMember]?
 
     struct Lane: Decodable, Identifiable, Sendable {
         let id: String
         let name: String
         let tasks: [BoardTask]?
+    }
+    struct ProjectMember: Decodable, Identifiable, Sendable {
+        let userId: String?
+        let user: UserRef?
+        struct UserRef: Decodable, Sendable { let id: String?; let name: String?; let avatar: String? }
+        var uid: String { userId ?? user?.id ?? "" }
+        var id: String { uid }
+        var displayName: String { user?.name ?? "?" }
+        var initial: String { String((user?.name ?? "?").first ?? "?").uppercased() }
     }
 }
 
