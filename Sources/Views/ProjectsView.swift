@@ -5,6 +5,8 @@ struct ProjectsView: View {
     @State private var projects: [Project] = []
     @State private var loading = true
     @State private var error: String?
+    @State private var workspaceId: String?
+    @State private var showCreate = false
 
     var body: some View {
         NavigationStack {
@@ -13,6 +15,15 @@ struct ProjectsView: View {
                 content
             }
             .navigationTitle("Mission Control")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showCreate = true } label: { Image(systemName: "plus") }
+                        .disabled(workspaceId == nil)
+                }
+            }
+            .sheet(isPresented: $showCreate) {
+                CreateProjectSheet(workspaceId: workspaceId ?? "") { await load() }
+            }
             .task { await load() }
         }
     }
@@ -69,12 +80,93 @@ struct ProjectsView: View {
         error = nil
         do {
             projects = try await APIClient.shared.projects()
+            if workspaceId == nil { workspaceId = try? await APIClient.shared.workspaceInfo().workspaceId }
         } catch APIError.unauthorized {
             auth.logout()
         } catch {
             self.error = (error as? LocalizedError)?.errorDescription ?? "Terjadi kesalahan."
         }
         loading = false
+    }
+}
+
+/// Create a new project (web "Launch a new mission"): name + color.
+struct CreateProjectSheet: View {
+    let workspaceId: String
+    let onCreated: () async -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var color = "#7B2FBE"
+    @State private var icon = "🚀"
+    @State private var busy = false
+    @State private var err: String?
+
+    private let colors = ["#7b68ee", "#0091ff", "#16a34a", "#f59e0b", "#ef4444", "#ec4899", "#06b6d4", "#7B2FBE"]
+    private let icons = ["🚀", "📁", "⭐️", "⚡️", "🎯", "💼", "🎬", "📣"]
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                NX.background.ignoresSafeArea()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        field("NAMA MISSION") {
+                            TextField("mis. PATS Multimedia", text: $name)
+                                .font(NXFont.text(16)).padding(12)
+                                .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                        }
+                        field("ICON") {
+                            HStack(spacing: 8) {
+                                ForEach(icons, id: \.self) { ic in
+                                    Text(ic).font(.system(size: 22)).frame(width: 40, height: 40)
+                                        .background(icon == ic ? NX.violet.opacity(0.15) : NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(icon == ic ? NX.violet : NX.border))
+                                        .onTapGesture { icon = ic }
+                                }
+                            }
+                        }
+                        field("WARNA") {
+                            HStack(spacing: 10) {
+                                ForEach(colors, id: \.self) { c in
+                                    Circle().fill(Color(hex: c)).frame(width: 30, height: 30)
+                                        .overlay(Circle().strokeBorder(color == c ? NX.foreground : .clear, lineWidth: 2))
+                                        .onTapGesture { color = c }
+                                }
+                            }
+                        }
+                        if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
+                        Button { Task { await create() } } label: {
+                            HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text("Launch mission") }
+                        }
+                        .buttonStyle(NexusPrimaryButton())
+                        .disabled(busy || name.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                    .padding(20)
+                }
+            }
+            .navigationTitle("Mission baru")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Batal") { dismiss() } } }
+        }
+    }
+
+    private func field<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(label).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
+            content()
+        }
+    }
+
+    private func create() async {
+        busy = true; err = nil; defer { busy = false }
+        do {
+            try await APIClient.shared.createProject(workspaceId: workspaceId, name: name.trimmingCharacters(in: .whitespaces), color: color, icon: icon)
+            await onCreated()
+            dismiss()
+        } catch {
+            err = (error as? LocalizedError)?.errorDescription ?? "Gagal bikin project."
+        }
     }
 }
 

@@ -66,6 +66,25 @@ struct APIClient {
         try await run(makeRequest("/api/projects/\(id)"), decode: ProjectDetail.self)
     }
 
+    func workspaceInfo() async throws -> WorkspaceInfo {
+        try await run(makeRequest("/api/workspaces/members"), decode: WorkspaceInfo.self)
+    }
+
+    @discardableResult
+    func createProject(workspaceId: String, name: String, color: String, icon: String) async throws -> Bool {
+        var req = makeRequest("/api/projects", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["name": name, "workspaceId": workspaceId, "color": color, "icon": icon])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+
+    @discardableResult
+    func deleteTask(_ id: String) async throws -> Bool {
+        _ = try await run(makeRequest("/api/tasks/\(id)", method: "DELETE"), decode: SuccessResponse.self)
+        return true
+    }
+
     func taskDetail(_ id: String) async throws -> TaskDetail {
         try await run(makeRequest("/api/tasks/\(id)"), decode: TaskDetail.self)
     }

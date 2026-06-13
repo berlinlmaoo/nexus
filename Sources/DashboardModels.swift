@@ -67,6 +67,11 @@ struct SuccessResponse: Decodable, Sendable {
     let success: Bool?
 }
 
+/// GET /api/workspaces/members — caller's workspace id (for creating projects) + member pool.
+struct WorkspaceInfo: Decodable, Sendable {
+    let workspaceId: String
+}
+
 /// Inbox notification (GET /api/notifications).
 struct NexusNotification: Decodable, Identifiable, Sendable {
     let id: String

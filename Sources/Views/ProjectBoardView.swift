@@ -29,8 +29,9 @@ struct ProjectBoardView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 14) {
                         ForEach(lanes) { lane in
-                            LaneColumn(lane: lane, onOpen: { openTaskId = $0 },
-                                       onAddTask: { title in await addTask(laneId: lane.id, title: title) })
+                            LaneColumn(lane: lane, allLanes: lanes, onOpen: { openTaskId = $0 },
+                                       onAddTask: { title in await addTask(laneId: lane.id, title: title) },
+                                       onMove: { tid, lid in await moveTask(tid, to: lid) })
                         }
                     }
                     .padding(16)
@@ -64,12 +65,19 @@ struct ProjectBoardView: View {
         try? await APIClient.shared.createTask(projectId: projectId, taskListId: laneId, title: t)
         await load()
     }
+
+    private func moveTask(_ taskId: String, to laneId: String) async {
+        try? await APIClient.shared.updateTask(taskId, ["taskListId": laneId])
+        await load()
+    }
 }
 
 struct LaneColumn: View {
     let lane: ProjectDetail.Lane
+    let allLanes: [ProjectDetail.Lane]
     let onOpen: (String) -> Void
     let onAddTask: (String) async -> Void
+    let onMove: (String, String) async -> Void
     @State private var composing = false
     @State private var newTitle = ""
     @State private var adding = false
@@ -87,6 +95,16 @@ struct LaneColumn: View {
 
             ForEach(lane.tasks ?? []) { task in
                 Button { onOpen(task.id) } label: { BoardCard(task: task) }.buttonStyle(.plain)
+                    .contextMenu {
+                        let others = allLanes.filter { $0.id != lane.id }
+                        if !others.isEmpty {
+                            Menu("Pindah ke") {
+                                ForEach(others) { l in
+                                    Button(l.name) { Task { await onMove(task.id, l.id) } }
+                                }
+                            }
+                        }
+                    }
             }
             if (lane.tasks ?? []).isEmpty && !composing {
                 Text("Kosong").font(NXFont.text(12)).foregroundStyle(NX.mutedFg.opacity(0.6))

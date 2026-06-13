@@ -5,6 +5,8 @@ import SwiftUI
 struct TaskDetailView: View {
     let taskId: String
     @Environment(AuthStore.self) private var auth
+    @Environment(\.dismiss) private var dismiss
+    @State private var confirmDelete = false
     @State private var task: TaskDetail?
     @State private var loading = true
     @State private var error: String?
@@ -45,6 +47,17 @@ struct TaskDetailView: View {
         }
         .navigationTitle("Task")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button(role: .destructive) { confirmDelete = true } label: { Label("Hapus task", systemImage: "trash") }
+                } label: { Image(systemName: "ellipsis.circle") }
+            }
+        }
+        .confirmationDialog("Hapus task ini?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Hapus", role: .destructive) { Task { await deleteTask() } }
+            Button("Batal", role: .cancel) {}
+        } message: { Text("Task beserta subtask & komentarnya akan dihapus.") }
         .task { await load() }
     }
 
@@ -233,6 +246,9 @@ struct TaskDetailView: View {
     }
     private func toggleSub(_ st: TaskDetail.SubDetail) async {
         try? await APIClient.shared.setTaskStatus(taskId: st.id, status: st.isDone ? "TODO" : "DONE"); await load()
+    }
+    private func deleteTask() async {
+        try? await APIClient.shared.deleteTask(taskId); dismiss()
     }
     private func addComment(_ t: TaskDetail) {
         let v = newComment.trimmingCharacters(in: .whitespaces)
