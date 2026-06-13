@@ -51,6 +51,8 @@ enum NX {
     static let danger      = Color(light: 0xef4444, dark: 0xf87171)
     static let accentBg    = Color(light: 0xf1eefe, dark: 0x2a2546)
     static let accentFg    = Color(light: 0x6750cf, dark: 0xb9acff)
+    static let coral       = Color(hex: "#FF7F50")   // "Secure Uplink Ready" pill
+    static let cream       = Color(light: 0xfdfcfb, dark: 0x11141b)   // login background
     static let ink         = Color(hex: "#11141b")
     static let inkGradient = LinearGradient(colors: [Color(hex: "#11141b"), Color(hex: "#3a2f7a")],
                                             startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -64,11 +66,11 @@ enum Brand {
     static let success = NX.success
 }
 
-/// Typography. SF Rounded stands in for Plus Jakarta Sans (display); system for Inter (body) —
-/// swap to `Font.custom("PlusJakartaSans-Bold", size:)` once the .ttf files are bundled.
+/// Typography. SF Pro stands in for Plus Jakarta Sans (display, geometric — NOT rounded) and Inter
+/// (body) — swap to `Font.custom("PlusJakartaSans-Bold"/"Inter", size:)` once the .ttf are bundled.
 enum NXFont {
     static func display(_ size: CGFloat, _ weight: Font.Weight = .bold) -> Font {
-        .system(size: size, weight: weight, design: .rounded)
+        .system(size: size, weight: weight, design: .default)
     }
     static func text(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
         .system(size: size, weight: weight)

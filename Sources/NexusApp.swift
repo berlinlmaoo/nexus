@@ -23,8 +23,8 @@ struct NexusApp: App {
         nav.configureWithOpaqueBackground()
         nav.backgroundColor = bg
         nav.shadowColor = .clear
-        if let large = roundedFont(34, .heavy) { nav.largeTitleTextAttributes = [.font: large] }
-        if let inline = roundedFont(17, .bold) { nav.titleTextAttributes = [.font: inline] }
+        nav.largeTitleTextAttributes = [.font: UIFont.systemFont(ofSize: 32, weight: .heavy)]
+        nav.titleTextAttributes = [.font: UIFont.systemFont(ofSize: 17, weight: .bold)]
         UINavigationBar.appearance().standardAppearance = nav
         UINavigationBar.appearance().scrollEdgeAppearance = nav
         UINavigationBar.appearance().compactAppearance = nav
@@ -34,11 +34,5 @@ struct NexusApp: App {
         tab.backgroundColor = bg
         UITabBar.appearance().standardAppearance = tab
         UITabBar.appearance().scrollEdgeAppearance = tab
-    }
-
-    private static func roundedFont(_ size: CGFloat, _ weight: UIFont.Weight) -> UIFont? {
-        let base = UIFont.systemFont(ofSize: size, weight: weight)
-        guard let descriptor = base.fontDescriptor.withDesign(.rounded) else { return base }
-        return UIFont(descriptor: descriptor, size: size)
     }
 }

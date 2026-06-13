@@ -1,5 +1,7 @@
 import SwiftUI
 
+/// Faithful native port of the web login (src/routes/login.tsx): cream bg + soft color glows,
+/// frosted white card, X logo, "NEXUS PHAËTHON" tracked title, uppercase labels, ONYX CTA, coral pill.
 struct LoginView: View {
     @Environment(AuthStore.self) private var auth
     @State private var email = ""
@@ -10,96 +12,160 @@ struct LoginView: View {
 
     var body: some View {
         ZStack {
-            NX.inkGradient.ignoresSafeArea()
+            // bg-[#fdfcfb] + blurred color blobs (primary/orange/purple)
+            NX.cream.ignoresSafeArea()
+            Circle().fill(NX.onyx.opacity(0.10)).frame(width: 360, height: 360).blur(radius: 100)
+                .offset(x: -150, y: -260)
+            Circle().fill(NX.coral.opacity(0.22)).frame(width: 360, height: 360).blur(radius: 100)
+                .offset(x: 150, y: 320)
+            Circle().fill(Color(hex: "#a78bfa").opacity(0.16)).frame(width: 240, height: 300).blur(radius: 90)
+                .offset(x: 120, y: -120)
 
-            VStack(spacing: 24) {
-                Spacer()
+            card
+                .padding(.horizontal, 22)
+        }
+        .preferredColorScheme(.light)   // login is light-only on web
+    }
 
-                VStack(spacing: 10) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .fill(.white.opacity(0.12))
-                            .frame(width: 76, height: 76)
-                        Image(systemName: "bolt.fill")
-                            .font(.system(size: 36, weight: .black))
-                            .foregroundStyle(.white)
-                    }
-                    Text("NEXUS")
-                        .font(NXFont.display(40, .black))
-                        .foregroundStyle(.white)
-                        .tracking(1)
-                    Text("Masuk ke workspace lo")
-                        .font(NXFont.text(15, .medium))
-                        .foregroundStyle(.white.opacity(0.7))
-                }
+    private var card: some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 0) {
+                Image("NexusLogo")
+                    .resizable().scaledToFit()
+                    .frame(width: 72, height: 72)
+                    .shadow(color: NX.violet.opacity(0.3), radius: 16, y: 10)
+                    .padding(.bottom, 22)
 
-                VStack(spacing: 12) {
-                    field("Email", text: $email, field: .email, secure: false)
+                Text("NEXUS PHAËTHON")
+                    .font(NXFont.display(22, .bold))
+                    .tracking(4)
+                    .foregroundStyle(NX.onyx)
+                    .padding(.bottom, 30)
+
+                // Access ID
+                fieldBlock(label: "ACCESS ID (EMAIL)") {
+                    inputField("commander@nexus.app", text: $email, field: .email, secure: false)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .submitLabel(.next)
                         .onSubmit { focus = .password }
-                    field("Password", text: $password, field: .password, secure: true)
-                        .submitLabel(.go)
-                        .onSubmit(attemptLogin)
-
-                    if let err = auth.loginError {
-                        HStack(spacing: 8) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                            Text(err).font(NXFont.text(13, .semibold))
-                        }
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12).padding(.vertical, 10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(NX.danger.opacity(0.85), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
-
-                    Button(action: attemptLogin) {
-                        HStack(spacing: 8) {
-                            if auth.isLoggingIn { ProgressView().tint(.white) }
-                            Text(auth.isLoggingIn ? "Masuk…" : "Masuk")
-                        }
-                    }
-                    .buttonStyle(NexusPrimaryButton())
-                    .disabled(auth.isLoggingIn || email.isEmpty || password.isEmpty)
-                    .opacity(email.isEmpty || password.isEmpty ? 0.55 : 1)
-                    .padding(.top, 2)
                 }
 
-                Spacer()
-                Text("PATS Group · NEXUS iOS")
-                    .font(NXFont.text(11, .medium))
-                    .foregroundStyle(.white.opacity(0.45))
+                // Encryption Key + Forgot
+                fieldBlock(label: "ENCRYPTION KEY", trailing: "FORGOT?") {
+                    inputField("••••••••", text: $password, field: .password, secure: true)
+                        .submitLabel(.go)
+                        .onSubmit(attemptLogin)
+                }
+                .padding(.top, 18)
+
+                if let err = auth.loginError {
+                    Text(err)
+                        .font(NXFont.text(13, .semibold))
+                        .foregroundStyle(NX.danger)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 14).padding(.vertical, 11)
+                        .background(Color(hex: "#fef2f2"), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.danger.opacity(0.2)))
+                        .padding(.top, 18)
+                }
+
+                // onyx CTA
+                Button(action: attemptLogin) {
+                    HStack(spacing: 8) {
+                        if auth.isLoggingIn {
+                            ProgressView().tint(.white)
+                            Text("Opening uplink…")
+                        } else {
+                            Text("Enter Mission Control")
+                            Image(systemName: "arrow.right").font(.system(size: 14, weight: .bold))
+                        }
+                    }
+                    .font(NXFont.display(16, .bold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(NX.onyx, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .shadow(color: NX.onyx.opacity(0.25), radius: 18, y: 10)
+                }
+                .buttonStyle(.plain)
+                .disabled(auth.isLoggingIn)
+                .opacity(auth.isLoggingIn ? 0.7 : 1)
+                .padding(.top, 26)
+
+                // New operative
+                HStack(spacing: 4) {
+                    Text("New operative?").foregroundStyle(NX.mutedFg)
+                    Text("Request access").foregroundStyle(NX.onyx).fontWeight(.bold)
+                }
+                .font(NXFont.text(14))
+                .padding(.top, 28)
             }
-            .padding(28)
+            .padding(.horizontal, 30)
+            .padding(.vertical, 40)
+            .frame(maxWidth: .infinity)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 38, style: .continuous))
+            .background(Color.white.opacity(0.5), in: RoundedRectangle(cornerRadius: 38, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 38, style: .continuous).strokeBorder(.white.opacity(0.65), lineWidth: 1))
+            .shadow(color: .black.opacity(0.10), radius: 40, y: 26)
+        }
+        .overlay(alignment: .bottom) {
+            Text("SECURE UPLINK READY")
+                .font(NXFont.text(10, .bold))
+                .tracking(2)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16).padding(.vertical, 7)
+                .background(NX.coral, in: Capsule())
+                .overlay(Capsule().strokeBorder(.white, lineWidth: 2))
+                .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+                .offset(y: 14)
         }
     }
 
     @ViewBuilder
-    private func field(_ placeholder: String, text: Binding<String>, field: Field, secure: Bool) -> some View {
+    private func fieldBlock<Content: View>(label: String, trailing: String? = nil, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                Text(label).font(NXFont.text(11, .bold)).tracking(1).foregroundStyle(NX.mutedFg)
+                if let trailing {
+                    Spacer()
+                    Text(trailing).font(NXFont.text(11, .bold)).tracking(1).foregroundStyle(NX.onyx)
+                }
+            }
+            .padding(.leading, 4)
+            content()
+        }
+    }
+
+    @ViewBuilder
+    private func inputField(_ placeholder: String, text: Binding<String>, field: Field, secure: Bool) -> some View {
         Group {
             if secure {
                 SecureField("", text: text, prompt: Text(placeholder).foregroundColor(NX.mutedFg))
-                    .textContentType(.password)
             } else {
                 TextField("", text: text, prompt: Text(placeholder).foregroundColor(NX.mutedFg))
-                    .textContentType(.emailAddress)
             }
         }
-        .font(NXFont.text(16, .medium))
+        .font(NXFont.text(16))
         .foregroundStyle(NX.foreground)
         .focused($focus, equals: field)
-        .padding(15)
-        .background(NX.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(.horizontal, 18).padding(.vertical, 15)
+        .background(Color.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(focus == field ? NX.violet : .clear, lineWidth: 2)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(focus == field ? NX.onyx.opacity(0.5) : .white, lineWidth: focus == field ? 2 : 1)
         )
+        .shadow(color: .black.opacity(0.03), radius: 4, y: 2)
     }
 
     private func attemptLogin() {
         focus = nil
-        Task { await auth.login(email: email.trimmingCharacters(in: .whitespaces), password: password) }
+        let e = email.trimmingCharacters(in: .whitespaces)
+        guard !e.isEmpty, !password.isEmpty else {
+            auth.loginError = "Isi Access ID dan Encryption Key dulu ya."
+            return
+        }
+        Task { await auth.login(email: e, password: password) }
     }
 }
