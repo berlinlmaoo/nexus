@@ -217,6 +217,7 @@ struct DashboardView: View {
                         .frame(width: 32, height: 32).background(.white.opacity(0.22), in: Circle())
                 }.buttonStyle(.plain)
             }
+            .opacity(morphReady ? 1 : 0)   // morph only the gradient card; fade the header in too (no squish)
             // While morphing, show a cheap size-reserving placeholder instead of laying out the
             // up-to-40-row detail list every frame; build + fade the real list once the card settles.
             // The ScrollView fills maxHeight 320, so the 320 placeholder is the same size → no jump.
@@ -296,6 +297,7 @@ struct DashboardView: View {
                         .frame(width: 32, height: 32).background(NX.muted, in: Circle())
                 }.buttonStyle(.plain)
             }
+            .opacity(morphReady ? 1 : 0)   // morph only the card; fade the header in too (no squish)
             VStack(alignment: .leading, spacing: 6) {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
@@ -364,6 +366,7 @@ struct DashboardView: View {
                         .frame(width: 32, height: 32).background(NX.muted, in: Circle())
                 }.buttonStyle(.plain)
             }
+            .opacity(morphReady ? 1 : 0)   // morph only the card; fade the header in too (no squish)
             Group {
               if morphReady {
                 Group {
