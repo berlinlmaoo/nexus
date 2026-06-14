@@ -49,7 +49,6 @@ struct DashboardView: View {
                     }
                     .padding(16)
                 }
-                .overlay(alignment: .bottomTrailing) { oracleFab.padding(20) }
                 .overlay { statModal }
             }
             .navigationBarHidden(true)
@@ -296,12 +295,6 @@ struct DashboardView: View {
             Text(label).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg).frame(width: 96, alignment: .leading)
             Text(value).font(NXFont.text(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
         }
-    }
-
-    private var oracleFab: some View {
-        Circle().fill(NX.onyx).frame(width: 52, height: 52)
-            .overlay(Image(systemName: "sparkles").font(.system(size: 20, weight: .bold)).foregroundStyle(.white))
-            .nexusShadowPop()
     }
 
     // MARK: data

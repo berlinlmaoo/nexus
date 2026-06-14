@@ -296,9 +296,6 @@ struct APIClient {
         let path = "/api/master-calendar?teamId=\(enc(teamId))&rangeStart=\(enc(start))&rangeEnd=\(enc(end))"
         return (try await run(makeRequest(path), decode: CalendarResponse.self)).events ?? []
     }
-    func bufferDrafts() async throws -> BufferResponse {
-        try await run(makeRequest("/api/buffer/drafts"), decode: BufferResponse.self)
-    }
     func roster() async throws -> WorkspaceRoster {
         try await run(makeRequest("/api/workspaces/members"), decode: WorkspaceRoster.self)
     }

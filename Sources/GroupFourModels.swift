@@ -24,21 +24,6 @@ struct CalendarEvent: Decodable, Identifiable, Sendable {
 }
 struct CalendarResponse: Decodable, Sendable { let events: [CalendarEvent]? }
 
-// MARK: Social (Buffer)
-struct BufferDraft: Decodable, Identifiable, Sendable {
-    let id: String
-    let text: String
-    let status: String
-    let dueAt: String?
-    let channel: Channel?
-    struct Channel: Decodable, Sendable { let name: String?; let service: String? }
-}
-struct BufferResponse: Decodable, Sendable {
-    let configured: Bool
-    let drafts: [BufferDraft]?
-    let error: String?
-}
-
 // MARK: Admin (Control Room) — roster + org roles from /api/workspaces/members
 struct WorkspaceRoster: Decodable, Sendable {
     let role: String?
