@@ -119,13 +119,13 @@ struct InviteByEmailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("EMAIL").font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
+                    SectionLabel("EMAIL")
                     TextField("nama@perusahaan.com", text: $email).font(NXFont.text(15))
                         .keyboardType(.emailAddress).autocorrectionDisabled().textInputAutocapitalization(.never)
                         .padding(10).background(NX.muted, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("ROLE").font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
+                    SectionLabel("ROLE")
                     Picker("", selection: $role) { ForEach(roles, id: \.self) { Text($0.capitalized).tag($0) } }.pickerStyle(.segmented)
                 }
                 if let done {

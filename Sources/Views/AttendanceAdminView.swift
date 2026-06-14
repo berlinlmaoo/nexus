@@ -113,7 +113,7 @@ struct AttendanceAdminSection: View {
 
     private var membersCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("SHIFT & JATAH LIBUR").font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg).padding(.leading, 4)
+            SectionLabel("SHIFT & JATAH LIBUR").padding(.leading, 4)
             VStack(spacing: 0) {
                 ForEach(Array(members.enumerated()), id: \.element.idv) { idx, m in
                     if idx > 0 { Divider().overlay(NX.border) }
@@ -177,7 +177,7 @@ struct RedDateCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("TANGGAL MERAH — \(MonthKey.label(month))").font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
+            SectionLabel("TANGGAL MERAH — \(MonthKey.label(month))")
 
             if loading {
                 ProgressView().tint(NX.violet).frame(maxWidth: .infinity).padding(.vertical, 12)

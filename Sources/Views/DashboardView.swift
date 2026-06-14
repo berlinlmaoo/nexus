@@ -290,7 +290,7 @@ struct DashboardView: View {
 
     private func row(_ label: String, _ value: String) -> some View {
         HStack(spacing: 12) {
-            Text(label).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg).frame(width: 96, alignment: .leading)
+            SectionLabel(label).frame(width: 96, alignment: .leading)
             Text(value).font(NXFont.text(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
         }
     }

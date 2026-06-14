@@ -132,7 +132,7 @@ struct OfficeComposerSheet: View {
     }
 
     private func f<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
-        VStack(alignment: .leading, spacing: 7) { Text(label).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg); content() }
+        VStack(alignment: .leading, spacing: 7) { SectionLabel(label); content() }
             .frame(maxWidth: .infinity, alignment: .leading)
     }
     private func field(_ text: Binding<String>, _ ph: String) -> some View {

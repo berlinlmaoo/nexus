@@ -57,7 +57,7 @@ struct MemberAttendanceSheet: View {
 
     private var shiftCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("SHIFT KERJA").font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
+            SectionLabel("SHIFT KERJA")
             Toggle(isOn: $useCustom) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Pakai shift khusus").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
@@ -124,7 +124,7 @@ struct MemberAttendanceSheet: View {
 
     private var dayoffCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("JATAH LIBUR — \(MonthKey.label(month))").font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
+            SectionLabel("JATAH LIBUR — \(MonthKey.label(month))")
             if let d = dayoff {
                 HStack {
                     Text("Kepakai bulan ini").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)

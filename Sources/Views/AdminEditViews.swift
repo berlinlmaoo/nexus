@@ -274,7 +274,7 @@ struct CreateQuestSheet: View {
         }
     }
     private func f<C: View>(_ l: String, @ViewBuilder _ c: () -> C) -> some View {
-        VStack(alignment: .leading, spacing: 7) { Text(l).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg); c() }.frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 7) { SectionLabel(l); c() }.frame(maxWidth: .infinity, alignment: .leading)
     }
     private func create() async {
         busy = true; defer { busy = false }
@@ -368,7 +368,7 @@ struct CreateAnnouncementSheet: View {
         }
     }
     private func f<C: View>(_ l: String, @ViewBuilder _ c: () -> C) -> some View {
-        VStack(alignment: .leading, spacing: 7) { Text(l).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg); c() }
+        VStack(alignment: .leading, spacing: 7) { SectionLabel(l); c() }
     }
     private func create() async {
         busy = true; defer { busy = false }

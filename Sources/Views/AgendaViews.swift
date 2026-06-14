@@ -149,7 +149,7 @@ struct AgendaDay<Content: View>: View {
     @ViewBuilder let content: () -> Content
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(label.uppercased()).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg).padding(.leading, 4)
+            SectionLabel(label).padding(.leading, 4)
             VStack(spacing: 0) { content() }
                 .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))

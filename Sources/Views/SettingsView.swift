@@ -83,7 +83,7 @@ struct SettingsView: View {
 
     private func field<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(label).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
+            SectionLabel(label)
             content()
         }
     }
