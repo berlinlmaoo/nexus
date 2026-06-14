@@ -159,9 +159,10 @@ struct ProjectDetailView: View {
 
     @ViewBuilder private func boardTab(_ detail: ProjectDetail) -> some View {
         if let lanes = detail.taskLists, !lanes.isEmpty {
-            // BOTH axes + maxHeight: a horizontal-only ScrollView grows to its tallest lane's height,
-            // overflowing the VStack and pushing the header/tab-bar off-screen for task-heavy projects.
-            ScrollView([.horizontal, .vertical], showsIndicators: false) {
+            // Horizontal-only: each lane is a full-height column that scrolls its own cards
+            // vertically (see LaneColumn). The lanes fill the board height, so the HStack never
+            // overflows it and the custom header/tab-bar stay put.
+            ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 14) {
                     ForEach(lanes) { lane in
                         LaneColumn(lane: lane, allLanes: lanes, onOpen: { openTaskId = $0 },
@@ -170,6 +171,7 @@ struct ProjectDetailView: View {
                     }
                 }
                 .padding(16)
+                .frame(maxHeight: .infinity, alignment: .top)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -215,9 +217,10 @@ struct LaneColumn: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        // LazyVStack so a task-heavy lane only renders the cards in view (the rest
-        // materialize as you scroll) — keeps board scrolling smooth on device.
-        LazyVStack(alignment: .leading, spacing: 10) {
+        // ClickUp-style column: a FIXED lane header above a per-lane vertical scroll, so only this
+        // column's visible cards render (reliable culling) and the header stays put — faithful to
+        // the web board, and far smoother than the old whole-board 2-axis pan on a task-heavy lane.
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(lane.name).font(NXFont.display(14, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
                 Spacer()
@@ -226,6 +229,8 @@ struct LaneColumn: View {
             }
             .padding(.horizontal, 4)
 
+            ScrollView(.vertical, showsIndicators: false) {
+              LazyVStack(alignment: .leading, spacing: 10) {
             ForEach(lane.tasks ?? []) { task in
                 Button { onOpen(task.id) } label: { BoardCard(task: task) }.buttonStyle(.plain)
                     .contextMenu {
@@ -274,8 +279,11 @@ struct LaneColumn: View {
                         .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }.buttonStyle(.plain)
             }
+              }   // LazyVStack
+            }     // per-lane ScrollView
         }
         .frame(width: 290)
+        .frame(maxHeight: .infinity, alignment: .top)   // lane fills the board height so its scroll is bounded
         .padding(12)
         .background(NX.card.opacity(0.6), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(NX.border))
