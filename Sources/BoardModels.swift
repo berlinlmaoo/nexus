@@ -98,6 +98,21 @@ struct TaskDetail: Decodable, Sendable {
     var isDone: Bool { (status ?? "").uppercased() == "DONE" }
 }
 
+/// GET /api/projects/{id}/files?path= — folder listing for the project Files tab.
+struct ProjectFilesResponse: Decodable, Sendable {
+    let path: String?
+    let files: [ProjectFile]?
+}
+struct ProjectFile: Decodable, Identifiable, Sendable {
+    let name: String
+    let path: String
+    let relPath: String?
+    let isdir: Bool
+    let size: Int?
+    let modified: String?
+    var id: String { path }
+}
+
 /// Tasks' description column can hold rich-block JSON; show plain text only.
 func plainBlockText(_ raw: String?) -> String {
     guard let raw, !raw.isEmpty else { return "" }

@@ -54,7 +54,7 @@ struct ProjectsView: View {
 
                     ForEach(projects) { p in
                         NavigationLink {
-                            ProjectBoardView(projectId: p.id, projectName: p.name)
+                            ProjectDetailView(projectId: p.id, projectName: p.name)
                         } label: {
                             ProjectCard(project: p)
                         }

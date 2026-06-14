@@ -131,6 +131,12 @@ struct APIClient {
     func forms(projectId: String) async throws -> [NexusForm] {
         try await run(makeRequest("/api/forms?projectId=\(projectId)"), decode: [NexusForm].self)
     }
+    func projectDocs(_ projectId: String) async throws -> [Doc] {
+        (try await run(makeRequest("/api/docs?projectId=\(enc(projectId))"), decode: DocsResponse.self)).docs ?? []
+    }
+    func projectFiles(_ projectId: String, path: String = "") async throws -> ProjectFilesResponse {
+        try await run(makeRequest("/api/projects/\(projectId)/files?path=\(enc(path))"), decode: ProjectFilesResponse.self)
+    }
 
     func reports(days: Int) async throws -> Reports {
         try await run(makeRequest("/api/reports?days=\(days)"), decode: Reports.self)

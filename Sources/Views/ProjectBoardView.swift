@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Port of the web BoardView ($projectId.tsx): horizontal-scroll lanes (task lists) with cards.
-struct ProjectBoardView: View {
+/// Project detail with the web's view-switcher tabs (Overview · Board · List · Calendar ·
+/// Timeline · Pages · Forms · Files · Chat). Task-centric tabs run off the one project(id) load.
+struct ProjectDetailView: View {
     let projectId: String
     let projectName: String
     @Environment(AuthStore.self) private var auth
@@ -9,40 +10,18 @@ struct ProjectBoardView: View {
     @State private var loading = true
     @State private var error: String?
     @State private var openTaskId: String?
+    @State private var tab: ProjectTab = .board
 
     var body: some View {
-        ZStack {
-            // subtle green + violet radial wash (web board background)
+        VStack(spacing: 0) {
+            tabBar
+            Divider().overlay(NX.border)
+            content
+        }
+        .background {
             NX.background.ignoresSafeArea()
-            RadialGradient(colors: [Color(hex: "#4eb301").opacity(0.06), .clear], center: .topLeading, startRadius: 0, endRadius: 320).ignoresSafeArea()
-            RadialGradient(colors: [Color(hex: "#7b4dff").opacity(0.08), .clear], center: .topTrailing, startRadius: 0, endRadius: 320).ignoresSafeArea()
-
-            if loading {
-                ProgressView().tint(NX.violet)
-            } else if let error {
-                VStack(spacing: 12) {
-                    Image(systemName: "lock").font(.system(size: 38)).foregroundStyle(NX.mutedFg)
-                    Text(error).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center)
-                    Button("Coba lagi") { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
-                }.padding(32)
-            } else if let lanes = detail?.taskLists, !lanes.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: 14) {
-                        ForEach(lanes) { lane in
-                            LaneColumn(lane: lane, allLanes: lanes, onOpen: { openTaskId = $0 },
-                                       onAddTask: { title in await addTask(laneId: lane.id, title: title) },
-                                       onMove: { tid, lid in await moveTask(tid, to: lid) })
-                        }
-                    }
-                    .padding(16)
-                }
-            } else {
-                VStack(spacing: 8) {
-                    Image(systemName: "square.stack.3d.up.slash").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
-                    Text("No lanes yet").font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
-                    Text("Project ini belum punya lane.").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-                }
-            }
+            RadialGradient(colors: [Color(hex: "#4eb301").opacity(0.05), .clear], center: .topLeading, startRadius: 0, endRadius: 320).ignoresSafeArea()
+            RadialGradient(colors: [Color(hex: "#7b4dff").opacity(0.07), .clear], center: .topTrailing, startRadius: 0, endRadius: 320).ignoresSafeArea()
         }
         .navigationTitle(projectName)
         .navigationBarTitleDisplayMode(.inline)
@@ -50,12 +29,87 @@ struct ProjectBoardView: View {
         .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }
     }
 
+    // MARK: tab bar (underline style, horizontally scrollable)
+
+    private var tabBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 2) {
+                ForEach(ProjectTab.allCases) { t in
+                    Button { tab = t } label: {
+                        VStack(spacing: 5) {
+                            HStack(spacing: 5) {
+                                Image(systemName: t.icon).font(.system(size: 12, weight: .semibold))
+                                Text(t.rawValue).font(NXFont.text(13, tab == t ? .semibold : .medium))
+                            }
+                            .foregroundStyle(tab == t ? NX.foreground : NX.mutedFg)
+                            .padding(.horizontal, 12).padding(.vertical, 9)
+                            Rectangle().fill(tab == t ? NX.violet : .clear).frame(height: 2)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 8)
+        }
+    }
+
+    // MARK: content
+
+    @ViewBuilder private var content: some View {
+        switch tab {
+        case .pages: ProjectPagesTab(projectId: projectId)
+        case .forms: ProjectFormsTab(projectId: projectId, projectName: projectName)
+        case .files: ProjectFilesTab(projectId: projectId)
+        case .chat:  ProjectChatTab(projectId: projectId, projectName: projectName)
+        default:
+            if loading {
+                ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let error {
+                VStack(spacing: 12) {
+                    Image(systemName: "lock").font(.system(size: 38)).foregroundStyle(NX.mutedFg)
+                    Text(error).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center)
+                    Button("Coba lagi") { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
+                }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
+            } else if let detail {
+                switch tab {
+                case .overview: OverviewTab(detail: detail)
+                case .board:    boardTab(detail)
+                case .list:     ListTab(detail: detail, onOpen: { openTaskId = $0 })
+                case .calendar: CalendarTab(detail: detail, onOpen: { openTaskId = $0 })
+                case .timeline: TimelineTab(detail: detail, onOpen: { openTaskId = $0 })
+                default:        EmptyView()
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func boardTab(_ detail: ProjectDetail) -> some View {
+        if let lanes = detail.taskLists, !lanes.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 14) {
+                    ForEach(lanes) { lane in
+                        LaneColumn(lane: lane, allLanes: lanes, onOpen: { openTaskId = $0 },
+                                   onAddTask: { title in await addTask(laneId: lane.id, title: title) },
+                                   onMove: { tid, lid in await moveTask(tid, to: lid) })
+                    }
+                }
+                .padding(16)
+            }
+        } else {
+            VStack(spacing: 8) {
+                Image(systemName: "square.stack.3d.up.slash").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
+                Text("No lanes yet").font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+                Text("Project ini belum punya lane.").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
     private func load() async {
         error = nil
         do { detail = try await APIClient.shared.project(projectId) }
         catch APIError.unauthorized { auth.logout() }
-        catch APIError.http(403) { error = "Board terkunci — kamu belum jadi member project ini." }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? "Gagal memuat board." }
+        catch APIError.http(403) { error = "Project terkunci — kamu belum jadi member project ini." }
+        catch { self.error = (error as? LocalizedError)?.errorDescription ?? "Gagal memuat project." }
         loading = false
     }
 
