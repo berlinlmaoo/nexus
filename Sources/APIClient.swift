@@ -298,6 +298,35 @@ struct APIClient {
     func roster() async throws -> WorkspaceRoster {
         try await run(makeRequest("/api/workspaces/members"), decode: WorkspaceRoster.self)
     }
+    @discardableResult
+    func inviteWorkspaceMember(email: String, role: String, workspaceId: String) async throws -> Bool {
+        var req = makeRequest("/api/workspaces/members", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["email": email, "role": role, "workspaceId": workspaceId])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func updateWorkspaceMemberRole(memberId: String, role: String, workspaceId: String) async throws -> Bool {
+        var req = makeRequest("/api/workspaces/members", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["memberId": memberId, "role": role, "workspaceId": workspaceId])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func removeWorkspaceMember(memberId: String, workspaceId: String) async throws -> Bool {
+        _ = try await run(makeRequest("/api/workspaces/members?memberId=\(enc(memberId))&workspaceId=\(enc(workspaceId))", method: "DELETE"), decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func changePassword(current: String, new: String) async throws -> Bool {
+        var req = makeRequest("/api/user/password", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["currentPassword": current, "newPassword": new])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
     private func enc(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? s }
     @discardableResult
     func updateProfile(name: String) async throws -> Bool {

@@ -7,6 +7,7 @@ struct SettingsView: View {
     @State private var name = ""
     @State private var email = ""
     @State private var role: String?
+    @State private var workspaceId: String?
     @State private var saving = false
     @State private var savedOK = false
     @State private var loading = true
@@ -52,6 +53,9 @@ struct SettingsView: View {
                     }
                     .nexusCard()
 
+                    if let wsId = workspaceId { WorkspaceMembersCard(workspaceId: wsId) }
+                    SecurityCard()
+
                     // account
                     VStack(spacing: 0) {
                         Button(role: .destructive) { auth.logout() } label: {
@@ -91,7 +95,7 @@ struct SettingsView: View {
             name = p.user.name ?? name
             email = p.user.email ?? email
         }
-        role = (try? await APIClient.shared.workspaceInfo())?.role
+        if let info = try? await APIClient.shared.workspaceInfo() { role = info.role; workspaceId = info.workspaceId }
         loading = false
     }
     private func save() async {
