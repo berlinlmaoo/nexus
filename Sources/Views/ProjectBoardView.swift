@@ -242,6 +242,7 @@ struct BoardCard: View {
                     NexusChip(text: p.capitalized, tone: prioTone(p))
                 }
             }
+            CFChipRow(values: task.customFieldValues)
             HStack(spacing: 8) {
                 Label(dueText, systemImage: "clock").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 if task.totalSubs > 0 {

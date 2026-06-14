@@ -73,6 +73,7 @@ struct ProjectTaskRow: View {
                             Label("\(task.commentCount)", systemImage: "bubble.left").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                         }
                     }
+                    CFChipRow(values: task.customFieldValues)
                 }
                 Spacer(minLength: 4)
                 if let p = task.priority, p.uppercased() != "NONE" { NexusChip(text: p.capitalized, tone: prioTone(p)) }
@@ -672,8 +673,8 @@ struct ActivityView: UIViewControllerRepresentable {
 
 // MARK: - Create task (shared composer, reachable from every tab)
 
-/// One custom-field value being composed: a single string, or a multi-select set.
-enum CFVal: Equatable { case text(String); case multi([String]) }
+/// One custom-field value being composed: a single string, a multi-select set, or a PLACE.
+enum CFVal: Equatable { case text(String); case multi([String]); case place(label: String, mapUrl: String) }
 
 struct CreateTaskSheet: View {
     let projectId: String
@@ -819,6 +820,13 @@ struct CreateTaskSheet: View {
                         }
                     }
                 }
+            } else if type == "PLACE" {
+                VStack(spacing: 6) {
+                    TextField("Lokasi / nama tempat", text: placeLabel(f.id)).font(NXFont.text(15)).padding(10)
+                        .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(NX.border))
+                    TextField("Link Google Maps", text: placeMap(f.id)).font(NXFont.text(15)).keyboardType(.URL).autocorrectionDisabled().padding(10)
+                        .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(NX.border))
+                }
             } else {
                 TextField("…", text: cfText(f.id)).font(NXFont.text(15)).padding(10)
                     .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(NX.border))
@@ -826,6 +834,9 @@ struct CreateTaskSheet: View {
         }
     }
 
+    private func placeVal(_ id: String) -> (String, String) { if case let .place(l, m) = cfValues[id] { return (l, m) }; return ("", "") }
+    private func placeLabel(_ id: String) -> Binding<String> { Binding(get: { placeVal(id).0 }, set: { cfValues[id] = .place(label: $0, mapUrl: placeVal(id).1) }) }
+    private func placeMap(_ id: String) -> Binding<String> { Binding(get: { placeVal(id).1 }, set: { cfValues[id] = .place(label: placeVal(id).0, mapUrl: $0) }) }
     private func cfTextValue(_ id: String) -> String { if case let .text(s) = cfValues[id] { return s }; return "" }
     private func cfText(_ id: String) -> Binding<String> { Binding(get: { cfTextValue(id) }, set: { cfValues[id] = .text($0) }) }
     private func cfDate(_ id: String) -> Binding<Date> {
@@ -854,9 +865,9 @@ struct CreateTaskSheet: View {
                 case .text(let s):
                     if !s.isEmpty { try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: s) }
                 case .multi(let a):
-                    if !a.isEmpty, let data = try? JSONSerialization.data(withJSONObject: a), let s = String(data: data, encoding: .utf8) {
-                        try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: s)
-                    }
+                    if !a.isEmpty { try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: a) }
+                case .place(let l, let m):
+                    if !l.isEmpty || !m.isEmpty { try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: ["label": l, "mapUrl": m]) }
                 }
             }
             await onCreated()

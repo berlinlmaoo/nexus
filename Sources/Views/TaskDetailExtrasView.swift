@@ -78,6 +78,13 @@ struct TaskCustomFieldsCard: View {
                         }
                     }
                 }
+            } else if type == "PLACE" {
+                VStack(spacing: 6) {
+                    TextField("Lokasi / nama tempat", text: placeLabel(f)).font(NXFont.text(15)).padding(10)
+                        .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous)).onSubmit { Task { await commit(f) } }
+                    TextField("Link Google Maps", text: placeMap(f)).font(NXFont.text(15)).keyboardType(.URL).autocorrectionDisabled().padding(10)
+                        .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous)).onSubmit { Task { await commit(f) } }
+                }
             } else {
                 TextField("…", text: binding(f.id)).font(NXFont.text(15)).padding(10)
                     .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -94,7 +101,7 @@ struct TaskCustomFieldsCard: View {
             switch f.value {
             case .text(let s): seed[f.id] = .text(s)
             case .list(let a): seed[f.id] = .multi(a)
-            case .place(let l, _): seed[f.id] = .text(l)
+            case .place(let l, let m): seed[f.id] = .place(label: l, mapUrl: m ?? "")
             case .none: break
             }
         }
@@ -104,12 +111,13 @@ struct TaskCustomFieldsCard: View {
         guard let v = values[f.id] else { return }
         switch v {
         case .text(let s): try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: s)
-        case .multi(let a):
-            if let data = try? JSONSerialization.data(withJSONObject: a), let s = String(data: data, encoding: .utf8) {
-                try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: s)
-            }
+        case .multi(let a): try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: a)
+        case .place(let l, let m): try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: ["label": l, "mapUrl": m])
         }
     }
+    private func placeVal(_ id: String) -> (String, String) { if case let .place(l, m) = values[id] { return (l, m) }; return ("", "") }
+    private func placeLabel(_ f: CustomField) -> Binding<String> { Binding(get: { placeVal(f.id).0 }, set: { values[f.id] = .place(label: $0, mapUrl: placeVal(f.id).1) }) }
+    private func placeMap(_ f: CustomField) -> Binding<String> { Binding(get: { placeVal(f.id).1 }, set: { values[f.id] = .place(label: placeVal(f.id).0, mapUrl: $0) }) }
     private func cfText(_ id: String) -> String { if case let .text(s) = values[id] { return s }; return "" }
     private func binding(_ id: String) -> Binding<String> { Binding(get: { cfText(id) }, set: { values[id] = .text($0) }) }
     private func dateBinding(_ f: CustomField) -> Binding<Date> {

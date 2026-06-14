@@ -36,6 +36,7 @@ struct BoardTask: Decodable, Identifiable, Sendable {
     let assignees: [Assignee]?
     let subtasks: [Sub]?
     let count: CountRef?
+    let customFieldValues: [CFValue]?
 
     struct Assignee: Decodable, Sendable {
         let user: UserRef?
@@ -43,9 +44,15 @@ struct BoardTask: Decodable, Identifiable, Sendable {
     }
     struct Sub: Decodable, Sendable { let status: String? }
     struct CountRef: Decodable, Sendable { let comments: Int? }
+    struct CFValue: Decodable, Sendable {
+        let customFieldId: String
+        let value: String?
+        let customField: FieldRef?
+        struct FieldRef: Decodable, Sendable { let name: String?; let type: String?; let options: CFOptions? }
+    }
 
     enum CodingKeys: String, CodingKey {
-        case id, title, status, priority, startDate, dueDate, assignees, subtasks
+        case id, title, status, priority, startDate, dueDate, assignees, subtasks, customFieldValues
         case count = "_count"
     }
 
@@ -160,19 +167,21 @@ struct TaskDependency: Decodable, Identifiable, Sendable {
     let task: TaskRef?
     struct TaskRef: Decodable, Sendable { let id: String; let title: String; let status: String? }
 }
-/// options is polymorphic: ["a","b"] | {options:[…]} | {choices:[…]} | null.
+/// options is polymorphic: ["a","b"] | {options:[…], format?} | {choices:[…]} | null.
 struct CFOptions: Decodable, Sendable {
     let list: [String]
+    let format: String?   // e.g. "currency-idr"
     init(from decoder: Decoder) throws {
         if let arr = try? decoder.singleValueContainer().decode([String].self) {
-            list = arr
+            list = arr; format = nil
         } else if let c = try? decoder.container(keyedBy: CodingKeys.self) {
             if let o = try c.decodeIfPresent([String].self, forKey: .options) { list = o }
             else if let ch = try c.decodeIfPresent([String].self, forKey: .choices) { list = ch }
             else { list = [] }
-        } else { list = [] }
+            format = try? c.decodeIfPresent(String.self, forKey: .format)
+        } else { list = []; format = nil }
     }
-    enum CodingKeys: String, CodingKey { case options, choices }
+    enum CodingKeys: String, CodingKey { case options, choices, format }
 }
 
 /// GET /api/projects/{id}/files?path= — folder listing for the project Files tab.

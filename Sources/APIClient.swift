@@ -280,8 +280,10 @@ struct APIClient {
     func projectCustomFields(_ projectId: String) async throws -> [CustomField] {
         (try await run(makeRequest("/api/custom-fields?projectId=\(enc(projectId))"), decode: CustomFieldsResponse.self)).fields ?? []
     }
+    /// PATCH a custom-field value. `value` must match the field's stored shape: String for
+    /// text/select/status/number/date, [String] for MULTI_SELECT, ["label":,"mapUrl":] for PLACE.
     @discardableResult
-    func setCustomFieldValue(fieldId: String, taskId: String, value: String) async throws -> Bool {
+    func setCustomFieldValue(fieldId: String, taskId: String, value: Any) async throws -> Bool {
         var req = makeRequest("/api/custom-fields", method: "PATCH")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: ["id": fieldId, "taskId": taskId, "value": value])
