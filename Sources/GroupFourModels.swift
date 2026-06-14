@@ -47,7 +47,7 @@ struct WorkspaceRoster: Decodable, Sendable {
         struct UserRef: Decodable, Sendable { let name: String?; let email: String?; let avatar: String? }
         struct ShiftDay: Decodable, Sendable { let start: String?; let end: String? }
 
-        var idv: String { userId ?? id ?? UUID().uuidString }
+        var idv: String { userId ?? id ?? email ?? name ?? "member" }   // stable identity (was a fresh UUID per access → broke ForEach diffing)
         var displayName: String { name ?? user?.name ?? email ?? user?.email ?? "—" }
         var emailText: String? { email ?? user?.email }
         var avatarURL: String? { avatar ?? user?.avatar }

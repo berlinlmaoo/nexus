@@ -18,6 +18,7 @@ private let cfYMD: DateFormatter = {
     let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = ProjDate.cal.timeZone
     return f
 }()
+private let cfDecoder = JSONDecoder()   // reused — a fresh JSONDecoder per chip per scroll was an allocation hit
 
 /// Port of the web `cfStatusTone` — colors a STATUS value.
 func cfStatusTone(_ v: String) -> ChipTone {
@@ -53,13 +54,13 @@ func customFieldChip(_ cfv: BoardTask.CFValue) -> CFChip? {
     case "STATUS":
         return CFChip(id: cfv.customFieldId, label: raw, tone: cfStatusTone(raw))
     case "MULTI_SELECT":
-        if let data = raw.data(using: .utf8), let arr = try? JSONDecoder().decode([String].self, from: data) {
+        if let data = raw.data(using: .utf8), let arr = try? cfDecoder.decode([String].self, from: data) {
             let s = arr.joined(separator: ", ")
             return s.isEmpty ? nil : CFChip(id: cfv.customFieldId, label: s, tone: .neutral)
         }
         return CFChip(id: cfv.customFieldId, label: raw, tone: .neutral)
     case "PLACE":
-        if let data = raw.data(using: .utf8), let o = try? JSONDecoder().decode([String: String].self, from: data),
+        if let data = raw.data(using: .utf8), let o = try? cfDecoder.decode([String: String].self, from: data),
            let l = o["label"], !l.isEmpty {
             return CFChip(id: cfv.customFieldId, label: l, tone: .neutral)
         }

@@ -520,14 +520,19 @@ struct ProjectCard: View {
             .padding(.top, 16)
         }
         .padding(18)
-        .background(NX.card, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(NX.border, lineWidth: 1))
-        .overlay(alignment: .topTrailing) {
-            Circle().fill(accent.opacity(0.10)).frame(width: 110, height: 110).offset(x: 36, y: -36).allowsHitTesting(false)
+        // Clip only the fill + corner-accent (two cheap shapes) in the BACKGROUND — never the rich card
+        // content (it's inset by padding and never reaches the corners). The old `.clipShape` wrapped the
+        // whole card, forcing a per-row offscreen rasterization pass while scrolling; this avoids it and
+        // collapses the previous double NX.card fill into one.
+        .background {
+            RoundedRectangle(cornerRadius: 28, style: .continuous).fill(NX.card)
+                .overlay(alignment: .topTrailing) {
+                    Circle().fill(accent.opacity(0.10)).frame(width: 110, height: 110).offset(x: 36, y: -36)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                .nexusShadowSoft()
+                .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(NX.border, lineWidth: 1))
         }
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        // Shadow rides a flat shape behind the (clipped) card, not the rich content — cheap per row.
-        .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(NX.card).nexusShadowSoft())
     }
 
     private func metric(_ label: String, _ value: String) -> some View {

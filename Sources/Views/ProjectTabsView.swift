@@ -467,10 +467,11 @@ struct CalendarTab: View {
     }
     private var grid: some View {
         let cols = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
+        let map = tasksByDay   // build the day→tasks map ONCE, not once per day cell (was a full task-scan ×31)
         return LazyVGrid(columns: cols, spacing: 4) {
             ForEach(0..<leadingBlanks, id: \.self) { _ in Color.clear.frame(height: 42) }
             ForEach(1...daysInMonth, id: \.self) { day in
-                let has = !(tasksByDay[day]?.isEmpty ?? true)
+                let has = !(map[day]?.isEmpty ?? true)
                 Button { selected = day } label: {
                     VStack(spacing: 3) {
                         Text("\(day)").font(NXFont.text(13, selected == day ? .bold : .regular))

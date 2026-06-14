@@ -19,6 +19,7 @@ struct TaskDetailView: View {
     @State private var startValue = Date()
     @State private var showAssignee = false
     @State private var descDraft = ""
+    @State private var descOriginal = ""   // parsed once on load — avoids re-parsing block-JSON on every keystroke
 
     private let statuses = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"]
     private let priorities = ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"]
@@ -172,7 +173,7 @@ struct TaskDetailView: View {
     }
 
     private func descriptionCard(_ t: TaskDetail) -> some View {
-        let dirty = descDraft != blockText(t.description)
+        let dirty = descDraft != descOriginal
         return VStack(alignment: .leading, spacing: 8) {
             Text("DESCRIPTION").font(NXFont.text(10, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
             TextField("Tambah deskripsi…", text: $descDraft, axis: .vertical)
@@ -180,7 +181,7 @@ struct TaskDetailView: View {
                 .padding(10).background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             if dirty {
                 HStack {
-                    Button("Batal") { descDraft = blockText(t.description) }.font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                    Button("Batal") { descDraft = descOriginal }.font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
                     Spacer()
                     Button("Simpan") { Task { await update(t, ["description": descDraft]) } }
                         .font(NXFont.text(13, .bold)).foregroundStyle(.white)
@@ -277,6 +278,7 @@ struct TaskDetailView: View {
             task = t
             editTitle = t.title
             descDraft = blockText(t.description)
+            descOriginal = descDraft
         }
         catch APIError.unauthorized { auth.logout() }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? "Gagal memuat." }
