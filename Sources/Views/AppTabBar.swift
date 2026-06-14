@@ -33,6 +33,15 @@ extension View {
             self
         }
     }
+
+    /// iOS 26 Liquid Glass clipped to `shape`; frosted-material fallback below 26.
+    @ViewBuilder func liquidGlassBar<S: InsettableShape>(_ shape: S) -> some View {
+        if #available(iOS 26.0, *) {
+            glassEffect(.regular, in: shape)
+        } else {
+            background(.regularMaterial, in: shape).overlay(shape.strokeBorder(.primary.opacity(0.08)))
+        }
+    }
 }
 
 /// The app's bottom tab bar: native-style icon+label items on a frosted material (no drop shadow),
@@ -74,10 +83,7 @@ struct AppTabBar: View {
             }
         }
         .padding(.horizontal, 6)
-        // Frosted material gives separation from content WITHOUT casting a drop shadow
-        // (a glass/.shadow() bar was what the user disliked).
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(.primary.opacity(0.06)))
+        .liquidGlassBar(RoundedRectangle(cornerRadius: 26, style: .continuous))   // iOS 26 Liquid Glass
         .scaleEffect(compact ? 0.86 : 1, anchor: .bottom)   // mengecil on scroll-down (render-only → no reflow)
         .animation(.spring(response: 0.36, dampingFraction: 0.82), value: compact)
         .padding(.horizontal, 22)
