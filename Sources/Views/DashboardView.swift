@@ -17,6 +17,7 @@ struct DashboardView: View {
     @State private var activeStat: Int?
     @State private var activeLevel = false
     @State private var activeBell = false
+    @State private var morphReady = false   // gates the modal's detail body — fades in after the card settles
     @Namespace private var statNS
     @Namespace private var levelNS
     @Namespace private var bellNS
@@ -34,10 +35,21 @@ struct DashboardView: View {
             .init(value: game?.questsDone ?? 0, total: game?.questList.count ?? 0, label: "Monthly Quests", icon: "sparkles", from: "#fcd34d", to: "#ea580c", glow: "#fbbf24"),
         ]
     }
-    private var statSpring: Animation { reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.42, dampingFraction: 0.82) }
-    private func toggleStat(_ i: Int?) { withAnimation(statSpring) { activeStat = i } }
-    private func toggleLevel(_ on: Bool) { withAnimation(statSpring) { activeLevel = on } }
-    private func toggleBell(_ on: Bool) { withAnimation(statSpring) { activeBell = on } }
+    // Slower, low-bounce spring — the old 0.42/0.82 read as too fast & snappy. `revealBody` then
+    // fades the modal's heavy detail in just as the card finishes growing, so the morph animates only
+    // the gradient card + header (detail is laid out but invisible → stable size, no mid-flight squish).
+    private var statSpring: Animation { reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.58, bounce: 0.1) }
+    private func toggleStat(_ i: Int?) { withAnimation(statSpring) { activeStat = i }; revealBody(i != nil) }
+    private func toggleLevel(_ on: Bool) { withAnimation(statSpring) { activeLevel = on }; revealBody(on) }
+    private func toggleBell(_ on: Bool) { withAnimation(statSpring) { activeBell = on }; revealBody(on) }
+    private func revealBody(_ open: Bool) {
+        if open {
+            morphReady = false
+            withAnimation(.easeOut(duration: 0.28).delay(0.24)) { morphReady = true }
+        } else {
+            morphReady = false
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -205,7 +217,7 @@ struct DashboardView: View {
                         .frame(width: 32, height: 32).background(.white.opacity(0.22), in: Circle())
                 }.buttonStyle(.plain)
             }
-            ScrollView { statDetail(a).padding(2) }.frame(maxHeight: 320)
+            ScrollView { statDetail(a).padding(2) }.frame(maxHeight: 320).opacity(morphReady ? 1 : 0)
         }
         .padding(18)
         .frame(maxWidth: .infinity)
@@ -288,11 +300,13 @@ struct DashboardView: View {
                     if let next = g?.xp.nextFloor { Text("Next: \(next) XP").font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
                 }
             }
+            .opacity(morphReady ? 1 : 0)
             HStack(spacing: 10) {
                 levelStat("Streak", "\(g?.streakCurrent ?? 0) 🔥")
                 levelStat("Quest klaim", "\(g?.questsDone ?? 0)")
                 levelStat("Total XP", "\(g?.xp.totalXp ?? 0)")
             }
+            .opacity(morphReady ? 1 : 0)
         }
         .padding(18).frame(maxWidth: .infinity)
         .background {
@@ -341,6 +355,7 @@ struct DashboardView: View {
                         .frame(width: 32, height: 32).background(NX.muted, in: Circle())
                 }.buttonStyle(.plain)
             }
+            Group {
             if notifs.isEmpty {
                 Text("Belum ada notifikasi.").font(NXFont.text(13)).foregroundStyle(NX.mutedFg).padding(.vertical, 8)
             } else {
@@ -361,6 +376,8 @@ struct DashboardView: View {
                     }
                 }.frame(maxHeight: 300)
             }
+            }
+            .opacity(morphReady ? 1 : 0)
         }
         .padding(18).frame(maxWidth: .infinity)
         .background {
