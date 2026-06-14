@@ -33,6 +33,15 @@ extension View {
             self
         }
     }
+
+    /// iOS 26 Liquid Glass material clipped to `shape` (no manual shadow); frosted-material fallback below 26.
+    @ViewBuilder func liquidGlassBar<S: InsettableShape>(_ shape: S) -> some View {
+        if #available(iOS 26.0, *) {
+            glassEffect(.regular, in: shape)
+        } else {
+            background(.regularMaterial, in: shape).overlay(shape.strokeBorder(.primary.opacity(0.08)))
+        }
+    }
 }
 
 /// Instagram-style floating tab bar: a dark rounded pill with icon items and a sliding
@@ -74,11 +83,8 @@ struct FloatingTabBar: View {
             }
         }
         .padding(.horizontal, 6)
-        .background(NX.card, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(NX.border))
-        .nexusShadowSoft()
+        .liquidGlassBar(RoundedRectangle(cornerRadius: 26, style: .continuous))
         .scaleEffect(compact ? 0.86 : 1, anchor: .bottom)   // mengecil on scroll-down (render-only → no reflow)
-        .opacity(compact ? 0.96 : 1)
         .animation(.spring(response: 0.36, dampingFraction: 0.82), value: compact)
         .padding(.horizontal, 26)
         .padding(.top, 6)
