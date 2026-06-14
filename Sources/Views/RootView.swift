@@ -23,8 +23,10 @@ struct RootView: View {
                 }
             }
             .environment(\.tabBarShrink, shrink)
-            .contentMargins(.bottom, 88, for: .scrollContent)   // content scrolls UNDER the glass bar
-            .overlay(alignment: .bottom) { AppTabBar(selection: $tab, shrink: shrink) }
+            // safeAreaInset (NOT overlay): overlaying the bar over scroll content let the scroll
+            // gesture steal taps on the bar → tab taps registered as scrolls. This reserves the bar
+            // its own area so taps work.
+            .safeAreaInset(edge: .bottom, spacing: 0) { AppTabBar(selection: $tab, shrink: shrink) }
             .onChange(of: tab) { _, new in visited.insert(new) }
         } else {
             LoginView()
