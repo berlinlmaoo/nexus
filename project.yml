@@ -37,24 +37,24 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
 
-# Two schemes so on-device runs can be optimized in one click:
-#   • NEXUS         → Debug (breakpoints/dev; SwiftUI is much slower on device here)
-#   • NEXUS-Release → Release (-O; the build to actually USE on the phone — smooth)
-# Pick the scheme from Xcode's toolbar dropdown, then ⌘R.
+# Default scheme runs RELEASE so a plain ⌘R is the optimized, smooth-on-device build
+# (Debug SwiftUI is dramatically slower on device — the usual cause of on-device lag).
+#   • NEXUS       → Release (-O; default ⌘R — the build to actually use on the phone)
+#   • NEXUS-Debug → Debug (use only when you need breakpoints / fast incremental builds)
 schemes:
   NEXUS:
     build:
       targets:
         NEXUS: all
     run:
-      config: Debug
+      config: Release
     archive:
       config: Release
-  NEXUS-Release:
+  NEXUS-Debug:
     build:
       targets:
         NEXUS: all
     run:
-      config: Release
+      config: Debug
     archive:
       config: Release
