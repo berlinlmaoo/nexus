@@ -34,23 +34,21 @@ struct DashboardView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                NX.background.ignoresSafeArea()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        greeting
-                        levelCard
-                        searchRow
-                        statCards
-                        questsCard
-                        xpRulesCard
-                        profileCard
-                        Color.clear.frame(height: 8)
-                    }
-                    .padding(16)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    greeting
+                    levelCard
+                    searchRow
+                    statCards
+                    questsCard
+                    xpRulesCard
+                    profileCard
+                    Color.clear.frame(height: 8)
                 }
-                .overlay { statModal }
+                .padding(16)
             }
+            .background(NX.background.ignoresSafeArea())
+            .overlay { statModal }
             .navigationBarHidden(true)
             .task { if !loaded { await load() } }
             .refreshable { await load() }

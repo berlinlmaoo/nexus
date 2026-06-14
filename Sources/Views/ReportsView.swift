@@ -22,7 +22,7 @@ struct ReportsView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     ForEach([7, 30, 90], id: \.self) { d in Button("\(d) hari") { days = d; Task { await load() } } }
-                } label: { Text("\(days)h").font(NXFont.text(13, .bold)) }
+                } label: { Text("\(days) hari").font(NXFont.text(13, .bold)) }
             }
         }
         .task { await load() }
@@ -47,8 +47,8 @@ struct ReportsView: View {
                         metric("Overdue", "\(m?.overdueTasks ?? 0)", tone: (m?.overdueTasks ?? 0) > 0 ? .danger : .neutral)
                         metric("Completion", "\(m?.completionRate ?? 0)%", tone: .info, sub: m?.avgCompletionDays.map { "\(Int($0))d avg" })
                     }
-                    distro("By status", rows: (r.tasksByStatus ?? []).map { ($0.status.capitalized, $0.count, Self.statusColor[$0.status] ?? "#7b68ee") })
-                    distro("By priority", rows: (r.tasksByPriority ?? []).map { ($0.priority.capitalized, $0.count, Self.prioColor[$0.priority] ?? "#7b68ee") })
+                    distro("By status", rows: (r.tasksByStatus ?? []).map { ($0.status.replacingOccurrences(of: "_", with: " ").capitalized, $0.count, Self.statusColor[$0.status] ?? "#7b68ee") })
+                    distro("By priority", rows: (r.tasksByPriority ?? []).map { ($0.priority.replacingOccurrences(of: "_", with: " ").capitalized, $0.count, Self.prioColor[$0.priority] ?? "#7b68ee") })
                     if let health = r.projectHealth, !health.isEmpty { projectHealth(health) }
                 }
                 .padding(16)
