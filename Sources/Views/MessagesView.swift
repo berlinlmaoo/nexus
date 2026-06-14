@@ -53,9 +53,11 @@ struct MessagesView: View {
                                     .buttonStyle(.plain)
                                 }
                             }
-                            .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
-                            .nexusShadowSoft()
+                            .background {
+                                RoundedRectangle(cornerRadius: 18, style: .continuous).fill(NX.card)
+                                    .nexusShadowSoft()
+                                    .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
+                            }
                         }
                     }
                 }

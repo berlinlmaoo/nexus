@@ -526,7 +526,8 @@ struct ProjectCard: View {
             Circle().fill(accent.opacity(0.10)).frame(width: 110, height: 110).offset(x: 36, y: -36).allowsHitTesting(false)
         }
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .nexusShadowSoft()
+        // Shadow rides a flat shape behind the (clipped) card, not the rich content — cheap per row.
+        .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(NX.card).nexusShadowSoft())
     }
 
     private func metric(_ label: String, _ value: String) -> some View {
