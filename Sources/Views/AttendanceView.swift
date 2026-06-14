@@ -309,9 +309,11 @@ struct FunMetricCard: View {
         }
         .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
         .padding(12)
-        .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
-        .nexusShadowSoft()
+        .background {
+            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(NX.card)
+                .nexusShadowSoft()
+                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
+        }
     }
 }
 

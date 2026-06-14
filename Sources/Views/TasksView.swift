@@ -54,9 +54,11 @@ struct TasksView: View {
                                     TaskRow(task: t) { await toggle(t) }
                                 }
                             }
-                            .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
-                            .nexusShadowSoft()
+                            .background {
+                                RoundedRectangle(cornerRadius: 18, style: .continuous).fill(NX.card)
+                                    .nexusShadowSoft()
+                                    .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
+                            }
                         }
                     }
                 }

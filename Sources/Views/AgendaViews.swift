@@ -151,9 +151,11 @@ struct AgendaDay<Content: View>: View {
         VStack(alignment: .leading, spacing: 8) {
             SectionLabel(label).padding(.leading, 4)
             VStack(spacing: 0) { content() }
-                .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
-                .nexusShadowSoft()
+                .background {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous).fill(NX.card)
+                        .nexusShadowSoft()
+                        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
+                }
         }
     }
 }
