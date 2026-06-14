@@ -234,7 +234,9 @@ struct DashboardView: View {
         .background {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(LinearGradient(colors: [Color(hex: d.from), Color(hex: d.to)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                .shadow(color: Color(hex: d.glow).opacity(0.5), radius: 24, y: 12)
+                // No blurred shadow DURING the morph — re-blurring a radius-24 shadow on the growing
+                // rect every frame is a real GPU cost; fade it in once the card has settled.
+                .shadow(color: Color(hex: d.glow).opacity(morphReady ? 0.5 : 0), radius: morphReady ? 24 : 0, y: morphReady ? 12 : 0)
         }
         .modifier(MatchedCard(id: a, ns: statNS, isSource: true, enabled: !reduceMotion))
         .transition(reduceMotion ? .opacity.combined(with: .scale(scale: 0.96)) : .identity)
@@ -323,7 +325,7 @@ struct DashboardView: View {
         .background {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(NX.card)
-                .shadow(color: .black.opacity(0.18), radius: 24, y: 12)
+                .shadow(color: .black.opacity(morphReady ? 0.18 : 0), radius: morphReady ? 24 : 0, y: morphReady ? 12 : 0)
                 .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(NX.border))
         }
         .modifier(HeroMatch(id: "level", ns: levelNS, isSource: true, enabled: !reduceMotion))
@@ -401,7 +403,7 @@ struct DashboardView: View {
         .background {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(NX.card)
-                .shadow(color: .black.opacity(0.18), radius: 24, y: 12)
+                .shadow(color: .black.opacity(morphReady ? 0.18 : 0), radius: morphReady ? 24 : 0, y: morphReady ? 12 : 0)
                 .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(NX.border))
         }
         .modifier(HeroMatch(id: "bell", ns: bellNS, isSource: true, enabled: !reduceMotion))
