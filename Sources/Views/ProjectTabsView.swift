@@ -200,43 +200,166 @@ struct ListTab: View {
     }
 }
 
-// MARK: - Timeline (chronological by due date)
+// MARK: - Timeline (Gantt: start→due windows per section)
 
 struct TimelineTab: View {
     let detail: ProjectDetail
     let onOpen: (String) -> Void
-    private var scheduled: [(date: Date, task: BoardTask)] {
-        detail.allTasks.compactMap { t in ProjDate.parse(t.dueDate).map { ($0, t) } }.sorted { $0.date < $1.date }
+
+    private let dayW: CGFloat = 38
+    private let leftW: CGFloat = 122
+    private let rowH: CGFloat = 44
+    private let groupH: CGFloat = 32
+    private let headerH: CGFloat = 50
+    private static let DAY: TimeInterval = 86400
+
+    private var cal: Calendar { ProjDate.cal }
+    private func sod(_ d: Date) -> Date { cal.startOfDay(for: d) }
+    private func days(_ a: Date, _ b: Date) -> Int { cal.dateComponents([.day], from: sod(a), to: sod(b)).day ?? 0 }
+
+    struct Win { let start: Date; let end: Date }
+    /// Port of web taskWindow: start=startDate, end=dueDate, ±3-day fallback when one is missing.
+    private func window(_ t: BoardTask) -> Win {
+        var s = ProjDate.parse(t.startDate)
+        var e = ProjDate.parse(t.dueDate)
+        if let s0 = s, e == nil { e = s0.addingTimeInterval(3 * Self.DAY) }
+        if s == nil, let e0 = e { s = e0.addingTimeInterval(-3 * Self.DAY) }
+        if s == nil || e == nil { let t0 = sod(Date()); s = t0; e = t0.addingTimeInterval(3 * Self.DAY) }
+        let ss = sod(s!); let ee = sod(e!)
+        return Win(start: ss, end: ee < ss ? ss : ee)
     }
-    private var unscheduled: [BoardTask] { detail.allTasks.filter { ProjDate.parse($0.dueDate) == nil } }
-    private var byDay: [(key: String, date: Date, items: [BoardTask])] {
-        let groups = Dictionary(grouping: scheduled) { ProjDate.fmt("yyyy-MM-dd").string(from: $0.date) }
-        return groups.map { (k, v) in (k, v.first!.date, v.map(\.task)) }.sorted { $0.key < $1.key }
+
+    struct Group: Identifiable { let id: String; let name: String; let rows: [Row] }
+    struct Row: Identifiable { let id: String; let task: BoardTask; let win: Win }
+
+    private var groups: [Group] {
+        (detail.taskLists ?? []).map { lane in
+            let rows = (lane.tasks ?? []).map { Row(id: $0.id, task: $0, win: window($0)) }
+                .sorted { $0.win.start < $1.win.start }
+            return Group(id: lane.id, name: lane.name, rows: rows)
+        }.filter { !$0.rows.isEmpty }
     }
+    private var allWins: [Win] { groups.flatMap { $0.rows.map(\.win) } }
+
     var body: some View {
-        if scheduled.isEmpty && unscheduled.isEmpty {
+        if allWins.isEmpty {
             TabEmpty(icon: "chart.bar.xaxis", text: "Belum ada task buat di-timeline.")
         } else {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    ForEach(byDay, id: \.key) { day in
-                        HStack(alignment: .top, spacing: 12) {
-                            VStack(spacing: 2) {
-                                Text(ProjDate.fmt("d").string(from: day.date)).font(NXFont.display(18, .bold)).foregroundStyle(NX.violet)
-                                Text(ProjDate.fmt("MMM").string(from: day.date)).font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
+            gantt
+        }
+    }
+
+    private var gantt: some View {
+        let minD = sod(allWins.map(\.start).min()!.addingTimeInterval(-2 * Self.DAY))
+        let maxD = sod(allWins.map(\.end).max()!.addingTimeInterval(3 * Self.DAY))
+        let dayCount = days(minD, maxD) + 1
+        let timelineW = CGFloat(dayCount) * dayW
+        let dayList = (0..<dayCount).map { minD.addingTimeInterval(Double($0) * Self.DAY) }
+        let today = sod(Date())
+        let todayX: CGFloat? = (today >= minD && today <= maxD) ? CGFloat(days(minD, today)) * dayW + dayW / 2 : nil
+
+        var months: [(label: String, span: Int)] = []
+        for d in dayList {
+            let label = ProjDate.fmt("MMMM yyyy").string(from: d).capitalized
+            if months.last?.label == label { months[months.count - 1].span += 1 } else { months.append((label, 1)) }
+        }
+        func xOf(_ d: Date) -> CGFloat { CGFloat(days(minD, d)) * dayW }
+        func barW(_ w: Win) -> CGFloat { CGFloat(days(w.start, w.end) + 1) * dayW }
+
+        return ScrollView {
+            HStack(alignment: .top, spacing: 0) {
+                // LEFT — fixed title column
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("TITLE").font(NXFont.text(10, .bold)).foregroundStyle(NX.mutedFg)
+                        .padding(.leading, 12).padding(.bottom, 8)
+                        .frame(width: leftW, height: headerH, alignment: .bottomLeading)
+                    ForEach(groups) { g in
+                        Text(g.name).font(NXFont.text(12, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                            .padding(.leading, 12).frame(width: leftW, height: groupH, alignment: .leading)
+                            .background(NX.muted.opacity(0.4))
+                        ForEach(g.rows) { r in
+                            Text(r.task.title).font(NXFont.text(12)).foregroundStyle(r.task.isDone ? NX.mutedFg : NX.foreground)
+                                .strikethrough(r.task.isDone).lineLimit(1)
+                                .padding(.leading, 12).frame(width: leftW, height: rowH, alignment: .leading)
+                        }
+                    }
+                }
+                .background(NX.card)
+                .overlay(alignment: .trailing) { Rectangle().fill(NX.border).frame(width: 1) }
+
+                // RIGHT — horizontally-scrollable timeline
+                ScrollView(.horizontal, showsIndicators: true) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        // axis header (months + days)
+                        VStack(spacing: 0) {
+                            HStack(spacing: 0) {
+                                ForEach(Array(months.enumerated()), id: \.offset) { _, m in
+                                    Text(m.label).font(NXFont.text(11, .bold)).foregroundStyle(NX.foreground.opacity(0.7))
+                                        .padding(.leading, 6).frame(width: CGFloat(m.span) * dayW, height: 22, alignment: .leading)
+                                        .overlay(alignment: .leading) { Rectangle().fill(NX.border.opacity(0.5)).frame(width: 1) }
+                                }
                             }
-                            .frame(width: 44)
-                            VStack(spacing: 8) { ForEach(day.items) { ProjectTaskRow(task: $0, onOpen: onOpen) } }
+                            HStack(spacing: 0) {
+                                ForEach(Array(dayList.enumerated()), id: \.offset) { _, d in
+                                    let wd = cal.component(.weekday, from: d)
+                                    let isToday = d == today
+                                    Text("\(cal.component(.day, from: d))").font(NXFont.text(10, isToday ? .bold : .regular))
+                                        .foregroundStyle(isToday ? .white : NX.mutedFg)
+                                        .frame(width: dayW, height: 28)
+                                        .background(isToday ? NX.violet : ((wd == 1 || wd == 7) ? NX.muted.opacity(0.4) : Color.clear))
+                                        .overlay(alignment: .leading) { Rectangle().fill(NX.border.opacity(0.4)).frame(width: 1) }
+                                }
+                            }
+                        }
+                        // body rows
+                        ForEach(groups) { g in
+                            let gStart = g.rows.map(\.win.start).min()!
+                            let gEnd = g.rows.map(\.win.end).max()!
+                            ZStack(alignment: .leading) {
+                                Rectangle().fill(NX.muted.opacity(0.4))
+                                Capsule().fill(NX.mutedFg.opacity(0.3))
+                                    .frame(width: max(barW(Win(start: gStart, end: gEnd)) - 6, 4), height: 6)
+                                    .offset(x: xOf(gStart) + 3)
+                            }
+                            .frame(width: timelineW, height: groupH)
+                            ForEach(g.rows) { r in
+                                ZStack(alignment: .leading) {
+                                    Color.clear
+                                    Button { onOpen(r.task.id) } label: {
+                                        ganttBar(r).frame(width: max(barW(r.win) - 6, 16), height: 22).offset(x: xOf(r.win.start) + 3)
+                                    }.buttonStyle(.plain)
+                                }
+                                .frame(width: timelineW, height: rowH)
+                            }
                         }
                     }
-                    if !unscheduled.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("UNSCHEDULED").font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg).padding(.leading, 4)
-                            ForEach(unscheduled) { ProjectTaskRow(task: $0, onOpen: onOpen) }
+                    .frame(width: timelineW, alignment: .leading)
+                    .overlay(alignment: .topLeading) {
+                        if let tx = todayX {
+                            Rectangle().fill(NX.violet.opacity(0.55)).frame(width: 1).padding(.top, headerH).offset(x: tx)
                         }
                     }
-                }.padding(16)
+                }
             }
+        }
+    }
+
+    private func ganttBar(_ r: Row) -> some View {
+        RoundedRectangle(cornerRadius: 6, style: .continuous).fill(ganttColor(r.task.priority).gradient)
+            .overlay(alignment: .leading) {
+                if r.task.isDone {
+                    Image(systemName: "checkmark").font(.system(size: 9, weight: .black)).foregroundStyle(.white).padding(.leading, 5)
+                }
+            }
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.25)))
+    }
+    private func ganttColor(_ p: String?) -> Color {
+        switch (p ?? "NONE").uppercased() {
+        case "URGENT": return Color(hex: "#fb7185")
+        case "HIGH":   return Color(hex: "#f59e0b")
+        case "MEDIUM": return Color(hex: "#38bdf8")
+        case "LOW":    return Color(hex: "#a78bfa")
+        default:       return Color(hex: "#2dd4bf")
         }
     }
 }

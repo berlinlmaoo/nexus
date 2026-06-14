@@ -31,6 +31,7 @@ struct BoardTask: Decodable, Identifiable, Sendable {
     let title: String
     let status: String?
     let priority: String?
+    let startDate: String?
     let dueDate: String?
     let assignees: [Assignee]?
     let subtasks: [Sub]?
@@ -44,7 +45,7 @@ struct BoardTask: Decodable, Identifiable, Sendable {
     struct CountRef: Decodable, Sendable { let comments: Int? }
 
     enum CodingKeys: String, CodingKey {
-        case id, title, status, priority, dueDate, assignees, subtasks
+        case id, title, status, priority, startDate, dueDate, assignees, subtasks
         case count = "_count"
     }
 
