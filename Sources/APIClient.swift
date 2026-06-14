@@ -327,6 +327,59 @@ struct APIClient {
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }
+
+    // MARK: - Admin (Control Room) editing
+
+    func auditLogs() async throws -> [AuditLog] {
+        (try await run(makeRequest("/api/audit"), decode: AuditLogsResponse.self)).logs ?? []
+    }
+    func adminQuests(workspaceId: String) async throws -> [AdminQuest] {
+        (try await run(makeRequest("/api/gamification/quests/admin?workspaceId=\(enc(workspaceId))"), decode: AdminQuestsResponse.self)).quests ?? []
+    }
+    @discardableResult
+    func createAdminQuest(workspaceId: String, title: String, requirementType: String, requiredCount: Int, xpReward: Int, deadline: String?) async throws -> Bool {
+        var req = makeRequest("/api/gamification/quests/admin", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body: [String: Any] = ["workspaceId": workspaceId, "title": title, "requirementType": requirementType, "requiredCount": requiredCount, "xpReward": xpReward]
+        if let deadline { body["deadline"] = deadline }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func deleteAdminQuest(_ id: String) async throws -> Bool {
+        _ = try await run(makeRequest("/api/gamification/quests/admin?id=\(enc(id))", method: "DELETE"), decode: SuccessResponse.self)
+        return true
+    }
+    func announcements() async throws -> [AdminAnnouncement] {
+        (try await run(makeRequest("/api/announcements"), decode: AnnouncementsResponse.self)).announcements ?? []
+    }
+    @discardableResult
+    func createAnnouncement(title: String, body: String, tone: String) async throws -> Bool {
+        var req = makeRequest("/api/announcements", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["title": title, "body": body, "tone": tone])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func updateAnnouncementActive(id: String, active: Bool) async throws -> Bool {
+        var req = makeRequest("/api/announcements/\(id)", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["active": active])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func deleteAnnouncement(_ id: String) async throws -> Bool {
+        _ = try await run(makeRequest("/api/announcements/\(id)", method: "DELETE"), decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func deleteUser(_ userId: String) async throws -> Bool {
+        _ = try await run(makeRequest("/api/admin/users/\(userId)", method: "DELETE"), decode: SuccessResponse.self)
+        return true
+    }
     private func enc(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? s }
     @discardableResult
     func updateProfile(name: String) async throws -> Bool {
