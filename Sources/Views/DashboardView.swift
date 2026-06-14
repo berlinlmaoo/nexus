@@ -38,14 +38,14 @@ struct DashboardView: View {
     // Slower, low-bounce spring — the old 0.42/0.82 read as too fast & snappy. `revealBody` then
     // fades the modal's heavy detail in just as the card finishes growing, so the morph animates only
     // the gradient card + header (detail is laid out but invisible → stable size, no mid-flight squish).
-    private var statSpring: Animation { reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.62, bounce: 0.08) }
+    private var statSpring: Animation { reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.7, bounce: 0.06) }
     private func toggleStat(_ i: Int?) { withAnimation(statSpring) { activeStat = i }; revealBody(i != nil) }
     private func toggleLevel(_ on: Bool) { withAnimation(statSpring) { activeLevel = on }; revealBody(on) }
     private func toggleBell(_ on: Bool) { withAnimation(statSpring) { activeBell = on }; revealBody(on) }
     private func revealBody(_ open: Bool) {
         if open {
             morphReady = false
-            withAnimation(.easeOut(duration: 0.3).delay(0.26)) { morphReady = true }   // detail fades in as the card settles
+            withAnimation(.easeOut(duration: 0.32).delay(0.32)) { morphReady = true }   // content fades in as the card settles
         } else {
             withAnimation(.easeIn(duration: 0.14)) { morphReady = false }               // and fades out as it collapses (symmetric)
         }
