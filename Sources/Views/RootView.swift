@@ -23,7 +23,8 @@ struct RootView: View {
                 }
             }
             .environment(\.tabBarShrink, shrink)
-            .safeAreaInset(edge: .bottom, spacing: 0) { AppTabBar(selection: $tab, shrink: shrink) }
+            .contentMargins(.bottom, 88, for: .scrollContent)   // content scrolls UNDER the glass bar
+            .overlay(alignment: .bottom) { AppTabBar(selection: $tab, shrink: shrink) }
             .onChange(of: tab) { _, new in visited.insert(new) }
         } else {
             LoginView()

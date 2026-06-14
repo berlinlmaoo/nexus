@@ -49,6 +49,7 @@ extension View {
 struct AppTabBar: View {
     @Binding var selection: Int
     var shrink: TabBarShrink
+    @Namespace private var ns
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let items: [(icon: String, label: String)] = [
@@ -61,13 +62,13 @@ struct AppTabBar: View {
     private var compact: Bool { shrink.compact && !reduceMotion }
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 4) {
             ForEach(items.indices, id: \.self) { i in
                 let active = selection == i
                 Button {
                     Haptics.tap()
                     if reduceMotion { selection = i }
-                    else { withAnimation(.spring(response: 0.34, dampingFraction: 0.8)) { selection = i } }
+                    else { withAnimation(.spring(response: 0.42, dampingFraction: 0.72)) { selection = i } }
                 } label: {
                     VStack(spacing: 3) {
                         Image(systemName: items[i].icon).font(.system(size: 21, weight: active ? .semibold : .regular))
@@ -75,18 +76,32 @@ struct AppTabBar: View {
                     }
                     .foregroundStyle(active ? NX.violet : NX.mutedFg)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 9)
+                    .padding(.vertical, 8)
+                    .background { if active { slidingHighlight } }   // glass pill that slides between tabs
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(items[i].label)
             }
         }
-        .padding(.horizontal, 6)
-        .liquidGlassBar(RoundedRectangle(cornerRadius: 26, style: .continuous))   // iOS 26 Liquid Glass
+        .padding(5)
+        .liquidGlassBar(RoundedRectangle(cornerRadius: 28, style: .continuous))   // iOS 26 Liquid Glass
         .scaleEffect(compact ? 0.86 : 1, anchor: .bottom)   // mengecil on scroll-down (render-only → no reflow)
         .animation(.spring(response: 0.36, dampingFraction: 0.82), value: compact)
-        .padding(.horizontal, 22)
+        .padding(.horizontal, 20)
         .padding(.top, 6)
+    }
+
+    /// The active-tab indicator: a tinted Liquid-Glass capsule that slides (matchedGeometry) to the
+    /// selected tab. Tinted-fill fallback below iOS 26.
+    private var slidingHighlight: some View {
+        Group {
+            if #available(iOS 26.0, *) {
+                Color.clear.glassEffect(.regular.tint(NX.violet.opacity(0.55)), in: Capsule())
+            } else {
+                Capsule(style: .continuous).fill(NX.violet.opacity(0.16))
+            }
+        }
+        .matchedGeometryEffect(id: "tab-indicator", in: ns)
     }
 }
