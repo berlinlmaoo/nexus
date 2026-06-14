@@ -5,6 +5,7 @@ struct AttendanceToday: Decodable, Sendable {
     let attendanceDateKey: String?
     let activeOfficeCount: Int?
     let canManageAttendance: Bool?
+    let canReviewAttendanceRequests: Bool?
     let dayOffUsedThisMonth: Int?
     let dayOffQuota: Int?
     let redDateUsedThisMonth: Int?
@@ -52,6 +53,28 @@ struct AttendanceRow: Decodable, Identifiable, Sendable {
     let user: UserRef?
     struct UserRef: Decodable, Sendable { let id: String?; let name: String?; let avatar: String? }
     var idv: String { id ?? ((user?.id ?? "") + (attendanceDate ?? "")) }
+}
+
+/// GET /api/attendance/requests?scope= — leave/sick/permit/day-off/red-date requests.
+/// Response is either `{requests:[…]}` or a bare array.
+struct AttendanceRequestsResponse: Decodable, Sendable {
+    let requests: [AttendanceRequest]
+    init(from decoder: Decoder) throws {
+        if let arr = try? decoder.singleValueContainer().decode([AttendanceRequest].self) { requests = arr }
+        else if let c = try? decoder.container(keyedBy: K.self), let r = try? c.decode([AttendanceRequest].self, forKey: .requests) { requests = r }
+        else { requests = [] }
+    }
+    enum K: String, CodingKey { case requests }
+}
+struct AttendanceRequest: Decodable, Identifiable, Sendable {
+    let id: String
+    let type: String?
+    let status: String?
+    let reason: String?
+    let startDate: String?
+    let endDate: String?
+    let user: UserRef?
+    struct UserRef: Decodable, Sendable { let name: String? }
 }
 
 /// Outcome of a check-in/out attempt.

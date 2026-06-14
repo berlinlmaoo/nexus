@@ -392,6 +392,37 @@ struct APIClient {
         let path = "/api/attendance/history?scope=\(enc(scope))&month=\(enc(month))"
         return (try await run(makeRequest(path), decode: AttendanceHistoryResponse.self)).all
     }
+    func attendanceRequests(scope: String) async throws -> [AttendanceRequest] {
+        (try await run(makeRequest("/api/attendance/requests?scope=\(enc(scope))"), decode: AttendanceRequestsResponse.self)).requests
+    }
+    @discardableResult
+    func createAttendanceRequest(type: String, startDate: String, endDate: String, reason: String, attachment: (name: String, data: Data)? = nil) async throws -> Bool {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var req = makeRequest("/api/attendance/requests", method: "POST")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        var body = Data()
+        func field(_ name: String, _ value: String) {
+            body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".data(using: .utf8)!)
+        }
+        field("type", type); field("startDate", startDate); field("endDate", endDate); field("reason", reason)
+        if let a = attachment {
+            body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"supportingDocument\"; filename=\"\(a.name)\"\r\nContent-Type: application/octet-stream\r\n\r\n".data(using: .utf8)!)
+            body.append(a.data)
+            body.append("\r\n".data(using: .utf8)!)
+        }
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        req.httpBody = body
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func reviewAttendanceRequest(id: String, action: String) async throws -> Bool {
+        var req = makeRequest("/api/attendance/requests/\(id)", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["action": action])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
 
     func checkIn(lat: Double, lng: Double, selfie: Data, notes: String? = nil) async throws -> AttendanceOutcome {
         var fields = ["lat": String(lat), "lng": String(lng)]

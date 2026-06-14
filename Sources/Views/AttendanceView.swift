@@ -41,6 +41,7 @@ struct AttendanceView: View {
                     if rec?.checkOutApproval == "REJECTED" { infoBanner("Checkout di luar area kamu ditolak BoD.", tone: .danger) }
                     if let banner { infoBanner(banner.text, tone: banner.good ? .success : .danger) }
                     metricsGrid
+                    AttendanceRequestsCard(canReview: today?.canReviewAttendanceRequests ?? today?.canManageAttendance ?? false)
                     StreakBoardCard(canManage: today?.canManageAttendance ?? false)
                 }
                 .padding(16)
