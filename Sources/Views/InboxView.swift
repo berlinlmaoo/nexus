@@ -125,10 +125,7 @@ struct NotificationRow: View {
     }
 
     private var dateText: String {
-        guard let iso = notification.createdAt else { return "" }
-        let p = ISO8601DateFormatter(); p.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let d = p.date(from: iso) ?? { let q = ISO8601DateFormatter(); q.formatOptions = [.withInternetDateTime]; return q.date(from: iso) }()
-        guard let d else { return "" }
-        let f = DateFormatter(); f.dateFormat = "d MMM, HH:mm"; f.locale = Locale(identifier: "id_ID"); return f.string(from: d)
+        guard let d = ProjDate.parse(notification.createdAt) else { return "" }
+        return ProjDate.fmt("d MMM, HH:mm").string(from: d)   // cached parser + formatter
     }
 }

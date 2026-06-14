@@ -338,11 +338,8 @@ struct BoardCard: View {
     }
 
     private var dueText: String {
-        guard let iso = task.dueDate else { return "No due" }
-        let p = ISO8601DateFormatter(); p.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let d = p.date(from: iso) ?? { let q = ISO8601DateFormatter(); q.formatOptions = [.withInternetDateTime]; return q.date(from: iso) }()
-        guard let d else { return "No due" }
-        let f = DateFormatter(); f.dateFormat = "d MMM"; f.locale = Locale(identifier: "id_ID"); return f.string(from: d)
+        guard let d = ProjDate.parse(task.dueDate) else { return "No due" }
+        return ProjDate.fmt("d MMM").string(from: d)   // cached parser + formatter
     }
     private func prioTone(_ p: String) -> ChipTone {
         switch p.uppercased() { case "URGENT": return .danger; case "HIGH": return .warning; case "MEDIUM": return .info; default: return .neutral }

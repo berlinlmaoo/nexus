@@ -92,10 +92,7 @@ struct TasksView: View {
     }
 
     private func isDueSoon(_ iso: String?) -> Bool {
-        guard let iso else { return false }
-        let p = ISO8601DateFormatter(); p.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let d = p.date(from: iso) ?? { let q = ISO8601DateFormatter(); q.formatOptions = [.withInternetDateTime]; return q.date(from: iso) }()
-        guard let d else { return false }
+        guard let d = ProjDate.parse(iso) else { return false }
         return d.timeIntervalSinceNow < 2 * 24 * 60 * 60   // within ~2 days
     }
 }

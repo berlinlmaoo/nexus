@@ -7,10 +7,23 @@ struct CFChip: Identifiable, Equatable {
     let tone: ChipTone
 }
 
+// Formatters are expensive to construct — build once and reuse. `customFieldChip` runs per card
+// per render while scrolling, so a fresh NumberFormatter/DateFormatter each call was real jank.
+private let cfCurrencyIDR: NumberFormatter = {
+    let f = NumberFormatter(); f.numberStyle = .currency; f.currencyCode = "IDR"
+    f.maximumFractionDigits = 0; f.locale = Locale(identifier: "id_ID")
+    return f
+}()
+private let cfYMD: DateFormatter = {
+    let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = ProjDate.cal.timeZone
+    return f
+}()
+
 /// Port of the web `cfStatusTone` — colors a STATUS value.
 func cfStatusTone(_ v: String) -> ChipTone {
-    let s = v.lowercased().replacingOccurrences(of: "[_-]+", with: " ", options: .regularExpression)
-        .trimmingCharacters(in: .whitespaces)
+    // Normalize "_"/"-" to spaces and collapse runs (was a per-call regex) — split/join is cheaper.
+    let spaced = String(v.lowercased().map { ($0 == "_" || $0 == "-") ? " " : $0 })
+    let s = spaced.split(separator: " ", omittingEmptySubsequences: true).joined(separator: " ")
     if ["done", "complete", "completed", "selesai"].contains(s) { return .success }
     if ["on progress", "in progress", "progress", "ongoing", "sedang berjalan"].contains(s) { return .warning }
     if ["blocked", "stuck", "terhambat"].contains(s) { return .danger }
@@ -26,8 +39,7 @@ func customFieldChip(_ cfv: BoardTask.CFValue) -> CFChip? {
 
     func parseDay(_ s: String) -> Date? {
         if let d = ProjDate.parse(s) { return d }
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = ProjDate.cal.timeZone
-        return f.date(from: String(s.prefix(10)))
+        return cfYMD.date(from: String(s.prefix(10)))
     }
 
     switch type {
@@ -35,9 +47,7 @@ func customFieldChip(_ cfv: BoardTask.CFValue) -> CFChip? {
         let digits = raw.filter(\.isNumber)
         guard !digits.isEmpty else { return nil }
         if cfv.customField?.options?.format == "currency-idr", let n = Int(digits) {
-            let f = NumberFormatter(); f.numberStyle = .currency; f.currencyCode = "IDR"
-            f.maximumFractionDigits = 0; f.locale = Locale(identifier: "id_ID")
-            return CFChip(id: cfv.customFieldId, label: f.string(from: NSNumber(value: n)) ?? raw, tone: .neutral)
+            return CFChip(id: cfv.customFieldId, label: cfCurrencyIDR.string(from: NSNumber(value: n)) ?? raw, tone: .neutral)
         }
         return CFChip(id: cfv.customFieldId, label: raw, tone: .neutral)
     case "STATUS":

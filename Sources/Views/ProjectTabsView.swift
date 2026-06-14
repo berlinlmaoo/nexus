@@ -34,15 +34,34 @@ extension ProjectDetail {
 // MARK: - shared helpers
 
 enum ProjDate {
+    // All cached: building a DateFormatter/Calendar is expensive and these run per card per scroll
+    // frame (due labels, day chips). ISO8601DateFormatter + DateFormatter are thread-safe to read.
+    static let cal: Calendar = {
+        var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "Asia/Jakarta")!; return c
+    }()
+    private static let isoFractional: ISO8601DateFormatter = {
+        let p = ISO8601DateFormatter(); p.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return p
+    }()
+    private static let isoPlain: ISO8601DateFormatter = {
+        let q = ISO8601DateFormatter(); q.formatOptions = [.withInternetDateTime]; return q
+    }()
+
     static func parse(_ iso: String?) -> Date? {
         guard let iso else { return nil }
-        let p = ISO8601DateFormatter(); p.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return p.date(from: iso) ?? { let q = ISO8601DateFormatter(); q.formatOptions = [.withInternetDateTime]; return q.date(from: iso) }()
+        return isoFractional.date(from: iso) ?? isoPlain.date(from: iso)
     }
-    static var cal: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "Asia/Jakarta")!; return c }
     static func dayLabel(_ d: Date) -> String { fmt("d MMM").string(from: d) }
     static func longLabel(_ d: Date) -> String { fmt("EEEE, d MMM yyyy").string(from: d) }
-    static func fmt(_ p: String) -> DateFormatter { let f = DateFormatter(); f.dateFormat = p; f.locale = Locale(identifier: "id_ID"); f.timeZone = cal.timeZone; return f }
+
+    private static let fmtLock = NSLock()
+    private static var fmtCache: [String: DateFormatter] = [:]
+    static func fmt(_ p: String) -> DateFormatter {
+        fmtLock.lock(); defer { fmtLock.unlock() }
+        if let f = fmtCache[p] { return f }
+        let f = DateFormatter(); f.dateFormat = p; f.locale = Locale(identifier: "id_ID"); f.timeZone = cal.timeZone
+        fmtCache[p] = f
+        return f
+    }
 }
 
 func humanizeEnum(_ raw: String) -> String {
