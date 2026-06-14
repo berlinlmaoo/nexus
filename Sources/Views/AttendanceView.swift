@@ -243,13 +243,15 @@ struct AttendanceView: View {
             }()
             switch outcome {
             case .success:
+                Haptics.success()
                 banner = Banner(text: action == .checkIn ? "Check-in berhasil ✓" : "Check-out berhasil ✓", good: true)
                 await load()
             case .outsideRadius:
+                Haptics.warning()
                 offsiteReason = ""; showOffsite = true
             }
         } catch APIError.unauthorized { auth.logout() }
-        catch { banner = Banner(text: (error as? LocalizedError)?.errorDescription ?? "Gagal.", good: false) }
+        catch { Haptics.warning(); banner = Banner(text: (error as? LocalizedError)?.errorDescription ?? "Gagal.", good: false) }
     }
 
     private func submitOffsite() async {

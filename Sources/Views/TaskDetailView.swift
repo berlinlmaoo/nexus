@@ -291,6 +291,7 @@ struct TaskDetailView: View {
         Task { await update(t, ["title": v]) }
     }
     private func toggleSub(_ st: TaskDetail.SubDetail) async {
+        if st.isDone { Haptics.tap() } else { Haptics.success() }
         try? await APIClient.shared.setTaskStatus(taskId: st.id, status: st.isDone ? "TODO" : "DONE"); await load()
     }
     private func deleteTask() async {

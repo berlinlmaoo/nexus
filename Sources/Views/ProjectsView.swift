@@ -56,7 +56,7 @@ struct ProjectsView: View {
 
     @ViewBuilder private var content: some View {
         if loading {
-            ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity)
+            SkeletonList()
         } else if let error {
             errorState(error)
         } else if projects.isEmpty {
@@ -78,13 +78,15 @@ struct ProjectsView: View {
                     .background(NX.violet.opacity(0.1), in: Capsule())
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    ForEach(rootFolders) { f in
+                    ForEach(Array(rootFolders.enumerated()), id: \.element.id) { idx, f in
                         FolderNode(folder: f, depth: 0, allFolders: folders, projectsByFolder: byFolder,
                                    collapsed: $collapsed, onMove: move, onDeleteFolder: deleteFolder,
                                    onEditFolder: { editFolder = $0 })
+                            .revealOnAppear(idx)
                     }
-                    ForEach(ungrouped) { p in
+                    ForEach(Array(ungrouped.enumerated()), id: \.element.id) { idx, p in
                         ProjectFolderLink(project: p, folders: folders, onMove: move)
+                            .revealOnAppear(rootFolders.count + idx)
                     }
                 }
                 .padding(16)

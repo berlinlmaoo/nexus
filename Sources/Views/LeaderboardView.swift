@@ -28,7 +28,7 @@ struct LeaderboardView: View {
 
     @ViewBuilder private var content: some View {
         if loading {
-            ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity)
+            SkeletonList()
         } else if let error {
             VStack(spacing: 12) {
                 Image(systemName: "trophy").font(.system(size: 40)).foregroundStyle(NX.mutedFg)

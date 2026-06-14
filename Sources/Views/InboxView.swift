@@ -28,7 +28,7 @@ struct InboxView: View {
 
     @ViewBuilder private var content: some View {
         if loading {
-            ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity)
+            SkeletonList()
         } else if let error {
             errorState(error)
         } else {

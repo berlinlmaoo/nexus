@@ -30,7 +30,7 @@ struct TasksView: View {
 
     @ViewBuilder private var content: some View {
         if loading {
-            ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity)
+            SkeletonList()
         } else if let error {
             errorState(error)
         } else if tasks.isEmpty {
@@ -84,6 +84,7 @@ struct TasksView: View {
     }
 
     private func toggle(_ t: MyTask) async {
+        if t.isDone { Haptics.tap() } else { Haptics.success() }
         try? await APIClient.shared.setTaskStatus(taskId: t.id, status: t.isDone ? "TODO" : "DONE")
         await load()
     }
