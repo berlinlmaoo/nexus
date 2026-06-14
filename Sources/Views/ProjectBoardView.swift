@@ -76,7 +76,7 @@ struct ProjectDetailView: View {
                     if let ic = d.icon, ic.hasPrefix("/") || ic.hasPrefix("http") {
                         AsyncImage(url: URL(string: ic.hasPrefix("http") ? ic : Config.baseURL.absoluteString + ic)) { $0.resizable().scaledToFill() } placeholder: { tint.opacity(0.2) }
                     } else {
-                        Text(d.icon ?? "📁").font(.system(size: 17))
+                        Text(isEmojiIcon(d.icon ?? "") ? (d.icon ?? "📁") : "📁").font(.system(size: 17))
                     }
                 }
                 .frame(width: 30, height: 30)
@@ -159,7 +159,9 @@ struct ProjectDetailView: View {
 
     @ViewBuilder private func boardTab(_ detail: ProjectDetail) -> some View {
         if let lanes = detail.taskLists, !lanes.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
+            // BOTH axes + maxHeight: a horizontal-only ScrollView grows to its tallest lane's height,
+            // overflowing the VStack and pushing the header/tab-bar off-screen for task-heavy projects.
+            ScrollView([.horizontal, .vertical], showsIndicators: false) {
                 HStack(alignment: .top, spacing: 14) {
                     ForEach(lanes) { lane in
                         LaneColumn(lane: lane, allLanes: lanes, onOpen: { openTaskId = $0 },
@@ -169,6 +171,7 @@ struct ProjectDetailView: View {
                 }
                 .padding(16)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             VStack(spacing: 8) {
                 Image(systemName: "square.stack.3d.up.slash").font(.system(size: 40)).foregroundStyle(NX.mutedFg)

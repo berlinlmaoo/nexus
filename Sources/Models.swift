@@ -68,7 +68,7 @@ struct Project: Decodable, Identifiable, Sendable {
 
     var isUploadedIcon: Bool { (icon ?? "").hasPrefix("/") }
     var emoji: String {
-        guard let icon, !icon.isEmpty, !isUploadedIcon else { return "📁" }
+        guard let icon, !icon.isEmpty, !isUploadedIcon, isEmojiIcon(icon) else { return "📁" }
         return icon
     }
     /// Status chip label + tone (mirrors web statusBadge).
@@ -95,7 +95,16 @@ struct ProjectFolder: Decodable, Identifiable, Sendable {
 
     var isUploadedIcon: Bool { (icon ?? "").hasPrefix("/") }
     var emoji: String {
-        guard let icon, !icon.isEmpty, !isUploadedIcon else { return "📁" }
+        guard let icon, !icon.isEmpty, !isUploadedIcon, isEmojiIcon(icon) else { return "📁" }
         return icon
     }
+}
+
+/// True when the string actually starts with an emoji (rejects stray text / numbers stored as an
+/// icon — those were rendering as raw "fol…" / "3" text in the icon tile).
+func isEmojiIcon(_ s: String) -> Bool {
+    guard let first = s.unicodeScalars.first else { return false }
+    if first.properties.isEmojiPresentation { return true }
+    // text-default emoji (❤️ ⚙️ …) carry a VS16 selector
+    return first.properties.isEmoji && s.unicodeScalars.contains("\u{FE0F}")
 }
