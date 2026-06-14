@@ -99,6 +99,33 @@ struct TaskDetail: Decodable, Sendable {
     var isDone: Bool { (status ?? "").uppercased() == "DONE" }
 }
 
+/// POST /api/tasks returns the created task (top-level id).
+struct CreatedTaskRef: Decodable, Sendable { let id: String }
+
+/// GET /api/custom-fields?projectId= — project custom fields for the task composer.
+struct CustomFieldsResponse: Decodable, Sendable { let fields: [CustomField]? }
+struct CustomField: Decodable, Identifiable, Sendable {
+    let id: String
+    let name: String
+    let type: String          // SELECT | MULTI_SELECT | STATUS | NUMBER | DATE | PLACE | CREATED
+    let options: CFOptions?
+    var choices: [String] { options?.list ?? [] }
+}
+/// options is polymorphic: ["a","b"] | {options:[…]} | {choices:[…]} | null.
+struct CFOptions: Decodable, Sendable {
+    let list: [String]
+    init(from decoder: Decoder) throws {
+        if let arr = try? decoder.singleValueContainer().decode([String].self) {
+            list = arr
+        } else if let c = try? decoder.container(keyedBy: CodingKeys.self) {
+            if let o = try c.decodeIfPresent([String].self, forKey: .options) { list = o }
+            else if let ch = try c.decodeIfPresent([String].self, forKey: .choices) { list = ch }
+            else { list = [] }
+        } else { list = [] }
+    }
+    enum CodingKeys: String, CodingKey { case options, choices }
+}
+
 /// GET /api/projects/{id}/files?path= — folder listing for the project Files tab.
 struct ProjectFilesResponse: Decodable, Sendable {
     let path: String?

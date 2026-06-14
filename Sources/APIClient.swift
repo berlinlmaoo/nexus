@@ -266,7 +266,7 @@ struct APIClient {
 
     /// POST /api/tasks — create a task (or a subtask when parentId is set).
     @discardableResult
-    func createTask(projectId: String, taskListId: String, title: String, parentId: String? = nil, status: String = "TODO", priority: String? = nil, dueDate: String? = nil) async throws -> Bool {
+    func createTask(projectId: String, taskListId: String, title: String, parentId: String? = nil, status: String = "TODO", priority: String? = nil, dueDate: String? = nil) async throws -> String {
         var body: [String: Any] = ["projectId": projectId, "taskListId": taskListId, "title": title, "status": status]
         if let parentId { body["parentId"] = parentId }
         if let priority, priority.uppercased() != "NONE" { body["priority"] = priority }
@@ -274,6 +274,17 @@ struct APIClient {
         var req = makeRequest("/api/tasks", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return (try await run(req, decode: CreatedTaskRef.self)).id
+    }
+
+    func projectCustomFields(_ projectId: String) async throws -> [CustomField] {
+        (try await run(makeRequest("/api/custom-fields?projectId=\(enc(projectId))"), decode: CustomFieldsResponse.self)).fields ?? []
+    }
+    @discardableResult
+    func setCustomFieldValue(fieldId: String, taskId: String, value: String) async throws -> Bool {
+        var req = makeRequest("/api/custom-fields", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["id": fieldId, "taskId": taskId, "value": value])
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }

@@ -672,6 +672,9 @@ struct ActivityView: UIViewControllerRepresentable {
 
 // MARK: - Create task (shared composer, reachable from every tab)
 
+/// One custom-field value being composed: a single string, or a multi-select set.
+enum CFVal: Equatable { case text(String); case multi([String]) }
+
 struct CreateTaskSheet: View {
     let projectId: String
     let lanes: [ProjectDetail.Lane]
@@ -684,6 +687,8 @@ struct CreateTaskSheet: View {
     @State private var due: Date
     @State private var busy = false
     @State private var err: String?
+    @State private var customFields: [CustomField] = []
+    @State private var cfValues: [String: CFVal] = [:]
 
     private let priorities = ["NONE", "LOW", "MEDIUM", "HIGH", "URGENT"]
 
@@ -740,6 +745,14 @@ struct CreateTaskSheet: View {
                                 DatePicker("", selection: $due, displayedComponents: .date).datePickerStyle(.graphical).tint(NX.violet)
                             }
                         }
+                        if !customFields.isEmpty {
+                            VStack(alignment: .leading, spacing: 14) {
+                                Text("CUSTOM FIELDS").font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violet)
+                                ForEach(customFields) { f in cfField(f) }
+                            }
+                            .padding(14)
+                            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [5])))
+                        }
                         if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
                         Button { Task { await create() } } label: {
                             HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text("Buat task") }
@@ -753,6 +766,7 @@ struct CreateTaskSheet: View {
             .navigationTitle("Task baru")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Batal") { dismiss() } } }
+            .task { customFields = (try? await APIClient.shared.projectCustomFields(projectId)) ?? [] }
         }
     }
 
@@ -766,13 +780,85 @@ struct CreateTaskSheet: View {
         switch p { case "URGENT": return NX.danger; case "HIGH": return NX.warning; case "MEDIUM": return NX.blue; case "LOW": return NX.violet; default: return NX.mutedFg }
     }
 
+    // MARK: custom field rendering (port of web TaskComposer)
+
+    @ViewBuilder private func cfField(_ f: CustomField) -> some View {
+        let type = f.type.uppercased()
+        let choices = f.choices
+        VStack(alignment: .leading, spacing: 6) {
+            Text(f.name).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground)
+            if type == "NUMBER" {
+                TextField("0", text: cfText(f.id)).keyboardType(.decimalPad).font(NXFont.text(15)).padding(10)
+                    .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(NX.border))
+            } else if type == "DATE" {
+                DatePicker("", selection: cfDate(f.id), displayedComponents: .date)
+                    .datePickerStyle(.compact).labelsHidden().tint(NX.violet).frame(maxWidth: .infinity, alignment: .leading)
+            } else if (type == "SELECT" || type == "STATUS"), !choices.isEmpty {
+                Menu {
+                    Button("—") { cfValues[f.id] = .text("") }
+                    ForEach(choices, id: \.self) { c in Button(c) { cfValues[f.id] = .text(c) } }
+                } label: {
+                    let v = cfTextValue(f.id)
+                    HStack {
+                        Text(v.isEmpty ? "—" : v).font(NXFont.text(15)).foregroundStyle(v.isEmpty ? NX.mutedFg : NX.foreground)
+                        Spacer(); Image(systemName: "chevron.up.chevron.down").font(.system(size: 11)).foregroundStyle(NX.mutedFg)
+                    }
+                    .padding(10).background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(NX.border))
+                }
+            } else if type == "MULTI_SELECT", !choices.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(choices, id: \.self) { c in
+                            let on = cfMultiHas(f.id, c)
+                            Button { toggleMulti(f.id, c) } label: {
+                                Text(c).font(NXFont.text(12, .semibold)).padding(.horizontal, 12).padding(.vertical, 7)
+                                    .foregroundStyle(on ? NX.violet : NX.mutedFg)
+                                    .background(on ? NX.violet.opacity(0.12) : NX.card, in: Capsule())
+                                    .overlay(Capsule().strokeBorder(on ? NX.violet : NX.border))
+                            }.buttonStyle(.plain)
+                        }
+                    }
+                }
+            } else {
+                TextField("…", text: cfText(f.id)).font(NXFont.text(15)).padding(10)
+                    .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(NX.border))
+            }
+        }
+    }
+
+    private func cfTextValue(_ id: String) -> String { if case let .text(s) = cfValues[id] { return s }; return "" }
+    private func cfText(_ id: String) -> Binding<String> { Binding(get: { cfTextValue(id) }, set: { cfValues[id] = .text($0) }) }
+    private func cfDate(_ id: String) -> Binding<Date> {
+        Binding(get: { Self.ymdParse(cfTextValue(id)) ?? Date() }, set: { cfValues[id] = .text(Self.ymd($0)) })
+    }
+    private func cfMultiHas(_ id: String, _ c: String) -> Bool { if case let .multi(a) = cfValues[id] { return a.contains(c) }; return false }
+    private func toggleMulti(_ id: String, _ c: String) {
+        var arr: [String] = { if case let .multi(a) = cfValues[id] { return a }; return [] }()
+        if let i = arr.firstIndex(of: c) { arr.remove(at: i) } else { arr.append(c) }
+        cfValues[id] = .multi(arr)
+    }
+    private static func ymd(_ d: Date) -> String { let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = ProjDate.cal.timeZone; return f.string(from: d) }
+    private static func ymdParse(_ s: String) -> Date? { let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = ProjDate.cal.timeZone; return f.date(from: s) }
+
     private func create() async {
         busy = true; err = nil; defer { busy = false }
         let iso = ISO8601DateFormatter().string(from: ProjDate.cal.startOfDay(for: due))
         do {
-            try await APIClient.shared.createTask(projectId: projectId, taskListId: laneId,
-                                                   title: title.trimmingCharacters(in: .whitespaces),
-                                                   priority: priority, dueDate: hasDue ? iso : nil)
+            let taskId = try await APIClient.shared.createTask(projectId: projectId, taskListId: laneId,
+                                                               title: title.trimmingCharacters(in: .whitespaces),
+                                                               priority: priority, dueDate: hasDue ? iso : nil)
+            // Set custom-field values after the task exists (mirrors the web composer).
+            for f in customFields {
+                guard let v = cfValues[f.id] else { continue }
+                switch v {
+                case .text(let s):
+                    if !s.isEmpty { try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: s) }
+                case .multi(let a):
+                    if !a.isEmpty, let data = try? JSONSerialization.data(withJSONObject: a), let s = String(data: data, encoding: .utf8) {
+                        try? await APIClient.shared.setCustomFieldValue(fieldId: f.id, taskId: taskId, value: s)
+                    }
+                }
+            }
             await onCreated()
             dismiss()
         } catch {
