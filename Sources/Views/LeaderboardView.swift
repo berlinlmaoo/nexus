@@ -94,9 +94,8 @@ struct Podium: View {
         return VStack(spacing: 6) {
             if let row {
                 ZStack {
-                    Circle().fill(NX.accentBg).frame(width: avatar, height: avatar)
+                    AvatarView(url: row.avatar, initial: row.initial, size: avatar)
                         .overlay(Circle().strokeBorder(ring, lineWidth: 3))
-                    Text(row.initial).font(NXFont.display(avatar * 0.34, .black)).foregroundStyle(NX.violet)
                     if rank == 1 { Image(systemName: "crown.fill").font(.system(size: 18)).foregroundStyle(crown).offset(y: -avatar/2 - 6) }
                 }
                 Text(row.name ?? "—").font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
@@ -119,8 +118,7 @@ struct RankRow: View {
         HStack(spacing: 12) {
             Text("\(rank)").font(NXFont.display(15, .black)).foregroundStyle(rank <= 3 ? NX.violet : NX.mutedFg)
                 .frame(width: 28)
-            Text(row.initial).font(NXFont.text(13, .black)).foregroundStyle(NX.violet)
-                .frame(width: 36, height: 36).background(NX.accentBg, in: Circle())
+            AvatarView(url: row.avatar, initial: row.initial, size: 36)
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.name ?? "—").font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                 Text("Level \(row.level)\(row.levelName.map { " – \($0)" } ?? "")").font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)

@@ -241,7 +241,8 @@ struct TaskDetailView: View {
             } else {
                 ForEach(comments) { c in
                     VStack(alignment: .leading, spacing: 3) {
-                        HStack {
+                        HStack(spacing: 6) {
+                            AvatarView(url: c.user?.avatar, initial: String((c.user?.name ?? "?").first ?? "?").uppercased(), size: 20)
                             Text(c.user?.name ?? "Someone").font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground)
                             Spacer()
                             Text(dateText(c.createdAt)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)

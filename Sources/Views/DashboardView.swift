@@ -269,9 +269,7 @@ struct DashboardView: View {
     private var profileCard: some View {
         VStack(spacing: 14) {
             HStack(spacing: 14) {
-                RoundedRectangle(cornerRadius: 16, style: .continuous).fill(NX.muted)
-                    .frame(width: 64, height: 64)
-                    .overlay(Image(systemName: "person.fill").font(.system(size: 24)).foregroundStyle(NX.mutedFg))
+                AvatarView(url: profile?.avatar, initial: String(name.first ?? "?").uppercased(), size: 64)
                 VStack(alignment: .leading, spacing: 8) {
                     row("LEVEL", "\(game?.xp.level ?? 0) · \(game?.xp.levelName ?? "—")")
                     row("POIN PERIODE", (game?.xp.totalXp ?? 0).formatted(.number.grouping(.automatic)))

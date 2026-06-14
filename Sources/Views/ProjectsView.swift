@@ -498,9 +498,8 @@ struct ProjectCard: View {
             HStack {
                 if project.memberCount > 0 {
                     HStack(spacing: -8) {
-                        ForEach(Array(project.memberInitials.enumerated()), id: \.offset) { _, ini in
-                            Text(ini).font(NXFont.text(10, .bold)).foregroundStyle(NX.violet)
-                                .frame(width: 24, height: 24).background(NX.accentBg, in: Circle())
+                        ForEach(project.memberAvatars, id: \.id) { m in
+                            AvatarView(url: m.url, initial: m.initial, size: 24)
                                 .overlay(Circle().strokeBorder(NX.card, lineWidth: 2))
                         }
                         if project.memberCount > 4 {
