@@ -11,6 +11,10 @@ struct ProjectDetailView: View {
     @State private var error: String?
     @State private var openTaskId: String?
     @State private var tab: ProjectTab = .board
+    @State private var showCreate = false
+    @State private var prefillDue: Date?
+
+    private var canCreate: Bool { !(detail?.taskLists?.isEmpty ?? true) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,6 +29,15 @@ struct ProjectDetailView: View {
         }
         .navigationTitle(projectName)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { prefillDue = nil; showCreate = true } label: { Image(systemName: "plus") }
+                    .disabled(!canCreate)
+            }
+        }
+        .sheet(isPresented: $showCreate) {
+            CreateTaskSheet(projectId: projectId, lanes: detail?.taskLists ?? [], prefillDue: prefillDue) { await load() }
+        }
         .task { await load() }
         .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }
     }
@@ -75,7 +88,7 @@ struct ProjectDetailView: View {
                 case .overview: OverviewTab(detail: detail)
                 case .board:    boardTab(detail)
                 case .list:     ListTab(detail: detail, onOpen: { openTaskId = $0 })
-                case .calendar: CalendarTab(detail: detail, onOpen: { openTaskId = $0 })
+                case .calendar: CalendarTab(detail: detail, onOpen: { openTaskId = $0 }, onCreate: { date in prefillDue = date; showCreate = true })
                 case .timeline: TimelineTab(detail: detail, onOpen: { openTaskId = $0 })
                 default:        EmptyView()
                 }

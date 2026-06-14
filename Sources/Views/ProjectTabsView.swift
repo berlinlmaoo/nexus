@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - Tab model
 
@@ -369,12 +370,14 @@ struct TimelineTab: View {
 struct CalendarTab: View {
     let detail: ProjectDetail
     let onOpen: (String) -> Void
+    var onCreate: (Date?) -> Void = { _ in }
     @State private var monthOffset = 0
     @State private var selected: Int?
 
     private var cal: Calendar { ProjDate.cal }
     private var monthDate: Date { cal.date(byAdding: .month, value: monthOffset, to: Date()) ?? Date() }
     private var comps: DateComponents { cal.dateComponents([.year, .month], from: monthDate) }
+    private func dateFor(_ day: Int) -> Date? { var c = comps; c.day = day; return cal.date(from: c) }
     private var daysInMonth: Int { cal.range(of: .day, in: .month, for: monthDate)?.count ?? 30 }
     private var leadingBlanks: Int {
         let first = cal.date(from: comps) ?? monthDate
@@ -396,14 +399,23 @@ struct CalendarTab: View {
                 header
                 weekdayRow
                 grid
-                if let sel = selected, let items = tasksByDay[sel], !items.isEmpty {
+                if let sel = selected {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Tanggal \(sel)").font(NXFont.text(12, .bold)).foregroundStyle(NX.mutedFg)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        ForEach(items) { ProjectTaskRow(task: $0, onOpen: onOpen) }
+                        HStack {
+                            Text("Tanggal \(sel)").font(NXFont.text(12, .bold)).foregroundStyle(NX.mutedFg)
+                            Spacer()
+                            Button { onCreate(dateFor(sel)) } label: {
+                                Label("Tambah task", systemImage: "plus").font(NXFont.text(12, .semibold)).foregroundStyle(NX.violet)
+                            }
+                        }
+                        if let items = tasksByDay[sel], !items.isEmpty {
+                            ForEach(items) { ProjectTaskRow(task: $0, onOpen: onOpen) }
+                        } else {
+                            Text("Gak ada task di tanggal ini.").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                        }
                     }
                 } else {
-                    Text(selected == nil ? "Pilih tanggal buat lihat task-nya." : "Gak ada task di tanggal ini.")
+                    Text("Pilih tanggal buat lihat task-nya, atau tap + buat bikin task baru.")
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).padding(.top, 4)
                 }
             }.padding(16)
@@ -502,7 +514,9 @@ struct ProjectFormsTab: View {
     }
 }
 
-// MARK: - Files (read-only browser)
+// MARK: - Files (browse · upload · download · delete · new folder)
+
+struct ShareItem: Identifiable { let id = UUID(); let url: URL }
 
 struct ProjectFilesTab: View {
     let projectId: String
@@ -510,31 +524,67 @@ struct ProjectFilesTab: View {
     @State private var stack: [String] = [""]       // path breadcrumb
     @State private var files: [ProjectFile] = []
     @State private var loading = true
+    @State private var busy = false
+    @State private var downloading: String?
+    @State private var showImporter = false
+    @State private var showNewFolder = false
+    @State private var newFolderName = ""
+    @State private var deleteTarget: ProjectFile?
+    @State private var shareItem: ShareItem?
 
     private var path: String { stack.last ?? "" }
+    private var folderName: String { path.isEmpty ? "Files" : (path.split(separator: "/").last.map(String.init) ?? "Files") }
 
     var body: some View {
         VStack(spacing: 0) {
-            if stack.count > 1 {
-                Button { stack.removeLast(); Task { await load() } } label: {
-                    Label("Kembali", systemImage: "chevron.left").font(NXFont.text(13, .semibold)).foregroundStyle(NX.violet)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.top, 10)
-            }
+            toolbar
             if loading { ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity) }
-            else if files.isEmpty { TabEmpty(icon: "folder", text: "Folder ini kosong.") }
+            else if files.isEmpty { TabEmpty(icon: "folder", text: "Folder ini kosong. Upload file atau bikin folder lewat tombol +.") }
             else {
                 ScrollView {
-                    LazyVStack(spacing: 8) {
-                        ForEach(files) { f in fileRow(f) }
-                    }.padding(16)
+                    LazyVStack(spacing: 8) { ForEach(files) { f in fileRow(f) } }.padding(16)
                 }
             }
         }
         .task { await load() }
+        .fileImporter(isPresented: $showImporter, allowedContentTypes: [.item], allowsMultipleSelection: false) { result in
+            if case let .success(urls) = result, let url = urls.first { Task { await upload(url) } }
+        }
+        .alert("Folder baru", isPresented: $showNewFolder) {
+            TextField("Nama folder", text: $newFolderName)
+            Button("Buat") { Task { await createFolder() } }
+            Button("Batal", role: .cancel) { newFolderName = "" }
+        }
+        .confirmationDialog("Hapus \"\(deleteTarget?.name ?? "")\"?", isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }), titleVisibility: .visible) {
+            Button("Hapus", role: .destructive) { if let t = deleteTarget { deleteTarget = nil; Task { await delete(t) } } }
+            Button("Batal", role: .cancel) { deleteTarget = nil }
+        }
+        .sheet(item: $shareItem) { item in ActivityView(items: [item.url]) }
+    }
+
+    private var toolbar: some View {
+        HStack(spacing: 10) {
+            if stack.count > 1 {
+                Button { stack.removeLast(); Task { await load() } } label: {
+                    Image(systemName: "chevron.left").font(.system(size: 14, weight: .bold)).foregroundStyle(NX.violet)
+                }
+            }
+            Text(folderName).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+            Spacer()
+            if busy { ProgressView().scaleEffect(0.8) }
+            Menu {
+                Button { showImporter = true } label: { Label("Upload file", systemImage: "arrow.up.doc") }
+                Button { newFolderName = ""; showNewFolder = true } label: { Label("Folder baru", systemImage: "folder.badge.plus") }
+            } label: {
+                Image(systemName: "plus.circle.fill").font(.system(size: 22)).foregroundStyle(NX.violet)
+            }
+            .disabled(busy)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
     }
 
     @ViewBuilder private func fileRow(_ f: ProjectFile) -> some View {
+        let isDownloading = downloading == f.path
         let row = HStack(spacing: 12) {
             Image(systemName: f.isdir ? "folder.fill" : "doc.fill").font(.system(size: 16))
                 .foregroundStyle(f.isdir ? NX.violet : NX.mutedFg)
@@ -544,17 +594,23 @@ struct ProjectFilesTab: View {
                 Text(subtitle(f)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             }
             Spacer()
-            if f.isdir { Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(NX.mutedFg) }
+            if isDownloading { ProgressView().scaleEffect(0.8) }
+            else if f.isdir { Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(NX.mutedFg) }
+            else { Image(systemName: "square.and.arrow.down").font(.system(size: 14)).foregroundStyle(NX.mutedFg) }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(NX.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(NX.border))
 
-        if f.isdir {
-            Button { stack.append(f.relPath ?? f.path); Task { await load() } } label: { row }.buttonStyle(.plain)
-        } else {
-            row
+        Button {
+            if f.isdir { stack.append(f.relPath ?? f.path); Task { await load() } }
+            else { Task { await download(f) } }
+        } label: { row }
+        .buttonStyle(.plain)
+        .contextMenu {
+            if !f.isdir { Button { Task { await download(f) } } label: { Label("Download", systemImage: "square.and.arrow.down") } }
+            Button(role: .destructive) { deleteTarget = f } label: { Label("Hapus", systemImage: "trash") }
         }
     }
 
@@ -576,6 +632,152 @@ struct ProjectFilesTab: View {
         do { files = (try await APIClient.shared.projectFiles(projectId, path: path)).files ?? [] }
         catch APIError.unauthorized { auth.logout() } catch { files = [] }
         loading = false
+    }
+    private func upload(_ url: URL) async {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else { return }
+        busy = true; defer { busy = false }
+        try? await APIClient.shared.uploadProjectFile(projectId, path: path, fileName: url.lastPathComponent, data: data)
+        await load()
+    }
+    private func download(_ f: ProjectFile) async {
+        downloading = f.path; defer { downloading = nil }
+        if let url = try? await APIClient.shared.downloadProjectFile(projectId, path: f.relPath ?? f.path, fileName: f.name) {
+            shareItem = ShareItem(url: url)
+        }
+    }
+    private func delete(_ f: ProjectFile) async {
+        busy = true; defer { busy = false }
+        try? await APIClient.shared.deleteProjectFile(projectId, path: f.relPath ?? f.path)
+        await load()
+    }
+    private func createFolder() async {
+        let name = newFolderName.trimmingCharacters(in: .whitespaces); newFolderName = ""
+        guard !name.isEmpty else { return }
+        busy = true; defer { busy = false }
+        try? await APIClient.shared.createProjectFolder(projectId, name: name, path: path)
+        await load()
+    }
+}
+
+/// UIActivityViewController bridge for the share/save sheet.
+struct ActivityView: UIViewControllerRepresentable {
+    let items: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+    func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - Create task (shared composer, reachable from every tab)
+
+struct CreateTaskSheet: View {
+    let projectId: String
+    let lanes: [ProjectDetail.Lane]
+    let onCreated: () async -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var title = ""
+    @State private var laneId: String
+    @State private var priority = "NONE"
+    @State private var hasDue: Bool
+    @State private var due: Date
+    @State private var busy = false
+    @State private var err: String?
+
+    private let priorities = ["NONE", "LOW", "MEDIUM", "HIGH", "URGENT"]
+
+    init(projectId: String, lanes: [ProjectDetail.Lane], prefillDue: Date? = nil, onCreated: @escaping () async -> Void) {
+        self.projectId = projectId; self.lanes = lanes; self.onCreated = onCreated
+        _laneId = State(initialValue: lanes.first?.id ?? "")
+        _hasDue = State(initialValue: prefillDue != nil)
+        _due = State(initialValue: prefillDue ?? Date())
+    }
+
+    private var laneName: String { lanes.first(where: { $0.id == laneId })?.name ?? "Pilih section" }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                NX.background.ignoresSafeArea()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        field("JUDUL TASK") {
+                            TextField("mis. Shooting EPS 2", text: $title, axis: .vertical)
+                                .font(NXFont.text(16)).lineLimit(3).padding(12)
+                                .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                        }
+                        field("SECTION") {
+                            Menu {
+                                ForEach(lanes) { l in Button(l.name) { laneId = l.id } }
+                            } label: {
+                                HStack {
+                                    Text(laneName).font(NXFont.text(15)).foregroundStyle(NX.foreground)
+                                    Spacer(); Image(systemName: "chevron.up.chevron.down").font(.system(size: 12)).foregroundStyle(NX.mutedFg)
+                                }
+                                .padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                            }
+                        }
+                        field("PRIORITY") {
+                            HStack(spacing: 8) {
+                                ForEach(priorities, id: \.self) { p in
+                                    Button { priority = p } label: {
+                                        Text(p == "NONE" ? "None" : p.capitalized).font(NXFont.text(12, .semibold))
+                                            .padding(.horizontal, 12).padding(.vertical, 8)
+                                            .foregroundStyle(priority == p ? .white : NX.mutedFg)
+                                            .background(priority == p ? prioColor(p) : NX.card, in: Capsule())
+                                            .overlay(Capsule().strokeBorder(priority == p ? .clear : NX.border))
+                                    }.buttonStyle(.plain)
+                                }
+                            }
+                        }
+                        field("DEADLINE") {
+                            Toggle(isOn: $hasDue.animation()) { Text("Pakai deadline").font(NXFont.text(14)).foregroundStyle(NX.foreground) }
+                                .tint(NX.violet)
+                            if hasDue {
+                                DatePicker("", selection: $due, displayedComponents: .date).datePickerStyle(.graphical).tint(NX.violet)
+                            }
+                        }
+                        if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
+                        Button { Task { await create() } } label: {
+                            HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text("Buat task") }
+                        }
+                        .buttonStyle(NexusPrimaryButton())
+                        .disabled(busy || title.trimmingCharacters(in: .whitespaces).isEmpty || laneId.isEmpty)
+                    }
+                    .padding(20)
+                }
+            }
+            .navigationTitle("Task baru")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Batal") { dismiss() } } }
+        }
+    }
+
+    private func field<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(label).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
+            content()
+        }
+    }
+    private func prioColor(_ p: String) -> Color {
+        switch p { case "URGENT": return NX.danger; case "HIGH": return NX.warning; case "MEDIUM": return NX.blue; case "LOW": return NX.violet; default: return NX.mutedFg }
+    }
+
+    private func create() async {
+        busy = true; err = nil; defer { busy = false }
+        let iso = ISO8601DateFormatter().string(from: ProjDate.cal.startOfDay(for: due))
+        do {
+            try await APIClient.shared.createTask(projectId: projectId, taskListId: laneId,
+                                                   title: title.trimmingCharacters(in: .whitespaces),
+                                                   priority: priority, dueDate: hasDue ? iso : nil)
+            await onCreated()
+            dismiss()
+        } catch {
+            err = (error as? LocalizedError)?.errorDescription ?? "Gagal bikin task."
+        }
     }
 }
 

@@ -137,6 +137,48 @@ struct APIClient {
     func projectFiles(_ projectId: String, path: String = "") async throws -> ProjectFilesResponse {
         try await run(makeRequest("/api/projects/\(projectId)/files?path=\(enc(path))"), decode: ProjectFilesResponse.self)
     }
+    @discardableResult
+    func uploadProjectFile(_ projectId: String, path: String, fileName: String, data: Data) async throws -> Bool {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var req = makeRequest("/api/projects/\(projectId)/files", method: "POST")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        var body = Data()
+        func add(_ s: String) { body.append(s.data(using: .utf8)!) }
+        if !path.isEmpty { add("--\(boundary)\r\nContent-Disposition: form-data; name=\"path\"\r\n\r\n\(path)\r\n") }
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\nContent-Type: application/octet-stream\r\n\r\n")
+        body.append(data)
+        add("\r\n--\(boundary)--\r\n")
+        req.httpBody = body
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func createProjectFolder(_ projectId: String, name: String, path: String) async throws -> Bool {
+        var req = makeRequest("/api/projects/\(projectId)/files", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["name": name, "path": path])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func deleteProjectFile(_ projectId: String, path: String) async throws -> Bool {
+        _ = try await run(makeRequest("/api/projects/\(projectId)/files?path=\(enc(path))", method: "DELETE"), decode: SuccessResponse.self)
+        return true
+    }
+    /// Downloads a project file's bytes (authed) to a temp URL for sharing/preview.
+    func downloadProjectFile(_ projectId: String, path: String, fileName: String) async throws -> URL {
+        let req = makeRequest("/api/projects/\(projectId)/files/download?path=\(enc(path))")
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        guard (200..<300).contains(http.statusCode) else { throw APIError.http(http.statusCode) }
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("nexus-dl", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent(fileName)
+        try? FileManager.default.removeItem(at: url)
+        try data.write(to: url)
+        return url
+    }
 
     func reports(days: Int) async throws -> Reports {
         try await run(makeRequest("/api/reports?days=\(days)"), decode: Reports.self)
@@ -224,9 +266,11 @@ struct APIClient {
 
     /// POST /api/tasks — create a task (or a subtask when parentId is set).
     @discardableResult
-    func createTask(projectId: String, taskListId: String, title: String, parentId: String? = nil, status: String = "TODO") async throws -> Bool {
+    func createTask(projectId: String, taskListId: String, title: String, parentId: String? = nil, status: String = "TODO", priority: String? = nil, dueDate: String? = nil) async throws -> Bool {
         var body: [String: Any] = ["projectId": projectId, "taskListId": taskListId, "title": title, "status": status]
         if let parentId { body["parentId"] = parentId }
+        if let priority, priority.uppercased() != "NONE" { body["priority"] = priority }
+        if let dueDate { body["dueDate"] = dueDate }
         var req = makeRequest("/api/tasks", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
