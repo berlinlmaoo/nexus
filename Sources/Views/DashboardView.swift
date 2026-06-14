@@ -3,7 +3,6 @@ import SwiftUI
 struct DashboardView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.tabBarShrink) private var tabShrink
     @State private var profile: AppUser?
     @State private var game: Gamification?
     @State private var projectCount = 0
@@ -51,7 +50,6 @@ struct DashboardView: View {
             .background(NX.background.ignoresSafeArea())
             .overlay { statModal }
             .navigationBarHidden(true)
-            .tracksTabBarShrink(tabShrink)
             .task { if !loaded { await load() } }
             .refreshable { await load() }
         }
