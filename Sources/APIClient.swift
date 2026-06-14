@@ -153,6 +153,48 @@ struct APIClient {
         try await run(makeRequest("/api/tasks/\(id)"), decode: TaskDetail.self)
     }
 
+    // MARK: - Sprints
+
+    func sprints(_ projectId: String) async throws -> SprintsResponse {
+        try await run(makeRequest("/api/sprints?projectId=\(enc(projectId))"), decode: SprintsResponse.self)
+    }
+    @discardableResult
+    func createSprint(projectId: String, name: String, startDate: String, endDate: String) async throws -> Bool {
+        var req = makeRequest("/api/sprints", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["projectId": projectId, "name": name, "startDate": startDate, "endDate": endDate])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func updateSprint(id: String, status: String) async throws -> Bool {
+        var req = makeRequest("/api/sprints", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["id": id, "status": status])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+
+    // MARK: - Automations / Finance / P&L
+
+    func automations(_ projectId: String) async throws -> AutomationsResponse {
+        try await run(makeRequest("/api/automations?projectId=\(enc(projectId))"), decode: AutomationsResponse.self)
+    }
+    @discardableResult
+    func updateAutomation(id: String, enabled: Bool) async throws -> Bool {
+        var req = makeRequest("/api/automations", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["id": id, "enabled": enabled])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    func financeDashboard(projectId: String, year: Int) async throws -> FinanceDashboard {
+        try await run(makeRequest("/api/finance/dashboard?projectId=\(enc(projectId))&year=\(year)"), decode: FinanceDashboard.self)
+    }
+    func pnlDashboard(projectId: String, year: Int) async throws -> PnlDashboard {
+        try await run(makeRequest("/api/pnl/dashboard?projectId=\(enc(projectId))&year=\(year)"), decode: PnlDashboard.self)
+    }
+
     // MARK: - Dashboard
 
     func profile() async throws -> ProfileResponse {

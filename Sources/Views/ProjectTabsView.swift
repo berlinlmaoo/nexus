@@ -5,7 +5,8 @@ import UniformTypeIdentifiers
 
 enum ProjectTab: String, CaseIterable, Identifiable {
     case overview = "Overview", board = "Board", list = "List", calendar = "Calendar"
-    case timeline = "Timeline", pages = "Pages", forms = "Forms", files = "Files", chat = "Chat"
+    case timeline = "Timeline", sprints = "Sprints", automations = "Automations"
+    case pages = "Pages", forms = "Forms", finance = "Finance", pnl = "P&L", files = "Files", chat = "Chat"
     var id: String { rawValue }
     var icon: String {
         switch self {
@@ -14,8 +15,12 @@ enum ProjectTab: String, CaseIterable, Identifiable {
         case .list:     return "list.bullet"
         case .calendar: return "calendar"
         case .timeline: return "chart.bar.xaxis"
+        case .sprints:  return "target"
+        case .automations: return "bolt.fill"
         case .pages:    return "doc.text.fill"
         case .forms:    return "list.clipboard.fill"
+        case .finance:  return "banknote.fill"
+        case .pnl:      return "dollarsign.circle.fill"
         case .files:    return "folder.fill"
         case .chat:     return "bubble.left.and.bubble.right.fill"
         }

@@ -74,6 +74,10 @@ struct ProjectDetailView: View {
         case .forms: ProjectFormsTab(projectId: projectId, projectName: projectName)
         case .files: ProjectFilesTab(projectId: projectId)
         case .chat:  ProjectChatTab(projectId: projectId, projectName: projectName)
+        case .sprints: SprintsTab(projectId: projectId, onOpen: { openTaskId = $0 })
+        case .automations: AutomationsTab(projectId: projectId)
+        case .finance: FinanceTab(projectId: projectId)
+        case .pnl: PnlTab(projectId: projectId)
         default:
             if loading {
                 ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity)
