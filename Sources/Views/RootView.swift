@@ -3,37 +3,26 @@ import SwiftUI
 /// Switches between login and the authenticated app (5-tab bar mirroring the web).
 struct RootView: View {
     @Environment(AuthStore.self) private var auth
+    @State private var tab = 0
 
     var body: some View {
         if auth.isAuthenticated {
-            TabView {
-                DashboardView()
-                    .tabItem { Label("Home", systemImage: "house.fill") }
-                TasksView()
-                    .tabItem { Label("Tasks", systemImage: "checklist") }
-                InboxView()
-                    .tabItem { Label("Inbox", systemImage: "tray.fill") }
-                ProjectsView()
-                    .tabItem { Label("Projects", systemImage: "rectangle.stack.fill") }
-                MoreView()
-                    .tabItem { Label("More", systemImage: "ellipsis") }
-            }
-            .tabBarMinimizeOnScrollCompat()
+            authedApp
         } else {
             LoginView()
         }
     }
-}
 
-extension View {
-    /// iOS 26: shrink the floating tab bar into a compact pill while scrolling down, expand on
-    /// scroll up. No-op on earlier OSes (deployment target is iOS 17).
-    @ViewBuilder func tabBarMinimizeOnScrollCompat() -> some View {
-        if #available(iOS 26.0, *) {
-            self.tabBarMinimizeBehavior(.onScrollDown)
-        } else {
-            self
+    private var authedApp: some View {
+        TabView(selection: $tab) {
+            DashboardView().tag(0)
+            TasksView().tag(1)
+            InboxView().tag(2)
+            ProjectsView().tag(3)
+            MoreView().tag(4)
         }
+        .toolbar(.hidden, for: .tabBar)
+        .safeAreaInset(edge: .bottom, spacing: 0) { FloatingTabBar(selection: $tab) }
     }
 }
 
