@@ -40,7 +40,6 @@ extension View {
 struct FloatingTabBar: View {
     @Binding var selection: Int
     var shrink: TabBarShrink
-    @Namespace private var ns
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let items: [(icon: String, label: String)] = [
@@ -50,38 +49,35 @@ struct FloatingTabBar: View {
         ("square.stack.fill", "Projects"),
         ("ellipsis", "More"),
     ]
-    private let pill = Color(hex: "#1c1d22")   // fixed charcoal (IG-style), independent of light/dark
     private var compact: Bool { shrink.compact && !reduceMotion }
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 0) {
             ForEach(items.indices, id: \.self) { i in
                 let active = selection == i
                 Button {
                     Haptics.tap()
                     if reduceMotion { selection = i }
-                    else { withAnimation(.spring(response: 0.34, dampingFraction: 0.78)) { selection = i } }
+                    else { withAnimation(.spring(response: 0.34, dampingFraction: 0.8)) { selection = i } }
                 } label: {
-                    Image(systemName: items[i].icon)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(active ? .white : .white.opacity(0.5))
-                        .frame(maxWidth: .infinity).frame(height: 42)
-                        .background {
-                            if active {
-                                Capsule().fill(.white.opacity(0.16)).matchedGeometryEffect(id: "tabhl", in: ns)
-                            }
-                        }
-                        .contentShape(Rectangle())
+                    VStack(spacing: 3) {
+                        Image(systemName: items[i].icon).font(.system(size: 21, weight: active ? .semibold : .regular))
+                        Text(items[i].label).font(NXFont.text(10, active ? .bold : .medium))
+                    }
+                    .foregroundStyle(active ? NX.violet : NX.mutedFg)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 9)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(items[i].label)
             }
         }
-        .padding(5)
-        .background(pill, in: Capsule())
-        .overlay(Capsule().strokeBorder(.white.opacity(0.08)))
-        .shadow(color: .black.opacity(0.28), radius: 18, x: 0, y: 8)
-        .scaleEffect(compact ? 0.74 : 1, anchor: .bottom)   // mengecil on scroll-down (render-only → no reflow)
+        .padding(.horizontal, 6)
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(NX.border))
+        .nexusShadowSoft()
+        .scaleEffect(compact ? 0.86 : 1, anchor: .bottom)   // mengecil on scroll-down (render-only → no reflow)
         .opacity(compact ? 0.96 : 1)
         .animation(.spring(response: 0.36, dampingFraction: 0.82), value: compact)
         .padding(.horizontal, 26)
