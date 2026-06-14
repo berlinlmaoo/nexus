@@ -209,12 +209,12 @@ struct DashboardView: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity)
-        .background(
-            LinearGradient(colors: [Color(hex: d.from), Color(hex: d.to)], startPoint: .topLeading, endPoint: .bottomTrailing),
-            in: RoundedRectangle(cornerRadius: 28, style: .continuous)
-        )
+        .background {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(LinearGradient(colors: [Color(hex: d.from), Color(hex: d.to)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .shadow(color: Color(hex: d.glow).opacity(0.5), radius: 24, y: 12)
+        }
         .modifier(MatchedCard(id: a, ns: statNS, isSource: true, enabled: !reduceMotion))
-        .shadow(color: Color(hex: d.glow).opacity(0.5), radius: 24, y: 12)
         .transition(reduceMotion ? .opacity.combined(with: .scale(scale: 0.96)) : .identity)
     }
 
@@ -295,10 +295,13 @@ struct DashboardView: View {
             }
         }
         .padding(18).frame(maxWidth: .infinity)
-        .background(NX.card, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(NX.border))
+        .background {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(NX.card)
+                .shadow(color: .black.opacity(0.18), radius: 24, y: 12)
+                .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(NX.border))
+        }
         .modifier(HeroMatch(id: "level", ns: levelNS, isSource: true, enabled: !reduceMotion))
-        .shadow(color: .black.opacity(0.18), radius: 24, y: 12)
         .transition(reduceMotion ? .opacity.combined(with: .scale(scale: 0.96)) : .identity)
     }
 
@@ -360,10 +363,13 @@ struct DashboardView: View {
             }
         }
         .padding(18).frame(maxWidth: .infinity)
-        .background(NX.card, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(NX.border))
+        .background {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(NX.card)
+                .shadow(color: .black.opacity(0.18), radius: 24, y: 12)
+                .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(NX.border))
+        }
         .modifier(HeroMatch(id: "bell", ns: bellNS, isSource: true, enabled: !reduceMotion))
-        .shadow(color: .black.opacity(0.18), radius: 24, y: 12)
         .transition(reduceMotion ? .opacity.combined(with: .scale(scale: 0.96)) : .identity)
     }
 
@@ -513,14 +519,14 @@ struct StatCardView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 18).padding(.horizontal, 8)
-        .background(
-            LinearGradient(colors: [Color(hex: from), Color(hex: to)], startPoint: .topLeading, endPoint: .bottomTrailing),
-            in: RoundedRectangle(cornerRadius: 24, style: .continuous)
-        )
+        .background {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(LinearGradient(colors: [Color(hex: from), Color(hex: to)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .shadow(color: Color(hex: glow).opacity(0.45), radius: 14, y: 8)
+        }
         .overlay(alignment: .topTrailing) {
             Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 11, weight: .bold))
                 .foregroundStyle(.white.opacity(0.5)).padding(10)
         }
-        .shadow(color: Color(hex: glow).opacity(0.45), radius: 14, y: 8)
     }
 }
