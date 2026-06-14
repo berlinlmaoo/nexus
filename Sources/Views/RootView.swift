@@ -3,43 +3,36 @@ import SwiftUI
 /// Switches between login and the authenticated app (5-tab bar mirroring the web).
 struct RootView: View {
     @Environment(AuthStore.self) private var auth
-    @State private var tab = 0
-    @State private var visited: Set<Int> = [0]
-    @State private var shrink = TabBarShrink()
 
     var body: some View {
         if auth.isAuthenticated {
-            // No TabView: its iOS 26 Liquid Glass bar can't be fully hidden and leaked behind the
-            // custom bar. Manual ZStack instead — each tab lazy-mounted on first visit, then kept
-            // alive (state preserved) and just hidden when inactive.
-            ZStack {
-                ForEach(0..<5, id: \.self) { i in
-                    if visited.contains(i) {
-                        tabContent(i)
-                            .opacity(tab == i ? 1 : 0)
-                            .allowsHitTesting(tab == i)
-                            .accessibilityHidden(tab != i)
-                    }
-                }
+            TabView {
+                DashboardView()
+                    .tabItem { Label("Home", systemImage: "house.fill") }
+                TasksView()
+                    .tabItem { Label("Tasks", systemImage: "checklist") }
+                InboxView()
+                    .tabItem { Label("Inbox", systemImage: "tray.fill") }
+                ProjectsView()
+                    .tabItem { Label("Projects", systemImage: "rectangle.stack.fill") }
+                MoreView()
+                    .tabItem { Label("More", systemImage: "ellipsis") }
             }
-            .environment(\.tabBarShrink, shrink)
-            // safeAreaInset (NOT overlay): overlaying the bar over scroll content let the scroll
-            // gesture steal taps on the bar → tab taps registered as scrolls. This reserves the bar
-            // its own area so taps work.
-            .safeAreaInset(edge: .bottom, spacing: 0) { AppTabBar(selection: $tab, shrink: shrink) }
-            .onChange(of: tab) { _, new in visited.insert(new) }
+            .tabBarMinimizeOnScrollCompat()
         } else {
             LoginView()
         }
     }
+}
 
-    @ViewBuilder private func tabContent(_ i: Int) -> some View {
-        switch i {
-        case 0: DashboardView()
-        case 1: TasksView()
-        case 2: InboxView()
-        case 3: ProjectsView()
-        default: MoreView()
+extension View {
+    /// iOS 26: shrink the native tab bar into a compact pill while scrolling down, expand on scroll
+    /// up (Liquid Glass). No-op on earlier OSes (deployment target is iOS 17).
+    @ViewBuilder func tabBarMinimizeOnScrollCompat() -> some View {
+        if #available(iOS 26.0, *) {
+            self.tabBarMinimizeBehavior(.onScrollDown)
+        } else {
+            self
         }
     }
 }
@@ -67,7 +60,6 @@ struct ComingSoonView: View {
 /// Knowledge / Pulse Check / System) + account footer.
 struct MoreView: View {
     @Environment(AuthStore.self) private var auth
-    @Environment(\.tabBarShrink) private var tabShrink
     private let cols = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
     var body: some View {
@@ -113,7 +105,6 @@ struct MoreView: View {
                     }
                     .padding(16)
                 }
-                .tracksTabBarShrink(tabShrink)
             }
             .navigationTitle("More")
             .navigationBarTitleDisplayMode(.inline)
