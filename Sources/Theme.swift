@@ -84,12 +84,17 @@ extension View {
     func nexusShadowPop() -> some View { shadow(color: .black.opacity(0.14), radius: 24, x: 0, y: 10) }
 
     /// `.card` — rounded-3xl, hairline border, soft shadow.
+    /// The shadow rides on the flat background shape (not the rich content), so scrolling a list
+    /// of cards rasterizes a solid rounded-rect per card instead of all the text/avatars inside.
     func nexusCard(padding: CGFloat = 16, radius: CGFloat = 24) -> some View {
         self
             .padding(padding)
-            .background(NX.card, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(NX.border, lineWidth: 1))
-            .nexusShadowSoft()
+            .background {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(NX.card)
+                    .nexusShadowSoft()
+                    .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(NX.border, lineWidth: 1))
+            }
     }
 }
 

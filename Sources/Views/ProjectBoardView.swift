@@ -328,9 +328,13 @@ struct BoardCard: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(NX.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(NX.border))
-        .nexusShadowSoft()
+        .background {
+            // Shadow on the flat shape, not the card's content — cheap to rasterize per scroll.
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(NX.card)
+                .nexusShadowSoft()
+                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(NX.border))
+        }
     }
 
     private var dueText: String {
