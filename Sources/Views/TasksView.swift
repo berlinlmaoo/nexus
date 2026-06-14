@@ -4,6 +4,7 @@ import SwiftUI
 /// each a row with a done-toggle checkbox, title, lane · comments, priority chip.
 struct TasksView: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(\.tabBarShrink) private var tabShrink
     @State private var tasks: [MyTask] = []
     @State private var loading = true
     @State private var error: String?
@@ -62,6 +63,7 @@ struct TasksView: View {
                 }
                 .padding(16)
             }
+            .tracksTabBarShrink(tabShrink)
             .refreshable { await load() }
         }
     }
