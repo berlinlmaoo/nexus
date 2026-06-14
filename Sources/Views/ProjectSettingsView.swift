@@ -213,7 +213,7 @@ struct ProjectSettingsView: View {
 
     private func card<C: View>(_ title: String, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title.uppercased()).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
+            SectionLabel(title)
             content()
         }
         .padding(16).frame(maxWidth: .infinity, alignment: .leading)

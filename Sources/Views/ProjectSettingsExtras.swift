@@ -84,7 +84,7 @@ struct CustomFieldEditor: View {
 
     private func box<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(label.uppercased()).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
+            SectionLabel(label)
             content()
         }
     }

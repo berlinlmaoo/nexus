@@ -382,7 +382,7 @@ struct AssigneePicker: View {
                 ToolbarItem(placement: .topBarLeading) { Button("Batal") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { Task { saving = true; await onSave(selected); dismiss() } } label: {
-                        if saving { ProgressView() } else { Text("Simpan").bold() }
+                        if saving { ProgressView().tint(NX.violet) } else { Text("Simpan").bold() }
                     }.disabled(saving)
                 }
             }

@@ -45,7 +45,7 @@ struct TasksView: View {
                     ForEach(groups, id: \.label) { group in
                         VStack(alignment: .leading, spacing: 8) {
                             HStack(spacing: 6) {
-                                Text(group.label.uppercased()).font(NXFont.text(11, .bold)).tracking(1).foregroundStyle(NX.mutedFg)
+                                SectionLabel(group.label)
                                 Text("· \(group.items.count)").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg.opacity(0.7))
                             }
                             VStack(spacing: 0) {

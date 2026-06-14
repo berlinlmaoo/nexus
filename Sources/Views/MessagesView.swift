@@ -43,7 +43,7 @@ struct MessagesView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     ForEach(groups, id: \.label) { group in
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(group.label.uppercased()).font(NXFont.text(11, .bold)).tracking(1).foregroundStyle(NX.mutedFg).padding(.leading, 4)
+                            SectionLabel(group.label).padding(.leading, 4)
                             VStack(spacing: 0) {
                                 ForEach(Array(group.items.enumerated()), id: \.element.id) { idx, c in
                                     if idx > 0 { Divider().overlay(NX.border) }

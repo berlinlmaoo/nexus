@@ -104,7 +104,7 @@ struct SearchView: View {
 
     private func group<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(label).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg).padding(.leading, 4)
+            SectionLabel(label).padding(.leading, 4)
             VStack(spacing: 8) { content() }
         }
     }

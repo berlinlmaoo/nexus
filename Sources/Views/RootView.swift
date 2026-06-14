@@ -121,8 +121,7 @@ struct MoreSection<Content: View>: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title.uppercased()).font(NXFont.text(11, .bold)).tracking(0.6)
-                .foregroundStyle(NX.mutedFg).padding(.leading, 4)
+            SectionLabel(title).padding(.leading, 4)
             content()
         }
     }

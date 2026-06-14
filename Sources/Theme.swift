@@ -123,6 +123,17 @@ struct NexusChip: View {
     }
 }
 
+/// Canonical section header — the small UPPERCASE muted label above a card/group.
+/// Single source of truth so every screen spaces it identically (was hand-rolled 30+ times).
+struct SectionLabel: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+    var body: some View {
+        Text(text.uppercased())
+            .font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
+    }
+}
+
 /// `.button--primary` — violet, white, rounded, with a subtle press spring.
 struct NexusPrimaryButton: ButtonStyle {
     var tint: Color = NX.violet
