@@ -102,14 +102,52 @@ struct TaskDetail: Decodable, Sendable {
 /// POST /api/tasks returns the created task (top-level id).
 struct CreatedTaskRef: Decodable, Sendable { let id: String }
 
-/// GET /api/custom-fields?projectId= — project custom fields for the task composer.
+/// GET /api/custom-fields?projectId=[&taskId=] — project custom fields (with current value when taskId set).
 struct CustomFieldsResponse: Decodable, Sendable { let fields: [CustomField]? }
 struct CustomField: Decodable, Identifiable, Sendable {
     let id: String
     let name: String
     let type: String          // SELECT | MULTI_SELECT | STATUS | NUMBER | DATE | PLACE | CREATED
     let options: CFOptions?
+    let value: CFFieldValue?   // present only when fetched with taskId
     var choices: [String] { options?.list ?? [] }
+}
+/// A stored custom-field value: plain string, a multi-select array, or a PLACE {label, mapUrl}.
+enum CFFieldValue: Decodable, Sendable {
+    case text(String), list([String]), place(label: String, mapUrl: String?)
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if let s = try? c.decode(String.self) { self = .text(s) }
+        else if let a = try? c.decode([String].self) { self = .list(a) }
+        else if let o = try? c.decode(PlaceObj.self) { self = .place(label: o.label ?? "", mapUrl: o.mapUrl) }
+        else { self = .text("") }
+    }
+    struct PlaceObj: Decodable, Sendable { let label: String?; let mapUrl: String? }
+}
+
+/// GET /api/attachments?taskId= — task file attachments.
+struct TaskAttachment: Decodable, Identifiable, Sendable {
+    let id: String
+    let name: String?
+    let url: String?
+    let size: Int?
+    let mimeType: String?
+    let createdAt: String?
+    let uploader: Uploader?
+    struct Uploader: Decodable, Sendable { let name: String? }
+}
+
+/// GET /api/tasks/{id}/dependencies — blocking + blocked-by relations.
+struct TaskDependenciesResponse: Decodable, Sendable {
+    let dependencies: [TaskDependency]?   // this task depends on (is blocked by) these
+    let dependedOnBy: [TaskDependency]?   // these depend on this task
+}
+struct TaskDependency: Decodable, Identifiable, Sendable {
+    let id: String
+    let type: String?
+    let dependsOnTask: TaskRef?
+    let task: TaskRef?
+    struct TaskRef: Decodable, Sendable { let id: String; let title: String; let status: String? }
 }
 /// options is polymorphic: ["a","b"] | {options:[…]} | {choices:[…]} | null.
 struct CFOptions: Decodable, Sendable {

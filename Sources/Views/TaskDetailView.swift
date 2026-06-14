@@ -36,8 +36,11 @@ struct TaskDetailView: View {
                     VStack(alignment: .leading, spacing: 18) {
                         header(task)
                         metaRow(task)
+                        if let pid = task.projectId { TaskCustomFieldsCard(projectId: pid, taskId: task.id) }
                         if !plainBlockText(task.description).isEmpty { descriptionCard(task) }
                         subtasksCard(task)
+                        TaskAttachmentsCard(taskId: task.id)
+                        TaskDependenciesCard(taskId: task.id, projectId: task.projectId)
                         commentsCard(task)
                     }
                     .padding(16)

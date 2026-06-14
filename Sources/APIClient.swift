@@ -288,6 +288,75 @@ struct APIClient {
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }
+    func taskCustomFields(projectId: String, taskId: String) async throws -> [CustomField] {
+        (try await run(makeRequest("/api/custom-fields?projectId=\(enc(projectId))&taskId=\(enc(taskId))"), decode: CustomFieldsResponse.self)).fields ?? []
+    }
+
+    // MARK: - Attachments
+
+    func taskAttachments(_ taskId: String) async throws -> [TaskAttachment] {
+        try await run(makeRequest("/api/attachments?taskId=\(enc(taskId))"), decode: [TaskAttachment].self)
+    }
+    @discardableResult
+    func uploadAttachment(taskId: String, fileName: String, data: Data) async throws -> Bool {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var req = makeRequest("/api/attachments", method: "POST")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        var body = Data()
+        func add(_ s: String) { body.append(s.data(using: .utf8)!) }
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"taskId\"\r\n\r\n\(taskId)\r\n")
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\nContent-Type: application/octet-stream\r\n\r\n")
+        body.append(data)
+        add("\r\n--\(boundary)--\r\n")
+        req.httpBody = body
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func deleteAttachment(_ id: String) async throws -> Bool {
+        _ = try await run(makeRequest("/api/attachments/\(id)", method: "DELETE"), decode: SuccessResponse.self)
+        return true
+    }
+    /// Downloads an attachment's bytes (authed) to a temp URL for sharing. `url` may be a path or absolute.
+    func downloadAttachment(url: String, fileName: String) async throws -> URL {
+        let req: URLRequest
+        if url.hasPrefix("http"), let u = URL(string: url) {
+            var r = URLRequest(url: u)
+            if let s = Keychain.load() { r.setValue(s.cookieHeader, forHTTPHeaderField: "Cookie") }
+            req = r
+        } else {
+            req = makeRequest(url)
+        }
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        guard (200..<300).contains(http.statusCode) else { throw APIError.http(http.statusCode) }
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("nexus-att", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let out = dir.appendingPathComponent(fileName)
+        try? FileManager.default.removeItem(at: out)
+        try data.write(to: out)
+        return out
+    }
+
+    // MARK: - Dependencies
+
+    func taskDependencies(_ taskId: String) async throws -> TaskDependenciesResponse {
+        try await run(makeRequest("/api/tasks/\(taskId)/dependencies"), decode: TaskDependenciesResponse.self)
+    }
+    @discardableResult
+    func addDependency(taskId: String, dependsOnTaskId: String) async throws -> Bool {
+        var req = makeRequest("/api/tasks/\(taskId)/dependencies", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["dependsOnTaskId": dependsOnTaskId, "type": "BLOCKING"])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func removeDependency(taskId: String, id: String) async throws -> Bool {
+        _ = try await run(makeRequest("/api/tasks/\(taskId)/dependencies?id=\(enc(id))", method: "DELETE"), decode: SuccessResponse.self)
+        return true
+    }
 
     @discardableResult
     func addComment(taskId: String, content: String) async throws -> Bool {
