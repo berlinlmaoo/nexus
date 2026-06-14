@@ -92,16 +92,11 @@ struct AppTabBar: View {
         .padding(.top, 6)
     }
 
-    /// The active-tab indicator: a tinted Liquid-Glass capsule that slides (matchedGeometry) to the
-    /// selected tab. Tinted-fill fallback below iOS 26.
+    /// The active-tab indicator: a clean tinted capsule that slides (matchedGeometry) to the selected
+    /// tab — same simple look as the first nav-bar version (glass tint on it looked muddy).
     private var slidingHighlight: some View {
-        Group {
-            if #available(iOS 26.0, *) {
-                Color.clear.glassEffect(.regular.tint(NX.violet.opacity(0.55)), in: Capsule())
-            } else {
-                Capsule(style: .continuous).fill(NX.violet.opacity(0.16))
-            }
-        }
-        .matchedGeometryEffect(id: "tab-indicator", in: ns)
+        Capsule(style: .continuous)
+            .fill(NX.violet.opacity(0.14))
+            .matchedGeometryEffect(id: "tab-indicator", in: ns)
     }
 }
