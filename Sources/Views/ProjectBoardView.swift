@@ -12,7 +12,9 @@ struct ProjectDetailView: View {
     @State private var openTaskId: String?
     @State private var tab: ProjectTab = .board
     @State private var showCreate = false
+    @State private var showSettings = false
     @State private var prefillDue: Date?
+    @Environment(\.dismiss) private var dismiss
 
     private var canCreate: Bool { !(detail?.taskLists?.isEmpty ?? true) }
 
@@ -30,13 +32,21 @@ struct ProjectDetailView: View {
         .navigationTitle(projectName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if detail != nil {
+                    Button { showSettings = true } label: { Image(systemName: "gearshape") }
+                }
                 Button { prefillDue = nil; showCreate = true } label: { Image(systemName: "plus") }
                     .disabled(!canCreate)
             }
         }
         .sheet(isPresented: $showCreate) {
             CreateTaskSheet(projectId: projectId, lanes: detail?.taskLists ?? [], prefillDue: prefillDue) { await load() }
+        }
+        .sheet(isPresented: $showSettings) {
+            if let detail {
+                ProjectSettingsView(projectId: projectId, detail: detail, onChange: { await load() }, onDeleted: { dismiss() })
+            }
         }
         .task { await load() }
         .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }

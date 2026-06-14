@@ -475,6 +475,78 @@ struct APIClient {
         (try await run(makeRequest("/api/custom-fields?projectId=\(enc(projectId))&taskId=\(enc(taskId))"), decode: CustomFieldsResponse.self)).fields ?? []
     }
 
+    // MARK: - Project settings (identity / flags / fields / members / danger zone)
+    /// PATCH /api/projects/{id} with any of name/description/color/icon/flags.
+    @discardableResult
+    func updateProject(_ id: String, fields: [String: Any]) async throws -> Bool {
+        var req = makeRequest("/api/projects/\(id)", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: fields)
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func createCustomFieldDef(projectId: String, name: String, type: String, options: [String: Any]?) async throws -> Bool {
+        var body: [String: Any] = ["projectId": projectId, "name": name, "type": type]
+        if let options { body["options"] = options }
+        var req = makeRequest("/api/custom-fields", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func updateCustomFieldDef(id: String, name: String?, type: String?, options: [String: Any]?) async throws -> Bool {
+        var body: [String: Any] = ["id": id]
+        if let name { body["name"] = name }
+        if let type { body["type"] = type }
+        if let options { body["options"] = options }
+        var req = makeRequest("/api/custom-fields", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func deleteCustomFieldDef(id: String) async throws -> Bool {
+        _ = try await run(makeRequest("/api/custom-fields?id=\(enc(id))", method: "DELETE"), decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func addProjectMember(projectId: String, userId: String, role: String = "MEMBER") async throws -> Bool {
+        var req = makeRequest("/api/projects/\(projectId)/members", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["userId": userId, "role": role])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func removeProjectMember(projectId: String, userId: String) async throws -> Bool {
+        var req = makeRequest("/api/projects/\(projectId)/members", method: "DELETE")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["userId": userId])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func inviteProjectMember(projectId: String, email: String, role: String = "GUEST") async throws -> Bool {
+        var req = makeRequest("/api/projects/\(projectId)/invite", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["email": email, "role": role])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    /// POST /api/projects/{id}/duplicate → returns the new project id.
+    func duplicateProject(projectId: String) async throws -> String {
+        let req = makeRequest("/api/projects/\(projectId)/duplicate", method: "POST")
+        return (try await run(req, decode: CreatedTaskRef.self)).id
+    }
+    @discardableResult
+    func deleteProject(projectId: String) async throws -> Bool {
+        _ = try await run(makeRequest("/api/projects/\(projectId)", method: "DELETE"), decode: SuccessResponse.self)
+        return true
+    }
+
     // MARK: - Attachments
 
     func taskAttachments(_ taskId: String) async throws -> [TaskAttachment] {

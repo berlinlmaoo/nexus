@@ -7,8 +7,15 @@ struct ProjectDetail: Decodable, Sendable {
     let name: String
     let color: String?
     let icon: String?
+    let description: String?
+    let workspaceId: String?
     let taskLists: [Lane]?
     let members: [ProjectMember]?
+    // project settings flags
+    let enableTaskBatchDuplicate: Bool?
+    let enablePnlDashboard: Bool?
+    let autoAssignEnabled: Bool?
+    let autoAssignAssigneeIds: [String]?
 
     struct Lane: Decodable, Identifiable, Sendable {
         let id: String
