@@ -606,6 +606,28 @@ struct APIClient {
         return true
     }
 
+    // MARK: - Attendance offices
+
+    func attendanceOffices() async throws -> [Office] {
+        (try await run(makeRequest("/api/attendance/offices"), decode: OfficesResponse.self)).offices ?? []
+    }
+    @discardableResult
+    func createOffice(fields: [String: Any]) async throws -> Bool {
+        var req = makeRequest("/api/attendance/offices", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: fields)
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func updateOffice(id: String, fields: [String: Any]) async throws -> Bool {
+        var req = makeRequest("/api/attendance/offices/\(id)", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: fields)
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+
     func checkIn(lat: Double, lng: Double, selfie: Data, notes: String? = nil) async throws -> AttendanceOutcome {
         var fields = ["lat": String(lat), "lng": String(lng)]
         if let notes, !notes.isEmpty { fields["notes"] = notes }

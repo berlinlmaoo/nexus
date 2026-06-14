@@ -43,6 +43,7 @@ struct AttendanceView: View {
                     metricsGrid
                     AttendanceRequestsCard(canReview: today?.canReviewAttendanceRequests ?? today?.canManageAttendance ?? false)
                     StreakBoardCard(canManage: today?.canManageAttendance ?? false)
+                    if today?.canManageAttendance == true { OfficesCard() }
                 }
                 .padding(16)
             }
