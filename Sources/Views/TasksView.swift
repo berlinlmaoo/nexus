@@ -41,7 +41,7 @@ struct TasksView: View {
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                LazyVStack(alignment: .leading, spacing: 18) {
                     ForEach(groups, id: \.label) { group in
                         VStack(alignment: .leading, spacing: 8) {
                             HStack(spacing: 6) {

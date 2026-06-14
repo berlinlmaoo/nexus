@@ -78,15 +78,13 @@ struct ProjectsView: View {
                     .background(NX.violet.opacity(0.1), in: Capsule())
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    ForEach(Array(rootFolders.enumerated()), id: \.element.id) { idx, f in
+                    ForEach(rootFolders) { f in
                         FolderNode(folder: f, depth: 0, allFolders: folders, projectsByFolder: byFolder,
                                    collapsed: $collapsed, onMove: move, onDeleteFolder: deleteFolder,
                                    onEditFolder: { editFolder = $0 })
-                            .revealOnAppear(idx)
                     }
-                    ForEach(Array(ungrouped.enumerated()), id: \.element.id) { idx, p in
+                    ForEach(ungrouped) { p in
                         ProjectFolderLink(project: p, folders: folders, onMove: move)
-                            .revealOnAppear(rootFolders.count + idx)
                     }
                 }
                 .padding(16)
@@ -333,7 +331,7 @@ struct FolderIconTile: View {
         ZStack {
             RoundedRectangle(cornerRadius: 11, style: .continuous).fill(NX.muted)
             if folder.isUploadedIcon {
-                AsyncImage(url: URL(string: Config.baseURL.absoluteString + (folder.icon ?? ""))) { img in
+                CachedImage(url: URL(string: Config.baseURL.absoluteString + (folder.icon ?? ""))) { img in
                     img.resizable().scaledToFill()
                 } placeholder: { Text("📁").font(.system(size: 18)) }
                 .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
@@ -452,7 +450,7 @@ struct ProjectCard: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NX.muted)
                     if project.isUploadedIcon {
-                        AsyncImage(url: URL(string: Config.baseURL.absoluteString + (project.icon ?? ""))) { img in
+                        CachedImage(url: URL(string: Config.baseURL.absoluteString + (project.icon ?? ""))) { img in
                             img.resizable().scaledToFill()
                         } placeholder: { Text("📁").font(.system(size: 22)) }
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))

@@ -165,7 +165,7 @@ struct AvatarView: View {
         ZStack {
             Circle().fill(NX.accentBg)
             if let resolved {
-                AsyncImage(url: resolved) { img in img.resizable().scaledToFill() } placeholder: { initialText }
+                CachedImage(url: resolved) { img in img.resizable().scaledToFill() } placeholder: { initialText }
                     .clipShape(Circle())
             } else { initialText }
         }

@@ -74,7 +74,7 @@ struct ProjectDetailView: View {
                 let tint = Color(hex: d.color ?? "#7b68ee")
                 Group {
                     if let ic = d.icon, ic.hasPrefix("/") || ic.hasPrefix("http") {
-                        AsyncImage(url: URL(string: ic.hasPrefix("http") ? ic : Config.baseURL.absoluteString + ic)) { $0.resizable().scaledToFill() } placeholder: { tint.opacity(0.2) }
+                        CachedImage(url: URL(string: ic.hasPrefix("http") ? ic : Config.baseURL.absoluteString + ic)) { $0.resizable().scaledToFill() } placeholder: { tint.opacity(0.2) }
                     } else {
                         Text(isEmojiIcon(d.icon ?? "") ? (d.icon ?? "📁") : "📁").font(.system(size: 17))
                     }
@@ -215,7 +215,9 @@ struct LaneColumn: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        // LazyVStack so a task-heavy lane only renders the cards in view (the rest
+        // materialize as you scroll) — keeps board scrolling smooth on device.
+        LazyVStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(lane.name).font(NXFont.display(14, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
                 Spacer()

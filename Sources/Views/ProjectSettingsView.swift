@@ -70,7 +70,7 @@ struct ProjectSettingsView: View {
             field("Ikon (emoji)") {
                 HStack {
                     if iconIsImage {
-                        AsyncImage(url: URL(string: icon.hasPrefix("http") ? icon : Config.baseURL.absoluteString + icon)) { $0.resizable().scaledToFill() } placeholder: { Color.clear }
+                        CachedImage(url: URL(string: icon.hasPrefix("http") ? icon : Config.baseURL.absoluteString + icon)) { $0.resizable().scaledToFill() } placeholder: { Color.clear }
                             .frame(width: 32, height: 32).clipShape(RoundedRectangle(cornerRadius: 8))
                         Button("Pakai emoji lagi") { icon = "🚀" }.font(NXFont.text(12, .semibold)).foregroundStyle(NX.violet)
                     } else {

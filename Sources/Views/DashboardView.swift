@@ -42,7 +42,7 @@ struct DashboardView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                LazyVStack(alignment: .leading, spacing: 18) {
                     greeting
                     levelCard
                     searchRow
@@ -177,7 +177,6 @@ struct DashboardView: View {
         if let a = activeStat, a < statData.count {
             ZStack {
                 Color.black.opacity(0.5).ignoresSafeArea()
-                    .background(.ultraThinMaterial.opacity(0.001))
                     .transition(.opacity)
                     .onTapGesture { toggleStat(nil) }
                 statModalCard(a)
