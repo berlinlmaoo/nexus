@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct ProjectsView: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(\.tabBarShrink) private var tabShrink
     @State private var projects: [Project] = []
     @State private var folders: [ProjectFolder] = []
     @State private var loading = true
@@ -91,6 +92,7 @@ struct ProjectsView: View {
                 }
                 .padding(16)
             }
+            .tracksTabBarShrink(tabShrink)
             .refreshable { await load() }
         }
     }

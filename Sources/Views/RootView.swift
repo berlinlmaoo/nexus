@@ -4,6 +4,7 @@ import SwiftUI
 struct RootView: View {
     @Environment(AuthStore.self) private var auth
     @State private var tab = 0
+    @State private var shrink = TabBarShrink()
 
     var body: some View {
         if auth.isAuthenticated {
@@ -21,8 +22,9 @@ struct RootView: View {
             ProjectsView().tag(3)
             MoreView().tag(4)
         }
+        .environment(\.tabBarShrink, shrink)
         .toolbar(.hidden, for: .tabBar)
-        .safeAreaInset(edge: .bottom, spacing: 0) { FloatingTabBar(selection: $tab) }
+        .safeAreaInset(edge: .bottom, spacing: 0) { FloatingTabBar(selection: $tab, shrink: shrink) }
     }
 }
 
@@ -49,6 +51,7 @@ struct ComingSoonView: View {
 /// Knowledge / Pulse Check / System) + account footer.
 struct MoreView: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(\.tabBarShrink) private var tabShrink
     private let cols = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
     var body: some View {
@@ -94,6 +97,7 @@ struct MoreView: View {
                     }
                     .padding(16)
                 }
+                .tracksTabBarShrink(tabShrink)
             }
             .navigationTitle("More")
             .navigationBarTitleDisplayMode(.inline)

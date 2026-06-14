@@ -4,6 +4,7 @@ import SwiftUI
 /// message, date·type) + mark-read / mark-all.
 struct InboxView: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(\.tabBarShrink) private var tabShrink
     @State private var items: [NexusNotification] = []
     @State private var unread = 0
     @State private var loading = true
@@ -63,6 +64,7 @@ struct InboxView: View {
                 }
                 .padding(16)
             }
+            .tracksTabBarShrink(tabShrink)
             .refreshable { await load() }
         }
     }
