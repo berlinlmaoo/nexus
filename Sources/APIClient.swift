@@ -629,6 +629,76 @@ struct APIClient {
         return true
     }
 
+    // MARK: attendance admin — per-user shift, day-off quota/grant, red-date quota, holidays (BoD+)
+    /// PATCH /api/workspaces/members — set/clear a member's personal shift (HH:mm) + per-weekday overrides.
+    @discardableResult
+    func setAttendanceShift(memberId: String, workspaceId: String, start: String?, end: String?, byDay: [String: [String: String]]?) async throws -> Bool {
+        var body: [String: Any] = ["memberId": memberId, "workspaceId": workspaceId]
+        body["attendanceShiftStartTime"] = start ?? NSNull()
+        body["attendanceShiftEndTime"] = end ?? NSNull()
+        body["attendanceShiftByDay"] = (byDay?.isEmpty == false ? byDay! : NSNull())
+        var req = makeRequest("/api/workspaces/members", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    func dayoffs(userId: String, month: String) async throws -> DayoffsResponse {
+        try await run(makeRequest("/api/attendance/dayoffs?userId=\(enc(userId))&month=\(enc(month))"), decode: DayoffsResponse.self)
+    }
+    @discardableResult
+    func grantDayoff(userId: String, date: String, reason: String?) async throws -> Bool {
+        var body: [String: Any] = ["userId": userId, "date": date]
+        if let reason, !reason.isEmpty { body["reason"] = reason }
+        var req = makeRequest("/api/attendance/dayoffs", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func setDayoffQuota(userId: String, quota: Int?, workspaceId: String) async throws -> Bool {
+        var body: [String: Any] = ["userId": userId, "workspaceId": workspaceId]
+        body["quota"] = quota ?? NSNull()
+        var req = makeRequest("/api/attendance/dayoffs", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func deleteDayoff(id: String) async throws -> Bool {
+        _ = try await run(makeRequest("/api/attendance/dayoffs?id=\(enc(id))", method: "DELETE"), decode: SuccessResponse.self)
+        return true
+    }
+    func redDateQuota(month: String) async throws -> RedDateQuotaInfo {
+        try await run(makeRequest("/api/attendance/red-date-quota?month=\(enc(month))"), decode: RedDateQuotaInfo.self)
+    }
+    @discardableResult
+    func setRedDateQuota(month: String, quota: Int) async throws -> Bool {
+        var req = makeRequest("/api/attendance/red-date-quota", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["month": month, "quota": quota])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    func holidays(month: String) async throws -> HolidaysResponse {
+        try await run(makeRequest("/api/attendance/holidays?month=\(enc(month))"), decode: HolidaysResponse.self)
+    }
+    @discardableResult
+    func addHoliday(date: String, name: String) async throws -> Bool {
+        var req = makeRequest("/api/attendance/holidays", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["date": date, "name": name])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func deleteHoliday(id: String) async throws -> Bool {
+        _ = try await run(makeRequest("/api/attendance/holidays?id=\(enc(id))", method: "DELETE"), decode: SuccessResponse.self)
+        return true
+    }
+
     func checkIn(lat: Double, lng: Double, selfie: Data, notes: String? = nil) async throws -> AttendanceOutcome {
         var fields = ["lat": String(lat), "lng": String(lng)]
         if let notes, !notes.isEmpty { fields["notes"] = notes }

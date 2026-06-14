@@ -74,10 +74,10 @@ struct WorkspaceMembersCard: View {
 
     private func memberRow(_ m: WorkspaceRoster.Member) -> some View {
         HStack(spacing: 10) {
-            AvatarView(url: m.user?.avatar, initial: m.initial, size: 36)
+            AvatarView(url: m.avatarURL, initial: m.initial, size: 36)
             VStack(alignment: .leading, spacing: 1) {
                 Text(m.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                if let e = m.user?.email, !e.isEmpty { Text(e).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }
+                if let e = m.emailText, !e.isEmpty { Text(e).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }
             }
             Spacer(minLength: 6)
             if canEditTier(viewerRole, m.role) {

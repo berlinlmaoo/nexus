@@ -37,7 +37,7 @@ struct AdminAnnouncement: Decodable, Identifiable, Sendable {
 struct AdminView: View {
     @State private var section = 0
     @State private var workspaceId: String?
-    private let titles = ["Users", "Audit", "Quests", "Pengumuman"]
+    private let titles = ["Users", "Absensi", "Audit", "Quests", "Pengumuman"]
 
     var body: some View {
         ZStack {
@@ -47,9 +47,10 @@ struct AdminView: View {
                     .pickerStyle(.segmented).padding(12)
                 Divider().overlay(NX.border)
                 switch section {
-                case 1: AdminAuditSection()
-                case 2: AdminQuestsSection(workspaceId: workspaceId)
-                case 3: AdminAnnouncementsSection()
+                case 1: AttendanceAdminSection(workspaceId: workspaceId)
+                case 2: AdminAuditSection()
+                case 3: AdminQuestsSection(workspaceId: workspaceId)
+                case 4: AdminAnnouncementsSection()
                 default: AdminUsersSection(workspaceId: workspaceId)
                 }
             }
@@ -109,10 +110,10 @@ struct AdminUsersSection: View {
 
     private func row(_ m: WorkspaceRoster.Member) -> some View {
         HStack(spacing: 12) {
-            AvatarView(url: m.user?.avatar, initial: m.initial, size: 38)
+            AvatarView(url: m.avatarURL, initial: m.initial, size: 38)
             VStack(alignment: .leading, spacing: 2) {
                 Text(m.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                if let e = m.user?.email, !e.isEmpty { Text(e).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }
+                if let e = m.emailText, !e.isEmpty { Text(e).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }
             }
             Spacer(minLength: 6)
             if canEditTier(viewerRole, m.role), let wsId = workspaceId {

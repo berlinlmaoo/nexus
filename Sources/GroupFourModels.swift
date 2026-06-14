@@ -27,16 +27,36 @@ struct CalendarResponse: Decodable, Sendable { let events: [CalendarEvent]? }
 // MARK: Admin (Control Room) — roster + org roles from /api/workspaces/members
 struct WorkspaceRoster: Decodable, Sendable {
     let role: String?
+    let workspaceId: String?
     let members: [Member]?
     struct Member: Decodable, Identifiable, Sendable {
         let id: String?
         let userId: String?
         let role: String?
+        // /api/workspaces/members returns these FLAT (name/email/avatar at member level).
+        let name: String?
+        let email: String?
+        let avatar: String?
+        let attendanceRole: String?
+        let attendanceShiftStartTime: String?
+        let attendanceShiftEndTime: String?
+        let attendanceShiftByDay: [String: ShiftDay]?
+        let joinedAt: String?
+        // Some other endpoints nest under `user` — kept as a fallback.
         let user: UserRef?
         struct UserRef: Decodable, Sendable { let name: String?; let email: String?; let avatar: String? }
+        struct ShiftDay: Decodable, Sendable { let start: String?; let end: String? }
+
         var idv: String { userId ?? id ?? UUID().uuidString }
-        var displayName: String { user?.name ?? user?.email ?? "—" }
-        var initial: String { String((user?.name ?? user?.email ?? "?").first ?? "?").uppercased() }
+        var displayName: String { name ?? user?.name ?? email ?? user?.email ?? "—" }
+        var emailText: String? { email ?? user?.email }
+        var avatarURL: String? { avatar ?? user?.avatar }
+        var initial: String { String((name ?? user?.name ?? email ?? user?.email ?? "?").first ?? "?").uppercased() }
+        /// "09:00–18:00" when a personal default shift override is set, else nil (= inherit team/office).
+        var shiftLabel: String? {
+            guard let s = attendanceShiftStartTime, let e = attendanceShiftEndTime, !s.isEmpty, !e.isEmpty else { return nil }
+            return "\(s)–\(e)"
+        }
     }
 }
 
