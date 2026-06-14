@@ -115,14 +115,17 @@ struct DashboardView: View {
 
     private var searchRow: some View {
         HStack(spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").font(.system(size: 15)).foregroundStyle(NX.mutedFg)
-                Text("Search..").font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
-                Spacer()
+            NavigationLink { SearchView() } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass").font(.system(size: 15)).foregroundStyle(NX.mutedFg)
+                    Text("Search..").font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+                    Spacer()
+                }
+                .padding(.horizontal, 18).frame(height: 48)
+                .background(NX.card, in: Capsule())
+                .overlay(Capsule().strokeBorder(NX.border, lineWidth: 1))
             }
-            .padding(.horizontal, 18).frame(height: 48)
-            .background(NX.card, in: Capsule())
-            .overlay(Capsule().strokeBorder(NX.border, lineWidth: 1))
+            .buttonStyle(.plain)
 
             ZStack(alignment: .topTrailing) {
                 Circle().fill(NX.card).frame(width: 48, height: 48).overlay(Circle().strokeBorder(NX.border))

@@ -195,6 +195,10 @@ struct APIClient {
         try await run(makeRequest("/api/pnl/dashboard?projectId=\(enc(projectId))&year=\(year)"), decode: PnlDashboard.self)
     }
 
+    func search(_ q: String) async throws -> SearchResults {
+        try await run(makeRequest("/api/search?q=\(enc(q))"), decode: SearchResults.self)
+    }
+
     // MARK: - Dashboard
 
     func profile() async throws -> ProfileResponse {
