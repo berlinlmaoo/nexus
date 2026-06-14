@@ -82,9 +82,11 @@ struct ProjectTaskRow: View {
                 }
                 Spacer(minLength: 4)
                 if let p = task.priority, p.uppercased() != "NONE" { NexusChip(text: p.capitalized, tone: prioTone(p)) }
-                if let ini = task.assigneeInitial {
-                    Text(ini).font(NXFont.text(10, .black)).foregroundStyle(NX.violet)
-                        .frame(width: 22, height: 22).background(NX.accentBg, in: Circle())
+                HStack(spacing: -7) {
+                    ForEach(task.assigneeAvatars, id: \.id) { a in
+                        AvatarView(url: a.url, initial: a.initial, size: 22)
+                            .overlay(Circle().strokeBorder(NX.card, lineWidth: 1.5))
+                    }
                 }
             }
             .padding(12)

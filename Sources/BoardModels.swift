@@ -71,6 +71,13 @@ struct BoardTask: Decodable, Identifiable, Sendable {
         guard let n = assignees?.first?.user?.name, let c = n.first else { return nil }
         return String(c).uppercased()
     }
+    /// Up to 3 assignees (avatar URL + initial) for a small overlapping stack on the card.
+    var assigneeAvatars: [(id: String, initial: String, url: String?)] {
+        (assignees ?? []).prefix(3).enumerated().map { idx, a in
+            let n = a.user?.name ?? "?"
+            return (id: a.user?.id ?? "a\(idx)", initial: String(n.first ?? "?").uppercased(), url: a.user?.avatar)
+        }
+    }
 }
 
 /// GET /api/tasks/{id} — focused task-detail fields.

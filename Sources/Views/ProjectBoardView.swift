@@ -20,26 +20,17 @@ struct ProjectDetailView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            Color.clear.frame(height: statusBarTop)   // clear the status bar only (NOT the reserved nav-bar height)
+            projectHeader
             tabBar
             Divider().overlay(NX.border)
             content
         }
-        .background {
-            NX.background.ignoresSafeArea()
-            RadialGradient(colors: [Color(hex: "#4eb301").opacity(0.05), .clear], center: .topLeading, startRadius: 0, endRadius: 320).ignoresSafeArea()
-            RadialGradient(colors: [Color(hex: "#7b4dff").opacity(0.07), .clear], center: .topTrailing, startRadius: 0, endRadius: 320).ignoresSafeArea()
-        }
-        .navigationTitle(projectName)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                if detail != nil {
-                    Button { showSettings = true } label: { Image(systemName: "gearshape") }
-                }
-                Button { prefillDue = nil; showCreate = true } label: { Image(systemName: "plus") }
-                    .disabled(!canCreate)
-            }
-        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(projectBackground)
+        .ignoresSafeArea(.container, edges: .top)   // the hidden nav bar's height stays in the top safe inset on iOS 26 → drop it
+        .navigationBarBackButtonHidden(true)
+        .navigationBarHidden(true)
         .sheet(isPresented: $showCreate) {
             CreateTaskSheet(projectId: projectId, lanes: detail?.taskLists ?? [], prefillDue: prefillDue) { await load() }
         }
@@ -50,6 +41,62 @@ struct ProjectDetailView: View {
         }
         .task { await load() }
         .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }
+    }
+
+    /// Real status-bar height from the window (does NOT include the reserved nav-bar height that the
+    /// container top-safe-inset keeps even with the bar hidden on iOS 26).
+    private var statusBarTop: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows).first(where: \.isKeyWindow)?.safeAreaInsets.top ?? 47
+    }
+
+    /// Single-expression background (a `.background { multi-statement closure }` mishandles the top
+    /// safe area and reserved a tall gap above the content).
+    private var projectBackground: some View {
+        ZStack {
+            NX.background
+            RadialGradient(colors: [Color(hex: "#4eb301").opacity(0.05), .clear], center: .topLeading, startRadius: 0, endRadius: 320)
+            RadialGradient(colors: [Color(hex: "#7b4dff").opacity(0.07), .clear], center: .topTrailing, startRadius: 0, endRadius: 320)
+        }
+        .ignoresSafeArea()
+    }
+
+    // MARK: compact header (native bar hidden — it reserved a tall white gap above the tab bar)
+
+    private var projectHeader: some View {
+        HStack(spacing: 10) {
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.left").font(.system(size: 16, weight: .bold)).foregroundStyle(NX.foreground)
+                    .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
+            }
+            if let d = detail {
+                let tint = Color(hex: d.color ?? "#7b68ee")
+                Group {
+                    if let ic = d.icon, ic.hasPrefix("/") || ic.hasPrefix("http") {
+                        AsyncImage(url: URL(string: ic.hasPrefix("http") ? ic : Config.baseURL.absoluteString + ic)) { $0.resizable().scaledToFill() } placeholder: { tint.opacity(0.2) }
+                    } else {
+                        Text(d.icon ?? "📁").font(.system(size: 17))
+                    }
+                }
+                .frame(width: 30, height: 30)
+                .background(tint.opacity(0.15), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            }
+            Text(projectName).font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+            Spacer(minLength: 6)
+            if detail != nil {
+                Button { showSettings = true } label: {
+                    Image(systemName: "gearshape").font(.system(size: 15, weight: .semibold)).foregroundStyle(NX.violet)
+                        .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
+                }
+            }
+            Button { prefillDue = nil; showCreate = true } label: {
+                Image(systemName: "plus").font(.system(size: 17, weight: .bold)).foregroundStyle(canCreate ? NX.violet : NX.mutedFg)
+                    .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
+            }.disabled(!canCreate)
+        }
+        .padding(.horizontal, 14).padding(.top, 4).padding(.bottom, 8)
     }
 
     // MARK: tab bar (underline style, horizontally scrollable)
@@ -266,9 +313,11 @@ struct BoardCard: View {
                 if task.commentCount > 0 {
                     Label("\(task.commentCount)", systemImage: "bubble.left").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 }
-                if let ini = task.assigneeInitial {
-                    Text(ini).font(NXFont.text(10, .black)).foregroundStyle(NX.violet)
-                        .frame(width: 22, height: 22).background(NX.accentBg, in: Circle())
+                HStack(spacing: -7) {
+                    ForEach(task.assigneeAvatars, id: \.id) { a in
+                        AvatarView(url: a.url, initial: a.initial, size: 22)
+                            .overlay(Circle().strokeBorder(NX.card, lineWidth: 1.5))
+                    }
                 }
             }
         }
