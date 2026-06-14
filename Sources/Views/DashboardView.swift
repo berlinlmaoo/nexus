@@ -365,7 +365,9 @@ struct DashboardView: View {
                 }.buttonStyle(.plain)
             }
             Group {
-            if notifs.isEmpty {
+              if morphReady {
+                Group {
+                if notifs.isEmpty {
                 Text("Belum ada notifikasi.").font(NXFont.text(13)).foregroundStyle(NX.mutedFg).padding(.vertical, 8)
             } else {
                 ScrollView {
@@ -385,8 +387,12 @@ struct DashboardView: View {
                     }
                 }.frame(maxHeight: 300)
             }
+                }
+                .transition(.opacity)
+              } else {
+                Color.clear.frame(height: notifs.isEmpty ? 44 : 300)
+              }
             }
-            .opacity(morphReady ? 1 : 0)
         }
         .padding(18).frame(maxWidth: .infinity)
         .background {
