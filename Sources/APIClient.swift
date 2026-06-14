@@ -90,6 +90,51 @@ struct APIClient {
         return true
     }
 
+    // MARK: - Project folders
+
+    func projectFolders(workspaceId: String?) async throws -> [ProjectFolder] {
+        let path = "/api/project-folders" + (workspaceId.map { "?workspaceId=\(enc($0))" } ?? "")
+        return try await run(makeRequest(path), decode: [ProjectFolder].self)
+    }
+    /// Creates a folder and returns its id (needed to upload a photo icon afterward).
+    func projectFolderCreate(workspaceId: String, name: String, icon: String, color: String, parentFolderId: String? = nil) async throws -> String {
+        var req = makeRequest("/api/project-folders", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body: [String: Any] = ["workspaceId": workspaceId, "name": name, "icon": icon, "color": color]
+        if let parentFolderId { body["parentFolderId"] = parentFolderId }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return (try await run(req, decode: CreatedTaskRef.self)).id
+    }
+    @discardableResult
+    func projectFolderDelete(_ folderId: String) async throws -> Bool {
+        _ = try await run(makeRequest("/api/project-folders/\(folderId)", method: "DELETE"), decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func uploadFolderIcon(folderId: String, fileName: String, data: Data) async throws -> Bool {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var req = makeRequest("/api/upload/folder-icon", method: "POST")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        var body = Data()
+        func add(_ s: String) { body.append(s.data(using: .utf8)!) }
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"folderId\"\r\n\r\n\(folderId)\r\n")
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\nContent-Type: application/octet-stream\r\n\r\n")
+        body.append(data)
+        add("\r\n--\(boundary)--\r\n")
+        req.httpBody = body
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    /// Move a project into a folder (or to root with nil).
+    @discardableResult
+    func setProjectFolder(projectId: String, folderId: String?) async throws -> Bool {
+        var req = makeRequest("/api/projects/\(projectId)", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["folderId": folderId as Any])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+
     @discardableResult
     func deleteTask(_ id: String) async throws -> Bool {
         _ = try await run(makeRequest("/api/tasks/\(id)", method: "DELETE"), decode: SuccessResponse.self)

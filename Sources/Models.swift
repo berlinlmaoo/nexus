@@ -24,6 +24,8 @@ struct Project: Decodable, Identifiable, Sendable {
     let color: String?
     let icon: String?
     let status: String?
+    let folderId: String?
+    let workspaceId: String?
     let count: Counts?
     let taskLists: [TaskList]?
     let members: [Member]?
@@ -43,7 +45,7 @@ struct Project: Decodable, Identifiable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, description, color, icon, status, taskLists, members
+        case id, name, description, color, icon, status, folderId, workspaceId, taskLists, members
         case count = "_count"
     }
 
@@ -73,5 +75,21 @@ struct Project: Decodable, Identifiable, Sendable {
         case "COMPLETED", "DONE": return "Completed"
         default: return "Active"
         }
+    }
+}
+
+/// GET /api/project-folders — a folder grouping projects (can nest via parentFolderId).
+struct ProjectFolder: Decodable, Identifiable, Sendable {
+    let id: String
+    let name: String
+    let icon: String?
+    let color: String?
+    let position: Int?
+    let parentFolderId: String?
+
+    var isUploadedIcon: Bool { (icon ?? "").hasPrefix("/") }
+    var emoji: String {
+        guard let icon, !icon.isEmpty, !isUploadedIcon else { return "📁" }
+        return icon
     }
 }

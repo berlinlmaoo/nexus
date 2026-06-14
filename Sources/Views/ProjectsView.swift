@@ -1,12 +1,28 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ProjectsView: View {
     @Environment(AuthStore.self) private var auth
     @State private var projects: [Project] = []
+    @State private var folders: [ProjectFolder] = []
     @State private var loading = true
     @State private var error: String?
     @State private var workspaceId: String?
     @State private var showCreate = false
+    @State private var showCreateFolder = false
+    @State private var collapsed: Set<String> = []
+
+    // grouping
+    private var byFolder: [String: [Project]] {
+        Dictionary(grouping: projects.filter { $0.folderId != nil }) { $0.folderId! }
+    }
+    private var rootFolders: [ProjectFolder] {
+        folders.filter { $0.parentFolderId == nil }.sorted { ($0.position ?? 0, $0.name) < ($1.position ?? 0, $1.name) }
+    }
+    private var ungrouped: [Project] {
+        let folderIds = Set(folders.map(\.id))
+        return projects.filter { $0.folderId == nil || !folderIds.contains($0.folderId!) }
+    }
 
     var body: some View {
         NavigationStack {
@@ -17,12 +33,18 @@ struct ProjectsView: View {
             .navigationTitle("Mission Control")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showCreate = true } label: { Image(systemName: "plus") }
-                        .disabled(workspaceId == nil)
+                    Menu {
+                        Button { showCreate = true } label: { Label("Mission baru", systemImage: "rectangle.stack.badge.plus") }
+                        Button { showCreateFolder = true } label: { Label("Folder baru", systemImage: "folder.badge.plus") }
+                    } label: { Image(systemName: "plus") }
+                    .disabled(workspaceId == nil)
                 }
             }
             .sheet(isPresented: $showCreate) {
                 CreateProjectSheet(workspaceId: workspaceId ?? "") { await load() }
+            }
+            .sheet(isPresented: $showCreateFolder) {
+                CreateFolderSheet(workspaceId: workspaceId ?? "") { await load() }
             }
             .task { await load() }
         }
@@ -52,13 +74,12 @@ struct ProjectsView: View {
                     .background(NX.violet.opacity(0.1), in: Capsule())
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    ForEach(projects) { p in
-                        NavigationLink {
-                            ProjectDetailView(projectId: p.id, projectName: p.name)
-                        } label: {
-                            ProjectCard(project: p)
-                        }
-                        .buttonStyle(PressableCardStyle())
+                    ForEach(rootFolders) { f in
+                        FolderNode(folder: f, depth: 0, allFolders: folders, projectsByFolder: byFolder,
+                                   collapsed: $collapsed, onMove: move, onDeleteFolder: deleteFolder)
+                    }
+                    ForEach(ungrouped) { p in
+                        ProjectFolderLink(project: p, folders: folders, onMove: move)
                     }
                 }
                 .padding(16)
@@ -81,12 +102,220 @@ struct ProjectsView: View {
         do {
             projects = try await APIClient.shared.projects()
             if workspaceId == nil { workspaceId = try? await APIClient.shared.workspaceInfo().workspaceId }
+            folders = (try? await APIClient.shared.projectFolders(workspaceId: workspaceId)) ?? []
         } catch APIError.unauthorized {
             auth.logout()
         } catch {
             self.error = (error as? LocalizedError)?.errorDescription ?? "Terjadi kesalahan."
         }
         loading = false
+    }
+    private func move(_ p: Project, to folderId: String?) async {
+        try? await APIClient.shared.setProjectFolder(projectId: p.id, folderId: folderId)
+        await load()
+    }
+    private func deleteFolder(_ f: ProjectFolder) async {
+        try? await APIClient.shared.projectFolderDelete(f.id)
+        await load()
+    }
+}
+
+/// A project shown as a card link, with a "move to folder" context menu.
+struct ProjectFolderLink: View {
+    let project: Project
+    let folders: [ProjectFolder]
+    let onMove: (Project, String?) async -> Void
+    var body: some View {
+        NavigationLink {
+            ProjectDetailView(projectId: project.id, projectName: project.name)
+        } label: {
+            ProjectCard(project: project)
+        }
+        .buttonStyle(PressableCardStyle())
+        .contextMenu {
+            Menu("Pindah ke folder") {
+                if project.folderId != nil { Button("Tanpa folder") { Task { await onMove(project, nil) } } }
+                ForEach(folders.filter { $0.id != project.folderId }) { f in
+                    Button { Task { await onMove(project, f.id) } } label: { Label(f.name, systemImage: "folder") }
+                }
+            }
+        }
+    }
+}
+
+/// Collapsible folder section (recurses for sub-folders).
+struct FolderNode: View {
+    let folder: ProjectFolder
+    let depth: Int
+    let allFolders: [ProjectFolder]
+    let projectsByFolder: [String: [Project]]
+    @Binding var collapsed: Set<String>
+    let onMove: (Project, String?) async -> Void
+    let onDeleteFolder: (ProjectFolder) async -> Void
+
+    private var subFolders: [ProjectFolder] {
+        allFolders.filter { $0.parentFolderId == folder.id }.sorted { ($0.position ?? 0, $0.name) < ($1.position ?? 0, $1.name) }
+    }
+    private var directProjects: [Project] { projectsByFolder[folder.id] ?? [] }
+    private var isExpanded: Bool { !collapsed.contains(folder.id) }
+    private var count: Int { directProjects.count + subFolders.count }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                if collapsed.contains(folder.id) { collapsed.remove(folder.id) } else { collapsed.insert(folder.id) }
+            } label: {
+                HStack(spacing: 10) {
+                    FolderIconTile(folder: folder)
+                    Text(folder.name).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    Text("\(count)").font(NXFont.text(12, .bold)).foregroundStyle(NX.mutedFg)
+                        .padding(.horizontal, 8).padding(.vertical, 2).background(NX.muted, in: Capsule())
+                    Spacer()
+                    Image(systemName: "chevron.down").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.mutedFg)
+                        .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                }
+                .padding(12)
+                .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
+            }
+            .buttonStyle(.plain)
+            .contextMenu { Button(role: .destructive) { Task { await onDeleteFolder(folder) } } label: { Label("Hapus folder", systemImage: "trash") } }
+
+            if isExpanded {
+                ForEach(subFolders) { sub in
+                    FolderNode(folder: sub, depth: depth + 1, allFolders: allFolders, projectsByFolder: projectsByFolder,
+                               collapsed: $collapsed, onMove: onMove, onDeleteFolder: onDeleteFolder)
+                }
+                ForEach(directProjects) { p in
+                    ProjectFolderLink(project: p, folders: allFolders, onMove: onMove)
+                }
+                if directProjects.isEmpty && subFolders.isEmpty {
+                    Text("Folder kosong.").font(NXFont.text(12)).foregroundStyle(NX.mutedFg).padding(.leading, 8)
+                }
+            }
+        }
+        .padding(.leading, CGFloat(depth) * 14)
+    }
+}
+
+/// Create a project folder: name + emoji/photo icon + color.
+struct CreateFolderSheet: View {
+    let workspaceId: String
+    let onCreated: () async -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var icon = "📁"
+    @State private var color = "#7b68ee"
+    @State private var photo: (name: String, data: Data)?
+    @State private var showImporter = false
+    @State private var busy = false
+    @State private var err: String?
+
+    private let icons = ["📁", "🎬", "📣", "💼", "⭐️", "🎯", "🚀", "📦"]
+    private let colors = ["#7b68ee", "#0091ff", "#16a34a", "#f59e0b", "#ef4444", "#ec4899", "#06b6d4", "#7B2FBE"]
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                NX.background.ignoresSafeArea()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        field("NAMA FOLDER") {
+                            TextField("mis. Client Pertamina", text: $name)
+                                .font(NXFont.text(16)).padding(12)
+                                .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                        }
+                        field("ICON") {
+                            HStack(spacing: 8) {
+                                Button { showImporter = true } label: {
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NX.violet.opacity(0.12))
+                                        if let photo, let ui = UIImage(data: photo.data) {
+                                            Image(uiImage: ui).resizable().scaledToFill().clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                        } else {
+                                            Image(systemName: "photo.badge.plus").font(.system(size: 16)).foregroundStyle(NX.violet)
+                                        }
+                                    }
+                                    .frame(width: 44, height: 44)
+                                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.violet.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [4])))
+                                }.buttonStyle(.plain)
+                                ForEach(icons, id: \.self) { ic in
+                                    Text(ic).font(.system(size: 20)).frame(width: 40, height: 40)
+                                        .background(icon == ic && photo == nil ? NX.violet.opacity(0.15) : NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(icon == ic && photo == nil ? NX.violet : NX.border))
+                                        .onTapGesture { icon = ic; photo = nil }
+                                }
+                            }
+                        }
+                        field("WARNA") {
+                            HStack(spacing: 10) {
+                                ForEach(colors, id: \.self) { c in
+                                    Circle().fill(Color(hex: c)).frame(width: 30, height: 30)
+                                        .overlay(Circle().strokeBorder(color == c ? NX.foreground : .clear, lineWidth: 2))
+                                        .onTapGesture { color = c }
+                                }
+                            }
+                        }
+                        if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
+                        Button { Task { await create() } } label: {
+                            HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text("Buat folder") }
+                        }
+                        .buttonStyle(NexusPrimaryButton())
+                        .disabled(busy || name.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                    .padding(20)
+                }
+            }
+            .navigationTitle("Folder baru")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Batal") { dismiss() } } }
+            .fileImporter(isPresented: $showImporter, allowedContentTypes: [.image], allowsMultipleSelection: false) { result in
+                if case let .success(urls) = result, let url = urls.first {
+                    let scoped = url.startAccessingSecurityScopedResource()
+                    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                    if let data = try? Data(contentsOf: url) { photo = (url.lastPathComponent, data) }
+                }
+            }
+        }
+    }
+
+    private func field<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(label).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
+            content()
+        }
+    }
+
+    private func create() async {
+        busy = true; err = nil; defer { busy = false }
+        do {
+            let folderId = try await APIClient.shared.projectFolderCreate(workspaceId: workspaceId, name: name.trimmingCharacters(in: .whitespaces), icon: icon, color: color)
+            if let photo { try? await APIClient.shared.uploadFolderIcon(folderId: folderId, fileName: photo.name, data: photo.data) }
+            await onCreated()
+            dismiss()
+        } catch {
+            err = (error as? LocalizedError)?.errorDescription ?? "Gagal bikin folder."
+        }
+    }
+}
+
+/// Folder icon: uploaded photo (AsyncImage) or emoji, on a muted tile.
+struct FolderIconTile: View {
+    let folder: ProjectFolder
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 11, style: .continuous).fill(NX.muted)
+            if folder.isUploadedIcon {
+                AsyncImage(url: URL(string: Config.baseURL.absoluteString + (folder.icon ?? ""))) { img in
+                    img.resizable().scaledToFill()
+                } placeholder: { Text("📁").font(.system(size: 18)) }
+                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+            } else {
+                Text(folder.emoji).font(.system(size: 18))
+            }
+        }
+        .frame(width: 34, height: 34)
     }
 }
 
