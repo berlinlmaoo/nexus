@@ -71,6 +71,7 @@ struct MoreView: View {
                         MoreSection("Home Base") {
                             LazyVGrid(columns: cols, spacing: 12) {
                                 MoreTile("Messages", "bubble.left.and.bubble.right.fill", NX.blue) { MessagesView() }
+                                MoreTile("Pengajuan Saya", "tray.full.fill", NX.warning) { SubmissionsView() }
                                 MoreTile("Team Calendar", "calendar", NX.violet) { TeamCalendarView() }
                                 MoreTile("Room Booking", "door.left.hand.open", NX.coral) { RoomBookingView() }
                             }

@@ -10,6 +10,7 @@ struct ProjectsView: View {
     @State private var workspaceId: String?
     @State private var showCreate = false
     @State private var showCreateFolder = false
+    @State private var editFolder: ProjectFolder?
     @State private var collapsed: Set<String> = []
 
     // grouping
@@ -46,6 +47,9 @@ struct ProjectsView: View {
             .sheet(isPresented: $showCreateFolder) {
                 CreateFolderSheet(workspaceId: workspaceId ?? "") { await load() }
             }
+            .sheet(item: $editFolder) { f in
+                CreateFolderSheet(workspaceId: workspaceId ?? "", editing: f) { await load() }
+            }
             .task { await load() }
         }
     }
@@ -76,7 +80,8 @@ struct ProjectsView: View {
 
                     ForEach(rootFolders) { f in
                         FolderNode(folder: f, depth: 0, allFolders: folders, projectsByFolder: byFolder,
-                                   collapsed: $collapsed, onMove: move, onDeleteFolder: deleteFolder)
+                                   collapsed: $collapsed, onMove: move, onDeleteFolder: deleteFolder,
+                                   onEditFolder: { editFolder = $0 })
                     }
                     ForEach(ungrouped) { p in
                         ProjectFolderLink(project: p, folders: folders, onMove: move)
@@ -152,6 +157,7 @@ struct FolderNode: View {
     @Binding var collapsed: Set<String>
     let onMove: (Project, String?) async -> Void
     let onDeleteFolder: (ProjectFolder) async -> Void
+    let onEditFolder: (ProjectFolder) -> Void
 
     private var subFolders: [ProjectFolder] {
         allFolders.filter { $0.parentFolderId == folder.id }.sorted { ($0.position ?? 0, $0.name) < ($1.position ?? 0, $1.name) }
@@ -179,12 +185,15 @@ struct FolderNode: View {
                 .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
             }
             .buttonStyle(.plain)
-            .contextMenu { Button(role: .destructive) { Task { await onDeleteFolder(folder) } } label: { Label("Hapus folder", systemImage: "trash") } }
+            .contextMenu {
+                Button { onEditFolder(folder) } label: { Label("Edit folder", systemImage: "pencil") }
+                Button(role: .destructive) { Task { await onDeleteFolder(folder) } } label: { Label("Hapus folder", systemImage: "trash") }
+            }
 
             if isExpanded {
                 ForEach(subFolders) { sub in
                     FolderNode(folder: sub, depth: depth + 1, allFolders: allFolders, projectsByFolder: projectsByFolder,
-                               collapsed: $collapsed, onMove: onMove, onDeleteFolder: onDeleteFolder)
+                               collapsed: $collapsed, onMove: onMove, onDeleteFolder: onDeleteFolder, onEditFolder: onEditFolder)
                 }
                 ForEach(directProjects) { p in
                     ProjectFolderLink(project: p, folders: allFolders, onMove: onMove)
@@ -198,18 +207,26 @@ struct FolderNode: View {
     }
 }
 
-/// Create a project folder: name + emoji/photo icon + color.
+/// Create or edit a project folder: name + emoji/photo icon + color.
 struct CreateFolderSheet: View {
     let workspaceId: String
+    let editing: ProjectFolder?
     let onCreated: () async -> Void
     @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var icon = "📁"
-    @State private var color = "#7b68ee"
+    @State private var name: String
+    @State private var icon: String
+    @State private var color: String
     @State private var photo: (name: String, data: Data)?
     @State private var showImporter = false
     @State private var busy = false
     @State private var err: String?
+
+    init(workspaceId: String, editing: ProjectFolder? = nil, onCreated: @escaping () async -> Void) {
+        self.workspaceId = workspaceId; self.editing = editing; self.onCreated = onCreated
+        _name = State(initialValue: editing?.name ?? "")
+        _icon = State(initialValue: (editing?.isUploadedIcon == true ? "📁" : (editing?.icon ?? "📁")))
+        _color = State(initialValue: editing?.color ?? "#7b68ee")
+    }
 
     private let icons = ["📁", "🎬", "📣", "💼", "⭐️", "🎯", "🚀", "📦"]
     private let colors = ["#7b68ee", "#0091ff", "#16a34a", "#f59e0b", "#ef4444", "#ec4899", "#06b6d4", "#7B2FBE"]
@@ -259,7 +276,7 @@ struct CreateFolderSheet: View {
                         }
                         if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
                         Button { Task { await create() } } label: {
-                            HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text("Buat folder") }
+                            HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text(editing == nil ? "Buat folder" : "Simpan") }
                         }
                         .buttonStyle(NexusPrimaryButton())
                         .disabled(busy || name.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -267,7 +284,7 @@ struct CreateFolderSheet: View {
                     .padding(20)
                 }
             }
-            .navigationTitle("Folder baru")
+            .navigationTitle(editing == nil ? "Folder baru" : "Edit folder")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Batal") { dismiss() } } }
             .fileImporter(isPresented: $showImporter, allowedContentTypes: [.image], allowsMultipleSelection: false) { result in
@@ -289,13 +306,20 @@ struct CreateFolderSheet: View {
 
     private func create() async {
         busy = true; err = nil; defer { busy = false }
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
         do {
-            let folderId = try await APIClient.shared.projectFolderCreate(workspaceId: workspaceId, name: name.trimmingCharacters(in: .whitespaces), icon: icon, color: color)
+            let folderId: String
+            if let editing {
+                try await APIClient.shared.projectFolderUpdate(folderId: editing.id, name: trimmed, icon: icon, color: color)
+                folderId = editing.id
+            } else {
+                folderId = try await APIClient.shared.projectFolderCreate(workspaceId: workspaceId, name: trimmed, icon: icon, color: color)
+            }
             if let photo { try? await APIClient.shared.uploadFolderIcon(folderId: folderId, fileName: photo.name, data: photo.data) }
             await onCreated()
             dismiss()
         } catch {
-            err = (error as? LocalizedError)?.errorDescription ?? "Gagal bikin folder."
+            err = (error as? LocalizedError)?.errorDescription ?? "Gagal simpan folder."
         }
     }
 }

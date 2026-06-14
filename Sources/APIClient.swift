@@ -106,6 +106,14 @@ struct APIClient {
         return (try await run(req, decode: CreatedTaskRef.self)).id
     }
     @discardableResult
+    func projectFolderUpdate(folderId: String, name: String, icon: String, color: String) async throws -> Bool {
+        var req = makeRequest("/api/project-folders/\(folderId)", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["name": name, "icon": icon, "color": color])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
     func projectFolderDelete(_ folderId: String) async throws -> Bool {
         _ = try await run(makeRequest("/api/project-folders/\(folderId)", method: "DELETE"), decode: SuccessResponse.self)
         return true
@@ -175,6 +183,9 @@ struct APIClient {
     }
     func forms(projectId: String) async throws -> [NexusForm] {
         try await run(makeRequest("/api/forms?projectId=\(projectId)"), decode: [NexusForm].self)
+    }
+    func mySubmissions() async throws -> MySubmissionsResponse {
+        try await run(makeRequest("/api/forms/my-submissions"), decode: MySubmissionsResponse.self)
     }
     func projectDocs(_ projectId: String) async throws -> [Doc] {
         (try await run(makeRequest("/api/docs?projectId=\(enc(projectId))"), decode: DocsResponse.self)).docs ?? []
