@@ -287,6 +287,74 @@ struct TaskDependenciesCard: View {
     }
 }
 
+// MARK: - Time tracking
+
+struct TaskTimeCard: View {
+    let taskId: String
+    @State private var entries: [TimeEntry] = []
+    @State private var loading = true
+    @State private var minutes = ""
+    @State private var busy = false
+    private var total: Int { entries.reduce(0) { $0 + ($1.duration ?? 0) } }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            taskCardHeader(total > 0 ? "Time tracked · \(fmtDur(total))" : "Time tracked", "clock")
+            HStack(spacing: 8) {
+                TextField("Menit", text: $minutes).keyboardType(.numberPad).font(NXFont.text(14)).padding(10)
+                    .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous)).frame(width: 110)
+                Button { Task { await log() } } label: {
+                    HStack(spacing: 4) { if busy { ProgressView().scaleEffect(0.7).tint(.white) }; Text("Log time") }
+                        .font(NXFont.text(13, .bold)).foregroundStyle(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 9).background(NX.violet, in: Capsule())
+                }.buttonStyle(.plain).disabled(busy || (Int(minutes) ?? 0) <= 0)
+                Spacer()
+            }
+            if !loading && !entries.isEmpty {
+                ForEach(entries.prefix(6)) { e in
+                    HStack(spacing: 8) {
+                        Text("\(e.duration ?? 0)m").font(NXFont.text(12, .bold)).foregroundStyle(NX.foreground)
+                        Text(e.description ?? e.user?.name ?? "").font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                        Spacer()
+                        Text(ProjDate.parse(e.startTime).map { ProjDate.dayLabel($0) } ?? "").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading).nexusCard().task { await load() }
+    }
+    private func fmtDur(_ m: Int) -> String { m >= 60 ? "\(m / 60)j \(m % 60)m" : "\(m)m" }
+    private func log() async {
+        let m = Int(minutes) ?? 0; guard m > 0 else { return }
+        busy = true; defer { busy = false }; minutes = ""
+        try? await APIClient.shared.logTime(taskId: taskId, duration: m)
+        await load()
+    }
+    private func load() async { entries = (try? await APIClient.shared.timeEntries(taskId)) ?? []; loading = false }
+}
+
+// MARK: - Activity (read-only; comes with the task)
+
+struct TaskActivityCard: View {
+    let logs: [TaskDetail.ActivityLog]
+    var body: some View {
+        if !logs.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                taskCardHeader("Activity", "waveform.path.ecg")
+                ForEach(logs.prefix(12)) { a in
+                    HStack(alignment: .top, spacing: 8) {
+                        Text(a.user?.name ?? "Someone").font(NXFont.text(12, .bold)).foregroundStyle(NX.foreground)
+                        Text(humanizeEnum(a.action ?? "") + (a.details.map { " — \($0)" } ?? "")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                        Spacer(minLength: 6)
+                        Text(ProjDate.parse(a.createdAt).map { ProjDate.dayLabel($0) } ?? "").font(NXFont.text(11)).foregroundStyle(NX.mutedFg.opacity(0.8))
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
+        }
+    }
+}
+
 /// Pick a task in the same project to depend on.
 struct DependencyPicker: View {
     let projectId: String

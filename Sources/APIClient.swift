@@ -344,6 +344,21 @@ struct APIClient {
     func taskDependencies(_ taskId: String) async throws -> TaskDependenciesResponse {
         try await run(makeRequest("/api/tasks/\(taskId)/dependencies"), decode: TaskDependenciesResponse.self)
     }
+
+    func timeEntries(_ taskId: String) async throws -> [TimeEntry] {
+        (try await run(makeRequest("/api/time-entries?taskId=\(enc(taskId))"), decode: TimeEntriesResponse.self)).entries ?? []
+    }
+    @discardableResult
+    func logTime(taskId: String, duration: Int, description: String? = nil) async throws -> Bool {
+        var req = makeRequest("/api/time-entries", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body: [String: Any] = ["taskId": taskId, "duration": duration]
+        if let d = description, !d.isEmpty { body["description"] = d }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+
     @discardableResult
     func addDependency(taskId: String, dependsOnTaskId: String) async throws -> Bool {
         var req = makeRequest("/api/tasks/\(taskId)/dependencies", method: "POST")

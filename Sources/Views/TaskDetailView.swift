@@ -15,7 +15,10 @@ struct TaskDetailView: View {
     @State private var newSubtask = ""
     @State private var showDuePicker = false
     @State private var dueValue = Date()
+    @State private var showStartPicker = false
+    @State private var startValue = Date()
     @State private var showAssignee = false
+    @State private var descDraft = ""
 
     private let statuses = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"]
     private let priorities = ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"]
@@ -37,11 +40,13 @@ struct TaskDetailView: View {
                         header(task)
                         metaRow(task)
                         if let pid = task.projectId { TaskCustomFieldsCard(projectId: pid, taskId: task.id) }
-                        if !plainBlockText(task.description).isEmpty { descriptionCard(task) }
+                        descriptionCard(task)
                         subtasksCard(task)
                         TaskAttachmentsCard(taskId: task.id)
                         TaskDependenciesCard(taskId: task.id, projectId: task.projectId)
+                        TaskTimeCard(taskId: task.id)
                         commentsCard(task)
+                        TaskActivityCard(logs: task.activityLogs ?? [])
                     }
                     .padding(16)
                 }
@@ -97,6 +102,10 @@ struct TaskDetailView: View {
                         }
                     } label: { controlChip((t.priority ?? "NONE").capitalized, system: "flag.fill", tone: prioTone(t.priority ?? "NONE")) }
 
+                    Button { startValue = parsedDue(t.startDate); showStartPicker = true } label: {
+                        controlChip(t.startDate == nil ? "Start —" : "Start \(dueText(t.startDate))", system: "calendar.badge.clock", tone: .neutral)
+                    }.buttonStyle(.plain)
+
                     Button { dueValue = parsedDue(t.dueDate); showDuePicker = true } label: {
                         controlChip(dueText(t.dueDate), system: "calendar", tone: .neutral)
                     }.buttonStyle(.plain)
@@ -104,16 +113,23 @@ struct TaskDetailView: View {
             }
         }
         .sheet(isPresented: $showDuePicker) {
-            NavigationStack {
-                DatePicker("Due date", selection: $dueValue, displayedComponents: .date)
-                    .datePickerStyle(.graphical).padding()
-                    .navigationTitle("Due date").navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarLeading) { Button("Hapus") { Task { await update(t, ["dueDate": NSNull()]); showDuePicker = false } } }
-                        ToolbarItem(placement: .topBarTrailing) { Button("Simpan") { Task { await update(t, ["dueDate": isoDay(dueValue)]); showDuePicker = false } }.bold() }
-                    }
-            }.presentationDetents([.medium])
+            datePickerSheet("Due date", $dueValue, onSave: { await update(t, ["dueDate": isoDay(dueValue)]) }, onClear: { await update(t, ["dueDate": NSNull()]) }, close: { showDuePicker = false })
         }
+        .sheet(isPresented: $showStartPicker) {
+            datePickerSheet("Start date", $startValue, onSave: { await update(t, ["startDate": isoDay(startValue)]) }, onClear: { await update(t, ["startDate": NSNull()]) }, close: { showStartPicker = false })
+        }
+    }
+
+    private func datePickerSheet(_ title: String, _ value: Binding<Date>, onSave: @escaping () async -> Void, onClear: @escaping () async -> Void, close: @escaping () -> Void) -> some View {
+        NavigationStack {
+            DatePicker(title, selection: value, displayedComponents: .date)
+                .datePickerStyle(.graphical).padding()
+                .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) { Button("Hapus") { Task { await onClear(); close() } } }
+                    ToolbarItem(placement: .topBarTrailing) { Button("Simpan") { Task { await onSave(); close() } }.bold() }
+                }
+        }.presentationDetents([.medium])
     }
 
     private func controlChip(_ text: String, system: String, tone: ChipTone) -> some View {
@@ -156,9 +172,21 @@ struct TaskDetailView: View {
     }
 
     private func descriptionCard(_ t: TaskDetail) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let dirty = descDraft != blockText(t.description)
+        return VStack(alignment: .leading, spacing: 8) {
             Text("DESCRIPTION").font(NXFont.text(10, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
-            Text(plainBlockText(t.description)).font(NXFont.text(14)).foregroundStyle(NX.foreground).fixedSize(horizontal: false, vertical: true)
+            TextField("Tambah deskripsi…", text: $descDraft, axis: .vertical)
+                .font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(2...12)
+                .padding(10).background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            if dirty {
+                HStack {
+                    Button("Batal") { descDraft = blockText(t.description) }.font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                    Spacer()
+                    Button("Simpan") { Task { await update(t, ["description": descDraft]) } }
+                        .font(NXFont.text(13, .bold)).foregroundStyle(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 7).background(NX.violet, in: Capsule())
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
     }
@@ -247,6 +275,7 @@ struct TaskDetailView: View {
             let t = try await APIClient.shared.taskDetail(taskId)
             task = t
             editTitle = t.title
+            descDraft = blockText(t.description)
         }
         catch APIError.unauthorized { auth.logout() }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? "Gagal memuat." }

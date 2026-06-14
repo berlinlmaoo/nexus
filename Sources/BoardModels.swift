@@ -66,12 +66,23 @@ struct TaskDetail: Decodable, Sendable {
     let description: String?
     let status: String?
     let priority: String?
+    let startDate: String?
     let dueDate: String?
     let assignees: [BoardTask.Assignee]?
     let subtasks: [SubDetail]?
     let comments: [Comment]?
     let parent: ParentRef?
     let taskList: TaskListInfo?
+    let activityLogs: [ActivityLog]?
+
+    struct ActivityLog: Decodable, Identifiable, Sendable {
+        let id: String
+        let action: String?
+        let details: String?
+        let createdAt: String?
+        let user: UserRef?
+        struct UserRef: Decodable, Sendable { let name: String? }
+    }
 
     struct TaskListInfo: Decodable, Sendable {
         let id: String?
@@ -179,10 +190,52 @@ struct ProjectFile: Decodable, Identifiable, Sendable {
     var id: String { path }
 }
 
-/// Tasks' description column can hold rich-block JSON; show plain text only.
+/// GET /api/time-entries?taskId= — logged time on a task.
+struct TimeEntriesResponse: Decodable, Sendable { let entries: [TimeEntry]? }
+struct TimeEntry: Decodable, Identifiable, Sendable {
+    let id: String
+    let duration: Int?       // minutes
+    let description: String?
+    let startTime: String?
+    let user: UserRef?
+    struct UserRef: Decodable, Sendable { let name: String? }
+}
+
+/// Tasks' description column can hold rich-block JSON; show plain text only (for read-only display).
 func plainBlockText(_ raw: String?) -> String {
     guard let raw, !raw.isEmpty else { return "" }
     let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     if t.hasPrefix("[") || t.hasPrefix("{") { return "" }  // rich-block JSON → skip (rendered elsewhere later)
     return raw
+}
+
+/// Extracts plain text from a description that may be block-editor JSON (else returns it as-is).
+/// Port of the web `blockText` — used to seed the editable description field.
+func blockText(_ raw: String?) -> String {
+    guard let raw else { return "" }
+    let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !(s.hasPrefix("[") || s.hasPrefix("{")) { return raw }
+    guard let data = s.data(using: .utf8), let json = try? JSONSerialization.jsonObject(with: data) else { return raw }
+    func inlineText(_ content: Any?) -> String {
+        if let str = content as? String { return str }
+        if let arr = content as? [Any] {
+            return arr.map { c -> String in
+                if let str = c as? String { return str }
+                if let o = c as? [String: Any] {
+                    if let t = o["text"] as? String { return t }
+                    if let inner = o["content"] { return inlineText(inner) }
+                }
+                return ""
+            }.joined()
+        }
+        return ""
+    }
+    var lines: [String] = []
+    func walk(_ b: Any?) {
+        guard let o = b as? [String: Any] else { return }
+        let t = inlineText(o["content"]); if !t.isEmpty { lines.append(t) }
+        if let children = o["children"] as? [Any] { children.forEach(walk) }
+    }
+    if let arr = json as? [Any] { arr.forEach(walk) } else { walk(json) }
+    return lines.joined(separator: "\n")
 }
