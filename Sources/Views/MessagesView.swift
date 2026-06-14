@@ -79,10 +79,13 @@ struct ConvoRow: View {
     let meId: String?
     var body: some View {
         HStack(spacing: 12) {
-            ZStack {
-                Circle().fill(NX.violet.opacity(0.12)).frame(width: 40, height: 40)
-                if convo.isGroupish { Image(systemName: "person.2.fill").font(.system(size: 15)).foregroundStyle(NX.violet) }
-                else { Text(convo.initial(meId: meId)).font(NXFont.text(14, .black)).foregroundStyle(NX.violet) }
+            if convo.isGroupish {
+                ZStack {
+                    Circle().fill(NX.violet.opacity(0.12)).frame(width: 40, height: 40)
+                    Image(systemName: "person.2.fill").font(.system(size: 15)).foregroundStyle(NX.violet)
+                }
+            } else {
+                AvatarView(url: convo.avatarURL(meId: meId), initial: convo.initial(meId: meId), size: 40)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(convo.title(meId: meId)).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
@@ -150,8 +153,12 @@ struct ChatThreadView: View {
 
     private func bubble(_ m: ChatMessage) -> some View {
         let mine = m.userId != nil && m.userId == meId
-        return HStack {
-            if mine { Spacer(minLength: 50) }
+        return HStack(alignment: .bottom, spacing: 8) {
+            if mine {
+                Spacer(minLength: 50)
+            } else {
+                AvatarView(url: m.user?.avatar, initial: String((m.user?.name ?? "?").first ?? "?").uppercased(), size: 28)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 if !mine, let n = m.user?.name { Text(n).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg) }
                 Text(m.content).font(NXFont.text(15))
