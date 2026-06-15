@@ -13,12 +13,7 @@ import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/folders/$folderId")({ component: FolderAggregatePage });
 
-// Board columns keyed by normalized task status (task lists differ per project, so we group by status).
-const STATUS_ORDER = ["TODO", "IN_PROGRESS", "IN_REVIEW", "BLOCKED", "DONE"] as const;
-const STATUS_LABEL: Record<string, string> = {
-  TODO: "To Do", IN_PROGRESS: "In Progress", IN_REVIEW: "In Review", BLOCKED: "Blocked", DONE: "Done",
-};
-const normStatus = (s?: string | null) => (s ?? "TODO").toUpperCase().replace(/\s+/g, "_");
+type ProjLookup = Map<string, NexusProject>;
 
 function FolderAggregatePage() {
   const { folderId } = useParams({ from: "/_app/folders/$folderId" });
@@ -53,6 +48,9 @@ function FolderAggregatePage() {
     retry: false,
   });
   const tasks = tasksQuery.data ?? [];
+  // Tasks come back with taskList.projectId but not the nested project — resolve the project (name + icon)
+  // client-side from the already-loaded list so each card shows which project it belongs to.
+  const projById = useMemo<ProjLookup>(() => new Map(projects.map((p) => [p.id, p])), [projects]);
 
   const [tab, setTab] = useState<"board" | "calendar">("board");
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -97,9 +95,9 @@ function FolderAggregatePage() {
         ) : selectedIds.length === 0 ? (
           <EmptyState text="Folder ini belum punya project. Pindahin project ke sini dulu, atau pilih project lewat 'Pilih project'." />
         ) : tab === "board" ? (
-          <BoardView tasks={tasks} />
+          <BoardView tasks={tasks} projById={projById} />
         ) : (
-          <CalendarView tasks={tasks} />
+          <CalendarView tasks={tasks} projById={projById} />
         )}
       </div>
 
@@ -122,46 +120,55 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
-const projectName = (t: NexusTask) => t.taskList?.project?.name ?? "—";
+const projectOf = (t: NexusTask, byId: ProjLookup) => byId.get(t.taskList?.projectId ?? "") ?? null;
+const projectName = (t: NexusTask, byId: ProjLookup) => projectOf(t, byId)?.name ?? t.taskList?.project?.name ?? "—";
 const dueOf = (t: NexusTask) => (t.dueDate ? new Date(t.dueDate) : null);
 
-function TaskCard({ t }: { t: NexusTask }) {
+function TaskCard({ t, projById }: { t: NexusTask; projById: ProjLookup }) {
   const due = dueOf(t);
+  const proj = projectOf(t, projById);
   return (
     <Link to="/tasks/$taskId" params={{ taskId: t.id }} className="block rounded-2xl border border-border bg-card p-3 shadow-soft transition hover:border-primary/30">
       <div className="line-clamp-2 text-sm font-medium">{t.title}</div>
       <div className="mt-1.5 flex items-center gap-2 text-[11px] text-muted-foreground">
-        <span className="truncate rounded-md bg-muted px-1.5 py-0.5">{projectName(t)}</span>
-        {due && <span>{due.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>}
-        {t.priority && t.priority.toUpperCase() !== "NONE" && <span className="capitalize">{t.priority.toLowerCase()}</span>}
+        <span className="flex min-w-0 items-center gap-1 truncate rounded-md bg-muted px-1.5 py-0.5">
+          {proj && <span className="grid h-3 w-3 shrink-0 place-items-center"><ProjectIcon icon={proj.icon} className="max-h-3 max-w-3" /></span>}
+          <span className="truncate">{proj?.name ?? projectName(t, projById)}</span>
+        </span>
+        {due && <span className="shrink-0">{due.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>}
+        {t.priority && t.priority.toUpperCase() !== "NONE" && <span className="shrink-0 capitalize">{t.priority.toLowerCase()}</span>}
       </div>
     </Link>
   );
 }
 
-function BoardView({ tasks }: { tasks: NexusTask[] }) {
+function BoardView({ tasks, projById }: { tasks: NexusTask[]; projById: ProjLookup }) {
+  // Columns = the projects' real section names (taskList.name), merged across projects by name. Same-named
+  // sections from different projects ("Done", "To Do", …) collapse into one column; ordered by the section's
+  // position within its project (then name) so a typical To Do → In Progress → Done flow stays left-to-right.
   const groups = useMemo(() => {
-    const map = new Map<string, NexusTask[]>();
+    const map = new Map<string, { label: string; pos: number; items: NexusTask[] }>();
     for (const t of tasks) {
-      const k = normStatus(t.status);
-      (map.get(k) ?? map.set(k, []).get(k)!).push(t);
+      const label = t.taskList?.name?.trim() || "Tanpa section";
+      const pos = t.taskList?.position ?? 9999;
+      const g = map.get(label);
+      if (g) { g.items.push(t); if (pos < g.pos) g.pos = pos; }
+      else map.set(label, { label, pos, items: [t] });
     }
-    const known = STATUS_ORDER.filter((s) => map.has(s));
-    const extra = [...map.keys()].filter((s) => !STATUS_ORDER.includes(s as (typeof STATUS_ORDER)[number]));
-    return [...known, ...extra].map((s) => ({ status: s, label: STATUS_LABEL[s] ?? s.replace(/_/g, " "), items: map.get(s)! }));
+    return [...map.values()].sort((a, b) => a.pos - b.pos || a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
   }, [tasks]);
 
   if (!tasks.length) return <EmptyState text="Belum ada task di project-project ini." />;
   return (
     <div className="flex gap-4 overflow-x-auto pb-2">
       {groups.map((g) => (
-        <div key={g.status} className="w-72 shrink-0">
+        <div key={g.label} className="w-72 shrink-0">
           <div className="mb-2 flex items-center gap-2 px-1">
             <h3 className="text-sm font-bold tracking-tight">{g.label}</h3>
             <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">{g.items.length}</span>
           </div>
           <div className="flex flex-col gap-2">
-            {g.items.map((t) => <TaskCard key={t.id} t={t} />)}
+            {g.items.map((t) => <TaskCard key={t.id} t={t} projById={projById} />)}
           </div>
         </div>
       ))}
@@ -169,7 +176,7 @@ function BoardView({ tasks }: { tasks: NexusTask[] }) {
   );
 }
 
-function CalendarView({ tasks }: { tasks: NexusTask[] }) {
+function CalendarView({ tasks, projById }: { tasks: NexusTask[]; projById: ProjLookup }) {
   const [monthOffset, setMonthOffset] = useState(0);
   const base = new Date();
   const month = new Date(base.getFullYear(), base.getMonth() + monthOffset, 1);
@@ -209,7 +216,7 @@ function CalendarView({ tasks }: { tasks: NexusTask[] }) {
               <div className="text-[11px] font-semibold text-muted-foreground">{day}</div>
               <div className="mt-1 flex flex-col gap-1">
                 {items.slice(0, 3).map((t) => (
-                  <Link key={t.id} to="/tasks/$taskId" params={{ taskId: t.id }} className="truncate rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary hover:bg-primary/20" title={`${t.title} · ${projectName(t)}`}>
+                  <Link key={t.id} to="/tasks/$taskId" params={{ taskId: t.id }} className="truncate rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary hover:bg-primary/20" title={`${t.title} · ${projectName(t, projById)}`}>
                     {t.title}
                   </Link>
                 ))}

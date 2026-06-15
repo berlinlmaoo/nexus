@@ -102,31 +102,6 @@ function ProjectNavItem({ project, active, collapsed, depth = 0, pinned, onToggl
   return actions ? <ProjectRowMenu project={project} actions={actions}>{row}</ProjectRowMenu> : row;
 }
 
-// A pinned FOLDER row → opens the folder's aggregate (board + calendar) view.
-function FolderNavItem({ folder, active, onUnpin }: { folder: NexusProjectFolder; active: boolean; onUnpin: () => void }) {
-  return (
-    <SidebarMenuItem className="group/pin relative">
-      <SidebarMenuButton asChild isActive={active} tooltip={folder.name}>
-        <Link to="/folders/$folderId" params={{ folderId: folder.id }} className="flex items-center gap-2 pr-6">
-          <span className="grid h-4 w-4 shrink-0 place-items-center overflow-hidden rounded text-[13px] leading-none">
-            <ProjectIcon icon={folder.icon ?? "📁"} className="max-h-4 max-w-4 object-cover" />
-          </span>
-          <span className="truncate">{folder.name}</span>
-        </Link>
-      </SidebarMenuButton>
-      <button
-        type="button"
-        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUnpin(); }}
-        title="Lepas pin folder"
-        aria-label="Unpin folder"
-        className="absolute right-1 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded text-primary transition-opacity hover:text-foreground"
-      >
-        <Pin className="h-3.5 w-3.5 fill-current" />
-      </button>
-    </SidebarMenuItem>
-  );
-}
-
 export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed";
@@ -435,17 +410,18 @@ export function AppSidebar() {
               {!collapsed && (pinnedProjects.length > 0 || pinnedFolders.length > 0) && (
                 <div className="mb-1">
                   <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Pinned</div>
-                  {pinnedFolders.map((f) => (
-                    <FolderNavItem key={`pinf-${f.id}`} folder={f} active={isActive(`/folders/${f.id}`)} onUnpin={() => onToggleFolderPin(f.id)} />
-                  ))}
+                  {/* Pinned folders render as the full expandable tree (so their projects show + can expand),
+                      and are dropped from the root list below to avoid a duplicated, sync-expanding row. */}
+                  {pinnedFolders.map((f) => renderFolderNode(f, 0))}
                   {pinnedProjects.map((p) => (
                     <ProjectNavItem key={`pin-${p.id}`} project={p} active={isActive(`/projects/${p.id}`)} collapsed={collapsed} depth={0} pinned onTogglePin={() => onTogglePin(p.id)} actions={sidebarActions} />
                   ))}
                   <div className="mx-2 my-1 h-px bg-sidebar-border/60" />
                 </div>
               )}
-              {/* Root folders render recursively (subfolders nested inside, up to 3 levels). */}
-              {folders.filter((f) => !(f.parentFolderId ?? null)).map((folder) => renderFolderNode(folder, 0))}
+              {/* Root folders render recursively (subfolders nested inside, up to 3 levels).
+                  Pinned root folders are already shown (expandable) in the Pinned section above. */}
+              {folders.filter((f) => !(f.parentFolderId ?? null) && !pinnedFolderIds.has(f.id)).map((folder) => renderFolderNode(folder, 0))}
               {/* Unfiled projects double as the "root" drop zone — drop here to pull an item out of its folder. */}
               <div
                 onDragOver={(e) => { if (canDrop(null)) { e.preventDefault(); setDropTarget("ROOT"); } }}
