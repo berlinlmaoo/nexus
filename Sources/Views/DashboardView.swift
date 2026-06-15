@@ -35,19 +35,19 @@ struct DashboardView: View {
             .init(value: game?.questsDone ?? 0, total: game?.questList.count ?? 0, label: "Monthly Quests", icon: "sparkles", from: "#fcd34d", to: "#ea580c", glow: "#fbbf24"),
         ]
     }
-    // Slower, low-bounce spring — the old 0.42/0.82 read as too fast & snappy. `revealBody` then
-    // fades the modal's heavy detail in just as the card finishes growing, so the morph animates only
-    // the gradient card + header (detail is laid out but invisible → stable size, no mid-flight squish).
-    private var statSpring: Animation { reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.7, bounce: 0.06) }
+    // Morph spring: 0.5s with a touch of bounce — 0.42 read as too fast, 0.7 as too slow, so split it.
+    // `revealBody` fades the heavy detail in as the card grows, so the morph animates only the gradient
+    // card + header (detail laid out but invisible → stable size, no mid-flight squish).
+    private var statSpring: Animation { reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.5, bounce: 0.1) }
     private func toggleStat(_ i: Int?) { withAnimation(statSpring) { activeStat = i }; revealBody(i != nil) }
     private func toggleLevel(_ on: Bool) { withAnimation(statSpring) { activeLevel = on }; revealBody(on) }
     private func toggleBell(_ on: Bool) { withAnimation(statSpring) { activeBell = on }; revealBody(on) }
     private func revealBody(_ open: Bool) {
         if open {
             morphReady = false
-            withAnimation(.easeOut(duration: 0.32).delay(0.32)) { morphReady = true }   // content fades in as the card settles
+            withAnimation(.easeOut(duration: 0.24).delay(0.14)) { morphReady = true }   // content fades in as the card settles
         } else {
-            withAnimation(.easeIn(duration: 0.14)) { morphReady = false }               // and fades out as it collapses (symmetric)
+            withAnimation(.easeIn(duration: 0.12)) { morphReady = false }               // and fades out as it collapses (symmetric)
         }
     }
 
@@ -125,6 +125,7 @@ struct DashboardView: View {
             .nexusCard(padding: 12, radius: 18)
         }
         .buttonStyle(PressableCardStyle())
+        .modifier(HeroMatch(id: "level", ns: levelNS, isSource: !activeLevel, enabled: !reduceMotion))
         .opacity(activeLevel ? 0 : 1)
     }
 
@@ -162,6 +163,7 @@ struct DashboardView: View {
                 }
             }
             .buttonStyle(.plain)
+            .modifier(HeroMatch(id: "bell", ns: bellNS, isSource: !activeBell, enabled: !reduceMotion))
             .opacity(activeBell ? 0 : 1)
         }
     }
@@ -173,6 +175,7 @@ struct DashboardView: View {
             ForEach(Array(statData.enumerated()), id: \.offset) { i, d in
                 Button { toggleStat(i) } label: {
                     StatCardView(value: d.value, total: d.total, label: d.label, icon: d.icon, from: d.from, to: d.to, glow: d.glow)
+                        .modifier(MatchedCard(id: i, ns: statNS, isSource: activeStat != i, enabled: !reduceMotion))
                 }
                 .buttonStyle(PressableCardStyle())
                 .opacity(activeStat == i ? 0 : 1)
@@ -235,7 +238,8 @@ struct DashboardView: View {
                 // rect every frame is a real GPU cost; fade it in once the card has settled.
                 .shadow(color: Color(hex: d.glow).opacity(morphReady ? 0.5 : 0), radius: morphReady ? 24 : 0, y: morphReady ? 12 : 0)
         }
-        .transition(reduceMotion ? .opacity : .scale(scale: 0.6, anchor: .center).combined(with: .opacity))
+        .modifier(MatchedCard(id: a, ns: statNS, isSource: true, enabled: !reduceMotion))
+        .transition(reduceMotion ? .opacity.combined(with: .scale(scale: 0.96)) : .identity)
     }
 
     @ViewBuilder private func statDetail(_ a: Int) -> some View {
@@ -324,7 +328,8 @@ struct DashboardView: View {
                 .shadow(color: .black.opacity(morphReady ? 0.18 : 0), radius: morphReady ? 24 : 0, y: morphReady ? 12 : 0)
                 .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(NX.border))
         }
-        .transition(reduceMotion ? .opacity : .scale(scale: 0.6, anchor: .center).combined(with: .opacity))
+        .modifier(HeroMatch(id: "level", ns: levelNS, isSource: true, enabled: !reduceMotion))
+        .transition(reduceMotion ? .opacity.combined(with: .scale(scale: 0.96)) : .identity)
     }
 
     private func levelStat(_ label: String, _ value: String) -> some View {
@@ -401,7 +406,8 @@ struct DashboardView: View {
                 .shadow(color: .black.opacity(morphReady ? 0.18 : 0), radius: morphReady ? 24 : 0, y: morphReady ? 12 : 0)
                 .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(NX.border))
         }
-        .transition(reduceMotion ? .opacity : .scale(scale: 0.6, anchor: .center).combined(with: .opacity))
+        .modifier(HeroMatch(id: "bell", ns: bellNS, isSource: true, enabled: !reduceMotion))
+        .transition(reduceMotion ? .opacity.combined(with: .scale(scale: 0.96)) : .identity)
     }
 
     // MARK: lower cards
