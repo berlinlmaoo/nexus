@@ -45,12 +45,13 @@ struct DashboardView: View {
     private var morphSpring: Animation { reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.4, dampingFraction: 0.84) }
     private func openMorph(_ source: CGRect) { morphSourceRect = source; morphTarget = .zero; morphExpanded = false; morphReady = false; morphShowModal = true }
     private func closeMorph(_ clear: @escaping () -> Void) {
-        // The box shrinks (FLIP) while the modal crossfades OUT and the source card crossfades IN — both on
-        // the same spring, so the card's centered content fades in exactly as the modal's top-left content
-        // fades out. No mismatched intermediate to dwell on. (Open stays a solid FLIP scale — untouched.)
-        withAnimation(morphSpring) { morphExpanded = false; morphShowModal = false } completion: {
+        // The card stays SOLID and visibly shrinks back (the morph-out) for a beat, THEN crossfades to the
+        // real card at the end. The .delay is what makes the shrink readable — fading immediately (no delay)
+        // looked like "no morph on close". morphShowModal holds true through the shrink, drops at the end.
+        withAnimation(morphSpring) { morphExpanded = false } completion: {
             clear(); morphTarget = .zero; morphReady = false; morphShowModal = true
         }
+        withAnimation(.easeInOut(duration: 0.22).delay(0.24)) { morphShowModal = false }
     }
     private func toggleStat(_ i: Int?) {
         if let i { openMorph(morphFrames["stat-\(i)"] ?? .zero); activeStat = i } else { closeMorph { activeStat = nil } }
