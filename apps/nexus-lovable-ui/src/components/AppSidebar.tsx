@@ -2,7 +2,7 @@ import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import {
   LayoutDashboard, Inbox, MessageCircle, CheckSquare, Calendar, CalendarClock, FolderKanban,
   BookOpen, Users, Trophy, ClipboardCheck, Settings, Shield, FileText, Sparkles, Megaphone,
-  Search, Plus, PanelLeftClose, ChevronRight, LogOut, Loader2, Pin, FolderPlus, Rocket,
+  Search, Plus, PanelLeftClose, ChevronRight, LogOut, Loader2, Pin, FolderPlus, Rocket, Maximize2,
 } from "lucide-react";
 import { useState, type ReactNode, type DragEvent } from "react";
 import { ProjectIcon } from "@/components/projects/ProjectIcon";
@@ -252,6 +252,7 @@ export function AppSidebar() {
     removeProject: (p) => { if (window.confirm(`Hapus project "${p.name}"?\n\nIni PERMANEN dan menghapus semua task di dalamnya.`)) deleteProjectM.mutate(p.id); },
     togglePin: (id) => onTogglePin(id),
     toggleFolderPin: (id) => onToggleFolderPin(id),
+    openFolderView: (id) => navigate({ to: "/folders/$folderId", params: { folderId: id } }),
     createSubfolder: (parent) => {
       const name = window.prompt(parent ? `Nama subfolder di dalam "${parent.name}":` : "Nama folder baru:", "");
       if (!name || !name.trim()) return;
@@ -299,25 +300,38 @@ export function AppSidebar() {
       <div key={folder.id} className="mb-0.5">
         {!collapsed && (
           <FolderRowMenu folder={folder} actions={sidebarActions}>
-            <button
-              type="button"
-              onClick={() => toggleFolder(folder.id)}
-              aria-expanded={open}
-              style={{ paddingLeft: 8 + depth * 12 }}
-              {...dragHandlers("folder", folder.id)}
+            <div
               {...folderDropHandlers(folder.id)}
               className={cn(
-                "flex w-full cursor-grab items-center gap-1.5 rounded-md py-1 pr-2 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:cursor-grabbing",
+                "group/folder flex w-full items-center gap-0.5 rounded-md pr-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                 dropTarget === folder.id && "bg-primary/15 ring-2 ring-inset ring-primary",
               )}
             >
-              <ChevronRight className={cn("h-3 w-3 shrink-0 transition-transform duration-200", open && "rotate-90")} />
-              <span className="grid h-4 w-4 shrink-0 place-items-center overflow-hidden rounded text-xs">
-                <ProjectIcon icon={folder.icon || "📁"} className="max-h-4 max-w-4 rounded object-cover" />
-              </span>
-              <span className="flex-1 truncate text-left">{folder.name}</span>
-              <span className="text-[10px] tabular-nums text-muted-foreground/60">{count}</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => toggleFolder(folder.id)}
+                aria-expanded={open}
+                style={{ paddingLeft: 8 + depth * 12 }}
+                {...dragHandlers("folder", folder.id)}
+                className="flex min-w-0 flex-1 cursor-grab items-center gap-1.5 py-1 text-left active:cursor-grabbing"
+              >
+                <ChevronRight className={cn("h-3 w-3 shrink-0 transition-transform duration-200", open && "rotate-90")} />
+                <span className="grid h-4 w-4 shrink-0 place-items-center overflow-hidden rounded text-xs">
+                  <ProjectIcon icon={folder.icon || "📁"} className="max-h-4 max-w-4 rounded object-cover" />
+                </span>
+                <span className="flex-1 truncate">{folder.name}</span>
+              </button>
+              <Link
+                to="/folders/$folderId"
+                params={{ folderId: folder.id }}
+                title="Buka tampilan folder"
+                onClick={(e) => e.stopPropagation()}
+                className="hidden shrink-0 rounded p-1 text-muted-foreground/70 hover:bg-primary/15 hover:text-primary group-hover/folder:block"
+              >
+                <Maximize2 className="h-3 w-3" />
+              </Link>
+              <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/60 group-hover/folder:hidden">{count}</span>
+            </div>
           </FolderRowMenu>
         )}
         {open && (
