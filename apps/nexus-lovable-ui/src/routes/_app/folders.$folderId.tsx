@@ -2,14 +2,16 @@ import { useMemo, useState } from "react";
 import { createFileRoute, useParams, useNavigate, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft, SlidersHorizontal, LayoutGrid, CalendarDays, ChevronLeft, ChevronRight, Check, Loader2, X,
+  ArrowLeft, SlidersHorizontal, LayoutGrid, CalendarDays, ChevronLeft, ChevronRight, Check, Loader2, X, Clock,
 } from "lucide-react";
 import { nexusApi, type NexusTask, type NexusProject } from "@/lib/nexus-api";
 import { descendantFolderIds, folderPath } from "@/lib/folder-tree-client";
 import { invalidateProjectData } from "@/lib/invalidate";
 import { ProjectIcon } from "@/components/projects/ProjectIcon";
+import { Avatar } from "@/components/Avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { PageHeader } from "@/components/PageHeader";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/folders/$folderId")({ component: FolderAggregatePage });
@@ -285,7 +287,16 @@ function BoardView({ tasks, projById }: { tasks: NexusTask[]; projById: ProjLook
   );
 }
 
+// Dispatcher: the desktop month-grid crams badly into a phone, so mobile gets a dedicated dot-grid +
+// day-detail layout. useIsMobile() is the only hook here, so the early branch never trips hook order.
 function CalendarView({ tasks, projById }: { tasks: NexusTask[]; projById: ProjLookup }) {
+  const isMobile = useIsMobile();
+  return isMobile
+    ? <MobileCalendarView tasks={tasks} projById={projById} />
+    : <DesktopCalendarView tasks={tasks} projById={projById} />;
+}
+
+function DesktopCalendarView({ tasks, projById }: { tasks: NexusTask[]; projById: ProjLookup }) {
   const [monthOffset, setMonthOffset] = useState(0);
   const base = new Date();
   const month = new Date(base.getFullYear(), base.getMonth() + monthOffset, 1);
@@ -344,6 +355,134 @@ function CalendarView({ tasks, projById }: { tasks: NexusTask[]; projById: ProjL
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+const PRIORITY_PILL: Record<string, string> = {
+  LOW: "bg-muted text-muted-foreground",
+  MEDIUM: "bg-info/15 text-info",
+  HIGH: "bg-warning/15 text-warning",
+  URGENT: "bg-destructive/15 text-destructive",
+};
+function PriorityPill({ priority }: { priority?: string | null }) {
+  const key = (priority ?? "NONE").toUpperCase();
+  if (key === "NONE" || !PRIORITY_PILL[key]) return null;
+  return <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", PRIORITY_PILL[key])}>{key.charAt(0) + key.slice(1).toLowerCase()}</span>;
+}
+
+// One task row in the mobile day-detail list (checkbox · title · project + due · priority · assignee).
+function MobileTaskRow({ t, projById }: { t: NexusTask; projById: ProjLookup }) {
+  const proj = projectOf(t, projById);
+  const color = colorOf(proj);
+  const done = (t.status ?? "").toUpperCase() === "DONE";
+  const assignee = t.assignees?.[0]?.user;
+  const due = dueOf(t);
+  return (
+    <Link
+      to="/tasks/$taskId"
+      params={{ taskId: t.id }}
+      className="flex items-center gap-3 rounded-2xl border border-l-4 border-border bg-card p-3 shadow-soft transition active:scale-[0.99]"
+      style={{ borderLeftColor: color }}
+    >
+      <span className={cn("grid h-5 w-5 shrink-0 place-items-center rounded-full border-2", done ? "border-success bg-success text-success-foreground" : "border-muted-foreground/40")}>
+        {done && <Check className="h-3 w-3" />}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className={cn("truncate text-sm font-semibold", done && "text-muted-foreground line-through")}>{t.title}</div>
+        <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          {proj && <span className="grid h-3.5 w-3.5 shrink-0 place-items-center"><ProjectIcon icon={proj.icon} className="max-h-3.5 max-w-3.5" /></span>}
+          <span className="truncate font-medium" style={{ color }}>{proj?.name ?? projectName(t, projById)}</span>
+          {due && <><span className="shrink-0">·</span><Clock className="h-3 w-3 shrink-0" /><span className="shrink-0">{due.toLocaleDateString("id-ID", { day: "numeric", month: "short" })}</span></>}
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <PriorityPill priority={t.priority} />
+        {assignee && <Avatar userId={assignee.id} name={assignee.name} avatar={assignee.avatar} size={24} />}
+      </div>
+    </Link>
+  );
+}
+
+// Mobile calendar: compact dot-grid month (tap a day to select) + a list of that day's tasks below — far
+// cleaner on a phone than the desktop month grid with truncated chips crammed into 44px-wide cells.
+function MobileCalendarView({ tasks, projById }: { tasks: NexusTask[]; projById: ProjLookup }) {
+  const [monthOffset, setMonthOffset] = useState(0);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const base = new Date();
+  const month = new Date(base.getFullYear(), base.getMonth() + monthOffset, 1);
+  const year = month.getFullYear();
+  const mon = month.getMonth();
+  const daysInMonth = new Date(year, mon + 1, 0).getDate();
+  const leadingBlanks = (new Date(year, mon, 1).getDay() + 6) % 7; // Monday-first
+  const todayDay = base.getFullYear() === year && base.getMonth() === mon ? base.getDate() : null;
+
+  const byDay = useMemo(() => {
+    const map = new Map<number, NexusTask[]>();
+    for (const t of tasks) {
+      const d = dueOf(t);
+      if (d && d.getFullYear() === year && d.getMonth() === mon) {
+        const day = d.getDate();
+        (map.get(day) ?? map.set(day, []).get(day)!).push(t);
+      }
+    }
+    return map;
+  }, [tasks, year, mon]);
+  const firstWithTasks = useMemo(() => [...byDay.keys()].sort((a, b) => a - b)[0] ?? null, [byDay]);
+
+  // Manual tap wins; otherwise default to today (current month) else the first day that has tasks.
+  const selected = selectedDay ?? todayDay ?? firstWithTasks;
+  const dayTasks = selected ? (byDay.get(selected) ?? []) : [];
+  const goMonth = (delta: number) => { setSelectedDay(null); setMonthOffset((o) => o + delta); };
+
+  return (
+    <div>
+      <div className="rounded-[28px] border border-border bg-card p-3 shadow-soft">
+        <div className="mb-2 flex items-center justify-between">
+          <button onClick={() => goMonth(-1)} className="grid h-9 w-9 place-items-center rounded-xl hover:bg-accent"><ChevronLeft className="h-5 w-5" /></button>
+          <h3 className="text-base font-bold capitalize">{month.toLocaleDateString("id-ID", { month: "long", year: "numeric" })}</h3>
+          <button onClick={() => goMonth(1)} className="grid h-9 w-9 place-items-center rounded-xl hover:bg-accent"><ChevronRight className="h-5 w-5" /></button>
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"].map((d) => (
+            <div key={d} className="py-1 text-center text-[11px] font-semibold text-muted-foreground">{d}</div>
+          ))}
+          {Array.from({ length: leadingBlanks }).map((_, i) => <div key={`b${i}`} />)}
+          {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
+            const has = byDay.has(day);
+            const isSel = day === selected;
+            const isToday = day === todayDay;
+            return (
+              <button
+                key={day}
+                onClick={() => setSelectedDay(day)}
+                className={cn(
+                  "relative grid aspect-square place-items-center rounded-2xl text-sm font-semibold transition",
+                  isSel ? "bg-primary text-primary-foreground shadow-sm" : has ? "bg-primary/10 text-foreground" : "text-muted-foreground hover:bg-accent",
+                  !isSel && isToday && "ring-1 ring-primary/50",
+                )}
+              >
+                {day}
+                {has && <span className={cn("absolute bottom-1.5 h-1.5 w-1.5 rounded-full", isSel ? "bg-primary-foreground" : "bg-primary")} />}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <div className="mb-2 flex items-center justify-between px-1">
+          <h4 className="text-sm font-bold">Tanggal {selected ?? "—"}</h4>
+          <span className="text-xs text-muted-foreground">{dayTasks.length} task</span>
+        </div>
+        {dayTasks.length === 0 ? (
+          <EmptyState text="Gaada task jatuh tempo di tanggal ini." />
+        ) : (
+          <div className="flex flex-col gap-2">
+            {dayTasks.map((t) => <MobileTaskRow key={t.id} t={t} projById={projById} />)}
+          </div>
+        )}
       </div>
     </div>
   );
