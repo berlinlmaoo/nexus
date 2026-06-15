@@ -17,7 +17,7 @@ struct DashboardView: View {
     @State private var activeStat: Int?
     @State private var activeLevel = false
     @State private var activeBell = false
-    @State private var morphReady = false   // gates the modal's detail body — fades in after the card settles
+    @State private var morphReady = true   // always-on now: card + content morph together (web-like), no deferral
     @Namespace private var statNS
     @Namespace private var levelNS
     @Namespace private var bellNS
@@ -35,21 +35,12 @@ struct DashboardView: View {
             .init(value: game?.questsDone ?? 0, total: game?.questList.count ?? 0, label: "Monthly Quests", icon: "sparkles", from: "#fcd34d", to: "#ea580c", glow: "#fbbf24"),
         ]
     }
-    // Morph spring: 0.5s with a touch of bounce — 0.42 read as too fast, 0.7 as too slow, so split it.
-    // `revealBody` fades the heavy detail in as the card grows, so the morph animates only the gradient
-    // card + header (detail laid out but invisible → stable size, no mid-flight squish).
-    private var statSpring: Animation { reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.5, bounce: 0.1) }
-    private func toggleStat(_ i: Int?) { withAnimation(statSpring) { activeStat = i }; revealBody(i != nil) }
-    private func toggleLevel(_ on: Bool) { withAnimation(statSpring) { activeLevel = on }; revealBody(on) }
-    private func toggleBell(_ on: Bool) { withAnimation(statSpring) { activeBell = on }; revealBody(on) }
-    private func revealBody(_ open: Bool) {
-        if open {
-            morphReady = false
-            withAnimation(.easeOut(duration: 0.24).delay(0.14)) { morphReady = true }   // content fades in as the card settles
-        } else {
-            withAnimation(.easeIn(duration: 0.12)) { morphReady = false }               // and fades out as it collapses (symmetric)
-        }
-    }
+    // Whole card + its content morph together (like the web), so nothing fades in "one by one".
+    // bounce: 0 → critically damped, so the card never overshoots past the final modal size mid-morph.
+    private var statSpring: Animation { reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.5, bounce: 0) }
+    private func toggleStat(_ i: Int?) { withAnimation(statSpring) { activeStat = i } }
+    private func toggleLevel(_ on: Bool) { withAnimation(statSpring) { activeLevel = on } }
+    private func toggleBell(_ on: Bool) { withAnimation(statSpring) { activeBell = on } }
 
     var body: some View {
         NavigationStack {
