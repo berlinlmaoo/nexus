@@ -887,10 +887,21 @@ function FolderSection({ folder, count, collapsed, onToggle, canManage, onEdit, 
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: folder?.color || "#94a3b8" }} />
-        <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-md text-base leading-none">
-          <ProjectIcon icon={folder ? (folder.icon || "📁") : "🗂️"} className="max-h-6 max-w-6 rounded-md object-cover" />
-        </span>
-        <h3 className="truncate font-bold tracking-tight">{folder ? folder.name : "Tanpa folder"}</h3>
+        {folder ? (
+          <Link to="/folders/$folderId" params={{ folderId: folder.id }} className="flex min-w-0 items-center gap-2 transition hover:text-primary" title="Buka folder view (board + calendar gabungan)">
+            <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-md text-base leading-none">
+              <ProjectIcon icon={folder.icon || "📁"} className="max-h-6 max-w-6 rounded-md object-cover" />
+            </span>
+            <h3 className="truncate font-bold tracking-tight">{folder.name}</h3>
+          </Link>
+        ) : (
+          <>
+            <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-md text-base leading-none">
+              <ProjectIcon icon="🗂️" className="max-h-6 max-w-6 rounded-md object-cover" />
+            </span>
+            <h3 className="truncate font-bold tracking-tight">Tanpa folder</h3>
+          </>
+        )}
         <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">{count}</span>
         {canManage && folder && onEdit && onDelete && (
           <div className="ml-auto"><FolderManageMenu name={folder.name} onEdit={onEdit} onDelete={onDelete} onNewSub={onNewSub} /></div>

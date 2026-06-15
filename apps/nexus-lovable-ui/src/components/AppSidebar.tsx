@@ -102,6 +102,31 @@ function ProjectNavItem({ project, active, collapsed, depth = 0, pinned, onToggl
   return actions ? <ProjectRowMenu project={project} actions={actions}>{row}</ProjectRowMenu> : row;
 }
 
+// A pinned FOLDER row → opens the folder's aggregate (board + calendar) view.
+function FolderNavItem({ folder, active, onUnpin }: { folder: NexusProjectFolder; active: boolean; onUnpin: () => void }) {
+  return (
+    <SidebarMenuItem className="group/pin relative">
+      <SidebarMenuButton asChild isActive={active} tooltip={folder.name}>
+        <Link to="/folders/$folderId" params={{ folderId: folder.id }} className="flex items-center gap-2 pr-6">
+          <span className="grid h-4 w-4 shrink-0 place-items-center overflow-hidden rounded text-[13px] leading-none">
+            <ProjectIcon icon={folder.icon ?? "📁"} className="max-h-4 max-w-4 object-cover" />
+          </span>
+          <span className="truncate">{folder.name}</span>
+        </Link>
+      </SidebarMenuButton>
+      <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUnpin(); }}
+        title="Lepas pin folder"
+        aria-label="Unpin folder"
+        className="absolute right-1 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded text-primary transition-opacity hover:text-foreground"
+      >
+        <Pin className="h-3.5 w-3.5 fill-current" />
+      </button>
+    </SidebarMenuItem>
+  );
+}
+
 export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed";
@@ -113,8 +138,10 @@ export function AppSidebar() {
   const projectsQuery = useQuery({ queryKey: ["nexus", "projects"], queryFn: nexusApi.projects, retry: false, staleTime: 60_000 });
   const foldersQuery = useQuery({ queryKey: ["nexus", "project-folders"], queryFn: () => nexusApi.projectFolders(), retry: false, staleTime: 60_000 });
   const pinsQuery = useQuery({ queryKey: ["nexus", "project-pins"], queryFn: nexusApi.projectPins, retry: false, staleTime: 60_000 });
+  const folderPinsQuery = useQuery({ queryKey: ["nexus", "folder-pins"], queryFn: nexusApi.folderPins, retry: false, staleTime: 60_000 });
   const projects = projectsQuery.data ?? [];
   const pinnedIds = new Set(pinsQuery.data?.projectIds ?? []);
+  const pinnedFolderIds = new Set(folderPinsQuery.data?.folderIds ?? []);
 
   // A-Z ordering (case-insensitive) for both folders and projects.
   const byName = (a: { name?: string | null }, b: { name?: string | null }) =>
@@ -122,12 +149,18 @@ export function AppSidebar() {
   const folders = [...(foldersQuery.data ?? [])].sort(byName);
   const unfiled = projects.filter((p) => !p.folderId).sort(byName);
   const pinnedProjects = projects.filter((p) => pinnedIds.has(p.id)).sort(byName);
+  const pinnedFolders = folders.filter((f) => pinnedFolderIds.has(f.id)).sort(byName);
 
   const togglePin = useMutation({
     mutationFn: ({ projectId, pinned }: { projectId: string; pinned: boolean }) => nexusApi.setProjectPin(projectId, pinned),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["nexus", "project-pins"] }),
   });
   const onTogglePin = (projectId: string) => togglePin.mutate({ projectId, pinned: !pinnedIds.has(projectId) });
+  const toggleFolderPin = useMutation({
+    mutationFn: ({ folderId, pinned }: { folderId: string; pinned: boolean }) => nexusApi.setFolderPin(folderId, pinned),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["nexus", "folder-pins"] }),
+  });
+  const onToggleFolderPin = (folderId: string) => toggleFolderPin.mutate({ folderId, pinned: !pinnedFolderIds.has(folderId) });
 
   // Org role gates management-only nav (Control Room /admin + Crew Hub /teams):
   // visible to BoD/Manager, hidden from Staff (and while role is still unknown).
@@ -213,10 +246,12 @@ export function AppSidebar() {
   const sidebarActions: SidebarActions = {
     folders,
     isPinned: (id) => pinnedIds.has(id),
+    isPinnedFolder: (id) => pinnedFolderIds.has(id),
     renameProject: (p) => { const name = window.prompt("Nama project baru:", p.name); if (name && name.trim() && name.trim() !== p.name) renameProjectM.mutate({ id: p.id, name: name.trim() }); },
     moveProject: (id, folderId) => moveProjectM.mutate({ id, folderId }),
     removeProject: (p) => { if (window.confirm(`Hapus project "${p.name}"?\n\nIni PERMANEN dan menghapus semua task di dalamnya.`)) deleteProjectM.mutate(p.id); },
     togglePin: (id) => onTogglePin(id),
+    toggleFolderPin: (id) => onToggleFolderPin(id),
     createSubfolder: (parent) => {
       const name = window.prompt(parent ? `Nama subfolder di dalam "${parent.name}":` : "Nama folder baru:", "");
       if (!name || !name.trim()) return;
@@ -383,9 +418,12 @@ export function AppSidebar() {
           )}
           <SidebarGroupContent>
             <SidebarMenu>
-              {!collapsed && pinnedProjects.length > 0 && (
+              {!collapsed && (pinnedProjects.length > 0 || pinnedFolders.length > 0) && (
                 <div className="mb-1">
                   <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">Pinned</div>
+                  {pinnedFolders.map((f) => (
+                    <FolderNavItem key={`pinf-${f.id}`} folder={f} active={isActive(`/folders/${f.id}`)} onUnpin={() => onToggleFolderPin(f.id)} />
+                  ))}
                   {pinnedProjects.map((p) => (
                     <ProjectNavItem key={`pin-${p.id}`} project={p} active={isActive(`/projects/${p.id}`)} collapsed={collapsed} depth={0} pinned onTogglePin={() => onTogglePin(p.id)} actions={sidebarActions} />
                   ))}

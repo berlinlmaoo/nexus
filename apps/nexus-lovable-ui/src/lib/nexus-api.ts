@@ -48,6 +48,7 @@ export type NexusProjectFolder = {
   position?: number;
   workspaceId?: string;
   parentFolderId?: string | null;
+  aggregateProjectIds?: string[];
 };
 
 export type NexusProject = {
@@ -1048,13 +1049,16 @@ export const nexusApi = {
   projectFolders: (workspaceId?: string) => apiFetch<NexusProjectFolder[]>(`/api/project-folders${workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ""}`),
   projectFolderCreate: (workspaceId: string, payload: { name: string; icon?: string; color?: string; parentFolderId?: string | null }) =>
     apiFetch<NexusProjectFolder>("/api/project-folders", { method: "POST", body: JSON.stringify({ workspaceId, ...payload }) }),
-  projectFolderUpdate: (folderId: string, patch: { name?: string; icon?: string; color?: string; position?: number; parentFolderId?: string | null }) =>
+  projectFolderUpdate: (folderId: string, patch: { name?: string; icon?: string; color?: string; position?: number; parentFolderId?: string | null; aggregateProjectIds?: string[] }) =>
     apiFetch<NexusProjectFolder>(`/api/project-folders/${folderId}`, { method: "PATCH", body: JSON.stringify(patch) }),
   projectFolderDelete: (folderId: string) =>
     apiFetch<{ message?: string }>(`/api/project-folders/${folderId}`, { method: "DELETE" }),
   // Per-user pinned projects (sidebar quick-access).
   projectPins: () => apiFetch<{ projectIds: string[] }>("/api/projects/pins"),
   setProjectPin: (projectId: string, pinned: boolean) => apiFetch<{ pinned: boolean }>("/api/projects/pins", { method: "POST", body: JSON.stringify({ projectId, pinned }) }),
+  // Per-user pinned FOLDERS (sidebar quick-access).
+  folderPins: () => apiFetch<{ folderIds: string[] }>("/api/project-folders/pins"),
+  setFolderPin: (folderId: string, pinned: boolean) => apiFetch<{ pinned: boolean }>("/api/project-folders/pins", { method: "POST", body: JSON.stringify({ folderId, pinned }) }),
   projectMembers: (projectId: string) => apiFetch<{ members?: Array<{ userId?: string; role?: string; user?: NexusUser }> } | Array<{ userId?: string; role?: string; user?: NexusUser }>>(`/api/projects/${projectId}/members`),
   addProjectMember: (projectId: string, userId: string, role = "MEMBER") => apiFetch<{ success?: boolean }>(`/api/projects/${projectId}/members`, { method: "POST", body: JSON.stringify({ userId, role }) }),
   removeProjectMember: (projectId: string, userId: string) => apiFetch<{ success?: boolean }>(`/api/projects/${projectId}/members`, { method: "DELETE", body: JSON.stringify({ userId }) }),
