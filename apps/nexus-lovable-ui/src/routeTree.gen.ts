@@ -36,6 +36,7 @@ import { Route as AppAdminRouteImport } from './routes/_app/admin'
 import { Route as AppProjectsIndexRouteImport } from './routes/_app/projects/index'
 import { Route as AppTasksTaskIdRouteImport } from './routes/_app/tasks.$taskId'
 import { Route as AppProjectsProjectIdRouteImport } from './routes/_app/projects/$projectId'
+import { Route as AppFoldersFolderIdRouteImport } from './routes/_app/folders.$folderId'
 import { Route as AppDocsDocIdRouteImport } from './routes/_app/docs.$docId'
 
 const RegisterRoute = RegisterRouteImport.update({
@@ -172,6 +173,11 @@ const AppProjectsProjectIdRoute = AppProjectsProjectIdRouteImport.update({
   path: '/projects/$projectId',
   getParentRoute: () => AppRoute,
 } as any)
+const AppFoldersFolderIdRoute = AppFoldersFolderIdRouteImport.update({
+  id: '/folders/$folderId',
+  path: '/folders/$folderId',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppDocsDocIdRoute = AppDocsDocIdRouteImport.update({
   id: '/$docId',
   path: '/$docId',
@@ -203,6 +209,7 @@ export interface FileRoutesByFullPath {
   '/f/$formId': typeof FFormIdRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/docs/$docId': typeof AppDocsDocIdRoute
+  '/folders/$folderId': typeof AppFoldersFolderIdRoute
   '/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
   '/projects/': typeof AppProjectsIndexRoute
@@ -232,6 +239,7 @@ export interface FileRoutesByTo {
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/': typeof AppIndexRoute
   '/docs/$docId': typeof AppDocsDocIdRoute
+  '/folders/$folderId': typeof AppFoldersFolderIdRoute
   '/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
   '/projects': typeof AppProjectsIndexRoute
@@ -263,6 +271,7 @@ export interface FileRoutesById {
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/_app/': typeof AppIndexRoute
   '/_app/docs/$docId': typeof AppDocsDocIdRoute
+  '/_app/folders/$folderId': typeof AppFoldersFolderIdRoute
   '/_app/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/_app/tasks/$taskId': typeof AppTasksTaskIdRoute
   '/_app/projects/': typeof AppProjectsIndexRoute
@@ -294,6 +303,7 @@ export interface FileRouteTypes {
     | '/f/$formId'
     | '/oauth/authorize'
     | '/docs/$docId'
+    | '/folders/$folderId'
     | '/projects/$projectId'
     | '/tasks/$taskId'
     | '/projects/'
@@ -323,6 +333,7 @@ export interface FileRouteTypes {
     | '/oauth/authorize'
     | '/'
     | '/docs/$docId'
+    | '/folders/$folderId'
     | '/projects/$projectId'
     | '/tasks/$taskId'
     | '/projects'
@@ -353,6 +364,7 @@ export interface FileRouteTypes {
     | '/oauth/authorize'
     | '/_app/'
     | '/_app/docs/$docId'
+    | '/_app/folders/$folderId'
     | '/_app/projects/$projectId'
     | '/_app/tasks/$taskId'
     | '/_app/projects/'
@@ -558,6 +570,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProjectsProjectIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/folders/$folderId': {
+      id: '/_app/folders/$folderId'
+      path: '/folders/$folderId'
+      fullPath: '/folders/$folderId'
+      preLoaderRoute: typeof AppFoldersFolderIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/docs/$docId': {
       id: '/_app/docs/$docId'
       path: '/$docId'
@@ -598,6 +617,7 @@ interface AppRouteChildren {
   AppSubmissionsRoute: typeof AppSubmissionsRoute
   AppTeamsRoute: typeof AppTeamsRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppFoldersFolderIdRoute: typeof AppFoldersFolderIdRoute
   AppProjectsProjectIdRoute: typeof AppProjectsProjectIdRoute
   AppTasksTaskIdRoute: typeof AppTasksTaskIdRoute
   AppProjectsIndexRoute: typeof AppProjectsIndexRoute
@@ -622,6 +642,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppSubmissionsRoute: AppSubmissionsRoute,
   AppTeamsRoute: AppTeamsRoute,
   AppIndexRoute: AppIndexRoute,
+  AppFoldersFolderIdRoute: AppFoldersFolderIdRoute,
   AppProjectsProjectIdRoute: AppProjectsProjectIdRoute,
   AppTasksTaskIdRoute: AppTasksTaskIdRoute,
   AppProjectsIndexRoute: AppProjectsIndexRoute,

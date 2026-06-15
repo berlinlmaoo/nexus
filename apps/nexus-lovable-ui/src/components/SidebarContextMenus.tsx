@@ -17,10 +17,12 @@ import { folderPath, descendantFolderIds } from "@/lib/folder-tree-client";
 export type SidebarActions = {
   folders: NexusProjectFolder[];
   isPinned: (projectId: string) => boolean;
+  isPinnedFolder: (folderId: string) => boolean;
   renameProject: (p: NexusProject) => void;
   moveProject: (projectId: string, folderId: string | null) => void;
   removeProject: (p: NexusProject) => void;
   togglePin: (projectId: string) => void;
+  toggleFolderPin: (folderId: string) => void;
   createSubfolder: (parent: NexusProjectFolder | null) => void;
   renameFolder: (f: NexusProjectFolder) => void;
   moveFolder: (folderId: string, parentFolderId: string | null) => void;
@@ -116,6 +118,10 @@ export function FolderRowMenu({ folder, actions, children }: { folder: NexusProj
             rootLabel="Ke paling atas (root)"
           />
         </ContextMenuSub>
+        <ContextMenuItem onClick={() => actions.toggleFolderPin(folder.id)}>
+          {actions.isPinnedFolder(folder.id) ? <PinOff className="mr-2 h-3.5 w-3.5" /> : <Pin className="mr-2 h-3.5 w-3.5" />}
+          {actions.isPinnedFolder(folder.id) ? "Lepas pin folder" : "Pin folder ke atas"}
+        </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem className="text-destructive focus:text-destructive" onClick={() => actions.removeFolder(folder)}>
           <Trash2 className="mr-2 h-3.5 w-3.5" /> Hapus folder

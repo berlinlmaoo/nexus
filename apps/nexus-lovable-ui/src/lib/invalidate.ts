@@ -13,7 +13,11 @@ export function invalidateProjectData(qc: QueryClient) {
   qc.invalidateQueries({
     predicate: (q) =>
       q.queryKey.some(
-        (seg) => seg === "projects" || seg === "project-folders" || seg === "project-pins",
+        (seg) =>
+          seg === "projects" ||
+          seg === "project-folders" ||
+          seg === "project-pins" ||
+          seg === "folder-pins",
       ),
   });
 }
