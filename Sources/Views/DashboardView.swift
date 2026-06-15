@@ -17,10 +17,12 @@ struct DashboardView: View {
     @State private var activeStat: Int?
     @State private var activeLevel = false
     @State private var activeBell = false
-    @State private var morphReady = true   // always-on now: card + content morph together (web-like), no deferral
-    @Namespace private var statNS
-    @Namespace private var levelNS
-    @Namespace private var bellNS
+    @State private var morphReady = false   // detail body fades in AFTER the card morphs (web: delay ~0.15)
+    // FLIP morph (ports framer-motion shared layoutId): published source rects + the live transform state.
+    @State private var morphFrames: [String: CGRect] = [:]
+    @State private var morphSourceRect: CGRect = .zero
+    @State private var morphExpanded = false
+    @State private var morphTarget: CGRect = .zero
 
     private var name: String { profile?.name ?? auth.session?.userName ?? "Commander" }
 
@@ -35,12 +37,25 @@ struct DashboardView: View {
             .init(value: game?.questsDone ?? 0, total: game?.questList.count ?? 0, label: "Monthly Quests", icon: "sparkles", from: "#fcd34d", to: "#ea580c", glow: "#fbbf24"),
         ]
     }
-    // Whole card + its content morph together (like the web), so nothing fades in "one by one".
-    // bounce: 0 → critically damped, so the card never overshoots past the final modal size mid-morph.
-    private var statSpring: Animation { reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.5, bounce: 0) }
-    private func toggleStat(_ i: Int?) { withAnimation(statSpring) { activeStat = i } }
-    private func toggleLevel(_ on: Bool) { withAnimation(statSpring) { activeLevel = on } }
-    private func toggleBell(_ on: Bool) { withAnimation(statSpring) { activeBell = on } }
+    // Crisp transform-FLIP morph ported from the web's framer layout-spring — smoothness comes from the
+    // transform (no reflow), not from being slow. Open: mount the modal, then once it measures itself the
+    // .onChange(morphTarget) springs it from the card's rect to full + fades the detail in 0.12s later.
+    private let morphSpace = "morph"
+    private var morphSpring: Animation { reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.4, dampingFraction: 0.84) }
+    private func openMorph(_ source: CGRect) { morphSourceRect = source; morphTarget = .zero; morphExpanded = false; morphReady = false }
+    private func closeMorph(_ clear: @escaping () -> Void) {
+        morphReady = false
+        withAnimation(morphSpring) { morphExpanded = false } completion: { clear(); morphTarget = .zero }
+    }
+    private func toggleStat(_ i: Int?) {
+        if let i { openMorph(morphFrames["stat-\(i)"] ?? .zero); activeStat = i } else { closeMorph { activeStat = nil } }
+    }
+    private func toggleLevel(_ on: Bool) {
+        if on { openMorph(morphFrames["level"] ?? .zero); activeLevel = true } else { closeMorph { activeLevel = false } }
+    }
+    private func toggleBell(_ on: Bool) {
+        if on { openMorph(morphFrames["bell"] ?? .zero); activeBell = true } else { closeMorph { activeBell = false } }
+    }
 
     var body: some View {
         NavigationStack {
@@ -62,6 +77,13 @@ struct DashboardView: View {
             .overlay { levelModal }
             .overlay { bellModal }
             .navigationBarHidden(true)
+            .coordinateSpace(.named(morphSpace))
+            .onPreferenceChange(MorphFrameKey.self) { morphFrames = $0 }
+            .onChange(of: morphTarget) { _, t in
+                guard t.width > 1, activeStat != nil || activeLevel || activeBell, !morphExpanded else { return }
+                withAnimation(morphSpring) { morphExpanded = true }                          // FLIP: card rect → full
+                withAnimation(.easeOut(duration: 0.2).delay(0.12)) { morphReady = true }       // detail fades in after
+            }
             .task { if !loaded { await load() } }
             .refreshable { await load() }
         }
@@ -116,7 +138,7 @@ struct DashboardView: View {
             .nexusCard(padding: 12, radius: 18)
         }
         .buttonStyle(PressableCardStyle())
-        .modifier(HeroMatch(id: "level", ns: levelNS, isSource: !activeLevel, enabled: !reduceMotion))
+        .morphSource("level", in: morphSpace)
         .opacity(activeLevel ? 0 : 1)
     }
 
@@ -154,7 +176,7 @@ struct DashboardView: View {
                 }
             }
             .buttonStyle(.plain)
-            .modifier(HeroMatch(id: "bell", ns: bellNS, isSource: !activeBell, enabled: !reduceMotion))
+            .morphSource("bell", in: morphSpace)
             .opacity(activeBell ? 0 : 1)
         }
     }
@@ -166,7 +188,7 @@ struct DashboardView: View {
             ForEach(Array(statData.enumerated()), id: \.offset) { i, d in
                 Button { toggleStat(i) } label: {
                     StatCardView(value: d.value, total: d.total, label: d.label, icon: d.icon, from: d.from, to: d.to, glow: d.glow)
-                        .modifier(MatchedCard(id: i, ns: statNS, isSource: activeStat != i, enabled: !reduceMotion))
+                        .morphSource("stat-\(i)", in: morphSpace)
                 }
                 .buttonStyle(PressableCardStyle())
                 .opacity(activeStat == i ? 0 : 1)
@@ -208,29 +230,19 @@ struct DashboardView: View {
                         .frame(width: 32, height: 32).background(.white.opacity(0.22), in: Circle())
                 }.buttonStyle(.plain)
             }
-            .opacity(morphReady ? 1 : 0)   // morph only the gradient card; fade the header in too (no squish)
-            // While morphing, show a cheap size-reserving placeholder instead of laying out the
-            // up-to-40-row detail list every frame; build + fade the real list once the card settles.
-            // The ScrollView fills maxHeight 320, so the 320 placeholder is the same size → no jump.
-            Group {
-                if morphReady {
-                    ScrollView { statDetail(a).padding(2) }.frame(maxHeight: 320).transition(.opacity)
-                } else {
-                    Color.clear.frame(height: 320)
-                }
-            }
+            // Header is part of the morphing card (scales with it via the FLIP) like the web's layoutId.
+            // The detail is a separate element that fades in just after the card lands (web: delay 0.15).
+            ScrollView { statDetail(a).padding(2) }.frame(maxHeight: 320)
+                .opacity(morphReady ? 1 : 0)
         }
         .padding(18)
         .frame(maxWidth: .infinity)
         .background {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(LinearGradient(colors: [Color(hex: d.from), Color(hex: d.to)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                // No blurred shadow DURING the morph — re-blurring a radius-24 shadow on the growing
-                // rect every frame is a real GPU cost; fade it in once the card has settled.
-                .shadow(color: Color(hex: d.glow).opacity(morphReady ? 0.5 : 0), radius: morphReady ? 24 : 0, y: morphReady ? 12 : 0)
+                .shadow(color: Color(hex: d.glow).opacity(0.5), radius: 24, y: 12)
         }
-        .modifier(MatchedCard(id: a, ns: statNS, isSource: true, enabled: !reduceMotion))
-        .transition(reduceMotion ? .opacity.combined(with: .scale(scale: 0.96)) : .identity)
+        .modifier(MorphFlip(source: morphSourceRect, expanded: morphExpanded, space: morphSpace, target: $morphTarget))
     }
 
     @ViewBuilder private func statDetail(_ a: Int) -> some View {
@@ -290,7 +302,6 @@ struct DashboardView: View {
                         .frame(width: 32, height: 32).background(NX.muted, in: Circle())
                 }.buttonStyle(.plain)
             }
-            .opacity(morphReady ? 1 : 0)   // morph only the card; fade the header in too (no squish)
             VStack(alignment: .leading, spacing: 6) {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
@@ -316,11 +327,10 @@ struct DashboardView: View {
         .background {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(NX.card)
-                .shadow(color: .black.opacity(morphReady ? 0.18 : 0), radius: morphReady ? 24 : 0, y: morphReady ? 12 : 0)
+                .shadow(color: .black.opacity(0.18), radius: 24, y: 12)
                 .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(NX.border))
         }
-        .modifier(HeroMatch(id: "level", ns: levelNS, isSource: true, enabled: !reduceMotion))
-        .transition(reduceMotion ? .opacity.combined(with: .scale(scale: 0.96)) : .identity)
+        .modifier(MorphFlip(source: morphSourceRect, expanded: morphExpanded, space: morphSpace, target: $morphTarget))
     }
 
     private func levelStat(_ label: String, _ value: String) -> some View {
@@ -359,46 +369,38 @@ struct DashboardView: View {
                         .frame(width: 32, height: 32).background(NX.muted, in: Circle())
                 }.buttonStyle(.plain)
             }
-            .opacity(morphReady ? 1 : 0)   // morph only the card; fade the header in too (no squish)
             Group {
-              if morphReady {
-                Group {
                 if notifs.isEmpty {
-                Text("Belum ada notifikasi.").font(NXFont.text(13)).foregroundStyle(NX.mutedFg).padding(.vertical, 8)
-            } else {
-                ScrollView {
-                    VStack(spacing: 8) {
-                        ForEach(notifs.prefix(8)) { n in
-                            HStack(alignment: .top, spacing: 10) {
-                                Circle().fill(n.isRead ? NX.mutedFg.opacity(0.3) : NX.violet).frame(width: 7, height: 7).padding(.top, 5)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(n.title ?? n.typeLabel).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                                    if let m = n.message { Text(m).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(2) }
+                    Text("Belum ada notifikasi.").font(NXFont.text(13)).foregroundStyle(NX.mutedFg).padding(.vertical, 8)
+                } else {
+                    ScrollView {
+                        VStack(spacing: 8) {
+                            ForEach(notifs.prefix(8)) { n in
+                                HStack(alignment: .top, spacing: 10) {
+                                    Circle().fill(n.isRead ? NX.mutedFg.opacity(0.3) : NX.violet).frame(width: 7, height: 7).padding(.top, 5)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(n.title ?? n.typeLabel).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                                        if let m = n.message { Text(m).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(2) }
+                                    }
+                                    Spacer(minLength: 4)
                                 }
-                                Spacer(minLength: 4)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(10).background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(10).background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
-                    }
-                }.frame(maxHeight: 300)
-            }
+                    }.frame(maxHeight: 300)
                 }
-                .transition(.opacity)
-              } else {
-                Color.clear.frame(height: notifs.isEmpty ? 44 : 300)
-              }
             }
+            .opacity(morphReady ? 1 : 0)   // detail fades in just after the card lands (web: delay 0.15)
         }
         .padding(18).frame(maxWidth: .infinity)
         .background {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(NX.card)
-                .shadow(color: .black.opacity(morphReady ? 0.18 : 0), radius: morphReady ? 24 : 0, y: morphReady ? 12 : 0)
+                .shadow(color: .black.opacity(0.18), radius: 24, y: 12)
                 .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(NX.border))
         }
-        .modifier(HeroMatch(id: "bell", ns: bellNS, isSource: true, enabled: !reduceMotion))
-        .transition(reduceMotion ? .opacity.combined(with: .scale(scale: 0.96)) : .identity)
+        .modifier(MorphFlip(source: morphSourceRect, expanded: morphExpanded, space: morphSpace, target: $morphTarget))
     }
 
     // MARK: lower cards
@@ -493,33 +495,6 @@ struct DashboardView: View {
             mission = (tasks.filter(\.isDone).count, tasks.count)
         }
         loaded = true
-    }
-}
-
-/// Conditionally applies a shared-id hero `matchedGeometryEffect` (skipped under Reduce Motion).
-struct MatchedCard: ViewModifier {
-    let id: Int
-    let ns: Namespace.ID
-    let isSource: Bool
-    let enabled: Bool
-    func body(content: Content) -> some View {
-        if enabled {
-            content.matchedGeometryEffect(id: "stat-\(id)", in: ns, isSource: isSource)
-        } else {
-            content
-        }
-    }
-}
-
-/// Same as MatchedCard but with a free-form string id (level card / bell morphs).
-struct HeroMatch: ViewModifier {
-    let id: String
-    let ns: Namespace.ID
-    let isSource: Bool
-    let enabled: Bool
-    func body(content: Content) -> some View {
-        if enabled { content.matchedGeometryEffect(id: id, in: ns, isSource: isSource) }
-        else { content }
     }
 }
 
