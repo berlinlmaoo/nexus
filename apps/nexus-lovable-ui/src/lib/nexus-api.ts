@@ -386,7 +386,7 @@ export type NexusTask = {
   tags?: string[] | null;
   taskListId?: string | null;
   position?: number | null;
-  taskList?: { id?: string; name?: string; projectId?: string; project?: { id?: string; name?: string } | null } | null;
+  taskList?: { id?: string; name?: string; position?: number; projectId?: string; project?: { id?: string; name?: string } | null } | null;
   assignees?: Array<{ user?: NexusUser | null }>;
   _count?: { subtasks?: number; comments?: number };
   /** Subtask rows. The project payload sends minimal {id,status} (for the card's "done/total"
