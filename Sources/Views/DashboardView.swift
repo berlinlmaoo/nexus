@@ -45,13 +45,13 @@ struct DashboardView: View {
     private var morphSpring: Animation { reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.4, dampingFraction: 0.84) }
     private func openMorph(_ source: CGRect) { morphSourceRect = source; morphTarget = .zero; morphExpanded = false; morphReady = false; morphShowModal = true }
     private func closeMorph(_ clear: @escaping () -> Void) {
-        // Crossfade back to the card: the modal fades OUT (and the source card fades IN) while it shrinks
-        // underneath — so you never dwell on the half-shrunk modal, whose top-left layout doesn't match the
-        // card's centered one. By the time it's small it's already invisible; the real card has taken over.
-        withAnimation(.easeInOut(duration: 0.22)) { morphShowModal = false; morphReady = false }
+        // Let the card visibly SHRINK back to its spot (morph-out, content and all), THEN crossfade to the
+        // real card only at the END — when the small modal's top-left layout would mismatch the card's
+        // centered one. The .delay is what keeps the shrink visible; an immediate fade read as "no morph-out".
         withAnimation(morphSpring) { morphExpanded = false } completion: {
             clear(); morphTarget = .zero; morphReady = false; morphShowModal = true
         }
+        withAnimation(.easeInOut(duration: 0.2).delay(0.22)) { morphShowModal = false }
     }
     private func toggleStat(_ i: Int?) {
         if let i { openMorph(morphFrames["stat-\(i)"] ?? .zero); activeStat = i } else { closeMorph { activeStat = nil } }
