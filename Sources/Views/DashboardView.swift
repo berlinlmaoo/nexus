@@ -23,6 +23,7 @@ struct DashboardView: View {
     @State private var morphSourceRect: CGRect = .zero
     @State private var morphExpanded = false
     @State private var morphTarget: CGRect = .zero
+    @State private var morphShowModal = true   // close crossfade: modal fades out + source card fades in
 
     private var name: String { profile?.name ?? auth.session?.userName ?? "Commander" }
 
@@ -42,12 +43,15 @@ struct DashboardView: View {
     // .onChange(morphTarget) springs it from the card's rect to full + fades the detail in 0.12s later.
     private let morphSpace = "morph"
     private var morphSpring: Animation { reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.4, dampingFraction: 0.84) }
-    private func openMorph(_ source: CGRect) { morphSourceRect = source; morphTarget = .zero; morphExpanded = false; morphReady = false }
+    private func openMorph(_ source: CGRect) { morphSourceRect = source; morphTarget = .zero; morphExpanded = false; morphReady = false; morphShowModal = true }
     private func closeMorph(_ clear: @escaping () -> Void) {
-        // Fade the detail OUT fast (not snap, not keep): it's gone before the card reaches its origin,
-        // so the detail never lingers at the small card's spot — only the card+header shrink back.
-        withAnimation(.easeIn(duration: 0.12)) { morphReady = false }
-        withAnimation(morphSpring) { morphExpanded = false } completion: { clear(); morphTarget = .zero }
+        // Crossfade back to the card: the modal fades OUT (and the source card fades IN) while it shrinks
+        // underneath — so you never dwell on the half-shrunk modal, whose top-left layout doesn't match the
+        // card's centered one. By the time it's small it's already invisible; the real card has taken over.
+        withAnimation(.easeInOut(duration: 0.22)) { morphShowModal = false; morphReady = false }
+        withAnimation(morphSpring) { morphExpanded = false } completion: {
+            clear(); morphTarget = .zero; morphReady = false; morphShowModal = true
+        }
     }
     private func toggleStat(_ i: Int?) {
         if let i { openMorph(morphFrames["stat-\(i)"] ?? .zero); activeStat = i } else { closeMorph { activeStat = nil } }
@@ -141,7 +145,7 @@ struct DashboardView: View {
         }
         .buttonStyle(PressableCardStyle())
         .morphSource("level", in: morphSpace)
-        .opacity(activeLevel ? 0 : 1)
+        .opacity(activeLevel && morphShowModal ? 0 : 1)
     }
 
     private var xpLabel: String {
@@ -179,7 +183,7 @@ struct DashboardView: View {
             }
             .buttonStyle(.plain)
             .morphSource("bell", in: morphSpace)
-            .opacity(activeBell ? 0 : 1)
+            .opacity(activeBell && morphShowModal ? 0 : 1)
         }
     }
 
@@ -193,7 +197,7 @@ struct DashboardView: View {
                         .morphSource("stat-\(i)", in: morphSpace)
                 }
                 .buttonStyle(PressableCardStyle())
-                .opacity(activeStat == i ? 0 : 1)
+                .opacity(activeStat == i && morphShowModal ? 0 : 1)
             }
         }
     }
@@ -245,6 +249,7 @@ struct DashboardView: View {
                 .shadow(color: Color(hex: d.glow).opacity(0.5), radius: 24, y: 12)
         }
         .modifier(MorphFlip(source: morphSourceRect, expanded: morphExpanded, space: morphSpace, target: $morphTarget))
+        .opacity(morphShowModal ? 1 : 0)   // crossfade out on close
     }
 
     @ViewBuilder private func statDetail(_ a: Int) -> some View {
@@ -333,6 +338,7 @@ struct DashboardView: View {
                 .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(NX.border))
         }
         .modifier(MorphFlip(source: morphSourceRect, expanded: morphExpanded, space: morphSpace, target: $morphTarget))
+        .opacity(morphShowModal ? 1 : 0)   // crossfade out on close
     }
 
     private func levelStat(_ label: String, _ value: String) -> some View {
@@ -403,6 +409,7 @@ struct DashboardView: View {
                 .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(NX.border))
         }
         .modifier(MorphFlip(source: morphSourceRect, expanded: morphExpanded, space: morphSpace, target: $morphTarget))
+        .opacity(morphShowModal ? 1 : 0)   // crossfade out on close
     }
 
     // MARK: lower cards
