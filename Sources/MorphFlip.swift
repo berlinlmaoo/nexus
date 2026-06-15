@@ -56,6 +56,8 @@ struct MorphFlip: ViewModifier {
             )
             .scaleEffect(x: collapsed ? sx : 1, y: collapsed ? sy : 1, anchor: .topLeading)
             .offset(x: collapsed ? tx : 0, y: collapsed ? ty : 0)
-            .opacity(valid ? 1 : 0)
+            // Hide ONLY while a real source rect is still being measured. If we never got a source
+            // (card frame not published yet), fall back to showing the modal full-size — never invisible.
+            .opacity(source.width > 1 && target.width <= 1 ? 0 : 1)
     }
 }
