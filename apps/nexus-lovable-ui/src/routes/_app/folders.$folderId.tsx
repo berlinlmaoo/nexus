@@ -8,12 +8,27 @@ import { nexusApi, type NexusTask, type NexusProject } from "@/lib/nexus-api";
 import { descendantFolderIds, folderPath } from "@/lib/folder-tree-client";
 import { invalidateProjectData } from "@/lib/invalidate";
 import { ProjectIcon } from "@/components/projects/ProjectIcon";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { PageHeader } from "@/components/PageHeader";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/folders/$folderId")({ component: FolderAggregatePage });
 
 type ProjLookup = Map<string, NexusProject>;
+
+// Shared palette with ProjectSettingsDrawer, so a colour picked here is also valid there.
+const COLORS = ["#7b68ee", "#0091ff", "#16a34a", "#f59e0b", "#ef4444", "#ec4899", "#06b6d4", "#64748b"];
+const DEFAULT_PROJECT_COLOR = "#7b68ee";
+const colorOf = (p?: NexusProject | null) => p?.color || DEFAULT_PROJECT_COLOR;
+
+// Translucent version of a project colour (hex → rgba) for chip/card backgrounds. Falls back to the raw
+// value for any non-#RRGGBB input so a stray named colour still renders something sane.
+function tint(hex: string, alpha: number): string {
+  const h = hex.replace("#", "");
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) return hex;
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
 function FolderAggregatePage() {
   const { folderId } = useParams({ from: "/_app/folders/$folderId" });
@@ -48,9 +63,13 @@ function FolderAggregatePage() {
     retry: false,
   });
   const tasks = tasksQuery.data ?? [];
-  // Tasks come back with taskList.projectId but not the nested project — resolve the project (name + icon)
-  // client-side from the already-loaded list so each card shows which project it belongs to.
+  // Tasks come back with taskList.projectId but not the nested project — resolve the project (name + icon
+  // + colour) client-side from the already-loaded list so each card shows which project it belongs to.
   const projById = useMemo<ProjLookup>(() => new Map(projects.map((p) => [p.id, p])), [projects]);
+  const selectedProjects = useMemo(
+    () => selectedIds.map((id) => projById.get(id)).filter((p): p is NexusProject => !!p),
+    [selectedIds, projById],
+  );
 
   const [tab, setTab] = useState<"board" | "calendar">("board");
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -90,6 +109,7 @@ function FolderAggregatePage() {
       />
 
       <div className="p-4 md:p-8">
+        {selectedProjects.length > 0 && <ProjectColorLegend projects={selectedProjects} />}
         {tasksQuery.isLoading ? (
           <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Memuat task…</div>
         ) : selectedIds.length === 0 ? (
@@ -120,6 +140,56 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
+// Colour legend for the folder view: one chip per project, tinted with that project's colour. Click a chip
+// to recolour the project inline (same palette as project settings) — board + calendar re-tint instantly.
+function ProjectColorLegend({ projects }: { projects: NexusProject[] }) {
+  const qc = useQueryClient();
+  const recolor = useMutation({
+    mutationFn: ({ id, color }: { id: string; color: string }) => nexusApi.updateProject(id, { color }),
+    onSuccess: () => invalidateProjectData(qc),
+  });
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-2">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">Warna project</span>
+      {projects.map((p) => {
+        const color = colorOf(p);
+        return (
+          <Popover key={p.id}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                title="Klik buat ganti warna project"
+                className="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-medium transition hover:brightness-105"
+                style={{ borderColor: tint(color, 0.4), background: tint(color, 0.12), color }}
+              >
+                <span className="h-3 w-3 rounded-full ring-1 ring-black/10" style={{ background: color }} />
+                <span className="grid h-4 w-4 place-items-center"><ProjectIcon icon={p.icon} className="max-h-4 max-w-4" /></span>
+                <span className="max-w-[140px] truncate">{p.name}</span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-auto p-2">
+              <div className="mb-1.5 px-1 text-[11px] font-medium text-muted-foreground">Warna untuk “{p.name}”</div>
+              <div className="flex items-center gap-1.5">
+                {COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => recolor.mutate({ id: p.id, color: c })}
+                    className={cn("h-6 w-6 rounded-full ring-2 transition", color.toLowerCase() === c ? "ring-foreground" : "ring-transparent hover:ring-border")}
+                    style={{ background: c }}
+                    aria-label={`Set warna ${c}`}
+                  />
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+        );
+      })}
+      {recolor.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+    </div>
+  );
+}
+
 const projectOf = (t: NexusTask, byId: ProjLookup) => byId.get(t.taskList?.projectId ?? "") ?? null;
 const projectName = (t: NexusTask, byId: ProjLookup) => projectOf(t, byId)?.name ?? t.taskList?.project?.name ?? "—";
 const dueOf = (t: NexusTask) => (t.dueDate ? new Date(t.dueDate) : null);
@@ -127,16 +197,22 @@ const dueOf = (t: NexusTask) => (t.dueDate ? new Date(t.dueDate) : null);
 function TaskCard({ t, projById }: { t: NexusTask; projById: ProjLookup }) {
   const due = dueOf(t);
   const proj = projectOf(t, projById);
+  const color = colorOf(proj);
   return (
-    <Link to="/tasks/$taskId" params={{ taskId: t.id }} className="block rounded-2xl border border-border bg-card p-3 shadow-soft transition hover:border-primary/30">
+    <Link
+      to="/tasks/$taskId"
+      params={{ taskId: t.id }}
+      className="block rounded-2xl border border-l-4 border-border bg-card p-3 shadow-soft transition hover:border-primary/30"
+      style={{ borderLeftColor: color }}
+    >
       <div className="line-clamp-2 text-sm font-medium">{t.title}</div>
-      <div className="mt-1.5 flex items-center gap-2 text-[11px] text-muted-foreground">
-        <span className="flex min-w-0 items-center gap-1 truncate rounded-md bg-muted px-1.5 py-0.5">
+      <div className="mt-1.5 flex items-center gap-2 text-[11px]">
+        <span className="flex min-w-0 items-center gap-1 truncate rounded-md px-1.5 py-0.5 font-medium" style={{ background: tint(color, 0.14), color }}>
           {proj && <span className="grid h-3 w-3 shrink-0 place-items-center"><ProjectIcon icon={proj.icon} className="max-h-3 max-w-3" /></span>}
           <span className="truncate">{proj?.name ?? projectName(t, projById)}</span>
         </span>
-        {due && <span className="shrink-0">{due.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>}
-        {t.priority && t.priority.toUpperCase() !== "NONE" && <span className="shrink-0 capitalize">{t.priority.toLowerCase()}</span>}
+        {due && <span className="shrink-0 text-muted-foreground">{due.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>}
+        {t.priority && t.priority.toUpperCase() !== "NONE" && <span className="shrink-0 capitalize text-muted-foreground">{t.priority.toLowerCase()}</span>}
       </div>
     </Link>
   );
@@ -215,11 +291,21 @@ function CalendarView({ tasks, projById }: { tasks: NexusTask[]; projById: ProjL
             <div key={day} className="min-h-[84px] rounded-xl border border-border/60 p-1.5">
               <div className="text-[11px] font-semibold text-muted-foreground">{day}</div>
               <div className="mt-1 flex flex-col gap-1">
-                {items.slice(0, 3).map((t) => (
-                  <Link key={t.id} to="/tasks/$taskId" params={{ taskId: t.id }} className="truncate rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary hover:bg-primary/20" title={`${t.title} · ${projectName(t, projById)}`}>
-                    {t.title}
-                  </Link>
-                ))}
+                {items.slice(0, 3).map((t) => {
+                  const color = colorOf(projectOf(t, projById));
+                  return (
+                    <Link
+                      key={t.id}
+                      to="/tasks/$taskId"
+                      params={{ taskId: t.id }}
+                      className="truncate rounded px-1.5 py-0.5 text-[10px] font-medium transition hover:brightness-95"
+                      style={{ background: tint(color, 0.16), color }}
+                      title={`${t.title} · ${projectName(t, projById)}`}
+                    >
+                      {t.title}
+                    </Link>
+                  );
+                })}
                 {items.length > 3 && <span className="px-1 text-[10px] text-muted-foreground">+{items.length - 3} lagi</span>}
               </div>
             </div>
