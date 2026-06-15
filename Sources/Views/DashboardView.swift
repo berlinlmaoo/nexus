@@ -44,8 +44,9 @@ struct DashboardView: View {
     private var morphSpring: Animation { reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.4, dampingFraction: 0.84) }
     private func openMorph(_ source: CGRect) { morphSourceRect = source; morphTarget = .zero; morphExpanded = false; morphReady = false }
     private func closeMorph(_ clear: @escaping () -> Void) {
-        morphReady = false
-        withAnimation(morphSpring) { morphExpanded = false } completion: { clear(); morphTarget = .zero }
+        // Keep the detail visible while the card shrinks back (it scales WITH the card, like the web).
+        // Snapping morphReady off first left a big empty gradient "box" for a frame. Reset after unmount.
+        withAnimation(morphSpring) { morphExpanded = false } completion: { clear(); morphTarget = .zero; morphReady = false }
     }
     private func toggleStat(_ i: Int?) {
         if let i { openMorph(morphFrames["stat-\(i)"] ?? .zero); activeStat = i } else { closeMorph { activeStat = nil } }
