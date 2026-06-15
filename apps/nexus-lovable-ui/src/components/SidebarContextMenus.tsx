@@ -10,9 +10,10 @@ import {
   ContextMenuSubTrigger,
   ContextMenuLabel,
 } from "@/components/ui/context-menu";
-import { FolderPlus, Pencil, FolderInput, FolderOutput, Pin, PinOff, Trash2 } from "lucide-react";
+import { FolderPlus, Pencil, FolderInput, FolderOutput, Pin, PinOff, Trash2, Maximize2 } from "lucide-react";
 import type { NexusProject, NexusProjectFolder } from "@/lib/nexus-api";
 import { folderPath, descendantFolderIds } from "@/lib/folder-tree-client";
+import { ProjectIcon } from "@/components/projects/ProjectIcon";
 
 export type SidebarActions = {
   folders: NexusProjectFolder[];
@@ -23,6 +24,7 @@ export type SidebarActions = {
   removeProject: (p: NexusProject) => void;
   togglePin: (projectId: string) => void;
   toggleFolderPin: (folderId: string) => void;
+  openFolderView: (folderId: string) => void;
   createSubfolder: (parent: NexusProjectFolder | null) => void;
   renameFolder: (f: NexusProjectFolder) => void;
   moveFolder: (folderId: string, parentFolderId: string | null) => void;
@@ -100,8 +102,16 @@ export function FolderRowMenu({ folder, actions, children }: { folder: NexusProj
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent className="w-52">
-        <ContextMenuLabel className="truncate">{folder.icon || "📁"} {folder.name}</ContextMenuLabel>
+        <ContextMenuLabel className="flex items-center gap-1.5 truncate">
+          <span className="grid h-4 w-4 shrink-0 place-items-center overflow-hidden rounded text-xs">
+            <ProjectIcon icon={folder.icon || "📁"} className="max-h-4 max-w-4 rounded object-cover" />
+          </span>
+          <span className="truncate">{folder.name}</span>
+        </ContextMenuLabel>
         <ContextMenuSeparator />
+        <ContextMenuItem onClick={() => actions.openFolderView(folder.id)}>
+          <Maximize2 className="mr-2 h-3.5 w-3.5" /> Buka tampilan folder
+        </ContextMenuItem>
         <ContextMenuItem onClick={() => actions.createSubfolder(folder)}>
           <FolderPlus className="mr-2 h-3.5 w-3.5" /> Subfolder baru
         </ContextMenuItem>
