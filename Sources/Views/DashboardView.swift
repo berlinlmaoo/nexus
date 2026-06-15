@@ -23,7 +23,7 @@ struct DashboardView: View {
     @State private var morphSourceRect: CGRect = .zero
     @State private var morphExpanded = false
     @State private var morphTarget: CGRect = .zero
-    @State private var morphShowModal = true   // close crossfade: modal fades out + source card fades in
+    @State private var morphShowModal = true   // open: modal solid (FLIP scale). close: fades out as the card fades in.
 
     private var name: String { profile?.name ?? auth.session?.userName ?? "Commander" }
 
@@ -45,13 +45,12 @@ struct DashboardView: View {
     private var morphSpring: Animation { reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.4, dampingFraction: 0.84) }
     private func openMorph(_ source: CGRect) { morphSourceRect = source; morphTarget = .zero; morphExpanded = false; morphReady = false; morphShowModal = true }
     private func closeMorph(_ clear: @escaping () -> Void) {
-        // Let the card visibly SHRINK back to its spot (morph-out, content and all), THEN crossfade to the
-        // real card only at the END — when the small modal's top-left layout would mismatch the card's
-        // centered one. The .delay is what keeps the shrink visible; an immediate fade read as "no morph-out".
-        withAnimation(morphSpring) { morphExpanded = false } completion: {
+        // The box shrinks (FLIP) while the modal crossfades OUT and the source card crossfades IN — both on
+        // the same spring, so the card's centered content fades in exactly as the modal's top-left content
+        // fades out. No mismatched intermediate to dwell on. (Open stays a solid FLIP scale — untouched.)
+        withAnimation(morphSpring) { morphExpanded = false; morphShowModal = false } completion: {
             clear(); morphTarget = .zero; morphReady = false; morphShowModal = true
         }
-        withAnimation(.easeInOut(duration: 0.2).delay(0.22)) { morphShowModal = false }
     }
     private func toggleStat(_ i: Int?) {
         if let i { openMorph(morphFrames["stat-\(i)"] ?? .zero); activeStat = i } else { closeMorph { activeStat = nil } }
@@ -249,7 +248,7 @@ struct DashboardView: View {
                 .shadow(color: Color(hex: d.glow).opacity(0.5), radius: 24, y: 12)
         }
         .modifier(MorphFlip(source: morphSourceRect, expanded: morphExpanded, space: morphSpace, target: $morphTarget))
-        .opacity(morphShowModal ? 1 : 0)   // crossfade out on close
+        .opacity(morphShowModal ? 1 : 0)   // solid on open; crossfades out on close
     }
 
     @ViewBuilder private func statDetail(_ a: Int) -> some View {
@@ -338,7 +337,7 @@ struct DashboardView: View {
                 .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(NX.border))
         }
         .modifier(MorphFlip(source: morphSourceRect, expanded: morphExpanded, space: morphSpace, target: $morphTarget))
-        .opacity(morphShowModal ? 1 : 0)   // crossfade out on close
+        .opacity(morphShowModal ? 1 : 0)   // solid on open; crossfades out on close
     }
 
     private func levelStat(_ label: String, _ value: String) -> some View {
@@ -409,7 +408,7 @@ struct DashboardView: View {
                 .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(NX.border))
         }
         .modifier(MorphFlip(source: morphSourceRect, expanded: morphExpanded, space: morphSpace, target: $morphTarget))
-        .opacity(morphShowModal ? 1 : 0)   // crossfade out on close
+        .opacity(morphShowModal ? 1 : 0)   // solid on open; crossfades out on close
     }
 
     // MARK: lower cards
