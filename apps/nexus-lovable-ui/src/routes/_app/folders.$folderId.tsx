@@ -14,7 +14,14 @@ import { PageHeader } from "@/components/PageHeader";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/_app/folders/$folderId")({ component: FolderAggregatePage });
+// `view` lives in the URL (not local state) so opening a task and coming back via history restores the
+// tab you were on — otherwise the route remounts and resets to "board".
+export const Route = createFileRoute("/_app/folders/$folderId")({
+  component: FolderAggregatePage,
+  // `view` is optional so existing links to the folder don't have to pass it; absent → "board".
+  validateSearch: (search: Record<string, unknown>): { view?: "board" | "calendar" } =>
+    search.view === "calendar" ? { view: "calendar" } : search.view === "board" ? { view: "board" } : {},
+});
 
 type ProjLookup = Map<string, NexusProject>;
 
@@ -73,7 +80,9 @@ function FolderAggregatePage() {
     [selectedIds, projById],
   );
 
-  const [tab, setTab] = useState<"board" | "calendar">("board");
+  const { view } = Route.useSearch();
+  const tab = view ?? "board";
+  const setTab = (v: "board" | "calendar") => navigate({ to: ".", search: { view: v }, replace: true });
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const byId = new Map(folders.map((f) => [f.id, f]));
@@ -350,7 +359,33 @@ function DesktopCalendarView({ tasks, projById }: { tasks: NexusTask[]; projById
                     </Link>
                   );
                 })}
-                {items.length > 3 && <span className="px-1 text-[10px] text-muted-foreground">+{items.length - 3} lagi</span>}
+                {items.length > 3 && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button type="button" className="px-1 text-left text-[10px] font-semibold text-muted-foreground transition hover:text-foreground">+{items.length - 3} lagi</button>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" className="w-60 p-2">
+                      <div className="mb-1.5 px-1 text-[11px] font-bold text-muted-foreground">{day} {month.toLocaleDateString("id-ID", { month: "short" })} · {items.length} task</div>
+                      <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
+                        {items.map((t) => {
+                          const c = colorOf(projectOf(t, projById));
+                          return (
+                            <Link
+                              key={t.id}
+                              to="/tasks/$taskId"
+                              params={{ taskId: t.id }}
+                              className="truncate rounded px-1.5 py-1 text-[11px] font-medium transition hover:brightness-95"
+                              style={{ background: tint(c, 0.16), color: c }}
+                              title={`${t.title} · ${projectName(t, projById)}`}
+                            >
+                              {t.title}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
               </div>
             </div>
           );
