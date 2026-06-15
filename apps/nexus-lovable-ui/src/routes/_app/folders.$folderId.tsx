@@ -65,7 +65,7 @@ function FolderAggregatePage() {
       <PageHeader
         title={folder?.name ?? "Folder"}
         subtitle={`${subtitle} · ${selectedIds.length} project${selectedIds.length === 1 ? "" : "s"} · ${tasks.length} task`}
-        icon={<ProjectIcon icon={folder?.icon ?? "🗂️"} />}
+        icon={<span className="grid h-8 w-8 place-items-center overflow-hidden rounded-lg text-2xl leading-none"><ProjectIcon icon={folder?.icon ?? "🗂️"} className="max-h-8 max-w-8 rounded-lg object-cover" /></span>}
         actions={
           <div className="flex items-center gap-2">
             <button onClick={() => navigate({ to: "/projects" })} className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent">
