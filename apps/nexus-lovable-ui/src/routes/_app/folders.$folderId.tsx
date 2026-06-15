@@ -142,50 +142,83 @@ function EmptyState({ text }: { text: string }) {
 
 // Colour legend for the folder view: one chip per project, tinted with that project's colour. Click a chip
 // to recolour the project inline (same palette as project settings) — board + calendar re-tint instantly.
+// Collapsed by default (it gets long with many projects); collapsed/expanded is remembered per-browser.
+const LEGEND_KEY = "nexus.folderLegendOpen";
 function ProjectColorLegend({ projects }: { projects: NexusProject[] }) {
   const qc = useQueryClient();
+  const [open, setOpen] = useState(() => {
+    try { return localStorage.getItem(LEGEND_KEY) === "1"; } catch { return false; }
+  });
+  const toggle = () => setOpen((v) => {
+    const next = !v;
+    try { localStorage.setItem(LEGEND_KEY, next ? "1" : "0"); } catch { /* best-effort */ }
+    return next;
+  });
   const recolor = useMutation({
     mutationFn: ({ id, color }: { id: string; color: string }) => nexusApi.updateProject(id, { color }),
     onSuccess: () => invalidateProjectData(qc),
   });
+
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-2">
-      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">Warna project</span>
-      {projects.map((p) => {
-        const color = colorOf(p);
-        return (
-          <Popover key={p.id}>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                title="Klik buat ganti warna project"
-                className="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-medium transition hover:brightness-105"
-                style={{ borderColor: tint(color, 0.4), background: tint(color, 0.12), color }}
-              >
-                <span className="h-3 w-3 rounded-full ring-1 ring-black/10" style={{ background: color }} />
-                <span className="grid h-4 w-4 place-items-center"><ProjectIcon icon={p.icon} className="max-h-4 max-w-4" /></span>
-                <span className="max-w-[140px] truncate">{p.name}</span>
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-auto p-2">
-              <div className="mb-1.5 px-1 text-[11px] font-medium text-muted-foreground">Warna untuk “{p.name}”</div>
-              <div className="flex items-center gap-1.5">
-                {COLORS.map((c) => (
+    <div className="mb-4">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground transition hover:bg-accent"
+      >
+        <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-90")} />
+        Warna project
+        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">{projects.length}</span>
+        {!open && (
+          <span className="ml-1 flex items-center -space-x-1">
+            {projects.slice(0, 10).map((p) => (
+              <span key={p.id} className="h-2.5 w-2.5 rounded-full ring-1 ring-card" style={{ background: colorOf(p) }} />
+            ))}
+            {projects.length > 10 && <span className="ml-1.5 normal-case text-[10px] text-muted-foreground/70">+{projects.length - 10}</span>}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {projects.map((p) => {
+            const color = colorOf(p);
+            return (
+              <Popover key={p.id}>
+                <PopoverTrigger asChild>
                   <button
-                    key={c}
                     type="button"
-                    onClick={() => recolor.mutate({ id: p.id, color: c })}
-                    className={cn("h-6 w-6 rounded-full ring-2 transition", color.toLowerCase() === c ? "ring-foreground" : "ring-transparent hover:ring-border")}
-                    style={{ background: c }}
-                    aria-label={`Set warna ${c}`}
-                  />
-                ))}
-              </div>
-            </PopoverContent>
-          </Popover>
-        );
-      })}
-      {recolor.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+                    title="Klik buat ganti warna project"
+                    className="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-medium transition hover:brightness-105"
+                    style={{ borderColor: tint(color, 0.4), background: tint(color, 0.12), color }}
+                  >
+                    <span className="h-3 w-3 rounded-full ring-1 ring-black/10" style={{ background: color }} />
+                    <span className="grid h-4 w-4 place-items-center"><ProjectIcon icon={p.icon} className="max-h-4 max-w-4" /></span>
+                    <span className="max-w-[140px] truncate">{p.name}</span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-auto p-2">
+                  <div className="mb-1.5 px-1 text-[11px] font-medium text-muted-foreground">Warna untuk “{p.name}”</div>
+                  <div className="flex items-center gap-1.5">
+                    {COLORS.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => recolor.mutate({ id: p.id, color: c })}
+                        className={cn("h-6 w-6 rounded-full ring-2 transition", color.toLowerCase() === c ? "ring-foreground" : "ring-transparent hover:ring-border")}
+                        style={{ background: c }}
+                        aria-label={`Set warna ${c}`}
+                      />
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            );
+          })}
+          {recolor.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+        </div>
+      )}
     </div>
   );
 }
