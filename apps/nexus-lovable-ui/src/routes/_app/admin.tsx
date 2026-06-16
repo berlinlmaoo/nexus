@@ -505,6 +505,7 @@ function AuditLog() {
 }
 
 const REQ_TYPES = [
+  { value: "specific_tasks", label: "Selesaikan task tertentu (pilih task)" },
   { value: "task_count", label: "Complete N tasks" },
   { value: "overdue_cleared", label: "Clear N overdue" },
   { value: "priority_done", label: "Complete N Urgent" },
@@ -531,9 +532,23 @@ function AdminQuests() {
   const [selectedTeams, setSelectedTeams] = useState<Set<string>>(new Set());
   const toggleTeam = (id: string) => setSelectedTeams((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
+  // Task-based quest (specific_tasks): pick exact tasks. Done = all DONE; XP to doers; visible to project members.
+  const isTasks = requirementType === "specific_tasks";
+  const [questTasks, setQuestTasks] = useState<{ id: string; title: string }[]>([]);
+  const [taskSearch, setTaskSearch] = useState("");
+  const taskSearchQ = useQuery({
+    queryKey: ["quest-task-search-admin", taskSearch],
+    queryFn: () => nexusApi.tasks(`search=${encodeURIComponent(taskSearch.trim())}`),
+    enabled: isTasks && taskSearch.trim().length >= 2,
+    staleTime: 10_000,
+  });
+  const taskResults = (taskSearchQ.data ?? []).filter((r) => !questTasks.some((t) => t.id === r.id)).slice(0, 8);
+
   const create = useMutation({
-    mutationFn: () => nexusApi.createAdminQuest({ workspaceId, title: title.trim(), requirementType, requiredCount: Number(requiredCount), xpReward: Math.min(50, Math.max(0, Number(xpReward) || 0)), teamIds: Array.from(selectedTeams), deadline: deadline || null }),
-    onSuccess: () => { setTitle(""); setDeadline(""); setSelectedTeams(new Set()); invalidate(); },
+    mutationFn: () => isTasks
+      ? nexusApi.createAdminQuest({ title: title.trim(), requirementType: "specific_tasks", xpReward: Math.min(50, Math.max(0, Number(xpReward) || 0)), taskIds: questTasks.map((t) => t.id), deadline: deadline || null })
+      : nexusApi.createAdminQuest({ workspaceId, title: title.trim(), requirementType, requiredCount: Number(requiredCount), xpReward: Math.min(50, Math.max(0, Number(xpReward) || 0)), teamIds: Array.from(selectedTeams), deadline: deadline || null }),
+    onSuccess: () => { setTitle(""); setDeadline(""); setSelectedTeams(new Set()); setQuestTasks([]); setTaskSearch(""); invalidate(); },
   });
   const del = useMutation({ mutationFn: (id: string) => nexusApi.deleteAdminQuest(id), onSuccess: invalidate });
   const inputCls = "rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary";
@@ -553,9 +568,11 @@ function AdminQuests() {
                   {REQ_TYPES.filter((r) => r.value !== "penalty").map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
               </label>
-              <label className="text-xs font-semibold text-muted-foreground">Target (jumlah task)
-                <input value={requiredCount} onChange={(e) => setRequiredCount(e.target.value.replace(/[^0-9]/g, ""))} className={cn(inputCls, "mt-1 w-full")} />
-              </label>
+              {!isTasks && (
+                <label className="text-xs font-semibold text-muted-foreground">Target (jumlah task)
+                  <input value={requiredCount} onChange={(e) => setRequiredCount(e.target.value.replace(/[^0-9]/g, ""))} className={cn(inputCls, "mt-1 w-full")} />
+                </label>
+              )}
               <label className="text-xs font-semibold text-muted-foreground">Deadline (jangka waktu)
                 <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} className={cn(inputCls, "mt-1 w-full")} />
               </label>
@@ -563,17 +580,46 @@ function AdminQuests() {
                 <input type="number" min={0} max={50} value={xpReward} onChange={(e) => setXpReward(String(Math.min(50, Math.max(0, parseInt(e.target.value, 10) || 0))))} className={cn(inputCls, "mt-1 w-full")} />
               </label>
             </div>
-            <div className="mt-3">
-              <span className="text-xs font-semibold text-muted-foreground">Assign ke team <span className="font-normal">(pilih satu/lebih · kosong = semua crew)</span></span>
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {teams.length === 0 && <span className="text-xs text-muted-foreground">Belum ada team.</span>}
-                {teams.map((t) => {
-                  const on = selectedTeams.has(t.id);
-                  return <button key={t.id} type="button" onClick={() => toggleTeam(t.id)} className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition", on ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}><span className="h-2 w-2 rounded-full" style={{ background: t.color ?? "#7b68ee" }} />{t.name}</button>;
-                })}
+            {isTasks ? (
+              <div className="mt-3">
+                <span className="text-xs font-semibold text-muted-foreground">Task buat quest ini <span className="font-normal">(selesai kalau semua DONE · XP buat yang ngerjain · kelihatan ke member project task-nya)</span></span>
+                <div className="mt-1.5 space-y-1">
+                  {questTasks.length === 0 && <p className="text-xs text-muted-foreground">Belum ada task kepilih. Cari di bawah.</p>}
+                  {questTasks.map((t) => (
+                    <div key={t.id} className="flex items-center gap-2 rounded-lg bg-muted px-2 py-1.5 text-sm">
+                      <span className="min-w-0 flex-1 truncate">{t.title}</span>
+                      <button type="button" onClick={() => setQuestTasks((prev) => prev.filter((x) => x.id !== t.id))} className="rounded p-0.5 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
+                    </div>
+                  ))}
+                </div>
+                <div className="relative mt-1.5">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <input value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} placeholder="Cari task buat ditambah (min 2 huruf)…" className={cn(inputCls, "w-full border-dashed pl-8")} />
+                </div>
+                {taskResults.length > 0 && (
+                  <div className="mt-1 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-border bg-background p-1">
+                    {taskResults.map((r) => (
+                      <button key={r.id} type="button" onClick={() => { setQuestTasks((prev) => [...prev, { id: r.id, title: r.title }]); setTaskSearch(""); }} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent">
+                        <Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> <span className="min-w-0 flex-1 truncate">{r.title}</span>
+                        {r.taskList?.project?.name && <span className="shrink-0 truncate rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{r.taskList.project.name}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
-            <button disabled={!title.trim() || !workspaceId || create.isPending} onClick={() => create.mutate()} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Assign quest</button>
+            ) : (
+              <div className="mt-3">
+                <span className="text-xs font-semibold text-muted-foreground">Assign ke team <span className="font-normal">(pilih satu/lebih · kosong = semua crew)</span></span>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {teams.length === 0 && <span className="text-xs text-muted-foreground">Belum ada team.</span>}
+                  {teams.map((t) => {
+                    const on = selectedTeams.has(t.id);
+                    return <button key={t.id} type="button" onClick={() => toggleTeam(t.id)} className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition", on ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}><span className="h-2 w-2 rounded-full" style={{ background: t.color ?? "#7b68ee" }} />{t.name}</button>;
+                  })}
+                </div>
+              </div>
+            )}
+            <button disabled={!title.trim() || !workspaceId || create.isPending || (isTasks && questTasks.length === 0)} onClick={() => create.mutate()} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} {isTasks ? "Buat quest" : "Assign quest"}</button>
             {create.isError && <span className="ml-2 text-xs font-semibold text-destructive">Gagal — cek akses.</span>}
           </div>
           <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
@@ -585,10 +631,12 @@ function AdminQuests() {
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold">{q.title}</div>
                     <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                      <span>{REQ_TYPES.find((r) => r.value === q.requirementType)?.label ?? q.requirementType} · target {q.requiredCount}</span>
+                      <span>{REQ_TYPES.find((r) => r.value === q.requirementType)?.label ?? q.requirementType}{q.requirementType === "specific_tasks" ? ` · ${q.requiredCount} task` : ` · target ${q.requiredCount}`}</span>
                       <span className="font-bold text-success">+{q.xpReward} XP</span>
                       {q.deadline && <span>· ⏰ s/d {fmtDate(q.deadline)}</span>}
-                      <span>· {q.teamIds && q.teamIds.length > 0 ? q.teamIds.map(teamName).join(", ") : "Semua crew"}</span>
+                      {q.requirementType === "specific_tasks"
+                        ? <span>· member project task-nya</span>
+                        : <span>· {q.teamIds && q.teamIds.length > 0 ? q.teamIds.map(teamName).join(", ") : "Semua crew"}</span>}
                     </div>
                   </div>
                   <button onClick={() => { if (confirm("Hapus quest ini?")) del.mutate(q.id); }} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
