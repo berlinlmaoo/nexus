@@ -481,6 +481,18 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
 
         {t && (
           <div className="flex flex-1 flex-col gap-4 p-4 sm:p-6">
+            {/* Quest nudge: this task is part of one or more task-bundle quests → motivate finishing it. */}
+            {(t.quests ?? []).map((q) => (
+              <div key={q.id} className="flex items-center gap-2.5 rounded-2xl border border-primary/30 bg-primary/5 px-3.5 py-2.5">
+                <Trophy className="h-5 w-5 shrink-0 text-primary" />
+                <div className="min-w-0 flex-1 text-sm">
+                  <div className="font-bold text-primary">
+                    {q.total <= 1 ? <>Selesaiin task ini → <span className="tabular-nums">+{q.xpReward} XP</span> 🎯</> : <>Bagian dari quest “{q.title}” → <span className="tabular-nums">+{q.xpReward} XP</span> 🎯</>}
+                  </div>
+                  {q.total > 1 && <div className="text-xs text-muted-foreground">Beresin semua {q.total} task-nya ({q.done}/{q.total} kelar) buat dapet XP-nya.</div>}
+                </div>
+              </div>
+            ))}
             {/* toolbar: mark done + status + priority (old-NEXUS pills) */}
             <div className="flex flex-wrap items-center gap-2">
               <button onClick={() => update.mutate({ status: (isDoneStatus(t.status) ? "TODO" : "DONE") as never })} className={cn("inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-bold uppercase tracking-wider transition-colors", isDoneStatus(t.status) ? "border-success/30 bg-success/10 text-success" : "border-border bg-card text-foreground hover:bg-accent")}>

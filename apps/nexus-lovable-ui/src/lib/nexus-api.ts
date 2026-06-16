@@ -513,6 +513,8 @@ export type NexusTaskDetail = NexusTask & {
   description?: string | null;
   estimatedHours?: number | null;
   creator?: NexusUser | null;
+  /** Active task-bundle quests this task belongs to (for the "+X XP" nudge). */
+  quests?: Array<{ id: string; title: string; xpReward: number; total: number; done: number }>;
   comments?: NexusComment[];
   parent?: { id: string; title: string } | null;
   subtasks?: NexusSubtask[];
