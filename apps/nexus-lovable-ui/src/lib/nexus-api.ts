@@ -387,6 +387,7 @@ export type NexusTask = {
   updatedAt?: string | null;
   tags?: string[] | null;
   taskListId?: string | null;
+  parentId?: string | null;
   position?: number | null;
   taskList?: { id?: string; name?: string; position?: number; projectId?: string; project?: { id?: string; name?: string } | null } | null;
   assignees?: Array<{ user?: NexusUser | null }>;
