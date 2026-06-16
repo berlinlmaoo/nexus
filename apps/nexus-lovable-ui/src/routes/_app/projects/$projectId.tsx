@@ -1084,7 +1084,13 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
   const updateRule = (id: string, patch: Partial<CalColorRule>) => persistRules(colorRules.map((r) => r.id === id ? { ...r, ...patch, ...(patch.source ? { customFieldId: undefined, value: "" } : {}), ...(patch.customFieldId ? { value: "" } : {}) } : r));
   const removeRule = (id: string) => persistRules(colorRules.filter((r) => r.id !== id));
 
-  const dated = tasks.filter((task) => parseDate(task.dueDate));
+  // Subtasks are hidden from Board/List (Asana-style, nested in the parent panel) but a subtask can have
+  // its own due date that matters — so the CALENDAR additionally pulls the project's dated subtasks (the
+  // project payload is parentId-only). Board/List stay subtask-free.
+  const allProjTasks = useQuery({ queryKey: ["nexus", "project-calendar-tasks", projectId], queryFn: () => nexusApi.tasks(`projectId=${projectId}`), staleTime: 30_000, retry: false });
+  const datedSubtasks = useMemo(() => (allProjTasks.data ?? []).filter((t) => t.parentId && parseDate(t.dueDate)), [allProjTasks.data]);
+
+  const dated = [...tasks.filter((task) => parseDate(task.dueDate)), ...datedSubtasks];
   const undated = tasks.filter((task) => !parseDate(task.dueDate));
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
   const [dropKey, setDropKey] = useState<string | null>(null);
@@ -1197,7 +1203,7 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
                       <motion.button key={task.id} layoutId={`calendar-taskcard-${task.id}`} data-morph-id={`calendar-taskcard-${task.id}`} style={cs && !done ? { borderRadius: 16, backgroundColor: cs.backgroundColor, borderColor: cs.borderColor } : { borderRadius: 16 }} {...bulk.bindCard(task, () => onOpen(task))} className={cn("group flex w-full items-stretch gap-3 rounded-2xl border border-border bg-card p-3 text-left shadow-soft", done && "opacity-60", bulk.isSelected(task.id) && "ring-2 ring-primary")}>
                         <span className={cn("w-1 shrink-0 rounded-full", done && "bg-success", !done && !cs && (CAL_STRIPE[(task.priority ?? "NONE").toUpperCase()] ?? CAL_STRIPE.NONE))} style={cs && !done ? { backgroundColor: cs.borderColor } : undefined} />
                         <div className="min-w-0 flex-1">
-                          <div className={cn("truncate text-sm font-semibold group-hover:text-primary", done && "line-through")}>{task.title}</div>
+                          <div className={cn("truncate text-sm font-semibold group-hover:text-primary", done && "line-through")}>{task.parentId ? `↳ ${task.title}` : task.title}</div>
                           <div className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
                             <span>{statusLabel(task.status)}</span>
                             {assignee?.name && <span className="inline-flex items-center gap-1"><span className="grid h-4 w-4 place-items-center rounded-full bg-primary/10 text-[8px] font-bold text-primary">{initials(assignee.name)}</span>{assignee.name}</span>}
@@ -1245,8 +1251,8 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
                       const done = isDone(task.status);
                       const cs = styleForTask(task);
                       return (
-                        <motion.button key={task.id} layoutId={`calendar-taskcard-${task.id}`} data-morph-id={`calendar-taskcard-${task.id}`} style={cs && !done ? { borderRadius: 6, backgroundColor: cs.backgroundColor, color: cs.color, boxShadow: `inset 2px 0 0 ${cs.borderColor}` } : { borderRadius: 6 }} {...bulk.bindCard(task, () => onOpen(task))} title={task.title} className={cn("block w-full truncate px-1.5 py-0.5 text-left text-[10px] font-bold leading-tight", done ? "bg-muted text-muted-foreground line-through" : !cs && (CAL_CHIP[(task.priority ?? "NONE").toUpperCase()] ?? CAL_CHIP.NONE), bulk.isSelected(task.id) && "ring-1 ring-inset ring-primary")}>
-                          {task.title}
+                        <motion.button key={task.id} layoutId={`calendar-taskcard-${task.id}`} data-morph-id={`calendar-taskcard-${task.id}`} style={cs && !done ? { borderRadius: 6, backgroundColor: cs.backgroundColor, color: cs.color, boxShadow: `inset 2px 0 0 ${cs.borderColor}` } : { borderRadius: 6 }} {...bulk.bindCard(task, () => onOpen(task))} title={task.parentId ? `↳ ${task.title} (subtask)` : task.title} className={cn("block w-full truncate px-1.5 py-0.5 text-left text-[10px] font-bold leading-tight", done ? "bg-muted text-muted-foreground line-through" : !cs && (CAL_CHIP[(task.priority ?? "NONE").toUpperCase()] ?? CAL_CHIP.NONE), bulk.isSelected(task.id) && "ring-1 ring-inset ring-primary")}>
+                          {task.parentId ? `↳ ${task.title}` : task.title}
                         </motion.button>
                       );
                     })}
