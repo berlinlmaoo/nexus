@@ -56,6 +56,7 @@ import {
   Sparkles,
   Tag,
   Target,
+  Trophy,
   Wallet,
   X,
   Zap,
@@ -540,6 +541,21 @@ function SubtaskChip({ task, className }: { task: NexusTask; className?: string 
   );
 }
 
+/** "🏆 +X" chip — when the task is part of one or more task-bundle quests. XP = sum across quests. */
+function QuestChip({ task, className }: { task: NexusTask; className?: string }) {
+  const quests = task.quests ?? [];
+  if (quests.length === 0) return null;
+  const xp = quests.reduce((s, q) => s + (q.xpReward ?? 0), 0);
+  return (
+    <span
+      title={`Quest: ${quests.map((q) => q.title).join(", ")} — selesaiin buat +${xp} XP`}
+      className={cn("inline-flex shrink-0 items-center gap-0.5 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary", className)}
+    >
+      <Trophy className="h-3 w-3" /> +{xp}
+    </span>
+  );
+}
+
 function TaskCfChips({ task, max = 2, className }: { task: NexusTask; max?: number; className?: string }) {
   const dueKey = task.dueDate ? fmtDate(task.dueDate) : null;
   const chips = ((task.customFieldValues ?? []).map(customFieldChip).filter(Boolean) as Array<{ id: string; label: string; tone: keyof typeof CF_TONE }>)
@@ -605,6 +621,7 @@ function TaskCard({ task, currentProjectId, onOpen, onDrag, moving }: { task: Ne
           <span className="inline-flex items-center gap-1.5">
             <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{fmtDue(task.dueDate)}</span>
             <SubtaskChip task={task} />
+            <QuestChip task={task} />
           </span>
           <span className="inline-flex items-center gap-2">
             {typeof task._count?.comments === "number" && <span className="inline-flex items-center gap-0.5"><MessageSquare className="h-3 w-3" />{task._count.comments}</span>}
@@ -959,6 +976,7 @@ function ListRow({ task, onOpen }: { task: NexusTask; onOpen: (task: NexusTask) 
         <div className="flex items-center gap-1.5">
           <span className={cn("truncate text-sm font-medium group-hover:text-primary", done && "text-muted-foreground line-through")}>{task.title}</span>
           <SubtaskChip task={task} />
+          <QuestChip task={task} />
         </div>
         <div className="truncate text-xs text-muted-foreground">{task.dueDate ? `due ${fmtDue(task.dueDate)}` : "No due date"}</div>
         <TaskCfChips task={task} max={3} className="mt-1 hidden sm:flex" />
