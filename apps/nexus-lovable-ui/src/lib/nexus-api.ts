@@ -217,6 +217,8 @@ export type NexusQuest = {
   claimed?: boolean;
   source?: "auto" | "admin";
   deadline?: string | null;
+  kind?: "count" | "tasks"; // "tasks" = a specific-tasks bundle quest
+  eligible?: boolean;        // specific_tasks: is the viewer a doer (assignee) who can claim XP
 };
 
 export type NexusGamification = {
@@ -1160,7 +1162,7 @@ export const nexusApi = {
     return apiFetch<NexusXpAuditResponse>(`/api/gamification/xp-transactions${s ? `?${s}` : ""}`);
   },
   adminQuests: (workspaceId?: string) => apiFetch<{ quests: NexusAdminQuest[] }>(`/api/gamification/quests/admin${workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ""}`),
-  createAdminQuest: (payload: { workspaceId: string; title: string; description?: string | null; requirementType: string; requiredCount: number; xpReward: number; teamIds?: string[]; deadline?: string | null }) => apiFetch<{ quest: NexusAdminQuest }>("/api/gamification/quests/admin", { method: "POST", body: JSON.stringify(payload) }),
+  createAdminQuest: (payload: { workspaceId?: string; title: string; description?: string | null; requirementType: string; requiredCount?: number; xpReward: number; teamIds?: string[]; taskIds?: string[]; deadline?: string | null }) => apiFetch<{ quest: NexusAdminQuest }>("/api/gamification/quests/admin", { method: "POST", body: JSON.stringify(payload) }),
   deleteAdminQuest: (id: string) => apiFetch<{ success?: boolean }>(`/api/gamification/quests/admin?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   // --- Tasks (detail surface) ---

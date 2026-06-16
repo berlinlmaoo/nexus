@@ -25,6 +25,7 @@ import {
   SlidersHorizontal,
   Star,
   Trash2,
+  Trophy,
   User,
   UserPlus,
   X,
@@ -242,6 +243,10 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   const favorites = useQuery({ queryKey: ["favorites"], queryFn: () => nexusApi.favorites(), staleTime: 60_000 });
   const isFavorited = (favorites.data ?? []).some((f) => f.targetId === taskId && (f.type ?? "").toLowerCase() === "task");
   const followers = useQuery({ queryKey: ["task-followers", taskId], queryFn: () => nexusApi.taskFollowers(taskId) });
+  // BoD-only "Jadiin quest" action: bundle this (and more) task(s) into a specific_tasks quest.
+  const wsMembers = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), staleTime: 300_000, retry: false });
+  const canMakeQuest = wsMembers.data?.role === "BOD" || wsMembers.data?.role === "ONE_ABOVE_ALL";
+  const [questOpen, setQuestOpen] = useState(false);
   const projectId = task.data?.taskList?.project?.id || task.data?.taskList?.projectId;
   const customFields = useQuery({ queryKey: ["task-cf", taskId], queryFn: () => nexusApi.taskCustomFields(projectId!, taskId), enabled: !!projectId });
   // Project's sections (board columns = TaskLists) so the top dropdown follows the actual project.
@@ -453,6 +458,11 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
             >
               <Heart className={cn("h-4 w-4", t?.liked && "fill-destructive")} /> {t?.likeCount ?? 0}
             </button>
+            {canMakeQuest && t && (
+              <button onClick={() => setQuestOpen(true)} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary" title="Jadiin quest">
+                <Trophy className="h-4 w-4" />
+              </button>
+            )}
             <button onClick={() => { if (confirm("Delete this task?")) delTask.mutate(); }} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title="Delete task">
               <Trash2 className="h-4 w-4" />
             </button>
@@ -884,6 +894,67 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
           {/* Nested panel: a subtask (or the parent, via the breadcrumb) opens stacked on top of
               this one — recursive, so sub-subtasks work; no morphId (plain fade, no card source). */}
           {openSub && <TaskDetailPanel taskId={openSub} onClose={() => setOpenSub(null)} />}
+          {questOpen && t && <QuestComposer initialTask={{ id: t.id, title: t.title }} onClose={() => setQuestOpen(false)} />}
+    </div>,
+    document.body,
+  );
+}
+
+// BoD-only: bundle this (and more) task(s) into a `specific_tasks` quest. Complete = all tasks DONE; XP
+// goes to whoever did them; visible to those tasks' project members.
+function QuestComposer({ initialTask, onClose }: { initialTask: { id: string; title: string }; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [title, setTitle] = useState(initialTask.title);
+  const [xp, setXp] = useState(50);
+  const [tasks, setTasks] = useState<{ id: string; title: string }[]>([initialTask]);
+  const [search, setSearch] = useState("");
+  const taskSearch = useQuery({
+    queryKey: ["quest-task-search", search],
+    queryFn: () => nexusApi.tasks(`search=${encodeURIComponent(search.trim())}`),
+    enabled: search.trim().length >= 2,
+    staleTime: 10_000,
+  });
+  const results = (taskSearch.data ?? []).filter((r) => !tasks.some((t) => t.id === r.id)).slice(0, 8);
+  const create = useMutation({
+    mutationFn: () => nexusApi.createAdminQuest({ title: title.trim() || "Quest", xpReward: xp, requirementType: "specific_tasks", taskIds: tasks.map((t) => t.id) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["gamification", "me"] }); toast.success("Quest dibuat 🎯"); onClose(); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Gagal bikin quest"),
+  });
+  return createPortal(
+    <div className="fixed inset-0 z-[90] grid place-items-center bg-black/50 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-3xl border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center gap-2"><Trophy className="h-5 w-5 text-primary" /><h3 className="text-lg font-bold">Jadiin quest</h3></div>
+        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Judul quest</label>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} className="mb-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder="Nama quest" />
+        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Hadiah XP (maks 50)</label>
+        <input type="number" min={0} max={50} value={xp} onChange={(e) => setXp(Math.max(0, Math.min(50, Number(e.target.value) || 0)))} className="mb-3 block w-28 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Task ({tasks.length})</label>
+        <div className="mb-2 space-y-1">
+          {tasks.map((t) => (
+            <div key={t.id} className="flex items-center gap-2 rounded-lg bg-muted px-2 py-1.5 text-sm">
+              <span className="min-w-0 flex-1 truncate">{t.title}</span>
+              <button onClick={() => setTasks((prev) => (prev.length > 1 ? prev.filter((x) => x.id !== t.id) : prev))} disabled={tasks.length <= 1} className="rounded p-0.5 text-muted-foreground hover:text-destructive disabled:opacity-30"><X className="h-3.5 w-3.5" /></button>
+            </div>
+          ))}
+        </div>
+        <input value={search} onChange={(e) => setSearch(e.target.value)} className="w-full rounded-xl border border-dashed border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder="+ Cari task buat ditambah (min 2 huruf)…" />
+        {results.length > 0 && (
+          <div className="mt-1 max-h-44 space-y-1 overflow-y-auto rounded-xl border border-border bg-popover p-1">
+            {results.map((r) => (
+              <button key={r.id} onClick={() => { setTasks((prev) => [...prev, { id: r.id, title: r.title }]); setSearch(""); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-accent">
+                <Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /> <span className="truncate">{r.title}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="mt-4 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-xl border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent">Batal</button>
+          <button onClick={() => create.mutate()} disabled={create.isPending || tasks.length === 0 || !title.trim()} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
+            {create.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Buat quest
+          </button>
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">Quest kelar kalau semua task DONE. XP buat yang ngerjain; kelihatan ke member project task-nya.</p>
+      </div>
     </div>,
     document.body,
   );
