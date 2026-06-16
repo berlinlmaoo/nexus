@@ -487,9 +487,9 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 <Trophy className="h-5 w-5 shrink-0 text-primary" />
                 <div className="min-w-0 flex-1 text-sm">
                   <div className="font-bold text-primary">
-                    {q.total <= 1 ? <>Selesaiin task ini → <span className="tabular-nums">+{q.xpReward} XP</span> 🎯</> : <>Bagian dari quest “{q.title}” → <span className="tabular-nums">+{q.xpReward} XP</span> 🎯</>}
+                    {(q.total ?? 1) <= 1 ? <>Selesaiin task ini → <span className="tabular-nums">+{q.xpReward} XP</span> 🎯</> : <>Bagian dari quest “{q.title}” → <span className="tabular-nums">+{q.xpReward} XP</span> 🎯</>}
                   </div>
-                  {q.total > 1 && <div className="text-xs text-muted-foreground">Beresin semua {q.total} task-nya ({q.done}/{q.total} kelar) buat dapet XP-nya.</div>}
+                  {(q.total ?? 1) > 1 && <div className="text-xs text-muted-foreground">Beresin semua {q.total} task-nya ({q.done ?? 0}/{q.total} kelar) buat dapet XP-nya.</div>}
                 </div>
               </div>
             ))}

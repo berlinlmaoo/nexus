@@ -389,6 +389,8 @@ export type NexusTask = {
   taskListId?: string | null;
   parentId?: string | null;
   position?: number | null;
+  /** Active task-bundle quests this task is in (board/list/detail "🏆 +X XP" badge). total/done only on detail. */
+  quests?: Array<{ id: string; title: string; xpReward: number; total?: number; done?: number }>;
   taskList?: { id?: string; name?: string; position?: number; projectId?: string; project?: { id?: string; name?: string } | null } | null;
   assignees?: Array<{ user?: NexusUser | null }>;
   _count?: { subtasks?: number; comments?: number };
@@ -513,8 +515,6 @@ export type NexusTaskDetail = NexusTask & {
   description?: string | null;
   estimatedHours?: number | null;
   creator?: NexusUser | null;
-  /** Active task-bundle quests this task belongs to (for the "+X XP" nudge). */
-  quests?: Array<{ id: string; title: string; xpReward: number; total: number; done: number }>;
   comments?: NexusComment[];
   parent?: { id: string; title: string } | null;
   subtasks?: NexusSubtask[];
