@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { createFileRoute, useParams, useNavigate, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft, SlidersHorizontal, LayoutGrid, CalendarDays, ChevronLeft, ChevronRight, Check, Loader2, X, Clock,
+  ArrowLeft, SlidersHorizontal, ChevronLeft, ChevronRight, Check, Loader2, X, Clock,
 } from "lucide-react";
 import { nexusApi, type NexusTask, type NexusProject } from "@/lib/nexus-api";
 import { descendantFolderIds, folderPath } from "@/lib/folder-tree-client";
@@ -14,14 +14,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
-// `view` lives in the URL (not local state) so opening a task and coming back via history restores the
-// tab you were on — otherwise the route remounts and resets to "board".
-export const Route = createFileRoute("/_app/folders/$folderId")({
-  component: FolderAggregatePage,
-  // `view` is optional so existing links to the folder don't have to pass it; absent → "board".
-  validateSearch: (search: Record<string, unknown>): { view?: "board" | "calendar" } =>
-    search.view === "calendar" ? { view: "calendar" } : search.view === "board" ? { view: "board" } : {},
-});
+export const Route = createFileRoute("/_app/folders/$folderId")({ component: FolderAggregatePage });
 
 type ProjLookup = Map<string, NexusProject>;
 
@@ -80,9 +73,6 @@ function FolderAggregatePage() {
     [selectedIds, projById],
   );
 
-  const { view } = Route.useSearch();
-  const tab = view ?? "board";
-  const setTab = (v: "board" | "calendar") => navigate({ to: ".", search: { view: v }, replace: true });
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const byId = new Map(folders.map((f) => [f.id, f]));
@@ -104,19 +94,6 @@ function FolderAggregatePage() {
             </button>
           </div>
         }
-        tabs={
-          <div className="flex gap-1">
-            {([["board", "Board", LayoutGrid], ["calendar", "Calendar", CalendarDays]] as const).map(([key, label, Icon]) => (
-              <button
-                key={key}
-                onClick={() => setTab(key)}
-                className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition", tab === key ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent")}
-              >
-                <Icon className="h-3.5 w-3.5" /> {label}
-              </button>
-            ))}
-          </div>
-        }
       />
 
       <div className="p-4 md:p-8">
@@ -125,8 +102,6 @@ function FolderAggregatePage() {
           <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Memuat task…</div>
         ) : selectedIds.length === 0 ? (
           <EmptyState text="Folder ini belum punya project. Pindahin project ke sini dulu, atau pilih project lewat 'Pilih project'." />
-        ) : tab === "board" ? (
-          <BoardView tasks={tasks} projById={projById} />
         ) : (
           <CalendarView tasks={tasks} projById={projById} />
         )}
@@ -237,64 +212,6 @@ function ProjectColorLegend({ projects }: { projects: NexusProject[] }) {
 const projectOf = (t: NexusTask, byId: ProjLookup) => byId.get(t.taskList?.projectId ?? "") ?? null;
 const projectName = (t: NexusTask, byId: ProjLookup) => projectOf(t, byId)?.name ?? t.taskList?.project?.name ?? "—";
 const dueOf = (t: NexusTask) => (t.dueDate ? new Date(t.dueDate) : null);
-
-function TaskCard({ t, projById }: { t: NexusTask; projById: ProjLookup }) {
-  const due = dueOf(t);
-  const proj = projectOf(t, projById);
-  const color = colorOf(proj);
-  return (
-    <Link
-      to="/tasks/$taskId"
-      params={{ taskId: t.id }}
-      className="block rounded-2xl border border-l-4 border-border bg-card p-3 shadow-soft transition hover:border-primary/30"
-      style={{ borderLeftColor: color }}
-    >
-      <div className="line-clamp-2 text-sm font-medium">{t.title}</div>
-      <div className="mt-1.5 flex items-center gap-2 text-[11px]">
-        <span className="flex min-w-0 items-center gap-1 truncate rounded-md px-1.5 py-0.5 font-medium" style={{ background: tint(color, 0.14), color }}>
-          {proj && <span className="grid h-3 w-3 shrink-0 place-items-center"><ProjectIcon icon={proj.icon} className="max-h-3 max-w-3" /></span>}
-          <span className="truncate">{proj?.name ?? projectName(t, projById)}</span>
-        </span>
-        {due && <span className="shrink-0 text-muted-foreground">{due.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>}
-        {t.priority && t.priority.toUpperCase() !== "NONE" && <span className="shrink-0 capitalize text-muted-foreground">{t.priority.toLowerCase()}</span>}
-      </div>
-    </Link>
-  );
-}
-
-function BoardView({ tasks, projById }: { tasks: NexusTask[]; projById: ProjLookup }) {
-  // Columns = the projects' real section names (taskList.name), merged across projects by name. Same-named
-  // sections from different projects ("Done", "To Do", …) collapse into one column; ordered by the section's
-  // position within its project (then name) so a typical To Do → In Progress → Done flow stays left-to-right.
-  const groups = useMemo(() => {
-    const map = new Map<string, { label: string; pos: number; items: NexusTask[] }>();
-    for (const t of tasks) {
-      const label = t.taskList?.name?.trim() || "Tanpa section";
-      const pos = t.taskList?.position ?? 9999;
-      const g = map.get(label);
-      if (g) { g.items.push(t); if (pos < g.pos) g.pos = pos; }
-      else map.set(label, { label, pos, items: [t] });
-    }
-    return [...map.values()].sort((a, b) => a.pos - b.pos || a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
-  }, [tasks]);
-
-  if (!tasks.length) return <EmptyState text="Belum ada task di project-project ini." />;
-  return (
-    <div className="flex gap-4 overflow-x-auto pb-2">
-      {groups.map((g) => (
-        <div key={g.label} className="w-72 shrink-0">
-          <div className="mb-2 flex items-center gap-2 px-1">
-            <h3 className="text-sm font-bold tracking-tight">{g.label}</h3>
-            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">{g.items.length}</span>
-          </div>
-          <div className="flex flex-col gap-2">
-            {g.items.map((t) => <TaskCard key={t.id} t={t} projById={projById} />)}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 // Dispatcher: the desktop month-grid crams badly into a phone, so mobile gets a dedicated dot-grid +
 // day-detail layout. useIsMobile() is the only hook here, so the early branch never trips hook order.
