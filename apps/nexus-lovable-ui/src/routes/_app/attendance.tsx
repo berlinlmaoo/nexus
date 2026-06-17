@@ -7,7 +7,7 @@ import { Avatar } from "@/components/Avatar";
 import { ApiError, downloadFile, fmtDate, fmtTime, nexusApi, statusLabel, type AttendanceActionPayload, type NexusAttendanceHistory, type NexusOffice, type NexusOffsiteCheckout } from "@/lib/nexus-api";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { getAttendanceFix, GeoError } from "@/lib/geo";
-import { AlertTriangle, Calendar, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Clock, Coffee, Download, Loader2, MapPin, Pencil, Scale, Search, Sparkles, X } from "lucide-react";
+import { AlertTriangle, Calendar, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Clock, Coffee, Download, Loader2, MapPin, Pencil, Scale, Search, Sparkles, Trash2, X } from "lucide-react";
 import { celebrate } from "@/components/Celebration";
 import { SelfieCapture } from "@/components/attendance/SelfieCapture";
 import { MobileCheckInHero } from "@/components/attendance/MobileCheckInHero";
@@ -132,6 +132,38 @@ function StatusOverridePanel({ userId, name, dateKey, onDone }: { userId: string
         {override.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Scale className="h-3.5 w-3.5" />} Hapus punishment (balikin XP & day-off)
       </button>
       <p className="mt-1.5 text-[10px] text-muted-foreground">Semua aksi otomatis balikin potongan XP & day-off hari itu, dan tercatat di audit log.</p>
+    </div>
+  );
+}
+
+/** BoD-only: delete bad attendance data — a whole record (e.g. an accidental/"mabok" double check-in)
+ *  or just the check-out (mis-tapped → reopen the record). */
+function DeleteRecordPanel({ recordId, hasCheckOut, name, dateKey, onDone }: { recordId: string; hasCheckOut: boolean; name: string | null; dateKey: string; onDone: () => void }) {
+  const qc = useQueryClient();
+  const del = useMutation({
+    mutationFn: (vars: { part?: "checkout" }) => nexusApi.deleteAttendanceRecord(recordId, vars.part ? { part: vars.part } : {}),
+    onSuccess: (_r, vars) => {
+      qc.invalidateQueries({ queryKey: ["attendance-history"] });
+      qc.invalidateQueries({ queryKey: ["attendance-today"] });
+      celebrate(vars.part === "checkout" ? `Check-out ${dateKey} dihapus — absen dibuka lagi 🔓` : `Absen ${dateKey} dihapus 🗑️`);
+      onDone();
+    },
+    onError: (e) => alert(e instanceof Error ? e.message : "Gagal menghapus."),
+  });
+  return (
+    <div className="mt-3 rounded-2xl border border-dashed border-rose-300/70 bg-rose-50/60 p-3">
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-600"><Trash2 className="h-3.5 w-3.5" /> Hapus data absen</div>
+      <div className="flex flex-wrap gap-1.5">
+        {hasCheckOut && (
+          <button disabled={del.isPending} onClick={() => { if (window.confirm(`Hapus CHECK-OUT ${dateKey} (${name ?? "staff ini"})?\n\nCheck-in-nya tetap — record dibuka lagi jadi "masih clocked-in".`)) del.mutate({ part: "checkout" }); }} className="rounded-full border border-rose-300 bg-card px-3 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-100 disabled:opacity-50">
+            Hapus check-out
+          </button>
+        )}
+        <button disabled={del.isPending} onClick={() => { if (window.confirm(`Hapus SELURUH absen ${dateKey} (${name ?? "staff ini"})?\n\nData check-in & check-out hari itu kehapus permanen. Potongan XP/day-off hari itu dibalikin & harinya diamankan dari potongan absen. Tercatat di audit log.`)) del.mutate({}); }} className="inline-flex items-center gap-1.5 rounded-full bg-rose-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-rose-700 disabled:opacity-50">
+          {del.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Hapus absen ini
+        </button>
+      </div>
+      <p className="mt-1.5 text-[10px] text-muted-foreground">Buat ngebersihin check-in yang kepencet gak sengaja. "Hapus absen ini" = record-nya ilang + hari itu diamankan dari potongan.</p>
     </div>
   );
 }
@@ -633,13 +665,24 @@ function AttendanceCorrectionDrawer({ record, origin, onClose, canOverride }: { 
   }, [onClose]);
 
   const save = useMutation({
-    mutationFn: () => nexusApi.correctAttendanceRecord(record.id!, {
-      checkInAt: checkInAt ? new Date(checkInAt).toISOString() : null,
-      checkOutAt: checkOutAt ? new Date(checkOutAt).toISOString() : null,
-      notes: notes || null,
-      correctionReason: reason.trim(),
-    }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["attendance-history"] }); celebrate("Attendance corrected ✅"); onClose(); },
+    mutationFn: async () => {
+      const checkInISO = checkInAt ? new Date(checkInAt).toISOString() : null;
+      const checkOutISO = checkOutAt ? new Date(checkOutAt).toISOString() : null;
+      // Existing record → PATCH. MISSING record (a placeholder history row / 404) → CREATE it via the
+      // override endpoint with the entered times — i.e. admin fills an absen the staff couldn't record
+      // (e.g. system error blocked their check-in).
+      if (record.id) {
+        try {
+          return await nexusApi.correctAttendanceRecord(record.id, { checkInAt: checkInISO, checkOutAt: checkOutISO, notes: notes || null, correctionReason: reason.trim() });
+        } catch (e) {
+          if (!(e instanceof ApiError && e.status === 404)) throw e;
+        }
+      }
+      const uid = record.user?.id;
+      if (!uid) throw new Error("User tidak diketahui.");
+      return nexusApi.attendanceOverride({ userId: uid, date: (record.attendanceDate || "").slice(0, 10), action: "PRESENT", checkInAt: checkInISO, checkOutAt: checkOutISO, note: reason.trim() });
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["attendance-history"] }); celebrate("Absen tersimpan ✅"); onClose(); },
   });
 
   const field = "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20";
@@ -674,6 +717,9 @@ function AttendanceCorrectionDrawer({ record, origin, onClose, canOverride }: { 
         </div>
         {canOverride && record.user?.id && (
           <StatusOverridePanel userId={record.user.id} name={record.user?.name ?? null} dateKey={(record.attendanceDate || "").slice(0, 10)} onDone={onClose} />
+        )}
+        {canOverride && record.id && (
+          <DeleteRecordPanel recordId={record.id} hasCheckOut={!!record.checkOutAt} name={record.user?.name ?? null} dateKey={(record.attendanceDate || "").slice(0, 10)} onDone={onClose} />
         )}
       </div>
     </MorphPanel>

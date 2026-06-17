@@ -1104,6 +1104,14 @@ export const nexusApi = {
   periodRewards: () => apiFetch<{ rewards: Array<{ periodKey: string; tier: string; perk?: string | null; bonusDayOff: number; zeroAlpha: boolean; finalScore: number }> }>("/api/attendance/xp-rewards"),
   runPeriodRewards: (monthKey?: string) => apiFetch<{ monthKey: string; members: number; rewarded: number }>("/api/attendance/xp-rewards", { method: "POST", body: JSON.stringify(monthKey ? { monthKey } : {}) }),
   correctAttendanceRecord: (recordId: string, payload: { checkInAt?: string | null; checkOutAt?: string | null; notes?: string | null; correctionReason?: string }) => apiFetch<{ record?: unknown }>(`/api/attendance/records/${recordId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  // BoD cleanup for bad data: omit `part` to delete the whole record, or part:"checkout" to clear only the check-out (reopen).
+  deleteAttendanceRecord: (recordId: string, opts?: { part?: "checkout"; reason?: string }) => {
+    const qs = new URLSearchParams();
+    if (opts?.part) qs.set("part", opts.part);
+    if (opts?.reason) qs.set("reason", opts.reason);
+    const q = qs.toString();
+    return apiFetch<{ deleted?: boolean; record?: unknown; date?: string }>(`/api/attendance/records/${recordId}${q ? `?${q}` : ""}`, { method: "DELETE" });
+  },
   attendanceOffices: () => apiFetch<{ offices: NexusOffice[] }>("/api/attendance/offices"),
   createOffice: (payload: OfficePayload) => apiFetch<{ office?: NexusOffice }>("/api/attendance/offices", { method: "POST", body: JSON.stringify(payload) }),
   updateOffice: (officeId: string, payload: Partial<OfficePayload>) => apiFetch<{ office?: NexusOffice }>(`/api/attendance/offices/${officeId}`, { method: "PATCH", body: JSON.stringify(payload) }),
