@@ -241,7 +241,7 @@ struct ListTab: View {
 // MARK: - Timeline (Gantt: start→due windows per section)
 
 struct TimelineTab: View {
-    let detail: ProjectDetail
+    let lanes: [ProjectDetail.Lane]   // merged (incl. subtasks)
     let onOpen: (String) -> Void
 
     private let dayW: CGFloat = 38
@@ -271,7 +271,7 @@ struct TimelineTab: View {
     struct Row: Identifiable { let id: String; let task: BoardTask; let win: Win }
 
     private var groups: [Group] {
-        (detail.taskLists ?? []).map { lane in
+        lanes.map { lane in
             let rows = (lane.tasks ?? []).map { Row(id: $0.id, task: $0, win: window($0)) }
                 .sorted { $0.win.start < $1.win.start }
             return Group(id: lane.id, name: lane.name, rows: rows)
@@ -316,9 +316,9 @@ struct TimelineTab: View {
                             .padding(.leading, 12).frame(width: leftW, height: groupH, alignment: .leading)
                             .background(NX.muted.opacity(0.4))
                         ForEach(g.rows) { r in
-                            Text(r.task.title).font(NXFont.text(12)).foregroundStyle(r.task.isDone ? NX.mutedFg : NX.foreground)
+                            Text(r.task.isSubtask ? "↳ \(r.task.title)" : r.task.title).font(NXFont.text(12)).foregroundStyle(r.task.isDone ? NX.mutedFg : NX.foreground)
                                 .strikethrough(r.task.isDone).lineLimit(1)
-                                .padding(.leading, 12).frame(width: leftW, height: rowH, alignment: .leading)
+                                .padding(.leading, r.task.isSubtask ? 20 : 12).frame(width: leftW, height: rowH, alignment: .leading)
                         }
                     }
                 }
@@ -405,7 +405,7 @@ struct TimelineTab: View {
 // MARK: - Calendar
 
 struct CalendarTab: View {
-    let detail: ProjectDetail
+    let tasks: [BoardTask]   // full set incl. merged subtasks, so dated subtasks land on the calendar too
     let onOpen: (String) -> Void
     var onCreate: (Date?) -> Void = { _ in }
     @State private var monthOffset = 0
@@ -422,7 +422,7 @@ struct CalendarTab: View {
     }
     private var tasksByDay: [Int: [BoardTask]] {
         var map: [Int: [BoardTask]] = [:]
-        for t in detail.allTasks {
+        for t in tasks {
             guard let d = ProjDate.parse(t.dueDate) else { continue }
             let c = cal.dateComponents([.year, .month, .day], from: d)
             if c.year == comps.year, c.month == comps.month, let day = c.day { map[day, default: []].append(t) }

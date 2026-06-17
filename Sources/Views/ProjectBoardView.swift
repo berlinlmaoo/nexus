@@ -150,8 +150,8 @@ struct ProjectDetailView: View {
                 case .overview: OverviewTab(detail: detail)
                 case .board:    boardTab(detail)
                 case .list:     ListTab(lanes: lanes, onOpen: { openTaskId = $0 })
-                case .calendar: CalendarTab(detail: detail, onOpen: { openTaskId = $0 }, onCreate: { date in prefillDue = date; showCreate = true })
-                case .timeline: TimelineTab(detail: detail, onOpen: { openTaskId = $0 })
+                case .calendar: CalendarTab(tasks: lanes.flatMap { $0.tasks ?? [] }, onOpen: { openTaskId = $0 }, onCreate: { date in prefillDue = date; showCreate = true })
+                case .timeline: TimelineTab(lanes: lanes, onOpen: { openTaskId = $0 })
                 default:        EmptyView()
                 }
             }
