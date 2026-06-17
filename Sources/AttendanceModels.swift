@@ -50,6 +50,7 @@ struct AttendanceRow: Decodable, Identifiable, Sendable {
     let attendanceDayType: String?
     let status: String?
     let checkInAt: String?
+    let checkOutAt: String?
     let user: UserRef?
     struct UserRef: Decodable, Sendable { let id: String?; let name: String?; let avatar: String? }
     var idv: String { id ?? ((user?.id ?? "") + (attendanceDate ?? "")) }

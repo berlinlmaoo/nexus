@@ -364,6 +364,7 @@ struct StreakBoardCard: View {
     @Environment(AuthStore.self) private var auth
     @State private var rows: [AttendanceRow] = []
     @State private var loading = true
+    @State private var selectedRow: AttendanceRow?   // BoD taps a cell → record actions (delete / clear check-out)
 
     private let cell: CGFloat = 24
     private let gap: CGFloat = 3
@@ -374,13 +375,14 @@ struct StreakBoardCard: View {
     private var monthLabel: String { let f = DateFormatter(); f.dateFormat = "MMMM yyyy"; f.locale = Locale(identifier: "id_ID"); f.timeZone = cal.timeZone; return f.string(from: Date()) }
     private var daysInMonth: Int { cal.range(of: .day, in: .month, for: Date())?.count ?? 30 }
 
-    private struct Member: Identifiable { let id: String; let name: String; let cells: [Int: AttTone] }
+    private struct Member: Identifiable { let id: String; let name: String; let cells: [Int: AttTone]; let rowByDay: [Int: AttendanceRow] }
     private var members: [Member] {
         let groups = Dictionary(grouping: rows) { $0.user?.id ?? "me" }
         return groups.map { uid, rs -> Member in
             var cells: [Int: AttTone] = [:]
-            for r in rs { if let d = dayOf(r.attendanceDate) { cells[d] = AttTone.of(r) } }
-            return Member(id: uid, name: rs.first?.user?.name ?? "Kamu", cells: cells)
+            var rowByDay: [Int: AttendanceRow] = [:]
+            for r in rs { if let d = dayOf(r.attendanceDate) { cells[d] = AttTone.of(r); rowByDay[d] = r } }
+            return Member(id: uid, name: rs.first?.user?.name ?? "Kamu", cells: cells, rowByDay: rowByDay)
         }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
     private func dayOf(_ iso: String?) -> Int? {
@@ -406,6 +408,9 @@ struct StreakBoardCard: View {
         }
         .nexusCard()
         .task { await load() }
+        .sheet(item: $selectedRow) { row in
+            RecordActionsSheet(row: row) { await load() }
+        }
     }
 
     private var legend: some View {
@@ -438,8 +443,12 @@ struct StreakBoardCard: View {
                     ForEach(members) { m in
                         HStack(spacing: gap) {
                             ForEach(1...daysInMonth, id: \.self) { d in
-                                RoundedRectangle(cornerRadius: 5, style: .continuous).fill((m.cells[d] ?? .none).color)
-                                    .frame(width: cell, height: cell)
+                                let fill = RoundedRectangle(cornerRadius: 5, style: .continuous).fill((m.cells[d] ?? .none).color).frame(width: cell, height: cell)
+                                if canManage, let row = m.rowByDay[d], row.id != nil {
+                                    Button { selectedRow = row } label: { fill }.buttonStyle(.plain)
+                                } else {
+                                    fill
+                                }
                             }
                         }
                     }
@@ -453,5 +462,96 @@ struct StreakBoardCard: View {
         catch APIError.unauthorized { auth.logout() }
         catch { rows = [] }
         loading = false
+    }
+}
+
+/// BoD: tap a crew-board cell → see that day's check-in/out and clean up bad data — delete the whole
+/// record (accidental/"mabok" double check-in) or just the check-out (mis-tapped → reopen).
+struct RecordActionsSheet: View {
+    let row: AttendanceRow
+    let onDone: () async -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var busy = false
+    @State private var confirmDelete = false
+    @State private var err: String?
+
+    private var dateLabel: String { AgendaRange.dayLabel(AgendaRange.dayKey(row.attendanceDate ?? "")) }
+    private func timeText(_ iso: String?) -> String {
+        guard let d = ProjDate.parse(iso) else { return "—" }
+        return ProjDate.fmt("HH:mm").string(from: d)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(row.user?.name ?? "Staff").font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)
+                        Text(dateLabel).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    }
+
+                    VStack(spacing: 0) {
+                        timeRow("Check-in", row.checkInAt, "arrow.right.to.line", NX.success)
+                        Divider().overlay(NX.border)
+                        timeRow("Check-out", row.checkOutAt, "arrow.left.to.line", NX.danger)
+                    }
+                    .padding(.horizontal, 12)
+                    .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border))
+
+                    SectionLabel("Hapus data absen")
+                    if row.checkOutAt != nil {
+                        Button { Task { await del(part: "checkout") } } label: {
+                            Label("Hapus check-out (buka lagi)", systemImage: "arrow.uturn.backward")
+                                .font(NXFont.text(14, .bold)).foregroundStyle(NX.danger).frame(maxWidth: .infinity).padding(.vertical, 12)
+                                .background(NX.danger.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.danger.opacity(0.3)))
+                        }.buttonStyle(.plain).disabled(busy)
+                    }
+                    Button { confirmDelete = true } label: {
+                        Label("Hapus absen ini", systemImage: "trash.fill")
+                            .font(NXFont.text(14, .bold)).foregroundStyle(.white).frame(maxWidth: .infinity).padding(.vertical, 12)
+                            .background(NX.danger, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }.buttonStyle(.plain).disabled(busy)
+
+                    Text("Buat ngebersihin check-in yang kepencet gak sengaja. \"Hapus absen ini\" = record-nya ilang + hari itu diamankan dari potongan absen. Tercatat di audit log.")
+                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+
+                    if let err { Text(err).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger) }
+                    if busy { ProgressView().tint(NX.violet).frame(maxWidth: .infinity) }
+                }
+                .padding(16)
+            }
+            .background(NX.background.ignoresSafeArea())
+            .navigationTitle("Atur absen").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Tutup") { dismiss() } } }
+            .confirmationDialog("Hapus seluruh absen \(dateLabel)?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button("Hapus", role: .destructive) { Task { await del(part: nil) } }
+                Button("Batal", role: .cancel) {}
+            } message: { Text("Data check-in & check-out hari itu kehapus permanen + hari itu diamankan dari potongan.") }
+        }
+    }
+
+    private func timeRow(_ label: String, _ iso: String?, _ icon: String, _ tint: Color) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon).font(.system(size: 13)).foregroundStyle(tint).frame(width: 26)
+            Text(label).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+            Spacer()
+            Text(timeText(iso)).font(NXFont.text(14, .bold)).foregroundStyle(iso == nil ? NX.mutedFg : NX.foreground)
+        }
+        .padding(.vertical, 11)
+    }
+
+    private func del(part: String?) async {
+        guard let id = row.id else { return }
+        busy = true; err = nil
+        do {
+            try await APIClient.shared.deleteAttendanceRecord(id, part: part)
+            await onDone()
+            dismiss()
+        } catch {
+            err = (error as? LocalizedError)?.errorDescription ?? "Gagal menghapus."
+            busy = false
+        }
     }
 }

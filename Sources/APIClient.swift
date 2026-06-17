@@ -679,6 +679,14 @@ struct APIClient {
         let path = "/api/attendance/history?scope=\(enc(scope))&month=\(enc(month))"
         return (try await run(makeRequest(path), decode: AttendanceHistoryResponse.self)).all
     }
+    /// BoD cleanup: omit `part` to delete the whole record (e.g. an accidental check-in), or part="checkout" to clear only the check-out (reopen).
+    @discardableResult
+    func deleteAttendanceRecord(_ recordId: String, part: String? = nil) async throws -> Bool {
+        var path = "/api/attendance/records/\(recordId)"
+        if let part { path += "?part=\(enc(part))" }
+        _ = try await run(makeRequest(path, method: "DELETE"), decode: SuccessResponse.self)
+        return true
+    }
     func attendanceRequests(scope: String) async throws -> [AttendanceRequest] {
         (try await run(makeRequest("/api/attendance/requests?scope=\(enc(scope))"), decode: AttendanceRequestsResponse.self)).requests
     }
