@@ -365,15 +365,17 @@ struct StreakBoardCard: View {
     @State private var rows: [AttendanceRow] = []
     @State private var loading = true
     @State private var selectedRow: AttendanceRow?   // BoD taps a cell → record actions (delete / clear check-out)
+    @State private var monthOffset = 0               // 0 = this month; ◀ ▶ to reach past months
 
     private let cell: CGFloat = 24
     private let gap: CGFloat = 3
     private let nameW: CGFloat = 76
 
     private var cal: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "Asia/Jakarta")!; return c }
-    private var monthKey: String { let f = DateFormatter(); f.dateFormat = "yyyy-MM"; f.timeZone = cal.timeZone; return f.string(from: Date()) }
-    private var monthLabel: String { let f = DateFormatter(); f.dateFormat = "MMMM yyyy"; f.locale = Locale(identifier: "id_ID"); f.timeZone = cal.timeZone; return f.string(from: Date()) }
-    private var daysInMonth: Int { cal.range(of: .day, in: .month, for: Date())?.count ?? 30 }
+    private var monthDate: Date { cal.date(byAdding: .month, value: monthOffset, to: Date()) ?? Date() }
+    private var monthKey: String { let f = DateFormatter(); f.dateFormat = "yyyy-MM"; f.timeZone = cal.timeZone; return f.string(from: monthDate) }
+    private var monthLabel: String { let f = DateFormatter(); f.dateFormat = "MMMM yyyy"; f.locale = Locale(identifier: "id_ID"); f.timeZone = cal.timeZone; return f.string(from: monthDate) }
+    private var daysInMonth: Int { cal.range(of: .day, in: .month, for: monthDate)?.count ?? 30 }
 
     private struct Member: Identifiable { let id: String; let name: String; let cells: [Int: AttTone]; let rowByDay: [Int: AttendanceRow] }
     private var members: [Member] {
@@ -392,9 +394,16 @@ struct StreakBoardCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(canManage ? "Crew streak board" : "Riwayat absen kamu").font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
-                Text(monthLabel.capitalized).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(canManage ? "Crew streak board" : "Riwayat absen kamu").font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+                    Text(monthLabel.capitalized).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                }
+                Spacer()
+                HStack(spacing: 2) {
+                    Button { monthOffset -= 1 } label: { Image(systemName: "chevron.left").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.foreground).frame(width: 30, height: 30) }
+                    Button { if monthOffset < 0 { monthOffset += 1 } } label: { Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundStyle(monthOffset < 0 ? NX.foreground : NX.mutedFg.opacity(0.4)).frame(width: 30, height: 30) }.disabled(monthOffset >= 0)
+                }
             }
             legend
             if loading {
@@ -407,7 +416,7 @@ struct StreakBoardCard: View {
             }
         }
         .nexusCard()
-        .task { await load() }
+        .task(id: monthOffset) { await load() }
         .sheet(item: $selectedRow) { row in
             RecordActionsSheet(row: row) { await load() }
         }
@@ -458,6 +467,7 @@ struct StreakBoardCard: View {
     }
 
     private func load() async {
+        loading = true
         do { rows = try await APIClient.shared.attendanceHistory(scope: canManage ? "workspace" : "me", month: monthKey) }
         catch APIError.unauthorized { auth.logout() }
         catch { rows = [] }
