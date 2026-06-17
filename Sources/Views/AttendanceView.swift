@@ -25,9 +25,14 @@ struct AttendanceView: View {
     struct Banner: Identifiable { let id = UUID(); let text: String; let good: Bool }
 
     private var rec: AttendanceRecord? { today?.today }
+    /// A PREVIOUS day's open check-in the user forgot to close. While this exists the backend blocks a
+    /// new check-in ("close it first"), so we must surface a check-out flow for it (web "Selesaikan absen kemarin").
+    private var pendingRec: AttendanceRecord? { today?.pendingCheckout }
+    private var forcePending: Bool { pendingRec != nil }
+    private var dispRec: AttendanceRecord? { rec ?? pendingRec }   // what the hero/metrics display
     private var checkedIn: Bool { rec?.hasCheckedIn == true }
     private var checkedOut: Bool { rec?.hasCheckedOut == true }
-    private var pending: Bool { rec?.checkOutApproval == "PENDING" }
+    private var pending: Bool { rec?.checkOutApproval == "PENDING" }   // offsite checkout awaiting BoD approval
 
     var body: some View {
         ZStack {
@@ -37,6 +42,7 @@ struct AttendanceView: View {
                     hero
                     presenceButtons
                     if showOffsite { offsitePrompt }
+                    if forcePending { infoBanner("⚠️ Masih ada absen sebelumnya yang belum di-check-out. Pencet PRESENCE OUT dulu buat nutup — baru bisa absen lagi.", tone: .warning) }
                     if pending { infoBanner("⏳ Checkout di luar area — nunggu approval BoD", tone: .warning) }
                     if rec?.checkOutApproval == "REJECTED" { infoBanner("Checkout di luar area kamu ditolak BoD.", tone: .danger) }
                     if let banner { infoBanner(banner.text, tone: banner.good ? .success : .danger) }
@@ -105,8 +111,8 @@ struct AttendanceView: View {
                 .padding(.horizontal, 12).padding(.vertical, 5)
                 .background(.white.opacity(0.18), in: Capsule())
             HStack(spacing: 32) {
-                Text("IN \(rec?.checkInAt.flatMap(Self.hhmm) ?? "--:--")")
-                Text("OUT \(rec?.checkOutAt.flatMap(Self.hhmm) ?? "--:--")")
+                Text("IN \(dispRec?.checkInAt.flatMap(Self.hhmm) ?? "--:--")")
+                Text("OUT \(dispRec?.checkOutAt.flatMap(Self.hhmm) ?? "--:--")")
             }
             .font(NXFont.text(14, .bold)).monospacedDigit().foregroundStyle(.white.opacity(0.9))
         }
@@ -128,7 +134,7 @@ struct AttendanceView: View {
             FunMetricCard(icon: "cup.and.saucer.fill", label: "Today's status", value: todayStatusValue,
                           helper: "Live dari NEXUS attendance API", tint: NX.success)
             FunMetricCard(icon: "mappin.circle.fill", label: "Office checkpoint", value: officeValue,
-                          helper: "In \(rec?.checkInAt.flatMap(Self.hhmm) ?? "--:--") · Out \(rec?.checkOutAt.flatMap(Self.hhmm) ?? "--:--")", tint: NX.violet)
+                          helper: "In \(dispRec?.checkInAt.flatMap(Self.hhmm) ?? "--:--") · Out \(dispRec?.checkOutAt.flatMap(Self.hhmm) ?? "--:--")", tint: NX.violet)
             FunMetricCard(icon: "sparkles", label: "Day-off tokens", value: "\(today?.dayOffUsedThisMonth ?? 0)/\(today?.dayOffQuota ?? 4) used",
                           helper: "Jatah day-off bulan ini", tint: NX.warning)
             FunMetricCard(icon: "calendar", label: "Tanggal merah", value: "\(today?.redDateUsedThisMonth ?? 0)/\(today?.redDateQuota ?? 0) used",
@@ -137,12 +143,13 @@ struct AttendanceView: View {
     }
 
     private var todayStatusValue: String {
+        if forcePending { return "Selesaikan absen kemarin" }
         if let s = rec?.status, !s.isEmpty { return Self.humanize(s) }
         if let req = today?.todayRequest, let t = req.type { return "\(Self.humanize(t)) \(Self.humanize(req.status ?? ""))".trimmingCharacters(in: .whitespaces) }
         return "Ready to check in"
     }
     private var officeValue: String {
-        rec?.officeLocation?.name ?? "\(today?.activeOfficeCount ?? 0) active offices"
+        dispRec?.officeLocation?.name ?? "\(today?.activeOfficeCount ?? 0) active offices"
     }
 
     static func humanize(_ raw: String) -> String {
@@ -156,9 +163,9 @@ struct AttendanceView: View {
     private var presenceButtons: some View {
         HStack(spacing: 12) {
             presenceButton(title: "Presence In", system: "arrow.right.to.line", tint: Color(hex: "#10b981"),
-                           action: .checkIn, disabled: checkedIn || pending)
+                           action: .checkIn, disabled: checkedIn || forcePending || pending)
             presenceButton(title: "Presence Out", system: "arrow.left.to.line", tint: Color(hex: "#f43f5e"),
-                           action: .checkOut, disabled: !checkedIn || checkedOut || pending)
+                           action: .checkOut, disabled: (!checkedIn && !forcePending) || checkedOut || pending)
         }
     }
 
@@ -219,6 +226,7 @@ struct AttendanceView: View {
     // MARK: computed copy
 
     private var statusText: String {
+        if forcePending { return "Selesaikan absen kemarin" }
         if checkedOut { return "Selesai hari ini 🎉" }
         if checkedIn { return "Lagi clocked-in" }
         return "Siap check-in"
