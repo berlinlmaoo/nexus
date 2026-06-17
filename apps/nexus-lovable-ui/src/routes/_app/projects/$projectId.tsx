@@ -57,7 +57,6 @@ import {
   Sparkles,
   Tag,
   Target,
-  Trophy,
   Wallet,
   X,
   Zap,
@@ -581,7 +580,7 @@ function QuestChip({ task, className }: { task: NexusTask; className?: string })
       title={`Quest: ${quests.map((q) => q.title).join(", ")} — selesaiin buat +${xp} XP`}
       className={cn("inline-flex shrink-0 items-center gap-0.5 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary", className)}
     >
-      <Trophy className="h-3 w-3" /> +{xp}
+      +{xp} XP
     </span>
   );
 }
