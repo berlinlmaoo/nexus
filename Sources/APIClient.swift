@@ -77,6 +77,12 @@ struct APIClient {
         try await run(makeRequest("/api/projects/\(id)"), decode: ProjectDetail.self)
     }
 
+    /// All of a project's tasks INCLUDING subtasks (the project payload is parentId-only). Carries
+    /// `parentId`/`taskListId`/`quests` → board & list merge subtasks into their lane + show "+N XP".
+    func projectTasks(_ projectId: String) async throws -> [BoardTask] {
+        try await run(makeRequest("/api/tasks?projectId=\(enc(projectId))"), decode: [BoardTask].self)
+    }
+
     func workspaceInfo() async throws -> WorkspaceInfo {
         try await run(makeRequest("/api/workspaces/members"), decode: WorkspaceInfo.self)
     }
@@ -344,6 +350,18 @@ struct APIClient {
         var body: [String: Any] = ["workspaceId": workspaceId, "title": title, "requirementType": requirementType, "requiredCount": requiredCount, "xpReward": xpReward]
         if let deadline { body["deadline"] = deadline }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    /// Bundle EXACT tasks into a `specific_tasks` quest (the per-task "Jadiin quest" button). The
+    /// backend derives workspaceId + requiredCount from the tasks, so we send only title/xp/taskIds.
+    @discardableResult
+    func createTaskQuest(title: String, xpReward: Int, taskIds: [String]) async throws -> Bool {
+        var req = makeRequest("/api/gamification/quests/admin", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "title": title, "xpReward": xpReward, "requirementType": "specific_tasks", "taskIds": taskIds,
+        ])
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }

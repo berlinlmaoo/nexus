@@ -7,6 +7,7 @@ struct ProjectDetailView: View {
     let projectName: String
     @Environment(AuthStore.self) private var auth
     @State private var detail: ProjectDetail?
+    @State private var lanes: [ProjectDetail.Lane] = []   // detail.taskLists + subtasks merged in (board + list)
     @State private var loading = true
     @State private var error: String?
     @State private var openTaskId: String?
@@ -148,7 +149,7 @@ struct ProjectDetailView: View {
                 switch tab {
                 case .overview: OverviewTab(detail: detail)
                 case .board:    boardTab(detail)
-                case .list:     ListTab(detail: detail, onOpen: { openTaskId = $0 })
+                case .list:     ListTab(lanes: lanes, onOpen: { openTaskId = $0 })
                 case .calendar: CalendarTab(detail: detail, onOpen: { openTaskId = $0 }, onCreate: { date in prefillDue = date; showCreate = true })
                 case .timeline: TimelineTab(detail: detail, onOpen: { openTaskId = $0 })
                 default:        EmptyView()
@@ -158,7 +159,7 @@ struct ProjectDetailView: View {
     }
 
     @ViewBuilder private func boardTab(_ detail: ProjectDetail) -> some View {
-        if let lanes = detail.taskLists, !lanes.isEmpty {
+        if !lanes.isEmpty {
             // Horizontal-only: each lane is a full-height column that scrolls its own cards
             // vertically (see LaneColumn). The lanes fill the board height, so the HStack never
             // overflows it and the custom header/tab-bar stay put.
@@ -185,11 +186,48 @@ struct ProjectDetailView: View {
 
     private func load() async {
         error = nil
-        do { detail = try await APIClient.shared.project(projectId) }
+        do {
+            let d = try await APIClient.shared.project(projectId)
+            detail = d
+            // Best-effort: the project payload is parentId-only, so pull the full task set and merge
+            // subtasks into their lane (under the parent) for the board + list. Calendar/Timeline use detail.
+            let all = (try? await APIClient.shared.projectTasks(projectId)) ?? []
+            lanes = Self.mergeSubtasks(into: d.taskLists ?? [], all: all)
+        }
         catch APIError.unauthorized { auth.logout() }
         catch APIError.http(403) { error = "Project terkunci — kamu belum jadi member project ini." }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? "Gagal memuat project." }
         loading = false
+    }
+
+    /// Merge subtasks into their section lane, placed right under their parent (orphans — parent in
+    /// another lane — go at the lane's end). Resolves each subtask's parent title client-side.
+    static func mergeSubtasks(into lanes: [ProjectDetail.Lane], all: [BoardTask]) -> [ProjectDetail.Lane] {
+        let subs = all.filter { $0.isSubtask && !($0.taskListId ?? "").isEmpty }
+        if subs.isEmpty { return lanes }
+        var titleById: [String: String] = [:]
+        for t in all { titleById[t.id] = t.title }
+        var subsByLane: [String: [BoardTask]] = [:]
+        for s in subs {
+            var sub = s
+            if let pid = s.parentId { sub.parent = BoardParent(id: pid, title: titleById[pid]) }
+            subsByLane[s.taskListId!, default: []].append(sub)
+        }
+        return lanes.map { lane in
+            guard let ls = subsByLane[lane.id], !ls.isEmpty else { return lane }
+            let parents = lane.tasks ?? []
+            let pidSet = Set(parents.map(\.id))
+            var byParent: [String: [BoardTask]] = [:]
+            var orphans: [BoardTask] = []
+            for s in ls {
+                if let pid = s.parentId, pidSet.contains(pid) { byParent[pid, default: []].append(s) }
+                else { orphans.append(s) }
+            }
+            var out: [BoardTask] = []
+            for p in parents { out.append(p); out.append(contentsOf: byParent[p.id] ?? []) }
+            out.append(contentsOf: orphans)
+            return ProjectDetail.Lane(id: lane.id, name: lane.name, tasks: out)
+        }
     }
 
     private func addTask(laneId: String, title: String) async {
@@ -300,11 +338,37 @@ struct LaneColumn: View {
     }
 }
 
+/// "+N XP" pill — shown on any task that's part of one or more task-bundle quests (board + list).
+struct QuestXPChip: View {
+    let xp: Int
+    var body: some View {
+        Text("+\(xp) XP")
+            .font(NXFont.text(10, .bold)).foregroundStyle(NX.violet)
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(NX.violet.opacity(0.12), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+}
+
+/// "↳ Subtask · <parent>" mark — flags a card/row as a subtask and names its parent task.
+struct SubtaskBadge: View {
+    let parentTitle: String?
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "arrow.turn.down.right").font(.system(size: 9, weight: .bold))
+            Text(parentTitle.map { "Subtask · \($0)" } ?? "Subtask").lineLimit(1)
+        }
+        .font(NXFont.text(10, .bold)).foregroundStyle(Color(hex: "#7c3aed"))
+        .padding(.horizontal, 6).padding(.vertical, 2)
+        .background(Color(hex: "#7c3aed").opacity(0.12), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+}
+
 struct BoardCard: View {
     let task: BoardTask
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            if task.isSubtask { SubtaskBadge(parentTitle: task.parent?.title) }
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 16)).foregroundStyle(task.isDone ? NX.success : NX.mutedFg.opacity(0.5))
@@ -322,6 +386,7 @@ struct BoardCard: View {
                 if task.totalSubs > 0 {
                     NexusChip(text: "\(task.doneSubs)/\(task.totalSubs)", tone: task.doneSubs == task.totalSubs ? .success : .neutral, systemImage: "checklist")
                 }
+                if task.hasQuest { QuestXPChip(xp: task.questXP) }
                 Spacer()
                 if task.commentCount > 0 {
                     Label("\(task.commentCount)", systemImage: "bubble.left").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)

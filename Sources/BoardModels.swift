@@ -33,6 +33,20 @@ struct ProjectDetail: Decodable, Sendable {
     }
 }
 
+/// A task-bundle quest this card is part of — drives the "+N XP" chip (board/list) and the
+/// task-detail banner. total/done only populated by the task-detail endpoint.
+struct TaskQuestRef: Decodable, Identifiable, Sendable {
+    let id: String
+    let title: String?
+    let xpReward: Int?
+    let total: Int?
+    let done: Int?
+}
+
+/// A subtask's parent, resolved CLIENT-SIDE during the board/list merge (the /api/tasks list
+/// endpoint returns parentId but not the parent object) → the "↳ Subtask · <parent>" mark.
+struct BoardParent: Sendable { let id: String; let title: String? }
+
 struct BoardTask: Decodable, Identifiable, Sendable {
     let id: String
     let title: String
@@ -44,6 +58,11 @@ struct BoardTask: Decodable, Identifiable, Sendable {
     let subtasks: [Sub]?
     let count: CountRef?
     let customFieldValues: [CFValue]?
+    let parentId: String?
+    let taskListId: String?
+    let quests: [TaskQuestRef]?
+    /// Set during the board/list subtask-merge (not decoded — /api/tasks omits the parent object).
+    var parent: BoardParent? = nil
 
     struct Assignee: Decodable, Sendable {
         let user: UserRef?
@@ -60,9 +79,13 @@ struct BoardTask: Decodable, Identifiable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, title, status, priority, startDate, dueDate, assignees, subtasks, customFieldValues
+        case parentId, taskListId, quests
         case count = "_count"
     }
 
+    var isSubtask: Bool { !(parentId ?? "").isEmpty }
+    var questXP: Int { (quests ?? []).reduce(0) { $0 + ($1.xpReward ?? 0) } }
+    var hasQuest: Bool { !(quests ?? []).isEmpty }
     var isDone: Bool { (status ?? "").uppercased() == "DONE" }
     var doneSubs: Int { (subtasks ?? []).filter { ($0.status ?? "").uppercased() == "DONE" }.count }
     var totalSubs: Int { (subtasks ?? []).count }
@@ -95,6 +118,7 @@ struct TaskDetail: Decodable, Sendable {
     let parent: ParentRef?
     let taskList: TaskListInfo?
     let activityLogs: [ActivityLog]?
+    let quests: [TaskQuestRef]?   // task-bundle quests this task is in (with total/done) → detail banner
 
     struct ActivityLog: Decodable, Identifiable, Sendable {
         let id: String

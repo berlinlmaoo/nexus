@@ -84,6 +84,7 @@ struct ProjectTaskRow: View {
                 Image(systemName: task.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 16)).foregroundStyle(task.isDone ? NX.success : NX.mutedFg.opacity(0.5))
                 VStack(alignment: .leading, spacing: 3) {
+                    if task.isSubtask { SubtaskBadge(parentTitle: task.parent?.title) }
                     Text(task.title).font(NXFont.text(14, .semibold)).foregroundStyle(task.isDone ? NX.mutedFg : NX.foreground)
                         .strikethrough(task.isDone).lineLimit(2).multilineTextAlignment(.leading)
                     HStack(spacing: 8) {
@@ -93,6 +94,7 @@ struct ProjectTaskRow: View {
                         if task.totalSubs > 0 {
                             Label("\(task.doneSubs)/\(task.totalSubs)", systemImage: "checklist").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                         }
+                        if task.hasQuest { QuestXPChip(xp: task.questXP) }
                         if task.commentCount > 0 {
                             Label("\(task.commentCount)", systemImage: "bubble.left").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                         }
@@ -203,12 +205,12 @@ struct OverviewTab: View {
 // MARK: - List
 
 struct ListTab: View {
-    let detail: ProjectDetail
+    let lanes: [ProjectDetail.Lane]   // subtasks already merged in (nested under their parent)
     let onOpen: (String) -> Void
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 18) {
-                ForEach(detail.taskLists ?? []) { lane in
+                ForEach(lanes) { lane in
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 6) {
                             Text(lane.name).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
@@ -219,7 +221,15 @@ struct ListTab: View {
                         if (lane.tasks ?? []).isEmpty {
                             Text("Kosong").font(NXFont.text(12)).foregroundStyle(NX.mutedFg.opacity(0.7)).padding(.vertical, 4)
                         } else {
-                            ForEach(lane.tasks ?? []) { ProjectTaskRow(task: $0, onOpen: onOpen) }
+                            ForEach(lane.tasks ?? []) { t in
+                                if t.isSubtask {
+                                    ProjectTaskRow(task: t, onOpen: onOpen)
+                                        .padding(.leading, 16)                       // nest under parent
+                                        .overlay(alignment: .leading) { Rectangle().fill(Color(hex: "#7c3aed").opacity(0.35)).frame(width: 2).padding(.vertical, 6) }
+                                } else {
+                                    ProjectTaskRow(task: t, onOpen: onOpen)
+                                }
+                            }
                         }
                     }
                 }

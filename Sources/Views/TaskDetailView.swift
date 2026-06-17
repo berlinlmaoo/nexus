@@ -20,6 +20,8 @@ struct TaskDetailView: View {
     @State private var showAssignee = false
     @State private var descDraft = ""
     @State private var descOriginal = ""   // parsed once on load — avoids re-parsing block-JSON on every keystroke
+    @State private var isBod = false       // gates the "Jadiin quest" button (BoD+)
+    @State private var showQuestComposer = false
 
     private let statuses = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"]
     private let priorities = ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"]
@@ -39,6 +41,7 @@ struct TaskDetailView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         header(task)
+                        questBanner(task)
                         metaRow(task)
                         if let pid = task.projectId { TaskCustomFieldsCard(projectId: pid, taskId: task.id) }
                         descriptionCard(task)
@@ -68,7 +71,48 @@ struct TaskDetailView: View {
             Button("Hapus", role: .destructive) { Task { await deleteTask() } }
             Button("Batal", role: .cancel) {}
         } message: { Text("Task beserta subtask & komentarnya akan dihapus.") }
+        .sheet(isPresented: $showQuestComposer) {
+            if let task { QuestComposerSheet(taskId: task.id, taskTitle: task.title) { await load() } }
+        }
         .task { await load() }
+    }
+
+    /// Quest membership banner ("+N XP" per quest) + the BoD "Jadiin quest" button.
+    @ViewBuilder private func questBanner(_ t: TaskDetail) -> some View {
+        let quests = t.quests ?? []
+        if !quests.isEmpty || isBod {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(quests) { q in
+                    HStack(spacing: 8) {
+                        Image(systemName: "trophy.fill").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.violet)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(q.title ?? "Quest").font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                            Text(questSubtitle(q)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                        }
+                        Spacer(minLength: 4)
+                        QuestXPChip(xp: q.xpReward ?? 0)
+                    }
+                }
+                if isBod {
+                    if !quests.isEmpty { Divider().overlay(NX.violet.opacity(0.2)) }
+                    Button { showQuestComposer = true } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "trophy").font(.system(size: 12, weight: .bold))
+                            Text(quests.isEmpty ? "Jadiin quest" : "Bikin quest lain")
+                        }
+                        .font(NXFont.text(13, .bold)).foregroundStyle(NX.violet)
+                    }.buttonStyle(.plain)
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(NX.violet.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.violet.opacity(0.25)))
+        }
+    }
+    private func questSubtitle(_ q: TaskQuestRef) -> String {
+        if let total = q.total, total > 0 { return "\(q.done ?? 0)/\(total) task selesai" }
+        return "Selesaiin task ini buat dapet XP"
     }
 
     private func header(_ t: TaskDetail) -> some View {
@@ -279,6 +323,9 @@ struct TaskDetailView: View {
             editTitle = t.title
             descDraft = blockText(t.description)
             descOriginal = descDraft
+            if !isBod, let role = (try? await APIClient.shared.workspaceInfo())?.role {
+                isBod = role == "BOD" || role == "ONE_ABOVE_ALL"
+            }
         }
         catch APIError.unauthorized { auth.logout() }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? "Gagal memuat." }
@@ -401,5 +448,78 @@ struct AssigneePicker: View {
         guard let pid = projectId else { loading = false; return }
         members = (try? await APIClient.shared.project(pid).members) ?? []
         loading = false
+    }
+}
+
+/// BoD: bundle THIS task into a `specific_tasks` quest. Done when the task is DONE; XP to its
+/// assignee(s); visible to all project members. Mirrors the web "Jadiin quest" composer.
+struct QuestComposerSheet: View {
+    let taskId: String
+    let taskTitle: String
+    let onDone: () async -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var title: String
+    @State private var xp = 10
+    @State private var saving = false
+    @State private var err: String?
+
+    init(taskId: String, taskTitle: String, onDone: @escaping () async -> Void) {
+        self.taskId = taskId; self.taskTitle = taskTitle; self.onDone = onDone
+        _title = State(initialValue: taskTitle)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    SectionLabel("Judul quest")
+                    TextField("Judul quest", text: $title, axis: .vertical)
+                        .font(NXFont.text(15)).padding(12)
+                        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+
+                    SectionLabel("XP reward")
+                    Stepper(value: $xp, in: 1...50) {
+                        HStack { Text("Reward").font(NXFont.text(14)).foregroundStyle(NX.foreground); Spacer(); QuestXPChip(xp: xp) }
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
+
+                    Text("Quest selesai kalau task ini DONE. XP masuk ke yang ngerjain (assignee), dan quest-nya keliatan buat semua member project. Maksimal 50 XP.")
+                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+
+                    if let err { Text(err).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger) }
+
+                    Button { Task { await save() } } label: {
+                        HStack(spacing: 6) {
+                            if saving { ProgressView().tint(.white).scaleEffect(0.8) }
+                            Text(saving ? "Bikin…" : "Bikin quest")
+                        }
+                    }
+                    .buttonStyle(NexusPrimaryButton(fullWidth: true))
+                    .disabled(saving || title.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                .padding(16)
+            }
+            .background(NX.background.ignoresSafeArea())
+            .navigationTitle("Jadiin quest")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Batal") { dismiss() } } }
+        }
+    }
+
+    private func save() async {
+        let t = title.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty else { return }
+        saving = true; err = nil
+        do {
+            _ = try await APIClient.shared.createTaskQuest(title: t, xpReward: xp, taskIds: [taskId])
+            await onDone()
+            dismiss()
+        } catch {
+            err = (error as? LocalizedError)?.errorDescription ?? "Gagal bikin quest."
+            saving = false
+        }
     }
 }
