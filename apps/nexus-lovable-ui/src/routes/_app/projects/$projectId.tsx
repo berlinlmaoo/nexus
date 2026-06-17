@@ -124,11 +124,11 @@ function ProjectDetail() {
   const allTasks = taskLists.flatMap((list) => (list.tasks ?? []).map((task) => ({ ...task, taskList: task.taskList ?? { id: list.id, name: list.name, projectId: data?.id } })));
   const filteredTaskLists = filterTaskLists(taskLists, filters);
   const filteredTasks = filteredTaskLists.flatMap((list) => (list.tasks ?? []).map((task) => ({ ...task, taskList: task.taskList ?? { id: list.id, name: list.name, projectId: data?.id } })));
-  // Board now shows subtasks as their own cards (placed in their section, right under their parent). The
-  // project payload is parentId-only, so pull the project's full task set and merge subtasks into each lane.
-  // Same query key as CalendarView → React Query dedupes to one fetch. List/Timeline stay subtask-free.
+  // Board + List show subtasks as their own cards/rows (placed in their section, right under their parent).
+  // The project payload is parentId-only, so pull the project's full task set and merge subtasks into each
+  // lane. Same query key as CalendarView → React Query dedupes to one fetch. Timeline stays subtask-free.
   const allProjTasks = useQuery({ queryKey: ["nexus", "project-calendar-tasks", projectId], queryFn: () => nexusApi.tasks(`projectId=${projectId}`), staleTime: 30_000, retry: false, enabled: !!data });
-  const boardTaskLists = useMemo(() => {
+  const listsWithSubtasks = useMemo(() => {
     const subs = (allProjTasks.data ?? []).filter((t) => t.parentId && t.taskListId);
     if (subs.length === 0) return filterTaskLists(taskLists, filters);
     const parentTitle = new Map<string, string>();
@@ -204,8 +204,8 @@ function ProjectDetail() {
         // Provider gates multi-select duplicate behind the project's "Task duplicate mode" flag.
         <TaskBulkProvider projectId={data.id} enabled={!!data.enableTaskBatchDuplicate}>
           {view === "overview" && <OverviewView project={data} tasks={filteredTasks} progress={progress} />}
-          {view === "board" && <BoardView project={data} taskLists={boardTaskLists} onOpen={setOpenTask} onCreate={setComposerListId} />}
-          {view === "list" && <ListView taskLists={filteredTaskLists} onOpen={setOpenTask} />}
+          {view === "board" && <BoardView project={data} taskLists={listsWithSubtasks} onOpen={setOpenTask} onCreate={setComposerListId} />}
+          {view === "list" && <ListView taskLists={listsWithSubtasks} onOpen={setOpenTask} />}
           {view === "calendar" && <CalendarView projectId={data.id} tasks={filteredTasks} onOpen={setOpenTask} onCreate={(due) => { setComposerDueDate(due); setComposerListId(taskLists[0]?.id ?? null); }} onSetDue={(taskId, due) => setTaskDue.mutate({ taskId, dueDate: due })} />}
           {view === "timeline" && <TimelineView projectId={data.id} taskLists={filteredTaskLists} onOpen={setOpenTask} />}
           {view === "sprints" && <SprintsView project={data} tasks={filteredTasks} onOpenTask={setOpenTask} />}
@@ -1010,11 +1010,16 @@ function ListRow({ task, onOpen }: { task: NexusTask; onOpen: (task: NexusTask) 
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
+          {task.parentId && <CornerDownRight className="h-3.5 w-3.5 shrink-0 text-violet-500" aria-label="Subtask" />}
           <span className={cn("truncate text-sm font-medium group-hover:text-primary", done && "text-muted-foreground line-through")}>{task.title}</span>
           <SubtaskChip task={task} />
           <QuestChip task={task} />
         </div>
-        <div className="truncate text-xs text-muted-foreground">{task.dueDate ? `due ${fmtDue(task.dueDate)}` : "No due date"}</div>
+        <div className="truncate text-xs text-muted-foreground">
+          {task.parentId && <span className="font-semibold text-violet-600">Subtask{task.parent?.title ? ` · ${task.parent.title}` : ""}</span>}
+          {task.parentId && " — "}
+          {task.dueDate ? `due ${fmtDue(task.dueDate)}` : "No due date"}
+        </div>
         <TaskCfChips task={task} max={3} className="mt-1 hidden sm:flex" />
       </div>
       <span className="hidden md:block"><PriorityChip priority={task.priority} /></span>
@@ -1047,7 +1052,11 @@ function ListView({ taskLists, onOpen }: { taskLists: NonNullable<NexusProject["
             </button>
             {!isCollapsed && (
               <div className="space-y-1.5 rounded-2xl bg-muted/40 p-2">
-                {tasks.map((task) => <ListRow key={task.id} task={task} onOpen={onOpen} />)}
+                {tasks.map((task) => (
+                  <div key={task.id} className={task.parentId ? "ml-4 border-l-2 border-violet-200 pl-2" : undefined}>
+                    <ListRow task={task} onOpen={onOpen} />
+                  </div>
+                ))}
               </div>
             )}
           </div>
