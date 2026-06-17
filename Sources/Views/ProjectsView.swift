@@ -168,23 +168,37 @@ struct FolderNode: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Button {
-                if collapsed.contains(folder.id) { collapsed.remove(folder.id) } else { collapsed.insert(folder.id) }
-            } label: {
-                HStack(spacing: 10) {
-                    FolderIconTile(folder: folder)
-                    Text(folder.name).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
-                    Text("\(count)").font(NXFont.text(12, .bold)).foregroundStyle(NX.mutedFg)
-                        .padding(.horizontal, 8).padding(.vertical, 2).background(NX.muted, in: Capsule())
-                    Spacer()
-                    Image(systemName: "chevron.down").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.mutedFg)
-                        .rotationEffect(.degrees(isExpanded ? 0 : -90))
+            HStack(spacing: 8) {
+                Button {
+                    if collapsed.contains(folder.id) { collapsed.remove(folder.id) } else { collapsed.insert(folder.id) }
+                } label: {
+                    HStack(spacing: 10) {
+                        FolderIconTile(folder: folder)
+                        Text(folder.name).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                        Text("\(count)").font(NXFont.text(12, .bold)).foregroundStyle(NX.mutedFg)
+                            .padding(.horizontal, 8).padding(.vertical, 2).background(NX.muted, in: Capsule())
+                    }
                 }
-                .padding(12)
-                .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
+                .buttonStyle(.plain)
+                Spacer(minLength: 4)
+                NavigationLink {
+                    FolderAggregateView(folder: folder, allFolders: allFolders, allProjects: Array(projectsByFolder.values.joined()))
+                } label: {
+                    Image(systemName: "calendar").font(.system(size: 14, weight: .semibold)).foregroundStyle(NX.violet)
+                        .frame(width: 30, height: 30).background(NX.violet.opacity(0.12), in: Circle())
+                }
+                .buttonStyle(.plain)
+                Button {
+                    if collapsed.contains(folder.id) { collapsed.remove(folder.id) } else { collapsed.insert(folder.id) }
+                } label: {
+                    Image(systemName: "chevron.down").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.mutedFg)
+                        .rotationEffect(.degrees(isExpanded ? 0 : -90)).frame(width: 30, height: 30)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+            .padding(12)
+            .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
             .contextMenu {
                 Button { onEditFolder(folder) } label: { Label("Edit folder", systemImage: "pencil") }
                 Button(role: .destructive) { Task { await onDeleteFolder(folder) } } label: { Label("Hapus folder", systemImage: "trash") }

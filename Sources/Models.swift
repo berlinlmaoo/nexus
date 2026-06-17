@@ -92,12 +92,30 @@ struct ProjectFolder: Decodable, Identifiable, Sendable {
     let color: String?
     let position: Int?
     let parentFolderId: String?
+    /// Curated subset for the aggregate view (empty/nil = every project in the folder + descendants).
+    let aggregateProjectIds: [String]?
 
     var isUploadedIcon: Bool { (icon ?? "").hasPrefix("/") }
     var emoji: String {
         guard let icon, !icon.isEmpty, !isUploadedIcon, isEmojiIcon(icon) else { return "📁" }
         return icon
     }
+}
+
+/// A task in the folder aggregate calendar (GET /api/tasks?projectIds=a,b,c). Carries taskList.projectId
+/// so each task resolves to its project (name/icon/colour) client-side.
+struct FolderTask: Decodable, Identifiable, Sendable {
+    let id: String
+    let title: String
+    let status: String?
+    let priority: String?
+    let dueDate: String?
+    let assignees: [BoardTask.Assignee]?
+    let taskList: TL?
+    struct TL: Decodable, Sendable { let projectId: String? }
+    var isDone: Bool { (status ?? "").uppercased() == "DONE" }
+    var projectId: String? { taskList?.projectId }
+    var assignee: BoardTask.Assignee.UserRef? { assignees?.first?.user }
 }
 
 /// True when the string actually starts with an emoji (rejects stray text / numbers stored as an
