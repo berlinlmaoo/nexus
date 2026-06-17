@@ -1274,7 +1274,27 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
                         </motion.button>
                       );
                     })}
-                    {dayTasks.length > 3 && <div className="px-1 text-[10px] font-bold text-muted-foreground">+{dayTasks.length - 3}</div>}
+                    {dayTasks.length > 3 && (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button type="button" className="w-full px-1 text-left text-[10px] font-bold text-muted-foreground transition hover:text-primary">+{dayTasks.length - 3} lagi</button>
+                        </PopoverTrigger>
+                        <PopoverContent align="start" className="w-60 p-2">
+                          <div className="mb-1.5 px-1 text-[11px] font-bold text-muted-foreground">{day.getDate()} {viewMonth.toLocaleDateString("en-US", { month: "short" })} · {dayTasks.length} task</div>
+                          <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
+                            {dayTasks.map((task) => {
+                              const done = isDone(task.status);
+                              const cs = styleForTask(task);
+                              return (
+                                <button key={task.id} type="button" onClick={() => onOpen(task)} style={cs && !done ? { backgroundColor: cs.backgroundColor, color: cs.color, boxShadow: `inset 2px 0 0 ${cs.borderColor}` } : undefined} className={cn("truncate rounded px-1.5 py-1 text-left text-[11px] font-medium transition hover:brightness-95", done ? "bg-muted text-muted-foreground line-through" : !cs && (CAL_CHIP[(task.priority ?? "NONE").toUpperCase()] ?? CAL_CHIP.NONE))}>
+                                  {task.parentId ? `↳ ${task.title}` : task.title}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    )}
                   </div>
                 </div>
               );
