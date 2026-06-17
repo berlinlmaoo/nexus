@@ -669,7 +669,7 @@ function AttendanceCorrectionDrawer({ record, origin, onClose, canOverride }: { 
           </div>
           <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">Notes<textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional note…" className={cn(field, "mt-1 min-h-16")} /></label>
           <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">Correction reason<input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why is this being corrected?" className={cn(field, "mt-1")} /></label>
-          {save.isError && <p className="text-sm text-destructive">Correction failed — you may not have permission, or check-out is before check-in.</p>}
+          {save.isError && <p className="text-sm text-destructive">Gagal: {save.error instanceof Error && save.error.message ? save.error.message : "koreksi gagal — cek izin / urutan waktu."}</p>}
           <button disabled={!checkInAt || !reason.trim() || save.isPending} onClick={() => save.mutate()} className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-default disabled:opacity-50">{save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Save correction</button>
         </div>
         {canOverride && record.user?.id && (
