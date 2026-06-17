@@ -40,6 +40,7 @@ import {
   BarChart3,
   GanttChart,
   GripVertical,
+  CornerDownRight,
   LayoutGrid,
   List,
   ListChecks,
@@ -123,6 +124,35 @@ function ProjectDetail() {
   const allTasks = taskLists.flatMap((list) => (list.tasks ?? []).map((task) => ({ ...task, taskList: task.taskList ?? { id: list.id, name: list.name, projectId: data?.id } })));
   const filteredTaskLists = filterTaskLists(taskLists, filters);
   const filteredTasks = filteredTaskLists.flatMap((list) => (list.tasks ?? []).map((task) => ({ ...task, taskList: task.taskList ?? { id: list.id, name: list.name, projectId: data?.id } })));
+  // Board now shows subtasks as their own cards (placed in their section, right under their parent). The
+  // project payload is parentId-only, so pull the project's full task set and merge subtasks into each lane.
+  // Same query key as CalendarView → React Query dedupes to one fetch. List/Timeline stay subtask-free.
+  const allProjTasks = useQuery({ queryKey: ["nexus", "project-calendar-tasks", projectId], queryFn: () => nexusApi.tasks(`projectId=${projectId}`), staleTime: 30_000, retry: false, enabled: !!data });
+  const boardTaskLists = useMemo(() => {
+    const subs = (allProjTasks.data ?? []).filter((t) => t.parentId && t.taskListId);
+    if (subs.length === 0) return filterTaskLists(taskLists, filters);
+    const parentTitle = new Map<string, string>();
+    for (const t of allProjTasks.data ?? []) parentTitle.set(t.id, t.title); // all tasks → resolves any depth
+    const subsByList = new Map<string, NexusTask[]>();
+    for (const s of subs) {
+      const withParent = { ...s, parent: s.parentId ? { id: s.parentId, title: parentTitle.get(s.parentId) ?? "" } : s.parent };
+      const arr = subsByList.get(s.taskListId!) ?? []; arr.push(withParent); subsByList.set(s.taskListId!, arr);
+    }
+    const merged = taskLists.map((list) => {
+      const ls = subsByList.get(list.id);
+      if (!ls?.length) return list;
+      const parents = list.tasks ?? [];
+      const pidSet = new Set(parents.map((t) => t.id));
+      const byParent = new Map<string, NexusTask[]>();
+      const orphans: NexusTask[] = []; // parent lives in another section (or none) → drop at the lane's end
+      for (const s of ls) { if (s.parentId && pidSet.has(s.parentId)) { const a = byParent.get(s.parentId) ?? []; a.push(s); byParent.set(s.parentId, a); } else orphans.push(s); }
+      const out: NexusTask[] = [];
+      for (const p of parents) { out.push(p); for (const s of byParent.get(p.id) ?? []) out.push(s); }
+      out.push(...orphans);
+      return { ...list, tasks: out };
+    });
+    return filterTaskLists(merged, filters);
+  }, [taskLists, allProjTasks.data, filters]);
   const activeFilterCount = [filters.query.trim(), filters.section !== "ALL", filters.priority !== "ALL", filters.hideDone, filters.assigneeId !== "ALL"].filter(Boolean).length + Object.values(filters.cfSelections).filter((v) => v.length > 0).length;
   const totalTasks = allTasks.length || data?._count?.tasks || 0;
   const completedTasks = allTasks.filter((task) => isDone(task.status)).length;
@@ -174,7 +204,7 @@ function ProjectDetail() {
         // Provider gates multi-select duplicate behind the project's "Task duplicate mode" flag.
         <TaskBulkProvider projectId={data.id} enabled={!!data.enableTaskBatchDuplicate}>
           {view === "overview" && <OverviewView project={data} tasks={filteredTasks} progress={progress} />}
-          {view === "board" && <BoardView project={data} taskLists={filteredTaskLists} onOpen={setOpenTask} onCreate={setComposerListId} />}
+          {view === "board" && <BoardView project={data} taskLists={boardTaskLists} onOpen={setOpenTask} onCreate={setComposerListId} />}
           {view === "list" && <ListView taskLists={filteredTaskLists} onOpen={setOpenTask} />}
           {view === "calendar" && <CalendarView projectId={data.id} tasks={filteredTasks} onOpen={setOpenTask} onCreate={(due) => { setComposerDueDate(due); setComposerListId(taskLists[0]?.id ?? null); }} onSetDue={(taskId, due) => setTaskDue.mutate({ taskId, dueDate: due })} />}
           {view === "timeline" && <TimelineView projectId={data.id} taskLists={filteredTaskLists} onOpen={setOpenTask} />}
@@ -611,6 +641,12 @@ function TaskCard({ task, currentProjectId, onOpen, onDrag, moving }: { task: Ne
           </button>
           <div className="min-w-0 flex-1">
             {linkedFrom && <span className="mb-1 block truncate text-[11px] font-semibold text-muted-foreground">From {linkedFrom}</span>}
+            {task.parentId && (
+              <span className="mb-1 inline-flex max-w-full items-center gap-1 rounded-md bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700" title={task.parent?.title ? `Subtask dari: ${task.parent.title}` : "Subtask"}>
+                <CornerDownRight className="h-3 w-3 shrink-0" />
+                <span className="truncate">{task.parent?.title ? `Subtask · ${task.parent.title}` : "Subtask"}</span>
+              </span>
+            )}
             <h4 className={cn("text-sm font-bold leading-snug tracking-tight", isDone && "text-muted-foreground/70 line-through")}>{task.title}</h4>
           </div>
           {moving ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <PriorityChip priority={task.priority} />}

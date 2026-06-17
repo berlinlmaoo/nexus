@@ -388,6 +388,8 @@ export type NexusTask = {
   tags?: string[] | null;
   taskListId?: string | null;
   parentId?: string | null;
+  /** Parent task (for subtask cards shown on the board) — title used for the "↳ Subtask · <parent>" marker. */
+  parent?: { id: string; title: string } | null;
   position?: number | null;
   /** Active task-bundle quests this task is in (board/list/detail "🏆 +X XP" badge). total/done only on detail. */
   quests?: Array<{ id: string; title: string; xpReward: number; total?: number; done?: number }>;
@@ -1096,7 +1098,7 @@ export const nexusApi = {
     if (payload.supportingDocument) fd.set("supportingDocument", payload.supportingDocument);
     return apiFetch<{ request?: NexusAttendanceRequest }>("/api/attendance/requests", { method: "POST", body: fd });
   },
-  attendanceOverride: (payload: { userId: string; date: string; action: "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "CLEAR_PENALTY"; note?: string }) =>
+  attendanceOverride: (payload: { userId: string; date: string; action: "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "CLEAR_PENALTY"; note?: string; checkInAt?: string | null; checkOutAt?: string | null }) =>
     apiFetch<{ ok: boolean; action: string; date: string; refunded: boolean; alreadyCovered?: boolean; canceledRequests?: number; replacedRequests?: number; multiDayRequestsLeft?: number }>("/api/attendance/override", { method: "POST", body: JSON.stringify(payload) }),
   reviewAttendanceRequest: (requestId: string, action: "approve" | "reject" | "cancel") => apiFetch<{ request?: NexusAttendanceRequest }>(`/api/attendance/requests/${requestId}`, { method: "PATCH", body: JSON.stringify({ action }) }),
   periodRewards: () => apiFetch<{ rewards: Array<{ periodKey: string; tier: string; perk?: string | null; bonusDayOff: number; zeroAlpha: boolean; finalScore: number }> }>("/api/attendance/xp-rewards"),
