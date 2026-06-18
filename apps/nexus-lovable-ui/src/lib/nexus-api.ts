@@ -600,6 +600,10 @@ export type NexusMySubmission = {
   procStatus?: string | null; // "Status" custom field value (null = belum diproses)
 };
 
+export type NexusSubmissionDetail = NexusMySubmission & {
+  answers?: Array<{ id: string; label: string; type: string; value: unknown }>;
+};
+
 export type NexusAnnouncement = { id: string; title: string; body: string; tone: "info" | "success" | "warning"; createdAt: string };
 export type NexusAdminAnnouncement = NexusAnnouncement & { active: boolean; seenCount: number };
 
@@ -1448,6 +1452,8 @@ export const nexusApi = {
   deleteForm: (formId: string) => apiFetch<{ success?: boolean }>(`/api/forms/${formId}`, { method: "DELETE" }),
   publicForm: (formId: string) => apiFetch<NexusForm>(`/api/forms/${formId}/public`),
   mySubmissions: () => apiFetch<{ submissions: NexusMySubmission[]; statusColumns?: string[] }>(`/api/forms/my-submissions`),
+  submissionDetail: (id: string) => apiFetch<NexusSubmissionDetail>(`/api/forms/my-submissions/${id}`),
+  deleteSubmission: (id: string) => apiFetch<{ deleted?: boolean }>(`/api/forms/my-submissions/${id}`, { method: "DELETE" }),
 
   // --- Announcements (BoD pop-ups) ---
   activeAnnouncements: () => apiFetch<{ announcements: NexusAnnouncement[] }>("/api/announcements/active"),
