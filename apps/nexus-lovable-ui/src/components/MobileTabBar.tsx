@@ -5,7 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   LayoutDashboard, Inbox, CheckSquare, FolderKanban, Menu, X,
   MessageCircle, Calendar, CalendarClock, Users, BookOpen, Trophy,
-  ClipboardCheck, Settings, Shield, LogOut, Loader2,
+  ClipboardCheck, Settings, Shield, LogOut, Loader2, FileText,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { nexusApi, activeNotifications } from "@/lib/nexus-api";
@@ -28,6 +28,7 @@ const moreGroups = [
       { title: "Messages", url: "/messages", icon: MessageCircle },
       { title: "Signal Inbox", url: "/inbox", icon: Inbox },
       { title: "My Mission", url: "/my-tasks", icon: CheckSquare },
+      { title: "Pengajuan Saya", url: "/submissions", icon: FileText },
       { title: "Time Map", url: "/master-calendar", icon: Calendar },
       { title: "Room Booking", url: "/room-booking", icon: CalendarClock },
     ],
