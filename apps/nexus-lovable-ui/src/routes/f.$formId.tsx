@@ -13,7 +13,9 @@ type Cond = {
   value: string;
 };
 // The backend returns richer fields than NexusFormField declares (name/showIf/…).
-type FField = NexusFormField & { name?: string; showIf?: Cond | null; attachmentEnabled?: boolean; autofill?: "name" | "email" };
+type FField = NexusFormField & { name?: string; showIf?: Cond | null; attachmentEnabled?: boolean; autofill?: "name" | "email"; numberFormat?: "currency-idr" };
+
+const idr = (digits: string) => { const n = Number(digits); return n ? new Intl.NumberFormat("id-ID").format(n) : ""; };
 
 function fieldLabel(f: FField) {
   return f.name || f.label || "Field";
@@ -225,6 +227,11 @@ function PublicForm() {
                         <span className="truncate">{val instanceof File ? val.name : "Pilih file…"}</span>
                         <input type="file" required={field.required} className="hidden" onChange={(e) => set(field.id, e.target.files?.[0] ?? "")} />
                       </label>
+                    ) : field.type === "number" && field.numberFormat === "currency-idr" ? (
+                      <div className="relative">
+                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">Rp</span>
+                        <input required={field.required} inputMode="numeric" placeholder="0" value={idr(String(val ?? ""))} onChange={(e) => set(field.id, e.target.value.replace(/[^\d]/g, ""))} className={cn(input, "pl-9")} />
+                      </div>
                     ) : field.autofill ? (
                       <div className="relative">
                         <input readOnly value={String(val ?? "")} className={cn(input, "cursor-not-allowed bg-muted/50 pr-9 text-muted-foreground")} />
