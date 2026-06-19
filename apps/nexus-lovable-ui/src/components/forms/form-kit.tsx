@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlignLeft, Calendar, Check, CheckSquare, ChevronDown, Copy, FileText, GitBranch, GripVertical, Hash, ListChecks, Loader2, Mail, Paperclip, Plus, Trash2, Type, X } from "lucide-react";
+import { AlignLeft, Calendar, Check, CheckSquare, ChevronDown, Copy, FileText, GitBranch, GripVertical, Hash, ListChecks, Loader2, Mail, Paperclip, Plus, Trash2, Type, User, X } from "lucide-react";
 import { nexusApi, ApiError, type NexusForm, type NexusFormField } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 import { Reveal } from "@/components/motion";
@@ -57,7 +57,7 @@ function FieldPreview({ field }: { field: NexusFormField }) {
 type FCond = { fieldId: string; operator: string; value: string };
 type FRule = { id: string; operator: string; value: string; action: string; targetTaskListId?: string; targetUserId?: string };
 type FMapping = { target?: string; customFieldId?: string };
-export type RichField = NexusFormField & { name?: string; showIf?: FCond | null; routingRules?: FRule[]; mapping?: FMapping | null; attachmentEnabled?: boolean };
+export type RichField = NexusFormField & { name?: string; showIf?: FCond | null; routingRules?: FRule[]; mapping?: FMapping | null; attachmentEnabled?: boolean; autofill?: "name" | "email" };
 
 const OPERATORS = [
   { value: "equals", label: "sama dengan" },
@@ -444,6 +444,20 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
                         <span className={cn("inline-block h-4 w-4 rounded-full bg-card shadow transition-transform", f.attachmentEnabled ? "translate-x-4" : "translate-x-0.5")} />
                       </button>
                       <span className="inline-flex items-center gap-1"><Paperclip className="h-3.5 w-3.5" /> Izinkan lampiran file (opsional)</span>
+                    </label>
+                  )}
+
+                  {/* autofill from the logged-in submitter — semua form wajib login, jadi field kayak
+                      "Request by" gak perlu diketik manual (auto + terkunci, gak bisa diisi nama orang lain). */}
+                  {(f.type === "text" || f.type === "email") && (
+                    <label className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span className="inline-flex items-center gap-1"><User className="h-3.5 w-3.5" /> Auto-isi dari akun login</span>
+                      <select value={f.autofill ?? ""} onChange={(e) => update(f.id, { autofill: (e.target.value || undefined) as RichField["autofill"] })} className="rounded-lg border border-border bg-background px-2 py-1 text-xs outline-none focus:border-primary">
+                        <option value="">— tidak —</option>
+                        <option value="name">Nama user</option>
+                        <option value="email">Email user</option>
+                      </select>
+                      {f.autofill && <span className="text-[10px] font-semibold text-primary">user gak isi — auto + terkunci</span>}
                     </label>
                   )}
 
