@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Clock, Loader2, LogIn, Paperclip } from "lucide-react";
+import { CheckCircle2, Clock, Loader2, LogIn, Lock, Paperclip } from "lucide-react";
 import { ApiError, nexusApi, type NexusFormField } from "@/lib/nexus-api";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/f/$formId")({ component: PublicForm });
 
@@ -12,7 +13,7 @@ type Cond = {
   value: string;
 };
 // The backend returns richer fields than NexusFormField declares (name/showIf/…).
-type FField = NexusFormField & { name?: string; showIf?: Cond | null; attachmentEnabled?: boolean };
+type FField = NexusFormField & { name?: string; showIf?: Cond | null; attachmentEnabled?: boolean; autofill?: "name" | "email" };
 
 function fieldLabel(f: FField) {
   return f.name || f.label || "Field";
@@ -61,6 +62,23 @@ function PublicForm() {
   const needsLogin = !me.isLoading && !loggedIn;
 
   const set = (id: string, v: unknown) => setValues((cur) => ({ ...cur, [id]: v }));
+
+  // Autofill fields (e.g. "Request by") prefill from the logged-in account so the user never retypes
+  // their own name. Server re-applies this authoritatively on submit (anti-spoof) — this is just UX.
+  const meUser = me.data?.user;
+  useEffect(() => {
+    if (!meUser) return;
+    setValues((cur) => {
+      let changed = false;
+      const next = { ...cur };
+      for (const fld of fields) {
+        if (!fld.autofill) continue;
+        const want = fld.autofill === "email" ? (meUser.email ?? "") : (meUser.name ?? "");
+        if (cur[fld.id] !== want) { next[fld.id] = want; changed = true; }
+      }
+      return changed ? next : cur;
+    });
+  }, [meUser, fields]);
 
   // only fields whose showIf passes are shown + submitted
   const visible = useMemo(() => fields.filter((field) => evalCond(field.showIf, values)), [fields, values]);
@@ -207,9 +225,15 @@ function PublicForm() {
                         <span className="truncate">{val instanceof File ? val.name : "Pilih file…"}</span>
                         <input type="file" required={field.required} className="hidden" onChange={(e) => set(field.id, e.target.files?.[0] ?? "")} />
                       </label>
+                    ) : field.autofill ? (
+                      <div className="relative">
+                        <input readOnly value={String(val ?? "")} className={cn(input, "cursor-not-allowed bg-muted/50 pr-9 text-muted-foreground")} />
+                        <Lock className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
+                      </div>
                     ) : (
                       <input required={field.required} type={field.type === "email" ? "email" : field.type === "number" ? "number" : field.type === "date" ? "date" : "text"} placeholder={field.placeholder} value={String(val ?? "")} onChange={(e) => set(field.id, e.target.value)} className={input} />
                     )}
+                    {field.autofill && <p className="mt-1 text-[11px] text-muted-foreground">🔒 otomatis dari akun login kamu</p>}
 
                     {/* optional extra attachment on non-file fields */}
                     {field.attachmentEnabled && field.type !== "file" && (
