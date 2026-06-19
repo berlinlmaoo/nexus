@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlignLeft, Calendar, Check, CheckSquare, ChevronDown, Copy, FileText, GitBranch, GripVertical, Hash, ListChecks, Loader2, Mail, Paperclip, Plus, Trash2, Type, X } from "lucide-react";
-import { nexusApi, type NexusForm, type NexusFormField } from "@/lib/nexus-api";
+import { nexusApi, ApiError, type NexusForm, type NexusFormField } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 import { Reveal } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -310,7 +310,20 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
     },
     onSuccess: () => { invalidate(); onClose(); },
   });
-  const del = useMutation({ mutationFn: () => nexusApi.deleteForm(form!.id), onSuccess: () => { invalidate(); onClose(); } });
+  const del = useMutation({
+    mutationFn: async (force: boolean) => {
+      try { return await nexusApi.deleteForm(form!.id, force); }
+      catch (e) {
+        // Backend guard (form still has submissions): re-confirm, then force.
+        if (!force && e instanceof ApiError && e.status === 409) {
+          if (!confirm("⚠️ Form ini masih punya pengajuan — kalau dihapus, semua pengajuan + history-nya ikut KEHAPUS permanen. Lanjut hapus?")) throw e;
+          return await nexusApi.deleteForm(form!.id, true);
+        }
+        throw e;
+      }
+    },
+    onSuccess: () => { invalidate(); onClose(); },
+  });
 
   // Duplicate the form's STRUCTURE into another project (no submissions/tasks copied). Project-specific
   // bits (custom-field mapping + routing rules) are stripped — their ids don't exist in the target.
@@ -451,7 +464,13 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
         <div className="sticky bottom-0 flex items-center gap-2 border-t border-border bg-card/95 px-5 py-4 backdrop-blur">
           <button disabled={!name.trim() || fields.length === 0 || save.isPending} onClick={() => save.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{save.isPending && <Loader2 className="h-4 w-4 animate-spin" />}{editing ? "Save form" : "Create form"}</button>
           {editing && <button onClick={() => { setDupName(name); setDupOpen(true); }} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-semibold transition-colors hover:bg-accent active:scale-[0.98]"><Copy className="h-4 w-4" /> Duplikat ke project lain</button>}
-          {editing && <button onClick={() => { if (confirm("Delete this form?")) del.mutate(); }} className="inline-flex items-center gap-1.5 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.98]"><Trash2 className="h-4 w-4" /> Delete</button>}
+          {editing && <button onClick={() => {
+            const n = form?._count?.submissions ?? 0;
+            const msg = n > 0
+              ? `⚠️ Form ini punya ${n} pengajuan.\n\nKalau dihapus, SEMUA ${n} pengajuan + history "Pengajuan Saya"-nya ikut KEHAPUS PERMANEN — gak bisa di-undo.\n\nYakin hapus form-nya?`
+              : "Hapus form ini?";
+            if (confirm(msg)) del.mutate(n > 0);
+          }} className="inline-flex items-center gap-1.5 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.98]"><Trash2 className="h-4 w-4" /> Delete</button>}
           {save.isError && <span className="text-xs font-semibold text-destructive">Gagal menyimpan form.</span>}
         </div>
       </aside>
