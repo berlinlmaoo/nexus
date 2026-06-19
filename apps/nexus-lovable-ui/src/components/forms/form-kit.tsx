@@ -57,7 +57,7 @@ function FieldPreview({ field }: { field: NexusFormField }) {
 type FCond = { fieldId: string; operator: string; value: string };
 type FRule = { id: string; operator: string; value: string; action: string; targetTaskListId?: string; targetUserId?: string };
 type FMapping = { target?: string; customFieldId?: string };
-export type RichField = NexusFormField & { name?: string; showIf?: FCond | null; routingRules?: FRule[]; mapping?: FMapping | null; attachmentEnabled?: boolean; autofill?: "name" | "email" };
+export type RichField = NexusFormField & { name?: string; showIf?: FCond | null; routingRules?: FRule[]; mapping?: FMapping | null; attachmentEnabled?: boolean; autofill?: "name" | "email"; numberFormat?: "currency-idr" };
 
 const OPERATORS = [
   { value: "equals", label: "sama dengan" },
@@ -458,6 +458,17 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
                         <option value="email">Email user</option>
                       </select>
                       {f.autofill && <span className="text-[10px] font-semibold text-primary">user gak isi — auto + terkunci</span>}
+                    </label>
+                  )}
+
+                  {/* number formatting — Rupiah (thousand separators + Rp) for price-style fields */}
+                  {f.type === "number" && (
+                    <label className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span className="inline-flex items-center gap-1"><Hash className="h-3.5 w-3.5" /> Format angka</span>
+                      <select value={f.numberFormat ?? "plain"} onChange={(e) => update(f.id, { numberFormat: e.target.value === "currency-idr" ? "currency-idr" : undefined } as Partial<RichField>)} className="rounded-lg border border-border bg-background px-2 py-1 text-xs outline-none focus:border-primary">
+                        <option value="plain">Plain (9240943)</option>
+                        <option value="currency-idr">Rupiah (Rp 9.240.943)</option>
+                      </select>
                     </label>
                   )}
 
