@@ -1044,6 +1044,20 @@ function CustomFieldInput({ field, onSet }: { field: NexusCustomField; onSet: (v
         <div className={cn("text-muted-foreground", name ? "text-xs" : "text-sm")}>{when || strVal || "—"}</div>
       </div>
     );
+  } else if (type === "NUMBER" && field.options && typeof field.options === "object" && !Array.isArray(field.options) && (field.options as { format?: string }).format === "currency-idr") {
+    // Rupiah-formatted number: show "Rp 9.240.943" (id-ID separators), store the raw digits.
+    body = (
+      <div className="relative">
+        <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">Rp</span>
+        <input
+          inputMode="numeric"
+          value={local ? new Intl.NumberFormat("id-ID").format(Number(String(local).replace(/[^\d]/g, "")) || 0) : ""}
+          onChange={(e) => setLocal(e.target.value.replace(/[^\d]/g, ""))}
+          onBlur={() => { if (local !== strVal) onSet(local); }}
+          className={cn(cls, "pl-8")}
+        />
+      </div>
+    );
   } else {
     body = (
       <input
