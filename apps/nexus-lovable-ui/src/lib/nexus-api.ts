@@ -1449,7 +1449,7 @@ export const nexusApi = {
   form: (formId: string) => apiFetch<NexusForm>(`/api/forms/${formId}`),
   createForm: (payload: { name: string; description?: string | null; fields: NexusFormField[]; isPublic?: boolean; requireAuth?: boolean; projectId: string; accessSchedule?: unknown }) => apiFetch<NexusForm>("/api/forms", { method: "POST", body: JSON.stringify(payload) }),
   updateForm: (formId: string, payload: { name?: string; description?: string | null; fields?: NexusFormField[]; isPublic?: boolean; requireAuth?: boolean; accessSchedule?: unknown }) => apiFetch<NexusForm>(`/api/forms/${formId}`, { method: "PATCH", body: JSON.stringify(payload) }),
-  deleteForm: (formId: string) => apiFetch<{ success?: boolean }>(`/api/forms/${formId}`, { method: "DELETE" }),
+  deleteForm: (formId: string, force?: boolean) => apiFetch<{ success?: boolean }>(`/api/forms/${formId}${force ? "?force=1" : ""}`, { method: "DELETE" }),
   publicForm: (formId: string) => apiFetch<NexusForm>(`/api/forms/${formId}/public`),
   mySubmissions: () => apiFetch<{ submissions: NexusMySubmission[]; statusColumns?: string[] }>(`/api/forms/my-submissions`),
   submissionDetail: (id: string) => apiFetch<NexusSubmissionDetail>(`/api/forms/my-submissions/${id}`),
