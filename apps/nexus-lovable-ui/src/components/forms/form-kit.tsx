@@ -312,6 +312,24 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
   });
   const del = useMutation({ mutationFn: () => nexusApi.deleteForm(form!.id), onSuccess: () => { invalidate(); onClose(); } });
 
+  // Duplicate the form's STRUCTURE into another project (no submissions/tasks copied). Project-specific
+  // bits (custom-field mapping + routing rules) are stripped — their ids don't exist in the target.
+  const [dupOpen, setDupOpen] = useState(false);
+  const [dupName, setDupName] = useState(form?.name ?? "");
+  const projectsQ = useQuery({ queryKey: ["nexus", "projects"], queryFn: nexusApi.projects, enabled: dupOpen, retry: false });
+  const dup = useMutation({
+    mutationFn: (targetProjectId: string) => {
+      const copyFields: RichField[] = fields.map((f) => ({
+        ...f,
+        options: Array.isArray(f.options) ? (f.options as unknown[]).map(String).map((s) => s.trim()).filter(Boolean) : f.options,
+        mapping: f.mapping?.target && f.mapping.target !== "none" ? { target: f.mapping.target } : null,
+        routingRules: undefined,
+      }));
+      return nexusApi.createForm({ name: dupName.trim() || name.trim() || "Form", description: description || null, fields: copyFields, isPublic, requireAuth, projectId: targetProjectId, accessSchedule });
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["nexus", "forms"] }); setDupOpen(false); onClose(); },
+  });
+
   const update = (id: string, patch: Partial<RichField>) => setFields((cur) => cur.map((f) => f.id === id ? { ...f, ...patch } : f));
   const remove = (id: string) => setFields((cur) => cur.filter((f) => f.id !== id));
 
@@ -432,10 +450,36 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
         </div>
         <div className="sticky bottom-0 flex items-center gap-2 border-t border-border bg-card/95 px-5 py-4 backdrop-blur">
           <button disabled={!name.trim() || fields.length === 0 || save.isPending} onClick={() => save.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{save.isPending && <Loader2 className="h-4 w-4 animate-spin" />}{editing ? "Save form" : "Create form"}</button>
+          {editing && <button onClick={() => { setDupName(name); setDupOpen(true); }} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-semibold transition-colors hover:bg-accent active:scale-[0.98]"><Copy className="h-4 w-4" /> Duplikat ke project lain</button>}
           {editing && <button onClick={() => { if (confirm("Delete this form?")) del.mutate(); }} className="inline-flex items-center gap-1.5 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.98]"><Trash2 className="h-4 w-4" /> Delete</button>}
           {save.isError && <span className="text-xs font-semibold text-destructive">Gagal menyimpan form.</span>}
         </div>
       </aside>
+
+      {dupOpen && (
+        <div className="fixed inset-0 z-[80] grid place-items-center bg-black/50 p-4" onClick={() => setDupOpen(false)}>
+          <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-4 shadow-pop" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-1 flex items-center justify-between">
+              <h3 className="font-display text-base font-bold">Duplikat form</h3>
+              <button onClick={() => setDupOpen(false)} aria-label="Tutup" className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+            </div>
+            <p className="mb-3 text-xs text-muted-foreground">Copy struktur form ini ke project lain — field-nya doang. Submission & task lama <b>gak ikut</b>. Mapping task-list / custom-field bakal direset (ID-nya beda antar project) — set ulang di project tujuan ya.</p>
+            <input value={dupName} onChange={(e) => setDupName(e.target.value)} placeholder="Nama form baru" className="mb-3 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
+            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Pilih project tujuan</div>
+            <div className="mt-1 max-h-72 space-y-0.5 overflow-y-auto">
+              {projectsQ.isLoading && <div className="py-4 text-center text-sm text-muted-foreground">Memuat project…</div>}
+              {(projectsQ.data ?? []).filter((p) => p.id !== projectId).map((p) => (
+                <button key={p.id} disabled={dup.isPending || !dupName.trim()} onClick={() => dup.mutate(p.id)} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-accent disabled:opacity-50">
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded bg-muted text-sm">{p.icon && !p.icon.startsWith("/") ? p.icon : "📁"}</span>
+                  <span className="truncate">{p.name}</span>
+                  {dup.isPending && dup.variables === p.id && <Loader2 className="ml-auto h-4 w-4 shrink-0 animate-spin" />}
+                </button>
+              ))}
+            </div>
+            {dup.isError && <p className="mt-2 text-xs font-semibold text-destructive">Gagal duplikat: {dup.error instanceof Error ? dup.error.message : "coba lagi"}.</p>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
