@@ -231,6 +231,29 @@ function AdvancedFieldEditor({ field, others, taskLists, members, customFields, 
             </select>
           )}
         </div>
+
+        {/* Section/list mapping: the answer is matched to a section BY NAME (submit/route.ts). Show the
+            project's sections + a one-click fill so the dropdown options match the section names exactly. */}
+        {mapping.target === "task_list" && (
+          <div className="mt-1 rounded-lg border border-border bg-muted/30 p-2.5 text-[11px] leading-relaxed">
+            <p className="text-muted-foreground">Jawaban field ini nentuin task masuk <b>section mana</b> — dicocokin sama <b>nama section</b>-nya. Jadi opsi field-nya harus persis sama kayak nama section di project (kalau gak ketemu, masuk section pertama).</p>
+            {taskLists.length > 0 ? (
+              <>
+                <div className="mt-2 mb-1 font-semibold text-muted-foreground">Section di project ini:</div>
+                <div className="flex flex-wrap gap-1">
+                  {taskLists.map((tl) => <span key={tl.id} className="rounded bg-card px-1.5 py-0.5 font-medium ring-1 ring-border">{tl.name}</span>)}
+                </div>
+                {(field.type === "dropdown" || field.type === "select") && (
+                  <button type="button" onClick={() => onChange({ options: taskLists.map((tl) => tl.name) })} className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2.5 py-1.5 font-bold text-primary transition hover:bg-primary/20">
+                    <Copy className="h-3 w-3" /> Pakai {taskLists.length} section ini sebagai opsi
+                  </button>
+                )}
+              </>
+            ) : (
+              <p className="mt-2 font-semibold text-amber-600">⚠️ Project ini belum punya section. Bikin section dulu di board, baru mapping ini jalan.</p>
+            )}
+          </div>
+        )}
       </div>
     </details>
   );
