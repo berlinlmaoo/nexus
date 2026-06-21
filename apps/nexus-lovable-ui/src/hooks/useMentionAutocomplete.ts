@@ -20,7 +20,12 @@ export function useMentionAutocomplete({ members, onSubmit }: { members: Mention
   const matches = useMemo(() => {
     if (query === null) return [];
     const q = query.toLowerCase();
-    return members.filter((m) => (m.name ?? m.email ?? "").toLowerCase().includes(q)).slice(0, 6);
+    return members
+      .map((m) => ({ m, name: (m.name ?? m.email ?? "").toLowerCase() }))
+      .filter((x) => x.name.includes(q))
+      // names STARTING with the typed letters first, then alphabetical (show ALL matches — scrollable)
+      .sort((a, b) => (a.name.startsWith(q) ? 0 : 1) - (b.name.startsWith(q) ? 0 : 1) || a.name.localeCompare(b.name))
+      .map((x) => x.m);
   }, [query, members]);
   useEffect(() => setActive(0), [query]);
 

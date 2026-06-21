@@ -49,7 +49,7 @@ export function Composer({ me, members, onPost, autoFocus }: { me?: MentionUser;
   const r = 10, C = 2 * Math.PI * r, pct = Math.min(len / TEXT_MAX, 1);
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-3 shadow-soft">
+    <div className="border-b border-border px-4 py-3">
       <div className="flex gap-3">
         {me && <Avatar userId={me.id} name={me.name} avatar={me.avatar} size={40} className="mt-0.5 shrink-0" />}
         <div className="relative min-w-0 flex-1">
@@ -60,7 +60,7 @@ export function Composer({ me, members, onPost, autoFocus }: { me?: MentionUser;
             onChange={mention.onChange}
             onKeyDown={mention.onKeyDown}
             rows={2}
-            placeholder="Lagi ngerjain / mikirin apa? (@ buat mention)"
+            placeholder="Apa yang baru?"
             className="w-full resize-none border-0 bg-transparent px-0 py-1.5 text-[15px] outline-none placeholder:text-muted-foreground"
           />
           {mention.open && <MentionList matches={mention.matches} active={mention.active} onPick={mention.pick} />}

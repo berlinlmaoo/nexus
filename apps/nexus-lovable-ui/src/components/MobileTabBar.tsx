@@ -5,7 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   LayoutDashboard, Inbox, CheckSquare, FolderKanban, Menu, X,
   MessageCircle, Calendar, CalendarClock, Users, BookOpen, Trophy,
-  ClipboardCheck, Settings, Shield, LogOut, Loader2, FileText, Rss, ShieldAlert,
+  ClipboardCheck, Settings, Shield, LogOut, Loader2, FileText, AtSign, ShieldAlert, LifeBuoy,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { nexusApi, activeNotifications } from "@/lib/nexus-api";
@@ -27,9 +27,10 @@ const moreGroups = [
       { title: "Morning Brief", url: "/dashboard", icon: LayoutDashboard },
       { title: "Messages", url: "/messages", icon: MessageCircle },
       { title: "Signal Inbox", url: "/inbox", icon: Inbox },
-      { title: "The Wire", url: "/feed", icon: Rss },
+      { title: "Threads", url: "/threads", icon: AtSign },
       { title: "My Mission", url: "/my-tasks", icon: CheckSquare },
       { title: "Pengajuan Saya", url: "/submissions", icon: FileText },
+      { title: "Keluhan", url: "/complaints", icon: LifeBuoy },
       { title: "Time Map", url: "/master-calendar", icon: Calendar },
       { title: "Room Booking", url: "/room-booking", icon: CalendarClock },
     ],
@@ -195,9 +196,9 @@ function MoreSheet({ open, onClose, isActive, unread }: { open: boolean; onClose
   // Org role gates management-only nav (Control Room + Crew Hub) — hidden from Staff.
   const orgRole = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 }).data?.role;
   const canManageOrg = ["ONE_ABOVE_ALL", "BOD", "MANAGER"].includes(orgRole ?? "");
-  // Beta features (The Wire + Integrity) → BoD-and-above only (hidden from Manager + Staff).
+  // Threads (feed) stays BoD-and-above beta. Integrity (/peer-reports) is open to everyone now.
   const canSeeFeed = ["ONE_ABOVE_ALL", "BOD"].includes(orgRole ?? "");
-  const BETA_URLS = new Set(["/feed", "/peer-reports"]);
+  const BETA_URLS = new Set(["/threads"]);
   const visibleGroups = moreGroups
     .map((g) => ({ ...g, items: g.items.filter((i) => (canManageOrg || (i.url !== "/admin" && i.url !== "/teams")) && (canSeeFeed || !BETA_URLS.has(i.url))) }))
     .filter((g) => g.items.length > 0);

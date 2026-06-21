@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { Avatar } from "@/components/Avatar";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, CalendarX2, ChevronDown, Loader2, Megaphone, Plus, ScrollText, Search, Shield, Trash2, Trophy, Users as UsersIcon, X } from "lucide-react";
+import { CalendarDays, CalendarX2, ChevronDown, Loader2, Megaphone, Plus, ScrollText, Search, Shield, Trash2, Trophy, Users as UsersIcon, X, Zap, Smartphone } from "lucide-react";
 import { type NexusAdminAnnouncement } from "@/lib/nexus-api";
 import { PageHeader } from "@/components/PageHeader";
 import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusAdminUser } from "@/lib/nexus-api";
@@ -31,7 +32,7 @@ function Admin() {
   const wsId = wsm.data?.workspaceId;
   const viewerRole = wsm.data?.role;
   const viewerAssignable = assignableRoles(viewerRole);
-  const orgInfoByUser = new Map(wsMembers.map((m) => [m.userId, { memberId: m.id, role: m.role, shiftStart: m.attendanceShiftStartTime ?? null, shiftEnd: m.attendanceShiftEndTime ?? null, shiftByDay: m.attendanceShiftByDay ?? null }] as const));
+  const orgInfoByUser = new Map(wsMembers.map((m) => [m.userId, { memberId: m.id, role: m.role, shiftStart: m.attendanceShiftStartTime ?? null, shiftEnd: m.attendanceShiftEndTime ?? null, shiftByDay: m.attendanceShiftByDay ?? null, flexi: m.flexiTimeEnabled ?? false, noGeofence: m.noGeofenceMode ?? false }] as const));
   const orgCount = (role: string) => wsMembers.filter((m) => m.role === role).length;
   // Per-person shift (jam masuk/keluar) bisa diatur BoD ke atas, di sini di Members.
   const canManageShift = viewerRole === "BOD" || viewerRole === "ONE_ABOVE_ALL";
@@ -47,6 +48,14 @@ function Admin() {
   });
   const updateShiftByDay = useMutation({
     mutationFn: ({ memberId, byDay }: { memberId: string; byDay: Record<string, { start: string; end: string }> }) => nexusApi.updateWorkspaceMember({ memberId, attendanceShiftByDay: byDay, workspaceId: wsId }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["nexus", "workspace-members"] }),
+  });
+  const updateFlexi = useMutation({
+    mutationFn: ({ memberId, flexi }: { memberId: string; flexi: boolean }) => nexusApi.updateWorkspaceMember({ memberId, flexiTimeEnabled: flexi, workspaceId: wsId }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["nexus", "workspace-members"] }),
+  });
+  const updateGeofence = useMutation({
+    mutationFn: ({ memberId, on }: { memberId: string; on: boolean }) => nexusApi.updateWorkspaceMember({ memberId, noGeofenceMode: on, workspaceId: wsId }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["nexus", "workspace-members"] }),
   });
   const allUsers = users.data?.users ?? [];
@@ -123,7 +132,7 @@ function Admin() {
                 <tbody>
                   {rows.map((u) => {
                     const info = orgInfoByUser.get(u.id);
-                    return <UserRow key={u.id} user={u} orgInfo={info} assignable={viewerAssignable} canEdit={!!info && canEditTier(viewerRole, info.role)} pending={updateOrg.isPending} onOrgRole={(role) => info && updateOrg.mutate({ memberId: info.memberId, role })} canManageShift={canManageShift} shiftPending={updateShift.isPending} onSaveShift={(start, end) => info && updateShift.mutate({ memberId: info.memberId, start, end })} shiftByDayPending={updateShiftByDay.isPending} onSaveShiftByDay={(byDay) => info && updateShiftByDay.mutate({ memberId: info.memberId, byDay })} onDayoff={() => setDayoffUser({ id: u.id, name: u.name || u.email || "User" })} canDelete={canDeleteUsers} isMember={!!info} onDelete={() => setDelUser({ id: u.id, name: u.name || "Unnamed", email: u.email ?? "" })} />;
+                    return <UserRow key={u.id} user={u} orgInfo={info} assignable={viewerAssignable} canEdit={!!info && canEditTier(viewerRole, info.role)} pending={updateOrg.isPending} onOrgRole={(role) => info && updateOrg.mutate({ memberId: info.memberId, role })} canManageShift={canManageShift} shiftPending={updateShift.isPending} onSaveShift={(start, end) => info && updateShift.mutate({ memberId: info.memberId, start, end })} shiftByDayPending={updateShiftByDay.isPending} onSaveShiftByDay={(byDay) => info && updateShiftByDay.mutate({ memberId: info.memberId, byDay })} flexiPending={updateFlexi.isPending} onToggleFlexi={() => info && updateFlexi.mutate({ memberId: info.memberId, flexi: !info.flexi })} geofencePending={updateGeofence.isPending} onToggleGeofence={() => info && updateGeofence.mutate({ memberId: info.memberId, on: !info.noGeofence })} onDayoff={() => setDayoffUser({ id: u.id, name: u.name || u.email || "User" })} canDelete={canDeleteUsers} isMember={!!info} onDelete={() => setDelUser({ id: u.id, name: u.name || "Unnamed", email: u.email ?? "" })} />;
                   })}
                 </tbody>
               </table>
@@ -184,7 +193,7 @@ function RedDateQuotaModal({ onClose }: { onClose: () => void }) {
 
 const WEEKDAYS: Array<[string, string]> = [["1", "Sen"], ["2", "Sel"], ["3", "Rab"], ["4", "Kam"], ["5", "Jum"], ["6", "Sab"], ["7", "Min"]];
 
-function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canManageShift, shiftPending, onSaveShift, shiftByDayPending, onSaveShiftByDay, onDayoff, canDelete, isMember, onDelete }: { user: NexusAdminUser; orgInfo?: { memberId: string; role: string; shiftStart: string | null; shiftEnd: string | null; shiftByDay: Record<string, { start: string; end: string }> | null }; assignable: OrgRole[]; canEdit: boolean; onOrgRole: (role: string) => void; pending: boolean; canManageShift: boolean; shiftPending: boolean; onSaveShift: (start: string | null, end: string | null) => void; shiftByDayPending: boolean; onSaveShiftByDay: (byDay: Record<string, { start: string; end: string }>) => void; onDayoff: () => void; canDelete: boolean; isMember: boolean; onDelete: () => void }) {
+function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canManageShift, shiftPending, onSaveShift, shiftByDayPending, onSaveShiftByDay, flexiPending, onToggleFlexi, geofencePending, onToggleGeofence, onDayoff, canDelete, isMember, onDelete }: { user: NexusAdminUser; orgInfo?: { memberId: string; role: string; shiftStart: string | null; shiftEnd: string | null; shiftByDay: Record<string, { start: string; end: string }> | null; flexi: boolean; noGeofence: boolean }; assignable: OrgRole[]; canEdit: boolean; onOrgRole: (role: string) => void; pending: boolean; canManageShift: boolean; shiftPending: boolean; onSaveShift: (start: string | null, end: string | null) => void; shiftByDayPending: boolean; onSaveShiftByDay: (byDay: Record<string, { start: string; end: string }>) => void; flexiPending: boolean; onToggleFlexi: () => void; geofencePending: boolean; onToggleGeofence: () => void; onDayoff: () => void; canDelete: boolean; isMember: boolean; onDelete: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const byDay = orgInfo?.shiftByDay ?? {};
   const overrideCount = Object.keys(byDay).length;
@@ -211,12 +220,24 @@ function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canMa
           {!orgInfo ? (
             <span className="text-xs text-muted-foreground/60">—</span>
           ) : (
-            <div className="flex items-center gap-2">
-              <ShiftCell start={orgInfo.shiftStart} end={orgInfo.shiftEnd} canEdit={canManageShift} pending={shiftPending} onSave={onSaveShift} />
-              {canManageShift && (
+            <div className="flex flex-wrap items-center gap-2">
+              <div className={cn(orgInfo.flexi && "opacity-40")} title={orgInfo.flexi ? "Flexi aktif — shift tetap ini diabaikan" : undefined}>
+                <ShiftCell start={orgInfo.shiftStart} end={orgInfo.shiftEnd} canEdit={canManageShift && !orgInfo.flexi} pending={shiftPending} onSave={onSaveShift} />
+              </div>
+              {canManageShift && !orgInfo.flexi && (
                 <button type="button" onClick={() => setExpanded((v) => !v)} title="Shift khusus per hari" className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] font-semibold transition", overrideCount > 0 ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}>
                   <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />
                   {overrideCount > 0 ? `${overrideCount} hari` : "per-hari"}
+                </button>
+              )}
+              {canManageShift && (
+                <button type="button" onClick={onToggleFlexi} disabled={flexiPending} title="Flexi Time — check-in bebas 12:00–15:00, jam pulang = jam masuk + 9 jam" className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] font-semibold transition disabled:opacity-50", orgInfo.flexi ? "border-amber-300 bg-amber-50 text-amber-700" : "border-border text-muted-foreground hover:bg-accent")}>
+                  <Zap className={cn("h-3.5 w-3.5", orgInfo.flexi && "fill-amber-400")} /> Flexi
+                </button>
+              )}
+              {canManageShift && (
+                <button type="button" onClick={onToggleGeofence} disabled={geofencePending} title="Custom/Mobile — bisa absen di mana aja (geofence mati, checkout luar kantor gak perlu approval)" className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] font-semibold transition disabled:opacity-50", orgInfo.noGeofence ? "border-sky-300 bg-sky-50 text-sky-700" : "border-border text-muted-foreground hover:bg-accent")}>
+                  <Smartphone className="h-3.5 w-3.5" /> Mobile
                 </button>
               )}
             </div>
@@ -676,8 +697,15 @@ function AnnouncementsAdmin() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [tone, setTone] = useState("info");
+  const [audience, setAudience] = useState<"all" | "some">("all");
+  const [targetIds, setTargetIds] = useState<string[]>([]);
+  const [memberSearch, setMemberSearch] = useState("");
+  const membersQ = useQuery({ queryKey: ["members"], queryFn: nexusApi.members, staleTime: 300_000 });
+  const members = useMemo(() => { const raw = membersQ.data; return (Array.isArray(raw) ? raw : raw?.members ?? []); }, [membersQ.data]);
+  const filteredMembers = useMemo(() => members.filter((m) => (m.name ?? m.email ?? "").toLowerCase().includes(memberSearch.toLowerCase())).slice(0, 8), [members, memberSearch]);
+  const toggleTarget = (id: string) => setTargetIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const invalidate = () => { qc.invalidateQueries({ queryKey: ["nexus", "announcements"] }); qc.invalidateQueries({ queryKey: ["announcements-active"] }); };
-  const create = useMutation({ mutationFn: () => nexusApi.createAnnouncement({ title: title.trim(), body: body.trim(), tone }), onSuccess: () => { setTitle(""); setBody(""); setTone("info"); invalidate(); } });
+  const create = useMutation({ mutationFn: () => nexusApi.createAnnouncement({ title: title.trim(), body: body.trim(), tone, targetUserIds: audience === "some" ? targetIds : [] }), onSuccess: () => { setTitle(""); setBody(""); setTone("info"); setAudience("all"); setTargetIds([]); setMemberSearch(""); invalidate(); } });
   const toggle = useMutation({ mutationFn: ({ id, active }: { id: string; active: boolean }) => nexusApi.updateAnnouncement(id, { active }), onSuccess: invalidate });
   const del = useMutation({ mutationFn: (id: string) => nexusApi.deleteAnnouncement(id), onSuccess: invalidate });
   const rows = list.data?.announcements ?? [];
@@ -691,16 +719,56 @@ function AnnouncementsAdmin() {
             <div className="text-sm font-bold">Buat pengumuman pop-up</div>
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Judul pengumuman" className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
             <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} placeholder="Isi pengumuman… (boleh beberapa baris)" className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+
+            {/* Audience: everyone, or specific people */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Tujuan</span>
+                <div className="flex rounded-lg border border-border p-0.5">
+                  {(["all", "some"] as const).map((a) => (
+                    <button key={a} onClick={() => setAudience(a)} className={cn("rounded-md px-2.5 py-1 text-xs font-bold transition-colors", audience === a ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}>{a === "all" ? "Semua orang" : "Orang tertentu"}</button>
+                  ))}
+                </div>
+              </div>
+              {audience === "some" && (
+                <div className="space-y-2 rounded-xl border border-border bg-background p-2.5">
+                  {targetIds.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {targetIds.map((id) => { const u = members.find((m) => m.id === id); return (
+                        <span key={id} className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                          {u?.name ?? "user"} <button onClick={() => toggleTarget(id)} aria-label="Hapus"><X className="h-3 w-3" /></button>
+                        </span>
+                      ); })}
+                    </div>
+                  )}
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <input value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} placeholder="Cari nama buat ditambah…" className="w-full rounded-lg border border-border bg-card py-1.5 pl-8 pr-3 text-sm outline-none focus:border-primary" />
+                  </div>
+                  {memberSearch && (
+                    <div className="max-h-40 space-y-0.5 overflow-y-auto">
+                      {filteredMembers.map((m) => (
+                        <button key={m.id} onClick={() => { toggleTarget(m.id); setMemberSearch(""); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-accent">
+                          <Avatar userId={m.id} name={m.name} avatar={m.avatar} size={22} /> <span className="truncate">{m.name ?? m.email}</span>
+                          {targetIds.includes(m.id) && <span className="ml-auto text-xs font-bold text-primary">✓</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="flex flex-wrap items-center gap-2">
               <select value={tone} onChange={(e) => setTone(e.target.value)} className="rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary">
                 <option value="info">Info (biru)</option>
                 <option value="success">Success (hijau)</option>
                 <option value="warning">Warning (kuning)</option>
               </select>
-              <button onClick={() => create.mutate()} disabled={!title.trim() || !body.trim() || create.isPending} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">
+              <button onClick={() => create.mutate()} disabled={!title.trim() || !body.trim() || create.isPending || (audience === "some" && targetIds.length === 0)} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">
                 {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Megaphone className="h-4 w-4" />} Posting
               </button>
-              <span className="text-xs text-muted-foreground">Muncul sekali per user; bisa di-nonaktifin kapan aja.</span>
+              <span className="text-xs text-muted-foreground">{audience === "some" ? `Muncul cuma ke ${targetIds.length} orang yang dipilih.` : "Muncul sekali ke semua user."}</span>
             </div>
           </div>
 
@@ -715,7 +783,7 @@ function AnnouncementsAdmin() {
                     <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">{a.tone}</span>
                   </div>
                   <p className="mt-1 whitespace-pre-line text-xs text-muted-foreground">{a.body}</p>
-                  <p className="mt-1.5 text-[11px] text-muted-foreground">{fmtDate(a.createdAt)} · dibaca {a.seenCount} orang</p>
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">{fmtDate(a.createdAt)} · {a.targetCount ? `ke ${a.targetCount} orang` : "ke semua"} · dibaca {a.seenCount}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
                   <button onClick={() => toggle.mutate({ id: a.id, active: !a.active })} className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold hover:bg-accent">{a.active ? "Nonaktifin" : "Aktifin"}</button>

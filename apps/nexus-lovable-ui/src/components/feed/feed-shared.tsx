@@ -36,7 +36,7 @@ export function RenderText({ text }: { text: string }) {
 export function MentionList({ matches, active, onPick }: { matches: MentionUser[]; active: number; onPick: (u: MentionUser) => void }) {
   if (!matches.length) return null;
   return (
-    <div className="absolute bottom-full left-0 z-30 mb-1 max-h-56 w-64 overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-pop">
+    <div className="absolute left-0 top-full z-40 mt-1 max-h-72 w-64 overflow-y-auto overscroll-contain rounded-xl border border-border bg-popover p-1 shadow-pop">
       {matches.map((u, i) => (
         <button key={u.id} type="button" onMouseDown={(e) => { e.preventDefault(); onPick(u); }}
           className={cn("flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors", i === active ? "bg-accent" : "hover:bg-accent")}>
@@ -52,17 +52,34 @@ export function MentionList({ matches, active, onPick }: { matches: MentionUser[
 export function ImageGrid({ images, onOpen }: { images: FeedImage[]; onOpen: (i: number) => void }) {
   if (!images.length) return null;
   const n = images.length;
-  const single = n === 1;
-  const ratio = single && images[0].width && images[0].height ? `${images[0].width} / ${images[0].height}` : undefined;
+
+  // Single image → fill the column width at the photo's OWN aspect ratio (no white space).
+  if (n === 1) {
+    const im = images[0];
+    const ratio = im.width && im.height ? `${im.width} / ${im.height}` : "4 / 3";
+    return (
+      <button onClick={() => onOpen(0)} className="mt-2.5 block w-full overflow-hidden rounded-2xl border border-border bg-muted">
+        <img src={im.url} loading="lazy" alt="" className="block w-full object-cover transition duration-300 hover:scale-[1.02]" style={{ aspectRatio: ratio, maxHeight: 680 }} />
+      </button>
+    );
+  }
+
+  // 3 images → one tall on the left, two stacked on the right (deterministic; no blank cell).
+  if (n === 3) {
+    return (
+      <div className="mt-2.5 grid aspect-[3/2] grid-cols-2 grid-rows-2 gap-1 overflow-hidden rounded-2xl border border-border">
+        <button onClick={() => onOpen(0)} className="row-span-2 overflow-hidden bg-muted"><img src={images[0].url} loading="lazy" alt="" className="h-full w-full object-cover transition duration-300 hover:scale-[1.03]" /></button>
+        <button onClick={() => onOpen(1)} className="overflow-hidden bg-muted"><img src={images[1].url} loading="lazy" alt="" className="h-full w-full object-cover transition duration-300 hover:scale-[1.03]" /></button>
+        <button onClick={() => onOpen(2)} className="overflow-hidden bg-muted"><img src={images[2].url} loading="lazy" alt="" className="h-full w-full object-cover transition duration-300 hover:scale-[1.03]" /></button>
+      </div>
+    );
+  }
+
+  // 2 or 4 images → square collage.
   return (
-    <div className={cn("mt-2.5 grid gap-1 overflow-hidden rounded-2xl border border-border", single ? "grid-cols-1" : "grid-cols-2")}>
+    <div className="mt-2.5 grid grid-cols-2 gap-1 overflow-hidden rounded-2xl border border-border">
       {images.map((im, i) => (
-        <button
-          key={im.id}
-          onClick={() => onOpen(i)}
-          className={cn("relative overflow-hidden bg-muted", n === 3 && i === 0 && "row-span-2")}
-          style={single ? { aspectRatio: ratio ?? "16 / 10", maxHeight: 420 } : { aspectRatio: "1 / 1" }}
-        >
+        <button key={im.id} onClick={() => onOpen(i)} className="relative aspect-square overflow-hidden bg-muted">
           <img src={im.url} loading="lazy" alt="" className="h-full w-full object-cover transition duration-300 hover:scale-[1.03]" />
         </button>
       ))}

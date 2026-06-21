@@ -191,13 +191,17 @@ export async function verifyPeerReportWithXp(opts: { reportId: string; reviewerI
   return await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${k1})::int8)`
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${k2})::int8)`
-    const already = await tx.xpTransaction.findFirst({ where: { reason: reporterKey }, select: { id: true } })
+    // Idempotency anchored on the PENALTY key (always written) — the bounty may be 0/skipped.
+    const already = await tx.xpTransaction.findFirst({ where: { reason: reportedKey }, select: { id: true } })
     if (already) return { ok: false, reason: "already_applied" }
     const report = await tx.peerReport.findUnique({ where: { id: opts.reportId }, select: { reporterId: true, reportedUserId: true, status: true } })
     if (!report) return { ok: false, reason: "not_found" }
     if (report.status !== "PENDING") return { ok: false, reason: "already_decided" }
-    await applyXpDelta(tx, report.reporterId, opts.bounty)
-    await tx.xpTransaction.create({ data: { userId: report.reporterId, amount: opts.bounty, reason: reporterKey } })
+    // Reporter bounty only if > 0 (penalty-only model when reporting is open to all staff → no farming).
+    if (opts.bounty > 0) {
+      await applyXpDelta(tx, report.reporterId, opts.bounty)
+      await tx.xpTransaction.create({ data: { userId: report.reporterId, amount: opts.bounty, reason: reporterKey } })
+    }
     await applyXpDelta(tx, report.reportedUserId, -opts.penalty)
     await tx.xpTransaction.create({ data: { userId: report.reportedUserId, amount: -opts.penalty, reason: reportedKey } })
     const upd = await tx.peerReport.updateMany({

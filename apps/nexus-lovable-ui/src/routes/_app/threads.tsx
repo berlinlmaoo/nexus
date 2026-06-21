@@ -2,8 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Rss, ArrowUp, Loader2 } from "lucide-react";
-import { PageHeader } from "@/components/PageHeader";
+import { AtSign, ArrowUp, Loader2 } from "lucide-react";
 import { AvatarStack } from "@/components/Avatar";
 import { celebrate } from "@/components/Celebration";
 import { cn } from "@/lib/utils";
@@ -12,7 +11,7 @@ import type { MentionUser } from "@/hooks/useMentionAutocomplete";
 import { Composer, type ComposerPayload } from "@/components/feed/Composer";
 import { PostCard, type FeedPostUI } from "@/components/feed/PostCard";
 
-export const Route = createFileRoute("/_app/feed")({ component: FeedPage });
+export const Route = createFileRoute("/_app/threads")({ component: FeedPage });
 
 type Inf = { pages: FeedPage[]; pageParams: unknown[] };
 type Tab = "all" | "mentions";
@@ -32,7 +31,7 @@ function FeedPage() {
   const [tab, setTab] = useState<Tab>("all");
   const key = useMemo(() => ["feed", tab] as const, [tab]);
 
-  // BETA gate — The Wire is BoD-and-above only for now. Bounce everyone else (and never call the API).
+  // BETA gate — Threads is BoD-and-above only for now. Bounce everyone else (and never call the API).
   const roleQ = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 });
   const roleLoaded = roleQ.isSuccess || roleQ.isError;
   const canSeeFeed = ["ONE_ABOVE_ALL", "BOD"].includes(roleQ.data?.role ?? "");
@@ -145,29 +144,32 @@ function FeedPage() {
   const empty = roleLoaded && canSeeFeed && !feed.isLoading && posts.length === 0;
 
   return (
-    <div className="mx-auto w-full max-w-2xl">
-      <PageHeader title="The Wire" subtitle="Apa yang lagi dikerjain, diteriakin, dikerjain lagi sama tim." icon={<Rss className="h-6 w-6 text-primary" />} />
+    <div className="mx-auto min-h-screen w-full max-w-[600px] sm:border-x sm:border-border">
+      {/* slim sticky header */}
+      <div className="sticky top-0 z-20 flex items-center justify-center border-b border-border bg-background/80 py-3 backdrop-blur-md">
+        <h1 className="font-display text-lg font-black tracking-tight">Threads</h1>
+      </div>
 
-      {/* tabs */}
-      <div className="mb-3 flex gap-1 rounded-xl border border-border bg-card p-1">
+      {/* underline tabs */}
+      <div className="sticky top-[49px] z-20 flex border-b border-border bg-background/80 backdrop-blur-md">
         {([["all", "Semua"], ["mentions", "Nyebut kamu"]] as const).map(([t, label]) => (
-          <button key={t} onClick={() => setTab(t)} className="relative flex-1 rounded-lg px-3 py-1.5 text-sm font-bold transition">
-            {tab === t && <motion.span layoutId="wire-tab" className="absolute inset-0 rounded-lg bg-primary" transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
-            <span className={cn("relative", tab === t ? "text-primary-foreground" : "text-muted-foreground")}>{label}</span>
+          <button key={t} onClick={() => setTab(t)} className="relative flex-1 py-3.5 text-sm font-bold transition hover:bg-muted/30">
+            <span className={cn(tab === t ? "text-foreground" : "text-muted-foreground")}>{label}</span>
+            {tab === t && <motion.span layoutId="wire-tab" className="absolute bottom-0 left-1/2 h-1 w-14 -translate-x-1/2 rounded-full bg-primary" transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
           </button>
         ))}
       </div>
 
-      {tab === "all" && me && <div className="mb-3"><Composer me={{ id: me.id, name: me.name, avatar: me.avatar }} members={members} onPost={onPost} /></div>}
+      {tab === "all" && me && <Composer me={{ id: me.id, name: me.name, avatar: me.avatar }} members={members} onPost={onPost} />}
 
       {/* new-posts pill */}
-      <div className="sticky top-2 z-10 flex justify-center">
+      <div className="pointer-events-none sticky top-[104px] z-10 flex justify-center">
         <AnimatePresence>
           {newPosts.length > 0 && (
             <motion.button
               initial={{ y: -12, opacity: 0, scale: 0.9 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: -12, opacity: 0, scale: 0.9 }}
               onClick={flushNew}
-              className="inline-flex items-center gap-2 rounded-full bg-primary px-3.5 py-1.5 text-sm font-bold text-primary-foreground shadow-pop"
+              className="pointer-events-auto mt-2 inline-flex items-center gap-2 rounded-full bg-primary px-3.5 py-1.5 text-sm font-bold text-primary-foreground shadow-pop"
             >
               <ArrowUp className="h-3.5 w-3.5" />
               {newPosts.length} post baru
@@ -177,13 +179,13 @@ function FeedPage() {
         </AnimatePresence>
       </div>
 
-      {/* list */}
-      <div className="space-y-3">
-        {loading && Array.from({ length: 4 }).map((_, i) => <PostSkeleton key={i} />)}
+      {/* list — continuous, divider-separated */}
+      <div>
+        {loading && Array.from({ length: 5 }).map((_, i) => <PostSkeleton key={i} />)}
 
         {empty && (
-          <div className="rounded-2xl border border-dashed border-border bg-card/50 px-6 py-14 text-center">
-            <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary"><Rss className="h-7 w-7" /></div>
+          <div className="px-6 py-16 text-center">
+            <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary"><AtSign className="h-7 w-7" /></div>
             <div className="text-base font-black">{tab === "mentions" ? "Belum ada yang nyebut kamu ✨" : "Sepi nih, mulai obrolannya"}</div>
             <p className="mt-1 text-sm text-muted-foreground">{tab === "mentions" ? "Nanti kalau ada yang nge-tag kamu, muncul di sini." : "Post pertama tentang apa yang lagi kamu kerjain hari ini 🚀"}</p>
           </div>
@@ -196,7 +198,7 @@ function FeedPage() {
         </AnimatePresence>
 
         <div ref={sentinel} className="h-8" />
-        {feed.isFetchingNextPage && <div className="flex justify-center py-3 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
+        {feed.isFetchingNextPage && <div className="flex justify-center py-4 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
       </div>
     </div>
   );
@@ -204,8 +206,8 @@ function FeedPage() {
 
 function PostSkeleton() {
   return (
-    <div className="rounded-2xl border border-border bg-card p-3.5">
-      <div className="flex items-start gap-2.5">
+    <div className="border-b border-border px-4 py-3">
+      <div className="flex items-start gap-3">
         <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-muted" />
         <div className="flex-1 space-y-2">
           <div className="h-3 w-32 animate-pulse rounded bg-muted" />

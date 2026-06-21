@@ -27,10 +27,11 @@ export async function GET() {
 
     const workspaceIds = userMemberships.map((m: { workspaceId: string }) => m.workspaceId)
 
-    // Get all members in those workspaces
+    // Get all members in those workspaces (incl. their org role)
     const workspaceMembers = await prisma.workspaceMember.findMany({
       where: { workspaceId: { in: workspaceIds } },
       select: {
+        role: true,
         user: {
           select: {
             id: true,
@@ -42,9 +43,9 @@ export async function GET() {
       },
     })
 
-    // Deduplicate users (in case they share multiple workspaces)
+    // Deduplicate users (in case they share multiple workspaces), carrying their org role.
     const uniqueMembers = Array.from(
-      new Map(workspaceMembers.map((m: { user: { id: string; name: string; email: string; avatar: string | null } }) => [m.user.id, m.user])).values()
+      new Map(workspaceMembers.map((m) => [m.user.id, { ...m.user, role: m.role }])).values()
     )
 
     return NextResponse.json(uniqueMembers)

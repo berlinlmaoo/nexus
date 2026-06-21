@@ -10,6 +10,7 @@ import {
   buildAttendanceDerivedFields,
   formatAttendanceDateKey,
   getAttendanceWorkspaceContext,
+  getMemberNoGeofence,
   isWorkdayForAttendanceDate,
   resolveEffectiveAttendanceShift,
   resolveNearestOffice,
@@ -24,6 +25,9 @@ import { attendanceActionSchema } from "@/lib/validations"
 import { notifyOffsiteCheckoutPending } from "@/lib/notification-service"
 
 const MAX_SELFIE_SIZE = 10 * 1024 * 1024
+// Daily Reflection — mandatory recap before a day can be closed out.
+const MIN_REFLECTION_CHARS = 200
+const MAX_REFLECTION_CHARS = 4000
 
 export async function POST(request: NextRequest) {
   try {
@@ -44,6 +48,9 @@ export async function POST(request: NextRequest) {
     // mandatory reason. Recorded as PENDING until a BoD approves it.
     const offsiteRequested = formData.get("offsite") === "1" || formData.get("offsite") === "true"
     const offsiteReason = (formData.get("reason") as string | null)?.trim().slice(0, 500) || undefined
+    // Daily Reflection — required, min 200 chars. Validated up-front (before selfie upload / geofence)
+    // so a too-short reflection fails fast and never reaches the offsite-approval branch.
+    const reflection = (formData.get("reflection") as string | null)?.trim() || ""
 
     const validation = attendanceActionSchema.safeParse({ lat, lng, notes })
     if (!validation.success) {
@@ -60,6 +67,19 @@ export async function POST(request: NextRequest) {
     if (selfie.size <= 0 || selfie.size > MAX_SELFIE_SIZE) {
       return NextResponse.json({ error: "Selfie photo must be smaller than 10MB." }, { status: 400 })
     }
+
+    if (reflection.length < MIN_REFLECTION_CHARS) {
+      return NextResponse.json(
+        {
+          error: `Refleksi harian wajib diisi minimal ${MIN_REFLECTION_CHARS} karakter sebelum check-out.`,
+          code: "REFLECTION_REQUIRED",
+          minChars: MIN_REFLECTION_CHARS,
+          currentChars: reflection.length,
+        },
+        { status: 400 }
+      )
+    }
+    const reflectionText = reflection.slice(0, MAX_REFLECTION_CHARS)
 
     // Close the oldest still-open record first — that's either today's check-in,
     // or a previous day the user forgot to check out (must be closed before a new check-in).
@@ -126,7 +146,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No office location could be matched." }, { status: 400 })
     }
 
-    const outsideRadius = nearest.distanceMeters > nearest.office.radiusMeters
+    // Custom/Mobile members are geofence-exempt — a checkout outside the radius is normal for them and is
+    // NOT routed through the offsite-approval flow.
+    const noGeofence = await getMemberNoGeofence(session.user.id, context.workspace.id)
+    const outsideRadius = !noGeofence && nearest.distanceMeters > nearest.office.radiusMeters
     if (outsideRadius && !offsiteRequested) {
       // First attempt from outside → tell the client to offer an offsite checkout (with a reason).
       return NextResponse.json(
@@ -193,6 +216,7 @@ export async function POST(request: NextRequest) {
         lateMinutes: derived.lateMinutes,
         earlyLeaveMinutes: derived.earlyLeaveMinutes,
         workedMinutes: derived.workedMinutes,
+        attendanceFlexi: derived.attendanceFlexi,
         checkOutLat: validation.data.lat,
         checkOutLng: validation.data.lng,
         checkOutAddress: reverseGeocode.displayName,
@@ -201,6 +225,8 @@ export async function POST(request: NextRequest) {
         checkOutOffsite: isOffsite,
         checkOutApproval: isOffsite ? "PENDING" : null,
         checkOutReason: isOffsite ? offsiteReason : null,
+        checkOutReflection: reflectionText,
+        checkOutReflectionAt: checkOutAt,
         notes: mergedNotes,
         status: derived.status,
       },

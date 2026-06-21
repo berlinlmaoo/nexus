@@ -6,11 +6,12 @@ import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { verifyPeerReportWithXp } from "@/lib/gamification"
 import {
-  getUserOrgRole, isBodPlus, peerReportXpEnabled, DEFAULT_BOUNTY_XP, DEFAULT_PENALTY_XP,
-  REPORT_INCLUDE, serializeReport,
+  getUserOrgRole, isBodPlus, peerReportXpEnabled, DEFAULT_PENALTY_XP,
+  REPORT_INCLUDE, serializeReport, categoryLabel,
 } from "@/lib/peer-reports"
 
-// POST /api/peer-reports/[id]/verdict — { action: "verify" | "reject", reviewNote? }
+// POST /api/peer-reports/[id]/verdict — BoD only. { action: "verify" | "reject", reviewNote? }
+// Verify = penalty-only XP (violator −XP, no reporter bounty) + PUBLIC announcement + Hall of Shame.
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
@@ -36,11 +37,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         await tx.peerReportEvent.create({ data: { reportId: id, action: "rejected", fromStatus: "PENDING", toStatus: "REJECTED", note: reviewNote, actorId: me } })
       })
     } else if (peerReportXpEnabled()) {
-      // XP enabled (post governance) → atomic transfer + status flip.
-      const res = await verifyPeerReportWithXp({ reportId: id, reviewerId: me, reviewNote, bounty: DEFAULT_BOUNTY_XP, penalty: DEFAULT_PENALTY_XP })
+      // Penalty-only: violator −penalty, NO reporter bounty (reporting is open to all → no farming).
+      const res = await verifyPeerReportWithXp({ reportId: id, reviewerId: me, reviewNote, bounty: 0, penalty: DEFAULT_PENALTY_XP })
       if (!res.ok) return NextResponse.json({ error: "Laporan ini udah diputus." }, { status: 409 })
     } else {
-      // BETA: verify = status change only, NO XP (snapshot stays 0).
+      // XP kill-switch (PEER_REPORT_XP_DISABLED=1) → verify = status change only, no XP.
       await prisma.$transaction(async (tx) => {
         const upd = await tx.peerReport.updateMany({ where: { id, status: "PENDING" }, data: { status: "VERIFIED", reviewerId: me, reviewNote, reviewedAt: new Date() } })
         if (upd.count === 0) throw new Error("ALREADY_DECIDED")
@@ -48,9 +49,29 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       })
     }
 
-    logAudit({ action: "update", entityType: "peer_report", entityId: id, userId: me, request, metadata: { verdict: action, xp: action === "verify" && peerReportXpEnabled() } })
+    logAudit({ action: "update", entityType: "peer_report", entityId: id, userId: me, request, metadata: { verdict: action } })
     const updated = await prisma.peerReport.findUnique({ where: { id }, include: REPORT_INCLUDE })
-    return NextResponse.json(updated ? serializeReport(updated, me) : { ok: true })
+
+    // On a verified violation → company-wide POP-UP announcement (same mechanism as Control Room),
+    // shown once per user. Best-effort: never fail the verdict if the announcement insert errors.
+    if (action === "verify" && updated?.status === "VERIFIED") {
+      try {
+        await prisma.announcement.create({
+          data: {
+            title: "⚠️ Pelanggaran terbukti",
+            body: `${updated.reportedUser.name} terbukti melanggar: ${categoryLabel(updated.category)}.`,
+            tone: "warning",
+            active: true,
+            imageUrl: updated.evidenceUrl ?? null, // show the evidence photo in the pop-up
+            createdById: me,
+          },
+        })
+      } catch (e) {
+        console.error("violation announcement failed:", e)
+      }
+    }
+
+    return NextResponse.json(updated ? serializeReport(updated, me, true) : { ok: true })
   } catch (error) {
     console.error("Error deciding peer report:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
