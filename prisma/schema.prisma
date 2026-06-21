@@ -14,6 +14,9 @@ model User {
   password       String?
   avatar         String?
   phoneNumber    String?
+  whatsappId       String?         @unique // verified WhatsApp identity (LID/JID) for the Gideon WA bot
+  waLinkCode       String?         // short-lived code to link WhatsApp (self-service)
+  waLinkExpiresAt  DateTime?
   role           SystemRole        @default(MEMBER)
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
@@ -44,16 +47,123 @@ model User {
   taskLikes        TaskLike[]
   savedSearches    SavedSearch[]
   dndUntil         DateTime?
+  onboardedAt      DateTime?
   sessions         UserSession[]
   workflowBundles    WorkflowBundle[]
   proofAnnotations   ProofAnnotation[]
   teamCalendarEvents TeamCalendarEvent[]         @relation("TeamCalendarEventCreator")
+  roomBookings       RoomBooking[]               @relation("RoomBookingCreator")
   teamCalendarEventAttendances TeamCalendarEventAttendee[]
   emailOtps          EmailOtpVerification[]
   attendanceRecords  AttendanceRecord[]
   attendanceCorrections AttendanceRecord[] @relation("AttendanceRecordCorrectedBy")
   attendanceRequests AttendanceRequest[] @relation("AttendanceRequestUser")
   reviewedAttendanceRequests AttendanceRequest[] @relation("AttendanceRequestReviewedBy")
+  userXp               UserXp?
+  xpTransactions       XpTransaction[]
+  userStreak           UserStreak?
+  questsCreated        Quest[]             @relation("QuestCreator")
+  questClaims          QuestClaim[]
+  conversationMembers  ConversationMember[]
+  messages             Message[]
+  projectPins          ProjectPin[]
+  folderPins           FolderPin[]
+  periodRewards        PeriodReward[]
+  apiTokens            ApiToken[]
+  oauthAuthCodes       OAuthAuthCode[]
+  postsAuthored        Post[]              @relation("PostAuthor")
+  postMentions         PostMention[]       @relation("PostMentionUser")
+  postLikes            PostLike[]          @relation("PostLikeUser")
+  postComments         PostComment[]       @relation("PostCommentAuthor")
+  peerReportsFiled     PeerReport[]        @relation("PeerReportReporter")
+  peerReportsAgainst   PeerReport[]        @relation("PeerReportReported")
+  peerReportsReviewed  PeerReport[]        @relation("PeerReportReviewer")
+}
+
+// Per-user API token for the MCP connector (and other integrations). Only the SHA-256 hash is
+// stored; the plaintext "nxs_..." (PAT) token is shown once at creation. The token acts AS the user,
+// so all existing RBAC applies. Scope is enforced by which MCP tools are registered (task-only).
+// OAuth-issued access tokens ("nxo_...") are also stored here with clientId set + a refresh token,
+// so the same hash lookup verifies both PATs and OAuth tokens.
+model ApiToken {
+  id               String    @id @default(cuid())
+  name             String
+  tokenHash        String    @unique
+  scopes           String[]  @default([])
+  lastUsedAt       DateTime?
+  expiresAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  // OAuth-issued tokens only (null for personal access tokens minted in Tuning Room).
+  clientId             String?
+  refreshTokenHash     String?   @unique
+  // Previous (rotated-away) refresh hash — presenting it again = token theft → revoke the connection.
+  prevRefreshTokenHash String?   @unique
+  refreshExpiresAt     DateTime?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client OAuthClient? @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([clientId])
+}
+
+// A client app registered via OAuth 2.1 Dynamic Client Registration (RFC 7591) — e.g. the Claude
+// app connecting as a custom connector. Public clients (PKCE), no client secret.
+model OAuthClient {
+  id                      String   @id @default(cuid())
+  clientName              String
+  redirectUris            String[] @default([])
+  grantTypes              String[] @default([])
+  responseTypes           String[] @default([])
+  tokenEndpointAuthMethod String   @default("none")
+  scopes                  String[] @default([])
+  createdAt               DateTime @default(now())
+
+  authCodes OAuthAuthCode[]
+  tokens    ApiToken[]
+}
+
+// Short-lived OAuth 2.1 authorization code (auth-code + PKCE flow). Single-use, ~5 min TTL.
+// Only the SHA-256 hash of the code is stored.
+model OAuthAuthCode {
+  id                  String    @id @default(cuid())
+  codeHash            String    @unique
+  redirectUri         String
+  codeChallenge       String
+  codeChallengeMethod String    @default("S256")
+  scopes              String[]  @default([])
+  resource            String?
+  expiresAt           DateTime
+  consumedAt          DateTime?
+  createdAt           DateTime  @default(now())
+
+  clientId String
+  client   OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([userId])
+}
+
+/// Monthly XP-tier outcome per user (Excellent / Good / Review) + perk earned.
+model PeriodReward {
+  id          String   @id @default(cuid())
+  periodKey   String   // attendance month, e.g. "2026-06"
+  tier        String   // EXCELLENT | GOOD | REVIEW | NONE
+  perk        String?  // human-readable reward label
+  bonusDayOff Int      @default(0) // extra day-off tokens granted (usable next period)
+  zeroAlpha   Boolean  @default(false)
+  finalScore  Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, periodKey])
+  @@index([periodKey])
 }
 
 model Workspace {
@@ -74,17 +184,65 @@ model Workspace {
   ssoConfig       SsoConfig?
   workflowBundles WorkflowBundle[]
   teamCalendarEvents TeamCalendarEvent[]
+  roomBookings       RoomBooking[]
   officeLocations    OfficeLocation[]
   attendanceRecords  AttendanceRecord[]
   attendanceRequests AttendanceRequest[]
   customFieldLibraries CustomFieldLibrary[]
+  quests               Quest[]
+  divisions            Division[]
+  holidays             Holiday[]
+  redDateQuotas        RedDateQuota[]
+}
+
+// Monthly "tanggal merah" quota (jatah), set by BoD per month, same for every staff. Staff
+// request RED_DATE leave up to this quota for the month. One row per (workspace, month).
+model RedDateQuota {
+  id          String   @id @default(cuid())
+  month       String // "YYYY-MM"
+  quota       Int      @default(0)
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  updatedById String?
+  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime  @default(now())
+
+  @@unique([workspaceId, month])
+}
+
+// Company-wide public holidays ("tanggal merah"). On these dates nobody is penalized for not
+// checking in, and they do NOT consume day-off quota. Input monthly by BoD. One row per date.
+model Holiday {
+  id          String   @id @default(cuid())
+  date        DateTime // UTC-midnight of the holiday date (same convention as attendance dates)
+  name        String
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdById String?
+  createdAt   DateTime  @default(now())
+
+  @@unique([workspaceId, date])
+  @@index([workspaceId, date])
 }
 
 model WorkspaceMember {
   id             String           @id @default(cuid())
-  role           WorkspaceRole    @default(MEMBER)
+  role           WorkspaceRole    @default(STAFF)
   attendanceRole AttendanceRole   @default(NONE)
   joinedAt       DateTime         @default(now())
+
+  // Per-person attendance shift override (HH:mm). When BOTH are set, this beats the
+  // team/office shift for this member (effectiveShiftSource = "USER"). Null = inherit.
+  attendanceShiftStartTime String?
+  attendanceShiftEndTime   String?
+
+  // Per-weekday shift overrides, keyed by ISO weekday 1=Mon..7=Sun, e.g.
+  // { "5": { "start": "15:00", "end": "00:00" } }. A weekday present here beats the default
+  // shift above for that day only; absent days fall back to the default. Null/empty = none.
+  attendanceShiftByDay Json?
+
+  // Per-person monthly day-off quota override. Null = workspace default (4).
+  dayOffQuota Int?
 
   userId      String
   workspaceId String
@@ -104,6 +262,9 @@ model Project {
   enableTaskBatchDuplicate Boolean @default(false)
   autoAssignEnabled Boolean @default(false)
   autoAssignAssigneeIds String[] @default([])
+  // Standalone per-project P&L dashboard (transaction-level expenses + income pipeline, BoD-only).
+  // Toggled from the Tune drawer; unrelated to the legacy FinanceValue monthly matrix.
+  enablePnlDashboard Boolean @default(false)
   status      ProjectStatus @default(ACTIVE)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -123,6 +284,7 @@ model Project {
   customFieldLibraries CustomFieldLibrary[]
   docs           Doc[]
   forms          Form[]
+  financeValues  FinanceValue[]
   statusUpdates  StatusUpdate[]
   pages          ProjectPage[]
   webhooks           Webhook[]
@@ -130,6 +292,46 @@ model Project {
   portfolioProjects  PortfolioProject[]
   teamProjects       TeamProject[]
   taskProjects       TaskProject[]
+  conversation       Conversation?
+  pins               ProjectPin[]
+  pnlCategories      PnlCategory[]
+  pnlExpenses        PnlExpense[]
+  pnlIncomeStages    PnlIncomeStage[]
+  pnlIncomes         PnlIncome[]
+  pnlBudgets         PnlBudget[]
+  pnlRecurring       PnlRecurringExpense[]
+}
+
+/// Per-user pinned project (sidebar quick-access). One row = one user pinning one project.
+model ProjectPin {
+  id        String   @id @default(cuid())
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+  @@index([userId])
+}
+
+/// Per-user pinned FOLDER (sidebar quick-access). Mirrors ProjectPin exactly.
+model FolderPin {
+  id        String   @id @default(cuid())
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  folderId  String
+  folder    ProjectFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, folderId])
+  @@index([userId])
 }
 
 model ProjectMember {
@@ -159,10 +361,22 @@ model ProjectFolder {
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
+  // Self-referential tree (nested folders, max depth enforced in the app). Deleting a parent detaches
+  // its children to root (SetNull); the DELETE handler reparents them to the removed folder's parent.
+  parentFolderId String?
+  parent         ProjectFolder?  @relation("FolderTree", fields: [parentFolderId], references: [id], onDelete: SetNull)
+  children       ProjectFolder[] @relation("FolderTree")
+
   projects Project[]
+  pins     FolderPin[]
+
+  // Folder aggregate view (board + calendar): a CURATED set of project ids to pull tasks from.
+  // Empty = fall back to every project currently in the folder (and its subtree), resolved in the app.
+  aggregateProjectIds String[] @default([])
 
   @@unique([workspaceId, name])
   @@index([workspaceId, position])
+  @@index([parentFolderId])
 }
 
 model TaskList {
@@ -544,10 +758,29 @@ model Team {
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
+  divisionId String?
+  division   Division? @relation(fields: [divisionId], references: [id], onDelete: SetNull)
+
   members  TeamMember[]
   projects TeamProject[]
   calendarEvents TeamCalendarEvent[]
   attendanceRequests AttendanceRequest[]
+}
+
+/// Grouping layer above teams (divisi / perusahaan). Teams optionally belong to one.
+model Division {
+  id          String   @id @default(cuid())
+  name        String
+  color       String   @default("#64748B")
+  position    Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  teams Team[]
+
+  @@unique([workspaceId, name])
 }
 
 model TeamCalendarEvent {
@@ -575,6 +808,28 @@ model TeamCalendarEvent {
 
   @@index([teamId, startsAt])
   @@index([workspaceId, startsAt])
+  @@index([status])
+}
+
+model RoomBooking {
+  id          String            @id @default(cuid())
+  room        String
+  title       String
+  description String?
+  startsAt    DateTime
+  endsAt      DateTime
+  status      RoomBookingStatus @default(ACTIVE)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  workspaceId String
+  workspace   Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  createdById String
+  createdBy   User              @relation("RoomBookingCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, startsAt])
+  @@index([room, startsAt])
   @@index([status])
 }
 
@@ -651,6 +906,14 @@ model AttendanceRecord {
   checkOutPhotoUrl      String?
   checkInDistanceMeters Float?
   checkOutDistanceMeters Float?
+  // Offsite checkout: staff checked out beyond the office geofence (e.g. meeting/shoot). Requires a
+  // reason and BoD approval. checkOutApproval is null for normal on-site checkouts, otherwise one of
+  // PENDING | APPROVED | REJECTED.
+  checkOutOffsite       Boolean          @default(false)
+  checkOutApproval      String?
+  checkOutReason        String?
+  checkOutApprovedById  String?
+  checkOutApprovedAt    DateTime?
   notes                 String?
   status                AttendanceStatus @default(CHECKED_IN)
   correctedAt           DateTime?
@@ -723,6 +986,11 @@ enum TeamRole {
   MEMBER
 }
 
+enum RoomBookingStatus {
+  ACTIVE
+  CANCELLED
+}
+
 enum TeamCalendarEventStatus {
   ACTIVE
   CANCELLED
@@ -754,9 +1022,10 @@ enum SystemRole {
 }
 
 enum WorkspaceRole {
-  OWNER
-  ADMIN
-  MEMBER
+  ONE_ABOVE_ALL
+  BOD
+  MANAGER
+  STAFF
 }
 
 enum AttendanceRole {
@@ -773,6 +1042,7 @@ enum AttendanceStatus {
 enum AttendanceShiftSource {
   OFFICE
   TEAM
+  USER
 }
 
 enum AttendanceCheckInStatus {
@@ -791,6 +1061,7 @@ enum AttendanceRequestType {
   SICK
   PERMIT
   DAY_OFF
+  RED_DATE
 }
 
 enum AttendanceRequestStatus {
@@ -944,7 +1215,12 @@ model Form {
   description String?
   fields      Json
   branding    Json?    // { logoUrl, primaryColor, backgroundColor, headerImage }
+  accessSchedule Json?  // { enabled, daysOfWeek, startTime, endTime, timezone }
   isPublic    Boolean  @default(false)
+  // When true, submitting requires a logged-in NEXUS account (any user, not just project
+  // members) — the form page is still reachable, but submission is gated + submitterId is
+  // always captured so the submitter can track their request under "Pengajuan Saya".
+  requireAuth Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -966,6 +1242,72 @@ model FormSubmission {
   task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   submitterId String?
+}
+
+// --- Finance dashboard (per Finance project, monthly OPEX + Revenue) ---
+// Structure (categories + line items) is shared/fixed (seeded from the OPEX sheet); only
+// the monthly amounts (FinanceValue) are per-project and entered by finance staff.
+model FinanceCategory {
+  id        String            @id @default(cuid())
+  kind      String            // "OPEX" | "REVENUE"
+  name      String
+  order     Int               @default(0)
+  lineItems FinanceLineItem[]
+  createdAt DateTime          @default(now())
+
+  @@index([kind, order])
+}
+
+model FinanceLineItem {
+  id         String          @id @default(cuid())
+  categoryId String
+  category   FinanceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name       String
+  order      Int             @default(0)
+  values     FinanceValue[]
+
+  @@index([categoryId, order])
+}
+
+model FinanceValue {
+  id         String          @id @default(cuid())
+  projectId  String
+  project    Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lineItemId String
+  lineItem   FinanceLineItem @relation(fields: [lineItemId], references: [id], onDelete: Cascade)
+  year       Int
+  month      Int             // 1..12
+  amount     Float           @default(0)
+  updatedById String?
+  updatedAt  DateTime        @updatedAt
+
+  @@unique([projectId, lineItemId, year, month])
+  @@index([projectId, year])
+}
+
+// --- Announcements (BoD-posted pop-ups shown once per user) ---
+model Announcement {
+  id          String              @id @default(cuid())
+  title       String
+  body        String
+  tone        String              @default("info") // info | success | warning
+  active      Boolean             @default(true)
+  createdById String?
+  createdAt   DateTime            @default(now())
+  seenBy      AnnouncementSeen[]
+
+  @@index([active, createdAt])
+}
+
+model AnnouncementSeen {
+  id             String       @id @default(cuid())
+  announcementId String
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  userId         String
+  seenAt         DateTime     @default(now())
+
+  @@unique([announcementId, userId])
+  @@index([userId])
 }
 
 model StatusUpdate {
@@ -1113,7 +1455,7 @@ model InviteToken {
   id        String      @id @default(cuid())
   email     String
   token     String      @unique
-  role      ProjectRole @default(GUEST)
+  role      ProjectRole @default(MEMBER)
   expiresAt DateTime
   accepted  Boolean     @default(false)
   createdAt DateTime    @default(now())
@@ -1302,4 +1644,405 @@ model WorkflowBundle {
 enum SsoProvider {
   SAML
   OIDC
+}
+
+// ===== Gamification (XP / levels / quests) =====
+model UserXp {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  totalXp      Int      @default(0)
+  currentLevel Int      @default(1)
+  updatedAt    DateTime @updatedAt
+}
+
+model XpTransaction {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount    Int
+  reason    String   // task_done | priority_bonus | goal_milestone | streak | quest
+  taskId    String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model UserStreak {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentStreak   Int       @default(0)
+  longestStreak   Int       @default(0)
+  lastActivityDay DateTime?
+  updatedAt       DateTime  @updatedAt
+}
+
+model Quest {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  title           String
+  description     String?
+  requirementType String   // task_count | overdue_cleared | priority_done | specific_tasks
+  requiredCount   Int      @default(1)
+  xpReward        Int      @default(50)
+  isActive        Boolean  @default(true)
+  teamIds         String[] @default([]) // assigned teams; empty = semua crew (ignored for specific_tasks)
+  taskIds         String[] @default([]) // specific_tasks quest: exact tasks to finish; visible to those tasks' project members, XP to whoever completes them
+  deadline        DateTime?              // jangka waktu — quest expired setelah ini
+  createdById     String
+  createdBy       User     @relation("QuestCreator", fields: [createdById], references: [id])
+  createdAt       DateTime @default(now())
+  claims          QuestClaim[]
+
+  @@index([workspaceId, isActive])
+}
+
+model QuestClaim {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questKey  String   // admin quest id OR auto template key (e.g. "auto:weekly-10")
+  periodKey String   // weekly reset bucket, e.g. "2026-W23"
+  xpAwarded Int      @default(0)
+  claimedAt DateTime @default(now())
+  questId   String?
+  quest     Quest?   @relation(fields: [questId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, questKey, periodKey])
+  @@index([userId])
+}
+
+// ===== Messages (DM / group / project chat) =====
+enum ConversationType {
+  DM
+  GROUP
+  PROJECT
+}
+
+model Conversation {
+  id        String           @id @default(cuid())
+  type      ConversationType
+  name      String?
+  projectId String?          @unique
+  project   Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  members  ConversationMember[]
+  messages Message[]
+}
+
+model ConversationMember {
+  id             String   @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt       DateTime @default(now())
+  lastReadAt     DateTime?
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content        String
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+// ── P&L Dashboard (standalone per-project finance: transaction-level expenses + income pipeline) ──
+// Access is BoD-and-above only (workspace role BOD/ONE_ABOVE_ALL), enforced in src/lib/pnl.ts.
+// Deliberately NOT linked to tasks/FinanceValue — the user wants this view fully standalone.
+
+/// Per-project expense category (custom, with color) — breakdowns in the dashboard follow it.
+model PnlCategory {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  color     String   @default("#7b68ee")
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  expenses  PnlExpense[]
+  recurring PnlRecurringExpense[]
+
+  @@index([projectId])
+}
+
+/// One expense transaction (per-day granularity; dashboard rolls up to week/month).
+model PnlExpense {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  date        DateTime
+  amount      Float
+  description String?
+  categoryId  String?
+  category    PnlCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  // Set when this entry was auto-posted from a recurring template (idempotency + provenance).
+  recurringId String?
+  recurring   PnlRecurringExpense? @relation(fields: [recurringId], references: [id], onDelete: SetNull)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  attachments PnlExpenseAttachment[]
+
+  @@index([projectId, date])
+  @@index([recurringId, date])
+}
+
+/// Receipt/photo attached to an expense. Files live in public/uploads/attachments (same mounted
+/// dir as task attachments) and are served via the login-gated /api/files route.
+model PnlExpenseAttachment {
+  id         String     @id @default(cuid())
+  expenseId  String
+  expense    PnlExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  filename   String
+  url        String
+  mimeType   String
+  size       Int
+  uploaderId String?
+  createdAt  DateTime   @default(now())
+
+  @@index([expenseId])
+}
+
+/// Custom income-pipeline stage per project (e.g. Penawaran → Invoice → DP/Termin → Lunas).
+model PnlIncomeStage {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  color     String   @default("#0091ff")
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  incomes PnlIncome[]
+
+  @@index([projectId])
+}
+
+/// One income deal/invoice moving through the pipeline. Money actually received is recorded as
+/// PnlIncomePayment rows (clients pay in parts: DP, termin, pelunasan) — realized revenue comes
+/// from payments, NOT from totalAmount.
+model PnlIncome {
+  id           String    @id @default(cuid())
+  projectId    String
+  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title        String
+  totalAmount  Float
+  stageId      String?
+  stage        PnlIncomeStage? @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  expectedDate DateTime?
+  notes        String?
+  createdById  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  payments PnlIncomePayment[]
+
+  @@index([projectId])
+}
+
+/// A real money-in event against a deal (DP/termin/pelunasan).
+model PnlIncomePayment {
+  id        String    @id @default(cuid())
+  incomeId  String
+  income    PnlIncome @relation(fields: [incomeId], references: [id], onDelete: Cascade)
+  date      DateTime
+  amount    Float
+  note      String?
+  createdAt DateTime  @default(now())
+
+  @@index([incomeId, date])
+}
+
+/// Monthly expense budget target — dashboard shows on/over-budget against actual spend.
+model PnlBudget {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  year      Int
+  month     Int // 1..12
+  amount    Float
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, year, month])
+}
+
+/// Recurring monthly expense template (gaji, sewa, langganan). Materialized lazily into
+/// PnlExpense rows by postDueRecurringPnlExpenses() whenever the dashboard loads — no cron.
+model PnlRecurringExpense {
+  id            String   @id @default(cuid())
+  projectId     String
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  description   String
+  amount        Float
+  categoryId    String?
+  category      PnlCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  dayOfMonth    Int      @default(1) // posting day (clamped to month length)
+  active        Boolean  @default(true)
+  // Last "YYYY-MM" month key already materialized (idempotency cursor; months in between are backfilled).
+  lastPostedKey String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  expenses PnlExpense[]
+
+  @@index([projectId])
+}
+
+// ─── THE WIRE (FEED) ─────────────────────────────────────────
+// Company-wide firehose timeline (Twitter/X-style). Deliberately NOT workspace-scoped:
+// every authenticated user sees one global feed. Mentions/likes/comments are per-user.
+// Soft-delete (deletedAt) + denormalized likeCount/commentCount synced inside the like/comment tx.
+
+model Post {
+  id           String        @id @default(cuid())
+  text         String        @db.Text          // ≤280 enforced in the API
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  editedAt     DateTime?                        // shows "· edited" when set
+  deletedAt    DateTime?                        // soft delete; feed filters deletedAt: null
+  authorId     String
+  author       User          @relation("PostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  images       PostImage[]
+  mentions     PostMention[]
+  likes        PostLike[]
+  comments     PostComment[]
+  likeCount    Int           @default(0)
+  commentCount Int           @default(0)
+
+  @@index([deletedAt, createdAt])               // primary feed path: where deletedAt null order by createdAt desc
+  @@index([authorId, createdAt])
+}
+
+model PostImage {
+  id        String  @id @default(cuid())
+  postId    String
+  post      Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  url       String                              // gated /api/files/feed/<name>
+  mimeType  String
+  size      Int
+  width     Int?                                // stored to kill CLS (reserve aspect-ratio box)
+  height    Int?
+  position  Int     @default(0)
+
+  @@index([postId])
+}
+
+model PostMention {
+  id        String   @id @default(cuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("PostMentionUser", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId])                    // one mention row per (post,user)
+  @@index([userId])                             // "posts mentioning me" tab
+}
+
+model PostLike {
+  id        String   @id @default(cuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("PostLikeUser", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId])                    // 1 like/user — DB-enforced idempotency key for the toggle
+  @@index([postId])
+}
+
+model PostComment {
+  id        String    @id @default(cuid())
+  text      String    @db.Text
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  postId    String
+  post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User      @relation("PostCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  parentId  String?                             // reserved for v2 threads
+
+  @@index([postId, createdAt])
+}
+
+// ─── INTEGRITY (PEER REPORTS / "cepu") ───────────────────────
+// BETA: BoD-and-above only. Reports of policy violations; on VERIFY, XP can move
+// (reporter +bounty, reported −penalty) — but XP is gated behind PEER_REPORT_XP_ENABLED
+// (default OFF) until governance sign-off. Snapshot XP onto the row so config changes
+// don't rewrite history; PeerReportEvent = append-only audit; reversible via shared reason.
+
+enum PeerReportStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  WITHDRAWN
+}
+
+enum PeerReportCategory {
+  SMOKING_INDOORS
+  SMOKING_TOILET
+  SAFETY_VIOLATION
+  CLEANLINESS
+  EQUIPMENT_MISUSE
+  POLICY_OTHER
+}
+
+model PeerReport {
+  id                String             @id @default(cuid())
+  reporterId        String
+  reporter          User               @relation("PeerReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUserId    String
+  reportedUser      User               @relation("PeerReportReported", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  category          PeerReportCategory
+  reason            String             @db.Text
+  status            PeerReportStatus   @default(PENDING)
+  rebuttal          String?            @db.Text       // reported person's response (future; reserved)
+  rebuttalAt        DateTime?
+  reviewerId        String?
+  reviewer          User?              @relation("PeerReportReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  reviewNote        String?            @db.Text        // rationale, shown on the report
+  reviewedAt        DateTime?
+  reporterBountyXp  Int                @default(0)     // SNAPSHOT as-applied (immutable)
+  reportedPenaltyXp Int                @default(0)     // stored positive, applied negative
+  xpAppliedAt       DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  events            PeerReportEvent[]
+
+  @@index([status, createdAt])
+  @@index([reportedUserId, status])
+  @@index([reporterId, createdAt])
+  @@index([reviewerId])
+}
+
+model PeerReportEvent {
+  id         String     @id @default(cuid())
+  reportId   String
+  report     PeerReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  action     String     // created | verified | rejected | withdrawn | reversed
+  fromStatus String?
+  toStatus   String?
+  note       String?    @db.Text
+  actorId    String?
+  createdAt  DateTime   @default(now())
+
+  @@index([reportId, createdAt])
 }

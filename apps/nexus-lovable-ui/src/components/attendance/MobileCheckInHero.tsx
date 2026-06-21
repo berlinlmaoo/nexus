@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, LocateFixed, LogIn, LogOut } from "lucide-react";
+import { CheckCircle2, Loader2, LocateFixed, LogIn, LogOut } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { celebrate } from "@/components/Celebration";
 import { ApiError, fmtTime, nexusApi, type AttendanceActionPayload, type NexusAttendanceToday } from "@/lib/nexus-api";
 import { getAttendanceFix, GeoError } from "@/lib/geo";
@@ -38,13 +39,23 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
   const [offsitePrompt, setOffsitePrompt] = useState<{ officeName: string; distanceMeters: number } | null>(null);
   const [offsiteReason, setOffsiteReason] = useState("");
   const errOf = (e: unknown, fb: string) => (e instanceof ApiError ? ((e.payload as { error?: string } | null)?.error ?? fb) : fb);
-  const checkIn = useMutation({ mutationFn: (p: AttendanceActionPayload) => nexusApi.attendanceCheckIn(p), onSuccess: () => { setMsg(null); refresh(); celebrate("Checked in. Let's cook ☕✨"); }, onError: (e) => { setMsgOk(false); setMsg(errOf(e, "Gagal check-in.")); } });
+  // Big success popup after a confirmed check-in/out (in addition to the confetti).
+  const reduce = useReducedMotion();
+  const [success, setSuccess] = useState<{ kind: "in" | "out"; time: string } | null>(null);
+  const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (successTimer.current) clearTimeout(successTimer.current); }, []);
+  const showSuccess = (kind: "in" | "out") => {
+    setSuccess({ kind, time: jktTime(new Date()) });
+    if (successTimer.current) clearTimeout(successTimer.current);
+    successTimer.current = setTimeout(() => setSuccess(null), 2800);
+  };
+  const checkIn = useMutation({ mutationFn: (p: AttendanceActionPayload) => nexusApi.attendanceCheckIn(p), onSuccess: () => { setMsg(null); refresh(); celebrate("Checked in. Let's cook ☕✨"); showSuccess("in"); }, onError: (e) => { setMsgOk(false); setMsg(errOf(e, "Gagal check-in.")); } });
   const checkOut = useMutation({
     mutationFn: (p: AttendanceActionPayload) => nexusApi.attendanceCheckOut(p),
     onSuccess: (data) => {
       setOffsitePrompt(null); setOffsiteReason(""); refresh();
       if (data?.pendingApproval) { setMsgOk(true); setMsg("Checkout di luar area terkirim — nunggu approval BoD ⏳"); }
-      else { setMsg(null); celebrate("Checked out. Good run today 🏁"); }
+      else { setMsg(null); celebrate("Checked out. Good run today 🏁"); showSuccess("out"); }
     },
     onError: (e) => {
       const payload = e instanceof ApiError ? (e.payload as { code?: string; officeName?: string; distanceMeters?: number } | null) : null;
@@ -236,6 +247,76 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
       )}
 
       <input ref={fileRef} type="file" accept="image/*" capture="user" onChange={onSelfie} className="hidden" />
+
+      {/* Loading overlay — visible while the selfie/GPS/upload is in flight */}
+      <AnimatePresence>
+        {busy && (
+          <motion.div
+            className="fixed inset-0 z-[60] grid place-items-center bg-slate-900/45 p-6 backdrop-blur-sm"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          >
+            <motion.div
+              initial={reduce ? { opacity: 0 } : { scale: 0.9, y: 12, opacity: 0 }}
+              animate={reduce ? { opacity: 1 } : { scale: 1, y: 0, opacity: 1 }}
+              exit={reduce ? { opacity: 0 } : { scale: 0.95, opacity: 0 }}
+              className="w-full max-w-xs rounded-3xl bg-card p-6 shadow-2xl ring-1 ring-border"
+            >
+              <div className="flex items-center gap-3">
+                <Loader2 className="h-6 w-6 shrink-0 animate-spin text-primary" />
+                <div className="text-sm font-bold text-foreground">
+                  {locating ? "Lagi ngambil lokasi GPS kamu…" : checkIn.isPending ? "Lagi ngirim check-in ke server…" : checkOut.isPending ? "Lagi ngirim check-out ke server…" : "Lagi proses…"}
+                </div>
+              </div>
+              <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-primary/15">
+                {reduce ? (
+                  <motion.div className="h-full w-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500" animate={{ opacity: [0.45, 1, 0.45] }} transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }} />
+                ) : (
+                  <motion.div className="h-full w-1/2 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500" animate={{ x: ["-60%", "220%"] }} transition={{ duration: 1.05, repeat: Infinity, ease: "easeInOut" }} />
+                )}
+              </div>
+              <p className="mt-3 text-center text-[11px] font-medium text-muted-foreground">Bentar ya, jangan tutup halaman ini dulu…</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Success popup — confirmed check-in / check-out */}
+      <AnimatePresence>
+        {success && (
+          <motion.div
+            className="fixed inset-0 z-[70] grid place-items-center bg-slate-900/45 p-6 backdrop-blur-sm"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => setSuccess(null)}
+          >
+            <motion.div
+              initial={reduce ? { opacity: 0 } : { scale: 0.8, y: 20, opacity: 0 }}
+              animate={reduce ? { opacity: 1 } : { scale: 1, y: 0, opacity: 1 }}
+              exit={reduce ? { opacity: 0 } : { scale: 0.9, opacity: 0 }}
+              transition={reduce ? { duration: 0.15 } : { type: "spring", stiffness: 320, damping: 22 }}
+              className="w-full max-w-xs rounded-3xl bg-card p-7 text-center shadow-2xl ring-1 ring-border"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <motion.div
+                initial={reduce ? { opacity: 0 } : { scale: 0 }}
+                animate={reduce ? { opacity: 1 } : { scale: 1 }}
+                transition={reduce ? { duration: 0.15 } : { type: "spring", stiffness: 260, damping: 14, delay: 0.05 }}
+                className={`mx-auto grid h-20 w-20 place-items-center rounded-full ${success.kind === "in" ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"}`}
+              >
+                <CheckCircle2 className="h-12 w-12" strokeWidth={2.5} />
+              </motion.div>
+              <div className="mt-4 text-xl font-black text-foreground">
+                {success.kind === "in" ? "Berhasil Check-In! ☕" : "Berhasil Check-Out! 🏁"}
+              </div>
+              <div className="mt-1 text-sm font-semibold text-muted-foreground">
+                Jam {success.time} · {success.kind === "in" ? "Semangat ya, selamat kerja!" : "Mantap, good run today!"}
+              </div>
+              <button onClick={() => setSuccess(null)} className="mt-5 w-full rounded-2xl bg-primary py-3 text-sm font-bold text-primary-foreground transition active:scale-[0.98]">
+                Oke, sip
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

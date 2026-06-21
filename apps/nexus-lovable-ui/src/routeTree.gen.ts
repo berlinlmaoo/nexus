@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as PhaethonRouteImport } from './routes/phaethon'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as OauthAuthorizeRouteImport } from './routes/oauth.authorize'
@@ -22,6 +23,7 @@ import { Route as AppSocialRouteImport } from './routes/_app/social'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppRoomBookingRouteImport } from './routes/_app/room-booking'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
+import { Route as AppPeerReportsRouteImport } from './routes/_app/peer-reports'
 import { Route as AppOracleRouteImport } from './routes/_app/oracle'
 import { Route as AppMyTasksRouteImport } from './routes/_app/my-tasks'
 import { Route as AppMessagesRouteImport } from './routes/_app/messages'
@@ -29,6 +31,7 @@ import { Route as AppMasterCalendarRouteImport } from './routes/_app/master-cale
 import { Route as AppLeaderboardRouteImport } from './routes/_app/leaderboard'
 import { Route as AppInboxRouteImport } from './routes/_app/inbox'
 import { Route as AppFormsRouteImport } from './routes/_app/forms'
+import { Route as AppFeedRouteImport } from './routes/_app/feed'
 import { Route as AppDocsRouteImport } from './routes/_app/docs'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppAttendanceRouteImport } from './routes/_app/attendance'
@@ -52,6 +55,11 @@ const PhaethonRoute = PhaethonRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppRoute = AppRouteImport.update({
@@ -103,6 +111,11 @@ const AppReportsRoute = AppReportsRouteImport.update({
   path: '/reports',
   getParentRoute: () => AppRoute,
 } as any)
+const AppPeerReportsRoute = AppPeerReportsRouteImport.update({
+  id: '/peer-reports',
+  path: '/peer-reports',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppOracleRoute = AppOracleRouteImport.update({
   id: '/oracle',
   path: '/oracle',
@@ -136,6 +149,11 @@ const AppInboxRoute = AppInboxRouteImport.update({
 const AppFormsRoute = AppFormsRouteImport.update({
   id: '/forms',
   path: '/forms',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppFeedRoute = AppFeedRouteImport.update({
+  id: '/feed',
+  path: '/feed',
   getParentRoute: () => AppRoute,
 } as any)
 const AppDocsRoute = AppDocsRouteImport.update({
@@ -186,6 +204,7 @@ const AppDocsDocIdRoute = AppDocsDocIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/phaethon': typeof PhaethonRoute
   '/register': typeof RegisterRoute
@@ -193,6 +212,7 @@ export interface FileRoutesByFullPath {
   '/attendance': typeof AppAttendanceRoute
   '/dashboard': typeof AppDashboardRoute
   '/docs': typeof AppDocsRouteWithChildren
+  '/feed': typeof AppFeedRoute
   '/forms': typeof AppFormsRoute
   '/inbox': typeof AppInboxRoute
   '/leaderboard': typeof AppLeaderboardRoute
@@ -200,6 +220,7 @@ export interface FileRoutesByFullPath {
   '/messages': typeof AppMessagesRoute
   '/my-tasks': typeof AppMyTasksRoute
   '/oracle': typeof AppOracleRoute
+  '/peer-reports': typeof AppPeerReportsRoute
   '/reports': typeof AppReportsRoute
   '/room-booking': typeof AppRoomBookingRoute
   '/settings': typeof AppSettingsRoute
@@ -215,6 +236,7 @@ export interface FileRoutesByFullPath {
   '/projects/': typeof AppProjectsIndexRoute
 }
 export interface FileRoutesByTo {
+  '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/phaethon': typeof PhaethonRoute
   '/register': typeof RegisterRoute
@@ -222,6 +244,7 @@ export interface FileRoutesByTo {
   '/attendance': typeof AppAttendanceRoute
   '/dashboard': typeof AppDashboardRoute
   '/docs': typeof AppDocsRouteWithChildren
+  '/feed': typeof AppFeedRoute
   '/forms': typeof AppFormsRoute
   '/inbox': typeof AppInboxRoute
   '/leaderboard': typeof AppLeaderboardRoute
@@ -229,6 +252,7 @@ export interface FileRoutesByTo {
   '/messages': typeof AppMessagesRoute
   '/my-tasks': typeof AppMyTasksRoute
   '/oracle': typeof AppOracleRoute
+  '/peer-reports': typeof AppPeerReportsRoute
   '/reports': typeof AppReportsRoute
   '/room-booking': typeof AppRoomBookingRoute
   '/settings': typeof AppSettingsRoute
@@ -247,6 +271,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
+  '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/phaethon': typeof PhaethonRoute
   '/register': typeof RegisterRoute
@@ -254,6 +279,7 @@ export interface FileRoutesById {
   '/_app/attendance': typeof AppAttendanceRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/docs': typeof AppDocsRouteWithChildren
+  '/_app/feed': typeof AppFeedRoute
   '/_app/forms': typeof AppFormsRoute
   '/_app/inbox': typeof AppInboxRoute
   '/_app/leaderboard': typeof AppLeaderboardRoute
@@ -261,6 +287,7 @@ export interface FileRoutesById {
   '/_app/messages': typeof AppMessagesRoute
   '/_app/my-tasks': typeof AppMyTasksRoute
   '/_app/oracle': typeof AppOracleRoute
+  '/_app/peer-reports': typeof AppPeerReportsRoute
   '/_app/reports': typeof AppReportsRoute
   '/_app/room-booking': typeof AppRoomBookingRoute
   '/_app/settings': typeof AppSettingsRoute
@@ -280,6 +307,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/forgot-password'
     | '/login'
     | '/phaethon'
     | '/register'
@@ -287,6 +315,7 @@ export interface FileRouteTypes {
     | '/attendance'
     | '/dashboard'
     | '/docs'
+    | '/feed'
     | '/forms'
     | '/inbox'
     | '/leaderboard'
@@ -294,6 +323,7 @@ export interface FileRouteTypes {
     | '/messages'
     | '/my-tasks'
     | '/oracle'
+    | '/peer-reports'
     | '/reports'
     | '/room-booking'
     | '/settings'
@@ -309,6 +339,7 @@ export interface FileRouteTypes {
     | '/projects/'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/forgot-password'
     | '/login'
     | '/phaethon'
     | '/register'
@@ -316,6 +347,7 @@ export interface FileRouteTypes {
     | '/attendance'
     | '/dashboard'
     | '/docs'
+    | '/feed'
     | '/forms'
     | '/inbox'
     | '/leaderboard'
@@ -323,6 +355,7 @@ export interface FileRouteTypes {
     | '/messages'
     | '/my-tasks'
     | '/oracle'
+    | '/peer-reports'
     | '/reports'
     | '/room-booking'
     | '/settings'
@@ -340,6 +373,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_app'
+    | '/forgot-password'
     | '/login'
     | '/phaethon'
     | '/register'
@@ -347,6 +381,7 @@ export interface FileRouteTypes {
     | '/_app/attendance'
     | '/_app/dashboard'
     | '/_app/docs'
+    | '/_app/feed'
     | '/_app/forms'
     | '/_app/inbox'
     | '/_app/leaderboard'
@@ -354,6 +389,7 @@ export interface FileRouteTypes {
     | '/_app/messages'
     | '/_app/my-tasks'
     | '/_app/oracle'
+    | '/_app/peer-reports'
     | '/_app/reports'
     | '/_app/room-booking'
     | '/_app/settings'
@@ -372,6 +408,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
   PhaethonRoute: typeof PhaethonRoute
   RegisterRoute: typeof RegisterRoute
@@ -400,6 +437,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app': {
@@ -472,6 +516,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppReportsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/peer-reports': {
+      id: '/_app/peer-reports'
+      path: '/peer-reports'
+      fullPath: '/peer-reports'
+      preLoaderRoute: typeof AppPeerReportsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/oracle': {
       id: '/_app/oracle'
       path: '/oracle'
@@ -519,6 +570,13 @@ declare module '@tanstack/react-router' {
       path: '/forms'
       fullPath: '/forms'
       preLoaderRoute: typeof AppFormsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/feed': {
+      id: '/_app/feed'
+      path: '/feed'
+      fullPath: '/feed'
+      preLoaderRoute: typeof AppFeedRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/docs': {
@@ -603,6 +661,7 @@ interface AppRouteChildren {
   AppAttendanceRoute: typeof AppAttendanceRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppDocsRoute: typeof AppDocsRouteWithChildren
+  AppFeedRoute: typeof AppFeedRoute
   AppFormsRoute: typeof AppFormsRoute
   AppInboxRoute: typeof AppInboxRoute
   AppLeaderboardRoute: typeof AppLeaderboardRoute
@@ -610,6 +669,7 @@ interface AppRouteChildren {
   AppMessagesRoute: typeof AppMessagesRoute
   AppMyTasksRoute: typeof AppMyTasksRoute
   AppOracleRoute: typeof AppOracleRoute
+  AppPeerReportsRoute: typeof AppPeerReportsRoute
   AppReportsRoute: typeof AppReportsRoute
   AppRoomBookingRoute: typeof AppRoomBookingRoute
   AppSettingsRoute: typeof AppSettingsRoute
@@ -628,6 +688,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAttendanceRoute: AppAttendanceRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppDocsRoute: AppDocsRouteWithChildren,
+  AppFeedRoute: AppFeedRoute,
   AppFormsRoute: AppFormsRoute,
   AppInboxRoute: AppInboxRoute,
   AppLeaderboardRoute: AppLeaderboardRoute,
@@ -635,6 +696,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppMessagesRoute: AppMessagesRoute,
   AppMyTasksRoute: AppMyTasksRoute,
   AppOracleRoute: AppOracleRoute,
+  AppPeerReportsRoute: AppPeerReportsRoute,
   AppReportsRoute: AppReportsRoute,
   AppRoomBookingRoute: AppRoomBookingRoute,
   AppSettingsRoute: AppSettingsRoute,
@@ -652,6 +714,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
+  ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   PhaethonRoute: PhaethonRoute,
   RegisterRoute: RegisterRoute,

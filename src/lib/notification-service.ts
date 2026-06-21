@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma"
 import { emitNotification } from "@/lib/socket-emitter"
+import { postWaBridge } from "@/lib/wa-bridge"
 import {
   sendEmail,
   taskAssignedEmail,
@@ -122,7 +123,23 @@ function envFlagEnabled(name: string, defaultValue = true): boolean {
   return !["0", "false", "no", "off"].includes(raw.toLowerCase())
 }
 
-async function sendWA(phone: string, message: string) {
+// Public deep link to a task's detail (same route the email "View Task" button uses) so WA notifications
+// are one-tap → straight into the task. NEXUS_PUBLIC_URL is required on backends that sit behind an nginx
+// proxy with a localhost NEXTAUTH_URL (e.g. the beta backend serving nexus.patsgroup.id); we fall back to
+// NEXTAUTH_URL only when it's already a public https URL.
+function publicBaseUrl(): string {
+  const explicit = process.env.NEXUS_PUBLIC_URL
+  if (explicit) return explicit.replace(/\/+$/, "")
+  const authUrl = process.env.NEXTAUTH_URL || ""
+  if (/^https:\/\//.test(authUrl) && !/(localhost|127\.0\.0\.1)/.test(authUrl)) return authUrl.replace(/\/+$/, "")
+  return "" // no usable public URL → omit the link rather than send a broken localhost one
+}
+function taskUrl(taskId: string): string {
+  const base = publicBaseUrl()
+  return base ? `${base}/tasks/${taskId}` : ""
+}
+
+export async function sendWA(phone: string, message: string) {
   const webhookUrl =
     process.env.WA_WEBHOOK_URL ||
     process.env.HERMES_WA_BRIDGE_URL ||
@@ -138,6 +155,18 @@ async function sendWA(phone: string, message: string) {
   const body = useHermesBridge ? { chatId, message } : { phone, message }
 
   try {
+    // The Hermes bridge rejects non-loopback Host headers; postWaBridge (raw node:http) overrides it.
+    // A non-bridge webhook is a normal external URL → plain fetch.
+    if (useHermesBridge) {
+      const r = await postWaBridge(webhookUrl, body)
+      if (r.status < 200 || r.status >= 300) {
+        log.error("WA delivery failed", { phone, status: r.status, response: r.body.slice(0, 300) })
+        return
+      }
+      log.info("WA message sent", { phone, via: "hermes_bridge" })
+      return
+    }
+
     const res = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -147,15 +176,11 @@ async function sendWA(phone: string, message: string) {
 
     if (!res.ok) {
       const response = await res.text().catch(() => "")
-      log.error("WA delivery failed", {
-        phone,
-        status: res.status,
-        response: response.slice(0, 300),
-      })
+      log.error("WA delivery failed", { phone, status: res.status, response: response.slice(0, 300) })
       return
     }
 
-    log.info("WA message sent", { phone, via: useHermesBridge ? "hermes_bridge" : "webhook" })
+    log.info("WA message sent", { phone, via: "webhook" })
   } catch (error) {
     log.error("WA delivery failed", { error: String(error) })
   }
@@ -202,6 +227,31 @@ async function createInAppNotification(data: {
 }
 
 // ── Public methods ──────────────────────────────────────────────
+
+/** Ping every BoD / Super Admin in the workspace that a staff member checked out OFFSITE (pending approval). */
+export async function notifyOffsiteCheckoutPending(data: {
+  workspaceId: string
+  staffUserId: string
+  staffName: string
+  reason?: string | null
+}) {
+  const approvers = await prisma.workspaceMember.findMany({
+    where: { workspaceId: data.workspaceId, role: { in: ["BOD", "ONE_ABOVE_ALL"] }, userId: { not: data.staffUserId } },
+    select: { userId: true },
+  })
+  const reasonSuffix = data.reason ? ` — “${data.reason}”` : ""
+  await Promise.all(
+    approvers.map((a) =>
+      createInAppNotification({
+        userId: a.userId,
+        type: "offsite_checkout_pending",
+        title: "Checkout di luar — perlu approval",
+        message: `${data.staffName} checkout di luar area kantor${reasonSuffix}. Cek & approve di Attendance.`,
+        link: "/attendance",
+      }).catch(() => null),
+    ),
+  )
+}
 
 export async function notifyTaskAssigned(data: {
   assigneeId: string
@@ -256,9 +306,10 @@ export async function notifyTaskAssigned(data: {
   const assignmentWaDefaultEnabled = envFlagEnabled("NEXUS_WA_TASK_ASSIGNMENTS_DEFAULT_ENABLED", true)
   const waRecipient = prefs.waPhone || user.phoneNumber
   if (prefs.taskAssigned && waRecipient && (prefs.waEnabled || assignmentWaDefaultEnabled)) {
+    const link = taskUrl(data.taskId)
     await sendWA(
       waRecipient,
-      `[NEXUS] ${data.assignedByName} assigned you "${data.taskTitle}" in ${data.projectName}`
+      `[NEXUS] ${data.assignedByName} assigned you "${data.taskTitle}" in ${data.projectName}${link ? `\n${link}` : ""}`
     )
   }
 
@@ -284,7 +335,7 @@ export async function notifyMention(data: {
 
   const user = await prisma.user.findUnique({
     where: { id: data.mentionedUserId },
-    select: { name: true, email: true },
+    select: { name: true, email: true, phoneNumber: true },
   })
   if (!user) return
 
@@ -314,10 +365,16 @@ export async function notifyMention(data: {
     await sendEmail(email)
   }
 
-  if (prefs.waEnabled && prefs.waPhone) {
+  // WA — mirror task-assignment behavior so mentions actually reach people: fall back to the profile
+  // phone number, and default-on (ops can kill-switch with NEXUS_WA_MENTIONS_DEFAULT_ENABLED=false).
+  // The mention pref itself is already gated above (`if (!prefs.commentMention) return`).
+  const mentionWaDefaultEnabled = envFlagEnabled("NEXUS_WA_MENTIONS_DEFAULT_ENABLED", true)
+  const waRecipient = prefs.waPhone || user.phoneNumber
+  if (waRecipient && (prefs.waEnabled || mentionWaDefaultEnabled)) {
+    const link = taskUrl(data.taskId)
     await sendWA(
-      prefs.waPhone,
-      `[NEXUS] ${data.mentionedByName} mentioned you on "${data.taskTitle}": ${data.commentSnippet.slice(0, 100)}`
+      waRecipient,
+      `[NEXUS] ${data.mentionedByName} mentioned you on "${data.taskTitle}": ${data.commentSnippet.slice(0, 100)}${link ? `\n${link}` : ""}`
     )
   }
 
@@ -326,6 +383,75 @@ export async function notifyMention(data: {
       prefs.slackWebhook,
       `*Mentioned*: ${data.mentionedByName} mentioned ${user.name} on "${data.taskTitle}"`
     )
+  }
+}
+
+// ── The Wire (Feed) ──────────────────────────────────────────
+// Feed mentions/comments reuse the `commentMention` preference (no new flag → no migration).
+// No taskId is set (a postId isn't a Task); the link points at /feed?post=<id>.
+
+export async function notifyFeedMention(data: {
+  mentionedUserId: string
+  mentionedByName: string
+  postId: string
+  snippet: string
+}) {
+  if (await isUserDnd(data.mentionedUserId)) return
+  const user = await prisma.user.findUnique({ where: { id: data.mentionedUserId }, select: { name: true, phoneNumber: true } })
+  if (!user) return
+  const prefs = await getUserPrefs(data.mentionedUserId)
+  const base = publicBaseUrl()
+  const link = `/feed?post=${data.postId}`
+
+  await createInAppNotification({
+    userId: data.mentionedUserId,
+    type: "feed_mention",
+    title: "Mentioned on The Wire",
+    message: `${data.mentionedByName} mentioned you in a post`,
+    link,
+  })
+
+  if (!prefs.commentMention) return
+  const waDefaultEnabled = envFlagEnabled("NEXUS_WA_MENTIONS_DEFAULT_ENABLED", true)
+  const waRecipient = prefs.waPhone || user.phoneNumber
+  if (waRecipient && (prefs.waEnabled || waDefaultEnabled)) {
+    await sendWA(waRecipient, `[NEXUS] ${data.mentionedByName} mentioned you on The Wire: ${data.snippet.slice(0, 100)}${base ? `\n${base}${link}` : ""}`)
+  }
+  if (prefs.slackEnabled && prefs.slackWebhook) {
+    await sendSlack(prefs.slackWebhook, `*The Wire*: ${data.mentionedByName} mentioned ${user.name} in a post`)
+  }
+}
+
+export async function notifyFeedComment(data: {
+  recipientUserId: string
+  commenterName: string
+  postId: string
+  snippet: string
+  reason: "author" | "mention"
+}) {
+  if (await isUserDnd(data.recipientUserId)) return
+  const user = await prisma.user.findUnique({ where: { id: data.recipientUserId }, select: { name: true, phoneNumber: true } })
+  if (!user) return
+  const prefs = await getUserPrefs(data.recipientUserId)
+  const base = publicBaseUrl()
+  const link = `/feed?post=${data.postId}`
+
+  await createInAppNotification({
+    userId: data.recipientUserId,
+    type: "feed_comment",
+    title: data.reason === "author" ? "New comment on your post" : "Mentioned in a comment",
+    message: `${data.commenterName} ${data.reason === "author" ? "commented on your post" : "mentioned you in a comment"}`,
+    link,
+  })
+
+  if (!prefs.commentMention) return
+  const waDefaultEnabled = envFlagEnabled("NEXUS_WA_MENTIONS_DEFAULT_ENABLED", true)
+  const waRecipient = prefs.waPhone || user.phoneNumber
+  if (waRecipient && (prefs.waEnabled || waDefaultEnabled)) {
+    await sendWA(waRecipient, `[NEXUS] ${data.commenterName} on The Wire: ${data.snippet.slice(0, 100)}${base ? `\n${base}${link}` : ""}`)
+  }
+  if (prefs.slackEnabled && prefs.slackWebhook) {
+    await sendSlack(prefs.slackWebhook, `*The Wire*: ${data.commenterName} commented`)
   }
 }
 

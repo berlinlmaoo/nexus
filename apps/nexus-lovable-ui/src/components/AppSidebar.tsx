@@ -2,7 +2,7 @@ import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import {
   LayoutDashboard, Inbox, MessageCircle, CheckSquare, Calendar, CalendarClock, FolderKanban,
   BookOpen, Users, Trophy, ClipboardCheck, Settings, Shield, FileText, Sparkles, Megaphone,
-  Search, Plus, PanelLeftClose, ChevronRight, LogOut, Loader2, Pin, FolderPlus, Rocket, Maximize2,
+  Search, Plus, PanelLeftClose, ChevronRight, LogOut, Loader2, Pin, FolderPlus, Rocket, Maximize2, Rss, ShieldAlert,
 } from "lucide-react";
 import { useState, type ReactNode, type DragEvent } from "react";
 import { ProjectIcon } from "@/components/projects/ProjectIcon";
@@ -27,6 +27,7 @@ const groups = [
       { title: "Morning Brief", url: "/dashboard", icon: LayoutDashboard },
       { title: "Messages", url: "/messages", icon: MessageCircle },
       { title: "Signal Inbox", url: "/inbox", icon: Inbox },
+      { title: "The Wire", url: "/feed", icon: Rss },
       { title: "My Mission", url: "/my-tasks", icon: CheckSquare },
       { title: "Pengajuan Saya", url: "/submissions", icon: FileText },
       { title: "Time Map", url: "/master-calendar", icon: Calendar },
@@ -39,6 +40,7 @@ const groups = [
       { title: "Mission Control", url: "/projects", icon: FolderKanban },
       { title: "Social Approvals", url: "/social", icon: Megaphone },
       { title: "Leaderboard", url: "/leaderboard", icon: Trophy },
+      { title: "Integrity", url: "/peer-reports", icon: ShieldAlert },
     ],
   },
   {
@@ -143,8 +145,11 @@ export function AppSidebar() {
   const canManageOrg = ["ONE_ABOVE_ALL", "BOD", "MANAGER"].includes(orgRoleQuery.data?.role ?? "");
   const canManageAttendance = ["ONE_ABOVE_ALL", "BOD"].includes(orgRoleQuery.data?.role ?? "");
   const canSeeOracle = orgRoleQuery.data?.role === "ONE_ABOVE_ALL";
+  // Beta features (The Wire + Integrity) → BoD-and-above only (hidden from Manager + Staff).
+  const canSeeFeed = ["ONE_ABOVE_ALL", "BOD"].includes(orgRoleQuery.data?.role ?? "");
   const MANAGER_ONLY_URLS = new Set(["/admin", "/teams"]);
   const ONE_ABOVE_ALL_URLS = new Set(["/oracle", "/social"]);
+  const BOD_PLUS_URLS = new Set(["/feed", "/peer-reports"]);
 
   // Live nav badges. Inbox = unread notifications (shared cache w/ the inbox page). Attendance =
   // pending offsite-checkout approvals (BoD only). Both refresh every 45s + on relevant mutations.
@@ -157,7 +162,7 @@ export function AppSidebar() {
   };
   const badgeText = (n: number) => (n > 9 ? "9+" : String(n));
   const visibleGroups = groups
-    .map((g) => ({ ...g, items: g.items.filter((item) => (canManageOrg || !MANAGER_ONLY_URLS.has(item.url)) && (canSeeOracle || !ONE_ABOVE_ALL_URLS.has(item.url))) }))
+    .map((g) => ({ ...g, items: g.items.filter((item) => (canManageOrg || !MANAGER_ONLY_URLS.has(item.url)) && (canSeeOracle || !ONE_ABOVE_ALL_URLS.has(item.url)) && (canSeeFeed || !BOD_PLUS_URLS.has(item.url))) }))
     .filter((g) => g.items.length > 0);
 
   // Collapsible folders (ClickUp-style). Folders are COLLAPSED by default for a clean sidebar; we

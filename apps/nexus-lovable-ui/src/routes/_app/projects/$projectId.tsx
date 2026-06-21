@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card, CardContent as CardBody, Chip } from "@heroui/react";
 import { motion } from "framer-motion";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { ProjectIcon } from "@/components/projects/ProjectIcon";
 import { Avatar, AvatarStack } from "@/components/Avatar";
@@ -365,6 +365,7 @@ function BoardFilterBar({ filters, onChange, total, visible, tasks, sections, pr
 function BoardView({ project, taskLists, onOpen, onCreate }: { project: NexusProject; taskLists: NonNullable<NexusProject["taskLists"]>; onOpen: (task: NexusTask) => void; onCreate: (listId: string) => void }) {
   const qc = useQueryClient();
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [draggingLaneId, setDraggingLaneId] = useState<string | null>(null);
   const moveTask = useMutation({
     mutationFn: ({ taskId, listId, position }: { taskId: string; listId: string; position: number }) => nexusApi.updateTask(taskId, { taskListId: listId, position, projectContextId: project.id }),
     onSuccess: () => {
@@ -372,6 +373,28 @@ function BoardView({ project, taskLists, onOpen, onCreate }: { project: NexusPro
       qc.invalidateQueries({ queryKey: ["nexus", "tasks"] });
       celebrate("Card moved. Board energy updated ⚡");
     },
+  });
+
+  // Reorder sections (lanes) left/right — via the ←/→ buttons or by dragging the lane's number badge.
+  // Optimistically reshuffle the cached lanes so the move is instant, then reconcile with the server.
+  const reorderLane = useMutation({
+    mutationFn: ({ id, position }: { id: string; position: number }) => nexusApi.updateSection(project.id, { id, position }),
+    onMutate: async ({ id, position }) => {
+      await qc.cancelQueries({ queryKey: ["nexus", "project", project.id] });
+      const prev = qc.getQueryData<NexusProject>(["nexus", "project", project.id]);
+      qc.setQueryData<NexusProject>(["nexus", "project", project.id], (old) => {
+        if (!old?.taskLists) return old;
+        const ls = [...old.taskLists].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+        const from = ls.findIndex((l) => l.id === id);
+        if (from === -1) return old;
+        const [moved] = ls.splice(from, 1);
+        ls.splice(Math.max(0, Math.min(position, ls.length)), 0, moved);
+        return { ...old, taskLists: ls.map((l, i) => ({ ...l, position: i })) };
+      });
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(["nexus", "project", project.id], ctx.prev); },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["nexus", "project", project.id] }),
   });
 
   if (taskLists.length === 0) return <div className="p-8"><Empty title="No lanes yet" message="Project ini belum punya task list/lane yang kebaca dari NEXUS." /></div>;
@@ -395,6 +418,9 @@ function BoardView({ project, taskLists, onOpen, onCreate }: { project: NexusPro
     tasks: g.tasks.sort((a, b) => (isDone(a.status) ? 1 : 0) - (isDone(b.status) ? 1 : 0)),
   }));
 
+  // Render (and reorder) lanes by their stored position — deterministic order, reflects reorders instantly.
+  const lanes = [...taskLists].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+
   return (
     <div className="p-4 md:p-6 overflow-x-auto bg-[radial-gradient(circle_at_top_left,rgba(78,179,1,0.08),transparent_32%),radial-gradient(circle_at_top_right,rgba(123,77,255,0.10),transparent_28%)]">
       <div className="flex gap-4 min-w-max pb-4">
@@ -415,28 +441,37 @@ function BoardView({ project, taskLists, onOpen, onCreate }: { project: NexusPro
             </div>
           </section>
         ))}
-        {taskLists.map((list, laneIndex) => {
+        {lanes.map((list, laneIndex) => {
           // Own tasks only; done sinks to bottom (parity with core NEXUS). Linked tasks live in their own lanes above.
           const items = [...(list.tasks ?? [])].sort((a, b) => (isDone(a.status) ? 1 : 0) - (isDone(b.status) ? 1 : 0));
           return (
             <section
               key={list.id}
-              className="w-80 shrink-0 rounded-[28px] border border-border bg-muted/40 p-3 shadow-soft backdrop-blur"
+              className={cn("w-80 shrink-0 rounded-[28px] border border-border bg-muted/40 p-3 shadow-soft backdrop-blur transition", draggingLaneId === list.id && "opacity-40 ring-2 ring-primary/50")}
               onDragOver={(event) => event.preventDefault()}
               onDrop={() => {
-                if (draggingId) moveTask.mutate({ taskId: draggingId, listId: list.id, position: items.length + 1 });
-                setDraggingId(null);
+                if (draggingLaneId && draggingLaneId !== list.id) reorderLane.mutate({ id: draggingLaneId, position: laneIndex });
+                else if (draggingId) moveTask.mutate({ taskId: draggingId, listId: list.id, position: items.length + 1 });
+                setDraggingId(null); setDraggingLaneId(null);
               }}
             >
-              <div className="mb-3 flex items-center justify-between px-1">
-                <div className="flex items-center gap-2">
-                  <span className="grid h-8 w-8 place-items-center rounded-2xl bg-primary/10 text-sm font-black text-primary">{laneIndex + 1}</span>
-                  <div>
-                    <h3 className="text-sm font-black tracking-tight">{list.name}</h3>
-                    <p className="text-[11px] text-muted-foreground">{items.length} cards in play</p>
-                  </div>
+              <div className="mb-3 flex items-center gap-1.5 px-1">
+                <button
+                  draggable
+                  onDragStart={(e) => { setDraggingLaneId(list.id); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", list.id); }}
+                  onDragEnd={() => setDraggingLaneId(null)}
+                  title="Geser buat pindahin urutan section"
+                  className="grid h-8 w-8 shrink-0 cursor-grab place-items-center rounded-2xl bg-primary/10 text-sm font-black text-primary transition hover:bg-primary/20 active:cursor-grabbing"
+                >
+                  {laneIndex + 1}
+                </button>
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate text-sm font-black tracking-tight">{list.name}</h3>
+                  <p className="text-[11px] text-muted-foreground">{items.length} cards in play</p>
                 </div>
-                <div className="flex items-center gap-0.5">
+                <div className="flex shrink-0 items-center">
+                  <Button isIconOnly size="sm" variant="ghost" aria-label="Pindah section ke kiri" className="rounded-full" isDisabled={laneIndex === 0 || reorderLane.isPending} onClick={() => reorderLane.mutate({ id: list.id, position: laneIndex - 1 })}><ChevronLeft className="h-4 w-4" /></Button>
+                  <Button isIconOnly size="sm" variant="ghost" aria-label="Pindah section ke kanan" className="rounded-full" isDisabled={laneIndex === lanes.length - 1 || reorderLane.isPending} onClick={() => reorderLane.mutate({ id: list.id, position: laneIndex + 1 })}><ChevronRight className="h-4 w-4" /></Button>
                   <ListMenu projectId={project.id} list={{ id: list.id, name: list.name }} />
                   <Button isIconOnly size="sm" variant="ghost" className="rounded-full" onClick={() => onCreate(list.id)}><Plus className="h-4 w-4" /></Button>
                 </div>
@@ -796,31 +831,99 @@ function TaskComposer({ project, selectedListId, initialDueDate, onClose }: { pr
   const members = project.members ?? [];
   const setCf = (id: string, v: string | string[]) => setCfValues((prev) => ({ ...prev, [id]: v }));
 
-  const create = useMutation({
-    mutationFn: async () => {
-      const task = await nexusApi.createTask({ title, description: description || null, projectId: project.id, taskListId, priority, dueDate: dueDate || null, status: "TODO", assigneeIds: assigneeIds.length ? assigneeIds : undefined });
-      const entries = Object.entries(cfValues).filter(([, v]) => (Array.isArray(v) ? v.length > 0 : String(v ?? "").trim() !== ""));
-      await Promise.all(entries.map(([fid, v]) => nexusApi.setCustomFieldValue(fid, task.id, Array.isArray(v) ? JSON.stringify(v) : v)));
-      return task;
-    },
-    onSuccess: () => {
+  // ---- Live auto-save: the task persists to the server while it's being filled in. ----
+  // First meaningful edit (a non-empty title + a short pause) creates the task; every later
+  // edit diff-saves the delta. Closing (X / klik luar / Selesai) keeps it; only "Buang" deletes it.
+  type Snap = { title: string; description: string | null; taskListId: string; priority: CreateTaskPayload["priority"]; dueDate: string | null; assigneeIds: string[]; cf: Record<string, string | string[]> };
+  const draftId = useRef<string | null>(null);
+  const cancelled = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chain = useRef<Promise<unknown>>(Promise.resolve());
+  const lastSaved = useRef<Snap | null>(null);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [finishing, setFinishing] = useState(false);
+
+  const latest = useRef<Snap>({ title: "", description: null, taskListId: selectedListId, priority: "MEDIUM", dueDate: null, assigneeIds: [], cf: {} });
+  latest.current = { title: title.trim(), description: description || null, taskListId, priority, dueDate: dueDate || null, assigneeIds, cf: cfValues };
+  const cfStr = (v: string | string[]) => (Array.isArray(v) ? JSON.stringify(v) : v);
+  const nonEmpty = (v: string | string[]) => (Array.isArray(v) ? v.length > 0 : String(v ?? "").trim() !== "");
+
+  const doSaveOnce = async () => {
+    if (cancelled.current) return;
+    const s = latest.current;
+    if (!s.title.trim() || !s.taskListId) return;
+    setSaveState("saving");
+    try {
+      if (!draftId.current) {
+        const task = await nexusApi.createTask({ title: s.title.trim(), description: s.description, projectId: project.id, taskListId: s.taskListId, priority: s.priority, dueDate: s.dueDate, status: "TODO", assigneeIds: s.assigneeIds.length ? s.assigneeIds : undefined });
+        draftId.current = task.id;
+        for (const [fid, v] of Object.entries(s.cf)) if (nonEmpty(v)) await nexusApi.setCustomFieldValue(fid, task.id, cfStr(v));
+      } else if (lastSaved.current) {
+        const id = draftId.current;
+        const prev = lastSaved.current;
+        const patch: Partial<Pick<NexusTask, "title" | "priority" | "dueDate">> & { description?: string | null; taskListId?: string } = {};
+        if (s.title.trim() !== prev.title) patch.title = s.title.trim();
+        if (s.description !== prev.description) patch.description = s.description;
+        if (s.taskListId !== prev.taskListId) patch.taskListId = s.taskListId;
+        if (s.priority !== prev.priority) patch.priority = s.priority as NexusTask["priority"];
+        if (s.dueDate !== prev.dueDate) patch.dueDate = s.dueDate;
+        if (Object.keys(patch).length) await nexusApi.updateTask(id, patch);
+        for (const uid of s.assigneeIds.filter((x) => !prev.assigneeIds.includes(x))) await nexusApi.addAssignee(id, uid);
+        for (const uid of prev.assigneeIds.filter((x) => !s.assigneeIds.includes(x))) await nexusApi.removeAssignee(id, uid);
+        for (const [fid, v] of Object.entries(s.cf)) if (cfStr(v ?? "") !== cfStr(prev.cf[fid] ?? "")) await nexusApi.setCustomFieldValue(fid, id, cfStr(v));
+      }
+      lastSaved.current = { ...s, assigneeIds: [...s.assigneeIds], cf: { ...s.cf } };
+      if (cancelled.current) return;
       qc.invalidateQueries({ queryKey: ["nexus", "project", project.id] });
       qc.invalidateQueries({ queryKey: ["nexus", "tasks"] });
-      celebrate("Task baru dibuat 🎉");
-      onClose();
-    },
-  });
+      setSaveState("saved");
+    } catch {
+      setSaveState("error");
+    }
+  };
+  const enqueueSave = () => { chain.current = chain.current.catch(() => {}).then(doSaveOnce); return chain.current; };
+
+  // Debounce a save after any field change, once there's a title to anchor the task.
+  useEffect(() => {
+    if (cancelled.current || !title.trim() || !taskListId) return;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => { void enqueueSave(); }, 700);
+    return () => { if (timer.current) clearTimeout(timer.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title, description, taskListId, priority, dueDate, assigneeIds, cfValues]);
+  // Flush the latest edit when the composer unmounts — whether it was closed OR the user
+  // navigated to another page/tab mid-typing. This is what guarantees nothing is lost.
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+    if (!cancelled.current && latest.current.title.trim() && latest.current.taskListId) void enqueueSave();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const closeKeep = () => onClose(); // the unmount flush above persists the latest edit
+  const onFinish = () => {
+    if (timer.current) clearTimeout(timer.current);
+    setFinishing(true);
+    void enqueueSave().then(() => { celebrate(draftId.current ? "Task kesimpen 🎉" : "Task baru dibuat 🎉"); onClose(); }).finally(() => setFinishing(false));
+  };
+  const discard = async () => {
+    if (draftId.current && !window.confirm("Buang draft task ini? Yang udah keisi bakal kehapus.")) return;
+    cancelled.current = true;
+    if (timer.current) clearTimeout(timer.current);
+    onClose();
+    try { await chain.current; } catch { /* ignore */ }
+    if (draftId.current) { try { await nexusApi.deleteTask(draftId.current); qc.invalidateQueries({ queryKey: ["nexus", "project", project.id] }); qc.invalidateQueries({ queryKey: ["nexus", "tasks"] }); } catch { /* ignore */ } }
+  };
 
   const inputCls = "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary";
   const labelCls = "text-[11px] font-bold uppercase tracking-wider text-muted-foreground";
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm" onClick={closeKeep}>
       <Card className="w-full max-w-lg border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
         <CardBody className="max-h-[85vh] gap-0 overflow-y-auto p-0">
           <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-border bg-card px-6 py-4">
             <h2 className="text-lg font-black tracking-tight">Add task</h2>
-            <Button isIconOnly size="sm" variant="ghost" className="rounded-full" onClick={onClose}><X className="h-4 w-4" /></Button>
+            <Button isIconOnly size="sm" variant="ghost" className="rounded-full" onClick={closeKeep}><X className="h-4 w-4" /></Button>
           </div>
           <div className="space-y-4 p-6">
             <div className="space-y-1">
@@ -904,11 +1007,18 @@ function TaskComposer({ project, selectedListId, initialDueDate, onClose }: { pr
               </div>
             )}
 
-            {create.isError && <p className="text-sm font-semibold text-red-600">Gagal bikin task — cek akses/lane/koneksi.</p>}
           </div>
-          <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-border bg-card px-6 py-4">
-            <Button variant="ghost" onClick={onClose}>Batal</Button>
-            <Button variant="primary" isDisabled={create.isPending || !title.trim() || !taskListId} onClick={() => create.mutate()}>{create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Buat task</Button>
+          <div className="sticky bottom-0 flex items-center justify-between gap-2 border-t border-border bg-card px-6 py-4">
+            <span className="flex items-center gap-1.5 text-xs font-semibold">
+              {saveState === "saving" ? <span className="flex items-center gap-1.5 text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Menyimpan…</span>
+                : saveState === "saved" ? <span className="flex items-center gap-1.5 text-emerald-600"><Check className="h-3.5 w-3.5" /> Tersimpan otomatis</span>
+                : saveState === "error" ? <span className="text-rose-600">Gagal nyimpen — coba lagi</span>
+                : <span className="text-muted-foreground">Auto-save aktif</span>}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" onClick={discard}>{draftId.current ? <><Trash2 className="h-4 w-4" /> Buang</> : "Batal"}</Button>
+              <Button variant="primary" isDisabled={finishing || !title.trim() || !taskListId} onClick={onFinish}>{finishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Selesai</Button>
+            </div>
           </div>
         </CardBody>
       </Card>
