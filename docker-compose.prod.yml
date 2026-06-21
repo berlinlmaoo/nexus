@@ -69,7 +69,9 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "127.0.0.1:${APP_PORT:-3000}:3000"
+      # Host port defaults to 3003 — :3000 is owned by the maintenance nginx
+      # (nexus.patsgroup.id). This app is reached by staff via oldnexus.patsgroup.id.
+      - "127.0.0.1:${APP_PORT:-3003}:3000"
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -77,8 +79,9 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       AUTH_SECRET: ${AUTH_SECRET}
       NEXTAUTH_SECRET: ${AUTH_SECRET}
-      NEXTAUTH_URL: ${NEXTAUTH_URL}
-      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://nexus.patsgroup.id}
+      # Defaults to oldnexus so auth works even if env-file omits it (prod app = OLD NEXUS for staff).
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-https://oldnexus.patsgroup.id}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://oldnexus.patsgroup.id}
       AUTH_TRUST_HOST: ${AUTH_TRUST_HOST:-true}
       APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Jakarta}
       LOG_LEVEL: ${LOG_LEVEL:-info}

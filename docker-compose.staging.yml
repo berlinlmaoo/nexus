@@ -1,0 +1,53 @@
+# STAGING backend for nexusdev.patsgroup.id — runs the LATEST src/ code on :3004,
+# against the SAME prod DB + shared uploads as the prod backend (nexus-app-beta :3002).
+# Prod is NOT touched by this stack. Build/run with an explicit project name:
+#   docker compose -p nexus-staging -f docker-compose.staging.yml up -d --build
+#
+# Flow: edit code -> deploy-staging.sh (build :3004 + dist-staging) -> test on nexusdev
+#       -> promote-to-prod.sh (retag image -> prod, copy dist-staging -> dist).
+#
+# Image tag `nexus-app:staging` is kept SEPARATE from `nexus-app:prod` so promoting is
+# just a retag (no rebuild). No internal scheduler runs here, and the nightly absence
+# cron targets :3002 only — so sharing the prod DB does NOT double-run jobs.
+services:
+  app-staging:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      args:
+        DATABASE_URL: postgresql://placeholder:placeholder@postgres:5432/nexus_db?schema=public
+        AUTH_SECRET: build-time-placeholder
+        NEXTAUTH_URL: http://127.0.0.1:3004
+    image: nexus-app:staging
+    container_name: nexus-app-staging
+    restart: unless-stopped
+    working_dir: /app
+    entrypoint: ["node", "server.js"]
+    ports:
+      - "127.0.0.1:3004:3000"
+    env_file: .env.production
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      # DATABASE_URL inherited from .env.production = PROD DB (shared with :3002).
+      NEXTAUTH_URL: http://127.0.0.1:3004
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3004
+      AUTH_TRUST_HOST: "true"
+      APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Jakarta}
+    volumes:
+      # Share the SAME uploads as the prod backend (DB is shared, so file refs must match).
+      - ./var-beta/uploads/attachments:/app/public/uploads/attachments
+      - ./var-beta/uploads/attendance:/app/public/uploads/attendance
+      - ./var-beta/uploads/avatars:/app/public/uploads/avatars
+      - ./var-beta/uploads/project-icons:/app/public/uploads/project-icons
+    networks:
+      - nexus_staging
+      - prod_internal
+
+networks:
+  nexus_staging:
+    driver: bridge
+  prod_internal:
+    external: true
+    name: nexus_nexus_internal

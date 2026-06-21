@@ -1,6 +1,12 @@
+import { dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  outputFileTracingRoot: __dirname,
   async headers() {
     const noStoreHeaders = [
       {
@@ -46,16 +52,14 @@ const nextConfig = {
     // Keep production/container builds unblocked while lint debt is handled separately.
     ignoreDuringBuilds: true,
   },
-  experimental: {
-    // Keep heavy native/DB stacks out of the webpack graph for server code (faster /login, RSC, actions).
-    serverComponentsExternalPackages: [
-      '@prisma/client',
-      '@prisma/adapter-pg',
-      'pg',
-      'bcryptjs',
-      'googleapis',
-    ],
-  },
+  // Keep heavy native/DB stacks out of the webpack graph for server code (faster /login, RSC, actions).
+  serverExternalPackages: [
+    '@prisma/client',
+    '@prisma/adapter-pg',
+    'pg',
+    'bcryptjs',
+    'googleapis',
+  ],
 };
 
 export default nextConfig;
