@@ -17,10 +17,10 @@ interface TaskBoardProps {
 }
 
 const columnColors: Record<string, string> = {
-  'To Do': 'border-t-gray-400',
+  'To Do': 'border-t-on-surface-variant',
   'In Progress': 'border-t-blue-500',
-  'In Review': 'border-t-zinc-700',
-  Review: 'border-t-zinc-700',
+  'In Review': 'border-t-foreground',
+  Review: 'border-t-foreground',
   Done: 'border-t-green-500',
 }
 
@@ -32,7 +32,7 @@ export function TaskBoard({ columns, onTaskClick, onAddTask }: TaskBoardProps) {
           key={col.id}
           className={cn(
             'flex w-[min(82vw,300px)] min-w-[min(82vw,300px)] flex-col rounded-lg border border-t-4 bg-muted/30 sm:w-[300px] sm:min-w-[300px]',
-            columnColors[col.name] || 'border-t-gray-300'
+            columnColors[col.name] || 'border-t-on-surface-variant'
           )}
         >
           {/* Column header */}

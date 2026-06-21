@@ -7,7 +7,7 @@ import { logAudit } from '@/lib/audit'
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { webhookId: string } }
+  { params }: { params: Promise<{ webhookId: string }> }
 ) {
   try {
     const session = await auth()
@@ -15,7 +15,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { webhookId } = params
+    const { webhookId } = await params
     const webhook = await prisma.webhook.findUnique({ where: { id: webhookId } })
 
     if (!webhook || webhook.userId !== session.user.id) {
@@ -57,7 +57,7 @@ export async function PATCH(
 
 export async function DELETE(
   _req: Request,
-  { params }: { params: { webhookId: string } }
+  { params }: { params: Promise<{ webhookId: string }> }
 ) {
   try {
     const session = await auth()
@@ -65,7 +65,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { webhookId } = params
+    const { webhookId } = await params
     const webhook = await prisma.webhook.findUnique({ where: { id: webhookId } })
 
     if (!webhook || webhook.userId !== session.user.id) {

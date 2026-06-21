@@ -6,14 +6,14 @@ import { auth } from "@/lib/auth"
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { taskId: string } }
+  { params }: { params: Promise<{ taskId: string }> }
 ) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const followers = await prisma.taskFollower.findMany({
-      where: { taskId: params.taskId },
+      where: { taskId: (await params).taskId },
       include: { user: { select: { id: true, name: true, avatar: true } } },
     })
 
@@ -28,7 +28,7 @@ export async function GET(
 
 export async function POST(
   _request: NextRequest,
-  { params }: { params: { taskId: string } }
+  { params }: { params: Promise<{ taskId: string }> }
 ) {
   try {
     const session = await auth()
@@ -36,7 +36,7 @@ export async function POST(
 
     // Toggle follow
     const existing = await prisma.taskFollower.findUnique({
-      where: { taskId_userId: { taskId: params.taskId, userId: session.user.id } },
+      where: { taskId_userId: { taskId: (await params).taskId, userId: session.user.id } },
     })
 
     if (existing) {
@@ -45,7 +45,7 @@ export async function POST(
     }
 
     await prisma.taskFollower.create({
-      data: { taskId: params.taskId, userId: session.user.id },
+      data: { taskId: (await params).taskId, userId: session.user.id },
     })
 
     return NextResponse.json({ following: true }, { status: 201 })

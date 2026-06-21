@@ -169,7 +169,7 @@ function PageTreeItem({
           className={cn(
             "flex flex-1 items-center gap-2 rounded-md py-1 text-[13px] transition-all duration-150",
             isActive
-              ? "bg-surface-container-high text-primary"
+              ? "bg-primary-container text-primary-on-container"
               : "text-on-surface-variant/70 hover:bg-surface-container-high hover:text-on-surface"
           )}
           style={{ paddingLeft: `${depth * 12 + (hasChildren ? 22 : 12)}px`, paddingRight: "8px" }}
@@ -759,7 +759,7 @@ export function Sidebar({ user }: SidebarProps) {
             className={cn(
               "flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] transition-all duration-200 md:gap-2.5 md:text-[13px]",
               isProjectActive
-                ? "bg-surface-container-high text-primary shadow-sm"
+                ? "bg-primary-container text-primary-on-container shadow-sm"
                 : "text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
             )}
           >
@@ -909,7 +909,7 @@ export function Sidebar({ user }: SidebarProps) {
                 className={cn(
                   "group flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition-all duration-200 md:gap-3 md:py-2 md:text-[13px]",
                   isActive
-                    ? "bg-surface-container-high text-primary shadow-sm"
+                    ? "bg-primary-container text-primary-on-container shadow-sm"
                     : "text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
                 )}
                 title={isCollapsed ? item.label : undefined}
@@ -917,7 +917,7 @@ export function Sidebar({ user }: SidebarProps) {
                 <item.icon
                   className={cn(
                     "h-4 w-4 shrink-0 transition-colors duration-200",
-                    isActive ? "text-primary" : "text-on-surface-variant group-hover:text-on-surface"
+                    isActive ? "text-primary-on-container" : "text-on-surface-variant group-hover:text-on-surface"
                   )}
                 />
                 {!isCollapsed && (
@@ -963,14 +963,14 @@ export function Sidebar({ user }: SidebarProps) {
                       className={cn(
                         "group flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition-all duration-200 md:gap-3 md:text-[13px]",
                         isActive
-                          ? "bg-surface-container-high text-primary"
+                          ? "bg-primary-container text-primary-on-container"
                           : "text-on-surface-variant/80 hover:bg-surface-container hover:text-on-surface"
                       )}
                     >
                       <item.icon
                         className={cn(
                           "h-4 w-4 shrink-0 transition-colors duration-200",
-                          isActive ? "text-primary" : "text-on-surface-variant/60 group-hover:text-on-surface"
+                          isActive ? "text-primary-on-container" : "text-on-surface-variant/60 group-hover:text-on-surface"
                         )}
                       />
                       <span className="font-headline tracking-tight">{item.label}</span>
@@ -995,7 +995,7 @@ export function Sidebar({ user }: SidebarProps) {
                   className={cn(
                     "flex items-center justify-center rounded-md p-2 transition-all duration-150",
                     isActive
-                      ? "bg-surface-container-high text-primary"
+                      ? "bg-primary-container text-primary-on-container"
                       : "text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
                   )}
                   title={item.label}
@@ -1038,7 +1038,7 @@ export function Sidebar({ user }: SidebarProps) {
                         className={cn(
                           "group flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-[12px] transition-all duration-200 md:text-[13px]",
                           isActive
-                            ? "bg-surface-container-high text-primary"
+                            ? "bg-primary-container text-primary-on-container"
                             : "text-on-surface-variant/80 hover:bg-surface-container hover:text-on-surface"
                         )}
                       >
@@ -1113,7 +1113,7 @@ export function Sidebar({ user }: SidebarProps) {
                         <div
                           className={cn(
                             "group flex w-full items-center rounded-lg text-[12px] font-black uppercase tracking-[0.12em] transition-all duration-200 md:text-[13px]",
-                            hasActiveProject ? "bg-surface-container-high text-primary" : "text-on-surface-variant/80 hover:bg-surface-container hover:text-on-surface"
+                            hasActiveProject ? "bg-primary-container text-primary-on-container" : "text-on-surface-variant/80 hover:bg-surface-container hover:text-on-surface"
                           )}
                           onContextMenu={(event) => {
                             event.preventDefault()
@@ -1205,7 +1205,7 @@ export function Sidebar({ user }: SidebarProps) {
                 className={cn(
                   "group flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition-all duration-200 md:gap-3 md:py-2 md:text-[13px]",
                   isActive
-                    ? "bg-surface-container-high text-primary"
+                    ? "bg-primary-container text-primary-on-container"
                     : "text-on-surface-variant/80 hover:bg-surface-container hover:text-on-surface"
                 )}
                 title={isCollapsed ? item.label : undefined}
@@ -1213,7 +1213,7 @@ export function Sidebar({ user }: SidebarProps) {
                 <item.icon
                   className={cn(
                     "h-4 w-4 shrink-0 transition-colors duration-200",
-                    isActive ? "text-primary" : "text-on-surface-variant/60 group-hover:text-on-surface"
+                    isActive ? "text-primary-on-container" : "text-on-surface-variant/60 group-hover:text-on-surface"
                   )}
                 />
                 {!isCollapsed && <span className="font-headline tracking-tight">{item.label}</span>}
@@ -1467,7 +1467,7 @@ export function Sidebar({ user }: SidebarProps) {
                       } catch {}
                       setProjectMenu(null)
                     }}
-                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-sidebar-text hover:bg-zinc-700 transition-colors"
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-sidebar-text hover:bg-surface-container-high transition-colors"
                   >
                     {isArchived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
                     {isArchived ? "Unarchive" : "Archive"}
@@ -1483,7 +1483,7 @@ export function Sidebar({ user }: SidebarProps) {
                       } catch {}
                       setProjectMenu(null)
                     }}
-                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-sidebar-text hover:bg-zinc-700 transition-colors"
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-sidebar-text hover:bg-surface-container-high transition-colors"
                   >
                     <Copy className="h-3.5 w-3.5" />
                     Duplicate
@@ -1497,7 +1497,7 @@ export function Sidebar({ user }: SidebarProps) {
                       await handleMoveProjectToFolder(projectMenu.projectId, null)
                       setProjectMenu(null)
                     }}
-                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-sidebar-text hover:bg-zinc-700 transition-colors"
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-sidebar-text hover:bg-surface-container-high transition-colors"
                   >
                     <Folder className="h-3.5 w-3.5" />
                     No folder
@@ -1510,7 +1510,7 @@ export function Sidebar({ user }: SidebarProps) {
                         await handleMoveProjectToFolder(projectMenu.projectId, folder.id)
                         setProjectMenu(null)
                       }}
-                      className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-sidebar-text hover:bg-zinc-700 transition-colors"
+                      className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-sidebar-text hover:bg-surface-container-high transition-colors"
                     >
                       <Folder className="h-3.5 w-3.5" style={{ color: folder.color }} />
                       <span className="truncate">{folder.name}</span>
@@ -1523,7 +1523,7 @@ export function Sidebar({ user }: SidebarProps) {
                       if (p) setConfirmDeleteProject({ id: p.id, name: p.name })
                       setProjectMenu(null)
                     }}
-                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-red-400 hover:bg-zinc-700 transition-colors"
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-red-400 hover:bg-surface-container-high transition-colors"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     Delete project

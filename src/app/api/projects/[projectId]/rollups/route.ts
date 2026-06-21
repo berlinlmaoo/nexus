@@ -6,7 +6,7 @@ import prisma from "@/lib/prisma"
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
     const session = await auth()
@@ -16,7 +16,7 @@ export async function GET(
     // Get all tasks for this project
     const tasks = await prisma.task.findMany({
       where: {
-        taskList: { projectId: params.projectId },
+        taskList: { projectId: (await params).projectId },
       },
       select: {
         id: true,

@@ -7,7 +7,7 @@ import { logAudit } from "@/lib/audit"
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { taskId: string } }
+  { params }: { params: Promise<{ taskId: string }> }
 ) {
   try {
     const session = await auth()
@@ -17,8 +17,8 @@ export async function GET(
     const relations = await prisma.taskRelation.findMany({
       where: {
         OR: [
-          { sourceTaskId: params.taskId },
-          { targetTaskId: params.taskId },
+          { sourceTaskId: (await params).taskId },
+          { targetTaskId: (await params).taskId },
         ],
       },
       include: {
@@ -75,7 +75,7 @@ export async function GET(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { taskId: string } }
+  { params }: { params: Promise<{ taskId: string }> }
 ) {
   try {
     const session = await auth()
@@ -91,13 +91,13 @@ export async function POST(
 
     const relation = await prisma.taskRelation.create({
       data: {
-        sourceTaskId: params.taskId,
+        sourceTaskId: (await params).taskId,
         targetTaskId,
         type,
       },
     })
 
-    logAudit({ action: "create", entityType: "task_relation", entityId: relation.id, userId: session.user.id, request: req, metadata: { sourceTaskId: params.taskId, targetTaskId, type } })
+    logAudit({ action: "create", entityType: "task_relation", entityId: relation.id, userId: session.user.id, request: req, metadata: { sourceTaskId: (await params).taskId, targetTaskId, type } })
 
     return NextResponse.json({ relation }, { status: 201 })
   } catch (error) {

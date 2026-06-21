@@ -7,7 +7,7 @@ import { logAudit } from "@/lib/audit"
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { taskId: string; relationId: string } }
+  { params }: { params: Promise<{ taskId: string; relationId: string }> }
 ) {
   try {
     const session = await auth()
@@ -15,10 +15,10 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     await prisma.taskRelation.delete({
-      where: { id: params.relationId },
+      where: { id: (await params).relationId },
     })
 
-    logAudit({ action: "delete", entityType: "task_relation", entityId: params.relationId, userId: session.user.id, request: req })
+    logAudit({ action: "delete", entityType: "task_relation", entityId: (await params).relationId, userId: session.user.id, request: req })
 
     return NextResponse.json({ success: true })
   } catch (error) {

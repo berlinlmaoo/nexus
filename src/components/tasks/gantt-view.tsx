@@ -32,7 +32,7 @@ interface GanttViewProps {
 const PRIORITY_COLORS: Record<string, string> = {
   URGENT: "bg-red-500",
   HIGH: "bg-orange-500",
-  MEDIUM: "bg-zinc-700",
+  MEDIUM: "bg-foreground",
   LOW: "bg-blue-500",
   NONE: "bg-muted-foreground/40",
 }
@@ -285,7 +285,7 @@ export function GanttView({ tasks, onTaskClick }: GanttViewProps) {
       <div className="flex items-center gap-4 pt-4 mt-3 border-t text-[10px] text-muted-foreground">
         <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-red-500" /> Urgent</span>
         <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-orange-500" /> High</span>
-        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-zinc-700" /> Medium</span>
+        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-foreground" /> Medium</span>
         <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-blue-500" /> Low</span>
         <span className="flex items-center gap-1 ml-4"><span className="h-3 w-0.5 bg-red-500" /> Today</span>
       </div>

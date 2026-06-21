@@ -8,14 +8,20 @@ import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import {
   buildAttendanceDerivedFields,
-  getAttendanceDate,
+  formatAttendanceDateKey,
   getAttendanceWorkspaceContext,
+  isWorkdayForAttendanceDate,
   resolveEffectiveAttendanceShift,
   resolveNearestOffice,
+  resolveShiftWindowAt,
   serializeAttendanceRecord,
 } from "@/lib/attendance"
+import { isHoliday } from "@/lib/holidays"
+import { isAutoDeduction, hasAttendanceWaiver } from "@/lib/attendance-absence"
+import { awardXpOnce } from "@/lib/gamification"
 import { reverseGeocodeCoordinates } from "@/lib/reverse-geocode"
 import { attendanceActionSchema } from "@/lib/validations"
+import { notifyOffsiteCheckoutPending } from "@/lib/notification-service"
 
 const MAX_SELFIE_SIZE = 10 * 1024 * 1024
 
@@ -34,6 +40,10 @@ export async function POST(request: NextRequest) {
     const lat = Number(formData.get("lat"))
     const lng = Number(formData.get("lng"))
     const notes = (formData.get("notes") as string | null)?.trim() || undefined
+    // Offsite checkout: staff outside the geofence opting to check out anyway (meeting/shoot), with a
+    // mandatory reason. Recorded as PENDING until a BoD approves it.
+    const offsiteRequested = formData.get("offsite") === "1" || formData.get("offsite") === "true"
+    const offsiteReason = (formData.get("reason") as string | null)?.trim().slice(0, 500) || undefined
 
     const validation = attendanceActionSchema.safeParse({ lat, lng, notes })
     if (!validation.success) {
@@ -51,35 +61,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Selfie photo must be smaller than 10MB." }, { status: 400 })
     }
 
-    const attendanceDate = getAttendanceDate()
-    const approvedRequest = await prisma.attendanceRequest.findFirst({
+    // Close the oldest still-open record first — that's either today's check-in,
+    // or a previous day the user forgot to check out (must be closed before a new check-in).
+    const existingRecord = await prisma.attendanceRecord.findFirst({
       where: {
         userId: session.user.id,
         workspaceId: context.workspace.id,
-        status: "APPROVED",
-        startDate: { lte: attendanceDate },
-        endDate: { gte: attendanceDate },
+        status: "CHECKED_IN",
+        checkOutAt: null,
       },
-      select: {
-        type: true,
-      },
-    })
-
-    if (approvedRequest) {
-      return NextResponse.json(
-        { error: `Attendance cannot be completed because an approved ${approvedRequest.type.toLowerCase().replace("_", "-")} request already covers today.` },
-        { status: 409 }
-      )
-    }
-
-    const existingRecord = await prisma.attendanceRecord.findUnique({
-      where: {
-        userId_workspaceId_attendanceDate: {
-          userId: session.user.id,
-          workspaceId: context.workspace.id,
-          attendanceDate,
-        },
-      },
+      orderBy: { attendanceDate: "asc" },
       include: {
         officeLocation: true,
       },
@@ -89,8 +80,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Check-in is required before check-out." }, { status: 400 })
     }
 
-    if (existingRecord.checkOutAt) {
-      return NextResponse.json({ error: "You have already checked out today." }, { status: 409 })
+    const attendanceDate = existingRecord.attendanceDate
+
+    // A REAL leave/day-off covering this date blocks completing attendance. But the cron's own
+    // auto-deduction day-off (e.g. ">120 min late → −1 token", filed for a day the staff WAS present)
+    // must NOT block them from finishing their check-out — that was the "can't check out, already a
+    // day-off" bug. So ignore auto-deductions here.
+    const coveringRequests = await prisma.attendanceRequest.findMany({
+      where: {
+        userId: session.user.id,
+        workspaceId: context.workspace.id,
+        status: "APPROVED",
+        startDate: { lte: attendanceDate },
+        endDate: { gte: attendanceDate },
+      },
+      select: {
+        type: true,
+        reason: true,
+        reviewedById: true,
+        approvalSource: true,
+      },
+    })
+
+    const blockingRequest = coveringRequests.find((r) => !isAutoDeduction(r))
+    if (blockingRequest) {
+      return NextResponse.json(
+        { error: `Attendance cannot be completed because an approved ${blockingRequest.type.toLowerCase().replace("_", "-")} request already covers ${attendanceDate.toISOString().slice(0, 10)}.` },
+        { status: 409 }
+      )
     }
 
     const activeOffices = await prisma.officeLocation.findMany({
@@ -109,10 +126,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No office location could be matched." }, { status: 400 })
     }
 
-    if (nearest.distanceMeters > nearest.office.radiusMeters) {
+    const outsideRadius = nearest.distanceMeters > nearest.office.radiusMeters
+    if (outsideRadius && !offsiteRequested) {
+      // First attempt from outside → tell the client to offer an offsite checkout (with a reason).
       return NextResponse.json(
         {
           error: `You're outside the allowed attendance radius for ${nearest.office.name}.`,
+          code: "OUTSIDE_RADIUS",
           officeName: nearest.office.name,
           distanceMeters: Number(nearest.distanceMeters.toFixed(2)),
           radiusMeters: nearest.office.radiusMeters,
@@ -120,6 +140,11 @@ export async function POST(request: NextRequest) {
         { status: 422 }
       )
     }
+    if (outsideRadius && offsiteRequested && !offsiteReason) {
+      return NextResponse.json({ error: "Alasan checkout di luar area wajib diisi." }, { status: 400 })
+    }
+    // Mark as offsite only when genuinely outside the radius (an in-radius checkout is never offsite).
+    const isOffsite = outsideRadius && offsiteRequested
 
     const uploadDir = path.join(process.cwd(), "public", "uploads", "attendance")
     await mkdir(uploadDir, { recursive: true })
@@ -141,6 +166,7 @@ export async function POST(request: NextRequest) {
       userId: session.user.id,
       workspaceId: context.workspace.id,
       office: nearest.office,
+      date: attendanceDate, // resolve the shift for the day the record belongs to
     })
 
     const derived = buildAttendanceDerivedFields({
@@ -149,6 +175,7 @@ export async function POST(request: NextRequest) {
       checkOutAt,
       office: nearest.office,
       effectiveShift,
+      treatAsNonWorkday: await isHoliday(context.workspace.id, attendanceDate),
     })
 
     const record = await prisma.attendanceRecord.update({
@@ -171,6 +198,9 @@ export async function POST(request: NextRequest) {
         checkOutAddress: reverseGeocode.displayName,
         checkOutPhotoUrl: photoUrl,
         checkOutDistanceMeters: Number(nearest.distanceMeters.toFixed(2)),
+        checkOutOffsite: isOffsite,
+        checkOutApproval: isOffsite ? "PENDING" : null,
+        checkOutReason: isOffsite ? offsiteReason : null,
         notes: mergedNotes,
         status: derived.status,
       },
@@ -194,6 +224,29 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // "Lupa check-out" penalty — moved here from the nightly 02:00 cron (which nicked staff who were still
+    // working overtime). The record counts as forgotten only if it's finally closed ≥24h after the shift
+    // STARTED — i.e. not until the next day's shift came around (they came back, got force-blocked, and
+    // closed yesterday to check in). This works the same for day shifts AND ones that cross midnight: a
+    // same-day check-out — however late (lembur/overtime) — is always <24h from the shift start, so it's
+    // never penalized. Skips non-workdays / holidays + days a BoD already pardoned. Best-effort.
+    try {
+      const { shiftStartAt } = resolveShiftWindowAt(attendanceDate, nearest.office, effectiveShift)
+      const forgotten = checkOutAt.getTime() >= shiftStartAt.getTime() + 24 * 60 * 60 * 1000
+      if (
+        forgotten &&
+        isWorkdayForAttendanceDate(attendanceDate, nearest.office) &&
+        !(await isHoliday(context.workspace.id, attendanceDate))
+      ) {
+        const dateKey = formatAttendanceDateKey(attendanceDate)
+        if (!(await hasAttendanceWaiver(session.user.id, dateKey))) {
+          await awardXpOnce(session.user.id, -25, `attendance:nocheckout:${dateKey}`)
+        }
+      }
+    } catch {
+      // XP best-effort; never block the check-out itself.
+    }
+
     await logAudit({
       action: "update",
       entityType: "attendance_record",
@@ -204,10 +257,21 @@ export async function POST(request: NextRequest) {
       metadata: {
         officeLocationId: nearest.office.id,
         distanceMeters: record.checkOutDistanceMeters,
+        offsite: isOffsite,
       },
     })
 
-    return NextResponse.json({ record: serializeAttendanceRecord(record) })
+    // Ping the BoD (best-effort, non-blocking) so they can approve without opening the attendance page.
+    if (isOffsite) {
+      notifyOffsiteCheckoutPending({
+        workspaceId: context.workspace.id,
+        staffUserId: session.user.id,
+        staffName: context.user?.name ?? "Staff",
+        reason: offsiteReason ?? null,
+      }).catch((err) => console.error("offsite checkout notify failed:", err))
+    }
+
+    return NextResponse.json({ record: serializeAttendanceRecord(record), pendingApproval: isOffsite })
   } catch (error) {
     console.error("Error checking out attendance:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

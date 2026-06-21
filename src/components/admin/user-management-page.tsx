@@ -23,7 +23,7 @@ import { getPrimaryWorkspaceDefaults } from "@/lib/workspace-defaults"
 
 type MembershipFilter = "all" | "workspace-members" | "non-members" | "system-admins"
 type SystemRole = "ADMIN" | "MEMBER"
-type WorkspaceRole = "OWNER" | "ADMIN" | "MEMBER"
+type WorkspaceRole = "BOD" | "ADMIN" | "MEMBER"
 
 interface AdminUserRow {
   id: string
@@ -97,7 +97,7 @@ const systemRoleOptions: Array<{ value: "all" | SystemRole; label: string }> = [
   { value: "MEMBER", label: "Member" },
 ]
 
-const workspaceRoleOptions: WorkspaceRole[] = ["OWNER", "ADMIN", "MEMBER"]
+const workspaceRoleOptions: WorkspaceRole[] = ["BOD", "ADMIN", "MEMBER"]
 const primaryWorkspaceDefaults = getPrimaryWorkspaceDefaults()
 
 function formatDate(value: string | null) {

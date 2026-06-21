@@ -8,7 +8,7 @@ import { checkProjectAccess } from '@/lib/rbac'
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
     const session = await auth()

@@ -240,8 +240,8 @@ export function TaskAttachments({ taskId }: { taskId: string }) {
         className={cn(
           "border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors",
           dragOver
-            ? "border-border bg-muted dark:border-zinc-500 dark:bg-zinc-800"
-            : "border-border hover:border-border dark:border-zinc-700 dark:hover:border-zinc-600"
+            ? "border-border bg-muted"
+            : "border-border hover:border-border"
         )}
       >
         <input

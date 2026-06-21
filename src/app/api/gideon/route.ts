@@ -252,80 +252,72 @@ async function executeToolCall(
   }
 }
 
+// Build a single prompt for the one-shot Hermes agent. CRITICAL: the Hermes agent carries its own
+// profile memory (it knows the operator), so we MUST anchor WHO it's talking to up front — otherwise
+// it greets every NEXUS user by the operator's name. This header makes each user's chat its own
+// session keyed to their real NEXUS identity.
+function buildGideonPrompt(history: { role: string; content: string }[], who: { name: string; email: string }): string {
+  const recent = (history || []).filter((m) => m && typeof m.content === "string").slice(-8)
+  const last = recent[recent.length - 1]?.content?.trim() || ""
+  const name = who.name?.trim() || "anggota tim NEXUS"
+  const header =
+    `[IDENTITAS LAWAN BICARA — WAJIB DIPATUHI] Kamu (Gideon) lagi ngobrol di chatbox NEXUS dengan "${name}"` +
+    `${who.email ? ` (${who.email})` : ""}, anggota tim NEXUS. Ini SESI TERPISAH khusus dia. Sapa & rujuk dia ` +
+    `sebagai "${name}". JANGAN sekali-kali manggil/menganggap dia sebagai orang lain (operator, admin, atau ` +
+    `nama apa pun dari memori sesi sebelumnya) — kalau kamu inget nama lain, ABAIKAN; sekarang kamu ngomong sama ${name}.\n\n`
+  if (recent.length <= 1) return `${header}Pesan dari ${name}: ${last}`
+  const ctx = recent.slice(0, -1).map((m) => `${m.role === "user" ? name : "Gideon"}: ${m.content}`).join("\n")
+  return `${header}Konteks percakapan:\n${ctx}\n\nPesan terbaru dari ${name}: ${last}`
+}
+
+// Gideon chat is now backed by the Hermes agent (gpt-5.5 + live NEXUS tools) via the host shim —
+// the same assistant the team uses on WhatsApp. We keep the exact SSE contract the frontend expects.
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user?.id) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
 
-  const { messages, model = 'sonnet' } = await req.json()
-  const anthropicModel = MODEL_MAP[model] || MODEL_MAP.sonnet
-  const client = new Anthropic()
+  const { messages } = (await req.json()) as { messages: { role: string; content: string }[] }
 
   const encoder = new TextEncoder()
   const stream = new TransformStream()
   const writer = stream.writable.getWriter()
-
   const sendEvent = async (data: Record<string, unknown>) => {
     await writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
   }
 
   ;(async () => {
     try {
-      let currentMessages = messages.map((m: { role: string; content: string }) => ({
-        role: m.role as 'user' | 'assistant',
-        content: m.content,
-      }))
-
-      let continueLoop = true
-
-      while (continueLoop) {
-        continueLoop = false
-
-        const response = client.messages.stream({
-          model: anthropicModel,
-          max_tokens: 4096,
-          system: SYSTEM_PROMPT,
-          messages: currentMessages,
-          tools: TOOLS,
-        })
-
-        const finalMessage = await response.finalMessage()
-        let hasToolUse = false
-
-        for (const block of finalMessage.content) {
-          if (block.type === 'text') {
-            await sendEvent({ type: 'text', content: block.text })
-          } else if (block.type === 'tool_use') {
-            hasToolUse = true
-            const result = await executeToolCall(block.name, block.input as ToolInput, session.user!.id!)
-            await sendEvent({ type: 'tool_result', tool: block.name, result: result.data })
-
-            currentMessages = [
-              ...currentMessages,
-              { role: 'assistant' as const, content: finalMessage.content },
-              { role: 'user' as const, content: [{ type: 'tool_result' as const, tool_use_id: block.id, content: JSON.stringify(result.data) }] },
-            ]
-
-            continueLoop = true
-          }
-        }
-
-        if (hasToolUse && finalMessage.stop_reason === 'end_turn') {
-          continueLoop = false
-        }
+      const url = process.env.GIDEON_CHAT_URL
+      if (!url) {
+        await sendEvent({ type: 'error', content: 'Gideon belum tersambung ke gateway Hermes.' })
+        return
       }
+      const prompt = buildGideonPrompt(messages, { name: session.user?.name || '', email: session.user?.email || '' })
+      if (!prompt) { await sendEvent({ type: 'error', content: 'Pesan kosong.' }); return }
 
-      await sendEvent({ type: 'done' })
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-oracle-secret': process.env.ORACLE_LLM_SECRET || '' },
+        // actorEmail → the shim sets it as NEXUS_GIDEON_ACTOR_EMAIL on the hermes spawn, so Gideon's
+        // NEXUS tools act AS this logged-in user (role-scoped), not the fixed service identity.
+        body: JSON.stringify({ prompt, user: session.user?.name || '', actorEmail: session.user?.email || session.user?.id || '' }),
+        signal: AbortSignal.timeout(150000), // Hermes agent + tool call can take ~30s+
+      })
+      if (!res.ok) { await sendEvent({ type: 'error', content: `Gideon error (${res.status}).` }); return }
+      const data = (await res.json()) as { reply?: string }
+      await sendEvent({ type: 'text', content: (data.reply || '').trim() || '(Gideon balas kosong — coba ulang.)' })
     } catch (error) {
       console.error('GIDEON API error:', error)
-      await sendEvent({ type: 'error', content: 'An error occurred while processing your request.' })
+      await sendEvent({ type: 'error', content: 'Gideon lagi gak bisa dihubungi. Coba lagi bentar ya.' })
     } finally {
+      await sendEvent({ type: 'done' })
       await writer.close()
     }
   })()
 
   return new Response(stream.readable, {
-    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' },
+    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', Connection: 'keep-alive' },
   })
 }

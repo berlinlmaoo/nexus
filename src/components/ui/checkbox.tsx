@@ -1,30 +1,54 @@
 "use client"
 
 import * as React from "react"
-import * as CheckboxPrimitive from "@radix-ui/react-checkbox"
-import { Check } from "lucide-react"
+import { Checkbox as HeroCheckbox } from "@heroui/react"
 
 import { cn } from "@/lib/utils"
 
-const Checkbox = React.forwardRef<
-  React.ElementRef<typeof CheckboxPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof CheckboxPrimitive.Root>
->(({ className, ...props }, ref) => (
-  <CheckboxPrimitive.Root
-    ref={ref}
-    className={cn(
-      "peer h-4 w-4 shrink-0 rounded-sm border border-primary ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-[#18181B] data-[state=checked]:text-white",
-      className
-    )}
-    {...props}
-  >
-    <CheckboxPrimitive.Indicator
-      className={cn("flex items-center justify-center text-current")}
+type CheckedState = boolean | "indeterminate"
+
+export interface CheckboxProps
+  extends Omit<
+    React.ComponentProps<typeof HeroCheckbox>,
+    "checked" | "defaultChecked" | "disabled" | "onChange" | "isSelected" | "defaultSelected"
+  > {
+  checked?: CheckedState
+  defaultChecked?: CheckedState
+  disabled?: boolean
+  onCheckedChange?: (checked: CheckedState) => void
+}
+
+const Checkbox = React.forwardRef<HTMLLabelElement, CheckboxProps>(
+  (
+    {
+      className,
+      checked,
+      defaultChecked,
+      disabled,
+      isDisabled,
+      onCheckedChange,
+      children,
+      ...props
+    },
+    ref
+  ) => (
+    <HeroCheckbox
+      ref={ref}
+      isSelected={checked === "indeterminate" ? true : checked}
+      defaultSelected={defaultChecked === "indeterminate" ? true : defaultChecked}
+      isIndeterminate={checked === "indeterminate"}
+      isDisabled={isDisabled ?? disabled}
+      onChange={(selected) => onCheckedChange?.(selected)}
+      className={cn(
+        "inline-flex min-h-5 min-w-5 items-center gap-2 rounded-md text-sm text-on-surface data-[selected=true]:text-on-surface",
+        className
+      )}
+      {...props}
     >
-      <Check className="h-4 w-4" />
-    </CheckboxPrimitive.Indicator>
-  </CheckboxPrimitive.Root>
-))
-Checkbox.displayName = CheckboxPrimitive.Root.displayName
+      {children}
+    </HeroCheckbox>
+  )
+)
+Checkbox.displayName = "Checkbox"
 
 export { Checkbox }

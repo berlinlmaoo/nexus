@@ -181,9 +181,9 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 20 }}
-      className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-md bg-zinc-900 px-4 py-3 text-sm text-white shadow-lg"
+      className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-md bg-foreground px-4 py-3 text-sm text-white shadow-lg"
     >
-      <CheckCircle2 className="h-4 w-4 text-zinc-400" />
+      <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
       {message}
     </motion.div>
   )
@@ -293,7 +293,7 @@ function ActionRow({
       className="flex items-end gap-3"
     >
       <div className="flex-1 space-y-1.5">
-        <Label className="text-xs text-zinc-500">
+        <Label className="text-xs text-muted-foreground">
           {index === 0 ? "THEN" : "AND"}
         </Label>
         <Select
@@ -315,7 +315,7 @@ function ActionRow({
 
       {action.type && ACTIONS_NEEDING_VALUE.has(action.type) && (
         <div className="flex-1 space-y-1.5">
-          <Label className="text-xs text-zinc-500">Value</Label>
+          <Label className="text-xs text-muted-foreground">Value</Label>
           <ValueInput
             parentType={action.type}
             value={action.value ?? ""}
@@ -329,7 +329,7 @@ function ActionRow({
         <Button
           variant="ghost"
           size="icon"
-          className="h-9 w-9 shrink-0 text-zinc-400 hover:text-zinc-900"
+          className="h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground"
           onClick={onRemove}
         >
           <X className="h-4 w-4" />
@@ -469,10 +469,10 @@ function BuilderForm({
       exit={{ opacity: 0, height: 0 }}
       transition={{ duration: 0.25 }}
     >
-      <Card className="border-zinc-300 p-5 space-y-5">
+      <Card className="border-on-surface-variant p-5 space-y-5">
         {/* Name */}
         <div className="space-y-1.5">
-          <Label className="text-xs text-zinc-500">Rule name</Label>
+          <Label className="text-xs text-muted-foreground">Rule name</Label>
           <Input
             className="h-9"
             placeholder="e.g. Move completed tasks to Done"
@@ -482,23 +482,23 @@ function BuilderForm({
         </div>
 
         {/* Visual flow header */}
-        <div className="flex items-center gap-2 text-xs font-medium text-zinc-500">
-          <span className="rounded bg-zinc-100 px-2 py-1">WHEN</span>
-          <ArrowRight className="h-3 w-3 text-zinc-400" />
+        <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <span className="rounded bg-muted px-2 py-1">WHEN</span>
+          <ArrowRight className="h-3 w-3 text-muted-foreground" />
           {draft.hasCondition && (
             <>
-              <span className="rounded bg-zinc-100 px-2 py-1">IF</span>
-              <ArrowRight className="h-3 w-3 text-zinc-400" />
+              <span className="rounded bg-muted px-2 py-1">IF</span>
+              <ArrowRight className="h-3 w-3 text-muted-foreground" />
             </>
           )}
-          <span className="rounded bg-zinc-100 px-2 py-1">THEN</span>
+          <span className="rounded bg-muted px-2 py-1">THEN</span>
         </div>
 
         {/* Trigger */}
         <div className="space-y-3">
           <div className="flex items-end gap-3">
             <div className="flex-1 space-y-1.5">
-              <Label className="text-xs text-zinc-500">WHEN</Label>
+              <Label className="text-xs text-muted-foreground">WHEN</Label>
               <Select
                 value={draft.trigger.type}
                 onValueChange={(v) => updateTrigger({ type: v, value: undefined })}
@@ -518,7 +518,7 @@ function BuilderForm({
 
             {draft.trigger.type && TRIGGERS_NEEDING_VALUE.has(draft.trigger.type) && (
               <div className="flex-1 space-y-1.5">
-                <Label className="text-xs text-zinc-500">Value</Label>
+                <Label className="text-xs text-muted-foreground">Value</Label>
                 <ValueInput
                   parentType={draft.trigger.type}
                   value={draft.trigger.value ?? ""}
@@ -542,7 +542,7 @@ function BuilderForm({
             >
               <div className="flex items-end gap-3">
                 <div className="flex-1 space-y-1.5">
-                  <Label className="text-xs text-zinc-500">IF (condition)</Label>
+                  <Label className="text-xs text-muted-foreground">IF (condition)</Label>
                   <Select
                     value={draft.condition?.type ?? ""}
                     onValueChange={(v) => updateCondition({ type: v, value: undefined })}
@@ -562,7 +562,7 @@ function BuilderForm({
 
                 {draft.condition?.type && (
                   <div className="flex-1 space-y-1.5">
-                    <Label className="text-xs text-zinc-500">Value</Label>
+                    <Label className="text-xs text-muted-foreground">Value</Label>
                     <ValueInput
                       parentType={draft.condition.type}
                       value={draft.condition.value ?? ""}
@@ -575,7 +575,7 @@ function BuilderForm({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-9 w-9 shrink-0 text-zinc-400 hover:text-zinc-900"
+                  className="h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground"
                   onClick={toggleCondition}
                 >
                   <X className="h-4 w-4" />
@@ -589,7 +589,7 @@ function BuilderForm({
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 gap-1.5 text-xs text-zinc-500 hover:text-zinc-900"
+            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
             onClick={toggleCondition}
           >
             <Filter className="h-3.5 w-3.5" />
@@ -615,7 +615,7 @@ function BuilderForm({
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 gap-1.5 text-xs text-zinc-500 hover:text-zinc-900"
+            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
             onClick={addAction}
           >
             <Plus className="h-3.5 w-3.5" />
@@ -624,7 +624,7 @@ function BuilderForm({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between border-t border-zinc-200 pt-4">
+        <div className="flex items-center justify-between border-t border-on-surface-variant pt-4">
           <Button
             variant="outline"
             size="sm"
@@ -685,7 +685,7 @@ function RuleCard({
     >
       <Card
         className={cn(
-          "group border transition-all duration-200 hover:border-zinc-400",
+          "group border transition-all duration-200 hover:border-on-surface-variant",
           !automation.enabled && "opacity-60",
         )}
       >
@@ -699,43 +699,43 @@ function RuleCard({
 
           {/* Content */}
           <div className="min-w-0 flex-1">
-            <h4 className="truncate text-sm font-medium text-zinc-900">
+            <h4 className="truncate text-sm font-medium text-foreground">
               {automation.name}
             </h4>
 
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
               {/* Trigger badge */}
-              <span className="inline-flex items-center gap-1 rounded bg-zinc-100 px-2 py-0.5 text-zinc-700">
+              <span className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-on-surface-variant">
                 <Zap className="h-3 w-3" />
                 {triggerLabel(automation.trigger.type)}
                 {automation.trigger.value && (
-                  <span className="text-zinc-500">: {automation.trigger.value}</span>
+                  <span className="text-muted-foreground">: {automation.trigger.value}</span>
                 )}
               </span>
 
-              <ArrowRight className="h-3 w-3 text-zinc-400" />
+              <ArrowRight className="h-3 w-3 text-muted-foreground" />
 
               {/* Condition badge (if present) */}
               {automation.condition?.type && (
                 <>
-                  <span className="inline-flex items-center gap-1 rounded bg-zinc-50 px-2 py-0.5 text-zinc-600 ring-1 ring-inset ring-zinc-200">
+                  <span className="inline-flex items-center gap-1 rounded bg-surface-container-lowest px-2 py-0.5 text-on-surface-variant ring-1 ring-inset ring-on-surface-variant">
                     <Filter className="h-3 w-3" />
                     {conditionLabel(automation.condition.type)}
                     {automation.condition.value && (
-                      <span className="text-zinc-500">
+                      <span className="text-muted-foreground">
                         : {automation.condition.value}
                       </span>
                     )}
                   </span>
-                  <ArrowRight className="h-3 w-3 text-zinc-400" />
+                  <ArrowRight className="h-3 w-3 text-muted-foreground" />
                 </>
               )}
 
               {/* Action badge */}
-              <span className="inline-flex items-center gap-1 rounded bg-zinc-900 px-2 py-0.5 text-zinc-100">
+              <span className="inline-flex items-center gap-1 rounded bg-foreground px-2 py-0.5 text-background">
                 {actionLabel(automation.action.type)}
                 {automation.action.value && (
-                  <span className="text-zinc-400">: {automation.action.value}</span>
+                  <span className="text-muted-foreground">: {automation.action.value}</span>
                 )}
               </span>
             </div>
@@ -746,7 +746,7 @@ function RuleCard({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-zinc-400 hover:text-zinc-900"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
               onClick={onEdit}
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -754,7 +754,7 @@ function RuleCard({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-zinc-400 hover:text-red-600"
+              className="h-8 w-8 text-muted-foreground hover:text-red-600"
               onClick={onDelete}
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -832,8 +832,8 @@ export function AutomationBuilder({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-zinc-900">Automations</h3>
-          <p className="text-sm text-zinc-500">
+          <h3 className="text-lg font-semibold text-foreground">Automations</h3>
+          <p className="text-sm text-muted-foreground">
             Automate repetitive tasks with rules
           </p>
         </div>
@@ -887,12 +887,12 @@ export function AutomationBuilder({
         </AnimatePresence>
 
         {automations.length === 0 && !showBuilder && (
-          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-zinc-300 py-12 text-center">
-            <Zap className="h-8 w-8 text-zinc-300" />
-            <p className="mt-3 text-sm font-medium text-zinc-500">
+          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-on-surface-variant py-12 text-center">
+            <Zap className="h-8 w-8 text-muted-foreground" />
+            <p className="mt-3 text-sm font-medium text-muted-foreground">
               No automations yet
             </p>
-            <p className="mt-1 text-xs text-zinc-400">
+            <p className="mt-1 text-xs text-muted-foreground">
               Create your first automation to get started
             </p>
             <Button

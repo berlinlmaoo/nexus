@@ -26,6 +26,20 @@ function normalizeCustomKey(key: string): string {
   return key.trim().toLowerCase()
 }
 
+/**
+ * Best-effort real client IP behind Cloudflare + nginx. Prefers CF-Connecting-IP (set by Cloudflare,
+ * not spoofable by the client) then X-Real-IP (set by nginx to $remote_addr), and only falls back to
+ * the left-most X-Forwarded-For hop (client-controllable) as a last resort.
+ */
+export function trustedClientIp(req: NextRequest): string {
+  return (
+    req.headers.get("cf-connecting-ip")?.trim() ||
+    req.headers.get("x-real-ip")?.trim() ||
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    "unknown"
+  )
+}
+
 function getClientKey(req: NextRequest, userId?: string): string {
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||

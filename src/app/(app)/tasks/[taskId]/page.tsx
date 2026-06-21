@@ -4,17 +4,18 @@ import prisma from "@/lib/prisma"
 import { TaskFullPage } from "./task-full-page"
 
 interface TaskPageProps {
-  params: { taskId: string }
+  params: Promise<{ taskId: string }>
 }
 
 export const dynamic = "force-dynamic"
 
 export default async function TaskPage({ params }: TaskPageProps) {
+  const { taskId } = await params
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
   const task = await prisma.task.findUnique({
-    where: { id: params.taskId },
+    where: { id: taskId },
     include: {
       assignees: {
         include: {

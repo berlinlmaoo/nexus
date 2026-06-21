@@ -83,14 +83,14 @@ export function MessageBubble({ role, content, message, toolResults, isStreaming
   return (
     <div className={cn('flex w-full gap-2', isUser ? 'justify-end' : 'justify-start')}>
       {!isUser && (
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-800">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-foreground">
           <Bot className="h-4 w-4 text-white" />
         </div>
       )}
 
       <div className={cn('flex max-w-[85%] flex-col gap-1', isUser && 'items-end')}>
         {!isUser && (
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             GIDEON
           </span>
         )}
@@ -99,16 +99,16 @@ export function MessageBubble({ role, content, message, toolResults, isStreaming
           className={cn(
             'rounded-2xl px-4 py-2.5 text-sm leading-relaxed',
             isUser
-              ? 'rounded-br-md bg-zinc-800 text-white'
-              : 'rounded-bl-md bg-zinc-800/50 text-gray-200'
+              ? 'rounded-br-md bg-foreground text-white'
+              : 'rounded-bl-md bg-foreground/50 text-background'
           )}
         >
           {content && formatContent(content)}
           {isStreaming && !content && (
             <div className="flex items-center gap-1 py-1">
-              <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-400 [animation-delay:0ms]" />
-              <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-400 [animation-delay:150ms]" />
-              <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-400 [animation-delay:300ms]" />
+              <span className="h-2 w-2 animate-bounce rounded-full bg-surface-container-high [animation-delay:0ms]" />
+              <span className="h-2 w-2 animate-bounce rounded-full bg-surface-container-high [animation-delay:150ms]" />
+              <span className="h-2 w-2 animate-bounce rounded-full bg-surface-container-high [animation-delay:300ms]" />
             </div>
           )}
         </div>

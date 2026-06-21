@@ -7,19 +7,19 @@ import { checkProjectAccess } from "@/lib/rbac"
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { allowed } = await checkProjectAccess(session.user.id!, params.projectId, ["MEMBER"])
+    const { allowed } = await checkProjectAccess(session.user.id!, (await params).projectId, ["MEMBER"])
     if (!allowed) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
     const sections = await prisma.taskList.findMany({
-      where: { projectId: params.projectId },
+      where: { projectId: (await params).projectId },
       orderBy: { position: "asc" },
       include: {
         _count: { select: { tasks: true } },
@@ -35,13 +35,13 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { allowed } = await checkProjectAccess(session.user.id!, params.projectId, ["MEMBER"])
+    const { allowed } = await checkProjectAccess(session.user.id!, (await params).projectId, ["MEMBER"])
     if (!allowed) {
       return NextResponse.json({ error: "Forbidden: MEMBER role or higher required" }, { status: 403 })
     }
@@ -55,7 +55,7 @@ export async function POST(
 
     // Auto-set position to last
     const lastSection = await prisma.taskList.findFirst({
-      where: { projectId: params.projectId },
+      where: { projectId: (await params).projectId },
       orderBy: { position: "desc" },
       select: { position: true },
     })
@@ -63,7 +63,7 @@ export async function POST(
     const section = await prisma.taskList.create({
       data: {
         name: name.trim(),
-        projectId: params.projectId,
+        projectId: (await params).projectId,
         position: (lastSection?.position ?? -1) + 1,
       },
     })
@@ -77,13 +77,13 @@ export async function POST(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { allowed } = await checkProjectAccess(session.user.id!, params.projectId, ["MEMBER"])
+    const { allowed } = await checkProjectAccess(session.user.id!, (await params).projectId, ["MEMBER"])
     if (!allowed) {
       return NextResponse.json({ error: "Forbidden: MEMBER role or higher required" }, { status: 403 })
     }
@@ -96,7 +96,7 @@ export async function PATCH(
     }
 
     const existing = await prisma.taskList.findUnique({ where: { id } })
-    if (!existing || existing.projectId !== params.projectId) {
+    if (!existing || existing.projectId !== (await params).projectId) {
       return NextResponse.json({ error: "Section not found" }, { status: 404 })
     }
 
@@ -109,7 +109,7 @@ export async function PATCH(
         // Moving up: shift items in [newPos, oldPos) down by 1
         await prisma.taskList.updateMany({
           where: {
-            projectId: params.projectId,
+            projectId: (await params).projectId,
             position: { gte: newPos, lt: oldPos },
           },
           data: { position: { increment: 1 } },
@@ -118,7 +118,7 @@ export async function PATCH(
         // Moving down: shift items in (oldPos, newPos] up by 1
         await prisma.taskList.updateMany({
           where: {
-            projectId: params.projectId,
+            projectId: (await params).projectId,
             position: { gt: oldPos, lte: newPos },
           },
           data: { position: { decrement: 1 } },
@@ -143,13 +143,13 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { allowed } = await checkProjectAccess(session.user.id!, params.projectId, ["MEMBER"])
+    const { allowed } = await checkProjectAccess(session.user.id!, (await params).projectId, ["MEMBER"])
     if (!allowed) {
       return NextResponse.json({ error: "Forbidden: MEMBER role or higher required" }, { status: 403 })
     }
@@ -162,7 +162,7 @@ export async function DELETE(
     }
 
     const allSections = await prisma.taskList.findMany({
-      where: { projectId: params.projectId },
+      where: { projectId: (await params).projectId },
       orderBy: { position: "asc" },
     })
 

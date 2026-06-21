@@ -252,7 +252,7 @@ export function FileBrowser({
             const path = "/" + breadcrumbs.slice(0, i + 1).join("/")
             return (
               <span key={path} className="flex items-center gap-0.5 shrink-0">
-                {i > 0 && <ChevronRight className="h-3 w-3 text-zinc-300" />}
+                {i > 0 && <ChevronRight className="h-3 w-3 text-muted-foreground" />}
                 <button
                   onClick={() => navigateTo(path)}
                   className="hover:text-foreground transition-colors px-1 py-0.5 rounded hover:bg-muted"
@@ -341,16 +341,16 @@ export function FileBrowser({
                   onClick={() => handleFileClick(file)}
                   onDoubleClick={() => handleDoubleClick(file)}
                   className={cn(
-                    "grid grid-cols-[1fr_80px_100px] gap-2 px-3 py-2 text-xs cursor-pointer transition-colors border-b border-zinc-100",
+                    "grid grid-cols-[1fr_80px_100px] gap-2 px-3 py-2 text-xs cursor-pointer transition-colors border-b border-on-surface-variant",
                     isSelected(file.path)
-                      ? "bg-zinc-100"
-                      : "hover:bg-zinc-50"
+                      ? "bg-muted"
+                      : "hover:bg-surface-container-lowest"
                   )}
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <Icon className={cn(
                       "h-4 w-4 shrink-0",
-                      file.isdir ? "text-zinc-600" : "text-zinc-400"
+                      file.isdir ? "text-on-surface-variant" : "text-muted-foreground"
                     )} />
                     <span className="truncate font-medium">{file.name}</span>
                   </div>
@@ -377,13 +377,13 @@ export function FileBrowser({
                   className={cn(
                     "flex flex-col items-center gap-1.5 p-3 rounded-lg cursor-pointer transition-colors text-center",
                     isSelected(file.path)
-                      ? "bg-zinc-100"
-                      : "hover:bg-zinc-50"
+                      ? "bg-muted"
+                      : "hover:bg-surface-container-lowest"
                   )}
                 >
                   <Icon className={cn(
                     "h-8 w-8",
-                    file.isdir ? "text-zinc-600" : "text-zinc-400"
+                    file.isdir ? "text-on-surface-variant" : "text-muted-foreground"
                   )} />
                   <span className="text-[11px] truncate w-full">{file.name}</span>
                   {!file.isdir && (
@@ -421,7 +421,7 @@ export function FileBrowser({
             onChange={(e) => setNewFolderName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleCreateFolder()}
             placeholder="Folder name..."
-            className="flex-1 text-xs border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-zinc-300"
+            className="flex-1 text-xs border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-on-surface-variant"
             autoFocus
           />
           <Button size="sm" className="h-7 text-xs" onClick={handleCreateFolder}>Create</Button>

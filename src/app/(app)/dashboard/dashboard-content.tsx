@@ -2,7 +2,20 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { DashboardSkeleton } from "@/components/ui/skeleton"
-import { Plus, X, Loader2, ArrowRight, CheckCircle2, Calendar, Circle, CheckCircle } from "lucide-react"
+import {
+  Plus,
+  Loader2,
+  ArrowRight,
+  CheckCircle2,
+  Circle,
+  CheckCircle,
+  Flame,
+  Sparkles,
+  Target,
+  Trophy,
+  ShieldCheck,
+  Zap,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -15,8 +28,6 @@ import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { UserAvatar } from "@/components/ui/user-avatar"
-import { StatusBadge } from "@/components/tasks/status-badge"
-import { format } from "date-fns"
 
 interface DashboardData {
   tasks: Array<{
@@ -56,6 +67,97 @@ const getGreeting = () => {
   return "Good evening"
 }
 
+const statusTone: Record<DashboardData["tasks"][number]["status"], string> = {
+  TODO: "bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-200",
+  IN_PROGRESS: "bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-200",
+  IN_REVIEW: "bg-blue-100 text-blue-800 dark:bg-blue-400/15 dark:text-blue-200",
+  DONE: "bg-emerald-100 text-emerald-800 dark:bg-emerald-400/15 dark:text-emerald-200",
+  CANCELLED: "bg-rose-100 text-rose-800 dark:bg-rose-400/15 dark:text-rose-200",
+}
+
+const statusLabel: Record<DashboardData["tasks"][number]["status"], string> = {
+  TODO: "Pending",
+  IN_PROGRESS: "In progress",
+  IN_REVIEW: "Review",
+  DONE: "Done",
+  CANCELLED: "Cancelled",
+}
+
+function getDevelopmentDashboardData(): DashboardData {
+  const now = new Date()
+  return {
+    tasks: [
+      {
+        id: "demo-task-1",
+        title: "Finalize Q2 roadmap",
+        status: "DONE",
+        dueDate: now.toISOString(),
+        project: { id: "demo-project-1", name: "Strategy", color: "#059669" },
+      },
+      {
+        id: "demo-task-2",
+        title: "Review campaign performance",
+        status: "IN_PROGRESS",
+        dueDate: now.toISOString(),
+        project: { id: "demo-project-2", name: "Growth", color: "#f59e0b" },
+      },
+      {
+        id: "demo-task-3",
+        title: "Align team on OKRs",
+        status: "TODO",
+        dueDate: null,
+        project: { id: "demo-project-3", name: "Operations", color: "#2563eb" },
+      },
+      {
+        id: "demo-task-4",
+        title: "Update investor deck",
+        status: "DONE",
+        dueDate: null,
+        project: { id: "demo-project-4", name: "Finance", color: "#10b981" },
+      },
+      {
+        id: "demo-task-5",
+        title: "Customer feedback analysis",
+        status: "IN_PROGRESS",
+        dueDate: null,
+        project: { id: "demo-project-5", name: "Product", color: "#7c3aed" },
+      },
+    ],
+    projects: [
+      { id: "demo-project-1", name: "Growth", color: "#059669", progress: 75 },
+      { id: "demo-project-2", name: "Product", color: "#2563eb", progress: 60 },
+      { id: "demo-project-3", name: "Operations", color: "#64748b", progress: 65 },
+      { id: "demo-project-4", name: "Finance", color: "#f59e0b", progress: 70 },
+    ],
+    activity: [
+      {
+        id: "demo-activity-1",
+        action: "completed",
+        details: null,
+        createdAt: now.toISOString(),
+        user: { name: "Jamie Lee", avatar: null },
+        task: { title: "Finalize Q2 roadmap" },
+      },
+      {
+        id: "demo-activity-2",
+        action: "commented on",
+        details: null,
+        createdAt: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
+        user: { name: "Sam Carter", avatar: null },
+        task: { title: "Campaign Performance Update" },
+      },
+      {
+        id: "demo-activity-3",
+        action: "updated project",
+        details: null,
+        createdAt: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(),
+        user: { name: "Taylor Kim", avatar: null },
+        project: { name: "Mobile App Redesign" },
+      },
+    ],
+  }
+}
+
 export function DashboardContent({ userName }: { userName: string }) {
   const router = useRouter()
   const [data, setData] = useState<DashboardData | null>(null)
@@ -70,6 +172,7 @@ export function DashboardContent({ userName }: { userName: string }) {
   const [taskListsLoading, setTaskListsLoading] = useState(false)
   const [creating, setCreating] = useState(false)
   const [completingIds, setCompletingIds] = useState<Set<string>>(new Set())
+  const isDemoId = (id: string) => id.startsWith("demo-")
 
   useEffect(() => {
     fetch("/api/dashboard", { credentials: "same-origin" })
@@ -84,7 +187,12 @@ export function DashboardContent({ userName }: { userName: string }) {
       .then((json) => {
         if (json) setData(json)
       })
-      .catch((err) => console.error("Dashboard fetch error:", err))
+      .catch((err) => {
+        console.error("Dashboard fetch error:", err)
+        if (process.env.NODE_ENV !== "production") {
+          setData(getDevelopmentDashboardData())
+        }
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -241,214 +349,292 @@ export function DashboardContent({ userName }: { userName: string }) {
 
   const selectedProjectTaskLists = selectedProject ? (projectTaskLists[selectedProject] ?? []) : []
   const greeting = getGreeting()
+  const tasks = data?.tasks ?? []
+  const projectsData = data?.projects ?? []
+  const activity = data?.activity ?? []
+  const activeTasks = tasks.filter((task) => task.status !== "DONE" && task.status !== "CANCELLED")
+  const reviewTasks = tasks.filter((task) => task.status === "IN_REVIEW").length
+  const averageProgress = projectsData.length
+    ? Math.round(projectsData.reduce((sum, project) => sum + project.progress, 0) / projectsData.length)
+    : 0
+  const focusScore = Math.min(100, Math.max(12, 100 - activeTasks.length * 7 + reviewTasks * 3))
+  const completedTasks = tasks.filter((task) => task.status === "DONE").length
+  const missionTotal = Math.max(tasks.length, 10)
+  const missionProgress = Math.round((completedTasks / missionTotal) * 100)
+  const weeklyTarget = Math.min(100, Math.max(25, averageProgress || focusScore))
 
   if (loading) {
     return <DashboardSkeleton />
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-8 animate-fade-in pb-24 [content-visibility:auto] sm:space-y-12">
-      {/* Header Section */}
-      <div className="flex flex-col justify-between gap-4 sm:gap-6 md:flex-row md:items-end">
-        <div className="space-y-2">
-          <h2 className="text-3xl font-headline font-black leading-none tracking-tight text-primary sm:text-4xl">
-            {greeting}, <span className="text-primary/40">{userName}.</span>
+    <div className="mx-auto max-w-6xl animate-fade-in space-y-5 pb-24 [content-visibility:auto] sm:space-y-6">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h2 className="text-3xl font-black leading-tight tracking-tight text-primary sm:text-4xl">
+            {greeting}, {userName}.
           </h2>
-          <p className="text-sm font-medium leading-relaxed text-on-surface-variant/60 sm:text-lg">
-            Operational status: <span className="text-green-600 font-bold uppercase tracking-wider text-xs">Active</span> • 4 critical nodes requiring attention.
+          <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-on-surface-variant/75">
+            Let&apos;s complete your missions and move the strategy forward.
           </p>
         </div>
         <Button
           onClick={openQuickCreate}
-          className="group h-12 w-full rounded-xl bg-primary px-5 text-[11px] font-black uppercase tracking-widest text-primary-foreground shadow-lg transition-all duration-300 hover:translate-y-[-2px] hover:opacity-90 hover:shadow-2xl sm:h-14 sm:w-auto sm:rounded-2xl sm:px-8 sm:text-xs"
+          className="h-12 w-full rounded-md bg-emerald-600 px-5 text-xs font-black tracking-wide text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-emerald-700 sm:w-auto"
         >
-          <Plus className="h-4 w-4 mr-2 transition-transform group-hover:rotate-90" />
-          Initiate Task
+          <Plus className="mr-2 h-4 w-4" />
+          Create Task
         </Button>
       </div>
 
-      {/* Bento Grid */}
-      <div className="grid grid-cols-12 gap-4 sm:gap-8">
-        {/* Today's Tasks */}
-        <section className="col-span-12 rounded-[28px] border border-on-surface-variant/5 bg-surface-container-lowest p-4 shadow-2xl shadow-primary/5 sm:rounded-[32px] sm:p-8 lg:col-span-7">
-          <div className="mb-6 flex flex-col gap-4 sm:mb-10 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-tertiary-new/5 text-tertiary-new sm:h-12 sm:w-12">
-                <CheckCircle2 className="h-6 w-6" />
+      <section className="rounded-lg border border-on-surface-variant/10 bg-surface-container-lowest shadow-sm">
+        <div className="grid divide-y divide-on-surface-variant/10 md:grid-cols-4 md:divide-x md:divide-y-0">
+          {[
+            {
+              icon: ShieldCheck,
+              label: "Mission status",
+              value: `${completedTasks} / ${missionTotal}`,
+              detail: "Completed",
+              tone: "text-emerald-600",
+              bar: missionProgress,
+            },
+            {
+              icon: Zap,
+              label: "XP earned",
+              value: focusScore * 32,
+              detail: `+${Math.max(25, activeTasks.length * 15)} XP today`,
+              tone: "text-emerald-600",
+              bar: null,
+            },
+            {
+              icon: Flame,
+              label: "Current streak",
+              value: Math.max(1, reviewTasks + 3),
+              detail: "days",
+              tone: "text-amber-500",
+              bar: null,
+            },
+            {
+              icon: Target,
+              label: "Weekly target",
+              value: `${weeklyTarget}%`,
+              detail: weeklyTarget > 70 ? "On track" : "Needs focus",
+              tone: "text-primary",
+              bar: null,
+            },
+          ].map((item) => (
+            <div key={item.label} className="flex items-center gap-4 p-4 sm:p-5">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-on-surface-variant/10 bg-surface-container-low text-primary">
+                <item.icon className={cn("h-6 w-6", item.tone)} />
               </div>
-              <div>
-                <h3 className="text-lg font-headline font-black tracking-tight text-primary sm:text-xl">Active Protocol</h3>
-                <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/40">Today's Objectives</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-on-surface-variant/65">{item.label}</p>
+                <div className="mt-1 flex items-end gap-2">
+                  <p className="text-xl font-black leading-none text-primary">{item.value}</p>
+                  <p className={cn("text-xs font-bold", item.tone)}>{item.detail}</p>
+                </div>
+                {item.bar !== null && (
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-container-high">
+                    <div className="h-full rounded-full bg-emerald-600" style={{ width: `${item.bar}%` }} />
+                  </div>
+                )}
               </div>
             </div>
-            <Link href="/my-tasks" className="inline-flex w-full items-center justify-center rounded-full bg-surface-container-low px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-primary/40 transition-colors hover:text-primary sm:w-auto">View All</Link>
+          ))}
+        </div>
+      </section>
+
+      <div className="grid grid-cols-12 gap-5">
+        <section className="col-span-12 rounded-lg border border-on-surface-variant/10 bg-surface-container-lowest p-4 shadow-sm sm:p-5 lg:col-span-5">
+          <div className="mb-4 flex items-center justify-between border-b border-on-surface-variant/10 pb-4">
+            <div>
+              <h3 className="text-base font-black uppercase tracking-tight text-primary">Daily objectives</h3>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-black text-primary">{completedTasks} / {Math.max(tasks.length, 6)}</span>
+              <Link href="/my-tasks" className="hidden text-xs font-black text-emerald-700 hover:text-emerald-800 sm:inline-flex">
+                View all tasks <ArrowRight className="ml-1 h-3.5 w-3.5" />
+              </Link>
+            </div>
           </div>
-          
-          <div className="space-y-2">
-            {data?.tasks.length === 0 ? (
-              <div className="py-12 text-center text-on-surface-variant/40 italic font-medium text-sm">System clear. No pending objectives for this cycle.</div>
+
+          <div className="divide-y divide-on-surface-variant/10">
+            {tasks.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-on-surface-variant/20 bg-surface-container-low/40 px-4 py-12 text-center">
+                <Sparkles className="mx-auto mb-3 h-6 w-6 text-emerald-500" />
+                <p className="text-sm font-black text-primary">Mission board is clear.</p>
+                <p className="mt-1 text-xs font-medium text-on-surface-variant/60">Create a new objective when you are ready to move.</p>
+              </div>
             ) : (
-              data?.tasks.slice(0, 5).map((task) => {
+              tasks.slice(0, 5).map((task) => {
                 const isCompleting = completingIds.has(task.id)
 
                 return (
-                <div 
-                  key={task.id}
-                  role="button"
-                  tabIndex={0}
-                  className={cn(
-                    "group block cursor-pointer rounded-2xl border border-transparent bg-surface-container-low/30 p-4 transition-all duration-300 hover:border-on-surface-variant/5 hover:bg-surface-container-low sm:px-6 sm:py-4",
-                    isCompleting && "opacity-60"
-                  )}
-                  onClick={() => {
-                    router.push(`/projects/${task.project.id}?task=${task.id}`)
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault()
-                      router.push(`/projects/${task.project.id}?task=${task.id}`)
-                    }
-                  }}
-                >
-                  <div className="flex items-start gap-3 sm:items-center">
-                    <button
-                      onClick={(e) => completeDashboardTask(task.id, e)}
-                      className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border-2 border-on-surface-variant/20 bg-surface-container-lowest text-on-surface-variant/60 shadow-sm transition-all hover:border-emerald-500 hover:text-emerald-500 sm:mt-0"
-                      aria-label={isCompleting ? "Task completed" : `Mark ${task.title} as done`}
-                    >
-                      {isCompleting ? (
-                        <CheckCircle className="h-4 w-4 text-emerald-500" />
-                      ) : (
-                        <Circle className="h-4 w-4" />
-                      )}
-                    </button>
-                    <div className="min-w-0 flex-1">
-                      <span className={cn(
-                        "mb-0.5 block truncate text-sm font-bold text-on-surface transition-all",
-                        isCompleting && "line-through text-on-surface-variant/50"
-                      )}>{task.title}</span>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <div className="h-2 w-2 rounded-full" style={{ backgroundColor: task.project.color }} />
-                          <span className="truncate text-[10px] font-black uppercase tracking-wider text-on-surface-variant/60">{task.project.name}</span>
-                        </div>
-                        {task.dueDate && (
-                          <div className="flex items-center gap-1 text-on-surface-variant/30">
-                            <span className="text-[10px] font-black tracking-widest">•</span>
-                            <Calendar className="h-3 w-3" />
-                            <span className="text-[10px] font-bold uppercase tracking-wider">{format(new Date(task.dueDate), "MMM d")}</span>
+                  <div
+                    key={task.id}
+                    role="button"
+                    tabIndex={0}
+                    className={cn(
+                      "group py-4 transition-colors sm:px-1",
+                      isDemoId(task.id) || isDemoId(task.project.id)
+                        ? "cursor-default"
+                        : "cursor-pointer hover:bg-surface-container-low/50",
+                      isCompleting && "opacity-60"
+                    )}
+                    onClick={() => {
+                      if (!isDemoId(task.id) && !isDemoId(task.project.id)) {
+                        router.push(`/projects/${task.project.id}?task=${task.id}`)
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault()
+                        if (!isDemoId(task.id) && !isDemoId(task.project.id)) {
+                          router.push(`/projects/${task.project.id}?task=${task.id}`)
+                        }
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={(e) => completeDashboardTask(task.id, e)}
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-on-surface-variant/25 bg-surface-container-lowest text-on-surface-variant/60 transition-all hover:border-emerald-600 hover:text-emerald-600"
+                        aria-label={isCompleting ? "Task completed" : `Mark ${task.title} as done`}
+                      >
+                        {isCompleting ? <CheckCircle className="h-4 w-4 text-emerald-600" /> : <Circle className="h-4 w-4" />}
+                      </button>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <h4 className={cn("truncate text-sm font-bold leading-snug text-on-surface", isCompleting && "line-through text-on-surface-variant/50")}>
+                              {task.title}
+                            </h4>
+                            <div className="mt-1 flex min-w-0 items-center gap-1.5">
+                              <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: task.project.color }} />
+                              <span className="truncate text-xs font-medium text-on-surface-variant">{task.project.name}</span>
+                            </div>
                           </div>
-                        )}
+                          <span className={cn("rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em]", statusTone[task.status])}>
+                            {statusLabel[task.status]}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                  <div className="mt-3 flex items-center justify-between sm:mt-4">
-                    <StatusBadge status={task.status} className="border-none bg-surface-container-high" />
-                    <ArrowRight className="h-4 w-4 text-on-surface-variant/20 transition-all group-hover:translate-x-1 group-hover:opacity-100 sm:opacity-0" />
-                  </div>
-                </div>
-              )})
+                )
+              })
             )}
           </div>
+          <Link href="/my-tasks" className="mt-4 inline-flex items-center text-xs font-black text-emerald-700 hover:text-emerald-800 sm:hidden">
+            View all tasks <ArrowRight className="ml-1 h-3.5 w-3.5" />
+          </Link>
         </section>
 
-        {/* Projects / Recent Docs Style */}
-        <section className="col-span-12 lg:col-span-5 flex flex-col gap-6">
-          <div className="group relative overflow-hidden rounded-[28px] bg-primary p-5 text-primary-foreground shadow-xl sm:rounded-[32px] sm:p-8">
-            <div className="absolute top-[-20%] right-[-10%] w-48 h-48 rounded-full bg-primary-foreground/10 blur-[60px] group-hover:scale-125 transition-transform duration-700" />
-            <div className="relative z-10">
-              <h3 className="mb-2 text-xl font-headline font-black tracking-tight sm:text-2xl">Strategy Map</h3>
-              <p className="mb-6 text-sm font-medium text-primary-foreground/60 sm:mb-8">Synchronized project infrastructure.</p>
-              
-              <div className="space-y-4">
-                {data?.projects.slice(0, 3).map((project) => (
-                  <Link 
-                    key={project.id}
-                    href={`/projects/${project.id}`}
-                    className="block group/item"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold tracking-tight group-hover/item:translate-x-1 transition-transform">{project.name}</span>
-                      <span className="text-[10px] font-black opacity-40">{Math.round(project.progress)}%</span>
-                    </div>
-                    <div className="h-1.5 w-full bg-primary-foreground/10 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-primary-foreground transition-all duration-1000 ease-out"
-                        style={{ width: `${project.progress}%` }}
-                      />
-                    </div>
-                  </Link>
-                ))}
+        <section className="col-span-12 flex flex-col gap-5 lg:col-span-7">
+          <div className="rounded-lg border border-on-surface-variant/10 bg-surface-container-lowest p-4 shadow-sm sm:p-5">
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-black uppercase tracking-tight text-primary">Strategy map</h3>
+                <p className="mt-1 text-xs font-medium text-on-surface-variant">Overall progress</p>
               </div>
-              
-              <Button variant="outline" className="mt-8 h-11 w-full rounded-xl border-none bg-primary-foreground text-[10px] font-black uppercase tracking-widest text-primary shadow-sm hover:bg-primary-foreground/90 sm:h-10">
-                Nexus Overview
-              </Button>
+              <Link href="/projects" className="hidden text-xs font-black text-emerald-700 hover:text-emerald-800 sm:inline-flex">
+                View full map <ArrowRight className="ml-1 h-3.5 w-3.5" />
+              </Link>
             </div>
-          </div>
-
-          <div className="flex-1 rounded-[28px] border border-on-surface-variant/5 bg-surface-container-low p-5 sm:rounded-[32px] sm:p-8">
-             <div className="flex items-center justify-between mb-6">
-                <h3 className="text-sm font-black uppercase tracking-[0.2em] text-on-surface-variant/40">Gideon Intel</h3>
-                <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-             </div>
-             <div className="rounded-2xl border border-on-surface-variant/5 bg-surface-container-highest/50 p-4">
-                <p className="text-xs text-primary font-medium leading-relaxed italic">
-                  "Operative, I've noticed a pattern in your late-night executions. Consider front-loading 'Strategy' tasks for 15% better efficiency."
-                </p>
-                <p className="mt-3 text-[10px] font-black text-primary/40 uppercase tracking-widest">— Gideon AI</p>
-             </div>
-          </div>
-        </section>
-
-        {/* Activity Feed */}
-        <section className="col-span-12 rounded-[28px] border border-on-surface-variant/5 bg-surface-container-lowest p-5 shadow-2xl shadow-primary/5 sm:rounded-[32px] sm:p-10">
-          <div className="mb-8 flex flex-col gap-4 sm:mb-12 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="text-xl font-headline font-black tracking-tight text-primary sm:text-2xl">Intelligence Stream</h3>
-              <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/40">Real-time collaboration node</p>
+            <div className="mb-5 flex items-center gap-3">
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-container-high">
+                <div className="h-full rounded-full bg-emerald-600" style={{ width: `${averageProgress}%` }} />
+              </div>
+              <span className="text-lg font-black text-emerald-700">{averageProgress}%</span>
             </div>
-            <div className="hidden -space-x-3 sm:flex">
-              {data?.activity.slice(0, 4).map((a, i) => (
-                <div key={i} className="ring-4 ring-surface-container-lowest rounded-full transition-transform hover:translate-y-[-4px] hover:z-10 cursor-pointer">
-                  <UserAvatar 
-                    user={{ name: a.user.name, image: a.user.avatar }}
-                    size="sm"
-                  />
+            <div className="relative h-40 overflow-hidden rounded-lg border border-on-surface-variant/10 bg-[linear-gradient(135deg,rgba(16,185,129,0.06),rgba(14,165,233,0.04))] sm:h-52">
+              <div className="absolute inset-0 opacity-60 [background-image:radial-gradient(circle_at_1px_1px,rgba(15,23,42,0.12)_1px,transparent_0)] [background-size:22px_22px]" />
+              <div className="absolute left-[8%] top-[58%] h-px w-[84%] border-t-2 border-dashed border-primary/25" />
+              {[
+                ["left-[12%] top-[60%]", true],
+                ["left-[28%] top-[44%]", true],
+                ["left-[46%] top-[28%]", averageProgress > 45],
+                ["left-[66%] top-[50%]", averageProgress > 65],
+                ["left-[84%] top-[36%]", averageProgress > 85],
+              ].map(([position, reached], index) => (
+                <div
+                  key={index}
+                  className={cn(
+                    "absolute flex h-9 w-9 items-center justify-center rounded-full border-4 border-surface-container-lowest shadow-sm",
+                    position,
+                    reached ? "bg-emerald-600 text-white" : "bg-amber-400 text-primary"
+                  )}
+                >
+                  {reached ? <CheckCircle2 className="h-4 w-4" /> : <Trophy className="h-4 w-4" />}
                 </div>
               ))}
-              <div className="w-8 h-8 rounded-full ring-4 ring-surface-container-lowest bg-surface-container-low flex items-center justify-center text-[10px] font-black text-primary/40">
-                +{data?.activity.length ?? 0}
-              </div>
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {projectsData.slice(0, 4).map((project) => {
+                const content = (
+                  <>
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: project.color }} />
+                    <span className="min-w-0 flex-1 truncate text-[10px] font-black uppercase text-on-surface-variant">{project.name}</span>
+                    <span className="text-sm font-black text-primary">{Math.round(project.progress)}%</span>
+                  </>
+                )
+
+                return isDemoId(project.id) ? (
+                  <div key={project.id} className="flex items-center gap-2 border-r border-on-surface-variant/10 last:border-r-0">
+                    {content}
+                  </div>
+                ) : (
+                  <Link key={project.id} href={`/projects/${project.id}`} className="group flex items-center gap-2 border-r border-on-surface-variant/10 last:border-r-0">
+                    {content}
+                  </Link>
+                )
+              })}
             </div>
           </div>
-          
-          <div className="relative space-y-6 sm:space-y-12 sm:pl-10">
-            <div className="absolute bottom-2 left-[15px] top-2 hidden w-[2px] bg-gradient-to-b from-primary/20 via-primary/5 to-transparent sm:block" />
-            
-            {data?.activity.slice(0, 5).map((act) => (
-              <div key={act.id} className="relative group">
-                <div className="absolute -left-[32px] top-1.5 z-10 hidden h-4 w-4 rounded-full border-2 border-primary bg-surface-container-lowest shadow-sm transition-transform group-hover:scale-125 sm:block"></div>
-                <div className="flex gap-3 sm:gap-6">
-                  <UserAvatar user={{ name: act.user.name, image: act.user.avatar }} size="sm" className="shadow-lg shadow-primary/5" />
-                  <div className="space-y-2 flex-1">
-                    <p className="text-sm leading-tight text-on-surface">
-                      <span className="font-black text-primary uppercase tracking-tight mr-1">{act.user.name}</span>{" "}
-                      <span className="text-on-surface-variant/60 font-medium">{act.action}</span>{" "}
-                      <span className="inline-flex rounded-md bg-surface-container-low px-2 py-0.5 font-bold text-primary">{act.task?.title || act.project?.name}</span>
+
+          <div className="rounded-lg border border-on-surface-variant/10 bg-surface-container-lowest p-4 shadow-sm sm:p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-base font-black uppercase tracking-tight text-primary">AI Intel</h3>
+              <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-[10px] font-black uppercase text-emerald-700">Insight</span>
+            </div>
+            <h4 className="text-sm font-black text-primary">Opportunity identified in today&apos;s planning</h4>
+            <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-on-surface-variant">
+              Start with the objective closest to its due date, then clear review items while context is still warm.
+            </p>
+            <Link href="/my-tasks" className="mt-4 inline-flex items-center text-xs font-black text-emerald-700 hover:text-emerald-800">
+              View full insight <ArrowRight className="ml-1 h-3.5 w-3.5" />
+            </Link>
+          </div>
+        </section>
+
+        <section className="col-span-12 rounded-lg border border-on-surface-variant/10 bg-surface-container-lowest p-4 shadow-sm sm:p-5">
+          <div className="mb-5 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-black uppercase tracking-tight text-primary">Activity stream</h3>
+            </div>
+            <div className="hidden -space-x-2 sm:flex">
+              {activity.slice(0, 4).map((item, i) => (
+                <div key={`${item.id}-${i}`} className="rounded-full ring-4 ring-surface-container-lowest">
+                  <UserAvatar user={{ name: item.user.name, image: item.user.avatar }} size="sm" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="divide-y divide-on-surface-variant/10">
+            {activity.slice(0, 6).map((act) => (
+              <div key={act.id} className="py-3">
+                <div className="flex gap-3">
+                  <UserAvatar user={{ name: act.user.name, image: act.user.avatar }} size="sm" className="shrink-0" />
+                  <div className="grid min-w-0 flex-1 gap-1 sm:grid-cols-[140px_1fr_auto] sm:items-center">
+                    <span className="text-sm font-black text-primary">{act.user.name}</span>
+                    <p className="text-sm leading-5 text-on-surface">
+                      <span className="font-medium text-on-surface-variant/70">{act.action}</span>{" "}
+                      <span className="font-black text-emerald-700">{act.task?.title || act.project?.name}</span>
                     </p>
-                    {act.details && (
-                      <div className="mt-2 max-w-2xl rounded-xl border border-on-surface-variant/5 bg-surface-container-low/50 p-3 transition-colors group-hover:bg-surface-container-low sm:mt-3 sm:rounded-2xl sm:p-4">
-                        <p className="text-xs text-on-surface-variant font-medium leading-relaxed italic opacity-80">{act.details}</p>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] text-on-surface-variant/40 font-black uppercase tracking-widest">
-                        {new Date(act.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                      <span className="text-[9px] text-on-surface-variant/20">•</span>
-                      <span className="text-[9px] text-on-surface-variant/40 font-black uppercase tracking-widest">Encrypted Signal</span>
-                    </div>
+                    <p className="text-[10px] font-bold text-on-surface-variant/55">
+                      {new Date(act.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </p>
                   </div>
                 </div>
               </div>

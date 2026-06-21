@@ -5,6 +5,55 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { isSystemAdminUser } from "@/lib/rbac"
+import { ensureProjectFolder } from "@/lib/nas-project"
+
+const projectListSelect = {
+  id: true,
+  name: true,
+  description: true,
+  color: true,
+  icon: true,
+  status: true,
+  workspaceId: true,
+  folderId: true,
+  createdAt: true,
+  updatedAt: true,
+  _count: {
+    select: {
+      members: true,
+      taskLists: true,
+    },
+  },
+  taskLists: {
+    select: {
+      id: true,
+      _count: {
+        select: { tasks: true },
+      },
+    },
+  },
+  members: {
+    select: {
+      id: true,
+      role: true,
+      userId: true,
+      projectId: true,
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          avatar: true,
+        },
+      },
+    },
+  },
+} as const
+
+function isMissingSchemaError(error: unknown) {
+  return typeof error === "object" && error !== null && "code" in error
+    && (error.code === "P2021" || error.code === "P2022")
+}
 
 async function canManageTeamInWorkspace(userId: string, workspaceId: string, teamId?: string) {
   if (!teamId) return false
@@ -37,24 +86,7 @@ export async function GET(request: NextRequest) {
       if (isSystemAdmin) {
         const projects = await prisma.project.findMany({
           where: { workspaceId },
-          include: {
-            _count: {
-              select: {
-                members: true,
-                taskLists: true,
-              },
-            },
-            taskLists: {
-              include: {
-                _count: {
-                  select: { tasks: true },
-                },
-              },
-            },
-            members: {
-              include: { user: true },
-            },
-          },
+          select: projectListSelect,
           orderBy: { createdAt: "desc" },
         })
 
@@ -92,8 +124,8 @@ export async function GET(request: NextRequest) {
       }
 
       const canSeeAllWorkspaceProjects =
-        workspaceMembership.role === "OWNER" ||
-        workspaceMembership.role === "ADMIN" ||
+        workspaceMembership.role === "BOD" ||
+        workspaceMembership.role === "MANAGER" || workspaceMembership.role === "ONE_ABOVE_ALL" ||
         await canManageTeamInWorkspace(session.user.id, workspaceId, teamId)
 
       const where: Record<string, unknown> = {
@@ -108,24 +140,7 @@ export async function GET(request: NextRequest) {
 
       const projects = await prisma.project.findMany({
         where,
-        include: {
-          _count: {
-            select: {
-              members: true,
-              taskLists: true,
-            },
-          },
-          taskLists: {
-            include: {
-              _count: {
-                select: { tasks: true },
-              },
-            },
-          },
-          members: {
-            include: { user: true },
-          },
-        },
+        select: projectListSelect,
         orderBy: { createdAt: "desc" },
       })
 
@@ -154,11 +169,11 @@ export async function GET(request: NextRequest) {
     })
 
     const adminWorkspaceIds = workspaceMemberships
-      .filter((membership) => membership.role === "OWNER" || membership.role === "ADMIN")
+      .filter((membership) => membership.role === "BOD" || membership.role === "MANAGER" || membership.role === "ONE_ABOVE_ALL")
       .map((membership) => membership.workspaceId)
 
     const memberWorkspaceIds = workspaceMemberships
-      .filter((membership) => membership.role === "MEMBER")
+      .filter((membership) => membership.role === "STAFF")
       .map((membership) => membership.workspaceId)
 
     const whereScopes: Record<string, unknown>[] = []
@@ -190,24 +205,7 @@ export async function GET(request: NextRequest) {
 
     const projects = await prisma.project.findMany({
       where,
-      include: {
-        _count: {
-          select: {
-            members: true,
-            taskLists: true,
-          },
-        },
-        taskLists: {
-          include: {
-            _count: {
-              select: { tasks: true },
-            },
-          },
-        },
-        members: {
-          include: { user: true },
-        },
-      },
+      select: projectListSelect,
       orderBy: { createdAt: "desc" },
     })
 
@@ -229,6 +227,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(result)
   } catch (error) {
+    if (isMissingSchemaError(error)) {
+      return NextResponse.json([])
+    }
+
     console.error("Error fetching projects:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
@@ -302,6 +304,12 @@ export async function POST(request: NextRequest) {
     })
 
     logAudit({ action: "create", entityType: "project", entityId: project.id, entityName: name, userId, request })
+
+    // Best-effort: pre-create the project's NAS storage folder so it exists immediately.
+    // Never blocks project creation — lazy creation in the files route still covers any failure.
+    ensureProjectFolder(project.id).catch((err) => {
+      console.error("Failed to pre-create NAS folder for project", project.id, err)
+    })
 
     return NextResponse.json(project, { status: 201 })
   } catch (error) {

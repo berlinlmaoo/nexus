@@ -8,19 +8,19 @@ import { logAudit } from "@/lib/audit"
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { allowed } = await checkProjectAccess(session.user.id, params.projectId, ["MEMBER"])
+    const { allowed } = await checkProjectAccess(session.user.id, (await params).projectId, ["MEMBER"])
     if (!allowed) {
       return NextResponse.json({ error: "Forbidden: MEMBER role or higher required" }, { status: 403 })
     }
 
     const original = await prisma.project.findUnique({
-      where: { id: params.projectId },
+      where: { id: (await params).projectId },
       include: {
         taskLists: {
           include: {
@@ -104,7 +104,7 @@ export async function POST(
       entityName: newProject.name,
       userId: session.user.id,
       request,
-      metadata: { duplicatedFrom: params.projectId },
+      metadata: { duplicatedFrom: (await params).projectId },
     })
 
     // Return full project

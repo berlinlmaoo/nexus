@@ -7,14 +7,14 @@ import { logAudit } from "@/lib/audit"
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { taskId: string; commentId: string } }
+  { params }: { params: Promise<{ taskId: string; commentId: string }> }
 ) {
   try {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const comment = await prisma.comment.findUnique({
-      where: { id: params.commentId, taskId: params.taskId },
+      where: { id: (await params).commentId, taskId: (await params).taskId },
     })
 
     if (!comment) {
@@ -33,12 +33,12 @@ export async function PATCH(
     }
 
     const updated = await prisma.comment.update({
-      where: { id: params.commentId },
+      where: { id: (await params).commentId },
       data: { content: content.trim(), isEdited: true },
       include: { user: true },
     })
 
-    logAudit({ action: "update", entityType: "comment", entityId: params.commentId, userId: session.user.id!, request })
+    logAudit({ action: "update", entityType: "comment", entityId: (await params).commentId, userId: session.user.id!, request })
 
     return NextResponse.json(updated)
   } catch (error) {
@@ -49,14 +49,14 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { taskId: string; commentId: string } }
+  { params }: { params: Promise<{ taskId: string; commentId: string }> }
 ) {
   try {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const comment = await prisma.comment.findUnique({
-      where: { id: params.commentId, taskId: params.taskId },
+      where: { id: (await params).commentId, taskId: (await params).taskId },
       include: {
         task: {
           include: {
@@ -87,9 +87,9 @@ export async function DELETE(
       return NextResponse.json({ error: "You can only delete your own comments or be a project lead" }, { status: 403 })
     }
 
-    await prisma.comment.delete({ where: { id: params.commentId } })
+    await prisma.comment.delete({ where: { id: (await params).commentId } })
 
-    logAudit({ action: "delete", entityType: "comment", entityId: params.commentId, userId: session.user.id!, request })
+    logAudit({ action: "delete", entityType: "comment", entityId: (await params).commentId, userId: session.user.id!, request })
 
     return NextResponse.json({ success: true })
   } catch (error) {

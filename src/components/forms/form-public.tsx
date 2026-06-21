@@ -2,10 +2,11 @@
 
 import { useState, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Send, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Send, Loader2, CheckCircle2, AlertCircle, Clock3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import type { FormField, FormFieldCondition } from "./form-builder";
+import { getFormAccessStatus, type FormAccessSchedule } from "@/lib/form-access-schedule";
 
 interface FormBranding {
   logoUrl?: string;
@@ -25,6 +26,7 @@ interface FormPublicProps {
   formDescription?: string | null;
   fields: FormField[];
   branding?: FormBranding | null;
+  accessSchedule?: FormAccessSchedule | null;
   taskLists?: TaskListOption[];
 }
 
@@ -87,6 +89,7 @@ export function FormPublic({
   formDescription,
   fields,
   branding,
+  accessSchedule,
   taskLists = [],
 }: FormPublicProps) {
   const [formValues, setFormValues] = useState<Record<string, unknown>>({});
@@ -94,6 +97,7 @@ export function FormPublic({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const accessStatus = useMemo(() => getFormAccessStatus(accessSchedule), [accessSchedule]);
 
   const normalizedFields = useMemo(() => {
     const sectionOptions = taskLists.map((taskList) => taskList.name);
@@ -198,18 +202,18 @@ export function FormPublic({
 
   if (isSubmitted) {
     return (
-      <div className="flex min-h-[100svh] items-center justify-center bg-zinc-50 p-4">
+      <div className="flex min-h-[100svh] items-center justify-center bg-muted p-4">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.3 }}
-          className="w-full max-w-lg rounded-xl border border-zinc-200 bg-white p-8 text-center shadow-sm"
+          className="w-full max-w-lg rounded-xl border border-border bg-card p-8 text-center shadow-sm"
         >
-          <CheckCircle2 className="mx-auto h-12 w-12 text-zinc-800" />
-          <h2 className="mt-4 text-2xl font-semibold text-zinc-900">
+          <CheckCircle2 className="mx-auto h-12 w-12 text-on-surface" />
+          <h2 className="mt-4 text-2xl font-semibold text-on-surface">
             Thank you!
           </h2>
-          <p className="mt-2 text-sm text-zinc-500">
+          <p className="mt-2 text-sm text-muted-foreground">
             Your submission has been received successfully.
           </p>
         </motion.div>
@@ -220,16 +224,38 @@ export function FormPublic({
   const bgColor = branding?.backgroundColor || undefined;
   const primaryColor = branding?.primaryColor || undefined;
 
+  if (!accessStatus.allowed) {
+    return (
+      <div
+        className="flex min-h-[100svh] items-center justify-center bg-muted p-4"
+        style={bgColor ? { backgroundColor: bgColor } : undefined}
+      >
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: "easeOut" }}
+          className="w-full max-w-lg rounded-xl border border-border bg-card p-8 text-center shadow-sm"
+        >
+          <Clock3 className="mx-auto h-12 w-12 text-on-surface" />
+          <h2 className="mt-4 text-2xl font-semibold text-on-surface">Form Closed</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {accessStatus.message ?? "This form is not available right now."}
+          </p>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <div
-      className="mobile-scroll-area flex min-h-[100svh] items-center justify-center overflow-y-auto bg-zinc-50 p-4"
+      className="mobile-scroll-area flex min-h-[100svh] items-center justify-center overflow-y-auto bg-muted p-4"
       style={bgColor ? { backgroundColor: bgColor } : undefined}
     >
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, ease: "easeOut" }}
-        className="w-full max-w-lg rounded-xl border border-zinc-200 bg-white p-8 shadow-sm"
+        className="w-full max-w-lg rounded-xl border border-border bg-card p-8 shadow-sm"
       >
         {branding?.headerImage && (
           <div className="-mx-8 -mt-8 mb-6 overflow-hidden rounded-t-xl">
@@ -250,13 +276,13 @@ export function FormPublic({
         )}
 
         <h1
-          className="text-2xl font-semibold text-zinc-900"
+          className="text-2xl font-semibold text-on-surface"
           style={primaryColor ? { color: primaryColor } : undefined}
         >
           {formName}
         </h1>
         {formDescription && (
-          <p className="mt-1 text-sm text-zinc-500">{formDescription}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{formDescription}</p>
         )}
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-5">
@@ -283,16 +309,16 @@ export function FormPublic({
                       key={`${field.id}-branch-line-${index}`}
                       className={cn(
                         "min-h-full w-px rounded-full",
-                        index === branchDepth - 1 ? "bg-zinc-900/35" : "bg-zinc-200"
+                        index === branchDepth - 1 ? "bg-primary/40" : "bg-surface-container-high"
                       )}
                     />
                   ))}
                 </div>
               )}
-              <div className={cn("min-w-0 flex-1 space-y-1.5", branchDepth > 0 && "rounded-lg bg-zinc-50/50 p-3")}>
+              <div className={cn("min-w-0 flex-1 space-y-1.5", branchDepth > 0 && "rounded-lg bg-muted/50 p-3")}>
                 <label
                   htmlFor={field.id}
-                  className="block text-sm font-medium text-zinc-700"
+                  className="block text-sm font-medium text-on-surface-variant"
                 >
                   {field.name}
                   {field.required && (
@@ -303,10 +329,10 @@ export function FormPublic({
                 {renderField(field, formValues[field.id], handleChange)}
 
                 {field.attachmentEnabled && field.type !== "file" && (
-                  <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50 p-3">
+                  <div className="rounded-lg border border-dashed border-border bg-muted p-3">
                     <label
                       htmlFor={`${field.id}-attachment`}
-                      className="mb-2 block text-xs font-medium text-zinc-500"
+                      className="mb-2 block text-xs font-medium text-muted-foreground"
                     >
                       Add attachment for {field.name} (optional)
                     </label>
@@ -344,9 +370,9 @@ export function FormPublic({
             type="submit"
             disabled={isSubmitting}
             className={cn(
-              "inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+              "inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
               !primaryColor &&
-                "bg-zinc-900 hover:bg-zinc-800 focus-visible:ring-zinc-900"
+                "bg-primary hover:bg-primary/90 focus-visible:ring-ring"
             )}
             style={
               primaryColor
@@ -473,7 +499,7 @@ function renderField(
           {field.options?.filter(Boolean).map((opt, optionIndex) => {
             const isChecked = selectedValues.includes(opt);
             return (
-              <label key={`${opt}-${optionIndex}`} className="flex items-center gap-2 text-sm text-zinc-700">
+              <label key={`${opt}-${optionIndex}`} className="flex items-center gap-2 text-sm text-on-surface-variant">
                 <input
                   type="checkbox"
                   checked={isChecked}
@@ -483,7 +509,7 @@ function renderField(
                       : selectedValues.filter((item) => item !== opt);
                     onChange(field.id, nextValues);
                   }}
-                  className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+                  className="h-4 w-4 rounded border-input text-on-surface focus:ring-ring"
                 />
                 {opt}
               </label>
@@ -514,9 +540,9 @@ function renderField(
             type="checkbox"
             checked={!!value}
             onChange={(e) => onChange(field.id, e.target.checked)}
-            className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+            className="h-4 w-4 rounded border-input text-on-surface focus:ring-ring"
           />
-          <span className="text-sm text-zinc-600">{field.name}</span>
+          <span className="text-sm text-muted-foreground">{field.name}</span>
         </div>
       );
 

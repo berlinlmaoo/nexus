@@ -59,7 +59,7 @@ export function ReportFilters({
     <div className="space-y-3">
       <div className="flex items-center gap-3 flex-wrap">
         {/* Date range selector */}
-        <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800 rounded-lg p-1">
+        <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
           {[
             { label: "30d", value: "30" },
             { label: "60d", value: "60" },
@@ -70,7 +70,7 @@ export function ReportFilters({
               onClick={() => onDateRangeChange(value)}
               className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
                 dateRange === value
-                  ? "bg-white dark:bg-zinc-700 shadow-sm"
+                  ? "bg-white shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -83,12 +83,12 @@ export function ReportFilters({
           variant="outline"
           size="sm"
           onClick={() => setShowFilters(!showFilters)}
-          className={hasFilters ? "border-zinc-900 dark:border-zinc-100" : ""}
+          className={hasFilters ? "border-on-surface-variant" : ""}
         >
           <Filter className="h-4 w-4 mr-1" />
           Filters
           {hasFilters && (
-            <span className="ml-1 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-full w-5 h-5 text-xs flex items-center justify-center">
+            <span className="ml-1 bg-foreground text-white rounded-full w-5 h-5 text-xs flex items-center justify-center">
               {selectedProjects.length + selectedMembers.length}
             </span>
           )}
@@ -103,7 +103,7 @@ export function ReportFilters({
       </div>
 
       {showFilters && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-lg border">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-surface-container-lowest rounded-lg border">
           {/* Projects */}
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-2">Projects</p>
@@ -111,7 +111,7 @@ export function ReportFilters({
               {projects.map((project) => (
                 <label
                   key={project.id}
-                  className="flex items-center gap-2 text-sm cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded px-2 py-1"
+                  className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted rounded px-2 py-1"
                 >
                   <input
                     type="checkbox"
@@ -135,7 +135,7 @@ export function ReportFilters({
               {members.map((member) => (
                 <label
                   key={member.id}
-                  className="flex items-center gap-2 text-sm cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded px-2 py-1"
+                  className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted rounded px-2 py-1"
                 >
                   <input
                     type="checkbox"

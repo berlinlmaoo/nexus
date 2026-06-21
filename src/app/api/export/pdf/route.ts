@@ -175,6 +175,8 @@ export async function GET(req: Request) {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${project.name}-report.pdf"`,
+        'Cache-Control': 'private, no-store', // per-user authenticated export — never let Cloudflare cache it
+        'X-Content-Type-Options': 'nosniff',
       },
     })
   } catch (error) {

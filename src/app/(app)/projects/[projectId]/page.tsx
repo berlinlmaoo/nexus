@@ -7,7 +7,7 @@ import { isSystemAdminUser } from "@/lib/rbac"
 import { buildTaskCardCustomFieldChips } from "@/lib/task-card-custom-fields"
 
 interface ProjectDetailPageProps {
-  params: { projectId: string }
+  params: Promise<{ projectId: string }>
 }
 
 export const dynamic = "force-dynamic"
@@ -139,13 +139,23 @@ function serializeLinkedTask(
 export default async function ProjectDetailPage({
   params,
 }: ProjectDetailPageProps) {
+  const { projectId } = await params
+  if (projectId.startsWith("demo-project-")) {
+    redirect("/dashboard")
+  }
+
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
   const isSystemAdmin = await isSystemAdminUser(session.user.id)
 
   const project = await prisma.project.findUnique({
-    where: { id: params.projectId },
-    include: {
+    where: { id: projectId },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      color: true,
+      icon: true,
       workspace: {
         select: {
           members: {
@@ -156,7 +166,8 @@ export default async function ProjectDetailPage({
         },
       },
       members: {
-        include: {
+        select: {
+          role: true,
           user: {
             select: { id: true, name: true, avatar: true },
           },
@@ -168,9 +179,19 @@ export default async function ProjectDetailPage({
           tasks: {
             where: { parentId: null },
             orderBy: { position: "asc" },
-            include: {
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              status: true,
+              priority: true,
+              dueDate: true,
+              tags: true,
+              position: true,
+              taskListId: true,
+              createdAt: true,
               assignees: {
-                include: {
+                select: {
                   user: {
                     select: { id: true, name: true, avatar: true },
                   },
@@ -185,7 +206,9 @@ export default async function ProjectDetailPage({
                 },
               },
               customFieldValues: {
-                include: {
+                select: {
+                  customFieldId: true,
+                  value: true,
                   customField: {
                     select: {
                       name: true,
@@ -206,9 +229,18 @@ export default async function ProjectDetailPage({
             orderBy: { position: "asc" },
             include: {
               task: {
-                include: {
+                select: {
+                  id: true,
+                  title: true,
+                  description: true,
+                  status: true,
+                  priority: true,
+                  dueDate: true,
+                  tags: true,
+                  position: true,
+                  createdAt: true,
                   assignees: {
-                    include: {
+                    select: {
                       user: {
                         select: { id: true, name: true, avatar: true },
                       },
@@ -223,7 +255,9 @@ export default async function ProjectDetailPage({
                     },
                   },
                   customFieldValues: {
-                    include: {
+                    select: {
+                      customFieldId: true,
+                      value: true,
                       customField: {
                         select: {
                           name: true,
@@ -234,7 +268,8 @@ export default async function ProjectDetailPage({
                     },
                   },
                   taskList: {
-                    include: {
+                    select: {
+                      projectId: true,
                       project: {
                         select: { id: true, name: true },
                       },
@@ -258,7 +293,7 @@ export default async function ProjectDetailPage({
 
   const workspaceRole = project.workspace.members[0]?.role
   const hasWorkspaceAccess =
-    isSystemAdmin || workspaceRole === "OWNER" || workspaceRole === "ADMIN"
+    isSystemAdmin || workspaceRole === "BOD" || workspaceRole === "MANAGER" || workspaceRole === "ONE_ABOVE_ALL"
   const isDirectProjectMember = project.members.some(
     (m) => m.user.id === session.user!.id
   )
@@ -272,9 +307,9 @@ export default async function ProjectDetailPage({
     description: project.description,
     color: project.color,
     icon: project.icon,
-    enableTaskBatchDuplicate: project.enableTaskBatchDuplicate,
-    autoAssignEnabled: project.autoAssignEnabled,
-    autoAssignAssigneeIds: project.autoAssignAssigneeIds,
+    enableTaskBatchDuplicate: false,
+    autoAssignEnabled: false,
+    autoAssignAssigneeIds: [],
     members: project.members.map((m) => ({
       id: m.user.id,
       name: m.user.name,

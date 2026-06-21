@@ -186,7 +186,7 @@ export function FeedView({ projectId }: FeedViewProps) {
               "rounded-full px-3 py-1 text-xs font-medium transition-all",
               filter === f.value
                 ? "bg-foreground text-background"
-                : "bg-muted dark:bg-zinc-800 text-muted-foreground hover:bg-accent dark:hover:bg-zinc-700"
+                : "bg-muted text-muted-foreground hover:bg-accent"
             )}
           >
             {f.label}

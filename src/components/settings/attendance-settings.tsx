@@ -49,7 +49,7 @@ type AttendanceRecord = {
   correctedAt: string | null
   correctionReason: string | null
   isCorrected: boolean
-  effectiveShiftSource: "OFFICE" | "TEAM"
+  effectiveShiftSource: "OFFICE" | "TEAM" | "USER"
   effectiveTeamId: string | null
   effectiveTeamName: string | null
   effectiveShiftStartTime: string | null
@@ -356,7 +356,7 @@ export function AttendanceSettingsSection({ workspace }: AttendanceSettingsSecti
             workdays: office.workdays?.length ? office.workdays : [1, 2, 3, 4, 5, 6, 7],
             shiftStartTime: office.shiftStartTime ?? "09:00",
             shiftEndTime: office.shiftEndTime ?? "18:00",
-            lateGraceMinutes: String(office.lateGraceMinutes ?? 15),
+            lateGraceMinutes: String(office.lateGraceMinutes ?? 0),
             earlyLeaveGraceMinutes: String(office.earlyLeaveGraceMinutes ?? 0),
             isActive: office.isActive,
           },
@@ -1945,7 +1945,7 @@ export function AttendanceSettingsSection({ workspace }: AttendanceSettingsSecti
                 <div className="rounded-[1.5rem] bg-surface-container p-4">
                   <p className="text-[10px] font-black uppercase tracking-[0.22em] text-on-surface-variant/40">Shift Source</p>
                   <p className="mt-2 text-sm font-black text-on-surface">
-                    {selectedRecapRecord.effectiveShiftSource === "TEAM" ? "Team Override" : "Office Default"}
+                    {selectedRecapRecord.effectiveShiftSource === "USER" ? "Personal Shift" : selectedRecapRecord.effectiveShiftSource === "TEAM" ? "Team Override" : "Office Default"}
                   </p>
                 </div>
               </div>

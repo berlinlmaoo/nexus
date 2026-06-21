@@ -22,4 +22,5 @@ export const BUS_EVENTS = {
   COMMENT_ADDED: "comment-added",
   NOTIFICATION: "notification",
   SPRINT_UPDATED: "sprint-updated",
+  MESSAGE_CREATED: "message-created",
 } as const

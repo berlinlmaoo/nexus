@@ -10,7 +10,7 @@ const OPS_DASHBOARD_HOSTS = new Set([
 ])
 
 export default async function Home() {
-  const headerList = headers()
+  const headerList = await headers()
   const forwardedHost = headerList.get("x-forwarded-host")?.split(",")[0]?.trim()
   const host = (forwardedHost ?? headerList.get("host"))?.split(":")[0]?.toLowerCase()
 

@@ -94,7 +94,7 @@ export async function ensureUserInPrimaryWorkspaceTeam(db: DbClient, userId: str
     create: {
       userId,
       workspaceId: workspace.id,
-      role: "MEMBER",
+      role: "STAFF",
     },
   })
 

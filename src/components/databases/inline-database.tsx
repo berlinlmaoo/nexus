@@ -180,7 +180,7 @@ export function InlineDatabase({
 
             {/* Resize handle */}
             <div
-              className="h-1.5 cursor-ns-resize hover:bg-zinc-200 transition-colors flex items-center justify-center"
+              className="h-1.5 cursor-ns-resize hover:bg-surface-container transition-colors flex items-center justify-center"
               onMouseDown={(e) => {
                 const startY = e.clientY
                 const startH = resizeHeight
@@ -218,7 +218,7 @@ function TasksView({ tasks, viewType }: { tasks: TaskCardData[]; viewType: ViewT
       id: t.id,
       title: t.title || "Untitled Task",
       subtitle: (t.status || "").replace("_", " "),
-      coverColor: t.priority === "URGENT" ? "from-red-100 to-red-50" : t.priority === "HIGH" ? "from-orange-100 to-orange-50" : t.priority === "MEDIUM" ? "from-yellow-100 to-yellow-50" : "from-zinc-100 to-zinc-50",
+      coverColor: t.priority === "URGENT" ? "from-red-100 to-red-50" : t.priority === "HIGH" ? "from-orange-100 to-orange-50" : t.priority === "MEDIUM" ? "from-yellow-100 to-yellow-50" : "from-muted to-surface-container-lowest",
       properties: [
         { label: "Status", value: (t.status || "TODO").replace("_", " ") },
         { label: "Priority", value: t.priority || "NONE" },
@@ -340,7 +340,7 @@ function DocsView({ docs, viewType }: { docs: DocItem[]; viewType: ViewType }) {
       id: d.id,
       title: d.title,
       subtitle: d.updatedAt ? `Updated ${format(new Date(d.updatedAt), "MMM d")}` : undefined,
-      coverColor: "from-zinc-100 to-zinc-50",
+      coverColor: "from-muted to-surface-container-lowest",
       properties: [],
     }))} />
   }
@@ -374,7 +374,7 @@ function DocsView({ docs, viewType }: { docs: DocItem[]; viewType: ViewType }) {
     <div className="divide-y">
       {docs.map((doc) => (
         <div key={doc.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors">
-          <div className="h-8 w-8 rounded bg-zinc-100 flex items-center justify-center text-xs font-medium text-zinc-500">
+          <div className="h-8 w-8 rounded bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground">
             D
           </div>
           <span className="text-sm font-medium flex-1 truncate">{doc.title}</span>

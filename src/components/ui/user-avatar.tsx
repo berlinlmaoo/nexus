@@ -48,7 +48,7 @@ export function UserAvatar({ user, size = "md", className }: UserAvatarProps) {
       )}
       <AvatarFallback
         className={cn(
-          "bg-zinc-100 font-medium text-zinc-700",
+          "bg-muted font-medium text-on-surface-variant",
           textSizes[size]
         )}
       >

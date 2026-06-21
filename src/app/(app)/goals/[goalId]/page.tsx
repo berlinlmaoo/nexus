@@ -5,11 +5,12 @@ import { GoalDetailClient } from "./goal-detail-client"
 
 export const dynamic = "force-dynamic"
 
-export default async function GoalDetailPage({ params }: { params: { goalId: string } }) {
+export default async function GoalDetailPage({ params }: { params: Promise<{ goalId: string }> }) {
+  const { goalId } = await params
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
   const goal = await prisma.goal.findUnique({
-    where: { id: params.goalId },
+    where: { id: goalId },
     include: {
       owner: { select: { id: true, name: true, avatar: true } },
       milestones: { orderBy: { dueDate: 'asc' } },

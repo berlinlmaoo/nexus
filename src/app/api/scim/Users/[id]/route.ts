@@ -111,7 +111,7 @@ export async function PATCH(
             // Reactivate: add back to workspace
             await prisma.workspaceMember.upsert({
               where: { userId_workspaceId: { userId: id, workspaceId: scimAuth.workspaceId } },
-              create: { userId: id, workspaceId: scimAuth.workspaceId, role: "MEMBER" },
+              create: { userId: id, workspaceId: scimAuth.workspaceId, role: "STAFF" },
               update: {},
             })
           }

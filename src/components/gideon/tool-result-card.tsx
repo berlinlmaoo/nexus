@@ -40,8 +40,8 @@ function getToolConfig(tool: string) {
       return {
         icon: ListTodo,
         label: 'Tasks',
-        color: 'border-zinc-700/50 bg-zinc-700/10',
-        iconColor: 'text-zinc-400',
+        color: 'border-on-surface-variant/50 bg-foreground/10',
+        iconColor: 'text-muted-foreground',
       }
     case 'list_projects':
       return {
@@ -54,8 +54,8 @@ function getToolConfig(tool: string) {
       return {
         icon: CheckCircle,
         label: 'Result',
-        color: 'border-gray-500/50 bg-gray-500/10',
-        iconColor: 'text-gray-400',
+        color: 'border-on-surface-variant/50 bg-muted',
+        iconColor: 'text-muted-foreground',
       }
   }
 }
@@ -67,12 +67,12 @@ function renderResult(tool: string, result: unknown) {
     return (
       <div className="space-y-0.5">
         <p className="font-medium text-white">{data.title as string}</p>
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-muted-foreground">
           {data.priority as string} &middot; {data.status as string}
           {data.taskList ? ` · ${String(data.taskList)}` : null}
         </p>
         {Array.isArray(data.assignees) && data.assignees.length > 0 && (
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-muted-foreground">
             Assigned to: {(data.assignees as string[]).join(', ')}
           </p>
         )}
@@ -84,7 +84,7 @@ function renderResult(tool: string, result: unknown) {
     return (
       <div>
         <p className="font-medium text-white">{data.title as string}</p>
-        <p className="text-xs text-gray-400">New status: {data.status as string}</p>
+        <p className="text-xs text-muted-foreground">New status: {data.status as string}</p>
       </div>
     )
   }
@@ -94,7 +94,7 @@ function renderResult(tool: string, result: unknown) {
       <div>
         <p className="font-medium text-white">{data.title as string}</p>
         {Array.isArray(data.assignees) && (
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-muted-foreground">
             Assigned to: {(data.assignees as string[]).join(', ')}
           </p>
         )}
@@ -105,14 +105,14 @@ function renderResult(tool: string, result: unknown) {
   if (tool === 'list_tasks' || tool === 'list_projects') {
     const items = Array.isArray(data) ? data : (Array.isArray(result) ? result : [])
     if (items.length === 0) {
-      return <p className="text-xs text-gray-400">No items found.</p>
+      return <p className="text-xs text-muted-foreground">No items found.</p>
     }
     return (
       <div className="max-h-40 space-y-1 overflow-y-auto">
         {(items as Record<string, unknown>[]).map((item, i) => (
           <div key={i} className="rounded bg-black/20 px-2 py-1">
             <p className="text-xs font-medium text-white">{String(item.title || item.name || '')}</p>
-            <p className="text-[10px] text-gray-400">
+            <p className="text-[10px] text-muted-foreground">
               {item.status ? String(item.status) : null}
               {item.priority ? ` · ${String(item.priority)}` : null}
               {item.project ? ` · ${String(item.project)}` : null}
@@ -124,7 +124,7 @@ function renderResult(tool: string, result: unknown) {
     )
   }
 
-  return <pre className="text-xs text-gray-300">{JSON.stringify(result, null, 2)}</pre>
+  return <pre className="text-xs text-muted-foreground">{JSON.stringify(result, null, 2)}</pre>
 }
 
 export function ToolResultCard({ tool, result }: ToolResultCardProps) {

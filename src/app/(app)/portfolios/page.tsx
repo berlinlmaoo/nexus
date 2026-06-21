@@ -200,7 +200,7 @@ export default function PortfoliosPage() {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full ${STATUS_COLORS[portfolio.status] || 'bg-gray-400'}`} />
+                    <div className={`w-3 h-3 rounded-full ${STATUS_COLORS[portfolio.status] || 'bg-surface-container-high'}`} />
                     <CardTitle className="text-lg">{portfolio.name}</CardTitle>
                   </div>
                   <div className="flex gap-1">

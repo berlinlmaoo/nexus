@@ -6,7 +6,7 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import {
   AttendanceDayType,
-  attendanceMonthRange,
+  attendancePeriodRange,
   enumerateAttendanceDates,
   formatAttendanceDateKey,
   getAttendanceWorkspaceContext,
@@ -14,6 +14,7 @@ import {
   mapRequestTypeToAttendanceDayType,
   serializeAttendanceRecord,
 } from "@/lib/attendance"
+import { isAutoDeduction } from "@/lib/attendance-absence"
 import { attendanceHistoryQuerySchema } from "@/lib/validations"
 
 const ATTENDANCE_EXPORT_TIMEZONE = "Asia/Jakarta"
@@ -21,7 +22,7 @@ const ATTENDANCE_EXPORT_TIMEZONE = "Asia/Jakarta"
 type HistoryRow = ReturnType<typeof serializeAttendanceRecord> & {
   recordKind: "ATTENDANCE" | "REQUEST" | "ABSENT"
   attendanceDayType: AttendanceDayType
-  requestType: "LEAVE" | "SICK" | "PERMIT" | "DAY_OFF" | null
+  requestType: "LEAVE" | "SICK" | "PERMIT" | "DAY_OFF" | "RED_DATE" | null
   requestStatus: "APPROVED" | null
   approvalSource: "ADMIN" | "ATTENDANCE_SUPERVISOR" | "TEAM_HEAD" | null
   reviewedAt: string | null
@@ -325,23 +326,38 @@ export async function GET(request: NextRequest) {
     }
 
     const scope = parsed.data.scope ?? "me"
-    if (scope === "workspace" && !context.canManageAttendance) {
+    // Full managers (BoD/OAA) see the whole workspace; a MANAGER who leads team(s) sees only those teams.
+    const isTeamManager = !context.canManageAttendance && context.teamLeadTeamIds.length > 0
+    if (scope === "workspace" && !context.canManageAttendance && !isTeamManager) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
+    let teamScopeUserIds: string[] | null = null
+    if (scope === "workspace" && isTeamManager) {
+      const teamMembers = await prisma.teamMember.findMany({
+        where: { teamId: { in: context.teamLeadTeamIds } },
+        select: { userId: true },
+      })
+      teamScopeUserIds = Array.from(new Set(teamMembers.map((m) => m.userId)))
+    }
+
     const range = parsed.data.month
-      ? attendanceMonthRange(parsed.data.month)
+      ? attendancePeriodRange(parsed.data.month)
       : {
           start: new Date(`${parsed.data.dateFrom ?? formatAttendanceDateKey()}T00:00:00.000Z`),
           end: new Date(`${parsed.data.dateTo ?? parsed.data.dateFrom ?? formatAttendanceDateKey()}T00:00:00.000Z`),
         }
 
-    const userWhere =
+    const userWhere: Record<string, unknown> =
       scope === "me"
         ? { userId: session.user.id }
-        : parsed.data.userId
-          ? { userId: parsed.data.userId }
-          : {}
+        : teamScopeUserIds
+          ? (parsed.data.userId && teamScopeUserIds.includes(parsed.data.userId)
+              ? { userId: parsed.data.userId }
+              : { userId: { in: teamScopeUserIds } })
+          : parsed.data.userId
+            ? { userId: parsed.data.userId }
+            : {}
 
     const recordWhere: Record<string, unknown> = {
       workspaceId: context.workspace.id,
@@ -432,11 +448,7 @@ export async function GET(request: NextRequest) {
       prisma.workspaceMember.findMany({
         where: {
           workspaceId: context.workspace.id,
-          ...(scope === "me"
-            ? { userId: session.user.id }
-            : parsed.data.userId
-              ? { userId: parsed.data.userId }
-              : {}),
+          ...userWhere,
         },
         include: {
           user: {
@@ -474,10 +486,15 @@ export async function GET(request: NextRequest) {
 
     for (const approvedRequest of approvedRequests) {
       const dayType = mapRequestTypeToAttendanceDayType(approvedRequest.type)
+      // The cron's auto-deduction day-off (a penalty, e.g. ">120 min late → −1 token") is filed for a
+      // day the staff was actually PRESENT. It must not hide their real check-in/out: if a present
+      // record already exists for the day, keep it (the token is still deducted via the quota count).
+      const isAutoPenalty = isAutoDeduction(approvedRequest)
       for (const date of enumerateAttendanceDates(approvedRequest.startDate, approvedRequest.endDate)) {
         if (date.getTime() < range.start.getTime() || date.getTime() > range.end.getTime()) continue
         const dateKey = date.toISOString().slice(0, 10)
         const key = `${approvedRequest.userId}:${dateKey}`
+        if (isAutoPenalty && rowMap.get(key)?.recordKind === "ATTENDANCE") continue
         rowMap.set(key, {
           id: `request-${approvedRequest.id}-${dateKey}`,
           attendanceDate: date.toISOString(),
@@ -505,6 +522,9 @@ export async function GET(request: NextRequest) {
           checkOutPhotoUrl: null,
           checkInDistanceMeters: null,
           checkOutDistanceMeters: null,
+          checkOutOffsite: false,
+          checkOutApproval: null,
+          checkOutReason: null,
           notes: approvedRequest.reason,
           status: "COMPLETED",
           correctedAt: null,
@@ -521,7 +541,7 @@ export async function GET(request: NextRequest) {
             workdays: fallbackOffice?.workdays ?? [1, 2, 3, 4, 5, 6, 7],
             shiftStartTime: fallbackOffice?.shiftStartTime ?? "09:00",
             shiftEndTime: fallbackOffice?.shiftEndTime ?? "18:00",
-            lateGraceMinutes: fallbackOffice?.lateGraceMinutes ?? 15,
+            lateGraceMinutes: fallbackOffice?.lateGraceMinutes ?? 0,
             earlyLeaveGraceMinutes: fallbackOffice?.earlyLeaveGraceMinutes ?? 0,
             isActive: fallbackOffice?.isActive ?? false,
           },
@@ -576,6 +596,9 @@ export async function GET(request: NextRequest) {
             checkOutPhotoUrl: null,
             checkInDistanceMeters: null,
             checkOutDistanceMeters: null,
+            checkOutOffsite: false,
+            checkOutApproval: null,
+            checkOutReason: null,
             notes: null,
             status: "INCOMPLETE",
             correctedAt: null,
@@ -661,7 +684,9 @@ export async function GET(request: NextRequest) {
       return new NextResponse(Buffer.from(workbookBuffer), {
         headers: {
           "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          "Content-Disposition": `attachment; filename="attendance-${range.start.toISOString().slice(0, 7)}.xlsx"`,
+          "Content-Disposition": `attachment; filename="attendance-${parsed.data.month ?? range.end.toISOString().slice(0, 7)}.xlsx"`,
+          "Cache-Control": "private, no-store",
+          "X-Content-Type-Options": "nosniff",
         },
       })
     }
@@ -730,7 +755,9 @@ export async function GET(request: NextRequest) {
       return new NextResponse(csv, {
         headers: {
           "Content-Type": "text/csv; charset=utf-8",
-          "Content-Disposition": `attachment; filename="attendance-${formatAttendanceDateKey()}.csv"`,
+          "Content-Disposition": `attachment; filename="attendance-${parsed.data.month ?? range.end.toISOString().slice(0, 7)}.csv"`,
+          "Cache-Control": "private, no-store",
+          "X-Content-Type-Options": "nosniff",
         },
       })
     }

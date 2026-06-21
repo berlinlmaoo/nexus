@@ -7,7 +7,7 @@ import { logAudit } from "@/lib/audit"
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { projectId: string; pageId: string } }
+  { params }: { params: Promise<{ projectId: string; pageId: string }> }
 ) {
   try {
     const session = await auth()
@@ -15,7 +15,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const page = await prisma.projectPage.findUnique({
-      where: { id: params.pageId },
+      where: { id: (await params).pageId },
       include: {
         children: {
           include: { children: true },
@@ -30,7 +30,7 @@ export async function GET(
       },
     })
 
-    if (!page || page.projectId !== params.projectId) {
+    if (!page || page.projectId !== (await params).projectId) {
       return NextResponse.json({ error: "Page not found" }, { status: 404 })
     }
 
@@ -43,7 +43,7 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { projectId: string; pageId: string } }
+  { params }: { params: Promise<{ projectId: string; pageId: string }> }
 ) {
   try {
     const session = await auth()
@@ -54,11 +54,11 @@ export async function PATCH(
     const { name, icon, content, position, pageType } = body
 
     const existing = await prisma.projectPage.findUnique({
-      where: { id: params.pageId },
+      where: { id: (await params).pageId },
       select: { projectId: true },
     })
 
-    if (!existing || existing.projectId !== params.projectId) {
+    if (!existing || existing.projectId !== (await params).projectId) {
       return NextResponse.json({ error: "Page not found" }, { status: 404 })
     }
 
@@ -70,12 +70,12 @@ export async function PATCH(
     if (pageType !== undefined) data.pageType = pageType
 
     const page = await prisma.projectPage.update({
-      where: { id: params.pageId },
+      where: { id: (await params).pageId },
       data,
       include: { children: true },
     })
 
-    logAudit({ action: "update", entityType: "project_page", entityId: params.pageId, entityName: page.name, userId: session.user.id, request, metadata: { projectId: params.projectId, changes: body } })
+    logAudit({ action: "update", entityType: "project_page", entityId: (await params).pageId, entityName: page.name, userId: session.user.id, request, metadata: { projectId: (await params).projectId, changes: body } })
 
     return NextResponse.json(page)
   } catch (error) {
@@ -86,7 +86,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { projectId: string; pageId: string } }
+  { params }: { params: Promise<{ projectId: string; pageId: string }> }
 ) {
   try {
     const session = await auth()
@@ -94,17 +94,17 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const existing = await prisma.projectPage.findUnique({
-      where: { id: params.pageId },
+      where: { id: (await params).pageId },
       select: { projectId: true },
     })
 
-    if (!existing || existing.projectId !== params.projectId) {
+    if (!existing || existing.projectId !== (await params).projectId) {
       return NextResponse.json({ error: "Page not found" }, { status: 404 })
     }
 
-    await prisma.projectPage.delete({ where: { id: params.pageId } })
+    await prisma.projectPage.delete({ where: { id: (await params).pageId } })
 
-    logAudit({ action: "delete", entityType: "project_page", entityId: params.pageId, entityName: params.pageId, userId: session.user.id, request, metadata: { projectId: params.projectId } })
+    logAudit({ action: "delete", entityType: "project_page", entityId: (await params).pageId, entityName: (await params).pageId, userId: session.user.id, request, metadata: { projectId: (await params).projectId } })
 
     return NextResponse.json({ success: true })
   } catch (error) {

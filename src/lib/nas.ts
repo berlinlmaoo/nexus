@@ -290,7 +290,8 @@ export async function nasDownload(
 export async function nasCreateFolder(
   sid: string,
   folderPath: string,
-  name: string
+  name: string,
+  forceParent = false
 ): Promise<void> {
   if (!validateNasPath(folderPath)) {
     throw new NasError(0, "Access denied: path not allowed")
@@ -302,6 +303,7 @@ export async function nasCreateFolder(
     method: "create",
     folder_path: folderPath,
     name,
+    force_parent: forceParent ? "true" : "false",
     _sid: sid,
   })
 
@@ -312,6 +314,33 @@ export async function nasCreateFolder(
   const data = await res.json()
   if (!data.success) {
     throw new NasError(data.error?.code || 0, "Failed to create folder")
+  }
+}
+
+// ── Delete file/folder ───────────────────────────────
+
+export async function nasDelete(sid: string, path: string): Promise<void> {
+  if (!validateNasPath(path)) {
+    throw new NasError(0, "Access denied: path not allowed")
+  }
+
+  const params = new URLSearchParams({
+    api: "SYNO.FileStation.Delete",
+    version: "2",
+    method: "delete",
+    path,
+    recursive: "true",
+    _sid: sid,
+  })
+
+  const res = await fetch(`${NAS_API}?${params}`, {
+    method: "GET",
+    signal: AbortSignal.timeout(30000),
+  })
+
+  const data = await res.json()
+  if (!data.success) {
+    throw new NasError(data.error?.code || 0, "Failed to delete")
   }
 }
 

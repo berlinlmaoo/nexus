@@ -121,9 +121,9 @@ function ActionButton({
       className={cn(
         "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
         variant === "destructive"
-          ? "text-zinc-400 hover:text-red-400 hover:bg-red-950/30"
-          : "text-zinc-300 hover:text-white hover:bg-zinc-800",
-        active && variant !== "destructive" && "bg-zinc-800 text-white"
+          ? "text-muted-foreground hover:text-red-400 hover:bg-red-950/30"
+          : "text-muted-foreground hover:text-white hover:bg-foreground",
+        active && variant !== "destructive" && "bg-foreground text-white"
       )}
     >
       <Icon className="h-4 w-4" />
@@ -164,13 +164,13 @@ export function BatchActionsBar({
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
             className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50"
           >
-            <div className="bg-zinc-900 text-white rounded-xl shadow-2xl px-4 py-3 flex items-center gap-2">
+            <div className="bg-foreground text-white rounded-xl shadow-2xl px-4 py-3 flex items-center gap-2">
               {/* Selection count */}
-              <span className="text-sm font-medium text-zinc-300 whitespace-nowrap mr-1">
+              <span className="text-sm font-medium text-muted-foreground whitespace-nowrap mr-1">
                 {count} task{count !== 1 ? "s" : ""} selected
               </span>
 
-              <div className="w-px h-6 bg-zinc-700" />
+              <div className="w-px h-6 bg-foreground" />
 
               {/* Status */}
               <div className="relative">
@@ -314,7 +314,7 @@ export function BatchActionsBar({
                 />
               </div>
 
-              <div className="w-px h-6 bg-zinc-700" />
+              <div className="w-px h-6 bg-foreground" />
 
               {/* Delete */}
               <ActionButton
@@ -330,7 +330,7 @@ export function BatchActionsBar({
               {/* Clear selection */}
               <button
                 onClick={onClear}
-                className="ml-1 p-1 rounded-md text-muted-foreground hover:text-white hover:bg-zinc-800 transition-colors"
+                className="ml-1 p-1 rounded-md text-muted-foreground hover:text-white hover:bg-foreground transition-colors"
                 aria-label="Clear selection"
               >
                 <X className="h-4 w-4" />

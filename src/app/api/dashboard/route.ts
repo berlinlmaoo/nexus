@@ -4,6 +4,11 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 
+function isMissingSchemaError(error: unknown) {
+  return typeof error === "object" && error !== null && "code" in error
+    && (error.code === "P2021" || error.code === "P2022")
+}
+
 export async function GET() {
   try {
     const session = await auth()
@@ -199,6 +204,22 @@ export async function GET() {
       sprints: sprintsData,
     })
   } catch (error) {
+    if (isMissingSchemaError(error)) {
+      return NextResponse.json({
+        stats: {
+          totalTasks: 0,
+          inProgressTasks: 0,
+          overdueTasks: 0,
+          completedThisWeek: 0,
+        },
+        tasks: [],
+        activity: [],
+        projects: [],
+        goals: [],
+        sprints: [],
+      })
+    }
+
     console.error("Dashboard API error:", error)
     return NextResponse.json(
       { error: "Internal server error" },

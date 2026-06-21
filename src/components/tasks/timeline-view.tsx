@@ -38,14 +38,14 @@ interface TimelineViewProps {
 
 // Assign colors to assignees based on zinc shades
 const ASSIGNEE_COLORS = [
-  "bg-zinc-900",
-  "bg-zinc-700",
-  "bg-zinc-500",
-  "bg-zinc-800",
-  "bg-zinc-600",
-  "bg-zinc-400",
-  "bg-zinc-950",
-  "bg-zinc-300",
+  "bg-foreground",
+  "bg-foreground",
+  "bg-on-surface-variant",
+  "bg-foreground",
+  "bg-on-surface-variant",
+  "bg-surface-container-high",
+  "bg-foreground",
+  "bg-surface-container-high",
 ]
 
 interface TimelineScheduledTask extends TaskCardData {
@@ -297,8 +297,8 @@ export function TimelineView({ tasks, onTaskClick }: TimelineViewProps) {
           task,
           barStyle,
           barColor: task.assignees.length > 0
-            ? assigneeColorMap.get(task.assignees[0].id) || "bg-zinc-700"
-            : "bg-zinc-400",
+            ? assigneeColorMap.get(task.assignees[0].id) || "bg-foreground"
+            : "bg-surface-container-high",
         }
       })
   }, [assigneeColorMap, days.length, rangeEnd, rangeStart, scheduledTasks])

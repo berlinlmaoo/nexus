@@ -16,6 +16,20 @@ export async function GET(request: NextRequest) {
 
     const query = q.trim()
 
+    // Multi-tenancy: a user may only search within workspaces they belong to. Without this every
+    // query below was global — leaking tasks/docs/comments across tenants and (via the user query)
+    // enabling full email enumeration of the whole instance.
+    const wsIds = (
+      await prisma.workspaceMember.findMany({
+        where: { userId: session.user.id },
+        select: { workspaceId: true },
+      })
+    ).map((m) => m.workspaceId)
+    if (wsIds.length === 0) {
+      return NextResponse.json({ tasks: [], projects: [], comments: [], docs: [], members: [], goals: [], forms: [], sprints: [] })
+    }
+    const inWorkspace = { in: wsIds }
+
     // Optional filters
     const projectId = request.nextUrl.searchParams.get("projectId")
     const assigneeId = request.nextUrl.searchParams.get("assigneeId")
@@ -23,16 +37,14 @@ export async function GET(request: NextRequest) {
     const startDate = request.nextUrl.searchParams.get("startDate")
     const endDate = request.nextUrl.searchParams.get("endDate")
 
-    // Build task filters
+    // Build task filters (scoped to the searcher's workspaces via taskList.project)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const taskWhere: any = {
       OR: [
         { title: { contains: query, mode: "insensitive" } },
         { description: { contains: query, mode: "insensitive" } },
       ],
-    }
-    if (projectId) {
-      taskWhere.taskList = { projectId }
+      taskList: { project: { workspaceId: inWorkspace, ...(projectId ? { id: projectId } : {}) } },
     }
     if (assigneeId) {
       taskWhere.assignees = { some: { userId: assigneeId } }
@@ -47,9 +59,10 @@ export async function GET(request: NextRequest) {
       if (endDate) taskWhere.createdAt.lte = new Date(endDate)
     }
 
-    // Build project filter
+    // Build project filter (scoped to the searcher's workspaces)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const projectWhere: any = {
+      workspaceId: inWorkspace,
       OR: [
         { name: { contains: query, mode: "insensitive" } },
         { description: { contains: query, mode: "insensitive" } },
@@ -59,9 +72,10 @@ export async function GET(request: NextRequest) {
       projectWhere.id = projectId
     }
 
-    // Goal filter
+    // Goal filter (Goal carries workspaceId directly)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const goalWhere: any = {
+      workspaceId: inWorkspace,
       OR: [
         { title: { contains: query, mode: "insensitive" } },
         { description: { contains: query, mode: "insensitive" } },
@@ -71,28 +85,24 @@ export async function GET(request: NextRequest) {
       goalWhere.status = status
     }
 
-    // Sprint filter
+    // Sprint filter (scoped via project.workspaceId)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sprintWhere: any = {
       name: { contains: query, mode: "insensitive" },
-    }
-    if (projectId) {
-      sprintWhere.projectId = projectId
+      project: { workspaceId: inWorkspace, ...(projectId ? { id: projectId } : {}) },
     }
     if (status) {
       sprintWhere.status = status
     }
 
-    // Form filter
+    // Form filter (scoped via project.workspaceId)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const formWhere: any = {
+      project: { workspaceId: inWorkspace, ...(projectId ? { id: projectId } : {}) },
       OR: [
         { name: { contains: query, mode: "insensitive" } },
         { description: { contains: query, mode: "insensitive" } },
       ],
-    }
-    if (projectId) {
-      formWhere.projectId = projectId
     }
 
     const [tasks, projects, comments, docs, members, goals, forms, sprints] = await Promise.all([
@@ -114,7 +124,10 @@ export async function GET(request: NextRequest) {
         take: 10,
       }),
       prisma.comment.findMany({
-        where: { content: { contains: query, mode: "insensitive" } },
+        where: {
+          content: { contains: query, mode: "insensitive" },
+          task: { taskList: { project: { workspaceId: inWorkspace } } },
+        },
         select: {
           id: true,
           content: true,
@@ -126,6 +139,7 @@ export async function GET(request: NextRequest) {
       }),
       prisma.doc.findMany({
         where: {
+          project: { workspaceId: inWorkspace },
           OR: [
             { title: { contains: query, mode: "insensitive" } },
             { contentText: { contains: query, mode: "insensitive" } },
@@ -141,6 +155,9 @@ export async function GET(request: NextRequest) {
       }),
       prisma.user.findMany({
         where: {
+          // Only surface users who share a workspace with the searcher — prevents instance-wide
+          // email/name enumeration of every account.
+          workspaceMembers: { some: { workspaceId: inWorkspace } },
           OR: [
             { name: { contains: query, mode: "insensitive" } },
             { email: { contains: query, mode: "insensitive" } },

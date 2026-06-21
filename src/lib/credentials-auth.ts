@@ -5,6 +5,14 @@ import { createLogger } from '@/lib/logger'
 
 const log = createLogger('auth')
 
+const credentialUserSelect = {
+  id: true,
+  name: true,
+  email: true,
+  password: true,
+  avatar: true,
+} as const
+
 export type VerifiedCredentialUser = {
   id: string
   name: string | null
@@ -32,12 +40,16 @@ export async function verifyCredentialUser(rawEmail: unknown, rawPassword: unkno
   try {
     // Always read directly from PostgreSQL so password resets are immediately
     // respected even when a browser keeps old login-page state alive.
-    let user = await prisma.user.findUnique({ where: { email } })
+    let user = await prisma.user.findUnique({
+      where: { email },
+      select: credentialUserSelect,
+    })
 
     if (!user) {
       try {
         user = await prisma.user.findFirst({
           where: { email: { equals: email, mode: 'insensitive' } },
+          select: credentialUserSelect,
         })
       } catch {
         /* case-insensitive mode unavailable or DB error; unique lookup already failed */

@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
         workdays: validation.data.workdays ?? [1, 2, 3, 4, 5, 6, 7],
         shiftStartTime: validation.data.shiftStartTime ?? "09:00",
         shiftEndTime: validation.data.shiftEndTime ?? "18:00",
-        lateGraceMinutes: validation.data.lateGraceMinutes ?? 15,
+        lateGraceMinutes: validation.data.lateGraceMinutes ?? 0, // default: no grace (strict). Set explicitly per office if tolerance is wanted.
         earlyLeaveGraceMinutes: validation.data.earlyLeaveGraceMinutes ?? 0,
         isActive: validation.data.isActive ?? true,
       },

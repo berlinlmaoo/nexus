@@ -80,7 +80,7 @@ export function InlineToolbar({ position, onClose }: InlineToolbarProps) {
   return (
     <div
       ref={toolbarRef}
-      className="fixed z-[110] flex items-center gap-0.5 bg-zinc-900 rounded-lg px-1 py-1 shadow-xl animate-in fade-in zoom-in-95 duration-100"
+      className="fixed z-[110] flex items-center gap-0.5 bg-foreground rounded-lg px-1 py-1 shadow-xl animate-in fade-in zoom-in-95 duration-100"
       style={{
         top: position.top,
         left: position.left,
@@ -112,7 +112,7 @@ export function InlineToolbar({ position, onClose }: InlineToolbarProps) {
           </button>
         )
       })}
-      <div className="w-px h-4 bg-zinc-700 mx-0.5" />
+      <div className="w-px h-4 bg-foreground mx-0.5" />
       <button
         onMouseDown={(e) => {
           e.preventDefault()

@@ -157,7 +157,7 @@ export function DocHeader({
           <div className="relative">
             <button
               onClick={() => setShowIconPicker(!showIconPicker)}
-              className="text-4xl hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg p-1 transition-colors"
+              className="text-4xl hover:bg-muted dark:hover:bg-foreground rounded-lg p-1 transition-colors"
             >
               {selectedIcon}
             </button>

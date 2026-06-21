@@ -8,10 +8,12 @@ import {
   formatAttendanceDateKey,
   getAttendanceDate,
   getAttendanceWorkspaceContext,
+  resolveEffectiveAttendanceShift,
   serializeAttendanceRequest,
   startOfAttendanceMonth,
   serializeAttendanceRecord,
 } from "@/lib/attendance"
+import { clearLeaveCoveredOpenRecords } from "@/lib/attendance-absence"
 
 export async function GET() {
   try {
@@ -24,7 +26,7 @@ export async function GET() {
     }
 
     const attendanceDate = getAttendanceDate()
-    const [todayRecord, activeOfficeCount, todayRequest, dayOffRequests] = await prisma.$transaction([
+    const [todayRecord, activeOfficeCount, todayRequest, dayOffRequests, pendingCheckoutRecord] = await prisma.$transaction([
       prisma.attendanceRecord.findUnique({
         where: {
           userId_workspaceId_attendanceDate: {
@@ -104,14 +106,77 @@ export async function GET() {
           endDate: true,
         },
       }),
+      prisma.attendanceRecord.findFirst({
+        where: {
+          userId: session.user.id,
+          workspaceId: context.workspace.id,
+          status: "CHECKED_IN",
+          attendanceDate: { lt: attendanceDate },
+        },
+        orderBy: { attendanceDate: "asc" },
+        include: {
+          officeLocation: true,
+          user: { select: { id: true, name: true, email: true, avatar: true } },
+          correctedBy: { select: { id: true, name: true, email: true } },
+        },
+      }),
     ])
+
+    // Self-heal: a leave/day-off approved AFTER the staff checked in leaves a stuck open record that
+    // can't be checked out (the covering request blocks it) and forces a perpetual "Selesaikan absen
+    // kemarin". If the pending record's day is now covered by a real approved leave, drop it so the
+    // UI shows a clean "Ready to check in".
+    let pendingCheckout = pendingCheckoutRecord
+    if (pendingCheckout) {
+      const cleared = await clearLeaveCoveredOpenRecords(session.user.id, context.workspace.id)
+      if (cleared.includes(pendingCheckout.id)) pendingCheckout = null
+    }
+
+    const quotaMember = await prisma.workspaceMember.findUnique({
+      where: { userId_workspaceId: { userId: session.user.id, workspaceId: context.workspace.id } },
+      select: { dayOffQuota: true },
+    })
+
+    // Tanggal merah (RED_DATE): this user's usage + the month's BoD-set quota (same for all staff).
+    const currentMonthKey = formatAttendanceDateKey().slice(0, 7)
+    const [redDateRequests, redDateQuotaRow] = await Promise.all([
+      prisma.attendanceRequest.findMany({
+        where: {
+          userId: session.user.id,
+          workspaceId: context.workspace.id,
+          type: "RED_DATE",
+          status: { in: ["PENDING", "APPROVED"] },
+          startDate: { lte: endOfAttendanceMonth(new Date()) },
+          endDate: { gte: startOfAttendanceMonth(new Date()) },
+        },
+        select: { startDate: true, endDate: true },
+      }),
+      prisma.redDateQuota.findUnique({
+        where: { workspaceId_month: { workspaceId: context.workspace.id, month: currentMonthKey } },
+        select: { quota: true },
+      }),
+    ])
+    const _mStart = startOfAttendanceMonth(new Date())
+    const _mEnd = endOfAttendanceMonth(new Date())
+    const redDateUsed = redDateRequests.reduce((c, r) => c + Math.max(0, Math.floor((Math.min(r.endDate.getTime(), _mEnd.getTime()) - Math.max(r.startDate.getTime(), _mStart.getTime())) / 86_400_000) + 1), 0)
+
+    // The user's effective shift for the "My Work Schedule" display (resolved pre-check-in against
+    // the first active office; USER/TEAM overrides are office-independent anyway).
+    const firstOffice = await prisma.officeLocation.findFirst({ where: { workspaceId: context.workspace.id, isActive: true } })
+    let myShift: { startTime: string; endTime: string; source: string } | null = null
+    if (firstOffice) {
+      const shift = await resolveEffectiveAttendanceShift({ userId: session.user.id, workspaceId: context.workspace.id, office: firstOffice })
+      myShift = { startTime: shift.shiftStartTime, endTime: shift.shiftEndTime, source: shift.source }
+    }
 
     return NextResponse.json({
       attendanceDateKey: formatAttendanceDateKey(),
       workspace: context.workspace,
       activeOfficeCount,
       today: todayRecord ? serializeAttendanceRecord(todayRecord) : null,
+      pendingCheckout: pendingCheckout ? serializeAttendanceRecord(pendingCheckout) : null,
       todayRequest: todayRequest ? serializeAttendanceRequest(todayRequest) : null,
+      dayOffQuota: quotaMember?.dayOffQuota ?? 4,
       dayOffUsedThisMonth: dayOffRequests.reduce((count: number, requestItem) => {
         const start = startOfAttendanceMonth(new Date())
         const end = endOfAttendanceMonth(new Date())
@@ -121,6 +186,9 @@ export async function GET() {
         )
         return count + days
       }, 0),
+      redDateQuota: redDateQuotaRow?.quota ?? 0,
+      redDateUsedThisMonth: redDateUsed,
+      myShift,
       canManageAttendance: context.canManageAttendance,
       canReviewAttendanceRequests: context.canReviewAttendanceRequests,
     })

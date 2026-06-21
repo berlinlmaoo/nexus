@@ -40,11 +40,11 @@ export async function GET(request: NextRequest) {
       })
 
       const adminWorkspaceIds = workspaceMemberships
-        .filter((membership) => membership.role === "OWNER" || membership.role === "ADMIN")
+        .filter((membership) => membership.role === "BOD" || membership.role === "MANAGER" || membership.role === "ONE_ABOVE_ALL")
         .map((membership) => membership.workspaceId)
 
       const memberWorkspaceIds = workspaceMemberships
-        .filter((membership) => membership.role === "MEMBER")
+        .filter((membership) => membership.role === "STAFF")
         .map((membership) => membership.workspaceId)
 
       const accessScopes: Prisma.TaskWhereInput[] = []
@@ -87,6 +87,19 @@ export async function GET(request: NextRequest) {
       where.taskList = {
         ...(where.taskList as Prisma.TaskListWhereInput | undefined),
         projectId,
+      }
+    } else {
+      // Folder aggregate view: ?projectIds=a,b,c → tasks across that set of projects (access scopes above
+      // still apply, so a user only ever sees tasks in projects they can access).
+      const projectIds = (searchParams.get("projectIds") ?? "")
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean)
+      if (projectIds.length) {
+        where.taskList = {
+          ...(where.taskList as Prisma.TaskListWhereInput | undefined),
+          projectId: { in: projectIds },
+        }
       }
     }
     if (taskListId) {
@@ -148,6 +161,22 @@ export async function GET(request: NextRequest) {
       orderBy: [{ position: "asc" }, { createdAt: "desc" }],
     })
 
+    // Attach task-bundle quest membership (board/list "+X XP" badge) — mirrors the project payload so
+    // that subtask cards (which the board/list pull from here, not the parentId-only project payload)
+    // also show the chip. Scoped to the returned, already-access-controlled task ids.
+    const taskIds = tasks.map((t) => t.id)
+    if (taskIds.length) {
+      const quests = await prisma.quest.findMany({
+        where: { isActive: true, requirementType: "specific_tasks", taskIds: { hasSome: taskIds } },
+        select: { id: true, title: true, xpReward: true, taskIds: true },
+      })
+      if (quests.length) {
+        const byTask = new Map<string, { id: string; title: string; xpReward: number }[]>()
+        for (const q of quests) for (const tid of q.taskIds) { const a = byTask.get(tid) ?? []; a.push({ id: q.id, title: q.title, xpReward: q.xpReward }); byTask.set(tid, a) }
+        for (const t of tasks) (t as { quests?: unknown }).quests = byTask.get(t.id) ?? []
+      }
+    }
+
     return NextResponse.json(tasks)
   } catch (error) {
     console.error("Error fetching tasks:", error)
@@ -195,6 +224,29 @@ export async function POST(request: NextRequest) {
     const { allowed } = await checkProjectAccess(session.user.id, taskList.projectId, ["MEMBER"])
     if (!allowed) {
       return NextResponse.json({ error: "Forbidden: MEMBER role or higher required to create tasks" }, { status: 403 })
+    }
+
+    // Subtask parent must be a task in the SAME project (an unvalidated parentId could attach a
+    // subtask onto any workspace's task — content injection into a panel you can't even open).
+    // Depth is capped Asana-style: max 5 levels of nesting.
+    if (parentId) {
+      const parent = await prisma.task.findUnique({
+        where: { id: parentId },
+        select: { id: true, parentId: true, taskList: { select: { projectId: true } } },
+      })
+      if (!parent || parent.taskList.projectId !== taskList.projectId) {
+        return NextResponse.json({ error: "Parent task not found in this project" }, { status: 400 })
+      }
+      let depth = 1
+      let cursor = parent.parentId
+      while (cursor && depth < 5) {
+        const up: { parentId: string | null } | null = await prisma.task.findUnique({ where: { id: cursor }, select: { parentId: true } })
+        cursor = up?.parentId ?? null
+        depth++
+      }
+      if (depth >= 5) {
+        return NextResponse.json({ error: "Maximum subtask depth (5) reached" }, { status: 400 })
+      }
     }
 
     const finalAssigneeIds = resolveAutoAssignAssigneeIds({

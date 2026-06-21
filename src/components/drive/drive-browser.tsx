@@ -216,7 +216,7 @@ export function DriveBrowser({
   if (connected === false) {
     return (
       <Card className={cn("p-8 text-center", className)}>
-        <div className="mx-auto w-12 h-12 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mb-4">
+        <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
           <AlertCircle className="h-6 w-6 text-muted-foreground" />
         </div>
         <h3 className="font-semibold mb-2">Connect Google Drive</h3>
@@ -340,12 +340,12 @@ export function DriveBrowser({
                   "flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors cursor-pointer group"
                 )}
               >
-                <div className="h-8 w-8 rounded bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center flex-shrink-0">
+                <div className="h-8 w-8 rounded bg-muted flex items-center justify-center flex-shrink-0">
                   <Icon
                     className={cn(
                       "h-4 w-4",
                       isFolder
-                        ? "text-zinc-700 dark:text-zinc-300"
+                        ? "text-on-surface-variant"
                         : "text-muted-foreground"
                     )}
                   />

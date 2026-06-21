@@ -91,8 +91,8 @@ export function ExportDialog({ projectId, trigger }: ExportDialogProps) {
                   className={cn(
                     "flex h-16 flex-1 flex-col items-center justify-center gap-1 rounded-lg border-2 text-sm font-medium transition-all",
                     format === value
-                      ? "border-zinc-900 dark:border-zinc-100 bg-zinc-50 dark:bg-zinc-800"
-                      : "border-transparent bg-zinc-100 dark:bg-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-600"
+                      ? "border-on-surface-variant bg-surface-container-lowest"
+                      : "border-transparent bg-muted hover:border-on-surface-variant"
                   )}
                 >
                   <Icon className="h-4 w-4" />

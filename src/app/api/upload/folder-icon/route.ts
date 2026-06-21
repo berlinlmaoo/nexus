@@ -41,7 +41,7 @@ async function canManageFolder(userId: string, folderId: string) {
   })
 
   return {
-    allowed: membership?.role === "OWNER" || membership?.role === "ADMIN",
+    allowed: membership?.role === "BOD" || membership?.role === "MANAGER" || membership?.role === "ONE_ABOVE_ALL",
     reason: "workspace-role" as const,
   }
 }
@@ -79,14 +79,16 @@ export async function POST(request: NextRequest) {
     }
 
     const ext = EXT_MAP[file.type] || "png"
-    const fileName = `${folderId}.${ext}`
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "folder-icons")
+    // Stored in the project-icons dir (bind-mounted in prod compose) with a "folder-" prefix —
+    // the old dedicated folder-icons dir was NOT mounted, so uploads vanished on every rebuild.
+    const fileName = `folder-${folderId}.${ext}`
+    const uploadDir = path.join(process.cwd(), "public", "uploads", "project-icons")
     await mkdir(uploadDir, { recursive: true })
 
     const buffer = Buffer.from(await file.arrayBuffer())
     await writeFile(path.join(uploadDir, fileName), buffer)
 
-    const url = `/api/files/folder-icons/${fileName}?v=${Date.now()}`
+    const url = `/api/files/project-icons/${fileName}?v=${Date.now()}`
     await prisma.projectFolder.update({
       where: { id: folderId },
       data: { icon: url },

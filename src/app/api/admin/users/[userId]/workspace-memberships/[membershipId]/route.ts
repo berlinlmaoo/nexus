@@ -7,7 +7,7 @@ import { getAdminSessionContext } from "@/lib/admin-access"
 import { logAudit } from "@/lib/audit"
 import { isPrimaryWorkspace } from "@/lib/primary-team"
 
-const WORKSPACE_ROLES: WorkspaceRole[] = ["OWNER", "ADMIN", "MEMBER"]
+const WORKSPACE_ROLES: WorkspaceRole[] = ["BOD", "MANAGER", "STAFF"]
 
 async function getTargetMembership(userId: string, membershipId: string) {
   return prisma.workspaceMember.findUnique({
@@ -33,7 +33,7 @@ async function isLastWorkspaceOwner(workspaceId: string, membershipId: string) {
   const ownerCount = await prisma.workspaceMember.count({
     where: {
       workspaceId,
-      role: "OWNER",
+      role: "BOD",
     },
   })
 
@@ -46,12 +46,12 @@ async function isLastWorkspaceOwner(workspaceId: string, membershipId: string) {
     select: { role: true },
   })
 
-  return membership?.role === "OWNER"
+  return membership?.role === "BOD"
 }
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { userId: string; membershipId: string } }
+  { params }: { params: Promise<{ userId: string; membershipId: string }> }
 ) {
   try {
     const { session, context } = await getAdminSessionContext()
@@ -71,7 +71,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid workspace role" }, { status: 400 })
     }
 
-    const target = await getTargetMembership(params.userId, params.membershipId)
+    const target = await getTargetMembership((await params).userId, (await params).membershipId)
 
     if (!target) {
       return NextResponse.json({ error: "Workspace membership not found" }, { status: 404 })
@@ -81,7 +81,7 @@ export async function PATCH(
       return NextResponse.json({ error: "PATS Group workspace role is managed automatically" }, { status: 400 })
     }
 
-    if (target.role === "OWNER" && role !== "OWNER" && await isLastWorkspaceOwner(target.workspaceId, target.id)) {
+    if (target.role === "BOD" && role !== "BOD" && await isLastWorkspaceOwner(target.workspaceId, target.id)) {
       return NextResponse.json({ error: "Cannot demote the last owner of a workspace" }, { status: 400 })
     }
 
@@ -125,7 +125,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { userId: string; membershipId: string } }
+  { params }: { params: Promise<{ userId: string; membershipId: string }> }
 ) {
   try {
     const { session, context } = await getAdminSessionContext()
@@ -138,7 +138,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const target = await getTargetMembership(params.userId, params.membershipId)
+    const target = await getTargetMembership((await params).userId, (await params).membershipId)
 
     if (!target) {
       return NextResponse.json({ error: "Workspace membership not found" }, { status: 404 })

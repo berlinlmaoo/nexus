@@ -8,7 +8,7 @@ import { notifyTaskAssigned } from "@/lib/notification-service"
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { taskId: string } }
+  { params }: { params: Promise<{ taskId: string }> }
 ) {
   try {
     const session = await auth()
@@ -22,7 +22,7 @@ export async function POST(
     }
 
     const task = await prisma.task.findUnique({
-      where: { id: params.taskId },
+      where: { id: (await params).taskId },
       include: { taskList: { include: { project: true } } },
     })
 
@@ -33,7 +33,7 @@ export async function POST(
     const existing = await prisma.taskAssignee.findUnique({
       where: {
         taskId_userId: {
-          taskId: params.taskId,
+          taskId: (await params).taskId,
           userId,
         },
       },
@@ -45,7 +45,7 @@ export async function POST(
 
     const assignee = await prisma.taskAssignee.create({
       data: {
-        taskId: params.taskId,
+        taskId: (await params).taskId,
         userId,
       },
       include: { user: true },
@@ -56,7 +56,7 @@ export async function POST(
         action: "added assignee",
         details: `Added assignee to "${task.title}"`,
         userId: session.user.id!,
-        taskId: params.taskId,
+        taskId: (await params).taskId,
         projectId: task.taskList.projectId,
       },
     })
@@ -64,14 +64,14 @@ export async function POST(
     // Send notification to the assignee, including self-assignment (don't block the response)
     notifyTaskAssigned({
       assigneeId: userId,
-      taskId: params.taskId,
+      taskId: (await params).taskId,
       taskTitle: task.title,
       projectName: task.taskList.project.name,
       projectId: task.taskList.projectId,
       assignedByName: session.user.name || "Someone",
     }).catch((err) => console.error("Notification error:", err))
 
-    logAudit({ action: "create", entityType: "task_assignee", entityId: params.taskId, entityName: task.title, userId: session.user.id!, request, metadata: { assigneeUserId: userId } })
+    logAudit({ action: "create", entityType: "task_assignee", entityId: (await params).taskId, entityName: task.title, userId: session.user.id!, request, metadata: { assigneeUserId: userId } })
 
     return NextResponse.json(assignee, { status: 201 })
   } catch (error) {
@@ -82,7 +82,7 @@ export async function POST(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { taskId: string } }
+  { params }: { params: Promise<{ taskId: string }> }
 ) {
   try {
     const session = await auth()
@@ -96,7 +96,7 @@ export async function DELETE(
     }
 
     const task = await prisma.task.findUnique({
-      where: { id: params.taskId },
+      where: { id: (await params).taskId },
       include: { taskList: true },
     })
 
@@ -107,7 +107,7 @@ export async function DELETE(
     const existing = await prisma.taskAssignee.findUnique({
       where: {
         taskId_userId: {
-          taskId: params.taskId,
+          taskId: (await params).taskId,
           userId,
         },
       },
@@ -120,7 +120,7 @@ export async function DELETE(
     await prisma.taskAssignee.delete({
       where: {
         taskId_userId: {
-          taskId: params.taskId,
+          taskId: (await params).taskId,
           userId,
         },
       },
@@ -131,12 +131,12 @@ export async function DELETE(
         action: "removed assignee",
         details: `Removed assignee from "${task.title}"`,
         userId: session.user.id!,
-        taskId: params.taskId,
+        taskId: (await params).taskId,
         projectId: task.taskList.projectId,
       },
     })
 
-    logAudit({ action: "delete", entityType: "task_assignee", entityId: params.taskId, entityName: task.title, userId: session.user.id!, request, metadata: { removedUserId: userId } })
+    logAudit({ action: "delete", entityType: "task_assignee", entityId: (await params).taskId, entityName: task.title, userId: session.user.id!, request, metadata: { removedUserId: userId } })
 
     return NextResponse.json({ message: "Assignee removed" })
   } catch (error) {

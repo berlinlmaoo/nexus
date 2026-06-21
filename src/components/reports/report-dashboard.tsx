@@ -152,7 +152,7 @@ export function ReportDashboard() {
   if (loading && !data) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-zinc-900 dark:border-zinc-100" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-on-surface-variant" />
       </div>
     )
   }
@@ -209,8 +209,8 @@ export function ReportDashboard() {
           icon={BarChart3}
           label="Total Tasks"
           value={data.metrics.totalTasks}
-          iconBg="bg-zinc-100 dark:bg-zinc-800"
-          iconColor="text-zinc-700 dark:text-zinc-300"
+          iconBg="bg-muted"
+          iconColor="text-on-surface-variant"
         />
         <MetricCard
           icon={CheckCircle2}
@@ -517,22 +517,22 @@ export function ReportDashboard() {
                 </thead>
                 <tbody>
                   {data.workloadHeatmap.map((row) => (
-                    <tr key={row.userId} className="border-t border-zinc-100 dark:border-zinc-800">
+                    <tr key={row.userId} className="border-t border-on-surface-variant">
                       <td className="py-2 px-3 font-medium truncate max-w-[120px]">{row.name}</td>
                       {row.days.map((d) => {
                         const intensity = Math.min(d.count / 5, 1)
                         const bg = d.count === 0
-                          ? "bg-zinc-100 dark:bg-zinc-800"
+                          ? "bg-muted"
                           : intensity < 0.3
-                          ? "bg-zinc-300 dark:bg-zinc-600"
+                          ? "bg-surface-container-high"
                           : intensity < 0.6
-                          ? "bg-zinc-500 dark:bg-zinc-400"
-                          : "bg-zinc-800 dark:bg-zinc-200"
+                          ? "bg-on-surface-variant"
+                          : "bg-foreground"
                         return (
                           <td key={d.date} className="py-2 px-2 text-center">
                             <div
                               className={`mx-auto w-8 h-8 rounded flex items-center justify-center text-xs font-medium ${bg} ${
-                                intensity >= 0.6 ? "text-white dark:text-zinc-900" : "text-zinc-600 dark:text-zinc-300"
+                                intensity >= 0.6 ? "text-white" : "text-on-surface-variant"
                               }`}
                               title={`${d.count} task updates`}
                             >
@@ -580,9 +580,9 @@ export function ReportDashboard() {
                         <span>Progress</span>
                         <span className="font-medium text-foreground">{project.progress}%</span>
                       </div>
-                      <div className="w-full bg-zinc-200 dark:bg-zinc-700 rounded-full h-1.5">
+                      <div className="w-full bg-surface-container rounded-full h-1.5">
                         <div
-                          className="h-1.5 rounded-full bg-zinc-800 dark:bg-zinc-200 transition-all"
+                          className="h-1.5 rounded-full bg-foreground transition-all"
                           style={{ width: `${project.progress}%` }}
                         />
                       </div>

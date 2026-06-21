@@ -369,7 +369,7 @@ export function WorkspaceMembersSection({ canManage, currentUserId }: { canManag
                               .slice(0, 2)}
                           </AvatarFallback>
                         </Avatar>
-                        {member.role === "OWNER" ? (
+                        {member.role === "BOD" ? (
                           <div className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-lg bg-amber-500 text-white shadow-lg">
                             <Crown className="h-3 w-3" />
                           </div>
@@ -420,7 +420,7 @@ export function WorkspaceMembersSection({ canManage, currentUserId }: { canManag
                             >
                               <option value="MEMBER">Member</option>
                               <option value="ADMIN">Admin</option>
-                              <option value="OWNER">Owner</option>
+                              <option value="BOD">Owner</option>
                             </select>
                             <select
                               value={member.attendanceRole}

@@ -206,12 +206,12 @@ export function InviteDialog({ projectId, trigger }: InviteDialogProps) {
                 {invites.map((invite) => (
                   <div
                     key={invite.id}
-                    className="flex items-center justify-between rounded-lg bg-zinc-50 dark:bg-zinc-900 p-2 text-sm"
+                    className="flex items-center justify-between rounded-lg bg-surface-container-lowest p-2 text-sm"
                   >
                     <div className="flex items-center gap-2">
                       <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                       <span>{invite.email}</span>
-                      <span className="rounded bg-zinc-200 dark:bg-zinc-700 px-1.5 py-0.5 text-xs">
+                      <span className="rounded bg-surface-container px-1.5 py-0.5 text-xs">
                         {invite.role}
                       </span>
                     </div>
@@ -251,7 +251,7 @@ export function InviteDialog({ projectId, trigger }: InviteDialogProps) {
                         {member.user.avatar && (
                           <AvatarImage src={member.user.avatar} />
                         )}
-                        <AvatarFallback className="bg-zinc-200 dark:bg-zinc-700 text-xs">
+                        <AvatarFallback className="bg-surface-container text-xs">
                           {initials(member.user.name)}
                         </AvatarFallback>
                       </Avatar>
@@ -262,7 +262,7 @@ export function InviteDialog({ projectId, trigger }: InviteDialogProps) {
                         </p>
                       </div>
                     </div>
-                    <span className="rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-xs font-medium">
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-medium">
                       {member.role}
                     </span>
                   </div>

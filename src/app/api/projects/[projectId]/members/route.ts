@@ -6,19 +6,20 @@ import { auth } from "@/lib/auth"
 import { notifyProjectInvite } from "@/lib/notification-service"
 import { logAudit } from "@/lib/audit"
 import { syncProjectLinkedTeamAccess } from "@/lib/team-sync"
+import { checkProjectAccess } from "@/lib/rbac"
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    await syncProjectLinkedTeamAccess(params.projectId)
+    await syncProjectLinkedTeamAccess((await params).projectId)
 
     const members = await prisma.projectMember.findMany({
-      where: { projectId: params.projectId },
+      where: { projectId: (await params).projectId },
       include: { user: true },
       orderBy: { joinedAt: "asc" },
     })
@@ -32,7 +33,7 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
     const session = await auth()
@@ -45,11 +46,17 @@ export async function POST(
       return NextResponse.json({ error: "userId is required" }, { status: 400 })
     }
 
+    // Only project managers (BoD / Manager-member / system admin) may add members.
+    const { allowed } = await checkProjectAccess(session.user.id!, (await params).projectId, ["LEAD"])
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden: manage access required to add members" }, { status: 403 })
+    }
+
     const existing = await prisma.projectMember.findUnique({
       where: {
         userId_projectId: {
           userId,
-          projectId: params.projectId,
+          projectId: (await params).projectId,
         },
       },
     })
@@ -59,14 +66,14 @@ export async function POST(
     }
 
     const project = await prisma.project.findUnique({
-      where: { id: params.projectId },
+      where: { id: (await params).projectId },
       select: { name: true },
     })
 
     const member = await prisma.projectMember.create({
       data: {
         userId,
-        projectId: params.projectId,
+        projectId: (await params).projectId,
         role: role || "MEMBER",
       },
       include: { user: true },
@@ -76,14 +83,14 @@ export async function POST(
     if (userId !== session.user.id) {
       notifyProjectInvite({
         userId,
-        projectId: params.projectId,
+        projectId: (await params).projectId,
         projectName: project?.name || "Unknown Project",
         invitedByName: session.user.name || "Someone",
         role: role || "MEMBER",
       }).catch((err) => console.error("Project invite notification error:", err))
     }
 
-    logAudit({ action: "create", entityType: "project_member", entityId: member.id, entityName: member.user?.name || userId, userId: session.user.id!, request, metadata: { projectId: params.projectId, role: role || "MEMBER" } })
+    logAudit({ action: "create", entityType: "project_member", entityId: member.id, entityName: member.user?.name || userId, userId: session.user.id!, request, metadata: { projectId: (await params).projectId, role: role || "MEMBER" } })
 
     return NextResponse.json(member, { status: 201 })
   } catch (error) {
@@ -94,7 +101,7 @@ export async function POST(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
     const session = await auth()
@@ -107,11 +114,17 @@ export async function DELETE(
       return NextResponse.json({ error: "userId is required" }, { status: 400 })
     }
 
+    // Only project managers (BoD / Manager-member / system admin) may remove members.
+    const { allowed } = await checkProjectAccess(session.user.id!, (await params).projectId, ["LEAD"])
+    if (!allowed) {
+      return NextResponse.json({ error: "Forbidden: manage access required to remove members" }, { status: 403 })
+    }
+
     const existing = await prisma.projectMember.findUnique({
       where: {
         userId_projectId: {
           userId,
-          projectId: params.projectId,
+          projectId: (await params).projectId,
         },
       },
     })
@@ -124,12 +137,12 @@ export async function DELETE(
       where: {
         userId_projectId: {
           userId,
-          projectId: params.projectId,
+          projectId: (await params).projectId,
         },
       },
     })
 
-    logAudit({ action: "delete", entityType: "project_member", entityId: existing.userId, entityName: userId, userId: session.user.id!, request, metadata: { projectId: params.projectId } })
+    logAudit({ action: "delete", entityType: "project_member", entityId: existing.userId, entityName: userId, userId: session.user.id!, request, metadata: { projectId: (await params).projectId } })
 
     return NextResponse.json({ message: "Member removed" })
   } catch (error) {
