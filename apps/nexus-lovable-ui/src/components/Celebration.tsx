@@ -29,6 +29,9 @@ let counter = 0;
 /** Trigger a fun celebration overlay from anywhere in the app. */
 export function celebrate(message?: string) {
   if (typeof window === "undefined") return;
+  // Respect reduced-motion: a particle storm is exactly what these users opt out of. The primary UI
+  // (count updates, success popups, settling states) still carries the confirmation without motion.
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
   const count = 22;
   const particles: Particle[] = Array.from({ length: count }, (_, i) => {
     const angle = (Math.PI * 2 * i) / count + Math.random() * 0.4;

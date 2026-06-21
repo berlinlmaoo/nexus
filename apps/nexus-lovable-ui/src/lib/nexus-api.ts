@@ -8,6 +8,50 @@ export type NexusUser = {
   onboardedAt?: string | null;
 };
 
+// --- The Wire (Feed) ---
+export type FeedAuthor = { id: string; name: string; avatar?: string | null };
+export type FeedImage = { id: string; url: string; width?: number | null; height?: number | null; position: number };
+export type FeedMention = { userId: string; name: string | null };
+export type FeedPost = {
+  id: string;
+  text: string;
+  createdAt: string;
+  editedAt?: string | null;
+  likeCount: number;
+  commentCount: number;
+  author: FeedAuthor;
+  images: FeedImage[];
+  mentions: FeedMention[];
+  likedByMe: boolean;
+  canDelete: boolean;
+  canEdit: boolean;
+};
+export type FeedPage = { posts: FeedPost[]; nextCursor: string | null; hasMore: boolean };
+export type FeedComment = { id: string; text: string; createdAt: string; author: FeedAuthor };
+
+// --- Integrity (Peer Reports / "cepu") — BoD-and-above beta ---
+export type PeerReportUser = { id: string; name: string; avatar?: string | null };
+export type PeerReportStatus = "PENDING" | "VERIFIED" | "REJECTED" | "WITHDRAWN";
+export type PeerReport = {
+  id: string;
+  category: string;
+  reason: string;
+  status: PeerReportStatus;
+  reviewNote: string | null;
+  reviewedAt: string | null;
+  reporterBountyXp: number;
+  reportedPenaltyXp: number;
+  xpApplied: boolean;
+  createdAt: string;
+  reporter: PeerReportUser;
+  reportedUser: PeerReportUser;
+  reviewer: { id: string; name: string } | null;
+  isMine: boolean;
+  canDecide: boolean;
+  canWithdraw: boolean;
+};
+export type PeerReportList = { reports: PeerReport[]; counts: Record<string, number> };
+
 export type NexusDashboardProject = {
   id: string;
   name: string;
@@ -1202,6 +1246,35 @@ export const nexusApi = {
   toggleFollow: (taskId: string) => apiFetch<{ following: boolean }>(`/api/tasks/${taskId}/followers`, { method: "POST" }),
   members: () => apiFetch<{ members?: NexusUser[] } | NexusUser[]>("/api/members"),
 
+  // --- The Wire (Feed) — company-wide firehose ---
+  feedPosts: (opts?: { cursor?: string; limit?: number; mentions?: "me" }) => {
+    const qs = new URLSearchParams();
+    if (opts?.cursor) qs.set("cursor", opts.cursor);
+    if (opts?.limit) qs.set("limit", String(opts.limit));
+    if (opts?.mentions) qs.set("mentions", opts.mentions);
+    const s = qs.toString();
+    return apiFetch<FeedPage>(`/api/feed/posts${s ? `?${s}` : ""}`);
+  },
+  createPost: (payload: { text: string; mentions: string[]; images: File[]; imageMeta?: { w?: number; h?: number }[] }) => {
+    const fd = new FormData();
+    fd.set("text", payload.text);
+    fd.set("mentions", JSON.stringify(payload.mentions));
+    if (payload.imageMeta) fd.set("imageMeta", JSON.stringify(payload.imageMeta));
+    payload.images.forEach((f) => fd.append("images", f));
+    return apiFetch<FeedPost>("/api/feed/posts", { method: "POST", body: fd });
+  },
+  editPost: (id: string, payload: { text: string; mentions: string[] }) => apiFetch<FeedPost>(`/api/feed/posts/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deletePost: (id: string) => apiFetch<{ success?: boolean }>(`/api/feed/posts/${id}`, { method: "DELETE" }),
+  likePost: (id: string) => apiFetch<{ liked: boolean; likeCount: number }>(`/api/feed/posts/${id}/like`, { method: "POST" }),
+  postComments: (id: string) => apiFetch<{ comments: FeedComment[] }>(`/api/feed/posts/${id}/comments`),
+  addPostComment: (id: string, payload: { text: string; mentions: string[] }) => apiFetch<FeedComment>(`/api/feed/posts/${id}/comments`, { method: "POST", body: JSON.stringify(payload) }),
+
+  // --- Integrity (Peer Reports) ---
+  peerReports: (status?: string) => apiFetch<PeerReportList>(`/api/peer-reports${status && status !== "ALL" ? `?status=${status}` : ""}`),
+  createPeerReport: (payload: { reportedUserId: string; category: string; reason: string }) => apiFetch<PeerReport>("/api/peer-reports", { method: "POST", body: JSON.stringify(payload) }),
+  peerReportVerdict: (id: string, payload: { action: "verify" | "reject"; reviewNote?: string }) => apiFetch<PeerReport>(`/api/peer-reports/${id}/verdict`, { method: "POST", body: JSON.stringify(payload) }),
+  withdrawPeerReport: (id: string) => apiFetch<PeerReport>(`/api/peer-reports/${id}/withdraw`, { method: "POST" }),
+
   // --- Workspace members (org roles: BoD / Manager / Staff) ---
   workspaceMembers: (workspaceId?: string, includeRegistered = false) => {
     const qs = new URLSearchParams();
@@ -1550,6 +1623,14 @@ export const nexusApi = {
     apiFetch<{ id?: string; email?: string; name?: string }>("/api/auth/register/verify", { method: "POST", body: JSON.stringify(payload) }),
   resendRegisterOtp: (email: string) =>
     apiFetch<{ ok?: boolean }>("/api/auth/register/resend", { method: "POST", body: JSON.stringify({ email }) }),
+
+  // --- Forgot / reset password (OTP email verification) ---
+  passwordResetRequest: (email: string) =>
+    apiFetch<{ ok?: boolean; email?: string; expiresInSeconds?: number; resendCooldownSeconds?: number }>("/api/auth/password/reset/request", { method: "POST", body: JSON.stringify({ email }) }),
+  passwordResetVerify: (payload: { email: string; code: string; password: string }) =>
+    apiFetch<{ ok?: boolean }>("/api/auth/password/reset/verify", { method: "POST", body: JSON.stringify(payload) }),
+  passwordResetResend: (email: string) =>
+    apiFetch<{ ok?: boolean; resendCooldownSeconds?: number; retryAfterSeconds?: number }>("/api/auth/password/reset/resend", { method: "POST", body: JSON.stringify({ email }) }),
 };
 
 export type NexusProjectFile = {

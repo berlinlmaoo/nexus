@@ -318,7 +318,7 @@ function Attendance() {
       <div className="p-4 md:p-8 space-y-5">
         {/* Mobile: new map-centric check-in hero. Desktop: keep the dashboard card. */}
         <div className="md:hidden">
-          <MobileCheckInHero today={today.data ?? null} disabled={today.isError || today.isLoading || Boolean(today.data?.todayRequest)} />
+          <MobileCheckInHero today={today.data ?? null} disabled={today.isError || today.isLoading || (Boolean(today.data?.todayRequest) && !today.data?.pendingCheckout)} />
         </div>
         <div className="hidden md:block">
           <AttendanceActionCard
@@ -329,7 +329,7 @@ function Attendance() {
             officeName={today.data?.today?.officeLocation?.name}
             checkOutApproval={today.data?.today?.checkOutApproval ?? null}
             pendingCheckout={today.data?.pendingCheckout ? { attendanceDate: today.data.pendingCheckout.attendanceDate, checkInAt: today.data.pendingCheckout.checkInAt, officeName: today.data.pendingCheckout.officeLocation?.name } : null}
-            disabled={today.isError || today.isLoading || Boolean(today.data?.todayRequest)}
+            disabled={today.isError || today.isLoading || (Boolean(today.data?.todayRequest) && !today.data?.pendingCheckout)}
           />
         </div>
 

@@ -11,7 +11,9 @@ import {
   normalizeCustomFieldType,
   serializeCustomFieldValue,
 } from "@/lib/custom-fields"
+import { getFormAccessStatus } from "@/lib/form-access-schedule"
 import { executeAutomations } from "@/lib/automation-engine"
+import { resolveAutoAssignAssigneeIds } from "@/lib/project-auto-assign"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import { emitTaskCreated } from "@/lib/socket-emitter"
 import { mkdir, writeFile } from "fs/promises"
@@ -34,6 +36,7 @@ interface IntakeFormField {
   type?: string
   required?: boolean
   attachmentEnabled?: boolean
+  autofill?: "name" | "email"
   mapping?: {
     target?: FormMappingTarget
     customFieldId?: string
@@ -314,6 +317,13 @@ export async function POST(
 
     if (!form) return NextResponse.json({ error: "Form not found" }, { status: 404 })
 
+    // Hardcoded policy: EVERY form submission requires a logged-in NEXUS account — no anonymous
+    // submissions. Guarantees the requester is always known (so "Request by" = the real submitter,
+    // never a LEAD fallback).
+    if (!userId) {
+      return NextResponse.json({ error: "Login NEXUS dulu buat ngajuin form ini.", code: "LOGIN_REQUIRED" }, { status: 401 })
+    }
+
     if (!form.isPublic) {
       if (!userId) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -325,11 +335,26 @@ export async function POST(
       }
     }
 
+    // requireAuth: even a public (link-shareable) form can require a logged-in NEXUS account
+    // to submit — ANY authenticated user, no project membership needed. submitterId is then
+    // always captured so the submitter can track their request under "Pengajuan Saya".
+    if (form.requireAuth && !userId) {
+      return NextResponse.json({ error: "Login NEXUS diperlukan untuk mengajukan form ini.", code: "LOGIN_REQUIRED" }, { status: 401 })
+    }
+
+    const accessStatus = getFormAccessStatus(form.accessSchedule)
+    if (!accessStatus.allowed) {
+      return NextResponse.json(
+        { error: accessStatus.message ?? "This form is not available right now." },
+        { status: 403 }
+      )
+    }
+
     const fallbackCreatorId =
       userId ??
       form.project.members.find((member) => member.role === "LEAD")?.userId ??
       form.project.members[0]?.userId ??
-      form.project.workspace.members.find((member) => member.role === "OWNER" || member.role === "ADMIN")?.userId ??
+      form.project.workspace.members.find((member) => member.role === "BOD" || member.role === "MANAGER" || member.role === "ONE_ABOVE_ALL")?.userId ??
       form.project.workspace.members[0]?.userId
 
     if (!fallbackCreatorId) {
@@ -337,6 +362,17 @@ export async function POST(
     }
 
     const fields = Array.isArray(form.fields) ? (form.fields as unknown as IntakeFormField[]) : []
+
+    // Autofill fields (e.g. "Request by") are set AUTHORITATIVELY from the logged-in submitter — never
+    // trust the client value (anti-spoof). All forms require login, so userId is present here.
+    const autofillFields = fields.filter((f) => f.autofill)
+    if (autofillFields.length && userId) {
+      const submitter = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } })
+      for (const f of autofillFields) {
+        data[f.id] = f.autofill === "email" ? (submitter?.email ?? "") : (submitter?.name ?? submitter?.email ?? "")
+      }
+    }
+
     const visibleFields = getVisibleFields(fields, data)
     const requiredMissing = visibleFields.find((field) => {
       const value = getFieldValue(data, field)
@@ -416,6 +452,15 @@ export async function POST(
       ? normalizeEnumValue(getFieldValue(data, mappedPriorityField), TASK_PRIORITIES)
       : undefined
 
+    // Apply the project's auto-assign (e.g. always-to-Gerald) when the form's routing rules didn't
+    // already pick assignees — same as a normal task create (forms previously skipped this).
+    const finalAssigneeIds = resolveAutoAssignAssigneeIds({
+      requestedAssigneeIds: Array.from(routedAssigneeIds),
+      autoAssignEnabled: form.project.autoAssignEnabled,
+      autoAssignAssigneeIds: form.project.autoAssignAssigneeIds,
+      validProjectMemberIds: Array.from(validProjectMemberIds),
+    })
+
     const result = await prisma.$transaction(async (tx) => {
       const task = await tx.task.create({
         data: {
@@ -426,9 +471,9 @@ export async function POST(
           ...(dueDate ? { dueDate } : {}),
           taskListId: routedTaskList.id,
           creatorId: fallbackCreatorId,
-          assignees: routedAssigneeIds.size > 0
+          assignees: finalAssigneeIds.length > 0
             ? {
-                create: Array.from(routedAssigneeIds).map((uid) => ({ userId: uid })),
+                create: finalAssigneeIds.map((uid) => ({ userId: uid })),
               }
             : undefined,
         },
@@ -499,7 +544,7 @@ export async function POST(
       taskId: result.task.id,
       userId: fallbackCreatorId,
       projectId: form.projectId,
-      assigneeIds: Array.from(routedAssigneeIds),
+      assigneeIds: finalAssigneeIds,
     }).catch(() => {})
 
     dispatchWebhookEvent("task.created", {
