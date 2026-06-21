@@ -85,6 +85,8 @@ export async function GET(req: NextRequest) {
         attendanceShiftStartTime: string | null
         attendanceShiftEndTime: string | null
         attendanceShiftByDay: unknown
+        flexiTimeEnabled: boolean
+        noGeofenceMode: boolean
         joinedAt: Date
       }>
       availableUsers?: Array<{
@@ -108,6 +110,8 @@ export async function GET(req: NextRequest) {
         attendanceShiftStartTime: m.attendanceShiftStartTime,
         attendanceShiftEndTime: m.attendanceShiftEndTime,
         attendanceShiftByDay: m.attendanceShiftByDay ?? null,
+        flexiTimeEnabled: m.flexiTimeEnabled,
+        noGeofenceMode: m.noGeofenceMode,
         joinedAt: m.joinedAt,
       })),
     }
@@ -230,7 +234,7 @@ export async function PATCH(req: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { memberId, role, attendanceRole, workspaceId, attendanceShiftStartTime, attendanceShiftEndTime, attendanceShiftByDay, phoneNumber } = await req.json()
+    const { memberId, role, attendanceRole, workspaceId, attendanceShiftStartTime, attendanceShiftEndTime, attendanceShiftByDay, phoneNumber, flexiTimeEnabled, noGeofenceMode } = await req.json()
 
     // Per-person shift times: "HH:mm", or null/"" to clear (inherit team/office shift).
     const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -306,6 +310,12 @@ export async function PATCH(req: NextRequest) {
     if (attendanceRole !== undefined && !['NONE', 'SUPERVISOR'].includes(attendanceRole)) {
       return NextResponse.json({ error: 'Invalid attendance role' }, { status: 400 })
     }
+    if (flexiTimeEnabled !== undefined && typeof flexiTimeEnabled !== 'boolean') {
+      return NextResponse.json({ error: 'flexiTimeEnabled must be boolean' }, { status: 400 })
+    }
+    if (noGeofenceMode !== undefined && typeof noGeofenceMode !== 'boolean') {
+      return NextResponse.json({ error: 'noGeofenceMode must be boolean' }, { status: 400 })
+    }
 
     const targetMember = await prisma.workspaceMember.findUnique({
       where: { id: memberId },
@@ -346,6 +356,8 @@ export async function PATCH(req: NextRequest) {
         ...(shiftStart !== undefined ? { attendanceShiftStartTime: shiftStart } : {}),
         ...(shiftEnd !== undefined ? { attendanceShiftEndTime: shiftEnd } : {}),
         ...(byDay === "skip" ? {} : { attendanceShiftByDay: byDay === "clear" ? Prisma.DbNull : byDay }),
+        ...(flexiTimeEnabled !== undefined ? { flexiTimeEnabled } : {}),
+        ...(noGeofenceMode !== undefined ? { noGeofenceMode } : {}),
       },
       include: {
         user: { select: { id: true, name: true, email: true, avatar: true, phoneNumber: true } },
@@ -367,6 +379,8 @@ export async function PATCH(req: NextRequest) {
         attendanceShiftStartTime: updated.attendanceShiftStartTime,
         attendanceShiftEndTime: updated.attendanceShiftEndTime,
         attendanceShiftByDay: updated.attendanceShiftByDay ?? null,
+        flexiTimeEnabled: updated.flexiTimeEnabled,
+        noGeofenceMode: updated.noGeofenceMode,
         joinedAt: updated.joinedAt,
       },
     })

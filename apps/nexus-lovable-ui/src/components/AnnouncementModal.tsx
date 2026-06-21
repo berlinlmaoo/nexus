@@ -53,6 +53,9 @@ export function AnnouncementModal() {
                   <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground">{current.body}</p>
                 </div>
               </div>
+              {current.imageUrl && (
+                <img src={current.imageUrl} alt="" className="max-h-72 w-full rounded-xl border border-border object-cover" />
+              )}
               <button
                 onClick={() => dismiss.mutate(current.id)}
                 disabled={dismiss.isPending}

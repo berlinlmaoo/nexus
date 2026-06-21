@@ -35,22 +35,65 @@ export type PeerReportStatus = "PENDING" | "VERIFIED" | "REJECTED" | "WITHDRAWN"
 export type PeerReport = {
   id: string;
   category: string;
-  reason: string;
+  reason: string | null;
+  evidenceUrl: string | null;
   status: PeerReportStatus;
+  rebuttal: string | null;
+  rebuttalAt: string | null;
   reviewNote: string | null;
   reviewedAt: string | null;
-  reporterBountyXp: number;
   reportedPenaltyXp: number;
   xpApplied: boolean;
   createdAt: string;
-  reporter: PeerReportUser;
+  reporter: PeerReportUser | null;   // null when anonymized (non-BoD viewer)
+  reporterHidden: boolean;
   reportedUser: PeerReportUser;
   reviewer: { id: string; name: string } | null;
   isMine: boolean;
+  isAgainstMe: boolean;
   canDecide: boolean;
   canWithdraw: boolean;
+  canRebut: boolean;
 };
-export type PeerReportList = { reports: PeerReport[]; counts: Record<string, number> };
+export type PeerReportList = { reports: PeerReport[]; counts: Record<string, number>; viewerIsBod: boolean };
+export type HallOfShameEntry = { id: string; category: string; at: string; reportedUser: PeerReportUser };
+export type HallOfShameOffender = { user: PeerReportUser; count: number };
+export type HallOfShame = { entries: HallOfShameEntry[]; offenders: HallOfShameOffender[] };
+
+// --- Complaint & Escalation channel ---
+export type ComplaintStatusKey = "OPEN" | "IN_REVIEW" | "RESOLVED" | "CLOSED";
+export type ComplaintPerson = { id: string; name: string; avatar: string | null };
+export type Complaint = {
+  id: string;
+  category: string;
+  subject: string;
+  anonymous: boolean;
+  confidential: boolean;
+  status: ComplaintStatusKey;
+  lastMessageAt: string;
+  resolvedAt: string | null;
+  createdAt: string;
+  reporter: ComplaintPerson | null;   // null when anonymous (and viewer is BoD)
+  reporterHidden: boolean;
+  messageCount: number;
+  isMine: boolean;
+  canReply: boolean;
+  canManage: boolean;                  // BoD: can change status
+};
+export type ComplaintMessage = {
+  id: string;
+  body: string;
+  fromReviewer: boolean;               // true = BoD side, false = reporter side
+  createdAt: string;
+  author: ComplaintPerson | null;
+  authorHidden: boolean;
+  mine: boolean;
+};
+export type ComplaintDetail = Complaint & {
+  resolvedBy: { id: string; name: string } | null;
+  messages: ComplaintMessage[];
+};
+export type ComplaintList = { complaints: Complaint[]; counts: Record<string, number>; viewerIsBod: boolean };
 
 export type NexusDashboardProject = {
   id: string;
@@ -126,7 +169,8 @@ export type NexusAttendanceToday = {
   dayOffQuota?: number;
   redDateUsedThisMonth?: number;
   redDateQuota?: number;
-  myShift?: { startTime: string; endTime: string; source: string } | null;
+  myShift?: { startTime: string; endTime: string; source: string; flexi?: boolean } | null;
+  noGeofence?: boolean;
   workspace?: { id: string; name: string } | null;
   today?: {
     id: string;
@@ -141,6 +185,8 @@ export type NexusAttendanceToday = {
     checkOutOffsite?: boolean | null;
     checkOutApproval?: string | null; // PENDING | APPROVED | REJECTED
     checkOutReason?: string | null;
+    checkOutReflection?: string | null;
+    checkOutReflectionAt?: string | null;
     officeLocation?: { name?: string | null } | null;
   } | null;
   // A previous day's check-in that was never checked out — must be closed before a new check-in.
@@ -193,6 +239,8 @@ export type NexusAttendanceHistory = {
     checkOutOffsite?: boolean | null;
     checkOutReason?: string | null;
     checkOutApproval?: string | null;
+    checkOutReflection?: string | null;
+    checkOutReflectionAt?: string | null;
     user?: NexusUser | null;
   }>;
 };
@@ -306,6 +354,8 @@ export type NexusWorkspaceMember = {
   attendanceShiftStartTime?: string | null;
   attendanceShiftEndTime?: string | null;
   attendanceShiftByDay?: Record<string, { start: string; end: string }> | null;
+  flexiTimeEnabled?: boolean;
+  noGeofenceMode?: boolean;
   joinedAt: string;
 };
 
@@ -648,8 +698,8 @@ export type NexusSubmissionDetail = NexusMySubmission & {
   answers?: Array<{ id: string; label: string; type: string; value: unknown }>;
 };
 
-export type NexusAnnouncement = { id: string; title: string; body: string; tone: "info" | "success" | "warning"; createdAt: string };
-export type NexusAdminAnnouncement = NexusAnnouncement & { active: boolean; seenCount: number };
+export type NexusAnnouncement = { id: string; title: string; body: string; tone: "info" | "success" | "warning"; imageUrl?: string | null; createdAt: string };
+export type NexusAdminAnnouncement = NexusAnnouncement & { active: boolean; seenCount: number; targetUserIds?: string[]; targetCount?: number };
 
 export type NexusFinanceLineItem = { id: string; name: string; order: number; monthly: number[]; total: number };
 export type NexusFinanceCategory = { id: string; kind: "OPEX" | "REVENUE"; name: string; order: number; lineItems: NexusFinanceLineItem[]; subtotalByMonth: number[]; subtotal: number };
@@ -1057,6 +1107,7 @@ export type AttendanceActionPayload = {
   notes?: string;
   offsite?: boolean; // checkout: confirm checking out beyond the office geofence
   reason?: string; // checkout: mandatory reason when offsite
+  reflection?: string; // checkout: mandatory daily reflection (min 200 chars)
 };
 
 function attendanceFormData(payload: AttendanceActionPayload) {
@@ -1066,6 +1117,7 @@ function attendanceFormData(payload: AttendanceActionPayload) {
   if (payload.notes) formData.set("notes", payload.notes);
   if (payload.offsite) formData.set("offsite", "1");
   if (payload.reason) formData.set("reason", payload.reason);
+  if (payload.reflection) formData.set("reflection", payload.reflection);
   formData.set("selfie", payload.selfie);
   return formData;
 }
@@ -1271,9 +1323,26 @@ export const nexusApi = {
 
   // --- Integrity (Peer Reports) ---
   peerReports: (status?: string) => apiFetch<PeerReportList>(`/api/peer-reports${status && status !== "ALL" ? `?status=${status}` : ""}`),
-  createPeerReport: (payload: { reportedUserId: string; category: string; reason: string }) => apiFetch<PeerReport>("/api/peer-reports", { method: "POST", body: JSON.stringify(payload) }),
+  createPeerReport: (payload: { reportedUserId: string; category: string; reason: string; evidence: File }) => {
+    const fd = new FormData();
+    fd.set("reportedUserId", payload.reportedUserId);
+    fd.set("category", payload.category);
+    fd.set("reason", payload.reason);
+    fd.set("evidence", payload.evidence);
+    return apiFetch<PeerReport>("/api/peer-reports", { method: "POST", body: fd });
+  },
   peerReportVerdict: (id: string, payload: { action: "verify" | "reject"; reviewNote?: string }) => apiFetch<PeerReport>(`/api/peer-reports/${id}/verdict`, { method: "POST", body: JSON.stringify(payload) }),
   withdrawPeerReport: (id: string) => apiFetch<PeerReport>(`/api/peer-reports/${id}/withdraw`, { method: "POST" }),
+  rebutPeerReport: (id: string, rebuttal: string) => apiFetch<PeerReport>(`/api/peer-reports/${id}/rebuttal`, { method: "POST", body: JSON.stringify({ rebuttal }) }),
+  hallOfShame: () => apiFetch<HallOfShame>("/api/peer-reports/hall-of-shame"),
+
+  // --- Complaint & Escalation channel ---
+  complaints: (status?: string) => apiFetch<ComplaintList>(`/api/complaints${status && status !== "ALL" ? `?status=${status}` : ""}`),
+  complaint: (id: string) => apiFetch<ComplaintDetail>(`/api/complaints/${id}`),
+  createComplaint: (payload: { category: string; subject: string; body: string; anonymous?: boolean; confidential?: boolean }) =>
+    apiFetch<Complaint>("/api/complaints", { method: "POST", body: JSON.stringify(payload) }),
+  replyComplaint: (id: string, body: string) => apiFetch<ComplaintDetail>(`/api/complaints/${id}/messages`, { method: "POST", body: JSON.stringify({ body }) }),
+  setComplaintStatus: (id: string, status: string) => apiFetch<ComplaintDetail>(`/api/complaints/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
 
   // --- Workspace members (org roles: BoD / Manager / Staff) ---
   workspaceMembers: (workspaceId?: string, includeRegistered = false) => {
@@ -1285,7 +1354,7 @@ export const nexusApi = {
   },
   inviteWorkspaceMember: (payload: { email: string; role?: OrgRole; attendanceRole?: string; workspaceId?: string }) =>
     apiFetch<{ member: NexusWorkspaceMember }>("/api/workspaces/members", { method: "POST", body: JSON.stringify(payload) }),
-  updateWorkspaceMember: (payload: { memberId: string; role?: OrgRole; attendanceRole?: string; workspaceId?: string; attendanceShiftStartTime?: string | null; attendanceShiftEndTime?: string | null; attendanceShiftByDay?: Record<string, { start: string; end: string }> | null; phoneNumber?: string | null }) =>
+  updateWorkspaceMember: (payload: { memberId: string; role?: OrgRole; attendanceRole?: string; workspaceId?: string; attendanceShiftStartTime?: string | null; attendanceShiftEndTime?: string | null; attendanceShiftByDay?: Record<string, { start: string; end: string }> | null; phoneNumber?: string | null; flexiTimeEnabled?: boolean; noGeofenceMode?: boolean }) =>
     apiFetch<{ member: NexusWorkspaceMember }>("/api/workspaces/members", { method: "PATCH", body: JSON.stringify(payload) }),
   removeWorkspaceMember: (memberId: string, workspaceId?: string) =>
     apiFetch<{ success?: boolean }>(`/api/workspaces/members?memberId=${encodeURIComponent(memberId)}${workspaceId ? `&workspaceId=${encodeURIComponent(workspaceId)}` : ""}`, { method: "DELETE" }),
@@ -1532,7 +1601,7 @@ export const nexusApi = {
   activeAnnouncements: () => apiFetch<{ announcements: NexusAnnouncement[] }>("/api/announcements/active"),
   dismissAnnouncement: (id: string) => apiFetch<{ ok?: boolean }>(`/api/announcements/${id}/seen`, { method: "POST" }),
   announcements: () => apiFetch<{ announcements: NexusAdminAnnouncement[] }>("/api/announcements"),
-  createAnnouncement: (payload: { title: string; body: string; tone?: string }) => apiFetch<{ announcement: NexusAdminAnnouncement }>("/api/announcements", { method: "POST", body: JSON.stringify(payload) }),
+  createAnnouncement: (payload: { title: string; body: string; tone?: string; targetUserIds?: string[] }) => apiFetch<{ announcement: NexusAdminAnnouncement }>("/api/announcements", { method: "POST", body: JSON.stringify(payload) }),
   updateAnnouncement: (id: string, payload: { title?: string; body?: string; tone?: string; active?: boolean }) => apiFetch<{ announcement: NexusAdminAnnouncement }>(`/api/announcements/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteAnnouncement: (id: string) => apiFetch<{ ok?: boolean }>(`/api/announcements/${id}`, { method: "DELETE" }),
 

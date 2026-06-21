@@ -48,6 +48,9 @@ type AttendanceRecordWithRelations = {
   checkOutOffsite?: boolean | null
   checkOutApproval?: string | null
   checkOutReason?: string | null
+  checkOutReflection?: string | null
+  checkOutReflectionAt?: Date | null
+  attendanceFlexi?: boolean | null
   checkOutApprovedById?: string | null
   checkOutApprovedAt?: Date | null
   notes: string | null
@@ -125,6 +128,7 @@ type AttendanceRecordInput = Pick<
   | "lateMinutes"
   | "earlyLeaveMinutes"
   | "workedMinutes"
+  | "attendanceFlexi"
   | "correctedAt"
   | "correctionReason"
 > & {
@@ -203,6 +207,17 @@ function getDateTimeParts(date: Date, timeZone = ATTENDANCE_TIMEZONE) {
       parts.find((part) => part.type === "month")?.value ?? "01"
     }-${parts.find((part) => part.type === "day")?.value ?? "01"}`,
   }
+}
+
+// Flexi Time — check-in allowed within this window with no late penalty; expected end = check-in + N hours.
+export const FLEXI_WINDOW_START = "12:00"
+export const FLEXI_WINDOW_END = "15:00"
+export const FLEXI_WORK_HOURS = 9
+
+/** Format a Date as "HH:mm" in the given timezone. */
+function formatHmInZone(date: Date, timeZone = ATTENDANCE_TIMEZONE) {
+  const p = getDateTimeParts(date, timeZone)
+  return `${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")}`
 }
 
 function getWeekdayInTimezone(date: Date, timeZone = ATTENDANCE_TIMEZONE) {
@@ -361,11 +376,20 @@ export async function getPrimaryAttendanceTeam(userId: string, workspaceId: stri
   })
 }
 
+/** Whether this member is geofence-exempt (Custom/Mobile attendance — check in/out anywhere). */
+export async function getMemberNoGeofence(userId: string, workspaceId: string): Promise<boolean> {
+  const m = await prisma.workspaceMember.findUnique({
+    where: { userId_workspaceId: { userId, workspaceId } },
+    select: { noGeofenceMode: true },
+  })
+  return m?.noGeofenceMode ?? false
+}
+
 /** Per-person attendance shift override (WorkspaceMember). Active only when BOTH times are set. */
 export async function getUserAttendanceShift(userId: string, workspaceId: string) {
   return prisma.workspaceMember.findUnique({
     where: { userId_workspaceId: { userId, workspaceId } },
-    select: { attendanceShiftStartTime: true, attendanceShiftEndTime: true, attendanceShiftByDay: true },
+    select: { attendanceShiftStartTime: true, attendanceShiftEndTime: true, attendanceShiftByDay: true, flexiTimeEnabled: true },
   })
 }
 
@@ -391,9 +415,21 @@ export async function resolveEffectiveAttendanceShift(args: {
   /** Attendance date — its weekday (in the attendance timezone) selects any per-day override. Defaults to now. */
   date?: Date
 }) {
-  // Precedence: USER per-weekday override > USER default > TEAM override > OFFICE default.
+  // Precedence: FLEXI (per-member) > USER per-weekday override > USER default > TEAM override > OFFICE default.
   const member = await getUserAttendanceShift(args.userId, args.workspaceId)
   if (member) {
+    // Flexi Time beats every fixed shift: the "window" (12:00–15:00) is the on-time check-in range; the
+    // actual expected end is computed dynamically (check-in + 9h) in deriveAttendanceMetrics.
+    if (member.flexiTimeEnabled) {
+      return {
+        source: "USER" as const,
+        teamId: null,
+        teamName: null,
+        shiftStartTime: FLEXI_WINDOW_START,
+        shiftEndTime: FLEXI_WINDOW_END,
+        flexi: true,
+      }
+    }
     // Derive the weekday in the OFFICE's timezone — the same zone the shift window & workday check use —
     // so the per-day override selection can't disagree with the late/early penalty math.
     const weekday = getWeekdayInTimezone(args.date ?? new Date(), safeAttendanceTimezone(args.office.timezone))
@@ -405,6 +441,7 @@ export async function resolveEffectiveAttendanceShift(args: {
         teamName: null,
         shiftStartTime: dayOverride.start,
         shiftEndTime: dayOverride.end,
+        flexi: false,
       }
     }
     if (member.attendanceShiftStartTime && member.attendanceShiftEndTime) {
@@ -414,6 +451,7 @@ export async function resolveEffectiveAttendanceShift(args: {
         teamName: null,
         shiftStartTime: member.attendanceShiftStartTime,
         shiftEndTime: member.attendanceShiftEndTime,
+        flexi: false,
       }
     }
   }
@@ -432,6 +470,7 @@ export async function resolveEffectiveAttendanceShift(args: {
       teamName: team.name,
       shiftStartTime: team.attendanceShiftStartTime,
       shiftEndTime: team.attendanceShiftEndTime,
+      flexi: false,
     }
   }
 
@@ -441,6 +480,7 @@ export async function resolveEffectiveAttendanceShift(args: {
     teamName: null,
     shiftStartTime: args.office.shiftStartTime?.trim() || "09:00",
     shiftEndTime: args.office.shiftEndTime?.trim() || "18:00",
+    flexi: false,
   }
 }
 
@@ -605,6 +645,7 @@ export function deriveAttendanceMetrics(input: {
     teamName: string | null
     shiftStartTime: string
     shiftEndTime: string
+    flexi?: boolean
   } | null
   treatAsNonWorkday?: boolean // tanggal merah → no late/early penalty for the day
 }): AttendanceDerivedMetrics {
@@ -628,6 +669,54 @@ export function deriveAttendanceMetrics(input: {
   let lateMinutes = 0
   let earlyLeaveMinutes = 0
   let workedMinutes = 0
+
+  // ── Flexi Time ──────────────────────────────────────────────────────────────
+  // On-time if checked in any time up to the window end (15:00). After that → LATE (vs the window end).
+  // Expected end is DYNAMIC: check-in + 9h. Early-leave/overtime measured against that, not a fixed clock.
+  if (input.effectiveShift?.flexi && input.checkInAt) {
+    const tz = policy.timeZone
+    const dp = getDateParts(shiftReference, tz)
+    const we = parseTimeString(FLEXI_WINDOW_END, "15:00")
+    const windowEndAt = zonedDateTimeToUtc({ year: dp.year, month: dp.month, day: dp.day, hour: we.hour, minute: we.minute }, tz)
+    const expectedEndAt = new Date(input.checkInAt.getTime() + FLEXI_WORK_HOURS * 60 * 60 * 1000)
+
+    const lateThresholdAt = new Date(windowEndAt.getTime() + policy.lateGraceMinutes * 60_000)
+    checkInStatus = isWorkday && input.checkInAt.getTime() > lateThresholdAt.getTime() ? "LATE" : "ON_TIME"
+    lateMinutes = checkInStatus === "LATE" ? differenceInMinutes(input.checkInAt, windowEndAt) : 0
+
+    if (input.checkOutAt) {
+      const earlyThresholdAt = new Date(expectedEndAt.getTime() - policy.earlyLeaveGraceMinutes * 60_000)
+      if (isWorkday && input.checkOutAt.getTime() < earlyThresholdAt.getTime()) {
+        checkOutStatus = "EARLY_LEAVE"
+        earlyLeaveMinutes = differenceInMinutes(expectedEndAt, input.checkOutAt)
+      } else if (input.checkOutAt.getTime() > expectedEndAt.getTime()) {
+        checkOutStatus = "OVERTIME"
+      } else {
+        checkOutStatus = "ON_TIME"
+      }
+      workedMinutes = differenceInMinutes(input.checkOutAt, input.checkInAt)
+    }
+
+    return {
+      checkInStatus,
+      checkOutStatus,
+      lateMinutes,
+      earlyLeaveMinutes,
+      workedMinutes,
+      timeZone: tz,
+      workdays: policy.workdays,
+      // Self-describing schedule for display/audit: actual start → computed end (e.g. "13:30" → "22:30").
+      shiftStartTime: formatHmInZone(input.checkInAt, tz),
+      shiftEndTime: formatHmInZone(expectedEndAt, tz),
+      lateGraceMinutes: policy.lateGraceMinutes,
+      earlyLeaveGraceMinutes: policy.earlyLeaveGraceMinutes,
+      shiftStartAt: input.checkInAt,
+      shiftEndAt: expectedEndAt,
+      effectiveShiftSource: policy.effectiveShiftSource,
+      effectiveTeamId: policy.effectiveTeamId,
+      effectiveTeamName: policy.effectiveTeamName,
+    }
+  }
 
   if (input.checkInAt) {
     const lateThresholdAt = new Date(policy.shiftStartAt.getTime() + policy.lateGraceMinutes * 60_000)
@@ -683,12 +772,14 @@ export function buildAttendanceDerivedFields(input: {
     teamName: string | null
     shiftStartTime: string
     shiftEndTime: string
+    flexi?: boolean
   } | null
   treatAsNonWorkday?: boolean // tanggal merah → no late/early penalty for the day
 }) {
   const metrics = deriveAttendanceMetrics(input)
   return {
     status: deriveAttendanceStatus(input.checkInAt, input.checkOutAt),
+    attendanceFlexi: !!input.effectiveShift?.flexi,
     effectiveShiftSource: metrics.effectiveShiftSource,
     effectiveTeamId: metrics.effectiveTeamId,
     effectiveTeamName: metrics.effectiveTeamName,
@@ -726,6 +817,7 @@ export function getAttendanceRecordMetrics(record: AttendanceRecordInput) {
       shiftEndTime:
         record.effectiveShiftEndTime ??
         parseTimeString(record.officeLocation.shiftEndTime, "18:00").normalized,
+      flexi: record.attendanceFlexi ?? false,
     },
   })
 
@@ -854,6 +946,8 @@ export function serializeAttendanceRecord(record: AttendanceRecordWithRelations)
     checkOutOffsite: record.checkOutOffsite ?? false,
     checkOutApproval: record.checkOutApproval ?? null,
     checkOutReason: record.checkOutReason ?? null,
+    checkOutReflection: record.checkOutReflection ?? null,
+    checkOutReflectionAt: record.checkOutReflectionAt?.toISOString() ?? null,
     notes: record.notes,
     status: record.status,
     correctedAt: record.correctedAt?.toISOString() ?? null,

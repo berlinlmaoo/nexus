@@ -2,6 +2,7 @@ import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import {
   enumerateAttendanceDates,
+  FLEXI_WINDOW_END,
   formatAttendanceDateKey,
   getAttendanceDate,
   getPrimaryAttendanceTeam,
@@ -406,7 +407,11 @@ export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date }
               const shift = await resolveEffectiveAttendanceShift({ userId, workspaceId, office, date })
               // Anchor the late math to the SAME timezone the shift was selected in (office tz), so an
               // office in a non-default tz can't disagree with the shift-window day boundary.
-              const lateMin = minutesLateAgainstShift(record.checkInAt, date, shift.shiftStartTime, safeAttendanceTimezone(office.timezone))
+              // Flexi members are on-time until the window END (15:00) — measure lateness against that,
+              // not the window start (12:00), or a flexi person who checked in at 13:30 would be wrongly
+              // (and permanently) penalized here.
+              const lateBaseline = shift.flexi ? FLEXI_WINDOW_END : shift.shiftStartTime
+              const lateMin = minutesLateAgainstShift(record.checkInAt, date, lateBaseline, safeAttendanceTimezone(office.timezone))
               const grace = Math.max(0, office.lateGraceMinutes ?? 0)
               if (lateMin > grace) {
                 // -1 XP/menit, maks 120.
@@ -548,7 +553,9 @@ export async function accrueLatePenalties(now: Date = new Date()): Promise<LateA
       // shifts, and the real office is only known at check-in via geofence) → skip those here;
       // they get penalized accurately at check-in instead.
       if (shift.source !== "USER" && shift.source !== "TEAM") continue
-      const elapsed = minutesLateAgainstShift(now, today, shift.shiftStartTime, safeAttendanceTimezone(office.timezone))
+      // Flexi members aren't "late" until the window END (15:00); accrue against that, not the 12:00 start.
+      const lateBaseline = shift.flexi ? FLEXI_WINDOW_END : shift.shiftStartTime
+      const elapsed = minutesLateAgainstShift(now, today, lateBaseline, safeAttendanceTimezone(office.timezone))
       if (elapsed <= 0) continue // shift not started / not late yet
 
       // Respect the late grace window: someone still within grace is NOT late yet (check-in would

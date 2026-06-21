@@ -2,7 +2,7 @@ import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import {
   LayoutDashboard, Inbox, MessageCircle, CheckSquare, Calendar, CalendarClock, FolderKanban,
   BookOpen, Users, Trophy, ClipboardCheck, Settings, Shield, FileText, Sparkles, Megaphone,
-  Search, Plus, PanelLeftClose, ChevronRight, LogOut, Loader2, Pin, FolderPlus, Rocket, Maximize2, Rss, ShieldAlert,
+  Search, Plus, PanelLeftClose, ChevronRight, LogOut, Loader2, Pin, FolderPlus, Rocket, Maximize2, AtSign, ShieldAlert, LifeBuoy,
 } from "lucide-react";
 import { useState, type ReactNode, type DragEvent } from "react";
 import { ProjectIcon } from "@/components/projects/ProjectIcon";
@@ -27,9 +27,10 @@ const groups = [
       { title: "Morning Brief", url: "/dashboard", icon: LayoutDashboard },
       { title: "Messages", url: "/messages", icon: MessageCircle },
       { title: "Signal Inbox", url: "/inbox", icon: Inbox },
-      { title: "The Wire", url: "/feed", icon: Rss },
+      { title: "Threads", url: "/threads", icon: AtSign },
       { title: "My Mission", url: "/my-tasks", icon: CheckSquare },
       { title: "Pengajuan Saya", url: "/submissions", icon: FileText },
+      { title: "Keluhan", url: "/complaints", icon: LifeBuoy },
       { title: "Time Map", url: "/master-calendar", icon: Calendar },
       { title: "Room Booking", url: "/room-booking", icon: CalendarClock },
     ],
@@ -145,11 +146,12 @@ export function AppSidebar() {
   const canManageOrg = ["ONE_ABOVE_ALL", "BOD", "MANAGER"].includes(orgRoleQuery.data?.role ?? "");
   const canManageAttendance = ["ONE_ABOVE_ALL", "BOD"].includes(orgRoleQuery.data?.role ?? "");
   const canSeeOracle = orgRoleQuery.data?.role === "ONE_ABOVE_ALL";
-  // Beta features (The Wire + Integrity) → BoD-and-above only (hidden from Manager + Staff).
+  // Threads (feed) is still BoD-and-above beta. Integrity (/peer-reports) is now open to everyone
+  // (staff file reports; review stays BoD-only, enforced server-side).
   const canSeeFeed = ["ONE_ABOVE_ALL", "BOD"].includes(orgRoleQuery.data?.role ?? "");
   const MANAGER_ONLY_URLS = new Set(["/admin", "/teams"]);
   const ONE_ABOVE_ALL_URLS = new Set(["/oracle", "/social"]);
-  const BOD_PLUS_URLS = new Set(["/feed", "/peer-reports"]);
+  const BOD_PLUS_URLS = new Set(["/threads"]);
 
   // Live nav badges. Inbox = unread notifications (shared cache w/ the inbox page). Attendance =
   // pending offsite-checkout approvals (BoD only). Both refresh every 45s + on relevant mutations.

@@ -12,7 +12,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const me = session.user.id
-    if (!isBodPlus(await getUserOrgRole(me))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    const role = await getUserOrgRole(me)
+    if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 }) // members only
     const { id } = await params
 
     const report = await prisma.peerReport.findUnique({ where: { id }, select: { reporterId: true, status: true } })
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     logAudit({ action: "update", entityType: "peer_report", entityId: id, userId: me, request, metadata: { withdrawn: true } })
     const updated = await prisma.peerReport.findUnique({ where: { id }, include: REPORT_INCLUDE })
-    return NextResponse.json(updated ? serializeReport(updated, me) : { ok: true })
+    return NextResponse.json(updated ? serializeReport(updated, me, isBodPlus(role)) : { ok: true })
   } catch (error) {
     console.error("Error withdrawing peer report:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

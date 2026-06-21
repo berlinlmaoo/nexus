@@ -7,7 +7,7 @@ import { Avatar } from "@/components/Avatar";
 import { ApiError, downloadFile, fmtDate, fmtTime, nexusApi, statusLabel, type AttendanceActionPayload, type NexusAttendanceHistory, type NexusOffice, type NexusOffsiteCheckout } from "@/lib/nexus-api";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { getAttendanceFix, GeoError } from "@/lib/geo";
-import { AlertTriangle, Calendar, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Clock, Coffee, Download, Loader2, MapPin, Pencil, Scale, Search, Sparkles, Trash2, X } from "lucide-react";
+import { AlertTriangle, Calendar, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Clock, Coffee, Download, Loader2, MapPin, Pencil, PenLine, Scale, Search, Sparkles, Trash2, X } from "lucide-react";
 import { celebrate } from "@/components/Celebration";
 import { SelfieCapture } from "@/components/attendance/SelfieCapture";
 import { MobileCheckInHero } from "@/components/attendance/MobileCheckInHero";
@@ -702,6 +702,12 @@ function AttendanceCorrectionDrawer({ record, origin, onClose, canOverride }: { 
           <AttendanceEvidence kind="in" photoUrl={record.checkInPhotoUrl} address={record.checkInAddress} lat={record.checkInLat} lng={record.checkInLng} distanceMeters={record.checkInDistanceMeters} atIso={record.checkInAt} />
           <AttendanceEvidence kind="out" photoUrl={record.checkOutPhotoUrl} address={record.checkOutAddress} lat={record.checkOutLat} lng={record.checkOutLng} distanceMeters={record.checkOutDistanceMeters} atIso={record.checkOutAt} offsite={record.checkOutOffsite} reason={record.checkOutReason} />
         </div>
+        {record.checkOutReflection && (
+          <div className="mt-4 rounded-2xl border border-border bg-muted/30 p-3">
+            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground"><PenLine className="h-3.5 w-3.5" /> Refleksi harian</p>
+            <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-foreground">{record.checkOutReflection}</p>
+          </div>
+        )}
         <div className="mt-4 border-t border-border pt-4">
           <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Koreksi manual</p>
         </div>
@@ -985,10 +991,13 @@ function fmtDateShort(value?: string | null) {
   return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+const REFLECTION_MIN = 200;
+
 function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, officeName, checkOutApproval, pendingCheckout, disabled }: { checkedIn: boolean; checkedOut: boolean; checkInAt?: string | null; checkOutAt?: string | null; officeName?: string | null; checkOutApproval?: string | null; pendingCheckout?: { attendanceDate?: string | null; checkInAt?: string | null; officeName?: string | null } | null; disabled: boolean }) {
   const qc = useQueryClient();
   const [selfie, setSelfie] = useState<File | null>(null);
   const [notes, setNotes] = useState("");
+  const [reflection, setReflection] = useState("");
   const [message, setMessage] = useState("");
   const [okMessage, setOkMessage] = useState("");
   const [locating, setLocating] = useState(false);
@@ -1007,7 +1016,7 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
   const checkOut = useMutation({
     mutationFn: (payload: AttendanceActionPayload) => nexusApi.attendanceCheckOut(payload),
     onSuccess: (data) => {
-      refresh(); pick(null); setOffsitePrompt(null); setOffsiteReason("");
+      refresh(); pick(null); setOffsitePrompt(null); setOffsiteReason(""); setReflection("");
       if (data?.pendingApproval) setOkMessage("Checkout di luar area terkirim — nunggu approval BoD ⏳");
       else { setOkMessage(""); celebrate("Checked out. Good run today 🏁"); }
     },
@@ -1032,12 +1041,16 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
   function submit() {
     setMessage("");
     if (mode === "done") return;
+    if (mode === "check-out" && reflection.trim().length < REFLECTION_MIN) {
+      setMessage(`Isi refleksi harian dulu (min ${REFLECTION_MIN} karakter) sebelum check-out.`);
+      return;
+    }
     if (!selfie) { setMessage("Ambil selfie dulu — klik tile selfie buat buka kamera."); return; }
     setLocating(true);
     getAttendanceFix()
       .then((fix) => {
         setLocating(false);
-        const payload = { lat: fix.lat, lng: fix.lng, selfie, notes: notes.trim() || undefined };
+        const payload = { lat: fix.lat, lng: fix.lng, selfie, notes: notes.trim() || undefined, ...(mode === "check-out" ? { reflection: reflection.trim() } : {}) };
         if (mode === "check-in") checkIn.mutate(payload); else { lastOut.current = payload; checkOut.mutate(payload); }
       })
       .catch((err) => {
@@ -1082,6 +1095,15 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
               <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-1", locating ? "bg-info/15 text-info" : "bg-muted text-muted-foreground")}>{locating ? <Loader2 className="h-3 w-3 animate-spin" /> : <MapPin className="h-3 w-3" />} GPS{locating ? "…" : ""}</span>
               <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-muted-foreground"><Clock className="h-3 w-3" /> Geofence auto</span>
             </div>
+            {mode === "check-out" && (
+              <div className="rounded-xl border border-primary/20 bg-card/80 p-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-foreground">Refleksi harian <span className="font-medium text-muted-foreground">· wajib, min {REFLECTION_MIN} karakter</span></span>
+                  <span className={cn("text-[11px] font-semibold", reflection.trim().length >= REFLECTION_MIN ? "text-success" : "text-muted-foreground")}>{reflection.trim().length}/{REFLECTION_MIN}</span>
+                </div>
+                <textarea value={reflection} onChange={(e) => setReflection(e.target.value)} rows={4} placeholder="Apa yang dikerjain hari ini, progress, kendala, dan prioritas berikutnya…" className="mt-1.5 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm leading-relaxed outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20" />
+              </div>
+            )}
             <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional note: traffic, WFH context, etc." className="rounded-xl border border-border bg-card/80 px-3 py-2 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20" />
             <button disabled={disabled || busy} onClick={submit} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50">
               {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> {locating ? "Locating…" : "Recording…"}</> : <><Camera className="h-4 w-4" /> {forcePending ? "Check out kemarin" : mode === "check-in" ? "Check in now" : "Check out now"}</>}

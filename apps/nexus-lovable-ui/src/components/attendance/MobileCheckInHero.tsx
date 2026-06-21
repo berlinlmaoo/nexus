@@ -2,13 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Loader2, LocateFixed, LogIn, LogOut } from "lucide-react";
+import { CheckCircle2, Loader2, LocateFixed, LogIn, LogOut, PenLine } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { celebrate } from "@/components/Celebration";
 import { ApiError, fmtTime, nexusApi, type AttendanceActionPayload, type NexusAttendanceToday } from "@/lib/nexus-api";
 import { getAttendanceFix, GeoError } from "@/lib/geo";
 
 type TodayData = NexusAttendanceToday | null;
+
+const REFLECTION_MIN = 200;
 
 function jktTime(d: Date) {
   return d.toLocaleTimeString("en-GB", { timeZone: "Asia/Jakarta", hour12: false });
@@ -38,6 +40,9 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
   const lastOut = useRef<AttendanceActionPayload | null>(null);
   const [offsitePrompt, setOffsitePrompt] = useState<{ officeName: string; distanceMeters: number } | null>(null);
   const [offsiteReason, setOffsiteReason] = useState("");
+  // Daily Reflection — mandatory recap (≥200 chars) collected BEFORE the selfie on check-out.
+  const [reflectOpen, setReflectOpen] = useState(false);
+  const [reflection, setReflection] = useState("");
   const errOf = (e: unknown, fb: string) => (e instanceof ApiError ? ((e.payload as { error?: string } | null)?.error ?? fb) : fb);
   // Big success popup after a confirmed check-in/out (in addition to the confetti).
   const reduce = useReducedMotion();
@@ -53,7 +58,7 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
   const checkOut = useMutation({
     mutationFn: (p: AttendanceActionPayload) => nexusApi.attendanceCheckOut(p),
     onSuccess: (data) => {
-      setOffsitePrompt(null); setOffsiteReason(""); refresh();
+      setOffsitePrompt(null); setOffsiteReason(""); setReflection(""); refresh();
       if (data?.pendingApproval) { setMsgOk(true); setMsg("Checkout di luar area terkirim — nunggu approval BoD ⏳"); }
       else { setMsg(null); celebrate("Checked out. Good run today 🏁"); showSuccess("out"); }
     },
@@ -71,7 +76,21 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
 
   const fileRef = useRef<HTMLInputElement>(null);
   const pendingMode = useRef<"in" | "out" | null>(null);
-  const trigger = (mode: "in" | "out") => { if (busy || disabled) return; setMsg(null); pendingMode.current = mode; fileRef.current?.click(); };
+  // Check-in goes straight to the selfie; check-out asks for the daily reflection first.
+  const trigger = (mode: "in" | "out") => {
+    if (busy || disabled) return;
+    setMsg(null);
+    if (mode === "out") { setReflectOpen(true); return; }
+    pendingMode.current = mode;
+    fileRef.current?.click();
+  };
+  // After the reflection passes ≥200 chars, continue the check-out into the selfie/GPS flow.
+  const proceedCheckout = () => {
+    if (reflection.trim().length < REFLECTION_MIN) return;
+    setReflectOpen(false);
+    pendingMode.current = "out";
+    fileRef.current?.click();
+  };
   const onSelfie = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
     e.target.value = "";
@@ -83,8 +102,8 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
     getAttendanceFix()
       .then((fix) => {
         setLocating(false);
-        const payload: AttendanceActionPayload = { lat: fix.lat, lng: fix.lng, selfie: file };
-        if (mode === "out") lastOut.current = payload; // keep it so an offsite retry can resubmit the same selfie+GPS
+        const payload: AttendanceActionPayload = { lat: fix.lat, lng: fix.lng, selfie: file, ...(mode === "out" ? { reflection: reflection.trim() } : {}) };
+        if (mode === "out") lastOut.current = payload; // keep it so an offsite retry can resubmit the same selfie+GPS+reflection
         (mode === "in" ? checkIn : checkOut).mutate(payload);
       })
       .catch((err) => {
@@ -179,7 +198,9 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
           <div className="mt-1 text-center font-display text-5xl font-bold tabular-nums tracking-tight">{jktTime(now)}</div>
           <div className="mt-2 flex justify-center">
             <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold">
-              My Work Schedule {shift ? `${shift.startTime} – ${shift.endTime}` : "—"}
+              {shift?.flexi
+                ? `Flexi ${shift.startTime}–${shift.endTime} · +9j`
+                : `My Work Schedule ${shift ? `${shift.startTime} – ${shift.endTime}` : "—"}`}
             </span>
           </div>
           <div className="mt-2 flex items-center justify-center gap-8 text-sm font-bold tabular-nums">
@@ -194,10 +215,13 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
         </button>
 
         {/* status + office chip */}
-        <div className="absolute bottom-4 left-4 z-20">
+        <div className="absolute bottom-4 left-4 z-20 flex flex-col items-start gap-1.5">
           <span className="rounded-full bg-card/90 px-3 py-1 text-xs font-semibold text-muted-foreground shadow ring-1 ring-border backdrop-blur">
             {status}{officeName ? ` · ${officeName}` : ""}
           </span>
+          {today?.noGeofence && (
+            <span className="rounded-full bg-sky-500/90 px-3 py-1 text-xs font-bold text-white shadow ring-1 ring-sky-300 backdrop-blur">📍 Bebas lokasi — absen di mana aja</span>
+          )}
         </div>
       </section>
 
@@ -247,6 +271,62 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
       )}
 
       <input ref={fileRef} type="file" accept="image/*" capture="user" onChange={onSelfie} className="hidden" />
+
+      {/* Daily Reflection — required (≥200 chars) before check-out, captured before the selfie */}
+      <AnimatePresence>
+        {reflectOpen && (
+          <motion.div
+            className="fixed inset-0 z-[65] grid place-items-center bg-slate-900/50 p-3 backdrop-blur-sm"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => { if (reflection.trim().length === 0) setReflectOpen(false); }}
+          >
+            <motion.div
+              initial={reduce ? { opacity: 0 } : { y: 30, opacity: 0 }}
+              animate={reduce ? { opacity: 1 } : { y: 0, opacity: 1 }}
+              exit={reduce ? { opacity: 0 } : { y: 24, opacity: 0 }}
+              transition={reduce ? { duration: 0.15 } : { type: "spring", stiffness: 300, damping: 28 }}
+              className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-3xl bg-card p-5 shadow-2xl ring-1 ring-border"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3">
+                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary"><PenLine className="h-5 w-5" /></div>
+                <div>
+                  <div className="text-base font-black text-foreground">Refleksi Harian</div>
+                  <div className="text-xs font-medium text-muted-foreground">Wajib diisi sebelum check-out · min {REFLECTION_MIN} karakter</div>
+                </div>
+              </div>
+              <p className="mt-3 rounded-xl bg-muted/60 px-3 py-2 text-[11px] font-medium leading-relaxed text-muted-foreground">
+                Ceritakan: apa yang dikerjain hari ini, progress yang dicapai, kendala/obstacle, dan prioritas berikutnya.
+              </p>
+              <textarea
+                value={reflection}
+                onChange={(e) => setReflection(e.target.value)}
+                rows={5}
+                placeholder="Hari ini gue ngerjain… progressnya… kendalanya… besok mau lanjut…"
+                className="mt-3 w-full resize-none rounded-2xl border border-border bg-background px-3 py-2.5 text-sm leading-relaxed outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+              />
+              <div className="mt-1.5 flex items-center justify-between text-[11px] font-semibold">
+                <span className={reflection.trim().length >= REFLECTION_MIN ? "text-emerald-600" : "text-muted-foreground"}>
+                  {reflection.trim().length}/{REFLECTION_MIN}
+                </span>
+                {reflection.trim().length < REFLECTION_MIN && (
+                  <span className="text-muted-foreground">kurang {REFLECTION_MIN - reflection.trim().length} karakter</span>
+                )}
+              </div>
+              <div className="mt-3 flex gap-2">
+                <button onClick={() => setReflectOpen(false)} className="flex-1 rounded-2xl border border-border bg-background py-3 text-sm font-semibold text-muted-foreground transition hover:bg-accent active:scale-[0.98]">Batal</button>
+                <button
+                  onClick={proceedCheckout}
+                  disabled={reflection.trim().length < REFLECTION_MIN}
+                  className="flex-[1.6] rounded-2xl bg-rose-500 py-3 text-sm font-bold text-white shadow-lg transition active:scale-[0.98] disabled:opacity-40"
+                >
+                  Lanjut · ambil selfie
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Loading overlay — visible while the selfie/GPS/upload is in flight */}
       <AnimatePresence>

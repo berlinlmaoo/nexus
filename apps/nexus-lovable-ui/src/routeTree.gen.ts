@@ -17,6 +17,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as OauthAuthorizeRouteImport } from './routes/oauth.authorize'
 import { Route as FFormIdRouteImport } from './routes/f.$formId'
+import { Route as AppThreadsRouteImport } from './routes/_app/threads'
 import { Route as AppTeamsRouteImport } from './routes/_app/teams'
 import { Route as AppSubmissionsRouteImport } from './routes/_app/submissions'
 import { Route as AppSocialRouteImport } from './routes/_app/social'
@@ -31,9 +32,9 @@ import { Route as AppMasterCalendarRouteImport } from './routes/_app/master-cale
 import { Route as AppLeaderboardRouteImport } from './routes/_app/leaderboard'
 import { Route as AppInboxRouteImport } from './routes/_app/inbox'
 import { Route as AppFormsRouteImport } from './routes/_app/forms'
-import { Route as AppFeedRouteImport } from './routes/_app/feed'
 import { Route as AppDocsRouteImport } from './routes/_app/docs'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
+import { Route as AppComplaintsRouteImport } from './routes/_app/complaints'
 import { Route as AppAttendanceRouteImport } from './routes/_app/attendance'
 import { Route as AppAdminRouteImport } from './routes/_app/admin'
 import { Route as AppProjectsIndexRouteImport } from './routes/_app/projects/index'
@@ -80,6 +81,11 @@ const FFormIdRoute = FFormIdRouteImport.update({
   id: '/f/$formId',
   path: '/f/$formId',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AppThreadsRoute = AppThreadsRouteImport.update({
+  id: '/threads',
+  path: '/threads',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppTeamsRoute = AppTeamsRouteImport.update({
   id: '/teams',
@@ -151,11 +157,6 @@ const AppFormsRoute = AppFormsRouteImport.update({
   path: '/forms',
   getParentRoute: () => AppRoute,
 } as any)
-const AppFeedRoute = AppFeedRouteImport.update({
-  id: '/feed',
-  path: '/feed',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppDocsRoute = AppDocsRouteImport.update({
   id: '/docs',
   path: '/docs',
@@ -164,6 +165,11 @@ const AppDocsRoute = AppDocsRouteImport.update({
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppComplaintsRoute = AppComplaintsRouteImport.update({
+  id: '/complaints',
+  path: '/complaints',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAttendanceRoute = AppAttendanceRouteImport.update({
@@ -210,9 +216,9 @@ export interface FileRoutesByFullPath {
   '/register': typeof RegisterRoute
   '/admin': typeof AppAdminRoute
   '/attendance': typeof AppAttendanceRoute
+  '/complaints': typeof AppComplaintsRoute
   '/dashboard': typeof AppDashboardRoute
   '/docs': typeof AppDocsRouteWithChildren
-  '/feed': typeof AppFeedRoute
   '/forms': typeof AppFormsRoute
   '/inbox': typeof AppInboxRoute
   '/leaderboard': typeof AppLeaderboardRoute
@@ -227,6 +233,7 @@ export interface FileRoutesByFullPath {
   '/social': typeof AppSocialRoute
   '/submissions': typeof AppSubmissionsRoute
   '/teams': typeof AppTeamsRoute
+  '/threads': typeof AppThreadsRoute
   '/f/$formId': typeof FFormIdRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/docs/$docId': typeof AppDocsDocIdRoute
@@ -242,9 +249,9 @@ export interface FileRoutesByTo {
   '/register': typeof RegisterRoute
   '/admin': typeof AppAdminRoute
   '/attendance': typeof AppAttendanceRoute
+  '/complaints': typeof AppComplaintsRoute
   '/dashboard': typeof AppDashboardRoute
   '/docs': typeof AppDocsRouteWithChildren
-  '/feed': typeof AppFeedRoute
   '/forms': typeof AppFormsRoute
   '/inbox': typeof AppInboxRoute
   '/leaderboard': typeof AppLeaderboardRoute
@@ -259,6 +266,7 @@ export interface FileRoutesByTo {
   '/social': typeof AppSocialRoute
   '/submissions': typeof AppSubmissionsRoute
   '/teams': typeof AppTeamsRoute
+  '/threads': typeof AppThreadsRoute
   '/f/$formId': typeof FFormIdRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/': typeof AppIndexRoute
@@ -277,9 +285,9 @@ export interface FileRoutesById {
   '/register': typeof RegisterRoute
   '/_app/admin': typeof AppAdminRoute
   '/_app/attendance': typeof AppAttendanceRoute
+  '/_app/complaints': typeof AppComplaintsRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/docs': typeof AppDocsRouteWithChildren
-  '/_app/feed': typeof AppFeedRoute
   '/_app/forms': typeof AppFormsRoute
   '/_app/inbox': typeof AppInboxRoute
   '/_app/leaderboard': typeof AppLeaderboardRoute
@@ -294,6 +302,7 @@ export interface FileRoutesById {
   '/_app/social': typeof AppSocialRoute
   '/_app/submissions': typeof AppSubmissionsRoute
   '/_app/teams': typeof AppTeamsRoute
+  '/_app/threads': typeof AppThreadsRoute
   '/f/$formId': typeof FFormIdRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/_app/': typeof AppIndexRoute
@@ -313,9 +322,9 @@ export interface FileRouteTypes {
     | '/register'
     | '/admin'
     | '/attendance'
+    | '/complaints'
     | '/dashboard'
     | '/docs'
-    | '/feed'
     | '/forms'
     | '/inbox'
     | '/leaderboard'
@@ -330,6 +339,7 @@ export interface FileRouteTypes {
     | '/social'
     | '/submissions'
     | '/teams'
+    | '/threads'
     | '/f/$formId'
     | '/oauth/authorize'
     | '/docs/$docId'
@@ -345,9 +355,9 @@ export interface FileRouteTypes {
     | '/register'
     | '/admin'
     | '/attendance'
+    | '/complaints'
     | '/dashboard'
     | '/docs'
-    | '/feed'
     | '/forms'
     | '/inbox'
     | '/leaderboard'
@@ -362,6 +372,7 @@ export interface FileRouteTypes {
     | '/social'
     | '/submissions'
     | '/teams'
+    | '/threads'
     | '/f/$formId'
     | '/oauth/authorize'
     | '/'
@@ -379,9 +390,9 @@ export interface FileRouteTypes {
     | '/register'
     | '/_app/admin'
     | '/_app/attendance'
+    | '/_app/complaints'
     | '/_app/dashboard'
     | '/_app/docs'
-    | '/_app/feed'
     | '/_app/forms'
     | '/_app/inbox'
     | '/_app/leaderboard'
@@ -396,6 +407,7 @@ export interface FileRouteTypes {
     | '/_app/social'
     | '/_app/submissions'
     | '/_app/teams'
+    | '/_app/threads'
     | '/f/$formId'
     | '/oauth/authorize'
     | '/_app/'
@@ -473,6 +485,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/f/$formId'
       preLoaderRoute: typeof FFormIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_app/threads': {
+      id: '/_app/threads'
+      path: '/threads'
+      fullPath: '/threads'
+      preLoaderRoute: typeof AppThreadsRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/teams': {
       id: '/_app/teams'
@@ -572,13 +591,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppFormsRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/feed': {
-      id: '/_app/feed'
-      path: '/feed'
-      fullPath: '/feed'
-      preLoaderRoute: typeof AppFeedRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/docs': {
       id: '/_app/docs'
       path: '/docs'
@@ -591,6 +603,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AppDashboardRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/complaints': {
+      id: '/_app/complaints'
+      path: '/complaints'
+      fullPath: '/complaints'
+      preLoaderRoute: typeof AppComplaintsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/attendance': {
@@ -659,9 +678,9 @@ const AppDocsRouteWithChildren =
 interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRoute
   AppAttendanceRoute: typeof AppAttendanceRoute
+  AppComplaintsRoute: typeof AppComplaintsRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppDocsRoute: typeof AppDocsRouteWithChildren
-  AppFeedRoute: typeof AppFeedRoute
   AppFormsRoute: typeof AppFormsRoute
   AppInboxRoute: typeof AppInboxRoute
   AppLeaderboardRoute: typeof AppLeaderboardRoute
@@ -676,6 +695,7 @@ interface AppRouteChildren {
   AppSocialRoute: typeof AppSocialRoute
   AppSubmissionsRoute: typeof AppSubmissionsRoute
   AppTeamsRoute: typeof AppTeamsRoute
+  AppThreadsRoute: typeof AppThreadsRoute
   AppIndexRoute: typeof AppIndexRoute
   AppFoldersFolderIdRoute: typeof AppFoldersFolderIdRoute
   AppProjectsProjectIdRoute: typeof AppProjectsProjectIdRoute
@@ -686,9 +706,9 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppAdminRoute: AppAdminRoute,
   AppAttendanceRoute: AppAttendanceRoute,
+  AppComplaintsRoute: AppComplaintsRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppDocsRoute: AppDocsRouteWithChildren,
-  AppFeedRoute: AppFeedRoute,
   AppFormsRoute: AppFormsRoute,
   AppInboxRoute: AppInboxRoute,
   AppLeaderboardRoute: AppLeaderboardRoute,
@@ -703,6 +723,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppSocialRoute: AppSocialRoute,
   AppSubmissionsRoute: AppSubmissionsRoute,
   AppTeamsRoute: AppTeamsRoute,
+  AppThreadsRoute: AppThreadsRoute,
   AppIndexRoute: AppIndexRoute,
   AppFoldersFolderIdRoute: AppFoldersFolderIdRoute,
   AppProjectsProjectIdRoute: AppProjectsProjectIdRoute,

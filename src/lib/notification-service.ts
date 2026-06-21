@@ -386,9 +386,9 @@ export async function notifyMention(data: {
   }
 }
 
-// ── The Wire (Feed) ──────────────────────────────────────────
+// ── Threads (Feed) ──────────────────────────────────────────
 // Feed mentions/comments reuse the `commentMention` preference (no new flag → no migration).
-// No taskId is set (a postId isn't a Task); the link points at /feed?post=<id>.
+// No taskId is set (a postId isn't a Task); the link points at /threads?post=<id>.
 
 export async function notifyFeedMention(data: {
   mentionedUserId: string
@@ -401,12 +401,12 @@ export async function notifyFeedMention(data: {
   if (!user) return
   const prefs = await getUserPrefs(data.mentionedUserId)
   const base = publicBaseUrl()
-  const link = `/feed?post=${data.postId}`
+  const link = `/threads?post=${data.postId}`
 
   await createInAppNotification({
     userId: data.mentionedUserId,
     type: "feed_mention",
-    title: "Mentioned on The Wire",
+    title: "Mentioned on Threads",
     message: `${data.mentionedByName} mentioned you in a post`,
     link,
   })
@@ -415,10 +415,10 @@ export async function notifyFeedMention(data: {
   const waDefaultEnabled = envFlagEnabled("NEXUS_WA_MENTIONS_DEFAULT_ENABLED", true)
   const waRecipient = prefs.waPhone || user.phoneNumber
   if (waRecipient && (prefs.waEnabled || waDefaultEnabled)) {
-    await sendWA(waRecipient, `[NEXUS] ${data.mentionedByName} mentioned you on The Wire: ${data.snippet.slice(0, 100)}${base ? `\n${base}${link}` : ""}`)
+    await sendWA(waRecipient, `[NEXUS] ${data.mentionedByName} mentioned you on Threads: ${data.snippet.slice(0, 100)}${base ? `\n${base}${link}` : ""}`)
   }
   if (prefs.slackEnabled && prefs.slackWebhook) {
-    await sendSlack(prefs.slackWebhook, `*The Wire*: ${data.mentionedByName} mentioned ${user.name} in a post`)
+    await sendSlack(prefs.slackWebhook, `*Threads*: ${data.mentionedByName} mentioned ${user.name} in a post`)
   }
 }
 
@@ -434,7 +434,7 @@ export async function notifyFeedComment(data: {
   if (!user) return
   const prefs = await getUserPrefs(data.recipientUserId)
   const base = publicBaseUrl()
-  const link = `/feed?post=${data.postId}`
+  const link = `/threads?post=${data.postId}`
 
   await createInAppNotification({
     userId: data.recipientUserId,
@@ -448,11 +448,44 @@ export async function notifyFeedComment(data: {
   const waDefaultEnabled = envFlagEnabled("NEXUS_WA_MENTIONS_DEFAULT_ENABLED", true)
   const waRecipient = prefs.waPhone || user.phoneNumber
   if (waRecipient && (prefs.waEnabled || waDefaultEnabled)) {
-    await sendWA(waRecipient, `[NEXUS] ${data.commenterName} on The Wire: ${data.snippet.slice(0, 100)}${base ? `\n${base}${link}` : ""}`)
+    await sendWA(waRecipient, `[NEXUS] ${data.commenterName} on Threads: ${data.snippet.slice(0, 100)}${base ? `\n${base}${link}` : ""}`)
   }
   if (prefs.slackEnabled && prefs.slackWebhook) {
-    await sendSlack(prefs.slackWebhook, `*The Wire*: ${data.commenterName} commented`)
+    await sendSlack(prefs.slackWebhook, `*Threads*: ${data.commenterName} commented`)
   }
+}
+
+// ── Integrity (peer reports / "cepu") ────────────────────────
+
+/** Tell the reported person a report was filed about them (reporter stays anonymous) — due-process so they can rebut. */
+export async function notifyPeerReportFiled(data: { reportedUserId: string; categoryLabel: string }) {
+  if (await isUserDnd(data.reportedUserId)) return
+  const user = await prisma.user.findUnique({ where: { id: data.reportedUserId }, select: { name: true, phoneNumber: true } })
+  if (!user) return
+  const prefs = await getUserPrefs(data.reportedUserId)
+  const base = publicBaseUrl()
+  const link = `/peer-reports`
+  await createInAppNotification({
+    userId: data.reportedUserId,
+    type: "peer_report_filed",
+    title: "Ada laporan tentang kamu",
+    message: `Soal: ${data.categoryLabel}. Kamu bisa kasih bantahan sebelum BoD memutuskan.`,
+    link,
+  })
+  const waRecipient = prefs.waPhone || user.phoneNumber
+  if (waRecipient && (prefs.waEnabled || envFlagEnabled("NEXUS_WA_MENTIONS_DEFAULT_ENABLED", true))) {
+    await sendWA(waRecipient, `[NEXUS] Ada laporan tentang kamu soal "${data.categoryLabel}". Buka Integrity buat kasih bantahan${base ? `: ${base}${link}` : ""}.`)
+  }
+}
+
+/** Broadcast a verified-violation announcement to EVERY workspace member (the public "pengumuman"). */
+export async function notifyViolationAnnouncement(data: { reportedName: string; categoryLabel: string }) {
+  const members = await prisma.workspaceMember.findMany({ select: { userId: true }, distinct: ["userId"] })
+  const title = "⚠️ Pelanggaran terbukti"
+  const message = `${data.reportedName} terbukti melanggar: ${data.categoryLabel}`
+  await Promise.allSettled(
+    members.map((m) => createInAppNotification({ userId: m.userId, type: "violation_announcement", title, message, link: "/peer-reports" })),
+  )
 }
 
 export async function notifyDueSoon(data: {
@@ -734,4 +767,70 @@ export async function checkDueSoonTasks() {
       })
     }
   }
+}
+
+// ── Complaint & Escalation channel ───────────────────────────────────────────────
+
+/** A new complaint was filed → ping every BoD (reporter identity is never included, anon or not). */
+export async function notifyComplaintFiled(data: { workspaceId: string; complaintId: string; categoryLabel: string; anonymous: boolean }) {
+  const bod = await prisma.workspaceMember.findMany({
+    where: { workspaceId: data.workspaceId, role: { in: ["BOD", "ONE_ABOVE_ALL"] } },
+    select: { userId: true },
+  })
+  await Promise.allSettled(
+    bod.map((b) =>
+      createInAppNotification({
+        userId: b.userId,
+        type: "complaint_filed",
+        title: "Keluhan baru masuk",
+        message: `Kategori: ${data.categoryLabel}${data.anonymous ? " · anonim" : ""}. Buka untuk menanggapi.`,
+        link: "/complaints",
+      }),
+    ),
+  )
+}
+
+/** A reply landed in a complaint thread → ping the other side (BoD reply → reporter; reporter reply → BoD). */
+export async function notifyComplaintReply(data: { complaintId: string; workspaceId: string; reporterId: string; fromReviewer: boolean; replierId: string }) {
+  if (data.fromReviewer) {
+    // BoD replied → tell the reporter (the reporter isn't anonymous to themselves).
+    await createInAppNotification({
+      userId: data.reporterId,
+      type: "complaint_reply",
+      title: "Balasan untuk keluhan kamu",
+      message: "BoD membalas keluhan yang kamu ajukan.",
+      link: "/complaints",
+    }).catch(() => null)
+  } else {
+    // Reporter replied → tell every BoD (except whoever just posted, if a BoD somehow filed it).
+    const bod = await prisma.workspaceMember.findMany({
+      where: { workspaceId: data.workspaceId, role: { in: ["BOD", "ONE_ABOVE_ALL"] }, userId: { not: data.replierId } },
+      select: { userId: true },
+    })
+    await Promise.allSettled(
+      bod.map((b) =>
+        createInAppNotification({
+          userId: b.userId,
+          type: "complaint_reply",
+          title: "Balasan di keluhan",
+          message: "Ada balasan baru di salah satu keluhan. Buka untuk menanggapi.",
+          link: "/complaints",
+        }),
+      ),
+    )
+  }
+}
+
+/** A complaint's status changed → tell the reporter. */
+export async function notifyComplaintStatus(data: { reporterId: string; complaintId: string; status: string }) {
+  const label: Record<string, string> = {
+    OPEN: "dibuka kembali", IN_REVIEW: "lagi ditangani BoD", RESOLVED: "ditandai selesai", CLOSED: "ditutup",
+  }
+  await createInAppNotification({
+    userId: data.reporterId,
+    type: "complaint_status",
+    title: "Update keluhan kamu",
+    message: `Keluhan kamu ${label[data.status] ?? data.status}.`,
+    link: "/complaints",
+  }).catch(() => null)
 }

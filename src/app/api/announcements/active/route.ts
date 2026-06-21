@@ -10,11 +10,17 @@ export async function GET() {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ announcements: [] })
 
+    const me = session.user.id
     const announcements = await prisma.announcement.findMany({
-      where: { active: true, seenBy: { none: { userId: session.user.id } } },
+      where: {
+        active: true,
+        seenBy: { none: { userId: me } },
+        // Audience: shown to everyone (empty target) OR only the targeted users.
+        OR: [{ targetUserIds: { isEmpty: true } }, { targetUserIds: { has: me } }],
+      },
       orderBy: { createdAt: "desc" },
       take: 5,
-      select: { id: true, title: true, body: true, tone: true, createdAt: true },
+      select: { id: true, title: true, body: true, tone: true, imageUrl: true, createdAt: true },
     })
     return NextResponse.json({ announcements })
   } catch (error) {

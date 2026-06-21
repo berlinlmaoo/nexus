@@ -11,6 +11,7 @@ import {
   formatAttendanceDateKey,
   getAttendanceDate,
   getAttendanceWorkspaceContext,
+  getMemberNoGeofence,
   resolveNearestOffice,
   resolveEffectiveAttendanceShift,
   serializeAttendanceRecord,
@@ -116,7 +117,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No office location could be matched." }, { status: 400 })
     }
 
-    if (nearest.distanceMeters > nearest.office.radiusMeters) {
+    // Custom/Mobile members are geofence-exempt — they may check in anywhere. Others are held to the radius.
+    const noGeofence = await getMemberNoGeofence(session.user.id, context.workspace.id)
+    if (!noGeofence && nearest.distanceMeters > nearest.office.radiusMeters) {
       return buildOutsideGeofenceResponse()(
         nearest.office.name,
         Number(nearest.distanceMeters.toFixed(2)),
@@ -208,6 +211,7 @@ export async function POST(request: NextRequest) {
         lateMinutes: derived.lateMinutes,
         earlyLeaveMinutes: derived.earlyLeaveMinutes,
         workedMinutes: derived.workedMinutes,
+        attendanceFlexi: derived.attendanceFlexi,
         checkInLat: validation.data.lat,
         checkInLng: validation.data.lng,
         checkInAddress: reverseGeocode.displayName,

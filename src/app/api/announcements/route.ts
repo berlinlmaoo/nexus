@@ -26,6 +26,7 @@ export async function GET() {
       announcements: announcements.map((a) => ({
         id: a.id, title: a.title, body: a.body, tone: a.tone, active: a.active,
         createdAt: a.createdAt.toISOString(), seenCount: a._count.seenBy,
+        targetUserIds: a.targetUserIds, targetCount: a.targetUserIds.length,
       })),
     })
   } catch (error) {
@@ -40,12 +41,20 @@ export async function POST(req: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     if (!(await isBoD(session.user.id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    const { title, body, tone } = await req.json()
+    const { title, body, tone, targetUserIds } = await req.json()
     if (!title || !body) return NextResponse.json({ error: "title & body required" }, { status: 400 })
     const t = ["info", "success", "warning"].includes(tone) ? tone : "info"
 
+    // Audience: empty = everyone. Otherwise restrict to the given (real, deduped) workspace members.
+    let targets: string[] = []
+    if (Array.isArray(targetUserIds) && targetUserIds.length) {
+      const wanted = [...new Set(targetUserIds.filter((x: unknown): x is string => typeof x === "string" && x.length > 0))]
+      const valid = await prisma.workspaceMember.findMany({ where: { userId: { in: wanted } }, select: { userId: true }, distinct: ["userId"] })
+      targets = valid.map((v) => v.userId)
+    }
+
     const announcement = await prisma.announcement.create({
-      data: { title: String(title).trim(), body: String(body).trim(), tone: t, active: true, createdById: session.user.id },
+      data: { title: String(title).trim(), body: String(body).trim(), tone: t, active: true, createdById: session.user.id, targetUserIds: targets },
     })
     return NextResponse.json({ announcement }, { status: 201 })
   } catch (error) {

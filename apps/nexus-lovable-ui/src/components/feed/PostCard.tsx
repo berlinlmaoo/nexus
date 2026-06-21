@@ -35,13 +35,15 @@ export function PostCard({ post, members, onLike, onDelete, onEdit, onRetry, onC
     onLike(post);
   };
 
+  const actionBtn = "inline-flex items-center gap-1.5 rounded-full px-2 py-1.5 text-sm transition";
+
   return (
     <motion.article
       layout={!reduce}
       initial={reduce ? false : { opacity: 0, y: 8 }}
       animate={failed && !reduce ? { opacity: 1, y: 0, x: [0, -6, 6, -4, 4, 0] } : { opacity: 1, y: 0, x: 0 }}
       transition={failed ? { x: { duration: 0.4 } } : { duration: 0.25 }}
-      className={cn("relative overflow-hidden rounded-2xl border bg-card shadow-soft", failed ? "border-rose-300" : "border-border")}
+      className={cn("relative border-b border-border px-4 py-3 transition-colors", failed ? "bg-rose-50/40" : "hover:bg-muted/20")}
     >
       {/* sending hairline */}
       {pending && (
@@ -49,81 +51,77 @@ export function PostCard({ post, members, onLike, onDelete, onEdit, onRetry, onC
           initial={{ scaleX: 0, transformOrigin: "left" }} animate={{ scaleX: 1 }} transition={{ duration: 1.2, ease: "easeInOut" }} />
       )}
 
-      <div className="p-3.5">
-        <div className="flex items-start gap-2.5">
-          <Avatar userId={post.author.id} name={post.author.name} avatar={post.author.avatar} size={40} className="shrink-0" />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 text-sm">
-              <span className="font-bold">{post.author.name}</span>
-              <span className="text-muted-foreground">· {pending ? "Posting…" : timeAgo(post.createdAt)}</span>
-              {post.editedAt && !pending && <span className="text-muted-foreground">· diedit</span>}
-            </div>
-
-            {editing ? (
-              <EditBox post={post} members={members} onCancel={() => setEditing(false)} onSave={(t, m) => { onEdit(post.id, t, m); setEditing(false); }} />
-            ) : (
-              post.text && <div className="mt-0.5 text-[15px] leading-snug"><RenderText text={post.text} /></div>
-            )}
-
-            {post.images.length > 0 && <ImageGrid images={post.images} onOpen={(i) => setLightbox(i)} />}
-
-            {/* actions */}
-            {!pending && !failed && !editing && (
-              <div className="mt-2.5 flex items-center gap-1 text-muted-foreground">
-                <button onClick={handleLike} className={cn("group relative inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm font-semibold transition", post.likedByMe ? "text-rose-500" : "hover:bg-rose-500/10 hover:text-rose-500")}>
-                  <span className="relative grid place-items-center">
-                    <Heart className={cn("h-[18px] w-[18px] transition-transform", post.likedByMe && "fill-rose-500")} style={{ transitionTimingFunction: "cubic-bezier(0.34,1.56,0.64,1)" }} />
-                    {burstKey > 0 && (
-                      <span key={burstKey} className="pointer-events-none absolute inset-0">
-                        {Array.from({ length: 6 }).map((_, i) => {
-                          const a = (Math.PI * 2 * i) / 6;
-                          return <motion.span key={i} className="absolute left-1/2 top-1/2 h-1.5 w-1.5 rounded-full bg-rose-500"
-                            initial={{ x: 0, y: 0, opacity: 1, scale: 1 }} animate={{ x: Math.cos(a) * 16, y: Math.sin(a) * 16, opacity: 0, scale: 0.4 }} transition={{ duration: 0.42, ease: "easeOut" }} />;
-                        })}
-                      </span>
-                    )}
-                  </span>
-                  <span className="inline-block min-w-[8px] overflow-hidden">
-                    <AnimatePresence mode="popLayout" initial={false}>
-                      <motion.span key={post.likeCount} initial={reduce ? false : { y: 9, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={reduce ? { opacity: 0 } : { y: -9, opacity: 0 }} transition={{ duration: 0.18 }} className="block tabular-nums">{post.likeCount || ""}</motion.span>
-                    </AnimatePresence>
-                  </span>
-                </button>
-
-                <button onClick={() => setShowComments((s) => !s)} className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm font-semibold transition hover:bg-primary/10 hover:text-primary", showComments && "text-primary")}>
-                  <MessageCircle className="h-[18px] w-[18px]" />
-                  <span className="tabular-nums">{post.commentCount || ""}</span>
-                </button>
-              </div>
-            )}
-
-            {failed && (
-              <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-rose-600">
-                Gagal ngirim.
-                <button onClick={() => onRetry(post)} className="inline-flex items-center gap-1 rounded-lg bg-rose-500 px-2.5 py-1 text-white"><RotateCw className="h-3.5 w-3.5" /> Coba lagi</button>
-                <button onClick={() => onDelete(post)} className="text-muted-foreground hover:text-foreground">Buang</button>
+      <div className="flex items-start gap-3">
+        <Avatar userId={post.author.id} name={post.author.name} avatar={post.author.avatar} size={40} className="shrink-0" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[15px] font-bold leading-tight">{post.author.name}</span>
+            <span className="text-sm text-muted-foreground">· {pending ? "Posting…" : timeAgo(post.createdAt)}</span>
+            {post.editedAt && !pending && <span className="text-sm text-muted-foreground">· diedit</span>}
+            {!pending && !failed && (post.canDelete || post.canEdit) && (
+              <div className="relative ml-auto">
+                <button onClick={() => setMenu((m) => !m)} className="-mr-1.5 grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition hover:bg-accent"><MoreHorizontal className="h-4 w-4" /></button>
+                {menu && (
+                  <>
+                    <div className="fixed inset-0 z-20" onClick={() => setMenu(false)} />
+                    <div className="absolute right-0 z-30 mt-1 w-36 overflow-hidden rounded-xl border border-border bg-popover py-1 shadow-pop">
+                      {post.canEdit && <button onClick={() => { setEditing(true); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent"><Pencil className="h-3.5 w-3.5" /> Edit</button>}
+                      {post.canDelete && <button onClick={() => { onDelete(post); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-rose-600 hover:bg-rose-50"><Trash2 className="h-3.5 w-3.5" /> Hapus</button>}
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
 
-          {/* overflow menu */}
-          {!pending && !failed && (post.canDelete || post.canEdit) && (
-            <div className="relative shrink-0">
-              <button onClick={() => setMenu((m) => !m)} className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition hover:bg-accent"><MoreHorizontal className="h-4 w-4" /></button>
-              {menu && (
-                <>
-                  <div className="fixed inset-0 z-20" onClick={() => setMenu(false)} />
-                  <div className="absolute right-0 z-30 mt-1 w-36 overflow-hidden rounded-xl border border-border bg-popover py-1 shadow-pop">
-                    {post.canEdit && <button onClick={() => { setEditing(true); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent"><Pencil className="h-3.5 w-3.5" /> Edit</button>}
-                    {post.canDelete && <button onClick={() => { onDelete(post); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-rose-600 hover:bg-rose-50"><Trash2 className="h-3.5 w-3.5" /> Hapus</button>}
-                  </div>
-                </>
-              )}
+          {editing ? (
+            <EditBox post={post} members={members} onCancel={() => setEditing(false)} onSave={(t, m) => { onEdit(post.id, t, m); setEditing(false); }} />
+          ) : (
+            post.text && <div className="mt-0.5 whitespace-pre-wrap text-[15px] leading-normal"><RenderText text={post.text} /></div>
+          )}
+
+          {post.images.length > 0 && <ImageGrid images={post.images} onOpen={(i) => setLightbox(i)} />}
+
+          {/* action row — like · comment · repost · share */}
+          {!pending && !failed && !editing && (
+            <div className="-ml-2 mt-1.5 flex items-center gap-0.5 text-muted-foreground">
+              <button onClick={handleLike} className={cn(actionBtn, post.likedByMe ? "text-rose-500" : "hover:bg-rose-500/10 hover:text-rose-500")}>
+                <span className="relative grid place-items-center">
+                  <Heart className={cn("h-[18px] w-[18px] transition-transform", post.likedByMe && "fill-rose-500")} style={{ transitionTimingFunction: "cubic-bezier(0.34,1.56,0.64,1)" }} />
+                  {burstKey > 0 && (
+                    <span key={burstKey} className="pointer-events-none absolute inset-0">
+                      {Array.from({ length: 6 }).map((_, i) => {
+                        const a = (Math.PI * 2 * i) / 6;
+                        return <motion.span key={i} className="absolute left-1/2 top-1/2 h-1.5 w-1.5 rounded-full bg-rose-500"
+                          initial={{ x: 0, y: 0, opacity: 1, scale: 1 }} animate={{ x: Math.cos(a) * 16, y: Math.sin(a) * 16, opacity: 0, scale: 0.4 }} transition={{ duration: 0.42, ease: "easeOut" }} />;
+                      })}
+                    </span>
+                  )}
+                </span>
+                <span className="inline-block min-w-[8px] overflow-hidden text-xs tabular-nums">
+                  <AnimatePresence mode="popLayout" initial={false}>
+                    <motion.span key={post.likeCount} initial={reduce ? false : { y: 9, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={reduce ? { opacity: 0 } : { y: -9, opacity: 0 }} transition={{ duration: 0.18 }} className="block">{post.likeCount || ""}</motion.span>
+                  </AnimatePresence>
+                </span>
+              </button>
+
+              <button onClick={() => setShowComments((s) => !s)} className={cn(actionBtn, "hover:bg-primary/10 hover:text-primary", showComments && "text-primary")}>
+                <MessageCircle className="h-[18px] w-[18px]" />
+                <span className="text-xs tabular-nums">{post.commentCount || ""}</span>
+              </button>
             </div>
           )}
-        </div>
 
-        {showComments && !pending && !failed && <CommentsSection postId={post.id} members={members} onCommentAdded={() => onCommentAdded(post.id)} />}
+          {failed && (
+            <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-rose-600">
+              Gagal ngirim.
+              <button onClick={() => onRetry(post)} className="inline-flex items-center gap-1 rounded-lg bg-rose-500 px-2.5 py-1 text-white"><RotateCw className="h-3.5 w-3.5" /> Coba lagi</button>
+              <button onClick={() => onDelete(post)} className="text-muted-foreground hover:text-foreground">Buang</button>
+            </div>
+          )}
+
+          {showComments && !pending && !failed && <CommentsSection postId={post.id} members={members} onCommentAdded={() => onCommentAdded(post.id)} />}
+        </div>
       </div>
 
       {lightbox !== null && <Lightbox images={post.images} index={lightbox} onClose={() => setLightbox(null)} />}

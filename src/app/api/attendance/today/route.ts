@@ -8,6 +8,7 @@ import {
   formatAttendanceDateKey,
   getAttendanceDate,
   getAttendanceWorkspaceContext,
+  getMemberNoGeofence,
   resolveEffectiveAttendanceShift,
   serializeAttendanceRequest,
   startOfAttendanceMonth,
@@ -163,11 +164,12 @@ export async function GET() {
     // The user's effective shift for the "My Work Schedule" display (resolved pre-check-in against
     // the first active office; USER/TEAM overrides are office-independent anyway).
     const firstOffice = await prisma.officeLocation.findFirst({ where: { workspaceId: context.workspace.id, isActive: true } })
-    let myShift: { startTime: string; endTime: string; source: string } | null = null
+    let myShift: { startTime: string; endTime: string; source: string; flexi?: boolean } | null = null
     if (firstOffice) {
       const shift = await resolveEffectiveAttendanceShift({ userId: session.user.id, workspaceId: context.workspace.id, office: firstOffice })
-      myShift = { startTime: shift.shiftStartTime, endTime: shift.shiftEndTime, source: shift.source }
+      myShift = { startTime: shift.shiftStartTime, endTime: shift.shiftEndTime, source: shift.source, flexi: shift.flexi }
     }
+    const noGeofence = await getMemberNoGeofence(session.user.id, context.workspace.id)
 
     return NextResponse.json({
       attendanceDateKey: formatAttendanceDateKey(),
@@ -189,6 +191,7 @@ export async function GET() {
       redDateQuota: redDateQuotaRow?.quota ?? 0,
       redDateUsedThisMonth: redDateUsed,
       myShift,
+      noGeofence,
       canManageAttendance: context.canManageAttendance,
       canReviewAttendanceRequests: context.canReviewAttendanceRequests,
     })

@@ -78,6 +78,9 @@ model User {
   peerReportsFiled     PeerReport[]        @relation("PeerReportReporter")
   peerReportsAgainst   PeerReport[]        @relation("PeerReportReported")
   peerReportsReviewed  PeerReport[]        @relation("PeerReportReviewer")
+  complaintsFiled      Complaint[]         @relation("ComplaintReporter")
+  complaintsResolved   Complaint[]         @relation("ComplaintResolver")
+  complaintMessages    ComplaintMessage[]
 }
 
 // Per-user API token for the MCP connector (and other integrations). Only the SHA-256 hash is
@@ -193,6 +196,7 @@ model Workspace {
   divisions            Division[]
   holidays             Holiday[]
   redDateQuotas        RedDateQuota[]
+  complaints           Complaint[]
 }
 
 // Monthly "tanggal merah" quota (jatah), set by BoD per month, same for every staff. Staff
@@ -243,6 +247,16 @@ model WorkspaceMember {
 
   // Per-person monthly day-off quota override. Null = workspace default (4).
   dayOffQuota Int?
+
+  // Flexi Time — when true, this member checks in any time in the flexi window (12:00–15:00) with no
+  // late penalty, and their expected end = check-in + 9h (overrides any fixed/team/office shift).
+  // Opt-in per person; default off = normal fixed shift.
+  flexiTimeEnabled Boolean @default(false)
+
+  // Custom/Mobile attendance — when true, this member may check in/out ANYWHERE (geofence radius is not
+  // enforced and a checkout outside the office is NOT routed through offsite-approval). For high-mobility
+  // roles. Opt-in per person; default off = normal geofenced attendance.
+  noGeofenceMode Boolean @default(false)
 
   userId      String
   workspaceId String
@@ -914,6 +928,13 @@ model AttendanceRecord {
   checkOutReason        String?
   checkOutApprovedById  String?
   checkOutApprovedAt    DateTime?
+  // Daily Reflection — mandatory ≥200-char recap captured at check-out (work done today, progress,
+  // blockers, next priorities). Stored separately from `notes` for auditability/reporting.
+  checkOutReflection    String?
+  checkOutReflectionAt  DateTime?
+  // Flexi Time — whether this record was computed under flexi rules (check-in window 12:00–15:00,
+  // expected end = check-in + 9h). Stored so re-derivation/audit doesn't fall back to fixed-shift math.
+  attendanceFlexi       Boolean          @default(false)
   notes                 String?
   status                AttendanceStatus @default(CHECKED_IN)
   correctedAt           DateTime?
@@ -1292,6 +1313,9 @@ model Announcement {
   body        String
   tone        String              @default("info") // info | success | warning
   active      Boolean             @default(true)
+  // Audience: empty = EVERYONE (default). Non-empty = only these user ids see the pop-up.
+  targetUserIds String[]          @default([])
+  imageUrl    String?             // optional image shown in the pop-up (e.g. violation evidence photo)
   createdById String?
   createdAt   DateTime            @default(now())
   seenBy      AnnouncementSeen[]
@@ -2013,6 +2037,9 @@ model PeerReport {
   reportedUser      User               @relation("PeerReportReported", fields: [reportedUserId], references: [id], onDelete: Cascade)
   category          PeerReportCategory
   reason            String             @db.Text
+  evidenceUrl       String?            // gated /api/files/peer-reports/<name>; REQUIRED at create (API-enforced)
+  evidenceMimeType  String?
+  evidenceSize      Int?
   status            PeerReportStatus   @default(PENDING)
   rebuttal          String?            @db.Text       // reported person's response (future; reserved)
   rebuttalAt        DateTime?
@@ -2045,4 +2072,76 @@ model PeerReportEvent {
   createdAt  DateTime   @default(now())
 
   @@index([reportId, createdAt])
+}
+
+// ── Complaint & Escalation channel ───────────────────────────────────────────────
+// A private, categorized chat between a staff member and the BoD for operational/HR grievances.
+// Distinct from PeerReport (which is PUBLIC + punitive): complaints stay CONFIDENTIAL (BoD-only),
+// support an ANONYMOUS option (reporter hidden even from BoD), and are a back-and-forth thread.
+enum ComplaintCategory {
+  ATTENDANCE
+  EXP
+  PAYROLL
+  DAY_OFF
+  OPERATIONAL
+  HR
+  LEADERSHIP
+  OTHER
+}
+
+enum ComplaintStatus {
+  OPEN       // baru masuk, belum ditangani
+  IN_REVIEW  // lagi ditangani BoD
+  RESOLVED   // selesai / ada solusi
+  CLOSED     // ditutup tanpa tindak lanjut
+}
+
+model Complaint {
+  id            String             @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  reporterId    String
+  reporter      User               @relation("ComplaintReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  category      ComplaintCategory
+  subject       String
+  anonymous     Boolean            @default(false) // reporter hidden from reviewers (BoD) too
+  confidential  Boolean            @default(false) // flagged extra-sensitive (badge for BoD)
+  status        ComplaintStatus    @default(OPEN)
+  lastMessageAt DateTime           @default(now())
+  resolvedAt    DateTime?
+  resolvedById  String?
+  resolvedBy    User?              @relation("ComplaintResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  messages      ComplaintMessage[]
+  events        ComplaintEvent[]
+
+  @@index([reporterId, createdAt])
+  @@index([status, lastMessageAt])
+}
+
+model ComplaintMessage {
+  id           String    @id @default(cuid())
+  complaintId  String
+  complaint    Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  authorId     String
+  author       User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  fromReviewer Boolean   @default(false) // true = BoD/reviewer side; false = reporter side
+  body         String    @db.Text
+  createdAt    DateTime  @default(now())
+
+  @@index([complaintId, createdAt])
+}
+
+model ComplaintEvent {
+  id          String    @id @default(cuid())
+  complaintId String
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  action      String    // filed | status
+  fromStatus  String?
+  toStatus    String?
+  actorId     String?
+  createdAt   DateTime  @default(now())
+
+  @@index([complaintId, createdAt])
 }
