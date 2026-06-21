@@ -72,15 +72,23 @@ prune_backups "$DAILY_DIR" 7
 prune_backups "$WEEKLY_DIR" 4
 
 if [ -n "${NAS_SSH_HOST:-}" ] && [ -n "${NAS_SSH_USER:-}" ] && [ -n "${NAS_BACKUP_DIR:-}" ]; then
-  echo "Copying backup snapshots to NAS"
-  ssh "${NAS_SSH_USER}@${NAS_SSH_HOST}" "mkdir -p '${NAS_BACKUP_DIR}'"
-  find "$BACKUP_DIR" -type f -name '*.sql.gz' -print | while IFS= read -r backup_file; do
-    rel_path="${backup_file#$BACKUP_DIR/}"
-    remote_dir="${NAS_BACKUP_DIR}/$(dirname "$rel_path")"
-    remote_file="${remote_dir}/$(basename "$backup_file")"
-    ssh "${NAS_SSH_USER}@${NAS_SSH_HOST}" "mkdir -p '${remote_dir}'"
-    cat "$backup_file" | ssh "${NAS_SSH_USER}@${NAS_SSH_HOST}" "cat > '${remote_file}'"
-  done
+  # Off-site copy to the NAS. The NAS may be unreachable when the deploy machine is off the office LAN
+  # (until Tailscale/VPN is wired up), so reach it with a short timeout and treat any failure as a
+  # non-fatal skip — the LOCAL backup above is already safe; we never want the daily job to hang/abort.
+  SSH_OPTS="-o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
+  if ssh $SSH_OPTS "${NAS_SSH_USER}@${NAS_SSH_HOST}" "mkdir -p '${NAS_BACKUP_DIR}'" 2>/dev/null; then
+    echo "Copying backup snapshots to NAS"
+    find "$BACKUP_DIR" -type f -name '*.sql.gz' -print | while IFS= read -r backup_file; do
+      rel_path="${backup_file#$BACKUP_DIR/}"
+      remote_dir="${NAS_BACKUP_DIR}/$(dirname "$rel_path")"
+      remote_file="${remote_dir}/$(basename "$backup_file")"
+      ssh $SSH_OPTS "${NAS_SSH_USER}@${NAS_SSH_HOST}" "mkdir -p '${remote_dir}'" 2>/dev/null \
+        && cat "$backup_file" | ssh $SSH_OPTS "${NAS_SSH_USER}@${NAS_SSH_HOST}" "cat > '${remote_file}'" 2>/dev/null \
+        || echo "  NAS copy skipped: $rel_path"
+    done
+  else
+    echo "NAS unreachable (${NAS_SSH_HOST}) — local backup kept, off-site sync skipped (set up Tailscale/cloud)."
+  fi
 fi
 
 echo "Backup completed."

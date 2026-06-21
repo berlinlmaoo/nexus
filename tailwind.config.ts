@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import tailwindcssAnimate from "tailwindcss-animate";
 
 const config: Config = {
   darkMode: "class",
@@ -82,7 +83,7 @@ const config: Config = {
         },
       },
       fontFamily: {
-        headline: ["var(--font-manrope)", "sans-serif"],
+        headline: ["var(--font-plus-jakarta)", "system-ui", "sans-serif"],
         body: ["var(--font-inter)", "sans-serif"],
         label: ["var(--font-inter)", "sans-serif"],
       },
@@ -155,6 +156,6 @@ const config: Config = {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [tailwindcssAnimate],
 };
 export default config;
