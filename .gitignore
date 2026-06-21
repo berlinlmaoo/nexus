@@ -44,9 +44,14 @@ next-env.d.ts
 
 # local runtime data
 /var/
+# sibling runtime-data dirs: beta/staging Postgres volumes + uploads, prod DB backups (var-beta/, var-prod-backups/, var-staging/, …)
+/var-*/
 /backups/
 *.sql
 *.sql.gz
 *.sqlite
 *.sqlite3
 postgres-data/
+
+# vendored third-party project (carries its own .git, ~566M) — never commit into this repo
+/AFFiNE/
