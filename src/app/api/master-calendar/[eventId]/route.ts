@@ -18,7 +18,7 @@ import {
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { eventId: string } }
+  { params }: { params: Promise<{ eventId: string }> }
 ) {
   try {
     const session = await auth()
@@ -26,7 +26,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const access = await canAccessMasterCalendarEvent(session.user.id, params.eventId)
+    const access = await canAccessMasterCalendarEvent(session.user.id, (await params).eventId)
     if (!access.event) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 })
     }
@@ -41,7 +41,7 @@ export async function PATCH(
     }
 
     const existing = await prisma.teamCalendarEvent.findUnique({
-      where: { id: params.eventId },
+      where: { id: (await params).eventId },
       include: {
         attendees: {
           select: { userId: true },
@@ -187,7 +187,7 @@ export async function PATCH(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { eventId: string } }
+  { params }: { params: Promise<{ eventId: string }> }
 ) {
   try {
     const session = await auth()
@@ -195,7 +195,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const access = await canAccessMasterCalendarEvent(session.user.id, params.eventId)
+    const access = await canAccessMasterCalendarEvent(session.user.id, (await params).eventId)
     if (!access.event) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 })
     }
@@ -204,7 +204,7 @@ export async function DELETE(
     }
 
     await prisma.teamCalendarEvent.update({
-      where: { id: params.eventId },
+      where: { id: (await params).eventId },
       data: { status: "CANCELLED" },
     })
 

@@ -27,7 +27,7 @@ export async function getAdminAccessContext(userId: string) {
 
   const isSystemAdmin = user?.role === "ADMIN"
   const isWorkspaceAdmin = workspaceMemberships.some(
-    (membership) => membership.role === "OWNER" || membership.role === "ADMIN"
+    (membership) => membership.role === "BOD" || membership.role === "MANAGER" || membership.role === "ONE_ABOVE_ALL"
   )
 
   return {

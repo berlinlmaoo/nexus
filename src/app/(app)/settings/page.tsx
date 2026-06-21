@@ -32,8 +32,8 @@ export default async function SettingsPage() {
     },
   })
 
-  const isAdmin = user.role === "ADMIN" || workspaceMember?.role === "OWNER" || workspaceMember?.role === "ADMIN"
-  const canAccessAttendanceSettings = isAdmin || workspaceMember?.attendanceRole === "SUPERVISOR"
+  const isAdmin = user.role === "ADMIN" || workspaceMember?.role === "BOD" || workspaceMember?.role === "MANAGER" || workspaceMember?.role === "ONE_ABOVE_ALL"
+  const canAccessAttendanceSettings = user.role === "ADMIN" || workspaceMember?.role === "BOD"
   const workspaceRole = workspaceMember?.role || null
 
   return (

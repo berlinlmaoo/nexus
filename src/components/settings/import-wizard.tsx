@@ -147,8 +147,8 @@ export function ImportWizard() {
                 className={cn(
                   "flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium",
                   step >= n
-                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                    : "bg-zinc-200 text-zinc-500 dark:bg-zinc-700"
+                    ? "bg-foreground text-white"
+                    : "bg-surface-container text-muted-foreground"
                 )}
               >
                 {n}
@@ -156,7 +156,7 @@ export function ImportWizard() {
               <span className={step >= n ? "font-medium" : "text-muted-foreground"}>
                 {label}
               </span>
-              {n < 4 && <div className="h-px w-6 bg-zinc-300 dark:bg-zinc-600" />}
+              {n < 4 && <div className="h-px w-6 bg-surface-container-high" />}
             </div>
           ))}
         </div>
@@ -175,8 +175,8 @@ export function ImportWizard() {
                   className={cn(
                     "flex h-20 w-32 flex-col items-center justify-center gap-1.5 rounded-lg border-2 text-sm font-medium transition-all",
                     source === s
-                      ? "border-zinc-900 dark:border-zinc-100 bg-zinc-50 dark:bg-zinc-800"
-                      : "border-transparent bg-zinc-100 dark:bg-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-600"
+                      ? "border-on-surface-variant bg-surface-container-lowest"
+                      : "border-transparent bg-muted hover:border-on-surface-variant"
                   )}
                 >
                   <span className="text-lg font-bold capitalize">{s}</span>
@@ -248,7 +248,7 @@ export function ImportWizard() {
         {step === 3 && (
           <div className="space-y-3">
             <p className="text-sm font-medium">Ready to import</p>
-            <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 p-4 text-sm space-y-1">
+            <div className="rounded-lg bg-surface-container-lowest p-4 text-sm space-y-1">
               <p>
                 <span className="text-muted-foreground">Source:</span>{" "}
                 <span className="font-medium capitalize">{source}</span>
@@ -301,9 +301,9 @@ export function ImportWizard() {
                 {/* Progress bar */}
                 {job.total > 0 && (
                   <div className="space-y-1">
-                    <div className="h-2 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
+                    <div className="h-2 rounded-full bg-surface-container overflow-hidden">
                       <div
-                        className="h-full bg-zinc-900 dark:bg-zinc-100 rounded-full transition-all duration-300"
+                        className="h-full bg-foreground rounded-full transition-all duration-300"
                         style={{
                           width: `${Math.round((job.progress / job.total) * 100)}%`,
                         }}

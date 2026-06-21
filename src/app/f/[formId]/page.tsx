@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import { FormPublic } from '@/components/forms/form-public'
 import type { FormField as BuilderFormField } from '@/components/forms/form-builder'
 import { Loader2 } from 'lucide-react'
+import type { FormAccessSchedule } from '@/lib/form-access-schedule'
 
 interface FormField {
   id: string
@@ -32,6 +33,7 @@ interface FormData {
   description: string | null
   fields: FormField[]
   isPublic: boolean
+  accessSchedule?: FormAccessSchedule | null
   branding?: FormBranding | null
   taskLists?: TaskListOption[]
 }
@@ -61,18 +63,18 @@ export default function PublicFormPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[100svh] items-center justify-center bg-zinc-50">
-        <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
+      <div className="flex min-h-[100svh] items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     )
   }
 
   if (error || !form) {
     return (
-      <div className="flex min-h-[100svh] items-center justify-center bg-zinc-50 p-4">
-        <div className="w-full max-w-lg rounded-xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
-          <h2 className="text-xl font-semibold text-zinc-900">Form Not Available</h2>
-          <p className="mt-2 text-sm text-zinc-500">
+      <div className="flex min-h-[100svh] items-center justify-center bg-background p-4">
+        <div className="w-full max-w-lg rounded-xl border border-border bg-card p-8 text-center shadow-sm">
+          <h2 className="text-xl font-semibold text-on-surface">Form Not Available</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
             {error || 'This form does not exist or is not publicly accessible.'}
           </p>
         </div>
@@ -86,6 +88,7 @@ export default function PublicFormPage() {
       formName={form.name}
       formDescription={form.description}
       fields={form.fields as BuilderFormField[]}
+      accessSchedule={form.accessSchedule}
       branding={form.branding}
       taskLists={form.taskLists ?? []}
     />

@@ -34,9 +34,9 @@ const LOAD_COLORS = {
 }
 
 const BAR_COLORS = {
-  todo: "bg-zinc-400",
-  inProgress: "bg-zinc-600",
-  inReview: "bg-zinc-800",
+  todo: "bg-surface-container-high",
+  inProgress: "bg-on-surface-variant",
+  inReview: "bg-foreground",
   done: "bg-green-500",
 }
 
@@ -165,9 +165,9 @@ export function WorkloadView({ tasks, members, onTaskClick }: WorkloadViewProps)
 
             {/* Legend */}
             <div className="flex items-center gap-4 pt-3 mt-2 border-t text-[10px] text-muted-foreground">
-              <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-zinc-400" /> To Do</span>
-              <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-zinc-600" /> In Progress</span>
-              <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-zinc-800" /> In Review</span>
+              <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-surface-container-high" /> To Do</span>
+              <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-on-surface-variant" /> In Progress</span>
+              <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-foreground" /> In Review</span>
               <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-green-500" /> Done</span>
             </div>
           </div>
@@ -203,9 +203,9 @@ export function WorkloadView({ tasks, members, onTaskClick }: WorkloadViewProps)
                   >
                     <div className={cn(
                       "h-2 w-2 rounded-full",
-                      task.status === "TODO" && "bg-zinc-400",
-                      task.status === "IN_PROGRESS" && "bg-zinc-600",
-                      task.status === "IN_REVIEW" && "bg-zinc-800",
+                      task.status === "TODO" && "bg-surface-container-high",
+                      task.status === "IN_PROGRESS" && "bg-on-surface-variant",
+                      task.status === "IN_REVIEW" && "bg-foreground",
                       task.status === "DONE" && "bg-green-500",
                     )} />
                     <span className="text-sm flex-1 truncate">{task.title}</span>

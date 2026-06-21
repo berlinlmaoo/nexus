@@ -49,18 +49,28 @@ async function getTeamContext(teamId: string, actorId: string) {
   const canManage = Boolean(
     isSystemAdmin ||
       (workspaceMembership &&
-        (workspaceMembership.role === 'OWNER' ||
-          workspaceMembership.role === 'ADMIN'))
+        (workspaceMembership.role === 'BOD' ||
+          workspaceMembership.role === 'MANAGER' || workspaceMembership.role === 'ONE_ABOVE_ALL'))
   )
   const canManageAttendanceSettings = Boolean(
     isSystemAdmin ||
       (workspaceMembership &&
-        (workspaceMembership.role === 'OWNER' ||
-          workspaceMembership.role === 'ADMIN' ||
+        (workspaceMembership.role === 'BOD' ||
+          workspaceMembership.role === 'MANAGER' || workspaceMembership.role === 'ONE_ABOVE_ALL' ||
           workspaceMembership.attendanceRole === 'SUPERVISOR'))
   )
 
   return { team, workspaceMembership, canManage, canManageAttendanceSettings, isSystemAdmin }
+}
+
+async function canManageWorkspace(workspaceId: string, actorId: string) {
+  const isSystemAdmin = await isSystemAdminUser(actorId)
+  if (isSystemAdmin) return true
+  const membership = await prisma.workspaceMember.findUnique({
+    where: { userId_workspaceId: { userId: actorId, workspaceId } },
+    select: { role: true },
+  })
+  return Boolean(membership && (membership.role === 'BOD' || membership.role === 'MANAGER' || membership.role === 'ONE_ABOVE_ALL'))
 }
 
 function normalizeTeamName(name: string) {
@@ -78,7 +88,7 @@ function normalizeRequestedEmails(value: unknown) {
   )
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const session = await auth()
     const user = session?.user
@@ -90,12 +100,25 @@ export async function GET() {
       select: { workspaceId: true, role: true, attendanceRole: true },
     })
 
+    // Division list (grouping layer above teams). Returned to all members so the
+    // grouped Crew Hub view can render section headers; only BoD/Manager edit them.
+    if (req.nextUrl.searchParams.get('resource') === 'divisions') {
+      const divisionScope = isSystemAdmin
+        ? {}
+        : { workspaceId: { in: workspaceMemberships.map((m) => m.workspaceId) } }
+      const divisions = await prisma.division.findMany({
+        where: divisionScope,
+        orderBy: [{ position: 'asc' }, { name: 'asc' }],
+      })
+      return NextResponse.json(divisions)
+    }
+
     const adminWorkspaceIds = workspaceMemberships
-      .filter((membership) => membership.role === 'OWNER' || membership.role === 'ADMIN')
+      .filter((membership) => membership.role === 'BOD' || membership.role === 'MANAGER' || membership.role === 'ONE_ABOVE_ALL')
       .map((membership) => membership.workspaceId)
 
     const memberWorkspaceIds = workspaceMemberships
-      .filter((membership) => membership.role === 'MEMBER')
+      .filter((membership) => membership.role === 'STAFF')
       .map((membership) => membership.workspaceId)
 
     const attendanceSupervisorWorkspaceIds = workspaceMemberships
@@ -138,6 +161,7 @@ export async function GET() {
             name: true,
           },
         },
+        division: { select: { id: true, name: true, color: true } },
         projects: {
           include: {
             project: { select: { id: true, name: true, color: true, icon: true, status: true } }
@@ -224,7 +248,7 @@ export async function POST(req: NextRequest) {
           data: teamMembers.map((member) => ({
             userId: member.userId,
             workspaceId: team.workspaceId,
-            role: 'MEMBER',
+            role: 'STAFF',
           })),
           skipDuplicates: true,
         })
@@ -326,7 +350,7 @@ export async function POST(req: NextRequest) {
         data: targetUserIds.map((memberId) => ({
           userId: memberId,
           workspaceId: team.workspaceId,
-          role: 'MEMBER',
+          role: 'STAFF',
         })),
         skipDuplicates: true,
       })
@@ -553,6 +577,136 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ updated: true })
     }
 
+    if (body.action === 'set-member-role') {
+      const { teamId, userId, role } = body
+      if (!teamId || !userId || (role !== 'LEAD' && role !== 'MEMBER')) {
+        return NextResponse.json({ error: 'teamId, userId, and role (LEAD|MEMBER) are required' }, { status: 400 })
+      }
+
+      const { team, canManageAttendanceSettings } = await getTeamContext(teamId, user.id)
+      if (!team || !canManageAttendanceSettings) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+
+      const membership = await prisma.teamMember.findUnique({
+        where: { teamId_userId: { teamId, userId } },
+      })
+      if (!membership) {
+        return NextResponse.json({ error: 'Team member not found' }, { status: 404 })
+      }
+
+      await prisma.teamMember.update({
+        where: { teamId_userId: { teamId, userId } },
+        data: { role },
+      })
+
+      logAudit({
+        action: "update",
+        entityType: "team_member_role",
+        entityId: `${teamId}:${userId}`,
+        entityName: `${team.name}:${userId}`,
+        userId: user.id,
+        request: req,
+        metadata: { teamId, memberId: userId, workspaceId: team.workspaceId, role },
+      })
+
+      return NextResponse.json({ updated: true })
+    }
+
+    if (body.action === 'create-division') {
+      const divisionName = typeof body.name === 'string' ? body.name.trim() : ''
+      const divisionColor = typeof body.color === 'string' ? body.color : undefined
+      if (!divisionName) return NextResponse.json({ error: 'Division name is required' }, { status: 400 })
+
+      const adminMembership = await prisma.workspaceMember.findFirst({
+        where: { userId: user.id, role: { in: ['ONE_ABOVE_ALL', 'BOD', 'MANAGER'] } },
+        select: { workspaceId: true },
+      })
+      const targetWorkspaceId = body.workspaceId || adminMembership?.workspaceId
+      if (!targetWorkspaceId || !(await canManageWorkspace(targetWorkspaceId, user.id))) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+
+      const existing = await prisma.division.findFirst({
+        where: { workspaceId: targetWorkspaceId, name: { equals: divisionName, mode: 'insensitive' } },
+        select: { id: true },
+      })
+      if (existing) return NextResponse.json({ error: 'A division with this name already exists' }, { status: 409 })
+
+      const maxPos = await prisma.division.aggregate({
+        where: { workspaceId: targetWorkspaceId },
+        _max: { position: true },
+      })
+      const division = await prisma.division.create({
+        data: {
+          name: divisionName,
+          color: divisionColor || '#64748B',
+          position: (maxPos._max.position ?? -1) + 1,
+          workspaceId: targetWorkspaceId,
+        },
+      })
+      logAudit({ action: 'create', entityType: 'division', entityId: division.id, entityName: division.name, userId: user.id, request: req, metadata: { workspaceId: targetWorkspaceId } })
+      return NextResponse.json(division, { status: 201 })
+    }
+
+    if (body.action === 'update-division') {
+      const { divisionId } = body
+      if (!divisionId) return NextResponse.json({ error: 'divisionId is required' }, { status: 400 })
+      const division = await prisma.division.findUnique({ where: { id: divisionId }, select: { workspaceId: true, name: true } })
+      if (!division) return NextResponse.json({ error: 'Division not found' }, { status: 404 })
+      if (!(await canManageWorkspace(division.workspaceId, user.id))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+      const data: Prisma.DivisionUpdateInput = {}
+      if (typeof body.name === 'string' && body.name.trim()) data.name = body.name.trim()
+      if (typeof body.color === 'string') data.color = body.color
+      if (typeof body.position === 'number') data.position = body.position
+
+      if (data.name && data.name !== division.name) {
+        const clash = await prisma.division.findFirst({
+          where: { workspaceId: division.workspaceId, name: { equals: data.name as string, mode: 'insensitive' }, id: { not: divisionId } },
+          select: { id: true },
+        })
+        if (clash) return NextResponse.json({ error: 'A division with this name already exists' }, { status: 409 })
+      }
+
+      const updated = await prisma.division.update({ where: { id: divisionId }, data })
+      logAudit({ action: 'update', entityType: 'division', entityId: updated.id, entityName: updated.name, userId: user.id, request: req })
+      return NextResponse.json(updated)
+    }
+
+    if (body.action === 'delete-division') {
+      const { divisionId } = body
+      if (!divisionId) return NextResponse.json({ error: 'divisionId is required' }, { status: 400 })
+      const division = await prisma.division.findUnique({ where: { id: divisionId }, select: { workspaceId: true, name: true } })
+      if (!division) return NextResponse.json({ error: 'Division not found' }, { status: 404 })
+      if (!(await canManageWorkspace(division.workspaceId, user.id))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+      // Teams keep existing — their divisionId is set to null via onDelete: SetNull.
+      await prisma.division.delete({ where: { id: divisionId } })
+      logAudit({ action: 'delete', entityType: 'division', entityId: divisionId, entityName: division.name, userId: user.id, request: req, metadata: { workspaceId: division.workspaceId } })
+      return NextResponse.json({ deleted: true })
+    }
+
+    if (body.action === 'set-team-division') {
+      const { teamId } = body
+      const divisionId: string | null = body.divisionId ?? null
+      if (!teamId) return NextResponse.json({ error: 'teamId is required' }, { status: 400 })
+
+      const { team, canManage } = await getTeamContext(teamId, user.id)
+      if (!team || !canManage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+      if (divisionId) {
+        const division = await prisma.division.findUnique({ where: { id: divisionId }, select: { workspaceId: true } })
+        if (!division || division.workspaceId !== team.workspaceId) {
+          return NextResponse.json({ error: 'Division must belong to the same workspace as the team' }, { status: 400 })
+        }
+      }
+
+      await prisma.team.update({ where: { id: teamId }, data: { divisionId } })
+      logAudit({ action: 'update', entityType: 'team_division', entityId: teamId, entityName: team.name, userId: user.id, request: req, metadata: { teamId, divisionId } })
+      return NextResponse.json({ updated: true, divisionId })
+    }
+
     // Default: create team
     const { name, color } = body
     if (!name) return NextResponse.json({ error: 'Team name is required' }, { status: 400 })
@@ -562,7 +716,7 @@ export async function POST(req: NextRequest) {
       where: { userId: user.id }
     })
 
-    if (!isSystemAdmin && (!membership || (membership.role !== 'OWNER' && membership.role !== 'ADMIN'))) {
+    if (!isSystemAdmin && (!membership || (membership.role !== 'BOD' && membership.role !== 'MANAGER' && membership.role !== 'ONE_ABOVE_ALL'))) {
       return NextResponse.json({ error: 'Only workspace owners/admins can create teams' }, { status: 403 })
     }
 
@@ -586,7 +740,7 @@ export async function POST(req: NextRequest) {
         create: {
           userId: user.id,
           workspaceId: workspace.id,
-          role: 'MEMBER',
+          role: 'STAFF',
         },
       })
 

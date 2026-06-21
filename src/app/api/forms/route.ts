@@ -6,6 +6,8 @@ import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { checkProjectAccess } from "@/lib/rbac"
 import { generateUniqueFormSlug } from "@/lib/form-slugs"
+import { normalizeFormAccessSchedule } from "@/lib/form-access-schedule"
+import type { InputJsonValue } from "@prisma/client/runtime/client"
 
 export async function GET(request: NextRequest) {
   try {
@@ -49,7 +51,7 @@ export async function POST(request: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { name, description, fields, isPublic, projectId } = await request.json()
+    const { name, description, fields, isPublic, requireAuth, projectId, accessSchedule } = await request.json()
 
     if (!name || !projectId || !fields) {
       return NextResponse.json({ error: "name, projectId, and fields are required" }, { status: 400 })
@@ -59,6 +61,7 @@ export async function POST(request: NextRequest) {
     if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     const slug = await generateUniqueFormSlug(prisma, name)
+    const normalizedAccessSchedule = (normalizeFormAccessSchedule(accessSchedule) ?? undefined) as InputJsonValue | undefined
 
     const form = await prisma.form.create({
       data: {
@@ -66,7 +69,9 @@ export async function POST(request: NextRequest) {
         slug,
         description,
         fields,
+        accessSchedule: normalizedAccessSchedule,
         isPublic: isPublic ?? false,
+        requireAuth: requireAuth ?? false,
         projectId,
       },
       include: { _count: { select: { submissions: true } } },

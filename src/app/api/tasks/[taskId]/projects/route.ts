@@ -82,13 +82,14 @@ async function ensureTaskAccess(userId: string, taskId: string) {
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { taskId: string } }
+  { params }: { params: Promise<{ taskId: string }> }
 ) {
   try {
+    const { taskId } = await params
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { task, allowed } = await ensureTaskAccess(session.user.id, params.taskId)
+    const { task, allowed } = await ensureTaskAccess(session.user.id, taskId)
     if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 })
     if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
@@ -168,9 +169,10 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { taskId: string } }
+  { params }: { params: Promise<{ taskId: string }> }
 ) {
   try {
+    const { taskId } = await params
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -181,7 +183,7 @@ export async function POST(
       return NextResponse.json({ error: "projectId is required" }, { status: 400 })
     }
 
-    const { task, allowed } = await ensureTaskAccess(session.user.id, params.taskId)
+    const { task, allowed } = await ensureTaskAccess(session.user.id, taskId)
     if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 })
     if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
@@ -190,7 +192,7 @@ export async function POST(
     }
 
     const existing = await prisma.taskProject.findUnique({
-      where: { taskId_projectId: { taskId: params.taskId, projectId } },
+      where: { taskId_projectId: { taskId: taskId, projectId } },
     })
     if (existing) {
       return NextResponse.json({ error: "Task is already in this project" }, { status: 409 })
@@ -245,7 +247,7 @@ export async function POST(
 
     const taskProject = await prisma.taskProject.create({
       data: {
-        taskId: params.taskId,
+        taskId: taskId,
         projectId,
         taskListId: resolvedTaskList.id,
         position: task.position,
@@ -256,7 +258,7 @@ export async function POST(
       },
     })
 
-    await seedTaskCustomFieldValues(params.taskId, projectId, task.createdAt)
+    await seedTaskCustomFieldValues(taskId, projectId, task.createdAt)
 
     const autoAssignAssigneeIds = resolveAutoAssignAssigneeIds({
       requestedAssigneeIds: [],
@@ -268,7 +270,7 @@ export async function POST(
     if (autoAssignAssigneeIds.length > 0) {
       await prisma.taskAssignee.createMany({
         data: autoAssignAssigneeIds.map((userId) => ({
-          taskId: params.taskId,
+          taskId: taskId,
           userId,
         })),
         skipDuplicates: true,
@@ -276,7 +278,7 @@ export async function POST(
     }
 
     const taskAssignees = await prisma.taskAssignee.findMany({
-      where: { taskId: params.taskId },
+      where: { taskId: taskId },
       include: {
         user: {
           select: {
@@ -303,9 +305,10 @@ export async function POST(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { taskId: string } }
+  { params }: { params: Promise<{ taskId: string }> }
 ) {
   try {
+    const { taskId } = await params
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -316,7 +319,7 @@ export async function DELETE(
       return NextResponse.json({ error: "projectId is required" }, { status: 400 })
     }
 
-    const { task, allowed } = await ensureTaskAccess(session.user.id, params.taskId)
+    const { task, allowed } = await ensureTaskAccess(session.user.id, taskId)
     if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 })
     if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
@@ -342,7 +345,7 @@ export async function DELETE(
     }
 
     const taskProject = await prisma.taskProject.findUnique({
-      where: { taskId_projectId: { taskId: params.taskId, projectId } },
+      where: { taskId_projectId: { taskId: taskId, projectId } },
     })
 
     if (!taskProject) {
@@ -350,7 +353,7 @@ export async function DELETE(
     }
 
     await prisma.taskProject.delete({
-      where: { taskId_projectId: { taskId: params.taskId, projectId } },
+      where: { taskId_projectId: { taskId: taskId, projectId } },
     })
 
     return NextResponse.json({ message: "Task removed from project" })

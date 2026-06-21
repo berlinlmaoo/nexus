@@ -11,7 +11,7 @@ export function AutomationRule({ name, trigger, action, enabled, onToggle }: { n
         <div>
           <h4 className="font-medium text-sm">{name}</h4>
           <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-            <span className="px-2 py-0.5 rounded bg-zinc-100 text-zinc-700">{trigger.type}{trigger.value ? `: ${trigger.value}` : ''}</span>
+            <span className="px-2 py-0.5 rounded bg-muted text-on-surface-variant">{trigger.type}{trigger.value ? `: ${trigger.value}` : ''}</span>
             <ArrowRight className="h-3 w-3" />
             <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700">{action.type}{action.value ? `: ${action.value}` : ''}</span>
           </div>

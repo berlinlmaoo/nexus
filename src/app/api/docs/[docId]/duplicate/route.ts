@@ -7,7 +7,7 @@ import { logAudit } from "@/lib/audit"
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { docId: string } }
+  { params }: { params: Promise<{ docId: string }> }
 ) {
   try {
     const session = await auth()
@@ -15,7 +15,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const original = await prisma.doc.findUnique({
-      where: { id: params.docId },
+      where: { id: (await params).docId },
     })
 
     if (!original)
@@ -37,7 +37,7 @@ export async function POST(
       },
     })
 
-    logAudit({ action: "create", entityType: "doc", entityId: duplicate.id, entityName: duplicate.title, userId: session.user.id, request: req, metadata: { duplicatedFrom: params.docId } })
+    logAudit({ action: "create", entityType: "doc", entityId: duplicate.id, entityName: duplicate.title, userId: session.user.id, request: req, metadata: { duplicatedFrom: (await params).docId } })
 
     return NextResponse.json({ doc: duplicate }, { status: 201 })
   } catch (error) {

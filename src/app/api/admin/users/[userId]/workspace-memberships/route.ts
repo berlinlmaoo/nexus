@@ -8,11 +8,11 @@ import { logAudit } from "@/lib/audit"
 import { ensureUserInPrimaryWorkspaceTeam, isPrimaryWorkspace } from "@/lib/primary-team"
 import { syncTeamMemberAccess } from "@/lib/team-sync"
 
-const WORKSPACE_ROLES: WorkspaceRole[] = ["OWNER", "ADMIN", "MEMBER"]
+const WORKSPACE_ROLES: WorkspaceRole[] = ["BOD", "MANAGER", "STAFF"]
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
     const { session, context } = await getAdminSessionContext()
@@ -39,7 +39,7 @@ export async function POST(
 
     const [user, workspace, existing] = await prisma.$transaction([
       prisma.user.findUnique({
-        where: { id: params.userId },
+        where: { id: (await params).userId },
         select: { id: true, email: true, name: true },
       }),
       prisma.workspace.findUnique({
@@ -49,7 +49,7 @@ export async function POST(
       prisma.workspaceMember.findUnique({
         where: {
           userId_workspaceId: {
-            userId: params.userId,
+            userId: (await params).userId,
             workspaceId,
           },
         },
@@ -71,7 +71,7 @@ export async function POST(
 
     const membership = await prisma.workspaceMember.create({
       data: {
-        userId: params.userId,
+        userId: (await params).userId,
         workspaceId,
         role,
       },
@@ -84,8 +84,8 @@ export async function POST(
 
     let autoJoinedPrimaryTeam = false
     if (isPrimaryWorkspace(workspace)) {
-      const { team } = await ensureUserInPrimaryWorkspaceTeam(prisma, params.userId)
-      await syncTeamMemberAccess(team.id, params.userId)
+      const { team } = await ensureUserInPrimaryWorkspaceTeam(prisma, (await params).userId)
+      await syncTeamMemberAccess(team.id, (await params).userId)
       autoJoinedPrimaryTeam = true
     }
 

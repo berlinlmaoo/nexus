@@ -12,7 +12,7 @@ interface MetricCardProps {
   iconColor?: string
 }
 
-export function MetricCard({ icon: Icon, label, value, trend, iconBg = "bg-zinc-100 dark:bg-zinc-800", iconColor = "text-zinc-700 dark:text-zinc-300" }: MetricCardProps) {
+export function MetricCard({ icon: Icon, label, value, trend, iconBg = "bg-muted", iconColor = "text-on-surface-variant" }: MetricCardProps) {
   return (
     <Card className="min-w-[160px]">
       <CardContent className="pt-6">

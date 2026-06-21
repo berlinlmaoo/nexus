@@ -6,8 +6,20 @@ import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
+import { resolveMime } from "@/lib/mime"
+import { checkProjectAccess } from "@/lib/rbac"
 
-const MAX_SIZE = 50 * 1024 * 1024 // 50MB
+const MAX_SIZE = 1024 * 1024 * 1024 // 1GB (cap consistency; large files use the chunk route)
+
+/** A task's project id + a membership/role check — attachments are workspace/project-scoped. */
+async function authorizeTask(userId: string, taskId: string, roles: ("VIEWER" | "MEMBER" | "LEAD")[]) {
+  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { taskList: { select: { projectId: true } } } })
+  const projectId = task?.taskList?.projectId
+  if (!projectId) return { ok: false as const, status: 404 as const, error: "Task not found" }
+  const { allowed } = await checkProjectAccess(userId, projectId, roles)
+  if (!allowed) return { ok: false as const, status: 403 as const, error: "Forbidden" }
+  return { ok: true as const, projectId }
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,12 +29,16 @@ export async function GET(request: NextRequest) {
     const taskId = request.nextUrl.searchParams.get("taskId")
     if (!taskId) return NextResponse.json({ error: "taskId is required" }, { status: 400 })
 
+    const authz = await authorizeTask(session.user.id, taskId, ["VIEWER"])
+    if (!authz.ok) return NextResponse.json({ error: authz.error }, { status: authz.status })
+
     const attachments = await prisma.attachment.findMany({
       where: { taskId },
       orderBy: { createdAt: "desc" },
     })
 
-    return NextResponse.json(attachments)
+    // Expose `name` (frontend reads att.name) mapped from the stored `filename`.
+    return NextResponse.json(attachments.map((a) => ({ ...a, name: a.filename })))
   } catch (error) {
     console.error("Error fetching attachments:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -42,12 +58,12 @@ export async function POST(request: NextRequest) {
     if (!taskId) return NextResponse.json({ error: "taskId is required" }, { status: 400 })
 
     if (file.size > MAX_SIZE) {
-      return NextResponse.json({ error: "File too large. Maximum size is 50MB" }, { status: 400 })
+      return NextResponse.json({ error: "File too large. Maximum size is 1GB" }, { status: 400 })
     }
 
-    // Verify task exists
-    const task = await prisma.task.findUnique({ where: { id: taskId } })
-    if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 })
+    // Must be a member (contributor) of the task's project to attach files to it.
+    const authz = await authorizeTask(session.user.id, taskId, ["MEMBER"])
+    if (!authz.ok) return NextResponse.json({ error: authz.error }, { status: authz.status })
 
     const uploadDir = path.join(process.cwd(), "public", "uploads", "attachments")
     await mkdir(uploadDir, { recursive: true })
@@ -65,7 +81,7 @@ export async function POST(request: NextRequest) {
       data: {
         filename: file.name,
         url,
-        mimeType: file.type || "application/octet-stream",
+        mimeType: resolveMime(file.type, file.name),
         size: file.size,
         taskId,
         uploaderId: session.user.id,

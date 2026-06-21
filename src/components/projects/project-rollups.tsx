@@ -109,9 +109,9 @@ export function ProjectRollups({ projectId }: ProjectRollupsProps) {
           <span className="text-muted-foreground">Overall Progress</span>
           <span className="font-medium">{data.completionPercent}%</span>
         </div>
-        <div className="h-2 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+        <div className="h-2 rounded-full bg-muted overflow-hidden">
           <div
-            className="h-full rounded-full bg-zinc-900 dark:bg-zinc-100 transition-all duration-500"
+            className="h-full rounded-full bg-foreground transition-all duration-500"
             style={{ width: `${data.completionPercent}%` }}
           />
         </div>
@@ -125,7 +125,7 @@ export function ProjectRollups({ projectId }: ProjectRollupsProps) {
             <span className="text-xs text-muted-foreground">Linked Goal</span>
           </div>
           <p className="text-sm font-medium mb-2">{data.linkedGoal.title}</p>
-          <div className="h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
             <div
               className="h-full rounded-full bg-emerald-500 transition-all duration-500"
               style={{ width: `${data.linkedGoal.progress}%` }}

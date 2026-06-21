@@ -243,6 +243,10 @@ export function initializeSocketServer(
     io.to(`project:${data.projectId}`).emit("sprint-updated", data.sprint)
   })
 
+  eventBus.on(BUS_EVENTS.MESSAGE_CREATED, (data: { conversationId: string; message: unknown }) => {
+    io.to(`conversation:${data.conversationId}`).emit("message-created", data.message)
+  })
+
   res.socket.server.io = io
   res.status(204).end()
 }

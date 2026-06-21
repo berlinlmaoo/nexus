@@ -22,8 +22,8 @@ const DASHBOARD_HOSTS = new Set([
   "dashboard-nexus.patsgroup.id",
 ])
 
-function getCurrentHost() {
-  const headerList = headers()
+async function getCurrentHost() {
+  const headerList = await headers()
   const forwardedHost = headerList.get("x-forwarded-host")?.split(",")[0]?.trim()
   return (forwardedHost ?? headerList.get("host"))?.split(":")[0]?.toLowerCase()
 }
@@ -37,13 +37,14 @@ function getSafeCallbackUrl(value: unknown, fallback = "/dashboard") {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams?: { callbackUrl?: string }
+  searchParams?: Promise<{ callbackUrl?: string }>
 }) {
   const session = await auth()
-  const host = getCurrentHost()
+  const resolvedSearchParams = await searchParams
+  const host = await getCurrentHost()
   const fallbackCallbackUrl = host && DASHBOARD_HOSTS.has(host) ? "/ops-dashboard" : "/dashboard"
 
-  if (session) redirect(getSafeCallbackUrl(searchParams?.callbackUrl, fallbackCallbackUrl))
+  if (session) redirect(getSafeCallbackUrl(resolvedSearchParams?.callbackUrl, fallbackCallbackUrl))
 
   return (
     <div className="relative flex min-h-[100svh] items-stretch overflow-hidden bg-surface">
@@ -62,6 +63,7 @@ export default async function LoginPage({
               width={180} 
               height={60} 
               className="object-contain transition-transform duration-500 group-hover:scale-105"
+              style={{ width: "auto", height: "auto" }}
               priority
             />
           </Link>
@@ -106,6 +108,8 @@ export default async function LoginPage({
             width={120} 
             height={40} 
             className="object-contain dark:invert"
+            style={{ width: "auto", height: "auto" }}
+            priority
           />
         </div>
 

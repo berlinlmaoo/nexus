@@ -6,6 +6,7 @@ import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { unlink } from "fs/promises"
 import path from "path"
+import { checkProjectAccess } from "@/lib/rbac"
 
 function resolveAttachmentFilePath(url: string) {
   const normalizedUrl = url.replace(/^\/+/, "")
@@ -29,8 +30,18 @@ export async function DELETE(
 
     const { attachmentId } = await params
 
-    const attachment = await prisma.attachment.findUnique({ where: { id: attachmentId } })
+    const attachment = await prisma.attachment.findUnique({
+      where: { id: attachmentId },
+      include: { task: { select: { taskList: { select: { projectId: true } } } } },
+    })
     if (!attachment) return NextResponse.json({ error: "Attachment not found" }, { status: 404 })
+
+    // Only the uploader or a project member (contributor+) may delete an attachment.
+    const projectId = attachment.task?.taskList?.projectId
+    if (attachment.uploaderId !== session.user.id) {
+      const allowed = projectId ? (await checkProjectAccess(session.user.id, projectId, ["MEMBER"])).allowed : false
+      if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
 
     // Delete file from disk
     try {

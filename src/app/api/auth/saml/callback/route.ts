@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
         data: {
           userId: user.id,
           workspaceId: ssoConfig.workspaceId,
-          role: "MEMBER",
+          role: "STAFF",
         },
       })
     } else {
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
           data: {
             userId: user.id,
             workspaceId: ssoConfig.workspaceId,
-            role: "MEMBER",
+            role: "STAFF",
           },
         })
       }

@@ -7,14 +7,14 @@ import { logAudit } from "@/lib/audit"
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
     const session = await auth()
     if (!session?.user?.id)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { projectId } = params
+    const { projectId } = await params
 
     const pages = await prisma.projectPage.findMany({
       where: { projectId, parentId: null },
@@ -38,14 +38,14 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
     const session = await auth()
     if (!session?.user?.id)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { projectId } = params
+    const { projectId } = await params
     const body = await request.json()
     const { name, icon, pageType, parentId, content } = body
 

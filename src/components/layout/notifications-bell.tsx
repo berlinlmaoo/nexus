@@ -282,9 +282,9 @@ export function NotificationsBell({ userId, userName }: NotificationsBellProps) 
       >
         <Bell className="h-5 w-5" />
         {unreadCount > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-900 text-[10px] font-medium text-white animate-scale-in">
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-foreground text-[10px] font-medium text-white animate-scale-in">
             {unreadCount > 9 ? "9+" : unreadCount}
-            <span className="absolute inset-0 rounded-full bg-zinc-900 animate-ping opacity-30" style={{ animationDuration: "2s" }} />
+            <span className="absolute inset-0 rounded-full bg-foreground animate-ping opacity-30" style={{ animationDuration: "2s" }} />
           </span>
         )}
       </button>
@@ -294,7 +294,7 @@ export function NotificationsBell({ userId, userName }: NotificationsBellProps) 
           <div className="flex items-center justify-between border-b px-4 py-2.5">
             <h3 className="font-semibold text-sm">Notifications</h3>
             {unreadCount > 0 && (
-              <button onClick={markAllRead} className="text-xs text-zinc-700 hover:text-zinc-900 flex items-center gap-1 transition-colors duration-200">
+              <button onClick={markAllRead} className="text-xs text-on-surface-variant hover:text-foreground flex items-center gap-1 transition-colors duration-200">
                 <CheckCheck className="h-3.5 w-3.5" /> Mark all read
               </button>
             )}
@@ -311,14 +311,14 @@ export function NotificationsBell({ userId, userName }: NotificationsBellProps) 
                   key={n.id}
                   className={cn(
                     "flex items-start gap-3 px-4 py-3 border-b last:border-0 hover:bg-muted/50 transition-colors duration-200 cursor-pointer",
-                    !n.read && "bg-zinc-50"
+                    !n.read && "bg-surface-container-lowest"
                   )}
                   style={{ animationDelay: `${i * 30}ms` }}
                   onClick={() => { if (!n.read) markAsRead(n.id) }}
                 >
                   <div className={cn(
                     "h-2 w-2 rounded-full mt-1.5 shrink-0 transition-all duration-300",
-                    n.read ? "bg-transparent scale-0" : "bg-zinc-900 scale-100"
+                    n.read ? "bg-transparent scale-0" : "bg-foreground scale-100"
                   )} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{n.title}</p>
@@ -329,7 +329,7 @@ export function NotificationsBell({ userId, userName }: NotificationsBellProps) 
               ))
             )}
           </div>
-          <a href="/inbox" className="flex items-center justify-center gap-1 border-t py-2.5 text-xs text-zinc-700 hover:text-zinc-900 transition-colors duration-200">
+          <a href="/inbox" className="flex items-center justify-center gap-1 border-t py-2.5 text-xs text-on-surface-variant hover:text-foreground transition-colors duration-200">
             View all <ExternalLink className="h-3 w-3" />
           </a>
         </div>

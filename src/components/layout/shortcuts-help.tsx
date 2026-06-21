@@ -53,7 +53,7 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
 
 function Kbd({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="px-2 py-1 rounded-md border border-zinc-200 bg-zinc-100 text-xs font-mono font-medium text-zinc-700 shadow-sm">
+    <kbd className="px-2 py-1 rounded-md border border-on-surface-variant bg-muted text-xs font-mono font-medium text-on-surface-variant shadow-sm">
       {children}
     </kbd>
   )
@@ -64,7 +64,7 @@ function ShortcutKeys({ keys }: { keys: string[] }) {
     <span className="flex items-center gap-1 shrink-0">
       {keys.map((key, i) =>
         key === "then" || key === "/" ? (
-          <span key={i} className="text-xs text-zinc-400 px-0.5">
+          <span key={i} className="text-xs text-muted-foreground px-0.5">
             {key}
           </span>
         ) : (
@@ -173,16 +173,16 @@ export function ShortcutsHelp({ open, onOpenChange }: ShortcutsHelpProps) {
               <div className="space-y-6 mt-4">
                 {SHORTCUT_GROUPS.map((group) => (
                   <div key={group.label}>
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
                       {group.label}
                     </h3>
                     <div className="space-y-0">
                       {group.shortcuts.map((shortcut, i) => (
                         <div
                           key={i}
-                          className="flex items-center justify-between py-2 px-2 rounded-md hover:bg-zinc-50 transition-colors"
+                          className="flex items-center justify-between py-2 px-2 rounded-md hover:bg-surface-container-lowest transition-colors"
                         >
-                          <span className="text-sm text-zinc-700">
+                          <span className="text-sm text-on-surface-variant">
                             {shortcut.description}
                           </span>
                           <ShortcutKeys keys={shortcut.keys} />
@@ -194,7 +194,7 @@ export function ShortcutsHelp({ open, onOpenChange }: ShortcutsHelpProps) {
               </div>
 
               <div className="mt-6 pt-4 border-t">
-                <p className="text-xs text-zinc-400 text-center">
+                <p className="text-xs text-muted-foreground text-center">
                   Press <Kbd>?</Kbd> to toggle this dialog
                 </p>
               </div>

@@ -33,10 +33,10 @@ const ROLES: { value: Role; label: string; description: string; icon: typeof Shi
 ]
 
 const ROLE_COLORS: Record<Role, string> = {
-  ADMIN: "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900",
-  MEMBER: "bg-zinc-200 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-200",
-  VIEWER: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
-  GUEST: "bg-zinc-50 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-500 border",
+  ADMIN: "bg-foreground text-white",
+  MEMBER: "bg-surface-container text-foreground",
+  VIEWER: "bg-muted text-on-surface-variant",
+  GUEST: "bg-surface-container-lowest text-muted-foreground border",
 }
 
 const ROLE_PERMISSIONS: Record<Role, string[]> = {

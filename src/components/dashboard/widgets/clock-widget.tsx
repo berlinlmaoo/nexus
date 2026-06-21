@@ -58,7 +58,7 @@ export function ClockDashWidget({ data }: ClockDashWidgetProps) {
   if (!now) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Clock className="h-5 w-5 animate-pulse text-zinc-300" />
+        <Clock className="h-5 w-5 animate-pulse text-muted-foreground" />
       </div>
     )
   }
@@ -68,10 +68,10 @@ export function ClockDashWidget({ data }: ClockDashWidgetProps) {
   return (
     <div className="flex h-full flex-col items-center justify-center">
       <div className="text-center">
-        <p className="font-mono text-3xl font-bold tracking-wider text-zinc-900">
+        <p className="font-mono text-3xl font-bold tracking-wider text-foreground">
           {formatTime(now, localTimezone)}
         </p>
-        <p className="mt-1 text-sm text-zinc-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           {formatDate(now)}
         </p>
       </div>
@@ -79,10 +79,10 @@ export function ClockDashWidget({ data }: ClockDashWidgetProps) {
       <div className="mt-4 flex w-full justify-center gap-4">
         {timezones.map((tz) => (
           <div key={tz.label} className="text-center">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               {tz.label}
             </p>
-            <p className="font-mono text-sm tabular-nums text-zinc-700">
+            <p className="font-mono text-sm tabular-nums text-on-surface-variant">
               {formatShortTime(now, tz.timezone)}
             </p>
           </div>

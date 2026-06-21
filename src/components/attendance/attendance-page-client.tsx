@@ -131,6 +131,7 @@ type TodayResponse = {
   today: AttendanceRecord | null
   todayRequest: AttendanceRequest | null
   dayOffUsedThisMonth: number
+  dayOffQuota?: number
   canManageAttendance: boolean
   canReviewAttendanceRequests?: boolean
 }
@@ -1238,7 +1239,7 @@ export function AttendancePageClient({ user, workspace }: AttendancePageClientPr
                   Leave, sick, permit, or day-off
                 </h3>
               </div>
-              <Badge variant="outline">Day-Off {todayData?.dayOffUsedThisMonth ?? 0}/4</Badge>
+              <Badge variant="outline">Day-Off {todayData?.dayOffUsedThisMonth ?? 0}/{todayData?.dayOffQuota ?? 4}</Badge>
             </div>
 
             <div className="mt-4 space-y-4">

@@ -57,8 +57,8 @@ const ACTION_COLORS: Record<string, string> = {
   create: "bg-green-500/10 text-green-600 dark:text-green-400",
   update: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
   delete: "bg-red-500/10 text-red-600 dark:text-red-400",
-  login: "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400",
-  logout: "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400",
+  login: "bg-muted text-on-surface-variant",
+  logout: "bg-muted text-on-surface-variant",
   export: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
   invite: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
   import: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
@@ -200,7 +200,7 @@ export function AuditLogViewer() {
 
         {/* Filters */}
         {showFilters && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3 bg-zinc-50 dark:bg-zinc-900/50 rounded-lg">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3 bg-surface-container-lowest rounded-lg">
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Action</label>
               <select
@@ -252,7 +252,7 @@ export function AuditLogViewer() {
         <div className="mobile-horizontal-scroll overflow-x-auto rounded-lg border">
           <table className="min-w-[760px] w-full text-sm">
             <thead>
-              <tr className="border-b bg-zinc-50 dark:bg-zinc-900/50">
+              <tr className="border-b bg-surface-container-lowest">
                 <th className="w-8 px-3 py-2" />
                 <th className="text-left px-3 py-2 font-medium text-muted-foreground">Timestamp</th>
                 <th className="text-left px-3 py-2 font-medium text-muted-foreground">User</th>
@@ -275,7 +275,7 @@ export function AuditLogViewer() {
                   <>
                     <tr
                       key={log.id}
-                      className="border-b hover:bg-zinc-50 dark:hover:bg-zinc-900/30 cursor-pointer"
+                      className="border-b hover:bg-surface-container-lowest cursor-pointer"
                       onClick={() => log.metadata && toggleRow(log.id)}
                     >
                       <td className="px-3 py-2">
@@ -294,7 +294,7 @@ export function AuditLogViewer() {
                         <div className="flex items-center gap-2">
                           <Avatar className="h-6 w-6">
                             {log.user.avatar && <AvatarImage src={log.user.avatar} alt={log.user.name} />}
-                            <AvatarFallback className="text-[10px] bg-zinc-200 dark:bg-zinc-700">
+                            <AvatarFallback className="text-[10px] bg-surface-container">
                               {initials(log.user.name)}
                             </AvatarFallback>
                           </Avatar>
@@ -314,11 +314,11 @@ export function AuditLogViewer() {
                       </td>
                     </tr>
                     {expandedRows.has(log.id) && log.metadata && (
-                      <tr key={`${log.id}-detail`} className="border-b bg-zinc-50/50 dark:bg-zinc-900/20">
+                      <tr key={`${log.id}-detail`} className="border-b bg-surface-container-lowest/50">
                         <td colSpan={6} className="px-6 py-3">
                           <div className="text-xs space-y-2">
                             <p className="font-medium text-muted-foreground">Metadata</p>
-                            <pre className="bg-zinc-100 dark:bg-zinc-800 p-3 rounded-md overflow-x-auto text-xs">
+                            <pre className="bg-muted p-3 rounded-md overflow-x-auto text-xs">
                               {JSON.stringify(log.metadata, null, 2)}
                             </pre>
                             {log.ipAddress && (

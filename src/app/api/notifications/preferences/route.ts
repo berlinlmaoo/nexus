@@ -6,6 +6,11 @@ import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { isLikelyPhoneNumber, normalizeIndonesianPhoneNumber } from "@/lib/phone-number"
 
+function isMissingSchemaError(error: unknown) {
+  return typeof error === "object" && error !== null && "code" in error
+    && (error.code === "P2021" || error.code === "P2022")
+}
+
 export async function GET() {
   try {
     const session = await auth()
@@ -15,10 +20,15 @@ export async function GET() {
     const pref = await prisma.notificationPreference.findUnique({
       where: { userId: session.user.id },
     })
-    const user = await prisma.user.findUnique({
+    const userPhoneNumber = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: { phoneNumber: true },
     })
+      .then((user) => user?.phoneNumber ?? null)
+      .catch((error) => {
+        if (isMissingSchemaError(error)) return null
+        throw error
+      })
 
     // Return defaults if no preferences set
     return NextResponse.json({
@@ -36,7 +46,7 @@ export async function GET() {
         projectInvite: true,
         statusUpdate: true,
       }),
-      waPhone: pref?.waPhone ?? user?.phoneNumber ?? null,
+      waPhone: pref?.waPhone ?? userPhoneNumber,
     })
   } catch (error) {
     console.error("Error fetching notification preferences:", error)
@@ -101,6 +111,9 @@ export async function PUT(req: NextRequest) {
         where: { id: session.user.id },
         data: { phoneNumber: waPhone },
       })
+        .catch((error) => {
+          if (!isMissingSchemaError(error)) throw error
+        })
     }
 
     logAudit({ action: "update", entityType: "notificationPreference", entityId: pref.id, userId: session.user.id, request: req })

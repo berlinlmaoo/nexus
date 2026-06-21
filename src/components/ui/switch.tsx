@@ -1,29 +1,51 @@
 "use client"
 
 import * as React from "react"
-import * as SwitchPrimitives from "@radix-ui/react-switch"
+import { Switch as HeroSwitch } from "@heroui/react"
 
 import { cn } from "@/lib/utils"
 
-const Switch = React.forwardRef<
-  React.ElementRef<typeof SwitchPrimitives.Root>,
-  React.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root>
->(({ className, ...props }, ref) => (
-  <SwitchPrimitives.Root
-    className={cn(
-      "peer inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-[#18181B] data-[state=unchecked]:bg-input",
-      className
-    )}
-    {...props}
-    ref={ref}
-  >
-    <SwitchPrimitives.Thumb
+export interface SwitchProps
+  extends Omit<
+    React.ComponentProps<typeof HeroSwitch>,
+    "checked" | "defaultChecked" | "disabled" | "onChange" | "isSelected" | "defaultSelected"
+  > {
+  checked?: boolean
+  defaultChecked?: boolean
+  disabled?: boolean
+  onCheckedChange?: (checked: boolean) => void
+}
+
+const Switch = React.forwardRef<HTMLLabelElement, SwitchProps>(
+  (
+    {
+      className,
+      checked,
+      defaultChecked,
+      disabled,
+      isDisabled,
+      onCheckedChange,
+      children,
+      ...props
+    },
+    ref
+  ) => (
+    <HeroSwitch
+      ref={ref}
+      isSelected={checked}
+      defaultSelected={defaultChecked}
+      isDisabled={isDisabled ?? disabled}
+      onChange={(selected) => onCheckedChange?.(selected)}
       className={cn(
-        "pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform data-[state=checked]:translate-x-5 data-[state=unchecked]:translate-x-0"
+        "inline-flex items-center gap-2 rounded-full text-sm text-on-surface",
+        className
       )}
-    />
-  </SwitchPrimitives.Root>
-))
-Switch.displayName = SwitchPrimitives.Root.displayName
+      {...props}
+    >
+      {children}
+    </HeroSwitch>
+  )
+)
+Switch.displayName = "Switch"
 
 export { Switch }

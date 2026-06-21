@@ -29,7 +29,7 @@ export default async function OpsDashboardPage() {
 
   if (!context.canAccessUserManagement) {
     return (
-      <main className="grid min-h-screen place-items-center bg-slate-950 px-6 text-white">
+      <main className="grid min-h-screen place-items-center bg-foreground px-6 text-white">
         <section className="max-w-lg rounded-[32px] bg-white/10 p-8 text-center shadow-2xl shadow-black/30">
           <p className="text-xs font-black uppercase tracking-[0.24em] text-white/45">Access restricted</p>
           <h1 className="mt-3 text-3xl font-black tracking-[-0.05em]">Ops dashboard is admin-only.</h1>
@@ -44,12 +44,12 @@ export default async function OpsDashboardPage() {
   const workspaceIds = context.isSystemAdmin
     ? context.workspaceMemberships.map((membership) => membership.workspaceId)
     : context.workspaceMemberships
-        .filter((membership) => membership.role === "OWNER" || membership.role === "ADMIN")
+        .filter((membership) => membership.role === "BOD" || membership.role === "MANAGER" || membership.role === "ONE_ABOVE_ALL")
         .map((membership) => membership.workspaceId)
 
   if (workspaceIds.length === 0) {
     return (
-      <main className="grid min-h-screen place-items-center bg-slate-950 px-6 text-white">
+      <main className="grid min-h-screen place-items-center bg-foreground px-6 text-white">
         <section className="max-w-lg rounded-[32px] bg-white/10 p-8 text-center shadow-2xl shadow-black/30">
           <p className="text-xs font-black uppercase tracking-[0.24em] text-white/45">No workspace</p>
           <h1 className="mt-3 text-3xl font-black tracking-[-0.05em]">No admin workspace found.</h1>

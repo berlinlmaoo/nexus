@@ -25,7 +25,7 @@ type AttendanceRecordWithRelations = {
   attendanceDate: Date
   checkInAt: Date | null
   checkOutAt: Date | null
-  effectiveShiftSource?: "OFFICE" | "TEAM" | null
+  effectiveShiftSource?: "OFFICE" | "TEAM" | "USER" | null
   effectiveTeamId?: string | null
   effectiveTeamName?: string | null
   effectiveShiftStartTime?: string | null
@@ -45,6 +45,11 @@ type AttendanceRecordWithRelations = {
   checkOutPhotoUrl: string | null
   checkInDistanceMeters: number | null
   checkOutDistanceMeters: number | null
+  checkOutOffsite?: boolean | null
+  checkOutApproval?: string | null
+  checkOutReason?: string | null
+  checkOutApprovedById?: string | null
+  checkOutApprovedAt?: Date | null
   notes: string | null
   status: "CHECKED_IN" | "COMPLETED" | "INCOMPLETE"
   correctedAt: Date | null
@@ -67,7 +72,7 @@ type AttendanceRequestWithRelations = {
   id: string
   startDate: Date
   endDate: Date
-  type: "LEAVE" | "SICK" | "PERMIT" | "DAY_OFF"
+  type: "LEAVE" | "SICK" | "PERMIT" | "DAY_OFF" | "RED_DATE"
   status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELED"
   reason: string
   reviewNote: string | null
@@ -141,12 +146,12 @@ type AttendanceDerivedMetrics = {
   earlyLeaveGraceMinutes: number
   shiftStartAt: Date | null
   shiftEndAt: Date | null
-  effectiveShiftSource: "OFFICE" | "TEAM"
+  effectiveShiftSource: "OFFICE" | "TEAM" | "USER"
   effectiveTeamId: string | null
   effectiveTeamName: string | null
 }
 
-function safeAttendanceTimezone(timeZone: string | null | undefined) {
+export function safeAttendanceTimezone(timeZone: string | null | undefined) {
   return timeZone?.trim() || ATTENDANCE_TIMEZONE
 }
 
@@ -254,6 +259,15 @@ function zonedDateTimeToUtc(
   return new Date(initialUtc.getTime() - offsetMinutes * 60_000)
 }
 
+/** Minutes a check-in is later than the shift start ("HH:MM") on its attendance date. 0 if on-time/early. */
+export function minutesLateAgainstShift(checkInAt: Date, attendanceDate: Date, shiftStartTime: string, timeZone = ATTENDANCE_TIMEZONE): number {
+  const m = /^(\d{2}):(\d{2})$/.exec(shiftStartTime?.trim() ?? "")
+  if (!m) return 0
+  const parts = getDateParts(attendanceDate, timeZone)
+  const shiftStartAt = zonedDateTimeToUtc({ year: parts.year, month: parts.month, day: parts.day, hour: Number(m[1]), minute: Number(m[2]) }, timeZone)
+  return differenceInMinutes(checkInAt, shiftStartAt)
+}
+
 function normalizeWorkdays(workdays: number[] | null | undefined) {
   const source = Array.isArray(workdays) && workdays.length > 0 ? workdays : DEFAULT_WORKDAYS
   return Array.from(new Set(source.filter((value) => Number.isInteger(value) && value >= 1 && value <= 7))).sort(
@@ -271,7 +285,7 @@ function buildShiftWindow(
   options?: {
     shiftStartTime?: string | null
     shiftEndTime?: string | null
-    shiftSource?: "OFFICE" | "TEAM"
+    shiftSource?: "OFFICE" | "TEAM" | "USER"
     effectiveTeamId?: string | null
     effectiveTeamName?: string | null
   }
@@ -312,7 +326,7 @@ function buildShiftWindow(
     workdays: normalizeWorkdays(office.workdays),
     shiftStartTime: shiftStart.normalized,
     shiftEndTime: shiftEnd.normalized,
-    lateGraceMinutes: Math.max(0, office.lateGraceMinutes ?? 15),
+    lateGraceMinutes: Math.max(0, office.lateGraceMinutes ?? 0),
     earlyLeaveGraceMinutes: Math.max(0, office.earlyLeaveGraceMinutes ?? 0),
     shiftStartAt,
     shiftEndAt,
@@ -347,11 +361,63 @@ export async function getPrimaryAttendanceTeam(userId: string, workspaceId: stri
   })
 }
 
+/** Per-person attendance shift override (WorkspaceMember). Active only when BOTH times are set. */
+export async function getUserAttendanceShift(userId: string, workspaceId: string) {
+  return prisma.workspaceMember.findUnique({
+    where: { userId_workspaceId: { userId, workspaceId } },
+    select: { attendanceShiftStartTime: true, attendanceShiftEndTime: true, attendanceShiftByDay: true },
+  })
+}
+
+const SHIFT_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
+
+/** Pull a valid per-weekday shift override ({start,end} in HH:mm) from the JSON map for an ISO weekday (1=Mon..7=Sun). */
+export function pickDayShift(shiftByDay: unknown, weekday: number): { start: string; end: string } | null {
+  if (!shiftByDay || typeof shiftByDay !== "object") return null
+  const entry = (shiftByDay as Record<string, unknown>)[String(weekday)]
+  if (!entry || typeof entry !== "object") return null
+  const start = (entry as Record<string, unknown>).start
+  const end = (entry as Record<string, unknown>).end
+  if (typeof start === "string" && typeof end === "string" && SHIFT_TIME_RE.test(start) && SHIFT_TIME_RE.test(end) && start !== end) {
+    return { start, end }
+  }
+  return null
+}
+
 export async function resolveEffectiveAttendanceShift(args: {
   userId: string
   workspaceId: string
   office: OfficeLocationLike
+  /** Attendance date — its weekday (in the attendance timezone) selects any per-day override. Defaults to now. */
+  date?: Date
 }) {
+  // Precedence: USER per-weekday override > USER default > TEAM override > OFFICE default.
+  const member = await getUserAttendanceShift(args.userId, args.workspaceId)
+  if (member) {
+    // Derive the weekday in the OFFICE's timezone — the same zone the shift window & workday check use —
+    // so the per-day override selection can't disagree with the late/early penalty math.
+    const weekday = getWeekdayInTimezone(args.date ?? new Date(), safeAttendanceTimezone(args.office.timezone))
+    const dayOverride = pickDayShift(member.attendanceShiftByDay, weekday)
+    if (dayOverride) {
+      return {
+        source: "USER" as const,
+        teamId: null,
+        teamName: null,
+        shiftStartTime: dayOverride.start,
+        shiftEndTime: dayOverride.end,
+      }
+    }
+    if (member.attendanceShiftStartTime && member.attendanceShiftEndTime) {
+      return {
+        source: "USER" as const,
+        teamId: null,
+        teamName: null,
+        shiftStartTime: member.attendanceShiftStartTime,
+        shiftEndTime: member.attendanceShiftEndTime,
+      }
+    }
+  }
+
   const primary = await getPrimaryAttendanceTeam(args.userId, args.workspaceId)
   const team = primary?.team
 
@@ -378,6 +444,45 @@ export async function resolveEffectiveAttendanceShift(args: {
   }
 }
 
+/**
+ * Overnight-aware shift END datetime for a given attendance date. When the shift end is <= the start
+ * (e.g. a 21:00→03:00 night shift) it rolls to the next calendar day. Used to decide when a
+ * "forgot to check out" penalty may FAIRLY apply — a night-shift worker who is still on shift (or just
+ * finished) must not be flagged as a no-checkout by the 02:00 nightly cron.
+ */
+export function resolveShiftEndAt(
+  date: Date,
+  office: OfficeLocationLike,
+  shift: { shiftStartTime?: string | null; shiftEndTime?: string | null },
+): Date {
+  return buildShiftWindow(date, office, {
+    shiftStartTime: shift.shiftStartTime,
+    shiftEndTime: shift.shiftEndTime,
+  }).shiftEndAt
+}
+
+/** Full shift window (start + overnight-aware end) for a date — used when synthesizing a corrected
+ *  "hadir on-time" record so its times line up with the member's actual shift. */
+export function resolveShiftWindowAt(
+  date: Date,
+  office: OfficeLocationLike,
+  shift: { shiftStartTime?: string | null; shiftEndTime?: string | null },
+): { shiftStartAt: Date; shiftEndAt: Date } {
+  const w = buildShiftWindow(date, office, {
+    shiftStartTime: shift.shiftStartTime,
+    shiftEndTime: shift.shiftEndTime,
+  })
+  return { shiftStartAt: w.shiftStartAt, shiftEndAt: w.shiftEndAt }
+}
+
+/**
+ * The "attendance day" (midnight-UTC anchor) that `date` falls on in the given timezone. Defaults to
+ * the app/workspace timezone (ATTENDANCE_TIMEZONE). When you already know the specific office an action
+ * belongs to AND that office may be in a different timezone, pass `safeAttendanceTimezone(office.timezone)`
+ * so the recorded day matches the office's shift-window day. Callers that only know the workspace (e.g.
+ * check-in before the geofenced office is resolved) intentionally use the default — a workspace can host
+ * several offices, so there is no single office tz to anchor on at that point.
+ */
 export function getAttendanceDate(date = new Date(), timeZone = ATTENDANCE_TIMEZONE) {
   const { key } = getDateParts(date, timeZone)
   return new Date(`${key}T00:00:00.000Z`)
@@ -391,6 +496,20 @@ export function attendanceMonthRange(monthKey: string) {
   const [year, month] = monthKey.split("-").map(Number)
   const start = new Date(Date.UTC(year, month - 1, 1))
   const end = new Date(Date.UTC(year, month, 0))
+  return { start, end }
+}
+
+// Company payroll cut-off: the attendance period closes on the 27th. The period labeled by `monthKey`
+// runs from the 28th of the PREVIOUS month through the 27th of monthKey's month.
+// e.g. "2026-06" → 2026-05-28 .. 2026-06-27. Used for the attendance recap/board/export ONLY
+// (day-off & leave quota stay on the calendar month via attendanceMonthRange).
+export const ATTENDANCE_CUTOFF_DAY = 27
+export function attendancePeriodRange(monthKey: string, cutoffDay = ATTENDANCE_CUTOFF_DAY) {
+  const [year, month] = monthKey.split("-").map(Number)
+  // end = cutoff day of monthKey's month (00:00 UTC, matching how attendanceDate is stored)
+  const end = new Date(Date.UTC(year, month - 1, cutoffDay))
+  // start = the day after the cut-off, in the previous month
+  const start = new Date(Date.UTC(year, month - 2, cutoffDay + 1))
   return { start, end }
 }
 
@@ -481,14 +600,19 @@ export function deriveAttendanceMetrics(input: {
   checkOutAt: Date | null
   office: OfficeLocationLike
   effectiveShift?: {
-    source: "OFFICE" | "TEAM"
+    source: "OFFICE" | "TEAM" | "USER"
     teamId: string | null
     teamName: string | null
     shiftStartTime: string
     shiftEndTime: string
   } | null
+  treatAsNonWorkday?: boolean // tanggal merah → no late/early penalty for the day
 }): AttendanceDerivedMetrics {
-  const shiftReference = input.checkInAt ?? input.checkOutAt ?? input.attendanceDate
+  // Anchor the shift window & workday weekday on the record's official attendanceDate — the SAME day
+  // whose weekday selected any per-day shift override — so selection, window, and workday all agree.
+  // (For normal/overnight check-ins attendanceDate already == checkInAt's calendar day; this only
+  // matters for admin corrections where checkInAt is moved to a different day.)
+  const shiftReference = input.attendanceDate
   const policy = buildShiftWindow(shiftReference, input.office, {
     shiftStartTime: input.effectiveShift?.shiftStartTime,
     shiftEndTime: input.effectiveShift?.shiftEndTime,
@@ -497,7 +621,7 @@ export function deriveAttendanceMetrics(input: {
     effectiveTeamName: input.effectiveShift?.teamName,
   })
   const weekday = getWeekdayInTimezone(shiftReference, policy.timeZone)
-  const isWorkday = policy.workdays.includes(weekday)
+  const isWorkday = input.treatAsNonWorkday ? false : policy.workdays.includes(weekday)
 
   let checkInStatus: AttendanceDerivedMetrics["checkInStatus"] = null
   let checkOutStatus: AttendanceDerivedMetrics["checkOutStatus"] = null
@@ -554,12 +678,13 @@ export function buildAttendanceDerivedFields(input: {
   checkOutAt: Date | null
   office: OfficeLocationLike
   effectiveShift?: {
-    source: "OFFICE" | "TEAM"
+    source: "OFFICE" | "TEAM" | "USER"
     teamId: string | null
     teamName: string | null
     shiftStartTime: string
     shiftEndTime: string
   } | null
+  treatAsNonWorkday?: boolean // tanggal merah → no late/early penalty for the day
 }) {
   const metrics = deriveAttendanceMetrics(input)
   return {
@@ -622,7 +747,7 @@ export function isAttendanceCorrected(record: Pick<AttendanceRecordInput, "corre
 }
 
 export async function getAttendanceWorkspaceContext(userId: string) {
-  const [user, workspaceMember, leadMemberships] = await prisma.$transaction([
+  const [user, workspaceMember] = await prisma.$transaction([
     prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -646,33 +771,25 @@ export async function getAttendanceWorkspaceContext(userId: string) {
       },
       orderBy: { joinedAt: "asc" },
     }),
-    prisma.teamMember.findMany({
-      where: {
-        userId,
-        role: "LEAD",
-      },
-      select: {
-        teamId: true,
-        team: {
-          select: {
-            workspaceId: true,
-          },
-        },
-      },
-    }),
   ])
 
   const workspace = workspaceMember?.workspace ?? null
   const workspaceRole = workspaceMember?.role ?? null
-  const attendanceRole = workspaceMember?.attendanceRole ?? "NONE"
-  const isWorkspaceAdmin = workspaceRole === "OWNER" || workspaceRole === "ADMIN"
+  const attendanceRole = workspaceMember?.attendanceRole ?? "NONE" // vestigial — role retired
   const isSystemAdmin = user?.role === "ADMIN"
-  const isAttendanceSupervisor = attendanceRole === "SUPERVISOR"
-  const canManageAttendance = Boolean(isSystemAdmin || isWorkspaceAdmin || isAttendanceSupervisor)
-  const teamLeadTeamIds = leadMemberships
-    .filter((membership) => membership.team.workspaceId === workspace?.id)
-    .map((membership) => membership.teamId)
-  const canReviewAttendanceRequests = Boolean(canManageAttendance || teamLeadTeamIds.length > 0)
+  // Full workspace attendance management (every staff) stays BoD / One-Above-All / system-admin.
+  const canManageAttendance = Boolean(isSystemAdmin || workspaceRole === "BOD" || workspaceRole === "ONE_ABOVE_ALL")
+  // A MANAGER who LEADS one or more teams gets TEAM-SCOPED attendance powers: view + approve only the
+  // attendance of members of the team(s) they lead. (Set someone as team Lead in Crew Hub / Teams.)
+  let teamLeadTeamIds: string[] = []
+  if (!canManageAttendance && workspaceRole === "MANAGER" && workspace?.id) {
+    const leads = await prisma.teamMember.findMany({
+      where: { userId, role: "LEAD", team: { workspaceId: workspace.id } },
+      select: { teamId: true },
+    })
+    teamLeadTeamIds = leads.map((l) => l.teamId)
+  }
+  const canReviewAttendanceRequests = canManageAttendance || teamLeadTeamIds.length > 0
 
   return {
     user,
@@ -680,7 +797,7 @@ export async function getAttendanceWorkspaceContext(userId: string) {
     workspaceMember,
     workspaceRole,
     attendanceRole,
-    isAttendanceSupervisor,
+    isAttendanceSupervisor: false,
     canManageAttendance,
     teamLeadTeamIds,
     canReviewAttendanceRequests,
@@ -734,6 +851,9 @@ export function serializeAttendanceRecord(record: AttendanceRecordWithRelations)
     checkOutPhotoUrl: record.checkOutPhotoUrl,
     checkInDistanceMeters: record.checkInDistanceMeters,
     checkOutDistanceMeters: record.checkOutDistanceMeters,
+    checkOutOffsite: record.checkOutOffsite ?? false,
+    checkOutApproval: record.checkOutApproval ?? null,
+    checkOutReason: record.checkOutReason ?? null,
     notes: record.notes,
     status: record.status,
     correctedAt: record.correctedAt?.toISOString() ?? null,
@@ -750,7 +870,7 @@ export function serializeAttendanceRecord(record: AttendanceRecordWithRelations)
       workdays: normalizeWorkdays(record.officeLocation.workdays),
       shiftStartTime: parseTimeString(record.officeLocation.shiftStartTime, "09:00").normalized,
       shiftEndTime: parseTimeString(record.officeLocation.shiftEndTime, "18:00").normalized,
-      lateGraceMinutes: Math.max(0, record.officeLocation.lateGraceMinutes ?? 15),
+      lateGraceMinutes: Math.max(0, record.officeLocation.lateGraceMinutes ?? 0),
       earlyLeaveGraceMinutes: Math.max(0, record.officeLocation.earlyLeaveGraceMinutes ?? 0),
       isActive: record.officeLocation.isActive,
     },
@@ -780,6 +900,8 @@ export function mapRequestTypeToAttendanceDayType(type: AttendanceRequestWithRel
       return "PERMIT_APPROVED"
     case "DAY_OFF":
       return "DAY_OFF_APPROVED"
+    case "RED_DATE":
+      return "DAY_OFF_APPROVED" // tanggal merah covers the day like a day-off
   }
 }
 

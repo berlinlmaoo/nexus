@@ -12,17 +12,25 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check if user is owner or admin
-    const member = await prisma.workspaceMember.findFirst({
-      where: { userId: session.user.id },
-    })
+    // Authorize: caller must hold an admin-tier role. Resolve memberships deterministically (the old
+    // findFirst picked an arbitrary membership, so a STAFF-in-A / BOD-in-B user got an unpredictable
+    // verdict). Collect every workspace where they're BOD/MANAGER/ONE_ABOVE_ALL — audit visibility is
+    // then scoped to actors in exactly those workspaces (no cross-tenant audit-log leak).
+    const [memberships, user] = await Promise.all([
+      prisma.workspaceMember.findMany({
+        where: { userId: session.user.id },
+        select: { workspaceId: true, role: true },
+      }),
+      prisma.user.findUnique({ where: { id: session.user.id }, select: { role: true } }),
+    ])
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { role: true },
-    })
+    const isGlobalAdmin = user?.role === 'ADMIN'
+    const isAllSeeing = isGlobalAdmin || memberships.some((m) => m.role === 'ONE_ABOVE_ALL')
+    const adminWorkspaceIds = memberships
+      .filter((m) => m.role === 'BOD' || m.role === 'MANAGER' || m.role === 'ONE_ABOVE_ALL')
+      .map((m) => m.workspaceId)
 
-    if (user?.role !== 'ADMIN' && member?.role !== 'OWNER' && member?.role !== 'ADMIN') {
+    if (!isAllSeeing && adminWorkspaceIds.length === 0) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -37,6 +45,11 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0')
 
     const where: Prisma.AuditLogWhereInput = {}
+
+    // Scope to actors inside the caller's admin workspaces unless they're an all-seeing super-admin.
+    if (!isAllSeeing) {
+      where.user = { workspaceMembers: { some: { workspaceId: { in: adminWorkspaceIds } } } }
+    }
 
     if (userId) where.userId = userId
     if (entityType) where.entityType = entityType

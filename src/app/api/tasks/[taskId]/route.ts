@@ -9,27 +9,31 @@ import { executeAutomations } from "@/lib/automation-engine"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import { emitTaskUpdated, emitTaskDeleted } from "@/lib/socket-emitter"
 import { notifyTaskCompleted } from "@/lib/notification-service"
+import { bumpStreak } from "@/lib/gamification"
 import { updateTaskSchema, validateBody } from "@/lib/validations"
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit"
 import { seedTaskCustomFieldValues } from "@/lib/custom-field-sync"
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { taskId: string } }
+  { params }: { params: Promise<{ taskId: string }> }
 ) {
   try {
+    const { taskId } = await params
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const [task, likeCount, userLike, taskProjects] = await Promise.all([
+    const [task, likeCount, userLike, taskProjects, questRows] = await Promise.all([
       prisma.task.findUnique({
-        where: { id: params.taskId },
+        where: { id: taskId },
         include: {
           assignees: { include: { user: true } },
           comments: {
             include: { user: true },
             orderBy: { createdAt: "asc" },
           },
+          // Breadcrumb context: a subtask's panel shows (and navigates back to) its parent.
+          parent: { select: { id: true, title: true } },
           subtasks: {
             include: {
               assignees: { include: { user: { select: { id: true, name: true, avatar: true } } } },
@@ -44,17 +48,22 @@ export async function GET(
           creator: true,
         },
       }),
-      prisma.taskLike.count({ where: { taskId: params.taskId } }),
+      prisma.taskLike.count({ where: { taskId: taskId } }),
       prisma.taskLike.findUnique({
-        where: { taskId_userId: { taskId: params.taskId, userId: session.user.id! } },
+        where: { taskId_userId: { taskId: taskId, userId: session.user.id! } },
       }),
       prisma.taskProject.findMany({
-        where: { taskId: params.taskId },
+        where: { taskId: taskId },
         include: {
           project: { select: { id: true, name: true, color: true, icon: true } },
           taskList: { select: { id: true, name: true } },
         },
         orderBy: { createdAt: "asc" },
+      }),
+      // Active task-bundle quests that include this task (for the "+X XP" nudge on the task panel).
+      prisma.quest.findMany({
+        where: { isActive: true, requirementType: "specific_tasks", taskIds: { has: taskId } },
+        select: { id: true, title: true, xpReward: true, taskIds: true },
       }),
     ])
 
@@ -62,11 +71,22 @@ export async function GET(
       return NextResponse.json({ error: "Task not found" }, { status: 404 })
     }
 
+    const quests = await Promise.all(
+      questRows.map(async (q) => ({
+        id: q.id,
+        title: q.title,
+        xpReward: q.xpReward,
+        total: q.taskIds.length,
+        done: await prisma.task.count({ where: { id: { in: q.taskIds }, status: "DONE" } }),
+      }))
+    )
+
     return NextResponse.json({
       ...task,
       likeCount,
       liked: !!userLike,
       taskProjects,
+      quests,
     })
   } catch (error) {
     console.error("Error fetching task:", error)
@@ -76,9 +96,10 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { taskId: string } }
+  { params }: { params: Promise<{ taskId: string }> }
 ) {
   try {
+    const { taskId } = await params
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -106,7 +127,7 @@ export async function PATCH(
     } = validation.data
 
     const existing = await prisma.task.findUnique({
-      where: { id: params.taskId },
+      where: { id: taskId },
       include: {
         taskList: true,
         assignees: { select: { userId: true } },
@@ -191,7 +212,7 @@ export async function PATCH(
 
     if (Object.keys(updateData).length > 0) {
       task = await prisma.task.update({
-        where: { id: params.taskId },
+        where: { id: taskId },
         data: updateData,
         include: {
           assignees: { include: { user: true } },
@@ -225,10 +246,21 @@ export async function PATCH(
           action: "changed status",
           details: `Changed status from ${existing.status} to ${status}`,
           userId: session.user.id!,
-          taskId: params.taskId,
+          taskId: taskId,
           projectId: effectiveProjectId,
         },
       })
+    }
+
+    // Gamification: task completion grants NO direct XP (quest-only model — XP for task
+    // work comes solely from quests assigned by a Head/BoD, claimed at most once per
+    // period). We only tick the daily activity streak here (+5 once/day, not farmable).
+    if (status === "DONE" && existing.status !== "DONE") {
+      try {
+        await bumpStreak(session.user.id!)
+      } catch (xpErr) {
+        console.error("streak bump (task done) failed:", xpErr)
+      }
     }
 
     // Auto-create next occurrence for recurring tasks completed
@@ -299,7 +331,7 @@ export async function PATCH(
       }
 
     logAudit({
-      action: "update", entityType: "task", entityId: params.taskId, entityName: task.title,
+      action: "update", entityType: "task", entityId: taskId, entityName: task.title,
       userId: session.user.id!, request,
       metadata: { changes: body },
     })
@@ -307,7 +339,7 @@ export async function PATCH(
     // Fire automations for status changes
     if (status !== undefined && status !== existing.status) {
       executeAutomations(existing.taskList.projectId, "task_status_changed", {
-        taskId: params.taskId,
+        taskId: taskId,
         userId: session.user.id!,
         projectId: effectiveProjectId,
         oldStatus: existing.status,
@@ -318,7 +350,7 @@ export async function PATCH(
     // Fire automations for assignee changes
     if (assigneeIds !== undefined) {
       executeAutomations(existing.taskList.projectId, "task_assigned", {
-        taskId: params.taskId,
+        taskId: taskId,
         userId: session.user.id!,
         projectId: effectiveProjectId,
         assigneeIds,
@@ -328,7 +360,7 @@ export async function PATCH(
     // Notify assignees + followers when task is completed
     if (status === "DONE" && existing.status !== "DONE") {
       notifyTaskCompleted({
-        taskId: params.taskId,
+        taskId: taskId,
         taskTitle: task.title,
         projectId: effectiveProjectId,
         projectName: existing.taskList.name || "",
@@ -340,7 +372,7 @@ export async function PATCH(
     // Webhook: task.updated (or task.completed if status → DONE)
     const webhookEvent = (status === "DONE" && existing.status !== "DONE") ? "task.completed" : "task.updated"
     dispatchWebhookEvent(webhookEvent, {
-      taskId: params.taskId,
+      taskId: taskId,
       title: task.title,
       status: task.status,
       priority: task.priority,
@@ -350,13 +382,13 @@ export async function PATCH(
 
     if (assigneeIds !== undefined) {
       await prisma.taskAssignee.deleteMany({
-        where: { taskId: params.taskId },
+        where: { taskId: taskId },
       })
 
       if (assigneeIds.length > 0) {
         await prisma.taskAssignee.createMany({
           data: assigneeIds.map((userId: string) => ({
-            taskId: params.taskId,
+            taskId: taskId,
             userId,
           })),
         })
@@ -364,15 +396,15 @@ export async function PATCH(
         // Auto-follow: assigned users follow the task
         for (const userId of assigneeIds) {
           await prisma.taskFollower.upsert({
-            where: { taskId_userId: { taskId: params.taskId, userId } },
-            create: { taskId: params.taskId, userId },
+            where: { taskId_userId: { taskId: taskId, userId } },
+            create: { taskId: taskId, userId },
             update: {},
           })
         }
       }
 
       const updatedTask = await prisma.task.findUnique({
-        where: { id: params.taskId },
+        where: { id: taskId },
         include: {
           assignees: { include: { user: true } },
           creator: true,
@@ -411,14 +443,15 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { taskId: string } }
+  { params }: { params: Promise<{ taskId: string }> }
 ) {
   try {
+    const { taskId } = await params
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const existing = await prisma.task.findUnique({
-      where: { id: params.taskId },
+      where: { id: taskId },
       include: {
         taskList: true,
         taskProjects: {
@@ -446,12 +479,12 @@ export async function DELETE(
     })
 
     logAudit({
-      action: "delete", entityType: "task", entityId: params.taskId, entityName: existing.title,
+      action: "delete", entityType: "task", entityId: taskId, entityName: existing.title,
       userId: session.user.id!, request,
     })
 
     await prisma.task.delete({
-      where: { id: params.taskId },
+      where: { id: taskId },
     })
 
     const relatedProjectIds = [
@@ -459,7 +492,7 @@ export async function DELETE(
       ...existing.taskProjects.map((taskProject) => taskProject.projectId),
     ]
     for (const projectId of Array.from(new Set(relatedProjectIds))) {
-      emitTaskDeleted(projectId, params.taskId)
+      emitTaskDeleted(projectId, taskId)
     }
 
     return NextResponse.json({ message: "Task deleted" })

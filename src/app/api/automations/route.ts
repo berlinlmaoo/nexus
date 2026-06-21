@@ -13,6 +13,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const projectId = searchParams.get('projectId')
     if (!projectId) return NextResponse.json({ error: 'projectId required' }, { status: 400 })
+    const { allowed } = await checkProjectAccess(session.user.id, projectId, ['MEMBER'])
+    if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     const automations = await prisma.automation.findMany({ where: { projectId }, orderBy: { name: 'asc' } })
     return NextResponse.json({ automations })
   } catch (error) {

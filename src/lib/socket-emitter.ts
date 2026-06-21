@@ -29,3 +29,8 @@ export function emitNotification(userId: string, notification: Record<string, un
 export function emitSprintUpdated(projectId: string, sprint: Record<string, unknown>) {
   eventBus.emit(BUS_EVENTS.SPRINT_UPDATED, { projectId, sprint })
 }
+
+/** Emit a chat message to everyone in a conversation room */
+export function emitMessageCreated(conversationId: string, message: Record<string, unknown>) {
+  eventBus.emit(BUS_EVENTS.MESSAGE_CREATED, { conversationId, message })
+}

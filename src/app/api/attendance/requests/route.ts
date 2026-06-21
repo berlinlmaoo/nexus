@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
+import { notifyApproversOfRequest } from "@/lib/wa-bot"
 import {
   attendanceMonthRange,
   endOfAttendanceMonth,
@@ -71,20 +72,29 @@ export async function GET(request: NextRequest) {
       workspaceId: context.workspace.id,
     }
 
+    // Team-scoped MANAGER: restrict to the members of the team(s) they lead (by userId — robust even
+    // when a request's teamId is null). Full managers (BoD/OAA) see everyone.
+    const isTeamManager = !context.canManageAttendance && context.teamLeadTeamIds.length > 0
+    let teamScopeUserIds: string[] | null = null
+    if ((scope === "workspace" || scope === "approvals") && isTeamManager) {
+      const teamMembers = await prisma.teamMember.findMany({
+        where: { teamId: { in: context.teamLeadTeamIds } },
+        select: { userId: true },
+      })
+      teamScopeUserIds = Array.from(new Set(teamMembers.map((m) => m.userId)))
+    }
+
     if (scope === "me") {
       where.userId = session.user.id
-    } else if (scope === "workspace") {
+    } else if (teamScopeUserIds) {
+      where.userId =
+        parsed.data.userId && teamScopeUserIds.includes(parsed.data.userId)
+          ? parsed.data.userId
+          : { in: teamScopeUserIds }
+    } else {
+      // Full manager (BoD/OAA): optional narrowing by user/team.
       if (parsed.data.userId) where.userId = parsed.data.userId
       if (parsed.data.teamId) where.teamId = parsed.data.teamId
-    } else if (scope === "approvals") {
-      if (context.canManageAttendance) {
-        if (parsed.data.userId) where.userId = parsed.data.userId
-        if (parsed.data.teamId) where.teamId = parsed.data.teamId
-      } else {
-        where.teamId = {
-          in: context.teamLeadTeamIds,
-        }
-      }
     }
 
     if (parsed.data.type) where.type = parsed.data.type
@@ -179,6 +189,7 @@ export async function POST(request: NextRequest) {
     const startDate = String(formData.get("startDate") ?? "")
     const endDate = String(formData.get("endDate") ?? "")
     const reason = String(formData.get("reason") ?? "")
+    const targetUserId = String(formData.get("targetUserId") ?? "").trim()
     const supportingDocument = formData.get("supportingDocument")
 
     const validation = attendanceRequestCreateSchema.safeParse({
@@ -201,10 +212,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "End date cannot be earlier than start date." }, { status: 400 })
     }
 
+    // Permission model: Staff may self-submit DAY_OFF / SICK / PERMIT / RED_DATE (all go in as
+    // PENDING for review). LEAVE is granted by BoD (canManageAttendance) — optionally on behalf
+    // of a specific user.
+    const canGrant = context.canManageAttendance // BoD / One Above All / system admin
+    const reqType = validation.data.type
+    if (!canGrant && reqType === "LEAVE") {
+      return NextResponse.json({ error: "Leave (cuti) cuma bisa diberikan oleh BoD." }, { status: 403 })
+    }
+    // Sick self-requests must include the doctor's note photo (BoD grants are exempt).
+    if (!canGrant && reqType === "SICK" && !(supportingDocument instanceof File && supportingDocument.size > 0)) {
+      return NextResponse.json({ error: "Request sakit wajib melampirkan foto surat sakit." }, { status: 400 })
+    }
+    let effectiveUserId = session.user.id
+    const isGrant = Boolean(targetUserId && targetUserId !== session.user.id)
+    if (isGrant) {
+      if (!canGrant) {
+        return NextResponse.json({ error: "Cuma BoD yang bisa kasih izin ke user lain." }, { status: 403 })
+      }
+      const targetMembership = await prisma.workspaceMember.findUnique({
+        where: { userId_workspaceId: { userId: targetUserId, workspaceId: context.workspace.id } },
+        select: { userId: true },
+      })
+      if (!targetMembership) {
+        return NextResponse.json({ error: "User target bukan anggota workspace ini." }, { status: 400 })
+      }
+      effectiveUserId = targetUserId
+    }
+
     const [existingRequests, existingAttendance, primaryAttendanceTeam] = await Promise.all([
       prisma.attendanceRequest.findMany({
         where: {
-          userId: session.user.id,
+          userId: effectiveUserId,
           workspaceId: context.workspace.id,
           status: { in: ["PENDING", "APPROVED"] },
           startDate: { lte: parsedEndDate },
@@ -218,7 +257,7 @@ export async function POST(request: NextRequest) {
       }),
       prisma.attendanceRecord.findMany({
         where: {
-          userId: session.user.id,
+          userId: effectiveUserId,
           workspaceId: context.workspace.id,
           attendanceDate: {
             gte: parsedStartDate,
@@ -233,7 +272,7 @@ export async function POST(request: NextRequest) {
           id: true,
         },
       }),
-      getPrimaryAttendanceTeam(session.user.id, context.workspace.id),
+      getPrimaryAttendanceTeam(effectiveUserId, context.workspace.id),
     ])
 
     if (existingRequests.length > 0) {
@@ -251,7 +290,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Supporting document must be smaller than 10MB." }, { status: 400 })
     }
 
-    if (validation.data.type === "DAY_OFF") {
+    // Monthly quota enforcement for the two bucketed leave types: DAY_OFF (per-person override,
+    // default 4) and RED_DATE / "tanggal merah" (fixed 2/month). Each counts within its OWN type,
+    // so the two buckets are independent. Admin grants (isGrant) bypass the cap.
+    if (validation.data.type === "DAY_OFF" || validation.data.type === "RED_DATE") {
+      const reqType = validation.data.type
       const requestDates = enumerateAttendanceDates(parsedStartDate, parsedEndDate)
       const monthCounts = new Map<string, number>()
 
@@ -265,24 +308,21 @@ export async function POST(request: NextRequest) {
         ...attendanceMonthRange(monthKey),
       }))
 
-      const existingDayOffRequests = await prisma.attendanceRequest.findMany({
+      const existingSameType = await prisma.attendanceRequest.findMany({
         where: {
-          userId: session.user.id,
-          type: "DAY_OFF",
+          userId: effectiveUserId,
+          type: reqType,
           status: { in: ["PENDING", "APPROVED"] },
           OR: monthWindows.map((window) => ({
             startDate: { lte: window.end },
             endDate: { gte: window.start },
           })),
         },
-        select: {
-          startDate: true,
-          endDate: true,
-        },
+        select: { startDate: true, endDate: true },
       })
 
       const existingMonthCounts = new Map<string, number>()
-      for (const requestItem of existingDayOffRequests) {
+      for (const requestItem of existingSameType) {
         for (const date of enumerateAttendanceDates(requestItem.startDate, requestItem.endDate)) {
           const monthKey = formatMonthKey(date)
           if (!monthCounts.has(monthKey)) continue
@@ -290,13 +330,35 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      for (const [monthKey, requestedCount] of Array.from(monthCounts.entries())) {
-        const total = requestedCount + (existingMonthCounts.get(monthKey) ?? 0)
-        if (total > 4) {
-          return NextResponse.json(
-            { error: `Day-Off limit exceeded for ${monthKey}. Each user may only use 4 day-off days per month.` },
-            { status: 422 }
-          )
+      const label = reqType === "DAY_OFF" ? "day-off" : "tanggal merah"
+      // DAY_OFF: per-person override (default 4). RED_DATE: per-month quota set by BoD (default 0
+      // until BoD inputs it — so staff can't request tanggal merah until BoD sets the month's jatah).
+      let dayOffQuota = 4
+      const redQuotaByMonth = new Map<string, number>()
+      if (reqType === "DAY_OFF") {
+        const quotaMember = await prisma.workspaceMember.findUnique({
+          where: { userId_workspaceId: { userId: effectiveUserId, workspaceId: context.workspace.id } },
+          select: { dayOffQuota: true },
+        })
+        dayOffQuota = quotaMember?.dayOffQuota ?? 4
+      } else {
+        const rows = await prisma.redDateQuota.findMany({
+          where: { workspaceId: context.workspace.id, month: { in: Array.from(monthCounts.keys()) } },
+          select: { month: true, quota: true },
+        })
+        for (const r of rows) redQuotaByMonth.set(r.month, r.quota)
+      }
+
+      if (!isGrant) {
+        for (const [monthKey, requestedCount] of Array.from(monthCounts.entries())) {
+          const total = requestedCount + (existingMonthCounts.get(monthKey) ?? 0)
+          const quota = reqType === "DAY_OFF" ? dayOffQuota : (redQuotaByMonth.get(monthKey) ?? 0)
+          if (total > quota) {
+            return NextResponse.json(
+              { error: `Jatah ${label} ${monthKey} terlampaui. Maksimal ${quota} hari per bulan${quota === 0 ? " (BoD belum set jatah)" : ""}.` },
+              { status: 422 }
+            )
+          }
         }
       }
     }
@@ -317,7 +379,7 @@ export async function POST(request: NextRequest) {
 
     const attendanceRequest = await prisma.attendanceRequest.create({
       data: {
-        userId: session.user.id,
+        userId: effectiveUserId,
         workspaceId: context.workspace.id,
         teamId: primaryAttendanceTeam?.teamId ?? null,
         type: validation.data.type,
@@ -326,6 +388,8 @@ export async function POST(request: NextRequest) {
         reason: validation.data.reason.trim(),
         supportingDocumentUrl,
         supportingDocumentName,
+        // BoD granting on behalf of a user → already approved by that BoD.
+        ...(isGrant ? { status: "APPROVED" as const, reviewedById: session.user.id, reviewedAt: new Date() } : {}),
       },
       include: {
         user: {
@@ -353,10 +417,10 @@ export async function POST(request: NextRequest) {
     })
 
     await logAudit({
-      action: "create",
+      action: isGrant ? "grant" : "create",
       entityType: "attendance_request",
       entityId: attendanceRequest.id,
-      entityName: `${attendanceRequest.type}:${context.user?.name ?? session.user.id}`,
+      entityName: `${attendanceRequest.type}:${attendanceRequest.user?.name ?? effectiveUserId}`,
       userId: session.user.id,
       request,
       metadata: {
@@ -364,8 +428,15 @@ export async function POST(request: NextRequest) {
         startDate: attendanceRequest.startDate.toISOString(),
         endDate: attendanceRequest.endDate.toISOString(),
         teamId: attendanceRequest.teamId,
+        granted: isGrant,
+        targetUserId: effectiveUserId,
       },
     })
+
+    // Ping approvers on WhatsApp (fire-and-forget) so a BoD can /approve straight from chat.
+    if (!isGrant && attendanceRequest.status === "PENDING") {
+      notifyApproversOfRequest(attendanceRequest.id).catch((e) => console.error("[wa] notifyApproversOfRequest failed", e))
+    }
 
     return NextResponse.json({ request: serializeAttendanceRequest(attendanceRequest) }, { status: 201 })
   } catch (error) {

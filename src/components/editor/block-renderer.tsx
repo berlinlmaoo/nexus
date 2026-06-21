@@ -611,9 +611,9 @@ function CodeBlock({
   }, [block.content, block.properties.language])
 
   return (
-    <div className="rounded-lg border border-border bg-zinc-950 overflow-hidden">
+    <div className="rounded-lg border border-border bg-foreground overflow-hidden">
       {editable && (
-        <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900 border-b border-zinc-800">
+        <div className="flex items-center justify-between px-3 py-1.5 bg-foreground border-b border-on-surface-variant">
           <select
             value={block.properties.language || "plaintext"}
             onChange={(e) =>
@@ -621,10 +621,10 @@ function CodeBlock({
                 properties: { ...block.properties, language: e.target.value },
               })
             }
-            className="bg-transparent text-zinc-400 text-xs border-none outline-none cursor-pointer"
+            className="bg-transparent text-muted-foreground text-xs border-none outline-none cursor-pointer"
           >
             {languages.map((l) => (
-              <option key={l} value={l} className="bg-zinc-900">
+              <option key={l} value={l} className="bg-foreground">
                 {l}
               </option>
             ))}
@@ -654,7 +654,7 @@ function CodeBlock({
             }
           }}
           onFocus={onFocus}
-          className="w-full bg-transparent text-zinc-100 text-sm font-mono p-3 outline-none resize-none min-h-[60px]"
+          className="w-full bg-transparent text-background text-sm font-mono p-3 outline-none resize-none min-h-[60px]"
           placeholder="Write code..."
           spellCheck={false}
         />
@@ -662,7 +662,7 @@ function CodeBlock({
         <pre className="p-3 overflow-x-auto">
           <code
             ref={codeRef}
-            className="text-sm font-mono text-zinc-100"
+            className="text-sm font-mono text-background"
             dangerouslySetInnerHTML={{ __html: highlighted || block.content }}
           />
         </pre>

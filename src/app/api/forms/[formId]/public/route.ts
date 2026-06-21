@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { getFormAccessStatus } from "@/lib/form-access-schedule"
 
 export async function GET(
   _request: NextRequest,
@@ -23,7 +24,9 @@ export async function GET(
         description: true,
         fields: true,
         branding: true,
+        accessSchedule: true,
         isPublic: true,
+        requireAuth: true,
         project: {
           select: {
             taskLists: {
@@ -41,6 +44,17 @@ export async function GET(
 
     if (!form.isPublic) {
       return NextResponse.json({ error: "This form is not publicly accessible" }, { status: 403 })
+    }
+
+    const accessStatus = getFormAccessStatus(form.accessSchedule)
+    if (!accessStatus.allowed) {
+      return NextResponse.json(
+        {
+          error: accessStatus.message ?? "This form is not available right now.",
+          accessSchedule: accessStatus.schedule,
+        },
+        { status: 403 }
+      )
     }
 
     return NextResponse.json({

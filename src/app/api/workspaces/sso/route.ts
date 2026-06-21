@@ -11,7 +11,7 @@ async function getWorkspaceAdmin(userId: string) {
     where: { userId },
     include: { workspace: true },
   })
-  if (!member || (member.role !== "OWNER" && member.role !== "ADMIN")) {
+  if (!member || (member.role !== "BOD" && member.role !== "MANAGER" && member.role !== "ONE_ABOVE_ALL")) {
     return null
   }
   return member

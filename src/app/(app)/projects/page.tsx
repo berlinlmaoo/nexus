@@ -33,8 +33,8 @@ export default async function ProjectsPage() {
 
   const canSeeAllWorkspaceProjects =
     isSystemAdmin ||
-    workspaceMember?.role === "OWNER" ||
-    workspaceMember?.role === "ADMIN"
+    workspaceMember?.role === "BOD" ||
+    workspaceMember?.role === "MANAGER" || workspaceMember?.role === "ONE_ABOVE_ALL"
 
   // Fetch projects for the workspace. Owners/admins can see all workspace projects.
   const projects = await prisma.project.findMany({

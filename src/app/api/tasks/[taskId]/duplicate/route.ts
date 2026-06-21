@@ -12,7 +12,7 @@ import { seedTaskCustomFieldValues } from "@/lib/custom-field-sync"
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { taskId: string } }
+  { params }: { params: Promise<{ taskId: string }> }
 ) {
   try {
     const session = await auth()
@@ -34,7 +34,7 @@ export async function POST(
     }
 
     const existing = await prisma.task.findUnique({
-      where: { id: params.taskId },
+      where: { id: (await params).taskId },
       include: {
         assignees: {
           select: { userId: true },

@@ -27,9 +27,16 @@ import {
   Activity,
   UserPlus,
   Copy,
+  Clock3,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { CustomFieldOptionConfig, SupportedCustomFieldType } from "@/lib/custom-fields"
+import {
+  FORM_ACCESS_DAY_LABELS,
+  formatFormAccessSchedule,
+  normalizeFormAccessSchedule,
+  type FormAccessSchedule,
+} from "@/lib/form-access-schedule"
 
 export interface FormFieldCondition {
   fieldId: string
@@ -94,6 +101,7 @@ interface FormBuilderProps {
     description: string | null
     fields: FormField[]
     isPublic: boolean
+    accessSchedule?: FormAccessSchedule | null
   }
   onSave?: () => void
 }
@@ -267,6 +275,15 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
   const [name, setName] = useState(form?.name ?? "")
   const [description, setDescription] = useState(form?.description ?? "")
   const [isPublic, setIsPublic] = useState(form?.isPublic ?? true)
+  const [accessSchedule, setAccessSchedule] = useState<FormAccessSchedule>(
+    normalizeFormAccessSchedule(form?.accessSchedule) ?? {
+      enabled: false,
+      daysOfWeek: [1, 2, 3, 4, 5],
+      startTime: "09:00",
+      endTime: "18:00",
+      timezone: "Asia/Jakarta",
+    }
+  )
   const [fields, setFields] = useState<FormField[]>(
     form?.fields ?? [createTaskTitleField()]
   )
@@ -627,6 +644,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
         description: description.trim() || null,
         fields: normalizedFields,
         isPublic,
+        accessSchedule: normalizeFormAccessSchedule(accessSchedule),
       }
 
       const isEdit = !!form?.id
@@ -657,13 +675,13 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-zinc-900">
+          <h2 className="text-lg font-semibold text-on-surface">
             {name || "Untitled Form"}
           </h2>
           <button
             type="button"
             onClick={() => setPreview(false)}
-            className="inline-flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:ring-offset-2"
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium text-on-surface-variant shadow-sm hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
           >
             <EyeOff className="h-4 w-4" />
             Exit Preview
@@ -671,16 +689,16 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
         </div>
 
         {description && (
-          <p className="text-sm text-zinc-500">{description}</p>
+          <p className="text-sm text-muted-foreground">{description}</p>
         )}
 
         <div className="space-y-4">
           {fields.map((field) => (
             <div key={field.id} className="space-y-1.5">
-              <label className="block text-sm font-medium text-zinc-700">
+              <label className="block text-sm font-medium text-on-surface-variant">
                 {field.name || "Unnamed field"}
                 {field.required && (
-                  <span className="ml-1 text-zinc-400">*</span>
+                  <span className="ml-1 text-muted-foreground">*</span>
                 )}
               </label>
 
@@ -689,7 +707,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                   type="text"
                   disabled
                   placeholder="Short text answer"
-                  className="block w-full rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-400 placeholder:text-zinc-300"
+                  className="block w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground placeholder:text-muted-foreground/70"
                 />
               )}
               {field.type === "textarea" && (
@@ -697,7 +715,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                   disabled
                   rows={3}
                   placeholder="Long text answer"
-                  className="block w-full rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-400 placeholder:text-zinc-300"
+                  className="block w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground placeholder:text-muted-foreground/70"
                 />
               )}
               {field.type === "number" && (
@@ -705,14 +723,14 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                   type="number"
                   disabled
                   placeholder="0"
-                  className="block w-full rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-400 placeholder:text-zinc-300"
+                  className="block w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground placeholder:text-muted-foreground/70"
                 />
               )}
               {field.type === "date" && (
                 <input
                   type="date"
                   disabled
-                  className="block w-full rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-400"
+                  className="block w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground"
                 />
               )}
               {field.type === "email" && (
@@ -720,13 +738,13 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                   type="email"
                   disabled
                   placeholder="email@example.com"
-                  className="block w-full rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-400 placeholder:text-zinc-300"
+                  className="block w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground placeholder:text-muted-foreground/70"
                 />
               )}
               {field.type === "dropdown" && (
                 <select
                   disabled
-                  className="block w-full rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-400"
+                  className="block w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground"
                 >
                   <option>Select an option</option>
                   {field.options?.filter(Boolean).map((opt, optionIndex) => (
@@ -735,23 +753,23 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                 </select>
               )}
               {field.type === "multi_select" && (
-                <div className="space-y-2 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2">
+                <div className="space-y-2 rounded-md border border-border bg-muted px-3 py-2">
                   {(field.options?.filter(Boolean) ?? ["Option 1"]).map((opt, optionIndex) => (
-                    <label key={`${opt}-${optionIndex}`} className="flex items-center gap-2 text-sm text-zinc-400">
-                      <input type="checkbox" disabled className="h-4 w-4 rounded border-zinc-300" />
+                    <label key={`${opt}-${optionIndex}`} className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <input type="checkbox" disabled className="h-4 w-4 rounded border-input" />
                       {opt}
                     </label>
                   ))}
                 </div>
               )}
               {field.type === "file" && (
-                <div className="flex items-center gap-2 rounded-md border border-dashed border-zinc-300 bg-zinc-50 px-3 py-4 text-sm text-zinc-400">
+                <div className="flex items-center gap-2 rounded-md border border-dashed border-input bg-muted px-3 py-4 text-sm text-muted-foreground">
                   <Paperclip className="h-4 w-4" />
                   Choose file
                 </div>
               )}
               {field.attachmentEnabled && field.type !== "file" && (
-                <div className="flex items-center gap-2 rounded-md border border-dashed border-zinc-300 bg-zinc-50 px-3 py-4 text-sm text-zinc-400">
+                <div className="flex items-center gap-2 rounded-md border border-dashed border-input bg-muted px-3 py-4 text-sm text-muted-foreground">
                   <Paperclip className="h-4 w-4" />
                   Optional attachment
                 </div>
@@ -761,9 +779,9 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                   <input
                     type="checkbox"
                     disabled
-                    className="h-4 w-4 rounded border-zinc-300"
+                    className="h-4 w-4 rounded border-input"
                   />
-                  <span className="text-sm text-zinc-400">
+                  <span className="text-sm text-muted-foreground">
                     {field.name || "Checkbox"}
                   </span>
                 </div>
@@ -783,7 +801,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
         <div>
           <label
             htmlFor="form-name"
-            className="block text-sm font-medium text-zinc-700"
+            className="block text-sm font-medium text-on-surface-variant"
           >
             Form Name
           </label>
@@ -793,14 +811,14 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Untitled Form"
-            className="mt-1 block w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+            className="mt-1 block w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-on-surface shadow-sm placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
 
         <div>
           <label
             htmlFor="form-description"
-            className="block text-sm font-medium text-zinc-700"
+            className="block text-sm font-medium text-on-surface-variant"
           >
             Description
           </label>
@@ -810,7 +828,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
             onChange={(e) => setDescription(e.target.value)}
             rows={2}
             placeholder="Optional description"
-            className="mt-1 block w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+            className="mt-1 block w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-on-surface shadow-sm placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
           />
         </div>
 
@@ -820,35 +838,132 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
             role="switch"
             aria-checked={isPublic}
             onClick={() => setIsPublic((v) => !v)}
-            className="focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:ring-offset-2 rounded-full"
+            className="focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 rounded-full"
           >
             {isPublic ? (
-              <ToggleRight className="h-6 w-6 text-zinc-900" />
+              <ToggleRight className="h-6 w-6 text-on-surface" />
             ) : (
-              <ToggleLeft className="h-6 w-6 text-zinc-400" />
+              <ToggleLeft className="h-6 w-6 text-muted-foreground" />
             )}
           </button>
           <div>
-            <span className="text-sm text-zinc-700">Public form</span>
-            <p className="text-xs text-zinc-500">
+            <span className="text-sm text-on-surface-variant">Public form</span>
+            <p className="text-xs text-muted-foreground">
               Public forms can be opened from one URL without signing in to Nexus.
             </p>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-border bg-muted/70 p-4">
+          <div className="flex items-start gap-3">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={Boolean(accessSchedule.enabled)}
+              onClick={() =>
+                setAccessSchedule((prev) => ({
+                  ...prev,
+                  enabled: !prev.enabled,
+                  daysOfWeek: prev.daysOfWeek?.length ? prev.daysOfWeek : [1, 2, 3, 4, 5],
+                  startTime: prev.startTime ?? "09:00",
+                  endTime: prev.endTime ?? "18:00",
+                  timezone: prev.timezone ?? "Asia/Jakarta",
+                }))
+              }
+              className="mt-0.5 rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              {accessSchedule.enabled ? (
+                <ToggleRight className="h-6 w-6 text-on-surface" />
+              ) : (
+                <ToggleLeft className="h-6 w-6 text-muted-foreground" />
+              )}
+            </button>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <Clock3 className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-on-surface">Access schedule</span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Limit when public users can open and submit this form.
+              </p>
+              {accessSchedule.enabled && (
+                <div className="mt-4 space-y-4">
+                  <div className="flex flex-wrap gap-2">
+                    {FORM_ACCESS_DAY_LABELS.map((label, dayIndex) => {
+                      const selected = accessSchedule.daysOfWeek?.includes(dayIndex) ?? false
+                      return (
+                        <button
+                          key={label}
+                          type="button"
+                          onClick={() =>
+                            setAccessSchedule((prev) => {
+                              const days = new Set(prev.daysOfWeek ?? [])
+                              if (days.has(dayIndex)) {
+                                days.delete(dayIndex)
+                              } else {
+                                days.add(dayIndex)
+                              }
+                              return { ...prev, daysOfWeek: Array.from(days).sort((a, b) => a - b) }
+                            })
+                          }
+                          className={cn(
+                            "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
+                            selected
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border bg-card text-muted-foreground hover:bg-accent"
+                          )}
+                        >
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="text-xs font-medium text-muted-foreground">Open time</span>
+                      <input
+                        type="time"
+                        value={accessSchedule.startTime ?? "09:00"}
+                        onChange={(event) =>
+                          setAccessSchedule((prev) => ({ ...prev, startTime: event.target.value }))
+                        }
+                        className="mt-1 block w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-on-surface shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-medium text-muted-foreground">Close time</span>
+                      <input
+                        type="time"
+                        value={accessSchedule.endTime ?? "18:00"}
+                        onChange={(event) =>
+                          setAccessSchedule((prev) => ({ ...prev, endTime: event.target.value }))
+                        }
+                        className="mt-1 block w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-on-surface shadow-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                      />
+                    </label>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Active: {formatFormAccessSchedule(accessSchedule)}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
       </div>
 
       {/* Divider */}
-      <div className="border-t border-zinc-200" />
+      <div className="border-t border-border" />
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-zinc-900">Fields</h3>
+        <h3 className="text-sm font-semibold text-on-surface">Fields</h3>
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={addField}
-            className="inline-flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:ring-offset-2"
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium text-on-surface-variant shadow-sm hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
             >
               <Plus className="h-4 w-4" />
               Blank field
@@ -856,7 +971,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
           <button
             type="button"
             onClick={addFileUploadField}
-            className="inline-flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:ring-offset-2"
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium text-on-surface-variant shadow-sm hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
           >
             <ImagePlus className="h-4 w-4" />
             Document / photo
@@ -864,7 +979,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
           <button
             type="button"
             onClick={addCoreIntelligenceField}
-            className="inline-flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:ring-offset-2"
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium text-on-surface-variant shadow-sm hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
           >
             <Activity className="h-4 w-4" />
             Core Intelligence
@@ -872,7 +987,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
           <button
             type="button"
             onClick={() => setPreview(true)}
-            className="inline-flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:ring-offset-2"
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium text-on-surface-variant shadow-sm hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
           >
             <Eye className="h-4 w-4" />
             Preview
@@ -880,8 +995,8 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
         </div>
       </div>
 
-      <div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-3">
-        <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+      <div className="rounded-xl border border-border bg-muted/70 p-3">
+        <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           <ClipboardList className="h-3.5 w-3.5" />
           Add project fields and task routing
         </div>
@@ -891,7 +1006,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
               <button
                 type="button"
                 onClick={addTaskSectionField}
-                className="rounded-full border border-zinc-900 bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-zinc-800"
+                className="rounded-full border border-primary bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
               >
                 + Section / Division picker
               </button>
@@ -901,14 +1016,14 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                 key={customField.id}
                 type="button"
                 onClick={() => addCustomField(customField)}
-                className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-900 hover:text-zinc-950"
+                className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-on-surface-variant transition-colors hover:border-primary hover:text-foreground"
               >
                 + {customField.name}
               </button>
             ))}
           </div>
         ) : (
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-muted-foreground">
             No custom fields or sections yet. Add project sections/custom fields first, then this form can write into them.
           </p>
         )}
@@ -945,7 +1060,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                           key={`${field.id}-branch-line-${lineIndex}`}
                           className={cn(
                             "min-h-full w-px rounded-full",
-                            lineIndex === branchDepth - 1 ? "bg-zinc-900/35" : "bg-zinc-200"
+                            lineIndex === branchDepth - 1 ? "bg-primary/40" : "bg-surface-container-high"
                           )}
                         />
                       ))}
@@ -957,15 +1072,15 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                     onDragOver={(e) => handleDragOver(e, index)}
                     onDragEnd={handleDragEnd}
                     className={cn(
-                      "min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white shadow-sm",
-                      branchDepth > 0 && "border-l-zinc-900/30 bg-zinc-50/40",
-                      dragOverIndex === index && "border-zinc-900"
+                      "min-w-0 flex-1 rounded-lg border border-border bg-card shadow-sm",
+                      branchDepth > 0 && "border-l-primary/30 bg-muted/40",
+                      dragOverIndex === index && "border-primary"
                     )}
                   >
                   {conditionSummary && (
-                    <div className="flex items-center gap-2 border-b border-zinc-100 px-3 py-2 text-[11px] font-medium text-zinc-500">
-                      <GitBranch className="h-3 w-3 text-zinc-400" />
-                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 uppercase tracking-[0.12em] text-zinc-500">
+                    <div className="flex items-center gap-2 border-b border-border px-3 py-2 text-[11px] font-medium text-muted-foreground">
+                      <GitBranch className="h-3 w-3 text-muted-foreground" />
+                      <span className="rounded-full bg-muted px-2 py-0.5 uppercase tracking-[0.12em] text-muted-foreground">
                         Branch level {branchDepth}
                       </span>
                       <span className="truncate">Shown if {conditionSummary}</span>
@@ -974,7 +1089,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                   {/* Field row */}
                   <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
                     {/* Drag handle */}
-                    <div className="cursor-grab text-zinc-400 hover:text-zinc-600 active:cursor-grabbing">
+                    <div className="cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing">
                       <GripVertical className="h-4 w-4" />
                     </div>
 
@@ -986,12 +1101,12 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                         updateField(field.id, { name: e.target.value })
                       }
                       placeholder="Field name"
-                      className="min-w-0 flex-1 basis-[calc(100%_-_2.5rem)] rounded-md border border-zinc-200 bg-white px-2.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 sm:basis-auto sm:py-1.5"
+                      className="min-w-0 flex-1 basis-[calc(100%_-_2.5rem)] rounded-md border border-border bg-card px-2.5 py-2 text-sm text-on-surface placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:basis-auto sm:py-1.5"
                     />
 
                     {/* Type selector */}
                     <div className="relative w-full sm:w-auto">
-                      <FieldTypeIcon className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+                      <FieldTypeIcon className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                       <select
                         value={field.type}
                         onChange={(e) => {
@@ -1009,7 +1124,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                             setExpandedFieldId(field.id)
                           }
                         }}
-                        className="h-10 w-full appearance-none rounded-md border border-zinc-200 bg-white py-1 pl-7 pr-7 text-sm text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 sm:h-8 sm:w-auto"
+                        className="h-10 w-full appearance-none rounded-md border border-border bg-card py-1 pl-7 pr-7 text-sm text-on-surface-variant focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:h-8 sm:w-auto"
                       >
                         {FIELD_TYPES.map((ft) => (
                           <option key={ft.value} value={ft.value}>
@@ -1017,7 +1132,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                           </option>
                         ))}
                       </select>
-                      <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+                      <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                     </div>
 
                     {/* Required toggle */}
@@ -1030,18 +1145,18 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                         updateField(field.id, { required: !field.required })
                       }
                       className={cn(
-                        "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:ring-offset-2",
-                        field.required ? "bg-zinc-900" : "bg-zinc-200"
+                        "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+                        field.required ? "bg-primary" : "bg-surface-container-high"
                       )}
                     >
                       <span
                         className={cn(
-                          "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm ring-0 transition-transform",
+                          "pointer-events-none inline-block h-4 w-4 rounded-full bg-card shadow-sm ring-0 transition-transform",
                           field.required ? "translate-x-4" : "translate-x-0"
                         )}
                       />
                     </button>
-                    <span className="hidden text-xs text-zinc-500 sm:inline">
+                    <span className="hidden text-xs text-muted-foreground sm:inline">
                       Required
                     </span>
 
@@ -1054,10 +1169,10 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                           })
                         }
                         className={cn(
-                          "inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-md border px-2 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-900 sm:h-8 sm:w-auto",
+                          "inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-md border px-2 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ring sm:h-8 sm:w-auto",
                           field.attachmentEnabled
-                            ? "border-zinc-900 bg-zinc-900 text-white"
-                            : "border-zinc-200 bg-white text-zinc-500 hover:text-zinc-900"
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border bg-card text-muted-foreground hover:text-foreground"
                         )}
                         title="Allow attachment upload for this answer"
                       >
@@ -1103,7 +1218,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                             : {}),
                         })
                       }}
-                      className="h-10 w-full rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 sm:h-8 sm:max-w-[220px]"
+                      className="h-10 w-full rounded-md border border-border bg-card px-2 text-xs text-on-surface-variant focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:h-8 sm:max-w-[220px]"
                       aria-label="Task mapping"
                     >
                       <option value="none">No mapping</option>
@@ -1131,7 +1246,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                         onClick={() =>
                           setExpandedFieldId(isExpanded ? null : field.id)
                         }
-                        className="touch-target rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-zinc-900 sm:min-h-0 sm:min-w-0"
+                        className="touch-target rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring sm:min-h-0 sm:min-w-0"
                         aria-label="Edit options"
                       >
                         <ChevronDown
@@ -1147,7 +1262,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                     <button
                       type="button"
                       onClick={() => duplicateField(field.id)}
-                      className="touch-target rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-900 sm:min-h-0 sm:min-w-0"
+                      className="touch-target rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring sm:min-h-0 sm:min-w-0"
                       aria-label="Duplicate field"
                     >
                       <Copy className="h-4 w-4" />
@@ -1157,7 +1272,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                     <button
                       type="button"
                       onClick={() => removeField(field.id)}
-                      className="touch-target rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-zinc-900 sm:min-h-0 sm:min-w-0"
+                      className="touch-target rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-ring sm:min-h-0 sm:min-w-0"
                       aria-label="Delete field"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -1165,45 +1280,45 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                   </div>
 
                   {field.mapping?.target === "task_description" && (
-                    <div className="border-t border-zinc-100 px-3 py-2.5">
-                      <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-zinc-500">
+                    <div className="border-t border-border px-3 py-2.5">
+                      <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                         <Activity className="h-3 w-3" />
                         Core Intelligence
                       </label>
-                      <p className="text-xs text-zinc-500">
-                        The submitter's answer will fill the task Core Intelligence panel.
+                      <p className="text-xs text-muted-foreground">
+                        The submitter&apos;s answer will fill the task Core Intelligence panel.
                       </p>
                     </div>
                   )}
 
                   {field.mapping?.target === "task_status" && (
-                    <div className="border-t border-zinc-100 px-3 py-2.5">
-                      <label className="mb-1 block text-xs font-medium text-zinc-500">
+                    <div className="border-t border-border px-3 py-2.5">
+                      <label className="mb-1 block text-xs font-medium text-muted-foreground">
                         Task status options
                       </label>
-                      <div className="flex flex-wrap gap-2 text-xs text-zinc-500">
+                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                         TODO · IN_PROGRESS · IN_REVIEW · DONE · CANCELLED
                       </div>
                     </div>
                   )}
 
                   {field.mapping?.target === "task_priority" && (
-                    <div className="border-t border-zinc-100 px-3 py-2.5">
-                      <label className="mb-1 block text-xs font-medium text-zinc-500">
+                    <div className="border-t border-border px-3 py-2.5">
+                      <label className="mb-1 block text-xs font-medium text-muted-foreground">
                         Priority options
                       </label>
-                      <div className="flex flex-wrap gap-2 text-xs text-zinc-500">
+                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                         URGENT · HIGH · MEDIUM · LOW · NONE
                       </div>
                     </div>
                   )}
 
                   {field.mapping?.target === "task_list" && taskLists.length > 0 && (
-                    <div className="border-t border-zinc-100 px-3 py-2.5">
-                      <label className="mb-1 block text-xs font-medium text-zinc-500">
+                    <div className="border-t border-border px-3 py-2.5">
+                      <label className="mb-1 block text-xs font-medium text-muted-foreground">
                         Task section options
                       </label>
-                      <div className="flex flex-wrap gap-2 text-xs text-zinc-500">
+                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                         {taskLists.map((taskList) => taskList.name).join(" · ")}
                       </div>
                     </div>
@@ -1211,13 +1326,13 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
 
                   {/* Choice options editor */}
                   {isChoiceField(field.type) && isExpanded && (
-                    <div className="border-t border-zinc-100 px-3 py-2.5">
+                    <div className="border-t border-border px-3 py-2.5">
                       <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                          <label className="block text-xs font-medium text-zinc-500">
+                          <label className="block text-xs font-medium text-muted-foreground">
                             {field.type === "multi_select" ? "Multi-select options" : "Dropdown options"}
                           </label>
-                          <p className="mt-0.5 text-[11px] text-zinc-400">
+                          <p className="mt-0.5 text-[11px] text-muted-foreground">
                             Optional: enable branch questions to add follow-up fields per answer.
                           </p>
                         </div>
@@ -1230,10 +1345,10 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                               updateField(field.id, { branchEnabled: !field.branchEnabled })
                             }
                             className={cn(
-                              "inline-flex h-10 items-center justify-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-900 sm:h-auto",
+                              "inline-flex h-10 items-center justify-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-ring sm:h-auto",
                               field.branchEnabled
-                                ? "border-zinc-900 bg-zinc-900 text-white"
-                                : "border-zinc-200 bg-white text-zinc-500 hover:text-zinc-900"
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border bg-card text-muted-foreground hover:text-foreground"
                             )}
                           >
                             <GitBranch className="h-3 w-3" />
@@ -1242,7 +1357,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                           <button
                             type="button"
                             onClick={() => addDropdownOption(field.id)}
-                            className="inline-flex h-10 items-center justify-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-900 sm:h-auto"
+                            className="inline-flex h-10 items-center justify-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-on-surface-variant hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring sm:h-auto"
                           >
                             <Plus className="h-3 w-3" />
                             Add option
@@ -1260,14 +1375,14 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                                   updateDropdownOption(field.id, optionIndex, e.target.value)
                                 }
                                 placeholder={`Option ${optionIndex + 1}`}
-                                className="block min-w-0 flex-1 rounded-md border border-zinc-200 bg-white px-2.5 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 sm:py-1.5"
+                                className="block min-w-0 flex-1 rounded-md border border-border bg-card px-2.5 py-2 text-sm text-on-surface placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:py-1.5"
                               />
                               {field.branchEnabled && (
                                 <button
                                   type="button"
                                   onClick={() => addBranchField(field.id, option)}
                                   disabled={!option.trim()}
-                                  className="inline-flex h-10 items-center justify-center gap-1 rounded-md border border-zinc-200 bg-white px-2 text-xs font-medium text-zinc-600 hover:border-zinc-900 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-40 sm:h-8"
+                                  className="inline-flex h-10 items-center justify-center gap-1 rounded-md border border-border bg-card px-2 text-xs font-medium text-muted-foreground hover:border-primary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 sm:h-8"
                                   title="Add a follow-up question shown only for this answer"
                                 >
                                   <GitBranch className="h-3 w-3" />
@@ -1277,7 +1392,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                               <button
                                 type="button"
                                 onClick={() => removeDropdownOption(field.id, optionIndex)}
-                                className="touch-target self-end rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-zinc-900 sm:self-auto sm:min-h-0 sm:min-w-0"
+                                className="touch-target self-end rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-ring sm:self-auto sm:min-h-0 sm:min-w-0"
                                 aria-label={`Delete option ${optionIndex + 1}`}
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -1288,7 +1403,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                           <button
                             type="button"
                             onClick={() => addDropdownOption(field.id)}
-                            className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2 text-sm font-medium text-zinc-500 hover:border-zinc-400 hover:bg-white"
+                            className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-input bg-muted px-3 py-2 text-sm font-medium text-muted-foreground hover:border-foreground/30 hover:bg-card"
                           >
                             <Plus className="h-4 w-4" />
                             Add first option
@@ -1298,21 +1413,21 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                     </div>
                   )}
 
-                  <div className="border-t border-zinc-100 px-3 py-2.5">
+                  <div className="border-t border-border px-3 py-2.5">
                     <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <span className="flex items-center gap-1.5 text-xs font-medium text-zinc-500">
+                        <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                           <GitBranch className="h-3 w-3" />
                           Automation routing
                         </span>
-                        <p className="mt-0.5 text-[11px] text-zinc-400">
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
                           IF this answer matches, THEN route the created task.
                         </p>
                       </div>
                       <button
                         type="button"
                         onClick={() => addRoutingRule(field.id)}
-                        className="inline-flex h-10 items-center justify-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-900 sm:h-auto"
+                        className="inline-flex h-10 items-center justify-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-on-surface-variant hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring sm:h-auto"
                       >
                         <Plus className="h-3 w-3" />
                         Add rule
@@ -1324,23 +1439,23 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                         {field.routingRules.map((rule) => (
                           <div
                             key={rule.id}
-                            className="rounded-lg border border-zinc-100 bg-zinc-50/80 p-2"
+                            className="rounded-lg border border-border bg-muted/80 p-2"
                           >
                             <div className="mb-2 flex items-center justify-between">
-                              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
+                              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                                 IF / THEN
                               </span>
                               <button
                                 type="button"
                                 onClick={() => removeRoutingRule(field.id, rule.id)}
-                                className="touch-target rounded p-0.5 text-zinc-400 hover:text-red-600 sm:min-h-0 sm:min-w-0"
+                                className="touch-target rounded p-0.5 text-muted-foreground hover:text-red-600 sm:min-h-0 sm:min-w-0"
                                 aria-label="Delete automation rule"
                               >
                                 <X className="h-3.5 w-3.5" />
                               </button>
                             </div>
                             <div className="grid gap-2 lg:grid-cols-[auto_minmax(120px,1fr)_minmax(120px,1fr)]">
-                              <div className="flex h-8 items-center text-xs font-semibold text-zinc-500">
+                              <div className="flex h-8 items-center text-xs font-semibold text-muted-foreground">
                                 IF answer
                               </div>
                               <select
@@ -1350,7 +1465,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                                     operator: e.target.value as FormFieldCondition["operator"],
                                   })
                                 }
-                                className="h-10 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 sm:h-8"
+                                className="h-10 rounded-md border border-border bg-card px-2 text-xs text-on-surface-variant focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:h-8"
                               >
                                 {CONDITION_OPERATORS.map((op) => (
                                   <option key={op.value} value={op.value}>
@@ -1366,16 +1481,16 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                                     updateRoutingRule(field.id, rule.id, { value: e.target.value })
                                   }
                                   placeholder="Value, e.g. Fotografer"
-                                  className="h-10 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 sm:h-8"
+                                  className="h-10 rounded-md border border-border bg-card px-2 text-xs text-on-surface placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:h-8"
                                 />
                               ) : (
-                                <div className="h-10 rounded-md border border-zinc-100 bg-white px-2 py-2 text-xs text-zinc-400 sm:h-8">
+                                <div className="h-10 rounded-md border border-border bg-card px-2 py-2 text-xs text-muted-foreground sm:h-8">
                                   No value needed
                                 </div>
                               )}
                             </div>
                             <div className="mt-2 grid gap-2 lg:grid-cols-[auto_minmax(150px,1fr)_minmax(150px,1fr)]">
-                              <div className="flex h-8 items-center gap-1.5 text-xs font-semibold text-zinc-500">
+                              <div className="flex h-8 items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                                 <UserPlus className="h-3 w-3" />
                                 THEN
                               </div>
@@ -1389,7 +1504,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                                     targetUserIds: undefined,
                                   })
                                 }
-                                className="h-10 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 sm:h-8"
+                                className="h-10 rounded-md border border-border bg-card px-2 text-xs text-on-surface-variant focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:h-8"
                               >
                                 {ROUTING_ACTIONS.map((action) => (
                                   <option key={action.value} value={action.value}>
@@ -1405,7 +1520,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                                       targetTaskListId: e.target.value || undefined,
                                     })
                                   }
-                                  className="h-10 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 sm:h-8"
+                                  className="h-10 rounded-md border border-border bg-card px-2 text-xs text-on-surface-variant focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:h-8"
                                 >
                                   <option value="">Select section...</option>
                                   {taskLists.map((taskList) => (
@@ -1415,7 +1530,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                                   ))}
                                 </select>
                               ) : (
-                                <div className="rounded-md border border-zinc-200 bg-white p-2">
+                                <div className="rounded-md border border-border bg-card p-2">
                                   {projectMembers.length > 0 ? (
                                     <div className="mobile-scroll-area max-h-44 space-y-1 overflow-y-auto pr-1 sm:max-h-36">
                                       {projectMembers.map((member) => {
@@ -1427,7 +1542,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                                             key={member.userId}
                                             className={cn(
                                               "touch-target flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors sm:min-h-0",
-                                              selected ? "bg-zinc-900 text-white" : "text-zinc-700 hover:bg-zinc-50"
+                                              selected ? "bg-primary text-primary-foreground" : "text-on-surface-variant hover:bg-accent"
                                             )}
                                           >
                                             <input
@@ -1442,7 +1557,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                                                   targetUserId: undefined,
                                                 })
                                               }}
-                                              className="h-3.5 w-3.5 rounded border-zinc-300"
+                                              className="h-3.5 w-3.5 rounded border-input"
                                             />
                                             <span className="min-w-0 flex-1 truncate">
                                               {member.name}
@@ -1453,12 +1568,12 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                                       })}
                                     </div>
                                   ) : (
-                                    <p className="px-2 py-1 text-xs text-zinc-400">
+                                    <p className="px-2 py-1 text-xs text-muted-foreground">
                                       No project members yet.
                                     </p>
                                   )}
                                   {getRuleTargetUserIds(rule).length > 0 && (
-                                    <div className="mt-2 border-t border-zinc-100 pt-2 text-[11px] font-medium text-zinc-500">
+                                    <div className="mt-2 border-t border-border pt-2 text-[11px] font-medium text-muted-foreground">
                                       {getRuleTargetUserIds(rule).length} member{getRuleTargetUserIds(rule).length === 1 ? "" : "s"} selected
                                     </div>
                                   )}
@@ -1469,7 +1584,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-xs text-zinc-400">
+                      <p className="text-xs text-muted-foreground">
                         No routing rule yet. Add one to auto-move or auto-assign tasks from form answers.
                       </p>
                     )}
@@ -1477,9 +1592,9 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
 
                   {/* Condition editor */}
                   {field.showIf ? (
-                    <div className="border-t border-zinc-100 px-3 py-2.5 space-y-2">
+                    <div className="border-t border-border px-3 py-2.5 space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-1.5 text-xs font-medium text-zinc-500">
+                        <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                           <GitBranch className="h-3 w-3" />
                           Show if condition
                         </span>
@@ -1488,7 +1603,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                           onClick={() =>
                             updateField(field.id, { showIf: undefined })
                           }
-                          className="rounded p-0.5 text-zinc-400 hover:text-zinc-600"
+                          className="rounded p-0.5 text-muted-foreground hover:text-foreground"
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>
@@ -1504,7 +1619,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                               },
                             })
                           }
-                          className="h-10 min-w-0 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 sm:h-7"
+                          className="h-10 min-w-0 rounded-md border border-border bg-card px-2 text-xs text-on-surface-variant focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:h-7"
                         >
                           <option value="">Select field...</option>
                           {fields
@@ -1526,7 +1641,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                               },
                             })
                           }
-                          className="h-10 min-w-0 rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 sm:h-7"
+                          className="h-10 min-w-0 rounded-md border border-border bg-card px-2 text-xs text-on-surface-variant focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:h-7"
                         >
                           {CONDITION_OPERATORS.map((op) => (
                             <option key={op.value} value={op.value}>
@@ -1548,13 +1663,13 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                                 })
                               }
                               placeholder="Value"
-                              className="h-10 w-full rounded-md border border-zinc-200 bg-white px-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 sm:h-7 sm:w-32"
+                              className="h-10 w-full rounded-md border border-border bg-card px-2 text-xs text-on-surface placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring sm:h-7 sm:w-32"
                             />
                           )}
                       </div>
                     </div>
                   ) : (
-                    <div className="border-t border-zinc-100 px-3 py-1.5">
+                    <div className="border-t border-border px-3 py-1.5">
                       <button
                         type="button"
                         onClick={() =>
@@ -1566,7 +1681,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
                             },
                           })
                         }
-                        className="touch-target flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-600 sm:min-h-0"
+                        className="touch-target flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground sm:min-h-0"
                       >
                         <GitBranch className="h-3 w-3" />
                         Add condition
@@ -1585,7 +1700,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
       <button
         type="button"
         onClick={addField}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-300 bg-white px-3 py-2.5 text-sm font-medium text-zinc-600 hover:border-zinc-400 hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:ring-offset-2"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-input bg-card px-3 py-2.5 text-sm font-medium text-muted-foreground hover:border-foreground/30 hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
       >
         <Plus className="h-4 w-4" />
         Add Field
@@ -1602,7 +1717,7 @@ export function FormBuilder({ projectId, form, onSave }: FormBuilderProps) {
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:ring-offset-2 disabled:opacity-50 sm:w-auto"
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 sm:w-auto"
         >
           {saving ? (
             <Loader2 className="h-4 w-4 animate-spin" />

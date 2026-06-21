@@ -104,12 +104,12 @@ export function AddWidgetDialog({
                 onClick={() => onAdd(type)}
                 className={cn(
                   "touch-target flex flex-col items-start gap-2 rounded-lg border p-3 text-left transition-all hover:shadow-md sm:min-h-0",
-                  isActive && "border-border bg-zinc-50 dark:bg-zinc-900"
+                  isActive && "border-border bg-surface-container-lowest"
                 )}
               >
                 <div className="flex items-center gap-2 w-full">
-                  <div className="rounded-md bg-zinc-100 dark:bg-zinc-800 p-1.5">
-                    <Icon className="h-4 w-4 text-zinc-700 dark:text-zinc-300" />
+                  <div className="rounded-md bg-muted p-1.5">
+                    <Icon className="h-4 w-4 text-on-surface-variant" />
                   </div>
                   <span className="text-sm font-medium flex-1">{entry.title}</span>
                   {isActive && (

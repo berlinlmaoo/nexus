@@ -184,8 +184,8 @@ export function WebhooksManager() {
                     className={cn(
                       "rounded-md px-2.5 py-1 text-xs font-medium transition-colors border",
                       selectedEvents.includes(event)
-                        ? "bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100"
-                        : "bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400"
+                        ? "bg-foreground text-white border-on-surface-variant"
+                        : "bg-surface-container-lowest border-on-surface-variant hover:border-on-surface-variant"
                     )}
                   >
                     {event}
@@ -283,7 +283,7 @@ export function WebhooksManager() {
                   {webhook.events.map((event) => (
                     <span
                       key={event}
-                      className="rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-xs"
+                      className="rounded bg-muted px-1.5 py-0.5 text-xs"
                     >
                       {event}
                     </span>
@@ -295,7 +295,7 @@ export function WebhooksManager() {
                   <div className="mt-2 space-y-2 pt-2 border-t">
                     <div className="text-xs">
                       <span className="text-muted-foreground">Secret:</span>{" "}
-                      <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">
+                      <code className="bg-muted px-1 rounded">
                         {webhook.secret}
                       </code>
                     </div>

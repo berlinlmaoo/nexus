@@ -105,7 +105,7 @@ export const attendanceCorrectionSchema = z.object({
 })
 
 export const attendanceRequestCreateSchema = z.object({
-  type: z.enum(["LEAVE", "SICK", "PERMIT", "DAY_OFF"]),
+  type: z.enum(["LEAVE", "SICK", "PERMIT", "DAY_OFF", "RED_DATE"]),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid start date"),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid end date"),
   reason: z.string().min(3, "Reason is required").max(1000),
@@ -121,7 +121,7 @@ export const attendanceRequestQuerySchema = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
   userId: z.string().cuid().optional(),
   teamId: z.string().cuid().optional(),
-  type: z.enum(["LEAVE", "SICK", "PERMIT", "DAY_OFF"]).optional(),
+  type: z.enum(["LEAVE", "SICK", "PERMIT", "DAY_OFF", "RED_DATE"]).optional(),
   status: z.enum(["PENDING", "APPROVED", "REJECTED", "CANCELED"]).optional(),
 })
 
@@ -247,6 +247,27 @@ export const updateMasterCalendarEventSchema = z.object({
   endTime: z.string().nullable().optional(),
   attendeeIds: z.array(z.string().cuid()).max(50).optional(),
   location: z.string().max(300).nullable().optional(),
+  description: z.string().max(5000).nullable().optional(),
+  status: z.enum(["ACTIVE", "CANCELLED"]).optional(),
+})
+
+// ── Room bookings ───────────────────────────────────────────────
+
+export const ROOM_BOOKING_ROOMS = ["Ruang Meeting VIP", "Ruang Meeting", "Studio"] as const
+
+export const createRoomBookingSchema = z.object({
+  room: z.enum(ROOM_BOOKING_ROOMS),
+  title: z.string().min(1, "Title is required").max(300),
+  startsAt: z.string().datetime({ message: "Invalid start time" }),
+  endsAt: z.string().datetime({ message: "Invalid end time" }),
+  description: z.string().max(5000).nullable().optional(),
+})
+
+export const updateRoomBookingSchema = z.object({
+  room: z.enum(ROOM_BOOKING_ROOMS).optional(),
+  title: z.string().min(1, "Title is required").max(300).optional(),
+  startsAt: z.string().datetime({ message: "Invalid start time" }).optional(),
+  endsAt: z.string().datetime({ message: "Invalid end time" }).optional(),
   description: z.string().max(5000).nullable().optional(),
   status: z.enum(["ACTIVE", "CANCELLED"]).optional(),
 })

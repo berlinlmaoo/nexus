@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { FormBuilder, type FormField } from "@/components/forms/form-builder"
 import { FormSubmissions } from "@/components/forms/form-submissions"
+import type { FormAccessSchedule } from "@/lib/form-access-schedule"
 
 interface Form {
   id: string
@@ -26,6 +27,7 @@ interface Form {
   description: string | null
   fields: FormField[]
   isPublic: boolean
+  accessSchedule?: FormAccessSchedule | null
   createdAt: string
   _count: {
     submissions: number
@@ -122,11 +124,11 @@ export default function FormsPage() {
                 variant="ghost"
                 size="icon"
                 onClick={handleBack}
-                className="text-zinc-400 hover:text-white"
+                className="text-muted-foreground hover:text-foreground"
               >
                 <ArrowLeft className="h-5 w-5" />
               </Button>
-              <h1 className="text-xl font-semibold text-white">
+              <h1 className="text-xl font-semibold text-on-surface">
                 {isCreating ? "New Form" : selectedForm?.name}
               </h1>
               {selectedForm && (
@@ -136,7 +138,7 @@ export default function FormsPage() {
                   size="sm"
                   onClick={handleDeleteForm}
                   disabled={isDeleting}
-                  className="ml-auto border-red-500/40 bg-red-500/10 text-red-200 hover:bg-red-500/20 hover:text-red-100"
+                  className="ml-auto border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive"
                 >
                   {isDeleting ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -158,6 +160,7 @@ export default function FormsPage() {
                       description: selectedForm.description,
                       fields: selectedForm.fields,
                       isPublic: selectedForm.isPublic,
+                      accessSchedule: selectedForm.accessSchedule,
                     }
                   : undefined
               }
@@ -195,15 +198,15 @@ export default function FormsPage() {
 
             {loading ? (
               <div className="flex items-center justify-center py-20">
-                <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : forms.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
-                <ClipboardList className="h-12 w-12 mb-4 text-zinc-600" />
-                <p className="text-sm font-medium text-zinc-400">
+              <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+                <ClipboardList className="h-12 w-12 mb-4 text-muted-foreground/50" />
+                <p className="text-sm font-medium text-on-surface">
                   No forms yet
                 </p>
-                <p className="text-xs text-zinc-500 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   Create a form to start collecting responses.
                 </p>
               </div>
@@ -216,28 +219,25 @@ export default function FormsPage() {
                     whileTap={{ scale: 0.995 }}
                     onClick={() => handleSelectForm(form)}
                     className={cn(
-                      "flex items-center gap-4 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4",
-                      "cursor-pointer transition-colors hover:border-zinc-700 hover:bg-zinc-900"
+                      "flex items-center gap-4 rounded-lg border border-border bg-card p-4",
+                      "cursor-pointer transition-colors hover:border-primary/30 hover:bg-accent"
                     )}
                   >
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-zinc-800 text-zinc-400">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-surface-container-high text-on-surface-variant">
                       <FileText className="h-5 w-5" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-white truncate">
+                      <p className="text-sm font-medium text-on-surface truncate">
                         {form.name}
                       </p>
                       {form.description && (
-                        <p className="text-xs text-zinc-500 truncate mt-0.5">
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">
                           {form.description}
                         </p>
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <Badge
-                        variant="secondary"
-                        className="bg-zinc-800 text-zinc-300 border-none text-xs"
-                      >
+                      <Badge variant="secondary" className="text-xs">
                         {form._count.submissions}{" "}
                         {form._count.submissions === 1
                           ? "submission"
@@ -246,8 +246,10 @@ export default function FormsPage() {
                       <Badge
                         variant="outline"
                         className={cn(
-                          "border-zinc-700 text-xs gap-1",
-                          form.isPublic ? "text-zinc-300" : "text-zinc-500"
+                          "border-border text-xs gap-1",
+                          form.isPublic
+                            ? "text-on-surface-variant"
+                            : "text-muted-foreground"
                         )}
                       >
                         {form.isPublic ? (
@@ -257,7 +259,7 @@ export default function FormsPage() {
                         )}
                         {form.isPublic ? "Public" : "Private"}
                       </Badge>
-                      <span className="text-xs text-zinc-600 hidden sm:inline">
+                      <span className="text-xs text-muted-foreground hidden sm:inline">
                         {new Date(form.createdAt).toLocaleDateString()}
                       </span>
                     </div>

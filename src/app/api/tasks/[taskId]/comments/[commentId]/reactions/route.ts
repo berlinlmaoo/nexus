@@ -6,7 +6,7 @@ import { auth } from "@/lib/auth"
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { taskId: string; commentId: string } }
+  { params }: { params: Promise<{ taskId: string; commentId: string }> }
 ) {
   try {
     const session = await auth()
@@ -19,7 +19,7 @@ export async function POST(
     const existing = await prisma.commentReaction.findUnique({
       where: {
         commentId_userId_emoji: {
-          commentId: params.commentId,
+          commentId: (await params).commentId,
           userId: session.user.id,
           emoji,
         },
@@ -33,7 +33,7 @@ export async function POST(
 
     const reaction = await prisma.commentReaction.create({
       data: {
-        commentId: params.commentId,
+        commentId: (await params).commentId,
         userId: session.user.id,
         emoji,
       },

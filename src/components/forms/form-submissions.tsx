@@ -49,8 +49,8 @@ export function FormSubmissions({ formId, fields }: FormSubmissionsProps) {
 
   if (error) {
     return (
-      <div className="rounded-lg border border-zinc-200 p-6 text-center">
-        <p className="text-sm text-zinc-500">{error}</p>
+      <div className="rounded-lg border border-border p-6 text-center">
+        <p className="text-sm text-muted-foreground">{error}</p>
       </div>
     )
   }
@@ -61,13 +61,13 @@ export function FormSubmissions({ formId, fields }: FormSubmissionsProps) {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="flex flex-col items-center justify-center rounded-lg border border-zinc-200 py-16"
+        className="flex flex-col items-center justify-center rounded-lg border border-border py-16"
       >
-        <FileText className="h-10 w-10 text-zinc-300" />
-        <p className="mt-3 text-sm font-medium text-zinc-500">
+        <FileText className="h-10 w-10 text-muted-foreground/70" />
+        <p className="mt-3 text-sm font-medium text-muted-foreground">
           No submissions yet
         </p>
-        <p className="mt-1 text-xs text-zinc-400">
+        <p className="mt-1 text-xs text-muted-foreground">
           Submissions will appear here once the form is filled out.
         </p>
       </motion.div>
@@ -82,14 +82,14 @@ export function FormSubmissions({ formId, fields }: FormSubmissionsProps) {
       className="space-y-3"
     >
       <div className="flex items-center justify-between">
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-muted-foreground">
           {submissions.length} submission{submissions.length !== 1 ? "s" : ""}
         </p>
         <button
           type="button"
           className={cn(
             "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium",
-            "border border-zinc-200 text-zinc-600 hover:bg-zinc-50 transition-colors"
+            "border border-border text-muted-foreground hover:bg-accent transition-colors"
           )}
           onClick={() => downloadCsv(fields, submissions)}
         >
@@ -98,19 +98,19 @@ export function FormSubmissions({ formId, fields }: FormSubmissionsProps) {
         </button>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-zinc-200">
+      <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-zinc-100 bg-zinc-50/80">
+            <tr className="border-b border-border bg-muted/80">
               {fields.map((field) => (
                 <th
                   key={field.id ?? field.name}
-                  className="px-4 py-2.5 text-left text-xs font-medium text-zinc-500"
+                  className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground"
                 >
                   {field.name}
                 </th>
               ))}
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-zinc-500">
+              <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">
                 Submitted
               </th>
             </tr>
@@ -123,18 +123,18 @@ export function FormSubmissions({ formId, fields }: FormSubmissionsProps) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.2, delay: index * 0.03 }}
                 className={cn(
-                  "border-b border-zinc-100 last:border-b-0 hover:bg-zinc-50/50 transition-colors"
+                  "border-b border-border last:border-b-0 hover:bg-accent/50 transition-colors"
                 )}
               >
                 {fields.map((field) => (
                   <td
                     key={field.id ?? field.name}
-                    className="px-4 py-3 text-zinc-700"
+                    className="px-4 py-3 text-on-surface-variant"
                   >
                     {renderCellValue(submission.data[field.id] ?? submission.data[field.name])}
                   </td>
                 ))}
-                <td className="px-4 py-3 text-zinc-400 whitespace-nowrap">
+                <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                   {format(new Date(submission.createdAt), "MMM d, yyyy h:mm a")}
                 </td>
               </motion.tr>
@@ -188,8 +188,8 @@ function SubmissionsSkeleton({ fieldCount }: { fieldCount: number }) {
         <Skeleton className="h-4 w-24" />
         <Skeleton className="h-8 w-24 rounded-md" />
       </div>
-      <div className="overflow-hidden rounded-lg border border-zinc-200">
-        <div className="border-b border-zinc-100 bg-zinc-50/80 flex gap-4 px-4 py-2.5">
+      <div className="overflow-hidden rounded-lg border border-border">
+        <div className="border-b border-border bg-muted/80 flex gap-4 px-4 py-2.5">
           {Array.from({ length: fieldCount + 1 }).map((_, i) => (
             <Skeleton key={i} className="h-3 w-20" />
           ))}
@@ -197,7 +197,7 @@ function SubmissionsSkeleton({ fieldCount }: { fieldCount: number }) {
         {Array.from({ length: 4 }).map((_, row) => (
           <div
             key={row}
-            className="flex gap-4 px-4 py-3 border-b border-zinc-100 last:border-b-0"
+            className="flex gap-4 px-4 py-3 border-b border-border last:border-b-0"
           >
             {Array.from({ length: fieldCount + 1 }).map((_, i) => (
               <Skeleton key={i} className="h-4 w-24" />

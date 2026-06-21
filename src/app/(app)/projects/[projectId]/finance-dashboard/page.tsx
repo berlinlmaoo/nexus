@@ -14,12 +14,13 @@ export const metadata = { title: "Finance Dashboard | Nexus" }
 export default async function FinanceDashboardPage({
   params,
 }: {
-  params: { projectId: string }
+  params: Promise<{ projectId: string }>
 }) {
+  const { projectId } = await params
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
-  const project = await getAccessibleFinanceProject(session.user.id, params.projectId)
+  const project = await getAccessibleFinanceProject(session.user.id, projectId)
   if (!project) notFound()
 
   return (

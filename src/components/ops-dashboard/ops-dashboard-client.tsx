@@ -43,7 +43,7 @@ const priorityStyles: Record<OpsDashboardTask["priority"], string> = {
   HIGH: "bg-orange-100 text-orange-800 dark:bg-orange-950/70 dark:text-orange-200",
   MEDIUM: "bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-200",
   LOW: "bg-sky-100 text-sky-800 dark:bg-sky-950/70 dark:text-sky-200",
-  NONE: "bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300",
+  NONE: "bg-muted text-on-surface-variant",
 }
 
 function startOfToday() {
@@ -191,26 +191,26 @@ export function OpsDashboardClient({ data, viewerName }: Props) {
   }, [tasks])
 
   return (
-    <main className="min-h-screen bg-[#eef2f5] text-slate-950 dark:bg-[#090b10] dark:text-white">
+    <main className="min-h-screen bg-background text-foreground">
       <section className="mx-auto flex w-full max-w-[1500px] flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8">
-        <header className="overflow-hidden rounded-[34px] border border-white/70 bg-white/90 p-5 shadow-2xl shadow-slate-900/5 backdrop-blur dark:border-white/10 dark:bg-white/[0.06] sm:p-8">
+        <header className="overflow-hidden rounded-[34px] border border-border bg-card/90 p-5 shadow-2xl shadow-black/5 backdrop-blur sm:p-8">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-slate-950 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.24em] text-white dark:bg-white dark:text-slate-950">
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-foreground px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.24em] text-white">
                 <LayoutDashboard className="h-3.5 w-3.5" />
                 Nexus command dashboard
               </div>
               <h1 className="font-headline text-4xl font-black tracking-[-0.06em] sm:text-6xl">
                 All ongoing tasks, one clean control room.
               </h1>
-              <p className="mt-4 max-w-2xl text-sm font-semibold leading-6 text-slate-500 dark:text-white/55">
+              <p className="mt-4 max-w-2xl text-sm font-semibold leading-6 text-muted-foreground">
                 Semua project aktif digabung di satu dashboard. Overdue langsung kebaca, owner task keliatan,
                 dan tiap divisi bisa difilter tanpa masuk project satu-satu.
               </p>
             </div>
-            <div className="rounded-[26px] bg-slate-100 p-4 text-xs font-bold text-slate-500 dark:bg-white/10 dark:text-white/55">
+            <div className="rounded-[26px] bg-muted p-4 text-xs font-bold text-muted-foreground">
               <p className="uppercase tracking-[0.18em]">Viewer</p>
-              <p className="mt-1 text-lg font-black text-slate-950 dark:text-white">{viewerName}</p>
+              <p className="mt-1 text-lg font-black text-foreground">{viewerName}</p>
               <p className="mt-3">Updated {formatDate(data.generatedAt)}</p>
             </div>
           </div>
@@ -225,18 +225,18 @@ export function OpsDashboardClient({ data, viewerName }: Props) {
         </section>
 
         <section className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <div className="rounded-[30px] bg-white p-5 shadow-xl shadow-slate-900/5 dark:bg-white/[0.06]">
-            <div className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-[0.22em] text-slate-400">
+          <div className="rounded-[30px] bg-card p-5 shadow-xl shadow-black/5">
+            <div className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-[0.22em] text-muted-foreground">
               <Filter className="h-4 w-4" />
               Filters
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="relative sm:col-span-2">
-                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  className="h-12 w-full rounded-2xl border-0 bg-slate-100 pl-11 pr-4 text-sm font-bold outline-none ring-1 ring-transparent transition focus:ring-slate-950 dark:bg-white/10 dark:focus:ring-white"
+                  className="h-12 w-full rounded-2xl border-0 bg-muted pl-11 pr-4 text-sm font-bold outline-none ring-1 ring-transparent transition focus:ring-ring"
                   placeholder="Search task, project, divisi, assignee..."
                 />
               </label>
@@ -271,8 +271,8 @@ export function OpsDashboardClient({ data, viewerName }: Props) {
                   className={cn(
                     "h-11 rounded-2xl text-xs font-black uppercase tracking-[0.16em] transition",
                     dueMode === value
-                      ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950"
-                      : "bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-white/10 dark:text-white/55"
+                      ? "bg-foreground text-white"
+                      : "bg-muted text-muted-foreground hover:bg-surface-container"
                   )}
                 >
                   {label}
@@ -308,22 +308,22 @@ export function OpsDashboardClient({ data, viewerName }: Props) {
           </div>
         </section>
 
-        <section className="overflow-hidden rounded-[34px] bg-white shadow-2xl shadow-slate-900/5 dark:bg-white/[0.06]">
-          <div className="flex flex-col gap-3 border-b border-slate-100 p-5 dark:border-white/10 sm:flex-row sm:items-end sm:justify-between">
+        <section className="overflow-hidden rounded-[34px] bg-card shadow-2xl shadow-black/5">
+          <div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-slate-400">Task detail list</p>
+              <p className="text-xs font-black uppercase tracking-[0.24em] text-muted-foreground">Task detail list</p>
               <h2 className="mt-1 text-2xl font-black tracking-[-0.04em]">
                 {filteredTasks.length} task{filteredTasks.length === 1 ? "" : "s"} visible
               </h2>
             </div>
-            <p className="max-w-xl text-xs font-semibold leading-5 text-slate-500 dark:text-white/50">
+            <p className="max-w-xl text-xs font-semibold leading-5 text-muted-foreground">
               Sorting default: due date terdekat dulu, lalu update terbaru. Klik project untuk buka detail di Nexus.
             </p>
           </div>
 
           <div className="hidden overflow-x-auto lg:block">
             <table className="w-full min-w-[1100px] border-collapse text-left">
-              <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:bg-white/[0.04]">
+              <thead className="bg-muted/50 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
                 <tr>
                   <th className="px-5 py-4">Task</th>
                   <th className="px-5 py-4">Division / Project</th>
@@ -334,7 +334,7 @@ export function OpsDashboardClient({ data, viewerName }: Props) {
                   <th className="px-5 py-4">Due date</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-white/10">
+              <tbody className="divide-y divide-border">
                 {filteredTasks.map((task) => (
                   <TaskTableRow key={task.id} task={task} />
                 ))}
@@ -351,7 +351,7 @@ export function OpsDashboardClient({ data, viewerName }: Props) {
           {filteredTasks.length === 0 && (
             <div className="p-12 text-center">
               <p className="text-lg font-black">No task matched this filter.</p>
-              <p className="mt-2 text-sm font-semibold text-slate-500">Coba clear filter atau search keyword lain.</p>
+              <p className="mt-2 text-sm font-semibold text-muted-foreground">Coba clear filter atau search keyword lain.</p>
             </div>
           )}
         </section>
@@ -374,12 +374,12 @@ function MetricCard({
   return (
     <div
       className={cn(
-        "rounded-[28px] p-5 shadow-xl shadow-slate-900/5",
+        "rounded-[28px] p-5 shadow-xl shadow-black/5",
         tone === "danger"
           ? "bg-red-500 text-white"
           : tone === "warning"
-            ? "bg-amber-300 text-slate-950"
-            : "bg-white text-slate-950 dark:bg-white/[0.06] dark:text-white"
+            ? "bg-amber-300 text-amber-950"
+            : "bg-card text-foreground"
       )}
     >
       <Icon className="h-5 w-5" />
@@ -404,11 +404,11 @@ function FilterSelect({
 }) {
   return (
     <label className="grid gap-1.5">
-      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{label}</span>
+      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-11 rounded-2xl border-0 bg-slate-100 px-3 text-xs font-black outline-none ring-1 ring-transparent transition focus:ring-slate-950 dark:bg-white/10 dark:focus:ring-white"
+        className="h-11 rounded-2xl border-0 bg-muted px-3 text-xs font-black outline-none ring-1 ring-transparent transition focus:ring-ring"
       >
         <option value="ALL">All</option>
         {options.map((option) => (
@@ -423,8 +423,8 @@ function FilterSelect({
 
 function SummaryPanel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-[30px] bg-white p-5 shadow-xl shadow-slate-900/5 dark:bg-white/[0.06]">
-      <p className="mb-4 text-xs font-black uppercase tracking-[0.22em] text-slate-400">{title}</p>
+    <div className="rounded-[30px] bg-card p-5 shadow-xl shadow-black/5">
+      <p className="mb-4 text-xs font-black uppercase tracking-[0.22em] text-muted-foreground">{title}</p>
       <div className="grid gap-2">{children}</div>
     </div>
   )
@@ -444,14 +444,14 @@ function SummaryRow({
   color?: string
 }) {
   return (
-    <div className="rounded-2xl bg-slate-100 p-3 dark:bg-white/10">
+    <div className="rounded-2xl bg-muted p-3">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-black">
             {color && <span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />}
             {title}
           </p>
-          <p className="mt-1 truncate text-[11px] font-semibold text-slate-500 dark:text-white/45">{meta}</p>
+          <p className="mt-1 truncate text-[11px] font-semibold text-muted-foreground">{meta}</p>
         </div>
         <div className="text-right">
           <p className="text-xs font-black">{value}</p>
@@ -473,12 +473,12 @@ function TaskTableRow({ task }: { task: OpsDashboardTask }) {
           <span className="mt-1 h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: task.project.color }} />
           <div className="min-w-0">
             <p className="truncate font-black">{task.title}</p>
-            <p className="mt-1 text-[11px] font-bold text-slate-400">Updated {formatDate(task.updatedAt)}</p>
+            <p className="mt-1 text-[11px] font-bold text-muted-foreground">Updated {formatDate(task.updatedAt)}</p>
           </div>
         </div>
       </td>
       <td className="px-5 py-4">
-        <p className="text-xs font-black text-slate-400">{task.project.division}</p>
+        <p className="text-xs font-black text-muted-foreground">{task.project.division}</p>
         <Link
           href={`/projects/${task.project.id}`}
           className="inline-flex items-center gap-1 font-black hover:underline"
@@ -487,12 +487,12 @@ function TaskTableRow({ task }: { task: OpsDashboardTask }) {
           <ArrowUpRight className="h-3.5 w-3.5" />
         </Link>
       </td>
-      <td className="px-5 py-4 text-slate-500 dark:text-white/55">{task.taskListName}</td>
+      <td className="px-5 py-4 text-muted-foreground">{task.taskListName}</td>
       <td className="px-5 py-4">
         <AssigneeStack assignees={task.assignees} />
       </td>
       <td className="px-5 py-4">
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] dark:bg-white/10">
+        <span className="rounded-full bg-muted px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em]">
           {STATUS_LABELS[task.status]}
         </span>
       </td>
@@ -502,7 +502,7 @@ function TaskTableRow({ task }: { task: OpsDashboardTask }) {
         </span>
       </td>
       <td className="px-5 py-4">
-        <div className={cn("inline-flex items-center gap-2 rounded-2xl px-3 py-2", overdue ? "bg-red-500 text-white" : "bg-slate-100 dark:bg-white/10")}>
+        <div className={cn("inline-flex items-center gap-2 rounded-2xl px-3 py-2", overdue ? "bg-red-500 text-white" : "bg-muted")}>
           <Clock3 className="h-3.5 w-3.5" />
           <div>
             <p className="text-xs font-black">{formatDate(task.dueDate)}</p>
@@ -517,12 +517,12 @@ function TaskTableRow({ task }: { task: OpsDashboardTask }) {
 function TaskMobileCard({ task }: { task: OpsDashboardTask }) {
   const overdue = isOverdue(task)
   return (
-    <article className={cn("rounded-[26px] p-4", overdue ? "bg-red-50 dark:bg-red-950/25" : "bg-slate-100 dark:bg-white/10")}>
+    <article className={cn("rounded-[26px] p-4", overdue ? "bg-red-50 dark:bg-red-950/25" : "bg-muted")}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">{task.project.division}</p>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-muted-foreground">{task.project.division}</p>
           <h3 className="mt-1 text-lg font-black leading-tight">{task.title}</h3>
-          <Link href={`/projects/${task.project.id}`} className="mt-2 inline-flex items-center gap-1 text-xs font-black text-slate-500">
+          <Link href={`/projects/${task.project.id}`} className="mt-2 inline-flex items-center gap-1 text-xs font-black text-muted-foreground">
             {task.project.name}
             <ArrowUpRight className="h-3.5 w-3.5" />
           </Link>
@@ -530,13 +530,13 @@ function TaskMobileCard({ task }: { task: OpsDashboardTask }) {
         <span className="h-4 w-4 shrink-0 rounded-full" style={{ backgroundColor: task.project.color }} />
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
-        <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slate-600 dark:bg-white/10 dark:text-white">
+        <span className="rounded-full bg-card px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-on-surface-variant">
           {STATUS_LABELS[task.status]}
         </span>
         <span className={cn("rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em]", priorityStyles[task.priority])}>
           {PRIORITY_LABELS[task.priority]}
         </span>
-        <span className={cn("rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em]", overdue ? "bg-red-500 text-white" : "bg-white text-slate-600 dark:bg-white/10 dark:text-white")}>
+        <span className={cn("rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em]", overdue ? "bg-red-500 text-white" : "bg-card text-on-surface-variant")}>
           {overdue ? `${overdueDays(task.dueDate)} days late` : formatDate(task.dueDate)}
         </span>
       </div>
@@ -549,21 +549,21 @@ function TaskMobileCard({ task }: { task: OpsDashboardTask }) {
 
 function AssigneeStack({ assignees }: { assignees: OpsDashboardTask["assignees"] }) {
   if (assignees.length === 0) {
-    return <span className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Unassigned</span>
+    return <span className="text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">Unassigned</span>
   }
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       {assignees.slice(0, 3).map((assignee) => (
-        <span key={assignee.id} className="inline-flex items-center gap-2 rounded-full bg-slate-100 py-1 pl-1 pr-3 text-xs font-black dark:bg-white/10">
-          <span className="grid h-7 w-7 place-items-center rounded-full bg-slate-950 text-[10px] text-white dark:bg-white dark:text-slate-950">
+        <span key={assignee.id} className="inline-flex items-center gap-2 rounded-full bg-muted py-1 pl-1 pr-3 text-xs font-black">
+          <span className="grid h-7 w-7 place-items-center rounded-full bg-foreground text-[10px] text-white">
             {initials(assignee.name)}
           </span>
           {assignee.name}
         </span>
       ))}
       {assignees.length > 3 && (
-        <span className="rounded-full bg-slate-100 px-3 py-2 text-xs font-black dark:bg-white/10">+{assignees.length - 3}</span>
+        <span className="rounded-full bg-muted px-3 py-2 text-xs font-black">+{assignees.length - 3}</span>
       )}
     </div>
   )

@@ -15,7 +15,7 @@ export async function GET() {
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { id: true, name: true, email: true, avatar: true, phoneNumber: true, dndUntil: true },
+      select: { id: true, name: true, email: true, avatar: true, phoneNumber: true, dndUntil: true, onboardedAt: true },
     })
 
     if (!user) {
@@ -40,11 +40,14 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, phoneNumber, dndUntil } = body
+    const { name, phoneNumber, dndUntil, markOnboarded } = body
 
-    const data: { name?: string; phoneNumber?: string | null; dndUntil?: Date | null } = {}
+    const data: { name?: string; phoneNumber?: string | null; dndUntil?: Date | null; onboardedAt?: Date } = {}
     if (typeof name === "string" && name.trim()) {
       data.name = name.trim()
+    }
+    if (markOnboarded === true) {
+      data.onboardedAt = new Date()
     }
     if (phoneNumber !== undefined) {
       if (phoneNumber === null || phoneNumber === "") {
@@ -72,7 +75,7 @@ export async function PATCH(request: NextRequest) {
     const user = await prisma.user.update({
       where: { id: session.user.id },
       data,
-      select: { id: true, name: true, email: true, avatar: true, phoneNumber: true, dndUntil: true },
+      select: { id: true, name: true, email: true, avatar: true, phoneNumber: true, dndUntil: true, onboardedAt: true },
     })
 
     logAudit({ action: "update", entityType: "user_profile", entityId: session.user.id, userId: session.user.id, request })

@@ -69,7 +69,8 @@ function statusVariant(status: "CHECKED_IN" | "COMPLETED" | "INCOMPLETE") {
   return "warning" as const
 }
 
-function shiftSourceLabel(source: "OFFICE" | "TEAM") {
+function shiftSourceLabel(source: "OFFICE" | "TEAM" | "USER") {
+  if (source === "USER") return "Personal Shift"
   return source === "TEAM" ? "Team Shift Override" : "Office Default Shift"
 }
 
@@ -157,8 +158,9 @@ function AttendanceEventSection({
 export default async function AttendanceRecordDetailPage({
   params,
 }: {
-  params: { recordId: string }
+  params: Promise<{ recordId: string }>
 }) {
+  const { recordId } = await params
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
 
@@ -166,7 +168,7 @@ export default async function AttendanceRecordDetailPage({
   if (!context.workspace || !context.user) redirect("/attendance")
 
   const record = await prisma.attendanceRecord.findUnique({
-    where: { id: params.recordId },
+    where: { id: recordId },
     include: {
       officeLocation: true,
       user: {

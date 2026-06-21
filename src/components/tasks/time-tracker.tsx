@@ -84,7 +84,7 @@ export function TimeTracker({ taskId }: TimeTrackerProps) {
       <span className="text-xs text-muted-foreground">{formatTotal(totalTime)}</span>
       {running ? (
         <>
-          <span className="text-xs font-mono text-zinc-800">{formatTime(elapsed)}</span>
+          <span className="text-xs font-mono text-foreground">{formatTime(elapsed)}</span>
           <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500" onClick={stop}>
             <Square className="h-3 w-3" />
           </Button>

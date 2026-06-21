@@ -1,13 +1,14 @@
 import type { Metadata, Viewport } from "next"
-import { Manrope, Inter } from "next/font/google"
+import { Plus_Jakarta_Sans, Inter } from "next/font/google"
+import { HeroUIProvider } from "@/components/providers/heroui-provider"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { ThemeProvider } from "@/components/layout/theme-provider"
 import { Toaster } from "sonner"
 import "./globals.css"
 
-const manrope = Manrope({
+const plusJakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
-  variable: "--font-manrope",
+  variable: "--font-plus-jakarta",
   weight: ["400", "500", "600", "700", "800"],
 })
 
@@ -76,37 +77,39 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${manrope.variable} ${inter.variable}`}
+      className={`${plusJakarta.variable} ${inter.variable}`}
       suppressHydrationWarning
     >
       <body className="font-body antialiased bg-background text-foreground">
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <ThemeProvider>
-          <TooltipProvider delayDuration={200}>
-            {children}
-            <Toaster 
-              position="bottom-right"
-              mobileOffset={{
-                bottom: "calc(5.75rem + env(safe-area-inset-bottom))",
-                left: "0.75rem",
-                right: "0.75rem",
-              }}
-              offset={{ bottom: "1.5rem", right: "1.5rem" }}
-              expand={false}
-              visibleToasts={5}
-              richColors 
-              closeButton
-              toastOptions={{
-                className: "bg-surface-container-highest border-none rounded-[20px] shadow-2xl shadow-primary/10 p-4 font-headline",
-                classNames: {
-                  title: "font-black uppercase tracking-widest text-[11px] text-primary",
-                  description: "text-xs font-medium text-on-surface-variant/60",
-                  actionButton: "bg-primary text-primary-foreground rounded-xl font-black uppercase tracking-widest text-[9px]",
-                  cancelButton: "bg-surface-container-low text-on-surface-variant/40 rounded-xl font-black uppercase tracking-widest text-[9px]",
-                }
-              }}
-            />
-          </TooltipProvider>
+          <HeroUIProvider>
+            <TooltipProvider delayDuration={200}>
+              {children}
+              <Toaster 
+                position="bottom-right"
+                mobileOffset={{
+                  bottom: "calc(5.75rem + env(safe-area-inset-bottom))",
+                  left: "0.75rem",
+                  right: "0.75rem",
+                }}
+                offset={{ bottom: "1.5rem", right: "1.5rem" }}
+                expand={false}
+                visibleToasts={5}
+                richColors 
+                closeButton
+                toastOptions={{
+                  className: "bg-surface-container-highest border-none rounded-[20px] shadow-2xl shadow-primary/10 p-4 font-headline",
+                  classNames: {
+                    title: "font-black uppercase tracking-widest text-[11px] text-primary",
+                    description: "text-xs font-medium text-on-surface-variant/60",
+                    actionButton: "bg-primary text-primary-foreground rounded-xl font-black uppercase tracking-widest text-[9px]",
+                    cancelButton: "bg-surface-container-low text-on-surface-variant/40 rounded-xl font-black uppercase tracking-widest text-[9px]",
+                  }
+                }}
+              />
+            </TooltipProvider>
+          </HeroUIProvider>
         </ThemeProvider>
       </body>
     </html>

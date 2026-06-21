@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { FormEvent, useEffect, useRef, useState } from "react"
+import { FormEvent, useEffect, useId, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
@@ -46,7 +46,7 @@ export function LoginForm() {
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [hasShownStatusToast, setHasShownStatusToast] = useState(false)
-  const [fieldNonce] = useState(() => Math.random().toString(36).slice(2, 10))
+  const fieldNonce = useId().replace(/:/g, "")
 
   // ── Field-level error state (replaces react-hook-form error display) ──
   const [emailError, setEmailError] = useState<string | null>(null)

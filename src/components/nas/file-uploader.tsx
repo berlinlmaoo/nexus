@@ -145,8 +145,8 @@ export function FileUploader({
         className={cn(
           "border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors",
           dragOver
-            ? "border-zinc-400 bg-zinc-100"
-            : "border-zinc-300 hover:border-zinc-400"
+            ? "border-on-surface-variant bg-muted"
+            : "border-on-surface-variant hover:border-on-surface-variant"
         )}
       >
         <input
@@ -159,7 +159,7 @@ export function FileUploader({
             if (fileInputRef.current) fileInputRef.current.value = ""
           }}
         />
-        <Upload className="h-6 w-6 text-zinc-400 mx-auto mb-2" />
+        <Upload className="h-6 w-6 text-muted-foreground mx-auto mb-2" />
         <p className="text-xs text-muted-foreground">
           Drop files here or click to browse
         </p>
@@ -182,21 +182,21 @@ export function FileUploader({
               className="flex items-center gap-2 rounded-md border px-3 py-2 text-xs"
             >
               {item.status === "uploading" ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400 shrink-0" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground shrink-0" />
               ) : item.status === "done" ? (
                 <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />
               ) : item.status === "error" ? (
                 <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
               ) : (
-                <File className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
+                <File className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               )}
 
               <div className="flex-1 min-w-0">
                 <p className="truncate font-medium">{item.file.name}</p>
                 {item.status === "uploading" && (
-                  <div className="mt-1 h-1 bg-zinc-100 rounded-full overflow-hidden">
+                  <div className="mt-1 h-1 bg-muted rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-zinc-900 rounded-full transition-all duration-300"
+                      className="h-full bg-foreground rounded-full transition-all duration-300"
                       style={{ width: `${item.progress}%` }}
                     />
                   </div>

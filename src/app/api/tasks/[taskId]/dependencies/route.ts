@@ -5,16 +5,16 @@ import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
 
-export async function GET(req: NextRequest, { params }: { params: { taskId: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ taskId: string }> }) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const dependencies = await prisma.taskDependency.findMany({
-      where: { taskId: params.taskId },
+      where: { taskId: (await params).taskId },
       include: { dependsOnTask: { select: { id: true, title: true, status: true } } },
     })
     const dependedOnBy = await prisma.taskDependency.findMany({
-      where: { dependsOnTaskId: params.taskId },
+      where: { dependsOnTaskId: (await params).taskId },
       include: { task: { select: { id: true, title: true, status: true } } },
     })
     return NextResponse.json({ dependencies, dependedOnBy })
@@ -24,18 +24,18 @@ export async function GET(req: NextRequest, { params }: { params: { taskId: stri
   }
 }
 
-export async function POST(req: NextRequest, { params }: { params: { taskId: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ taskId: string }> }) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const { dependsOnTaskId, type } = await req.json()
     if (!dependsOnTaskId) return NextResponse.json({ error: 'dependsOnTaskId required' }, { status: 400 })
     const dep = await prisma.taskDependency.create({
-      data: { taskId: params.taskId, dependsOnTaskId, type: type || 'BLOCKING' },
+      data: { taskId: (await params).taskId, dependsOnTaskId, type: type || 'BLOCKING' },
       include: { dependsOnTask: { select: { id: true, title: true, status: true } } },
     })
 
-    logAudit({ action: "create", entityType: "task_dependency", entityId: dep.id, userId: session.user.id, request: req, metadata: { taskId: params.taskId, dependsOnTaskId } })
+    logAudit({ action: "create", entityType: "task_dependency", entityId: dep.id, userId: session.user.id, request: req, metadata: { taskId: (await params).taskId, dependsOnTaskId } })
 
     return NextResponse.json({ dependency: dep }, { status: 201 })
   } catch (error) {

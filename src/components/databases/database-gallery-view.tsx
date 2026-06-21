@@ -46,7 +46,7 @@ export function DatabaseGalleryView({
           <div
             className={cn(
               "h-24 bg-gradient-to-br flex items-end p-3",
-              item.coverColor || "from-zinc-100 to-zinc-50"
+              item.coverColor || "from-muted to-surface-container-lowest"
             )}
             style={item.coverImage ? { backgroundImage: `url(${item.coverImage})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
           >

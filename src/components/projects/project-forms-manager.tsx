@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { FormBuilder, type FormField } from "@/components/forms/form-builder"
 import { FormSubmissions } from "@/components/forms/form-submissions"
+import type { FormAccessSchedule } from "@/lib/form-access-schedule"
 
 interface ProjectForm {
   id: string
@@ -16,6 +17,7 @@ interface ProjectForm {
   description: string | null
   fields: FormField[]
   isPublic: boolean
+  accessSchedule?: FormAccessSchedule | null
   createdAt: string
   _count?: {
     submissions: number
@@ -157,6 +159,7 @@ export function ProjectFormsManager({ projectId }: { projectId: string }) {
                   description: selectedForm.description,
                   fields: selectedForm.fields,
                   isPublic: selectedForm.isPublic,
+                  accessSchedule: selectedForm.accessSchedule,
                 }
               : undefined
           }
@@ -181,7 +184,7 @@ export function ProjectFormsManager({ projectId }: { projectId: string }) {
             <p className="text-sm font-semibold text-foreground">Task intake forms</p>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            Build Google Form-style intake forms that create tasks and fill this project's custom fields automatically.
+            Build Google Form-style intake forms that create tasks and fill this project&apos;s custom fields automatically.
           </p>
         </div>
         <Button

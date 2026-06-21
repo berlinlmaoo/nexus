@@ -18,7 +18,7 @@ async function getWorkspaceAndRole(userId: string, workspaceId?: string) {
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { memberId: string } }
+  { params }: { params: Promise<{ memberId: string }> }
 ) {
   try {
     const session = await auth()
@@ -34,7 +34,7 @@ export async function PATCH(
     }
 
     const targetMember = await prisma.workspaceMember.findUnique({
-      where: { id: params.memberId },
+      where: { id: (await params).memberId },
       include: {
         user: {
           select: { id: true, name: true, email: true, avatar: true },
@@ -51,7 +51,7 @@ export async function PATCH(
       return NextResponse.json({ error: "No workspace found" }, { status: 404 })
     }
 
-    if (currentMember.role !== "OWNER" && currentMember.role !== "ADMIN") {
+    if (currentMember.role !== "BOD" && currentMember.role !== "MANAGER" && currentMember.role !== "ONE_ABOVE_ALL") {
       return NextResponse.json({ error: "Only owners and admins can edit operatives" }, { status: 403 })
     }
 
@@ -69,7 +69,7 @@ export async function PATCH(
     await logAudit({
       action: "update",
       entityType: "workspace_member_profile",
-      entityId: params.memberId,
+      entityId: (await params).memberId,
       entityName: updatedUser.email,
       userId: session.user.id,
       request,

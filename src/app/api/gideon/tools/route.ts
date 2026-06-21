@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { authenticateGideonService } from '@/lib/gideon-service-auth'
+import { checkProjectAccess } from '@/lib/rbac'
 import { notifyCommentAdded, notifyTaskAssigned, notifyTaskCompleted } from '@/lib/notification-service'
 import { normalizeCustomFieldNumberInput, normalizeCustomFieldOptions, normalizeCustomFieldType, serializeCustomFieldValue } from '@/lib/custom-fields'
 import { resolveAutoAssignAssigneeIds } from '@/lib/project-auto-assign'
@@ -96,7 +97,7 @@ function actorScopedProjectWhere(actor: Pick<User, 'id' | 'role'>, input: Record
   if (actor.role !== 'ADMIN') {
     where.OR = [
       { members: { some: { userId: actor.id } } },
-      { workspace: { members: { some: { userId: actor.id, role: { in: ['OWNER', 'ADMIN'] } } } } },
+      { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD', 'MANAGER'] } } } } },
     ]
   }
 
@@ -120,7 +121,7 @@ function actorScopedTaskWhere(actor: Pick<User, 'id' | 'role'>, input: Record<st
     taskListWhere.project = {
       OR: [
         { members: { some: { userId: actor.id } } },
-        { workspace: { members: { some: { userId: actor.id, role: { in: ['OWNER', 'ADMIN'] } } } } },
+        { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD', 'MANAGER'] } } } } },
       ],
     }
   }
@@ -240,7 +241,7 @@ async function listMembers(actor: User, input: Record<string, unknown>) {
               project: {
                 OR: [
                   { members: { some: { userId: actor.id } } },
-                  { workspace: { members: { some: { userId: actor.id, role: { in: ['OWNER', 'ADMIN'] } } } } },
+                  { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD', 'MANAGER'] } } } } },
                 ],
               },
             }),
@@ -255,7 +256,7 @@ async function listMembers(actor: User, input: Record<string, unknown>) {
   const members = await prisma.workspaceMember.findMany({
     where: {
       ...(workspaceId ? { workspaceId } : {}),
-      ...(actor.role === 'ADMIN' ? {} : { workspace: { members: { some: { userId: actor.id, role: { in: ['OWNER', 'ADMIN'] } } } } }),
+      ...(actor.role === 'ADMIN' ? {} : { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD', 'MANAGER'] } } } } }),
     },
     select: { role: true, user: { select: { id: true, name: true, email: true, avatar: true } }, workspace: { select: { id: true, name: true, slug: true } } },
     orderBy: { joinedAt: 'asc' },
@@ -308,7 +309,7 @@ async function getProjectSummary(actor: User, input: Record<string, unknown>) {
         : {
             OR: [
               { members: { some: { userId: actor.id } } },
-              { workspace: { members: { some: { userId: actor.id, role: { in: ['OWNER', 'ADMIN'] } } } } },
+              { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD', 'MANAGER'] } } } } },
             ],
           }),
     },
@@ -353,7 +354,7 @@ async function getAccessibleProject(actor: User, projectId: string) {
         : {
             OR: [
               { members: { some: { userId: actor.id } } },
-              { workspace: { members: { some: { userId: actor.id, role: { in: ['OWNER', 'ADMIN'] } } } } },
+              { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD', 'MANAGER'] } } } } },
             ],
           }),
     },
@@ -361,6 +362,14 @@ async function getAccessibleProject(actor: User, projectId: string) {
   })
   if (!project) throw new Error('Project not found or not accessible')
   return project
+}
+
+// Web-parity WRITE gate: a user may create/update tasks + comment via Gideon only where they could on
+// the web — project MEMBER+ (LEAD/MEMBER), workspace BoD/Manager/One-Above-All, or system ADMIN. VIEWERs
+// and non-members stay read-only. (ADMIN/workspace-admin short-circuit inside checkProjectAccess.)
+async function assertCanWrite(actor: User, projectId: string) {
+  const { allowed } = await checkProjectAccess(actor.id, projectId, ['MEMBER'])
+  if (!allowed) throw new Error('Kamu gak punya akses buat bikin/ubah di project ini lewat Gideon.')
 }
 
 async function getAccessibleTask(actor: User, taskId: string) {
@@ -387,7 +396,7 @@ async function resolveTaskList(actor: User, input: Record<string, unknown>, stat
               project: {
                 OR: [
                   { members: { some: { userId: actor.id } } },
-                  { workspace: { members: { some: { userId: actor.id, role: { in: ['OWNER', 'ADMIN'] } } } } },
+                  { workspace: { members: { some: { userId: actor.id, role: { in: ['ONE_ABOVE_ALL', 'BOD', 'MANAGER'] } } } } },
                 ],
               },
             }),
@@ -563,6 +572,7 @@ async function createTask(actor: User, input: Record<string, unknown>) {
   const dueDate = asDate(input.dueDate)
   const requestedAssigneeIds = asStringArray(input.assigneeIds)
   const taskList = await resolveTaskList(actor, input, status)
+  await assertCanWrite(actor, taskList.projectId)
   const assigneeIds = resolveAutoAssignAssigneeIds({
     requestedAssigneeIds,
     autoAssignEnabled: taskList.project.autoAssignEnabled,
@@ -621,6 +631,7 @@ async function updateTask(actor: User, input: Record<string, unknown>) {
   const taskId = asString(input.taskId)
   if (!taskId) throw new Error('taskId is required')
   const existing = await getAccessibleTask(actor, taskId)
+  await assertCanWrite(actor, existing.taskList.projectId)
 
   const data: Prisma.TaskUpdateInput = {}
   const title = asString(input.title)
@@ -699,6 +710,7 @@ async function addTaskComment(actor: User, input: Record<string, unknown>) {
   if (!taskId) throw new Error('taskId is required')
   if (!content) throw new Error('content is required')
   const task = await getAccessibleTask(actor, taskId)
+  await assertCanWrite(actor, task.taskList.projectId)
 
   const comment = await prisma.comment.create({
     data: { taskId, userId: actor.id, content },

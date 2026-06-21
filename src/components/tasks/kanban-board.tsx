@@ -17,9 +17,9 @@ const COLUMNS: {
   label: string
   color: string
 }[] = [
-  { id: "TODO", label: "To Do", color: "bg-zinc-400" },
-  { id: "IN_PROGRESS", label: "In Progress", color: "bg-zinc-600" },
-  { id: "IN_REVIEW", label: "In Review", color: "bg-zinc-800" },
+  { id: "TODO", label: "To Do", color: "bg-surface-container-high" },
+  { id: "IN_PROGRESS", label: "In Progress", color: "bg-on-surface-variant" },
+  { id: "IN_REVIEW", label: "In Review", color: "bg-foreground" },
   { id: "DONE", label: "Done", color: "bg-green-500" },
 ]
 

@@ -1,91 +1,92 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@config "../../tailwind.config.ts";
+@import "@heroui/react/styles";
 
 @layer base {
   :root {
-    --background: 210 20% 98%; /* #f7f9fb */
-    --foreground: 200 10% 10%;
-    --card: 0 0% 100%;
-    --card-foreground: 200 10% 10%;
+    /* ClickUp palette — light. Canvas white, midnight-charcoal text, onyx CTA, violet+blue accents */
+    --background: 223 30% 98%; /* faint hint-of-sky canvas */
+    --foreground: 219 12% 18%; /* midnight charcoal #292d34 */
+    --card: 0 0% 100%; /* canvas white */
+    --card-foreground: 219 12% 18%;
     --popover: 0 0% 100%;
-    --popover-foreground: 200 10% 10%;
-    --primary: 222 53% 10%; /* #0c1427 */
-    --primary-foreground: 210 40% 98%;
-    --secondary: 218 19% 39%; /* #505f76 */
-    --secondary-foreground: 210 40% 98%;
-    --muted: 210 10% 93%; /* surface-container */
-    --muted-foreground: 215 5% 29%; /* on-surface-variant */
-    --accent: 210 10% 96%; /* surface-container-low */
-    --accent-foreground: 222 53% 10%;
-    --destructive: 0 75% 42%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 210 10% 90% / 0.5; /* Subtle ghost border */
-    --input: 210 10% 90% / 0.5;
-    --ring: 222 53% 10%;
+    --popover-foreground: 219 12% 18%;
+    --primary: 240 6% 13%; /* dark onyx #202023 — filled CTA */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 223 19% 93%; /* hint of sky #e9ebf0 */
+    --secondary-foreground: 219 12% 18%;
+    --muted: 223 19% 95%;
+    --muted-foreground: 220 7% 42%; /* charcoal gray, readable muted */
+    --accent: 223 24% 95%; /* neutral hover surface */
+    --accent-foreground: 219 12% 18%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%; /* ash gray #e8e8e8 */
+    --input: 220 13% 89%;
+    --ring: 249 80% 67%; /* deep violet #7b68ee focus */
     --radius: 0.75rem;
 
-    --primary-container: 222 29% 18%;
-    --primary-on-container: 226 15% 59%;
-    --surface: 210 20% 98%;
-    --surface-variant: 200 8% 89%;
-    --surface-dim: 210 4% 85%;
-    --surface-bright: 210 20% 98%;
+    --primary-container: 249 100% 96%; /* violet tint */
+    --primary-on-container: 249 55% 48%;
+    --surface: 0 0% 100%;
+    --surface-variant: 223 19% 93%;
+    --surface-dim: 223 16% 92%;
+    --surface-bright: 0 0% 100%;
     --surface-container-lowest: 0 0% 100%;
-    --surface-container-low: 210 18% 96%;
-    --surface-container: 210 12% 93%;
-    --surface-container-high: 210 9% 91%;
-    --surface-container-highest: 200 8% 89%;
-    --on-surface: 200 10% 10%;
-    --on-surface-variant: 220 5% 28%;
-    --secondary-new: 216 19% 39%;
-    --secondary-new-container: 211 78% 90%;
-    --secondary-new-on-container: 216 18% 40%;
-    --tertiary-new: 203 100% 7%;
-    --tertiary-new-container: 200 100% 13%;
-    --tertiary-new-on-container: 198 100% 43%;
+    --surface-container-low: 223 30% 98%;
+    --surface-container: 223 24% 96%;
+    --surface-container-high: 223 20% 94%;
+    --surface-container-highest: 223 18% 91%;
+    --on-surface: 219 12% 18%;
+    --on-surface-variant: 220 7% 42%;
+    --secondary-new: 249 80% 67%; /* deep violet accent */
+    --secondary-new-container: 249 100% 96%;
+    --secondary-new-on-container: 249 55% 48%;
+    --tertiary-new: 206 100% 50%; /* electric blue #0091ff accent */
+    --tertiary-new-container: 204 100% 95%;
+    --tertiary-new-on-container: 206 90% 38%;
   }
 
   .dark {
-    --background: 222 35% 6%;
-    --foreground: 210 32% 96%;
-    --card: 222 32% 10%;
-    --card-foreground: 210 32% 96%;
-    --popover: 222 32% 10%;
-    --popover-foreground: 210 32% 96%;
-    --primary: 210 32% 96%;
-    --primary-foreground: 222 35% 7%;
-    --secondary: 215 20% 68%;
-    --secondary-foreground: 222 35% 7%;
-    --muted: 222 28% 15%;
-    --muted-foreground: 217 16% 72%;
-    --accent: 222 28% 16%;
-    --accent-foreground: 210 32% 96%;
-    --destructive: 0 62% 30%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 220 22% 24% / 0.58;
-    --input: 220 22% 24% / 0.72;
-    --ring: 210 40% 98%;
+    /* ClickUp palette — derived dark. Deep charcoal surfaces, violet+blue accents preserved */
+    --background: 228 18% 9%;
+    --foreground: 220 14% 92%;
+    --card: 222 16% 12%;
+    --card-foreground: 220 14% 92%;
+    --popover: 222 16% 12%;
+    --popover-foreground: 220 14% 92%;
+    --primary: 220 14% 92%; /* light filled CTA in dark */
+    --primary-foreground: 228 18% 10%;
+    --secondary: 222 14% 18%;
+    --secondary-foreground: 220 14% 92%;
+    --muted: 222 14% 16%;
+    --muted-foreground: 220 10% 64%;
+    --accent: 222 14% 18%;
+    --accent-foreground: 220 14% 92%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 12% 22%;
+    --input: 220 12% 24%;
+    --ring: 249 80% 70%; /* violet focus */
 
-    --primary-container: 214 30% 92%;
-    --primary-on-container: 222 20% 17%;
-    --surface: 222 35% 6%;
-    --surface-variant: 220 24% 20%;
-    --surface-dim: 222 35% 5%;
-    --surface-bright: 220 22% 16%;
-    --surface-container-lowest: 224 42% 8%;
-    --surface-container-low: 223 35% 10%;
-    --surface-container: 222 32% 12%;
-    --surface-container-high: 221 28% 16%;
-    --surface-container-highest: 220 24% 20%;
-    --on-surface: 210 32% 96%;
-    --on-surface-variant: 217 16% 72%;
-    --secondary-new: 214 23% 72%;
-    --secondary-new-container: 218 25% 18%;
-    --secondary-new-on-container: 214 35% 88%;
-    --tertiary-new: 198 100% 78%;
-    --tertiary-new-container: 202 70% 18%;
-    --tertiary-new-on-container: 197 100% 84%;
+    --primary-container: 249 38% 22%;
+    --primary-on-container: 249 95% 90%;
+    --surface: 228 18% 9%;
+    --surface-variant: 222 14% 20%;
+    --surface-dim: 228 20% 7%;
+    --surface-bright: 222 14% 16%;
+    --surface-container-lowest: 228 22% 7%;
+    --surface-container-low: 226 18% 10%;
+    --surface-container: 222 16% 12%;
+    --surface-container-high: 221 15% 16%;
+    --surface-container-highest: 220 14% 20%;
+    --on-surface: 220 14% 92%;
+    --on-surface-variant: 220 10% 64%;
+    --secondary-new: 249 82% 72%; /* violet accent */
+    --secondary-new-container: 249 38% 22%;
+    --secondary-new-on-container: 249 95% 88%;
+    --tertiary-new: 206 90% 62%; /* electric blue accent */
+    --tertiary-new-container: 206 60% 18%;
+    --tertiary-new-on-container: 206 95% 82%;
   }
 }
 

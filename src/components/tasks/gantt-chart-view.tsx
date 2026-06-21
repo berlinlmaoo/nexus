@@ -356,7 +356,7 @@ export function GanttChartView({ tasks, onTaskClick }: GanttChartViewProps) {
                             "h-4 w-4 rotate-45 border-2",
                             isCritical
                               ? "bg-red-500 border-red-600"
-                              : "bg-zinc-800 border-zinc-900"
+                              : "bg-foreground border-on-surface-variant"
                           )}
                         />
                       </div>
@@ -366,7 +366,7 @@ export function GanttChartView({ tasks, onTaskClick }: GanttChartViewProps) {
                       <div
                         className={cn(
                           "absolute top-1.5 h-5 rounded cursor-pointer transition-all hover:opacity-80 hover:shadow-md z-[5] overflow-hidden",
-                          isCritical ? "bg-red-400" : item.isParent ? "bg-zinc-800" : "bg-zinc-600"
+                          isCritical ? "bg-red-400" : item.isParent ? "bg-foreground" : "bg-on-surface-variant"
                         )}
                         style={barStyle}
                         onClick={() => onTaskClick?.(item.task)}
@@ -377,7 +377,7 @@ export function GanttChartView({ tasks, onTaskClick }: GanttChartViewProps) {
                           <div
                             className={cn(
                               "absolute inset-y-0 left-0 rounded-l",
-                              isCritical ? "bg-red-600" : item.isParent ? "bg-zinc-950" : "bg-zinc-800"
+                              isCritical ? "bg-red-600" : item.isParent ? "bg-foreground" : "bg-foreground"
                             )}
                             style={{ width: `${item.progress}%` }}
                           />
@@ -425,16 +425,16 @@ export function GanttChartView({ tasks, onTaskClick }: GanttChartViewProps) {
       {/* Legend */}
       <div className="flex items-center gap-4 pt-4 mt-3 border-t text-[10px] text-muted-foreground">
         <span className="flex items-center gap-1">
-          <span className="h-2.5 w-4 rounded-sm bg-zinc-800" /> Parent task
+          <span className="h-2.5 w-4 rounded-sm bg-foreground" /> Parent task
         </span>
         <span className="flex items-center gap-1">
-          <span className="h-2.5 w-4 rounded-sm bg-zinc-600" /> Task
+          <span className="h-2.5 w-4 rounded-sm bg-on-surface-variant" /> Task
         </span>
         <span className="flex items-center gap-1">
           <span className="h-2.5 w-4 rounded-sm bg-red-400" /> Critical path
         </span>
         <span className="flex items-center gap-1">
-          <span className="h-3 w-3 rotate-45 bg-zinc-800" />
+          <span className="h-3 w-3 rotate-45 bg-foreground" />
           <span className="ml-0.5">Milestone</span>
         </span>
         <span className="flex items-center gap-1 ml-2">

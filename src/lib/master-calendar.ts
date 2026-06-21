@@ -46,11 +46,11 @@ export async function getMasterCalendarTeamsForUser(userId: string): Promise<Tea
   })
 
   const adminWorkspaceIds = workspaceMemberships
-    .filter((membership) => membership.role === "OWNER" || membership.role === "ADMIN")
+    .filter((membership) => membership.role === "BOD" || membership.role === "MANAGER" || membership.role === "ONE_ABOVE_ALL")
     .map((membership) => membership.workspaceId)
 
   const memberWorkspaceIds = workspaceMemberships
-    .filter((membership) => membership.role === "MEMBER")
+    .filter((membership) => membership.role === "STAFF")
     .map((membership) => membership.workspaceId)
 
   const scopes: Prisma.TeamWhereInput[] = []
@@ -140,7 +140,7 @@ export async function getMasterCalendarTeamAccess(userId: string, teamId: string
   })
 
   const workspaceRole = workspaceMembership?.role ?? null
-  const isWorkspaceAdmin = workspaceRole === "OWNER" || workspaceRole === "ADMIN"
+  const isWorkspaceAdmin = workspaceRole === "BOD" || workspaceRole === "MANAGER" || workspaceRole === "ONE_ABOVE_ALL"
   const isTeamMember = team.members.length > 0
   const visible = Boolean(isSystemAdmin || isWorkspaceAdmin || isTeamMember)
 

@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
       // Ensure they're a member of the workspace
       await prisma.workspaceMember.upsert({
         where: { userId_workspaceId: { userId: user.id, workspaceId: scimAuth.workspaceId } },
-        create: { userId: user.id, workspaceId: scimAuth.workspaceId, role: "MEMBER" },
+        create: { userId: user.id, workspaceId: scimAuth.workspaceId, role: "STAFF" },
         update: {},
       })
 
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
     })
 
     await prisma.workspaceMember.create({
-      data: { userId: user.id, workspaceId: scimAuth.workspaceId, role: "MEMBER" },
+      data: { userId: user.id, workspaceId: scimAuth.workspaceId, role: "STAFF" },
     })
 
     logAudit({
