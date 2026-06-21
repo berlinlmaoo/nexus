@@ -1,0 +1,110 @@
+# BETA stack — fully isolated from prod (own DB, volumes, network, container names, port 3002).
+# Prod `nexus-app` (:3000) is NOT touched. Run with an explicit project name:
+#   docker compose -p nexus-beta -f docker-compose.beta.yml up -d --build
+# Reuses prod secrets from .env.production (AUTH_SECRET, SMTP, etc.) but OVERRIDES the
+# database to a separate beta Postgres. Clone prod data into it first (see runbook).
+
+services:
+  postgres-beta:
+    image: postgres:16-alpine
+    container_name: nexus-postgres-beta
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nexus
+      POSTGRES_PASSWORD: ${BETA_DB_PASSWORD}
+      POSTGRES_DB: nexus
+      TZ: ${APP_TIMEZONE:-Asia/Jakarta}
+      PGTZ: ${APP_TIMEZONE:-Asia/Jakarta}
+    ports:
+      - "127.0.0.1:55433:5432"   # exposed so we can pg_restore the clone into it
+    volumes:
+      - ./var-beta/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexus -d nexus"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - nexus_beta
+
+  migrate-beta:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      target: builder
+      args:
+        DATABASE_URL: postgresql://nexus:${BETA_DB_PASSWORD}@postgres-beta:5432/nexus
+        AUTH_SECRET: build-time-placeholder
+        NEXTAUTH_URL: http://127.0.0.1:3002
+    image: nexus-app:beta
+    restart: "no"
+    env_file: .env.production
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://nexus:${BETA_DB_PASSWORD}@postgres-beta:5432/nexus
+      NEXTAUTH_URL: http://127.0.0.1:3002
+      AUTH_TRUST_HOST: "true"
+    command: ["sh", "-c", "npx prisma db push --accept-data-loss"]
+    depends_on:
+      postgres-beta:
+        condition: service_healthy
+    networks:
+      - nexus_beta
+
+  app-beta:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      args:
+        DATABASE_URL: postgresql://nexus:${BETA_DB_PASSWORD}@postgres-beta:5432/nexus
+        AUTH_SECRET: build-time-placeholder
+        NEXTAUTH_URL: http://127.0.0.1:3002
+    # Reuse the prod image (same source) — build ONCE, run for both. Runtime env
+    # (NEXTAUTH_URL, DATABASE_URL via env_file) is overridden below, so no rebuild needed.
+    image: nexus-app:prod
+    container_name: nexus-app-beta
+    restart: unless-stopped
+    # Next standalone output is self-contained here (nested due to apps/* workspace);
+    # run server.js directly from its own dir (the default dumb-init+CMD combo exits 0
+    # silently with this nested layout).
+    working_dir: /app
+    entrypoint: ["node", "server.js"]
+    depends_on:
+      postgres-beta:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3002:3000"
+    env_file: .env.production
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      # DATABASE_URL intentionally NOT overridden here → inherits the PROD DB from
+      # env_file (.env.production). Phaëthon (BoD) now runs on real prod data.
+      # (Old clone override: postgresql://nexus:${BETA_DB_PASSWORD}@postgres-beta:5432/nexus)
+      NEXTAUTH_URL: http://127.0.0.1:3002
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3002
+      AUTH_TRUST_HOST: "true"
+      # Public domain BoD actually use (this backend sits behind the nexus.patsgroup.id nginx, so its
+      # NEXTAUTH_URL is localhost). Used to build one-tap task deep links in WhatsApp notifications.
+      NEXUS_PUBLIC_URL: https://nexus.patsgroup.id
+      APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Jakarta}
+    # Unified file store: app-beta (Phaëthon) and app (oldnexus) share the SAME prod DB, so they must
+    # also share ONE uploads dir (var/) — otherwise an attachment uploaded via one backend 404s when
+    # served by the other. (Was ./var-beta which split files & broke cross-backend attachment serving.)
+    volumes:
+      - ./var/uploads/attachments:/app/public/uploads/attachments
+      - ./var/uploads/attendance:/app/public/uploads/attendance
+      - ./var/uploads/avatars:/app/public/uploads/avatars
+      - ./var/uploads/project-icons:/app/public/uploads/project-icons
+    networks:
+      - nexus_beta
+      - prod_internal
+
+networks:
+  nexus_beta:
+    driver: bridge
+  prod_internal:
+    external: true
+    name: nexus_nexus_internal
