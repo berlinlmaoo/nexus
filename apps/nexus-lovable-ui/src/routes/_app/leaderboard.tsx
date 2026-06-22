@@ -21,11 +21,8 @@ function Leaderboard() {
 
   const ranked = (board.data?.rows ?? [])
     .slice()
-    // BoD+ (atBottom) always sink below staff; within each group, rank by XP then name.
-    .sort((a, b) =>
-      Number(!!a.atBottom) - Number(!!b.atBottom) ||
-      b.totalXp - a.totalXp ||
-      (a.name ?? "").localeCompare(b.name ?? ""))
+    // BoD+ are excluded server-side; rank the staff by XP then name.
+    .sort((a, b) => b.totalXp - a.totalXp || (a.name ?? "").localeCompare(b.name ?? ""))
     .map((row, i) => ({ ...row, rank: i + 1 }));
 
   const podiumRankings = ranked.slice(0, 3).map((r) => ({

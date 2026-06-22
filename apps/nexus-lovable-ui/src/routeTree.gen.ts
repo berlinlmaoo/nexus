@@ -15,6 +15,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as RoomDisplayRoomRouteImport } from './routes/room-display.$room'
 import { Route as OauthAuthorizeRouteImport } from './routes/oauth.authorize'
 import { Route as FFormIdRouteImport } from './routes/f.$formId'
 import { Route as AppThreadsRouteImport } from './routes/_app/threads'
@@ -71,6 +72,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppRoute,
+} as any)
+const RoomDisplayRoomRoute = RoomDisplayRoomRouteImport.update({
+  id: '/room-display/$room',
+  path: '/room-display/$room',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const OauthAuthorizeRoute = OauthAuthorizeRouteImport.update({
   id: '/oauth/authorize',
@@ -236,6 +242,7 @@ export interface FileRoutesByFullPath {
   '/threads': typeof AppThreadsRoute
   '/f/$formId': typeof FFormIdRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/room-display/$room': typeof RoomDisplayRoomRoute
   '/docs/$docId': typeof AppDocsDocIdRoute
   '/folders/$folderId': typeof AppFoldersFolderIdRoute
   '/projects/$projectId': typeof AppProjectsProjectIdRoute
@@ -269,6 +276,7 @@ export interface FileRoutesByTo {
   '/threads': typeof AppThreadsRoute
   '/f/$formId': typeof FFormIdRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/room-display/$room': typeof RoomDisplayRoomRoute
   '/': typeof AppIndexRoute
   '/docs/$docId': typeof AppDocsDocIdRoute
   '/folders/$folderId': typeof AppFoldersFolderIdRoute
@@ -305,6 +313,7 @@ export interface FileRoutesById {
   '/_app/threads': typeof AppThreadsRoute
   '/f/$formId': typeof FFormIdRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/room-display/$room': typeof RoomDisplayRoomRoute
   '/_app/': typeof AppIndexRoute
   '/_app/docs/$docId': typeof AppDocsDocIdRoute
   '/_app/folders/$folderId': typeof AppFoldersFolderIdRoute
@@ -342,6 +351,7 @@ export interface FileRouteTypes {
     | '/threads'
     | '/f/$formId'
     | '/oauth/authorize'
+    | '/room-display/$room'
     | '/docs/$docId'
     | '/folders/$folderId'
     | '/projects/$projectId'
@@ -375,6 +385,7 @@ export interface FileRouteTypes {
     | '/threads'
     | '/f/$formId'
     | '/oauth/authorize'
+    | '/room-display/$room'
     | '/'
     | '/docs/$docId'
     | '/folders/$folderId'
@@ -410,6 +421,7 @@ export interface FileRouteTypes {
     | '/_app/threads'
     | '/f/$formId'
     | '/oauth/authorize'
+    | '/room-display/$room'
     | '/_app/'
     | '/_app/docs/$docId'
     | '/_app/folders/$folderId'
@@ -426,6 +438,7 @@ export interface RootRouteChildren {
   RegisterRoute: typeof RegisterRoute
   FFormIdRoute: typeof FFormIdRoute
   OauthAuthorizeRoute: typeof OauthAuthorizeRoute
+  RoomDisplayRoomRoute: typeof RoomDisplayRoomRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -471,6 +484,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/room-display/$room': {
+      id: '/room-display/$room'
+      path: '/room-display/$room'
+      fullPath: '/room-display/$room'
+      preLoaderRoute: typeof RoomDisplayRoomRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/oauth/authorize': {
       id: '/oauth/authorize'
@@ -741,6 +761,7 @@ const rootRouteChildren: RootRouteChildren = {
   RegisterRoute: RegisterRoute,
   FFormIdRoute: FFormIdRoute,
   OauthAuthorizeRoute: OauthAuthorizeRoute,
+  RoomDisplayRoomRoute: RoomDisplayRoomRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

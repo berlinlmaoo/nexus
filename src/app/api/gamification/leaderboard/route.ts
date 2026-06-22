@@ -18,9 +18,9 @@ export async function GET() {
       select: { userId: true, role: true },
     })
     const userIds = Array.from(new Set(memberships.map((m) => m.userId)))
-    // BoD + One-Above-All always sit at the BOTTOM of the leaderboard (management isn't competing
-    // with staff). A user counts as "bottom" if they hold that role in any shared workspace.
-    const bottomRole = new Set(
+    // BoD + One-Above-All are EXCLUDED from the leaderboard entirely (management isn't competing with
+    // staff). A user is excluded if they hold that role in ANY shared workspace.
+    const excluded = new Set(
       memberships.filter((m) => m.role === "BOD" || m.role === "ONE_ABOVE_ALL").map((m) => m.userId),
     )
 
@@ -40,8 +40,9 @@ export async function GET() {
 
     const deltaById = new Map(periodTxns.map((t) => [t.userId, t._sum.amount ?? 0]))
 
-    // Include ALL workspace peers — each sits at baseline 1000 until quests move them.
+    // Staff peers only (BoD+ excluded) — each sits at baseline 1000 until quests move them.
     const rows = users
+      .filter((u) => !excluded.has(u.id))
       .map((u) => {
         const score = PERIOD_BASELINE_XP + (deltaById.get(u.id) ?? 0)
         const info = levelForXp(score)
@@ -52,15 +53,10 @@ export async function GET() {
           totalXp: score, // points shown on the leaderboard = this period's score
           level: info.level,
           levelName: info.name,
-          atBottom: bottomRole.has(u.id), // BoD+ → forced to the bottom
         }
       })
-      // BoD+ rows sink below everyone; within each group, rank by score then name.
-      .sort((a, b) =>
-        Number(a.atBottom) - Number(b.atBottom) ||
-        b.totalXp - a.totalXp ||
-        (a.name ?? "").localeCompare(b.name ?? ""),
-      )
+      // Rank by score, then name.
+      .sort((a, b) => b.totalXp - a.totalXp || (a.name ?? "").localeCompare(b.name ?? ""))
 
     return NextResponse.json({
       rows,

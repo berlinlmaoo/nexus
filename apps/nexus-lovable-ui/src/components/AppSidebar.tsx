@@ -2,7 +2,7 @@ import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import {
   LayoutDashboard, Inbox, MessageCircle, CheckSquare, Calendar, CalendarClock, FolderKanban,
   BookOpen, Users, Trophy, ClipboardCheck, Settings, Shield, FileText, Sparkles, Megaphone,
-  Search, Plus, PanelLeftClose, ChevronRight, LogOut, Loader2, Pin, FolderPlus, Rocket, Maximize2, AtSign, ShieldAlert, LifeBuoy,
+  Search, Plus, PanelLeftClose, ChevronRight, LogOut, Loader2, Pin, FolderPlus, Rocket, Maximize2, AtSign, ShieldAlert, Ticket, Sun, Moon,
 } from "lucide-react";
 import { useState, type ReactNode, type DragEvent } from "react";
 import { ProjectIcon } from "@/components/projects/ProjectIcon";
@@ -16,6 +16,7 @@ import { nexusApi, type NexusProject, type NexusProjectFolder } from "@/lib/nexu
 import { ProjectRowMenu, FolderRowMenu, type SidebarActions } from "@/components/SidebarContextMenus";
 import { canMoveInto } from "@/lib/folder-tree-client";
 import { invalidateProjectData } from "@/lib/invalidate";
+import { useTheme } from "@/lib/theme";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
@@ -30,7 +31,6 @@ const groups = [
       { title: "Threads", url: "/threads", icon: AtSign },
       { title: "My Mission", url: "/my-tasks", icon: CheckSquare },
       { title: "Pengajuan Saya", url: "/submissions", icon: FileText },
-      { title: "Keluhan", url: "/complaints", icon: LifeBuoy },
       { title: "Time Map", url: "/master-calendar", icon: Calendar },
       { title: "Room Booking", url: "/room-booking", icon: CalendarClock },
     ],
@@ -59,6 +59,7 @@ const groups = [
   {
     label: "System",
     items: [
+      { title: "Ticket", url: "/complaints", icon: Ticket },
       { title: "Crew Hub", url: "/teams", icon: Users },
       { title: "Tuning Room", url: "/settings", icon: Settings },
       { title: "Control Room", url: "/admin", icon: Shield },
@@ -108,6 +109,7 @@ function ProjectNavItem({ project, active, collapsed, depth = 0, pinned, onToggl
 export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed";
+  const { isDark, toggle: toggleTheme } = useTheme();
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + "/");
   const profileQuery = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false, staleTime: 60_000 });
@@ -459,6 +461,14 @@ export function AppSidebar() {
             <span className="truncate text-xs font-medium">{me?.name ?? "—"}</span>
             <span className="truncate text-[10px] text-muted-foreground">{me?.email ?? ""}</span>
           </div>
+          <button
+            onClick={toggleTheme}
+            aria-label="Ganti tema"
+            title={isDark ? "Mode terang" : "Mode gelap"}
+            className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:hidden"
+          >
+            {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </button>
           <button
             onClick={handleLogout}
             disabled={loggingOut}

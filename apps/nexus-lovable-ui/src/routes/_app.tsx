@@ -11,6 +11,7 @@ import { MobileTabBar } from "@/components/MobileTabBar";
 import { AttendanceReminderModal } from "@/components/attendance/AttendanceReminderModal";
 import { AnnouncementModal } from "@/components/AnnouncementModal";
 import { XpPenaltyModal } from "@/components/XpPenaltyModal";
+import { PhoneNumberPrompt } from "@/components/PhoneNumberPrompt";
 import { RealtimeProvider } from "@/lib/realtime";
 
 export const Route = createFileRoute("/_app")({
@@ -100,6 +101,7 @@ function AppLayout() {
         <AttendanceReminderModal />
         <AnnouncementModal />
         <XpPenaltyModal />
+        <PhoneNumberPrompt />
       </SidebarProvider>
     </RealtimeProvider>
   );
