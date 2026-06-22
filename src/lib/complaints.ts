@@ -3,8 +3,10 @@
 // optional ANONYMOUS mode (reporter hidden even from BoD). Distinct from PeerReport (public + punitive).
 export { getUserOrgRole, isBodPlus } from "@/lib/feed" // reuse the org-role gate helpers
 
+// Active categories users can file under. (PAYROLL/OPERATIONAL/HR/LEADERSHIP retired 2026-06-22 — kept in
+// the Prisma enum + label map below so any legacy record still renders, just no longer selectable/acceptable.)
 export const COMPLAINT_CATEGORIES = [
-  "ATTENDANCE", "EXP", "PAYROLL", "DAY_OFF", "OPERATIONAL", "HR", "LEADERSHIP", "OTHER",
+  "ATTENDANCE", "EXP", "DAY_OFF", "OTHER",
 ] as const
 export type ComplaintCategoryKey = (typeof COMPLAINT_CATEGORIES)[number]
 
@@ -46,8 +48,7 @@ type ComplaintRow = {
   id: string
   category: string
   subject: string
-  anonymous: boolean
-  confidential: boolean
+  evidenceUrl: string | null
   status: string
   lastMessageAt: Date
   resolvedAt: Date | null
@@ -75,19 +76,17 @@ type ComplaintDetailRow = ComplaintRow & {
  */
 export function serializeComplaint(c: ComplaintRow, viewerId: string, viewerIsBod: boolean) {
   const isMine = c.reporterId === viewerId
-  const showReporter = isMine || (viewerIsBod && !c.anonymous)
+  const showReporter = isMine || viewerIsBod
   return {
     id: c.id,
     category: c.category,
     subject: c.subject,
-    anonymous: c.anonymous,
-    confidential: c.confidential,
+    evidenceUrl: c.evidenceUrl,
     status: c.status,
     lastMessageAt: c.lastMessageAt,
     resolvedAt: c.resolvedAt,
     createdAt: c.createdAt,
     reporter: showReporter ? c.reporter : null,
-    reporterHidden: !showReporter,
     messageCount: c._count?.messages ?? 0,
     isMine,
     canReply: (isMine || viewerIsBod) && c.status !== "CLOSED",
@@ -98,18 +97,13 @@ export function serializeComplaint(c: ComplaintRow, viewerId: string, viewerIsBo
 /** Serialize a complaint with its full message thread (detail view). */
 export function serializeComplaintDetail(c: ComplaintDetailRow, viewerId: string, viewerIsBod: boolean) {
   const base = serializeComplaint(c, viewerId, viewerIsBod)
-  const messages = (c.messages ?? []).map((m) => {
-    // Reporter-side messages are hidden-author when the complaint is anonymous and the viewer is BoD.
-    const hideAuthor = c.anonymous && viewerIsBod && !m.fromReviewer
-    return {
-      id: m.id,
-      body: m.body,
-      fromReviewer: m.fromReviewer,
-      createdAt: m.createdAt,
-      author: hideAuthor ? null : m.author,
-      authorHidden: hideAuthor,
-      mine: m.authorId === viewerId,
-    }
-  })
+  const messages = (c.messages ?? []).map((m) => ({
+    id: m.id,
+    body: m.body,
+    fromReviewer: m.fromReviewer,
+    createdAt: m.createdAt,
+    author: m.author,
+    mine: m.authorId === viewerId,
+  }))
   return { ...base, resolvedBy: c.resolvedBy ?? null, messages }
 }

@@ -67,14 +67,12 @@ export type Complaint = {
   id: string;
   category: string;
   subject: string;
-  anonymous: boolean;
-  confidential: boolean;
+  evidenceUrl: string | null;
   status: ComplaintStatusKey;
   lastMessageAt: string;
   resolvedAt: string | null;
   createdAt: string;
-  reporter: ComplaintPerson | null;   // null when anonymous (and viewer is BoD)
-  reporterHidden: boolean;
+  reporter: ComplaintPerson | null;   // null only for a non-reporter non-BoD viewer (who can't open it)
   messageCount: number;
   isMine: boolean;
   canReply: boolean;
@@ -86,7 +84,6 @@ export type ComplaintMessage = {
   fromReviewer: boolean;               // true = BoD side, false = reporter side
   createdAt: string;
   author: ComplaintPerson | null;
-  authorHidden: boolean;
   mine: boolean;
 };
 export type ComplaintDetail = Complaint & {
@@ -390,7 +387,6 @@ export type NexusLeaderboardRow = {
   allTimeXp?: number;
   level: number;
   levelName?: string;
-  atBottom?: boolean; // BoD+ are forced to the bottom (not competing with staff)
 };
 
 export type NexusLeaderboardPeriod = {
@@ -1339,8 +1335,14 @@ export const nexusApi = {
   // --- Complaint & Escalation channel ---
   complaints: (status?: string) => apiFetch<ComplaintList>(`/api/complaints${status && status !== "ALL" ? `?status=${status}` : ""}`),
   complaint: (id: string) => apiFetch<ComplaintDetail>(`/api/complaints/${id}`),
-  createComplaint: (payload: { category: string; subject: string; body: string; anonymous?: boolean; confidential?: boolean }) =>
-    apiFetch<Complaint>("/api/complaints", { method: "POST", body: JSON.stringify(payload) }),
+  createComplaint: (payload: { category: string; subject: string; body: string; evidence: File }) => {
+    const fd = new FormData();
+    fd.set("category", payload.category);
+    fd.set("subject", payload.subject);
+    fd.set("body", payload.body);
+    fd.set("evidence", payload.evidence);
+    return apiFetch<Complaint>("/api/complaints", { method: "POST", body: fd });
+  },
   replyComplaint: (id: string, body: string) => apiFetch<ComplaintDetail>(`/api/complaints/${id}/messages`, { method: "POST", body: JSON.stringify({ body }) }),
   setComplaintStatus: (id: string, status: string) => apiFetch<ComplaintDetail>(`/api/complaints/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
 
@@ -1810,7 +1812,10 @@ export function blockText(raw?: string | null): string {
     if (!b || typeof b !== "object") return;
     const o = b as { content?: unknown; children?: unknown[] };
     const text = inline(o.content);
-    if (text) lines.push(text);
+    // Keep intentional blank lines: textToBlocks stores them as a block with content "" — pushing only
+    // non-empty text collapsed them on read-back (the "spacing won't save" bug). Empty arrays/undefined
+    // (structural blocks) are still skipped so we don't inject spurious blank lines.
+    if (text || o.content === "") lines.push(text);
     if (Array.isArray(o.children)) o.children.forEach(walk);
   };
   (Array.isArray(data) ? data : [data]).forEach(walk);

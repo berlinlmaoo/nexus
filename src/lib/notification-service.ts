@@ -772,7 +772,7 @@ export async function checkDueSoonTasks() {
 // ── Complaint & Escalation channel ───────────────────────────────────────────────
 
 /** A new complaint was filed → ping every BoD (reporter identity is never included, anon or not). */
-export async function notifyComplaintFiled(data: { workspaceId: string; complaintId: string; categoryLabel: string; anonymous: boolean }) {
+export async function notifyComplaintFiled(data: { workspaceId: string; complaintId: string; categoryLabel: string }) {
   const bod = await prisma.workspaceMember.findMany({
     where: { workspaceId: data.workspaceId, role: { in: ["BOD", "ONE_ABOVE_ALL"] } },
     select: { userId: true },
@@ -783,7 +783,7 @@ export async function notifyComplaintFiled(data: { workspaceId: string; complain
         userId: b.userId,
         type: "complaint_filed",
         title: "Keluhan baru masuk",
-        message: `Kategori: ${data.categoryLabel}${data.anonymous ? " · anonim" : ""}. Buka untuk menanggapi.`,
+        message: `Kategori: ${data.categoryLabel}. Buka untuk menanggapi.`,
         link: "/complaints",
       }),
     ),

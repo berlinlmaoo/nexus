@@ -2106,6 +2106,10 @@ model Complaint {
   subject       String
   anonymous     Boolean            @default(false) // reporter hidden from reviewers (BoD) too
   confidential  Boolean            @default(false) // flagged extra-sensitive (badge for BoD)
+  // Evidence photo — REQUIRED at create (API-enforced). Served via gated /api/files/complaints/<name>.
+  evidenceUrl      String?
+  evidenceMimeType String?
+  evidenceSize     Int?
   status        ComplaintStatus    @default(OPEN)
   lastMessageAt DateTime           @default(now())
   resolvedAt    DateTime?

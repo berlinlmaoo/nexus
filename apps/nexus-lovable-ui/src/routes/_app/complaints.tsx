@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { LifeBuoy, Plus, X, Loader2, Send, EyeOff, Lock, CheckCircle2, MessageSquare, Inbox as InboxIcon } from "lucide-react";
+import { Ticket, Plus, X, Loader2, Send, CheckCircle2, MessageSquare, Camera, Inbox as InboxIcon } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Avatar } from "@/components/Avatar";
 import { cn } from "@/lib/utils";
@@ -13,11 +13,7 @@ export const Route = createFileRoute("/_app/complaints")({ component: Complaints
 const CATEGORIES: { key: string; label: string; emoji: string }[] = [
   { key: "ATTENDANCE", label: "Absensi", emoji: "🕐" },
   { key: "EXP", label: "EXP / Gamifikasi", emoji: "⭐" },
-  { key: "PAYROLL", label: "Payroll / Gaji", emoji: "💰" },
   { key: "DAY_OFF", label: "Cuti / Day-Off", emoji: "🌴" },
-  { key: "OPERATIONAL", label: "Operasional", emoji: "⚙️" },
-  { key: "HR", label: "HR", emoji: "🧑‍💼" },
-  { key: "LEADERSHIP", label: "Kepemimpinan", emoji: "🧭" },
   { key: "OTHER", label: "Lainnya", emoji: "💬" },
 ];
 const catOf = (k: string) => CATEGORIES.find((c) => c.key === k);
@@ -51,9 +47,9 @@ function ComplaintsPage() {
   return (
     <div className="mx-auto w-full max-w-3xl">
       <PageHeader
-        title="Keluhan & Eskalasi"
-        subtitle="Saluran rahasia ke BoD untuk masalah operasional/HR. Bisa anonim."
-        icon={<LifeBuoy className="h-6 w-6 text-primary" />}
+        title="Ticket"
+        subtitle="Saluran ke BoD untuk masalah operasional/HR. Cuma dibaca BoD."
+        icon={<Ticket className="h-6 w-6 text-primary" />}
         actions={<button onClick={() => setComposing(true)} className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-bold text-primary-foreground shadow-sm transition active:scale-[0.97]"><Plus className="h-4 w-4" /> Ajukan keluhan</button>}
       />
 
@@ -77,7 +73,7 @@ function ComplaintsPage() {
           <div className="rounded-2xl border border-dashed border-border bg-card/50 px-6 py-14 text-center">
             <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary"><InboxIcon className="h-7 w-7" /></div>
             <div className="text-base font-black">{viewerIsBod ? "Belum ada keluhan di sini" : "Belum ada keluhan"}</div>
-            <p className="mt-1 text-sm text-muted-foreground">{viewerIsBod ? "Keluhan dari staff bakal muncul di sini." : "Ada masalah operasional / HR? Ajukan — bisa anonim."}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{viewerIsBod ? "Keluhan dari staff bakal muncul di sini." : "Ada masalah operasional / HR? Ajukan ke BoD di sini."}</p>
           </div>
         )}
         {complaints.map((c) => <ComplaintCard key={c.id} c={c} viewerIsBod={viewerIsBod} onOpen={() => setOpenId(c.id)} />)}
@@ -96,14 +92,12 @@ function ComplaintsPage() {
 function ComplaintCard({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: boolean; onOpen: () => void }) {
   const st = STATUS[c.status];
   const cat = catOf(c.category);
-  const who = viewerIsBod ? (c.reporterHidden ? "Anonim" : c.reporter?.name ?? "—") : "Kamu";
+  const who = viewerIsBod ? (c.reporter?.name ?? "—") : "Kamu";
   return (
     <button onClick={onOpen} className="block w-full rounded-2xl border border-border bg-card p-3.5 text-left shadow-soft transition hover:border-primary/40 hover:shadow-pop active:scale-[0.99]">
       <div className="flex items-center gap-2">
         <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold ring-1", st.cls)}>{st.label}</span>
         <span className="text-xs font-semibold text-muted-foreground">{cat?.emoji} {cat?.label}</span>
-        {c.confidential && <span className="inline-flex items-center gap-0.5 rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700"><Lock className="h-2.5 w-2.5" /> rahasia</span>}
-        {c.anonymous && <span className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600"><EyeOff className="h-2.5 w-2.5" /> anonim</span>}
         <span className="ml-auto text-[11px] text-muted-foreground">{fmtWhen(c.lastMessageAt)}</span>
       </div>
       <div className="mt-1.5 line-clamp-1 text-sm font-bold">{c.subject}</div>
@@ -129,10 +123,12 @@ function Composer({ onClose, onDone }: { onClose: () => void; onDone: () => void
   const [category, setCategory] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
-  const [anonymous, setAnonymous] = useState(false);
-  const [confidential, setConfidential] = useState(false);
-  const canSubmit = category && subject.trim().length >= 4 && body.trim().length >= 10;
-  const create = useMutation({ mutationFn: () => nexusApi.createComplaint({ category, subject: subject.trim(), body: body.trim(), anonymous, confidential }), onSuccess: onDone });
+  const [evidence, setEvidence] = useState<File | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const previewUrl = useMemo(() => (evidence ? URL.createObjectURL(evidence) : null), [evidence]);
+  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
+  const canSubmit = category && subject.trim().length >= 4 && body.trim().length >= 10 && evidence;
+  const create = useMutation({ mutationFn: () => nexusApi.createComplaint({ category, subject: subject.trim(), body: body.trim(), evidence: evidence! }), onSuccess: onDone });
 
   return (
     <Backdrop onClose={onClose}>
@@ -163,23 +159,20 @@ function Composer({ onClose, onDone }: { onClose: () => void; onDone: () => void
           <p className="text-right text-[11px] text-muted-foreground">{body.trim().length}/4000</p>
         </div>
 
-        <div className="space-y-2">
-          <button onClick={() => setAnonymous((v) => !v)} className={cn("flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition", anonymous ? "border-slate-400 bg-slate-50" : "border-border hover:bg-accent")}>
-            <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-lg", anonymous ? "bg-slate-600 text-white" : "bg-muted text-muted-foreground")}><EyeOff className="h-4 w-4" /></span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-bold">Kirim anonim</span>
-              <span className="block text-[11px] text-muted-foreground">Nama kamu disembunyikan — bahkan dari BoD.</span>
-            </span>
-            <span className={cn("h-5 w-9 shrink-0 rounded-full p-0.5 transition", anonymous ? "bg-slate-600" : "bg-muted")}><span className={cn("block h-4 w-4 rounded-full bg-white transition", anonymous && "translate-x-4")} /></span>
-          </button>
-          <button onClick={() => setConfidential((v) => !v)} className={cn("flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition", confidential ? "border-rose-300 bg-rose-50" : "border-border hover:bg-accent")}>
-            <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-lg", confidential ? "bg-rose-600 text-white" : "bg-muted text-muted-foreground")}><Lock className="h-4 w-4" /></span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-bold">Tandai rahasia</span>
-              <span className="block text-[11px] text-muted-foreground">Sensitif — minta BoD ekstra hati-hati menanganinya.</span>
-            </span>
-            <span className={cn("h-5 w-9 shrink-0 rounded-full p-0.5 transition", confidential ? "bg-rose-600" : "bg-muted")}><span className={cn("block h-4 w-4 rounded-full bg-white transition", confidential && "translate-x-4")} /></span>
-          </button>
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Foto bukti <span className="text-rose-500">*wajib</span></label>
+          {previewUrl ? (
+            <div className="relative overflow-hidden rounded-xl border border-border">
+              <img src={previewUrl} alt="bukti" className="max-h-56 w-full object-cover" />
+              <button onClick={() => { setEvidence(null); if (fileRef.current) fileRef.current.value = ""; }} className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-black/60 text-white"><X className="h-4 w-4" /></button>
+            </div>
+          ) : (
+            <button onClick={() => fileRef.current?.click()} className="flex w-full flex-col items-center gap-1.5 rounded-xl border border-dashed border-border bg-background py-6 text-muted-foreground transition hover:border-primary/40 hover:text-primary">
+              <Camera className="h-6 w-6" />
+              <span className="text-sm font-semibold">Ambil / pilih foto bukti</span>
+            </button>
+          )}
+          <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setEvidence(f); }} />
         </div>
 
         <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-800">
@@ -190,7 +183,7 @@ function Composer({ onClose, onDone }: { onClose: () => void; onDone: () => void
       <div className="flex justify-end gap-2 border-t border-border px-5 py-4">
         <button onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-accent">Batal</button>
         <button onClick={() => create.mutate()} disabled={!canSubmit || create.isPending} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground disabled:opacity-40">
-          {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <LifeBuoy className="h-4 w-4" />} Kirim keluhan
+          {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ticket className="h-4 w-4" />} Kirim keluhan
         </button>
       </div>
     </Backdrop>
@@ -229,24 +222,26 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
       </div>
 
       {/* Reporter identity strip (BoD view) */}
-      {c && viewerIsBod && (
+      {c && viewerIsBod && c.reporter && (
         <div className="flex items-center gap-2 border-b border-border bg-muted/30 px-5 py-2 text-xs">
-          {c.reporterHidden ? (
-            <><span className="grid h-6 w-6 place-items-center rounded-full bg-slate-200 text-slate-500"><EyeOff className="h-3.5 w-3.5" /></span><span className="font-semibold text-muted-foreground">Pelapor anonim</span></>
-          ) : (
-            <><Avatar userId={c.reporter?.id ?? ""} name={c.reporter?.name} avatar={c.reporter?.avatar ?? null} size={24} /><span className="font-semibold">{c.reporter?.name}</span></>
-          )}
-          {c.confidential && <span className="ml-auto inline-flex items-center gap-0.5 rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700"><Lock className="h-2.5 w-2.5" /> rahasia</span>}
+          <Avatar userId={c.reporter.id} name={c.reporter.name} avatar={c.reporter.avatar ?? null} size={24} />
+          <span className="font-semibold">{c.reporter.name}</span>
         </div>
       )}
 
       {/* Thread */}
       <div ref={scrollRef} className="flex-1 space-y-2.5 overflow-y-auto bg-muted/10 p-4">
         {detailQ.isLoading && <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-12 animate-pulse rounded-2xl bg-muted" />)}</div>}
+        {c?.evidenceUrl && (
+          <div className="rounded-2xl border border-border bg-card p-3">
+            <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground"><Camera className="h-3.5 w-3.5" /> Foto bukti</div>
+            <img src={c.evidenceUrl} alt="bukti" className="max-h-80 w-full rounded-xl border border-border object-contain" />
+          </div>
+        )}
         {c?.messages.map((m) => (
           <div key={m.id} className={cn("flex", m.mine ? "justify-end" : "justify-start")}>
             <div className={cn("max-w-[82%] rounded-2xl px-3 py-2 text-sm shadow-sm", m.mine ? "rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md bg-card ring-1 ring-border")}>
-              {!m.mine && <div className="mb-0.5 text-[11px] font-bold opacity-70">{m.fromReviewer ? "BoD" : (m.authorHidden ? "Anonim" : m.author?.name ?? "—")}</div>}
+              {!m.mine && <div className="mb-0.5 text-[11px] font-bold opacity-70">{m.fromReviewer ? "BoD" : (m.author?.name ?? "—")}</div>}
               <p className="whitespace-pre-wrap break-words">{m.body}</p>
               <div className={cn("mt-0.5 text-right text-[10px]", m.mine ? "text-primary-foreground/70" : "text-muted-foreground")}>{fmtWhen(m.createdAt)}</div>
             </div>

@@ -40,6 +40,10 @@ function RoomBooking() {
   });
 
   const todayKey = dayKey(new Date());
+  // Only the current-month view hides elapsed days (so the agenda starts at today); navigating to a past
+  // month still shows its full history, and future months have no past days anyway.
+  const now = new Date();
+  const hidePast = viewMonth.getFullYear() === now.getFullYear() && viewMonth.getMonth() === now.getMonth();
   const agenda = useMemo(() => {
     const map = new Map<string, NexusRoomBooking[]>();
     for (const b of bookingsQ.data?.bookings ?? []) {
@@ -48,9 +52,10 @@ function RoomBooking() {
       map.get(k)!.push(b);
     }
     return Array.from(map.entries())
+      .filter(([k]) => !hidePast || k >= todayKey)
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([k, items]) => [k, items.sort((x, y) => new Date(x.startsAt).getTime() - new Date(y.startsAt).getTime())] as const);
-  }, [bookingsQ.data]);
+  }, [bookingsQ.data, hidePast, todayKey]);
 
   const shiftMonth = (delta: number) => setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() + delta, 1));
 
