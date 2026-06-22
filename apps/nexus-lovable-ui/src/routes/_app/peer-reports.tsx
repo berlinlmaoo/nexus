@@ -6,9 +6,21 @@ import { ShieldAlert, Plus, X, Search, Loader2, Undo2, Scale, Flame, MessageSqua
 import { PageHeader } from "@/components/PageHeader";
 import { Avatar } from "@/components/Avatar";
 import { cn } from "@/lib/utils";
-import { nexusApi, type PeerReport, type NexusUser } from "@/lib/nexus-api";
+import { nexusApi, ORG_HIERARCHY, type PeerReport, type NexusUser } from "@/lib/nexus-api";
+import { ComingSoon } from "@/components/ComingSoon";
 
-export const Route = createFileRoute("/_app/peer-reports")({ component: IntegrityPage });
+export const Route = createFileRoute("/_app/peer-reports")({ component: IntegrityGate });
+
+// Role gate — Integrity belum dibuka untuk Manager ke bawah (belum ada ETA rilis). BoD+ akses penuh;
+// selain itu lihat halaman "Coming Soon". Wrapper terpisah supaya hooks di IntegrityPage tetap konsisten.
+function IntegrityGate() {
+  const roleQ = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 });
+  const roleLoaded = roleQ.isSuccess || roleQ.isError;
+  const fullAccess = (ORG_HIERARCHY[roleQ.data?.role ?? ""] ?? 0) >= ORG_HIERARCHY.BOD;
+  if (!roleLoaded) return <div className="grid min-h-[60vh] place-items-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+  if (!fullAccess) return <ComingSoon feature="Integrity" />;
+  return <IntegrityPage />;
+}
 
 const CATEGORIES: { key: string; label: string; emoji: string }[] = [
   { key: "SMOKING_INDOORS", label: "Ngerokok di dalam ruangan", emoji: "🚬" },

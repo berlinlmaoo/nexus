@@ -6,12 +6,25 @@ import { AtSign, ArrowUp, Loader2 } from "lucide-react";
 import { AvatarStack } from "@/components/Avatar";
 import { celebrate } from "@/components/Celebration";
 import { cn } from "@/lib/utils";
-import { nexusApi, type FeedPage, type FeedPost, type NexusUser } from "@/lib/nexus-api";
+import { nexusApi, ORG_HIERARCHY, type FeedPage, type FeedPost, type NexusUser } from "@/lib/nexus-api";
 import type { MentionUser } from "@/hooks/useMentionAutocomplete";
 import { Composer, type ComposerPayload } from "@/components/feed/Composer";
 import { PostCard, type FeedPostUI } from "@/components/feed/PostCard";
+import { ComingSoon } from "@/components/ComingSoon";
 
-export const Route = createFileRoute("/_app/threads")({ component: FeedPage });
+export const Route = createFileRoute("/_app/threads")({ component: ThreadsGate });
+
+// Role gate — Threads belum dibuka untuk Manager ke bawah (belum ada ETA rilis). BoD+ akses penuh;
+// selain itu lihat halaman "Coming Soon". Wrapper terpisah supaya hooks di FeedPage tetap konsisten
+// (early-return di tengah komponen berisi hooks = crash "rendered fewer hooks").
+function ThreadsGate() {
+  const roleQ = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 });
+  const roleLoaded = roleQ.isSuccess || roleQ.isError;
+  const fullAccess = (ORG_HIERARCHY[roleQ.data?.role ?? ""] ?? 0) >= ORG_HIERARCHY.BOD;
+  if (!roleLoaded) return <div className="grid min-h-[60vh] place-items-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+  if (!fullAccess) return <ComingSoon feature="Threads" />;
+  return <FeedPage />;
+}
 
 type Inf = { pages: FeedPage[]; pageParams: unknown[] };
 type Tab = "all" | "mentions";

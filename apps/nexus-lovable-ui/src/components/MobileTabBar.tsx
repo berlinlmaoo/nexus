@@ -198,11 +198,10 @@ function MoreSheet({ open, onClose, isActive, unread }: { open: boolean; onClose
   // Org role gates management-only nav (Control Room + Crew Hub) — hidden from Staff.
   const orgRole = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 }).data?.role;
   const canManageOrg = ["ONE_ABOVE_ALL", "BOD", "MANAGER"].includes(orgRole ?? "");
-  // Threads (feed) stays BoD-and-above beta. Integrity (/peer-reports) is open to everyone now.
-  const canSeeFeed = ["ONE_ABOVE_ALL", "BOD"].includes(orgRole ?? "");
-  const BETA_URLS = new Set(["/threads"]);
+  // Threads / Integrity / Ticket show in nav for ALL roles; Manager-and-below land on a "Coming Soon"
+  // page (gated inside each route component) — no ETA yet, so we tease, not hide.
   const visibleGroups = moreGroups
-    .map((g) => ({ ...g, items: g.items.filter((i) => (canManageOrg || (i.url !== "/admin" && i.url !== "/teams")) && (canSeeFeed || !BETA_URLS.has(i.url))) }))
+    .map((g) => ({ ...g, items: g.items.filter((i) => canManageOrg || (i.url !== "/admin" && i.url !== "/teams")) }))
     .filter((g) => g.items.length > 0);
   useEffect(() => {
     if (!open) return;
