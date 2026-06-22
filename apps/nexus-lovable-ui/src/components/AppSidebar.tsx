@@ -4,7 +4,7 @@ import {
   BookOpen, Users, Trophy, ClipboardCheck, Settings, Shield, FileText, Sparkles, Megaphone,
   Search, Plus, PanelLeftClose, ChevronRight, LogOut, Loader2, Pin, FolderPlus, Rocket, Maximize2, AtSign, ShieldAlert, Ticket, Sun, Moon,
 } from "lucide-react";
-import { useState, type ReactNode, type DragEvent } from "react";
+import { Fragment, useRef, useState, type ReactNode, type DragEvent } from "react";
 import { ProjectIcon } from "@/components/projects/ProjectIcon";
 import nexusLogo from "@/assets/nexus-logo.png";
 import {
@@ -69,6 +69,20 @@ const groups = [
 
 type RowDnd = { draggable: boolean; onDragStart: (e: DragEvent) => void; onDragEnd: () => void };
 
+/** A thin drop slot shown between sibling rows while dragging a matching item — drop here to reorder. */
+function ReorderZone({ active, onDrop }: { active: boolean; onDrop: () => void }) {
+  const [over, setOver] = useState(false);
+  return (
+    <div
+      aria-hidden
+      onDragOver={active ? (e) => { e.preventDefault(); e.stopPropagation(); setOver(true); } : undefined}
+      onDragLeave={active ? () => setOver(false) : undefined}
+      onDrop={active ? (e) => { e.preventDefault(); e.stopPropagation(); setOver(false); onDrop(); } : undefined}
+      className={cn("mx-2 rounded-full transition-[height] duration-150", active ? (over ? "h-2 bg-primary" : "h-2") : "h-0")}
+    />
+  );
+}
+
 function ProjectNavItem({ project, active, collapsed, depth = 0, pinned, onTogglePin, actions, dnd }: { project: NexusProject; active: boolean; collapsed: boolean; depth?: number; pinned?: boolean; onTogglePin?: () => void; actions?: SidebarActions; dnd?: RowDnd }) {
   // Nested-folder indentation: each level adds a step of left padding (only when expanded view).
   const indentStyle = !collapsed && depth > 0 ? { paddingLeft: 8 + depth * 12 } : undefined;
@@ -123,13 +137,14 @@ export function AppSidebar() {
   const pinnedIds = new Set(pinsQuery.data?.projectIds ?? []);
   const pinnedFolderIds = new Set(folderPinsQuery.data?.folderIds ?? []);
 
-  // A-Z ordering (case-insensitive) for both folders and projects.
-  const byName = (a: { name?: string | null }, b: { name?: string | null }) =>
-    (a.name ?? "").localeCompare(b.name ?? "", undefined, { sensitivity: "base" });
-  const folders = [...(foldersQuery.data ?? [])].sort(byName);
-  const unfiled = projects.filter((p) => !p.folderId).sort(byName);
-  const pinnedProjects = projects.filter((p) => pinnedIds.has(p.id)).sort(byName);
-  const pinnedFolders = folders.filter((f) => pinnedFolderIds.has(f.id)).sort(byName);
+  // Custom ordering: by saved `position`, then name as a stable tiebreak (so items with no explicit
+  // position yet — all 0 — still read A-Z until the user drags to reorder).
+  const byPos = (a: { position?: number | null; name?: string | null }, b: { position?: number | null; name?: string | null }) =>
+    ((a.position ?? 0) - (b.position ?? 0)) || (a.name ?? "").localeCompare(b.name ?? "", undefined, { sensitivity: "base" });
+  const folders = [...(foldersQuery.data ?? [])].sort(byPos);
+  const unfiled = projects.filter((p) => !p.folderId).sort(byPos);
+  const pinnedProjects = projects.filter((p) => pinnedIds.has(p.id)).sort(byPos);
+  const pinnedFolders = folders.filter((f) => pinnedFolderIds.has(f.id)).sort(byPos);
 
   const togglePin = useMutation({
     mutationFn: ({ projectId, pinned }: { projectId: string; pinned: boolean }) => nexusApi.setProjectPin(projectId, pinned),
@@ -148,12 +163,10 @@ export function AppSidebar() {
   const canManageOrg = ["ONE_ABOVE_ALL", "BOD", "MANAGER"].includes(orgRoleQuery.data?.role ?? "");
   const canManageAttendance = ["ONE_ABOVE_ALL", "BOD"].includes(orgRoleQuery.data?.role ?? "");
   const canSeeOracle = orgRoleQuery.data?.role === "ONE_ABOVE_ALL";
-  // Threads (feed) is still BoD-and-above beta. Integrity (/peer-reports) is now open to everyone
-  // (staff file reports; review stays BoD-only, enforced server-side).
-  const canSeeFeed = ["ONE_ABOVE_ALL", "BOD"].includes(orgRoleQuery.data?.role ?? "");
+  // Threads / Integrity / Ticket are visible in nav to ALL roles, but Manager-and-below land on a
+  // "Coming Soon" page (gated inside each route component) — no ETA yet, so we tease, not hide.
   const MANAGER_ONLY_URLS = new Set(["/admin", "/teams"]);
   const ONE_ABOVE_ALL_URLS = new Set(["/oracle", "/social"]);
-  const BOD_PLUS_URLS = new Set(["/threads"]);
 
   // Live nav badges. Inbox = unread notifications (shared cache w/ the inbox page). Attendance =
   // pending offsite-checkout approvals (BoD only). Both refresh every 45s + on relevant mutations.
@@ -166,7 +179,7 @@ export function AppSidebar() {
   };
   const badgeText = (n: number) => (n > 9 ? "9+" : String(n));
   const visibleGroups = groups
-    .map((g) => ({ ...g, items: g.items.filter((item) => (canManageOrg || !MANAGER_ONLY_URLS.has(item.url)) && (canSeeOracle || !ONE_ABOVE_ALL_URLS.has(item.url)) && (canSeeFeed || !BOD_PLUS_URLS.has(item.url))) }))
+    .map((g) => ({ ...g, items: g.items.filter((item) => (canManageOrg || !MANAGER_ONLY_URLS.has(item.url)) && (canSeeOracle || !ONE_ABOVE_ALL_URLS.has(item.url))) }))
     .filter((g) => g.items.length > 0);
 
   // Collapsible folders (ClickUp-style). Folders are COLLAPSED by default for a clean sidebar; we
@@ -272,11 +285,54 @@ export function AppSidebar() {
     onDrop: (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); performDrop(folderId); },
   });
 
+  // ── Reorder: drop the dragged item just before `beforeId` (null = end) within a sibling group.
+  // Folders reorder among sibling folders, projects among sibling projects; a cross-container drop also
+  // moves the item into that container. Renumbers the group (position 0..n) and persists only what changed.
+  const reordering = useRef(false);
+  const reorder = async (kind: "project" | "folder", containerId: string | null, beforeId: string | null) => {
+    const d = drag;
+    setDrag(null);
+    setDropTarget(null);
+    if (!d || d.kind !== kind || reordering.current) return;
+    if (kind === "folder" && !canMoveInto(d, containerId, folders)) return; // no folder-into-own-subtree
+    const dragged = (kind === "folder" ? folders : projects).find((x) => x.id === d.id);
+    if (!dragged) return;
+    const group = (kind === "folder"
+      ? folders.filter((f) => (f.parentFolderId ?? null) === containerId)
+      : projects.filter((p) => (p.folderId ?? null) === containerId)
+    ).slice().sort(byPos);
+    const without = group.filter((g) => g.id !== d.id);
+    const at = beforeId ? without.findIndex((g) => g.id === beforeId) : without.length;
+    const idx = at === -1 ? without.length : at;
+    const next = [...without.slice(0, idx), dragged, ...without.slice(idx)];
+    reordering.current = true;
+    try {
+      await Promise.all(
+        next.flatMap((item, i) => {
+          const isDragged = item.id === d.id;
+          const cur = kind === "folder" ? ((item as NexusProjectFolder).parentFolderId ?? null) : ((item as NexusProject).folderId ?? null);
+          const moved = isDragged && cur !== containerId;
+          if ((item.position ?? 0) === i && !moved) return [];
+          return [
+            kind === "folder"
+              ? nexusApi.projectFolderUpdate(item.id, { position: i, ...(moved ? { parentFolderId: containerId } : {}) })
+              : nexusApi.updateProject(item.id, { position: i, ...(moved ? { folderId: containerId } : {}) }),
+          ];
+        }),
+      );
+    } catch (e) {
+      onMutationError(e);
+    } finally {
+      reordering.current = false;
+      invalidateSidebar(); // always re-sync with server truth (also recovers from a partial-failure batch)
+    }
+  };
+
   // Render a folder + its subfolders (recursively) + its projects. Folders nest up to 3 levels and may
   // hold a mix of subfolders and projects. A folder with nothing inside is hidden.
   const renderFolderNode = (folder: NexusProjectFolder, depth: number): ReactNode => {
     const subfolders = folders.filter((f) => (f.parentFolderId ?? null) === folder.id);
-    const inFolder = projects.filter((p) => (p.folderId ?? null) === folder.id).sort(byName);
+    const inFolder = projects.filter((p) => (p.folderId ?? null) === folder.id).sort(byPos);
     if (subfolders.length === 0 && inFolder.length === 0) return null;
     const open = isFolderOpen(folder.id);
     const count = subfolders.length + inFolder.length;
@@ -320,10 +376,20 @@ export function AppSidebar() {
         )}
         {open && (
           <>
-            {subfolders.map((sf) => renderFolderNode(sf, depth + 1))}
-            {inFolder.map((p) => (
-              <ProjectNavItem key={p.id} project={p} active={isActive(`/projects/${p.id}`)} collapsed={collapsed} depth={depth + 1} pinned={pinnedIds.has(p.id)} onTogglePin={() => onTogglePin(p.id)} actions={sidebarActions} dnd={dragHandlers("project", p.id)} />
+            {subfolders.map((sf) => (
+              <Fragment key={sf.id}>
+                <ReorderZone active={drag?.kind === "folder"} onDrop={() => reorder("folder", folder.id, sf.id)} />
+                {renderFolderNode(sf, depth + 1)}
+              </Fragment>
             ))}
+            {subfolders.length > 0 && <ReorderZone active={drag?.kind === "folder"} onDrop={() => reorder("folder", folder.id, null)} />}
+            {inFolder.map((p) => (
+              <Fragment key={p.id}>
+                <ReorderZone active={drag?.kind === "project"} onDrop={() => reorder("project", folder.id, p.id)} />
+                <ProjectNavItem project={p} active={isActive(`/projects/${p.id}`)} collapsed={collapsed} depth={depth + 1} pinned={pinnedIds.has(p.id)} onTogglePin={() => onTogglePin(p.id)} actions={sidebarActions} dnd={dragHandlers("project", p.id)} />
+              </Fragment>
+            ))}
+            {inFolder.length > 0 && <ReorderZone active={drag?.kind === "project"} onDrop={() => reorder("project", folder.id, null)} />}
           </>
         )}
       </div>
@@ -430,7 +496,13 @@ export function AppSidebar() {
               )}
               {/* Root folders render recursively (subfolders nested inside, up to 3 levels).
                   Pinned root folders are already shown (expandable) in the Pinned section above. */}
-              {folders.filter((f) => !(f.parentFolderId ?? null) && !pinnedFolderIds.has(f.id)).map((folder) => renderFolderNode(folder, 0))}
+              {folders.filter((f) => !(f.parentFolderId ?? null) && !pinnedFolderIds.has(f.id)).map((folder) => (
+                <Fragment key={folder.id}>
+                  <ReorderZone active={drag?.kind === "folder"} onDrop={() => reorder("folder", null, folder.id)} />
+                  {renderFolderNode(folder, 0)}
+                </Fragment>
+              ))}
+              <ReorderZone active={drag?.kind === "folder"} onDrop={() => reorder("folder", null, null)} />
               {/* Unfiled projects double as the "root" drop zone — drop here to pull an item out of its folder. */}
               <div
                 onDragOver={(e) => { if (canDrop(null)) { e.preventDefault(); setDropTarget("ROOT"); } }}
@@ -441,7 +513,13 @@ export function AppSidebar() {
                 {drag && !collapsed && (
                   <div className="px-2 py-1 text-[10px] italic text-muted-foreground/60">↩︎ Lepas di sini buat keluarin dari folder</div>
                 )}
-                {unfiled.map((p) => <ProjectNavItem key={p.id} project={p} active={isActive(`/projects/${p.id}`)} collapsed={collapsed} depth={0} pinned={pinnedIds.has(p.id)} onTogglePin={() => onTogglePin(p.id)} actions={sidebarActions} dnd={dragHandlers("project", p.id)} />)}
+                {unfiled.map((p) => (
+                  <Fragment key={p.id}>
+                    <ReorderZone active={drag?.kind === "project"} onDrop={() => reorder("project", null, p.id)} />
+                    <ProjectNavItem project={p} active={isActive(`/projects/${p.id}`)} collapsed={collapsed} depth={0} pinned={pinnedIds.has(p.id)} onTogglePin={() => onTogglePin(p.id)} actions={sidebarActions} dnd={dragHandlers("project", p.id)} />
+                  </Fragment>
+                ))}
+                {unfiled.length > 0 && <ReorderZone active={drag?.kind === "project"} onDrop={() => reorder("project", null, null)} />}
               </div>
             </SidebarMenu>
           </SidebarGroupContent>

@@ -16,6 +16,7 @@ const projectListSelect = {
   status: true,
   workspaceId: true,
   folderId: true,
+  position: true,
   createdAt: true,
   updatedAt: true,
   _count: {

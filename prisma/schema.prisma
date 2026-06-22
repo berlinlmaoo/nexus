@@ -280,6 +280,8 @@ model Project {
   // Toggled from the Tune drawer; unrelated to the legacy FinanceValue monthly matrix.
   enablePnlDashboard Boolean @default(false)
   status      ProjectStatus @default(ACTIVE)
+  // Manual sidebar ordering within its container (folder or root). Default 0 = falls back to A-Z.
+  position    Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -314,6 +316,8 @@ model Project {
   pnlIncomes         PnlIncome[]
   pnlBudgets         PnlBudget[]
   pnlRecurring       PnlRecurringExpense[]
+
+  @@index([folderId, position])
 }
 
 /// Per-user pinned project (sidebar quick-access). One row = one user pinning one project.

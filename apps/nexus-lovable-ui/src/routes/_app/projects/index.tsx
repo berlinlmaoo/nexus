@@ -228,9 +228,11 @@ function ProjectsPage() {
     return { byFolder, none: byFolder.get("__none__") ?? [] };
   }, [visibleProjects]);
 
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const toggleCollapse = (id: string) =>
-    setCollapsed((prev) => {
+  // Default = semua folder group KETUTUP (collapsed). Kita track set `expanded` (kosong = semua ketutup),
+  // jadi folder yang baru muncul pun otomatis ketutup sampai user buka manual.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleExpand = (id: string) =>
+    setExpanded((prev) => {
       const n = new Set(prev);
       if (n.has(id)) n.delete(id); else n.add(id);
       return n;
@@ -598,8 +600,8 @@ function ProjectsPage() {
                     folder={folder}
                     depth={depth}
                     count={items.length + subCount}
-                    collapsed={collapsed.has(folder.id)}
-                    onToggle={() => toggleCollapse(folder.id)}
+                    collapsed={!expanded.has(folder.id)}
+                    onToggle={() => toggleExpand(folder.id)}
                     canManage={canManageFolders}
                     dropProps={folderDropHandlers(folder.id)}
                     isDropTarget={dropTarget === folder.id}
@@ -623,8 +625,8 @@ function ProjectsPage() {
                   folder={null}
                   depth={0}
                   count={grouped.none.length}
-                  collapsed={collapsed.has("__none__")}
-                  onToggle={() => toggleCollapse("__none__")}
+                  collapsed={!expanded.has("__none__")}
+                  onToggle={() => toggleExpand("__none__")}
                   canManage={false}
                   dropProps={folderDropHandlers(null)}
                   isDropTarget={dropTarget === "__none__"}
