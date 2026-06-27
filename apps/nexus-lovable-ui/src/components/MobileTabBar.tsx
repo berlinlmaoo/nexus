@@ -25,13 +25,13 @@ const moreGroups = [
   {
     label: "Home Base",
     items: [
-      { title: "Morning Brief", url: "/dashboard", icon: LayoutDashboard },
+      { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
       { title: "Messages", url: "/messages", icon: MessageCircle },
-      { title: "Signal Inbox", url: "/inbox", icon: Inbox },
+      { title: "Notification", url: "/inbox", icon: Inbox },
       { title: "Threads", url: "/threads", icon: AtSign },
       { title: "My Mission", url: "/my-tasks", icon: CheckSquare },
       { title: "Pengajuan Saya", url: "/submissions", icon: FileText },
-      { title: "Time Map", url: "/master-calendar", icon: Calendar },
+      { title: "Team Calendar", url: "/master-calendar", icon: Calendar },
       { title: "Room Booking", url: "/room-booking", icon: CalendarClock },
     ],
   },
@@ -52,7 +52,7 @@ const moreGroups = [
   {
     label: "Pulse Check",
     items: [
-      { title: "Attendance Playground", url: "/attendance", icon: ClipboardCheck },
+      { title: "Attendance", url: "/attendance", icon: ClipboardCheck },
     ],
   },
   {
@@ -60,7 +60,7 @@ const moreGroups = [
     items: [
       { title: "Ticket", url: "/complaints", icon: Ticket },
       { title: "Crew Hub", url: "/teams", icon: Users },
-      { title: "Tuning Room", url: "/settings", icon: Settings },
+      { title: "Setting", url: "/settings", icon: Settings },
       { title: "Control Room", url: "/admin", icon: Shield },
     ],
   },

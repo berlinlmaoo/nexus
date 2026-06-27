@@ -48,10 +48,10 @@ export function PhoneNumberPrompt() {
     mutationFn: () => nexusApi.updateProfile({ phoneNumber: phone.trim() }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["nexus", "profile"] });
-      toast.success("Nomor WhatsApp tersimpan ✅");
+      toast.success("WhatsApp number saved ✅");
       setOpen(false);
     },
-    onError: (e) => toast.error("Gagal menyimpan", { description: e instanceof Error ? e.message : "Cek nomornya, coba lagi." }),
+    onError: (e) => toast.error("Couldn't save", { description: e instanceof Error ? e.message : "Double-check the number and try again." }),
   });
 
   const valid = looksLikePhone(phone);
@@ -72,24 +72,24 @@ export function PhoneNumberPrompt() {
               <div className="flex items-center gap-3">
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary"><MessageCircle className="h-5 w-5" /></span>
                 <div>
-                  <h2 className="font-display text-xl font-bold tracking-tight">Tambahin nomor WhatsApp</h2>
-                  <p className="mt-0.5 text-xs text-muted-foreground">Biar notif assignment, mention &amp; reminder absen nyampe ke WA kamu.</p>
+                  <h2 className="font-display text-xl font-bold tracking-tight">Add your WhatsApp number</h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">So assignment notifs, mentions &amp; check-in reminders land straight on your WhatsApp.</p>
                 </div>
               </div>
-              <button onClick={dismiss} aria-label="Tutup" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+              <button onClick={dismiss} aria-label="Close" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
             </div>
             <form onSubmit={(e) => { e.preventDefault(); if (valid && !save.isPending) save.mutate(); }} className="space-y-3 p-5">
               <input
                 value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" autoFocus
-                placeholder="08xxxxxxxxxx · luar negeri pakai + kode negara"
+                placeholder="08xxxxxxxxxx · outside Indonesia use + country code"
                 className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
-              <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5 shrink-0" /> Cuma dipakai buat notifikasi kerja. Bisa diubah kapan aja di Settings.</p>
+              <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5 shrink-0" /> Only used for work notifications. Change it anytime in Settings.</p>
               <button type="submit" disabled={!valid || save.isPending}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.99] disabled:opacity-50">
-                {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />} Simpan nomor
+                {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />} Save number
               </button>
-              <button type="button" onClick={dismiss} className="block w-full text-center text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground">Nanti aja</button>
+              <button type="button" onClick={dismiss} className="block w-full text-center text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground">Maybe later</button>
             </form>
           </motion.div>
         </div>

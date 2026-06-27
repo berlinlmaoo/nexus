@@ -56,8 +56,8 @@ function MyTasks() {
       } />
       <div className="p-4 md:p-8 space-y-6">
         {loading && <QuestSkeleton />}
-        {sessionLost && <EmptyState title="Quest feed locked" message="Login/session diperlukan untuk narik live tasks dari core NEXUS." />}
-        {!loading && !sessionLost && rows.length === 0 && <EmptyState title="Quest log kosong" message="Belum ada task yang di-assign ke kamu. Time to launch a mission." />}
+        {sessionLost && <EmptyState title="Quest feed locked" message="You'll need to log in to pull live tasks from core NEXUS." />}
+        {!loading && !sessionLost && rows.length === 0 && <EmptyState title="Quest log empty" message="Nothing's been assigned to you yet. Time to launch a mission." />}
         {groups.map((g, i) => (
           <Reveal key={g.label} delay={i * 0.08}>
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{g.label} <span className="text-muted-foreground/70">· {g.items.length}</span></h3>

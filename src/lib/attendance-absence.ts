@@ -357,8 +357,14 @@ export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date }
     // BoD & One Above All tidak wajib absen → dikecualiin dari auto-potong day-off.
     const members = await prisma.workspaceMember.findMany({
       where: { workspaceId, role: { notIn: ["BOD", "ONE_ABOVE_ALL"] } },
-      select: { userId: true, user: { select: { id: true, name: true } } },
+      select: { userId: true, joinedAt: true, user: { select: { id: true, name: true, createdAt: true } } },
     })
+    // Never penalize a member for workdays BEFORE they joined the workspace. The cron scans a 14-day
+    // window floored only at the global go-live, so a new hire created mid-window was getting back-dated
+    // absences for days they weren't employed yet. Floor each member at their own join day.
+    const joinKeyByUser = new Map(
+      members.map((m) => [m.userId, formatAttendanceDateKey(m.joinedAt ?? m.user?.createdAt ?? floor)] as const),
+    )
 
     const holidayKeys = await getHolidayKeys(workspaceId, from, to) // tanggal merah → skip
 
@@ -370,6 +376,10 @@ export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date }
 
       for (const member of members) {
         const userId = member.userId
+
+        // Pre-join guard: don't penalize days before this member joined the workspace.
+        const joinKey = joinKeyByUser.get(userId)
+        if (joinKey && dateKey < joinKey) { result.skipped++; continue }
 
         // Any leave/day-off covering this date. A MANUAL one (user-filed) cancels EVERY penalty for the
         // day — refund all XP + drop the auto-deduction. The cron's own AUTO day-off does NOT (it IS the

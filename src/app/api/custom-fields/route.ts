@@ -10,6 +10,7 @@ import {
   coerceCustomFieldValueForType,
   type CreatedFieldMetadata,
   type CustomFieldOptionConfig,
+  type FileFieldValue,
   type PlaceFieldValue,
   type SupportedCustomFieldType,
   normalizeCustomFieldOptions,
@@ -29,7 +30,7 @@ interface CustomFieldResponseItem {
   type: SupportedCustomFieldType
   position: number
   options: CustomFieldOptionConfig | null
-  value: string | string[] | PlaceFieldValue | null
+  value: string | string[] | PlaceFieldValue | FileFieldValue | null
   createdMeta?: CreatedFieldMetadata | null
 }
 

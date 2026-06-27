@@ -23,19 +23,19 @@ function IntegrityGate() {
 }
 
 const CATEGORIES: { key: string; label: string; emoji: string }[] = [
-  { key: "SMOKING_INDOORS", label: "Ngerokok di dalam ruangan", emoji: "🚬" },
-  { key: "SMOKING_TOILET", label: "Ngerokok di toilet", emoji: "🚻" },
-  { key: "SAFETY_VIOLATION", label: "Pelanggaran K3 / keamanan", emoji: "⚠️" },
-  { key: "CLEANLINESS", label: "Kebersihan", emoji: "🧹" },
-  { key: "EQUIPMENT_MISUSE", label: "Salah pakai alat / aset", emoji: "🔧" },
-  { key: "POLICY_OTHER", label: "Pelanggaran kebijakan lain", emoji: "📋" },
+  { key: "SMOKING_INDOORS", label: "Smoking indoors", emoji: "🚬" },
+  { key: "SMOKING_TOILET", label: "Smoking in the toilet", emoji: "🚻" },
+  { key: "SAFETY_VIOLATION", label: "Safety / health violation", emoji: "⚠️" },
+  { key: "CLEANLINESS", label: "Cleanliness", emoji: "🧹" },
+  { key: "EQUIPMENT_MISUSE", label: "Misusing tools / assets", emoji: "🔧" },
+  { key: "POLICY_OTHER", label: "Other policy violation", emoji: "📋" },
 ];
 const catOf = (k: string) => CATEGORIES.find((c) => c.key === k);
 const STATUS: Record<string, { label: string; cls: string }> = {
-  PENDING: { label: "Nunggu review", cls: "bg-amber-100 text-amber-700 ring-amber-200" },
-  VERIFIED: { label: "Terbukti", cls: "bg-rose-100 text-rose-700 ring-rose-200" },
-  REJECTED: { label: "Ditolak", cls: "bg-slate-100 text-slate-600 ring-slate-200" },
-  WITHDRAWN: { label: "Ditarik", cls: "bg-slate-100 text-slate-500 ring-slate-200" },
+  PENDING: { label: "Awaiting review", cls: "bg-amber-100 text-amber-700 ring-amber-200" },
+  VERIFIED: { label: "Confirmed", cls: "bg-rose-100 text-rose-700 ring-rose-200" },
+  REJECTED: { label: "Dismissed", cls: "bg-slate-100 text-slate-600 ring-slate-200" },
+  WITHDRAWN: { label: "Withdrawn", cls: "bg-slate-100 text-slate-500 ring-slate-200" },
 };
 const fmtWhen = (iso: string) => new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const fmtDay = (iso: string) => new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
@@ -60,16 +60,16 @@ function IntegrityPage() {
   const invalidate = () => { qc.invalidateQueries({ queryKey: ["peer-reports"] }); qc.invalidateQueries({ queryKey: ["hall-of-shame"] }); };
 
   const tabs: [Tab, string][] = viewerIsBod
-    ? [["hall", "Hall of Shame"], ["pending", "Perlu review"], ["all", "Semua"]]
-    : [["hall", "Hall of Shame"], ["mine", "Aktivitas saya"]];
+    ? [["hall", "Hall of Shame"], ["pending", "Needs review"], ["all", "All"]]
+    : [["hall", "Hall of Shame"], ["mine", "My activity"]];
 
   return (
     <div className="mx-auto w-full max-w-3xl">
       <PageHeader
         title="Integrity"
-        subtitle="Lapor pelanggaran kebijakan. Yang terbukti masuk Hall of Shame & diumumin."
+        subtitle="Report policy violations. Confirmed ones land in the Hall of Shame & get announced."
         icon={<ShieldAlert className="h-6 w-6 text-primary" />}
-        actions={<button onClick={() => setComposing(true)} className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-bold text-primary-foreground shadow-sm transition active:scale-[0.97]"><Plus className="h-4 w-4" /> Buat laporan</button>}
+        actions={<button onClick={() => setComposing(true)} className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-bold text-primary-foreground shadow-sm transition active:scale-[0.97]"><Plus className="h-4 w-4" /> New report</button>}
       />
 
       <div className="mb-3 flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1">
@@ -92,8 +92,8 @@ function IntegrityPage() {
           {!listQ.isLoading && reports.length === 0 && (
             <div className="rounded-2xl border border-dashed border-border bg-card/50 px-6 py-14 text-center">
               <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary"><Scale className="h-7 w-7" /></div>
-              <div className="text-base font-black">{tab === "pending" ? "Gak ada yang nunggu review" : tab === "mine" ? "Belum ada aktivitas" : "Belum ada laporan"}</div>
-              <p className="mt-1 text-sm text-muted-foreground">{tab === "mine" ? "Laporan yang kamu buat / soal kamu bakal muncul di sini." : "Laporan bakal muncul di sini."}</p>
+              <div className="text-base font-black">{tab === "pending" ? "Nothing waiting for review" : tab === "mine" ? "No activity yet" : "No reports yet"}</div>
+              <p className="mt-1 text-sm text-muted-foreground">{tab === "mine" ? "Reports you filed / about you will show up here." : "Reports will show up here."}</p>
             </div>
           )}
           {reports.map((r) => <ReportCard key={r.id} report={r} onOpen={() => setOpenReport(r)} />)}
@@ -118,8 +118,8 @@ function HallOfShameView({ loading, data }: { loading: boolean; data?: { entries
     return (
       <div className="rounded-2xl border border-dashed border-border bg-card/50 px-6 py-14 text-center">
         <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-rose-100 text-rose-600"><Flame className="h-7 w-7" /></div>
-        <div className="text-base font-black">Hall of Shame masih kosong 🎉</div>
-        <p className="mt-1 text-sm text-muted-foreground">Belum ada pelanggaran yang terbukti. Pertahankan!</p>
+        <div className="text-base font-black">Hall of Shame is still empty 🎉</div>
+        <p className="mt-1 text-sm text-muted-foreground">No confirmed violations yet. Keep it up!</p>
       </div>
     );
   }
@@ -127,7 +127,7 @@ function HallOfShameView({ loading, data }: { loading: boolean; data?: { entries
     <div className="space-y-4">
       {offenders.length > 0 && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50/60 p-3">
-          <div className="mb-2 flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-rose-700"><Flame className="h-3.5 w-3.5" /> Langganan</div>
+          <div className="mb-2 flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-rose-700"><Flame className="h-3.5 w-3.5" /> Repeat offenders</div>
           <div className="flex flex-wrap gap-2">
             {offenders.map((o) => (
               <div key={o.user.id} className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-white px-2 py-1">
@@ -150,7 +150,7 @@ function HallOfShameView({ loading, data }: { loading: boolean; data?: { entries
                 <div className="truncate text-xs text-muted-foreground">{cat?.emoji} {cat?.label}</div>
               </div>
               <div className="shrink-0 text-right">
-                <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-bold text-rose-700 ring-1 ring-rose-200">Terbukti</span>
+                <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-bold text-rose-700 ring-1 ring-rose-200">Confirmed</span>
                 <div className="mt-1 text-[11px] text-muted-foreground">{fmtDay(e.at)}</div>
               </div>
             </div>
@@ -164,20 +164,20 @@ function HallOfShameView({ loading, data }: { loading: boolean; data?: { entries
 function ReportCard({ report, onOpen }: { report: PeerReport; onOpen: () => void }) {
   const st = STATUS[report.status];
   const cat = catOf(report.category);
-  const rel = report.isMine ? "Kamu lapor" : report.isAgainstMe ? "Soal kamu" : "Laporan";
+  const rel = report.isMine ? "You reported" : report.isAgainstMe ? "About you" : "Report";
   return (
     <button onClick={onOpen} className="block w-full rounded-2xl border border-border bg-card p-3.5 text-left shadow-soft transition hover:border-primary/40 hover:shadow-pop active:scale-[0.99]">
       <div className="flex items-center gap-2">
         <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold ring-1", st.cls)}>{st.label}</span>
         <span className="text-xs font-semibold text-muted-foreground">{cat?.emoji} {cat?.label}</span>
-        {report.canRebut && <span className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-black text-white">perlu bantahan</span>}
+        {report.canRebut && <span className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-black text-white">needs response</span>}
         <span className="ml-auto text-[11px] text-muted-foreground">{fmtWhen(report.createdAt)}</span>
       </div>
       <div className="mt-2 flex items-center gap-2 text-sm">
         <Avatar userId={report.reportedUser.id} name={report.reportedUser.name} avatar={report.reportedUser.avatar} size={28} />
         <div className="min-w-0">
           <div className="font-bold leading-tight">{report.reportedUser.name}</div>
-          <div className="text-[11px] text-muted-foreground">{rel}{report.reporter ? ` · oleh ${report.isMine ? "kamu" : report.reporter.name}` : report.reporterHidden ? " · pelapor anonim" : ""}</div>
+          <div className="text-[11px] text-muted-foreground">{rel}{report.reporter ? ` · by ${report.isMine ? "you" : report.reporter.name}` : report.reporterHidden ? " · anonymous reporter" : ""}</div>
         </div>
       </div>
       {report.reason && <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{report.reason}</p>}
@@ -223,23 +223,23 @@ function Composer({ onClose, onDone }: { onClose: () => void; onDone: () => void
   return (
     <Backdrop onClose={onClose}>
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
-        <h2 className="text-lg font-black">Buat laporan</h2>
+        <h2 className="text-lg font-black">New report</h2>
         <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
       </div>
       <div className="max-h-[70vh] space-y-4 overflow-y-auto p-5">
         <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Siapa yang dilaporkan</label>
+          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Who are you reporting</label>
           {reported ? (
             <div className="flex items-center gap-2 rounded-xl border border-primary/40 bg-primary/5 px-3 py-2">
               <Avatar userId={reported.id} name={reported.name} avatar={reported.avatar} size={28} />
               <span className="text-sm font-bold">{reported.name}</span>
-              <button onClick={() => setReportedUserId("")} className="ml-auto text-xs font-semibold text-muted-foreground hover:text-foreground">Ganti</button>
+              <button onClick={() => setReportedUserId("")} className="ml-auto text-xs font-semibold text-muted-foreground hover:text-foreground">Change</button>
             </div>
           ) : (
             <>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari nama…" className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-primary" />
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name…" className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-primary" />
               </div>
               <div className="max-h-44 space-y-1 overflow-y-auto">
                 {filtered.map((m) => (
@@ -253,7 +253,7 @@ function Composer({ onClose, onDone }: { onClose: () => void; onDone: () => void
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Kategori</label>
+          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Category</label>
           <div className="flex flex-wrap gap-1.5">
             {CATEGORIES.map((c) => (
               <button key={c.key} onClick={() => setCategory(c.key)} className={cn("rounded-full border px-2.5 py-1 text-xs font-semibold transition", category === c.key ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}>
@@ -264,36 +264,36 @@ function Composer({ onClose, onDone }: { onClose: () => void; onDone: () => void
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Ceritakan kejadiannya</label>
-          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={4} maxLength={1000} placeholder="Jelaskan perilaku/kejadiannya — objektif, bukan nyerang orangnya. (min 10 karakter)" className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Tell us what happened</label>
+          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={4} maxLength={1000} placeholder="Describe the behavior/incident — keep it objective, don't attack the person. (min 10 characters)" className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
           <p className="text-right text-[11px] text-muted-foreground">{reason.trim().length}/1000</p>
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Foto bukti <span className="text-rose-500">*wajib</span></label>
+          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Photo evidence <span className="text-rose-500">*required</span></label>
           {previewUrl ? (
             <div className="relative overflow-hidden rounded-xl border border-border">
-              <img src={previewUrl} alt="bukti" className="max-h-56 w-full object-cover" />
+              <img src={previewUrl} alt="evidence" className="max-h-56 w-full object-cover" />
               <button onClick={() => { setEvidence(null); if (fileRef.current) fileRef.current.value = ""; }} className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-black/60 text-white"><X className="h-4 w-4" /></button>
             </div>
           ) : (
             <button onClick={() => fileRef.current?.click()} className="flex w-full flex-col items-center gap-1.5 rounded-xl border border-dashed border-border bg-background py-6 text-muted-foreground transition hover:border-primary/40 hover:text-primary">
               <Camera className="h-6 w-6" />
-              <span className="text-sm font-semibold">Ambil / pilih foto bukti</span>
+              <span className="text-sm font-semibold">Take / pick a photo as evidence</span>
             </button>
           )}
           <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setEvidence(f); }} />
         </div>
 
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-          ⚖️ Direview <b>BoD</b>. Identitas kamu (pelapor) <b>anonim</b>. Kalau terbukti: yang dilaporin kena <b>−XP</b>, masuk <b>Hall of Shame</b> + diumumin ke semua (termasuk foto buktinya). Yang dilaporin dikasih kesempatan bantah dulu.
+          ⚖️ Reviewed by <b>BoD</b>. Your identity (the reporter) stays <b>anonymous</b>. If confirmed: the reported person gets <b>−XP</b>, lands in the <b>Hall of Shame</b> + it's announced to everyone (including the evidence photo). The reported person gets a chance to respond first.
         </div>
-        {create.isError && <p className="text-sm font-semibold text-rose-600">Gagal ngirim laporan. Cek koneksi.</p>}
+        {create.isError && <p className="text-sm font-semibold text-rose-600">Couldn't send the report. Check your connection.</p>}
       </div>
       <div className="flex justify-end gap-2 border-t border-border px-5 py-4">
-        <button onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-accent">Batal</button>
+        <button onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-accent">Cancel</button>
         <button onClick={() => create.mutate()} disabled={!canSubmit || create.isPending} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground disabled:opacity-40">
-          {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldAlert className="h-4 w-4" />} Kirim laporan
+          {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldAlert className="h-4 w-4" />} Send report
         </button>
       </div>
     </Backdrop>
@@ -324,68 +324,68 @@ function ReportDetail({ report, viewerIsBod, onClose, onChanged }: { report: Pee
           <Avatar userId={report.reportedUser.id} name={report.reportedUser.name} avatar={report.reportedUser.avatar} size={36} />
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-black">{report.reportedUser.name}</div>
-            <div className="text-[11px] text-muted-foreground">yang dilaporkan{report.reporter ? ` · oleh ${report.isMine ? "kamu" : report.reporter.name}` : " · pelapor anonim"}</div>
+            <div className="text-[11px] text-muted-foreground">reported person{report.reporter ? ` · by ${report.isMine ? "you" : report.reporter.name}` : " · anonymous reporter"}</div>
           </div>
         </div>
 
         {report.reason ? (
-          <div><div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Kejadian</div><p className="mt-1 whitespace-pre-wrap text-sm">{report.reason}</p></div>
+          <div><div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">What happened</div><p className="mt-1 whitespace-pre-wrap text-sm">{report.reason}</p></div>
         ) : (
-          <p className="text-sm text-muted-foreground">Detail kejadian cuma kelihatan oleh BoD & pihak terkait.</p>
+          <p className="text-sm text-muted-foreground">The incident details are only visible to BoD & the people involved.</p>
         )}
 
         {report.evidenceUrl && (
           <div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Foto bukti</div>
-            <img src={report.evidenceUrl} alt="bukti" className="mt-1 max-h-72 w-full rounded-xl border border-border object-contain" />
+            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Photo evidence</div>
+            <img src={report.evidenceUrl} alt="evidence" className="mt-1 max-h-72 w-full rounded-xl border border-border object-contain" />
           </div>
         )}
 
         {report.rebuttal && (
           <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-sky-700">Bantahan dari yang dilaporkan</div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-sky-700">Response from the reported person</div>
             <p className="mt-1 whitespace-pre-wrap">{report.rebuttal}</p>
           </div>
         )}
 
         {report.status !== "PENDING" && (
           <div className="rounded-xl border border-border bg-muted/30 p-3 text-sm">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Keputusan {report.reviewer ? `· ${report.reviewer.name}` : ""}</div>
-            <p className="mt-1">{report.status === "VERIFIED" ? "Terbukti melanggar — masuk Hall of Shame + diumumin." : report.status === "REJECTED" ? "Ditolak / gak terbukti." : "Ditarik pelapor."}</p>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Decision {report.reviewer ? `· ${report.reviewer.name}` : ""}</div>
+            <p className="mt-1">{report.status === "VERIFIED" ? "Confirmed violation — added to Hall of Shame + announced." : report.status === "REJECTED" ? "Dismissed / not confirmed." : "Withdrawn by the reporter."}</p>
             {report.reviewNote && <p className="mt-1 text-muted-foreground">“{report.reviewNote}”</p>}
-            {report.xpApplied && <p className="mt-1 text-xs font-semibold text-rose-600">Yang dilaporin kena −{report.reportedPenaltyXp} XP</p>}
+            {report.xpApplied && <p className="mt-1 text-xs font-semibold text-rose-600">Reported person lost −{report.reportedPenaltyXp} XP</p>}
           </div>
         )}
 
         {/* Reported person → rebuttal (while pending) */}
         {report.canRebut && (
           <div className="space-y-2 rounded-2xl border border-sky-200 p-3">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-sky-700">Kasih bantahan kamu</div>
-            <textarea value={rebuttal} onChange={(e) => setRebuttal(e.target.value)} rows={3} maxLength={1000} placeholder="Klarifikasi / bantahan kamu — dibaca BoD sebelum mutusin." className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-sky-500" />
+            <div className="text-[11px] font-bold uppercase tracking-wider text-sky-700">Add your response</div>
+            <textarea value={rebuttal} onChange={(e) => setRebuttal(e.target.value)} rows={3} maxLength={1000} placeholder="Your clarification / response — BoD reads this before deciding." className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-sky-500" />
             <button onClick={() => rebut.mutate()} disabled={busy || !rebuttal.trim()} className="inline-flex items-center gap-1.5 rounded-xl bg-sky-600 px-3 py-2 text-sm font-bold text-white transition hover:bg-sky-700 disabled:opacity-40">
-              {rebut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquareWarning className="h-4 w-4" />} Kirim bantahan
+              {rebut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquareWarning className="h-4 w-4" />} Send response
             </button>
-            {rebut.isError && <p className="text-xs font-semibold text-rose-600">Gagal kirim bantahan.</p>}
+            {rebut.isError && <p className="text-xs font-semibold text-rose-600">Couldn't send your response.</p>}
           </div>
         )}
 
         {/* BoD → verdict (pending, not own report) */}
         {viewerIsBod && report.canDecide && (
           <div className="space-y-2 rounded-2xl border border-border p-3">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Putuskan</div>
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Catatan keputusan (opsional, dilihat kedua pihak)" className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Decide</div>
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Decision note (optional, visible to both parties)" className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
             <div className="flex gap-2">
-              <button onClick={() => verdict.mutate("reject")} disabled={busy} className="flex-1 rounded-xl border border-border py-2 text-sm font-bold text-muted-foreground transition hover:bg-accent disabled:opacity-40">Tolak</button>
-              <button onClick={() => verdict.mutate("verify")} disabled={busy} className="flex-[1.4] rounded-xl bg-rose-600 py-2 text-sm font-bold text-white transition hover:bg-rose-700 disabled:opacity-40">{verdict.isPending ? "Memproses…" : "Tandai terbukti"}</button>
+              <button onClick={() => verdict.mutate("reject")} disabled={busy} className="flex-1 rounded-xl border border-border py-2 text-sm font-bold text-muted-foreground transition hover:bg-accent disabled:opacity-40">Dismiss</button>
+              <button onClick={() => verdict.mutate("verify")} disabled={busy} className="flex-[1.4] rounded-xl bg-rose-600 py-2 text-sm font-bold text-white transition hover:bg-rose-700 disabled:opacity-40">{verdict.isPending ? "Processing…" : "Mark as confirmed"}</button>
             </div>
-            <p className="text-[11px] text-muted-foreground">Terbukti = −XP + Hall of Shame + pengumuman ke semua. Pelapor tetap anonim.</p>
-            {verdict.isError && <p className="text-xs font-semibold text-rose-600">Gagal — mungkin udah diputus orang lain.</p>}
+            <p className="text-[11px] text-muted-foreground">Confirmed = −XP + Hall of Shame + announced to everyone. The reporter stays anonymous.</p>
+            {verdict.isError && <p className="text-xs font-semibold text-rose-600">Failed — someone else may have already decided.</p>}
           </div>
         )}
 
         {report.canWithdraw && (
           <button onClick={() => withdraw.mutate()} disabled={busy} className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-accent disabled:opacity-40">
-            {withdraw.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />} Tarik laporan ini
+            {withdraw.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />} Withdraw this report
           </button>
         )}
       </div>

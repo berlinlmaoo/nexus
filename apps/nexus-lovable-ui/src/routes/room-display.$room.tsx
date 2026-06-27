@@ -6,8 +6,8 @@ export const Route = createFileRoute("/room-display/$room")({ component: RoomDis
 
 // Canonical rooms + friendly slugs so a TV URL can be simple: /room-display/studio, /vip, /meeting.
 const ROOMS = [
-  { name: "Ruang Meeting VIP", short: "Ruang Meeting VIP", slugs: ["vip", "ruang-meeting-vip", "meeting-vip"] },
-  { name: "Ruang Meeting", short: "Ruang Meeting", slugs: ["meeting", "ruang-meeting"] },
+  { name: "Ruang Meeting VIP", short: "VIP Meeting Room", slugs: ["vip", "ruang-meeting-vip", "meeting-vip"] },
+  { name: "Ruang Meeting", short: "Meeting Room", slugs: ["meeting", "ruang-meeting"] },
   { name: "Studio", short: "Studio", slugs: ["studio"] },
 ] as const;
 
@@ -30,7 +30,7 @@ const relMins = (from: Date, to: Date) => Math.round((to.getTime() - from.getTim
 function RoomChooser() {
   return (
     <div style={{ minHeight: "100vh" }} className="flex flex-col items-center justify-center gap-6 bg-background p-8 text-foreground">
-      <div className="text-2xl font-bold text-muted-foreground">Pilih ruangan buat ditampilin di TV</div>
+      <div className="text-2xl font-bold text-muted-foreground">Pick a room to show on the TV</div>
       <div className="flex flex-wrap items-center justify-center gap-4">
         {ROOMS.map((r) => (
           <Link key={r.name} to="/room-display/$room" params={{ room: r.slugs[0] }} className="rounded-2xl border border-border bg-card px-8 py-6 text-2xl font-black text-foreground shadow-soft transition hover:bg-accent hover:scale-[1.03]">
@@ -117,21 +117,21 @@ function RoomDisplay() {
           {occupied && current ? (
             <>
               <div className="flex items-center gap-3 text-lg font-black uppercase tracking-widest text-destructive">
-                <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-destructive" /> Sedang dipakai
+                <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-destructive" /> In use
               </div>
               <div className="mt-3 font-black leading-tight text-foreground" style={{ fontSize: "clamp(2rem, 5vw, 4rem)" }}>{current.title}</div>
-              <div className="mt-2 text-2xl font-semibold text-muted-foreground">{fmtTime(current.start)} – {fmtTime(current.end)} · berakhir dalam {Math.max(0, relMins(now, current.end))} menit</div>
+              <div className="mt-2 text-2xl font-semibold text-muted-foreground">{fmtTime(current.start)} – {fmtTime(current.end)} · ends in {Math.max(0, relMins(now, current.end))} min</div>
             </>
           ) : (
             <>
               <div className="flex items-center gap-3 text-lg font-black uppercase tracking-widest text-success">
-                <span className="inline-block h-3 w-3 rounded-full bg-success" /> Tersedia
+                <span className="inline-block h-3 w-3 rounded-full bg-success" /> Available
               </div>
               <div className="mt-3 font-black leading-tight text-foreground" style={{ fontSize: "clamp(2rem, 5vw, 4rem)" }}>
-                {next && dayKey(next.start) === todayK ? <>Kosong sampai {fmtTime(next.start)}</> : <>Bebas dipakai</>}
+                {next && dayKey(next.start) === todayK ? <>Free until {fmtTime(next.start)}</> : <>Free to use</>}
               </div>
               <div className="mt-2 text-2xl font-semibold text-muted-foreground">
-                {next ? (dayKey(next.start) === todayK ? <>Berikutnya: {next.title} · mulai dalam {Math.max(0, relMins(now, next.start))} menit</> : <>Booking berikutnya {fmtDayLong(next.start)}, {fmtTime(next.start)}</>) : <>Gak ada booking dalam waktu dekat</>}
+                {next ? (dayKey(next.start) === todayK ? <>Up next: {next.title} · starts in {Math.max(0, relMins(now, next.start))} min</> : <>Next booking {fmtDayLong(next.start)}, {fmtTime(next.start)}</>) : <>No bookings coming up</>}
               </div>
             </>
           )}
@@ -140,16 +140,16 @@ function RoomDisplay() {
 
       {/* upcoming agenda */}
       <section className="flex-1 overflow-hidden px-10 pb-6">
-        <div className="mb-3 text-sm font-black uppercase tracking-[0.3em] text-primary">Jadwal berikutnya</div>
+        <div className="mb-3 text-sm font-black uppercase tracking-[0.3em] text-primary">Up next</div>
         {!loaded ? (
-          <div className="text-2xl font-semibold text-muted-foreground">Memuat…</div>
+          <div className="text-2xl font-semibold text-muted-foreground">Loading…</div>
         ) : days.length === 0 ? (
-          <div className="text-2xl font-semibold text-muted-foreground">Belum ada booking ke depan.</div>
+          <div className="text-2xl font-semibold text-muted-foreground">No upcoming bookings yet.</div>
         ) : (
           <div className="space-y-5">
             {days.map(([k, items]) => (
               <div key={k}>
-                <div className="mb-2 text-lg font-bold text-muted-foreground">{k === todayK ? "Hari ini" : fmtDayLong(items[0].start)}</div>
+                <div className="mb-2 text-lg font-bold text-muted-foreground">{k === todayK ? "Today" : fmtDayLong(items[0].start)}</div>
                 <div className="space-y-2">
                   {items.map((b) => (
                     <div key={b.id} className="flex items-center gap-5 rounded-2xl border border-border bg-card px-6 py-4 shadow-soft">
@@ -166,7 +166,7 @@ function RoomDisplay() {
 
       {/* footer */}
       <footer className="flex items-center justify-between border-t border-border px-10 py-3 text-sm text-muted-foreground">
-        <span>{error ? "⚠️ koneksi terputus — nampilin data terakhir" : updatedAt ? `Diperbarui ${fmtClock(updatedAt)} · auto-refresh 30 detik` : "menyambung…"}</span>
+        <span>{error ? "⚠️ connection lost — showing last data" : updatedAt ? `Updated ${fmtClock(updatedAt)} · auto-refresh every 30s` : "connecting…"}</span>
         <span className="flex gap-4">{ROOMS.map((r) => <Link key={r.name} to="/room-display/$room" params={{ room: r.slugs[0] }} className={r.name === roomName ? "font-bold text-primary" : "hover:text-foreground"}>{r.short}</Link>)}</span>
       </footer>
     </div>

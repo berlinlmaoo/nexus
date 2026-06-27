@@ -57,7 +57,7 @@ export function PostCard({ post, members, onLike, onDelete, onEdit, onRetry, onC
           <div className="flex items-center gap-1.5">
             <span className="text-[15px] font-bold leading-tight">{post.author.name}</span>
             <span className="text-sm text-muted-foreground">· {pending ? "Posting…" : timeAgo(post.createdAt)}</span>
-            {post.editedAt && !pending && <span className="text-sm text-muted-foreground">· diedit</span>}
+            {post.editedAt && !pending && <span className="text-sm text-muted-foreground">· edited</span>}
             {!pending && !failed && (post.canDelete || post.canEdit) && (
               <div className="relative ml-auto">
                 <button onClick={() => setMenu((m) => !m)} className="-mr-1.5 grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition hover:bg-accent"><MoreHorizontal className="h-4 w-4" /></button>
@@ -66,7 +66,7 @@ export function PostCard({ post, members, onLike, onDelete, onEdit, onRetry, onC
                     <div className="fixed inset-0 z-20" onClick={() => setMenu(false)} />
                     <div className="absolute right-0 z-30 mt-1 w-36 overflow-hidden rounded-xl border border-border bg-popover py-1 shadow-pop">
                       {post.canEdit && <button onClick={() => { setEditing(true); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent"><Pencil className="h-3.5 w-3.5" /> Edit</button>}
-                      {post.canDelete && <button onClick={() => { onDelete(post); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-rose-600 hover:bg-rose-50"><Trash2 className="h-3.5 w-3.5" /> Hapus</button>}
+                      {post.canDelete && <button onClick={() => { onDelete(post); setMenu(false); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-rose-600 hover:bg-rose-50"><Trash2 className="h-3.5 w-3.5" /> Delete</button>}
                     </div>
                   </>
                 )}
@@ -114,9 +114,9 @@ export function PostCard({ post, members, onLike, onDelete, onEdit, onRetry, onC
 
           {failed && (
             <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-rose-600">
-              Gagal ngirim.
-              <button onClick={() => onRetry(post)} className="inline-flex items-center gap-1 rounded-lg bg-rose-500 px-2.5 py-1 text-white"><RotateCw className="h-3.5 w-3.5" /> Coba lagi</button>
-              <button onClick={() => onDelete(post)} className="text-muted-foreground hover:text-foreground">Buang</button>
+              Couldn't send.
+              <button onClick={() => onRetry(post)} className="inline-flex items-center gap-1 rounded-lg bg-rose-500 px-2.5 py-1 text-white"><RotateCw className="h-3.5 w-3.5" /> Try again</button>
+              <button onClick={() => onDelete(post)} className="text-muted-foreground hover:text-foreground">Discard</button>
             </div>
           )}
 
@@ -142,8 +142,8 @@ function EditBox({ post, members, onCancel, onSave }: { post: FeedPost; members:
         {mention.open && <MentionList matches={mention.matches} active={mention.active} onPick={mention.pick} />}
       </div>
       <div className="mt-1.5 flex justify-end gap-2">
-        <button onClick={onCancel} className="rounded-lg px-3 py-1.5 text-sm font-semibold text-muted-foreground hover:bg-accent">Batal</button>
-        <button onClick={() => onSave(mention.text.trim(), mention.resolveIds(mention.text.trim()))} disabled={!mention.text.trim()} className="rounded-lg bg-primary px-3 py-1.5 text-sm font-bold text-primary-foreground disabled:opacity-40">Simpan</button>
+        <button onClick={onCancel} className="rounded-lg px-3 py-1.5 text-sm font-semibold text-muted-foreground hover:bg-accent">Cancel</button>
+        <button onClick={() => onSave(mention.text.trim(), mention.resolveIds(mention.text.trim()))} disabled={!mention.text.trim()} className="rounded-lg bg-primary px-3 py-1.5 text-sm font-bold text-primary-foreground disabled:opacity-40">Save</button>
       </div>
     </div>
   );
@@ -161,7 +161,7 @@ function CommentsSection({ postId, members, onCommentAdded }: { postId: string; 
   return (
     <div className="mt-3 space-y-3 border-t border-border pt-3">
       {q.isLoading ? (
-        <div className="text-xs text-muted-foreground">Memuat komentar…</div>
+        <div className="text-xs text-muted-foreground">Loading comments…</div>
       ) : (
         (q.data?.comments ?? []).map((c) => (
           <div key={c.id} className="flex items-start gap-2">
@@ -174,7 +174,7 @@ function CommentsSection({ postId, members, onCommentAdded }: { postId: string; 
         ))
       )}
       <div className="relative flex items-end gap-2">
-        <textarea ref={mention.ref} value={mention.text} onChange={mention.onChange} onKeyDown={mention.onKeyDown} rows={1} placeholder="Bales… (@ buat mention)"
+        <textarea ref={mention.ref} value={mention.text} onChange={mention.onChange} onKeyDown={mention.onKeyDown} rows={1} placeholder="Reply… (@ to mention)"
           className="min-h-9 flex-1 resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
         {mention.open && <MentionList matches={mention.matches} active={mention.active} onPick={mention.pick} />}
         <button onClick={mention.submit} disabled={!mention.text.trim() || add.isPending} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground transition active:scale-95 disabled:opacity-40">

@@ -9,7 +9,7 @@ import { fmtDate, fmtTime, nexusApi, type NexusMySubmission } from "@/lib/nexus-
 
 export const Route = createFileRoute("/_app/submissions")({ component: MySubmissions });
 
-const NEW_COL = "Baru masuk";
+const NEW_COL = "Just in";
 
 function colTone(name: string) {
   const n = name.toLowerCase();
@@ -26,9 +26,9 @@ function Card({ s, onOpen }: { s: NexusMySubmission; onOpen: () => void }) {
       <div className="flex items-start gap-2">
         <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"><FileText className="h-3.5 w-3.5" /></div>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-bold">{s.taskTitle || s.formName || "Pengajuan"}</div>
+          <div className="truncate text-sm font-bold">{s.taskTitle || s.formName || "Submission"}</div>
           <div className="truncate text-[11px] text-muted-foreground">{s.formName}{s.projectName ? ` · ${s.projectName}` : ""}</div>
-          <div className="mt-1 text-[11px] text-muted-foreground">diajukan {fmtDate(s.createdAt)} {fmtTime(s.createdAt)}</div>
+          <div className="mt-1 text-[11px] text-muted-foreground">submitted {fmtDate(s.createdAt)} {fmtTime(s.createdAt)}</div>
         </div>
       </div>
     </button>
@@ -45,7 +45,7 @@ function fmtVal(v: unknown): string {
     if (typeof o.label === "string") return o.label; // place
     return JSON.stringify(v);
   }
-  if (typeof v === "boolean") return v ? "Ya" : "Tidak";
+  if (typeof v === "boolean") return v ? "Yes" : "No";
   return String(v);
 }
 
@@ -60,7 +60,7 @@ function SubmissionDetailDrawer({ id, onClose }: { id: string; onClose: () => vo
   const del = useMutation({
     mutationFn: () => nexusApi.deleteSubmission(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["my-submissions"] }); onClose(); },
-    onError: (e) => alert(e instanceof Error ? e.message : "Gagal menghapus pengajuan."),
+    onError: (e) => alert(e instanceof Error ? e.message : "Couldn't delete the submission."),
   });
   const sub = d.data;
   const answers = sub?.answers ?? [];
@@ -70,27 +70,27 @@ function SubmissionDetailDrawer({ id, onClose }: { id: string; onClose: () => vo
       <div className="flex h-full w-full max-w-md flex-col overflow-hidden bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 border-b border-border p-5">
           <div className="min-w-0">
-            <h2 className="font-display text-lg font-bold leading-tight">{sub?.taskTitle || sub?.formName || "Pengajuan"}</h2>
+            <h2 className="font-display text-lg font-bold leading-tight">{sub?.taskTitle || sub?.formName || "Submission"}</h2>
             <p className="mt-0.5 truncate text-xs text-muted-foreground">{sub?.formName}{sub?.projectName ? ` · ${sub.projectName}` : ""}</p>
           </div>
-          <button onClick={onClose} aria-label="Tutup" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:bg-accent"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} aria-label="Close" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-5">
           {d.isLoading && <div className="space-y-2">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full rounded-lg" />)}</div>}
-          {d.isError && <p className="text-sm text-destructive">Gagal memuat detail.</p>}
+          {d.isError && <p className="text-sm text-destructive">Couldn't load the details.</p>}
           {sub && (
             <>
               <div className="mb-4 flex flex-wrap items-center gap-1.5 text-[11px] font-bold">
                 {sub.stage && <span className={cn("rounded-full border px-2 py-0.5", colTone(sub.stage))}>{sub.stage}</span>}
                 {sub.procStatus && <span className={cn("rounded-full border px-2 py-0.5", colTone(sub.procStatus))}>{sub.procStatus}</span>}
                 {sub.status && <span className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-muted-foreground">{statusLabel(sub.status)}</span>}
-                <span className="text-muted-foreground">· diajukan {fmtDate(sub.createdAt)} {fmtTime(sub.createdAt)}</span>
+                <span className="text-muted-foreground">· submitted {fmtDate(sub.createdAt)} {fmtTime(sub.createdAt)}</span>
               </div>
 
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">Detail pengajuan</p>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">Submission details</p>
               {answers.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Gaada isian yang kerekam.</p>
+                <p className="text-sm text-muted-foreground">No answers were recorded.</p>
               ) : (
                 <div className="space-y-2.5">
                   {answers.map((a) => (
@@ -107,13 +107,13 @@ function SubmissionDetailDrawer({ id, onClose }: { id: string; onClose: () => vo
 
         <div className="border-t border-border p-4">
           <button
-            onClick={() => { if (window.confirm("Hapus pengajuan ini?\n\nTask-nya di project juga ikut KEHAPUS permanen, dan gabisa di-undo.")) del.mutate(); }}
+            onClick={() => { if (window.confirm("Delete this submission?\n\nIts task in the project gets PERMANENTLY deleted too, and this can't be undone.")) del.mutate(); }}
             disabled={del.isPending}
             className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-rose-700 disabled:opacity-50"
           >
-            {del.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Hapus pengajuan + task-nya
+            {del.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Delete submission + its task
           </button>
-          <p className="mt-1.5 text-center text-[11px] text-muted-foreground">Ngapus pengajuan ini bakal ngapus juga task-nya di project.</p>
+          <p className="mt-1.5 text-center text-[11px] text-muted-foreground">Deleting this submission also deletes its task in the project.</p>
         </div>
       </div>
     </div>
@@ -130,23 +130,23 @@ function MySubmissions() {
 
   return (
     <div>
-      <PageHeader title="Pengajuan Saya" subtitle="Board status pengajuanmu — digerakin tim Finance, kamu cuma pantau (read-only). Klik buat lihat detail." />
+      <PageHeader title="My Submissions" subtitle="A status board for your submissions — the Finance team moves them, you just watch (read-only). Tap to see the details." />
       <div className="p-4 md:p-8">
         {q.isLoading && <div className="flex gap-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-64 w-72 rounded-2xl" />)}</div>}
-        {q.isError && <div className="rounded-2xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground shadow-sm">Gagal memuat. Login diperlukan.</div>}
+        {q.isError && <div className="rounded-2xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground shadow-sm">Couldn't load. You need to log in.</div>}
 
         {!q.isLoading && !q.isError && subs.length === 0 && (
           <div className="rounded-2xl border border-dashed bg-card p-10 text-center shadow-sm">
             <Inbox className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
-            <div className="text-base font-black">Belum ada pengajuan</div>
-            <p className="mt-1.5 text-sm text-muted-foreground">Form yang kamu ajukan bakal muncul di board ini lengkap sama statusnya.</p>
+            <div className="text-base font-black">No submissions yet</div>
+            <p className="mt-1.5 text-sm text-muted-foreground">Forms you submit will show up on this board with their status.</p>
           </div>
         )}
 
         {!q.isLoading && !q.isError && subs.length > 0 && (
           <>
             <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1 text-[11px] font-semibold text-muted-foreground">
-              <Lock className="h-3 w-3" /> Read-only — status diatur tim Finance
+              <Lock className="h-3 w-3" /> Read-only — status managed by the Finance team
             </div>
             <div className="flex gap-3 overflow-x-auto pb-4">
               {columns.map((col) => {
@@ -159,7 +159,7 @@ function MySubmissions() {
                     </div>
                     <div className="flex-1 space-y-2 px-2 pb-2">
                       {items.map((s) => <Card key={s.id} s={s} onOpen={() => setOpenId(s.id)} />)}
-                      {items.length === 0 && <div className="rounded-xl border border-dashed border-border/60 py-6 text-center text-[11px] text-muted-foreground">kosong</div>}
+                      {items.length === 0 && <div className="rounded-xl border border-dashed border-border/60 py-6 text-center text-[11px] text-muted-foreground">empty</div>}
                     </div>
                   </div>
                 );

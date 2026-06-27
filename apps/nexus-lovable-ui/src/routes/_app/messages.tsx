@@ -120,7 +120,7 @@ function NewChat({ onClose, onCreated, meId }: { onClose: () => void; onCreated:
         </div>
         <div className="mt-4 flex items-center gap-2">
           <button disabled={selected.length === 0 || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Start {isGroup ? "group" : "chat"}</button>
-          {create.isError && <span className="text-xs font-semibold text-destructive">Gagal bikin chat.</span>}
+          {create.isError && <span className="text-xs font-semibold text-destructive">Couldn't start the chat.</span>}
         </div>
       </div>
     </div>

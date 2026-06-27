@@ -253,17 +253,17 @@ function ProjectsPage() {
       return saved;
     },
     onSuccess: () => { invalidateFolders(); setFolderForm(null); },
-    onError: (e: unknown) => toast.error("Gagal simpan folder", { description: e instanceof Error ? e.message : undefined }),
+    onError: (e: unknown) => toast.error("Couldn't save folder", { description: e instanceof Error ? e.message : undefined }),
   });
   const folderDelete = useMutation({
     mutationFn: (id: string) => nexusApi.projectFolderDelete(id),
-    onSuccess: () => { invalidateFolders(); toast.success("Folder dihapus — project-nya jadi tanpa folder"); },
-    onError: (e: unknown) => toast.error("Gagal hapus folder", { description: e instanceof Error ? e.message : undefined }),
+    onSuccess: () => { invalidateFolders(); toast.success("Folder deleted — its projects are now folder-free"); },
+    onError: (e: unknown) => toast.error("Couldn't delete folder", { description: e instanceof Error ? e.message : undefined }),
   });
   const moveProject = useMutation({
     mutationFn: ({ projectId, folderId }: { projectId: string; folderId: string | null }) => nexusApi.updateProject(projectId, { folderId }),
     onSuccess: () => { invalidateProjectData(queryClient); },
-    onError: (e: unknown) => toast.error("Gagal pindah project", { description: e instanceof Error ? e.message : undefined }),
+    onError: (e: unknown) => toast.error("Couldn't move project", { description: e instanceof Error ? e.message : undefined }),
   });
   const onMoveProject = (projectId: string, folderId: string | null) => moveProject.mutate({ projectId, folderId });
 
@@ -611,7 +611,7 @@ function ProjectsPage() {
                   >
                     {renderFolderTree(folder.id, depth + 1)}
                     {items.length ? renderItems(items) : (subCount === 0 ? (
-                      <p className="px-1 py-2 text-xs text-muted-foreground">Folder kosong — pindahin project ke sini, atau bikin subfolder.</p>
+                      <p className="px-1 py-2 text-xs text-muted-foreground">Empty folder — drop a project in here, or make a subfolder.</p>
                     ) : null)}
                   </FolderSection>
                 );
@@ -810,18 +810,18 @@ function MoveToFolderMenu({ currentFolderId, folders, onMove }: { currentFolderI
           type="button"
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((o) => !o); }}
           className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-border bg-background text-muted-foreground transition hover:border-primary hover:text-primary"
-          title="Pindah ke folder"
-          aria-label="Pindah ke folder"
+          title="Move to folder"
+          aria-label="Move to folder"
         >
           <Folder className="h-3.5 w-3.5" />
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-56 p-1.5">
-        <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Pindah ke folder</div>
+        <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Move to folder</div>
         <div className="max-h-64 overflow-y-auto">
           <button type="button" onClick={(e) => pick(e, null)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-accent">
             <span className="grid h-4 w-4 place-items-center">{currentFolderId === null && <Check className="h-3.5 w-3.5 text-primary" />}</span>
-            <span className="text-muted-foreground">Tanpa folder</span>
+            <span className="text-muted-foreground">No folder</span>
           </button>
           {(() => {
             const byId = new Map(folders.map((f) => [f.id, f]));
@@ -856,18 +856,18 @@ function FolderManageMenu({ name, onEdit, onDelete, onNewSub }: { name: string; 
       <PopoverContent align="end" className="w-44 p-1.5">
         {onNewSub && (
           <button type="button" onClick={() => { setOpen(false); onNewSub(); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-accent">
-            <FolderPlus className="h-3.5 w-3.5" /> Subfolder baru
+            <FolderPlus className="h-3.5 w-3.5" /> New subfolder
           </button>
         )}
         <button type="button" onClick={() => { setOpen(false); onEdit(); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-accent">
-          <Pencil className="h-3.5 w-3.5" /> Ubah folder
+          <Pencil className="h-3.5 w-3.5" /> Edit folder
         </button>
         <button
           type="button"
-          onClick={() => { setOpen(false); if (window.confirm(`Hapus folder "${name}"? Project di dalamnya jadi tanpa folder (nggak ikut kehapus).`)) onDelete(); }}
+          onClick={() => { setOpen(false); if (window.confirm(`Delete folder "${name}"? The projects inside become folder-free (they won't be deleted).`)) onDelete(); }}
           className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-destructive hover:bg-destructive/10"
         >
-          <Trash2 className="h-3.5 w-3.5" /> Hapus folder
+          <Trash2 className="h-3.5 w-3.5" /> Delete folder
         </button>
       </PopoverContent>
     </Popover>
@@ -890,7 +890,7 @@ function FolderSection({ folder, count, collapsed, onToggle, canManage, onEdit, 
         </button>
         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: folder?.color || "#94a3b8" }} />
         {folder ? (
-          <Link to="/folders/$folderId" params={{ folderId: folder.id }} className="flex min-w-0 items-center gap-2 transition hover:text-primary" title="Buka folder view (board + calendar gabungan)">
+          <Link to="/folders/$folderId" params={{ folderId: folder.id }} className="flex min-w-0 items-center gap-2 transition hover:text-primary" title="Open folder view (combined board + calendar)">
             <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-md text-base leading-none">
               <ProjectIcon icon={folder.icon || "📁"} className="max-h-6 max-w-6 rounded-md object-cover" />
             </span>
@@ -901,7 +901,7 @@ function FolderSection({ folder, count, collapsed, onToggle, canManage, onEdit, 
             <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-md text-base leading-none">
               <ProjectIcon icon="🗂️" className="max-h-6 max-w-6 rounded-md object-cover" />
             </span>
-            <h3 className="truncate font-bold tracking-tight">Tanpa folder</h3>
+            <h3 className="truncate font-bold tracking-tight">No folder</h3>
           </>
         )}
         <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">{count}</span>
@@ -931,8 +931,8 @@ function FolderFormModal({ form, saving, canSave, onChange, onCancel, onSave }: 
   return (
     <div className="fixed inset-0 z-[60] grid place-items-center bg-black/35 px-4 backdrop-blur-sm" role="dialog" aria-modal="true">
       <div className="w-full max-w-sm rounded-[28px] border border-border bg-card p-5 shadow-pop">
-        <h2 className="text-lg font-black tracking-tight">{form.mode === "create" ? (form.parentName ? "Subfolder baru" : "Folder baru") : "Ubah folder"}</h2>
-        <p className="mt-1 text-xs text-muted-foreground">{form.parentName ? `Di dalam folder "${form.parentName}". ` : ""}Kelompokin project biar Mission Control rapi.</p>
+        <h2 className="text-lg font-black tracking-tight">{form.mode === "create" ? (form.parentName ? "New subfolder" : "New folder") : "Edit folder"}</h2>
+        <p className="mt-1 text-xs text-muted-foreground">{form.parentName ? `Inside the "${form.parentName}" folder. ` : ""}Group your projects to keep Mission Control tidy.</p>
         <div className="mt-4 space-y-3">
           <div className="flex items-center gap-2">
             {photoPreview ? (
@@ -943,7 +943,7 @@ function FolderFormModal({ form, saving, canSave, onChange, onCancel, onSave }: 
             <input
               value={form.name}
               onChange={(e) => onChange({ name: e.target.value })}
-              placeholder="Nama folder"
+              placeholder="Folder name"
               autoFocus
               onKeyDown={(e) => { if (e.key === "Enter" && canSave && !saving) onSave(); }}
               className="h-10 flex-1 rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-primary"
@@ -952,14 +952,14 @@ function FolderFormModal({ form, saving, canSave, onChange, onCancel, onSave }: 
           {/* foto folder — sama kaya icon project (PNG/JPG/SVG/WEBP maks 5MB) */}
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition hover:bg-accent">
-              <ImagePlus className="h-3.5 w-3.5" />{photoPreview ? "Ganti foto" : "Upload foto"}
+              <ImagePlus className="h-3.5 w-3.5" />{photoPreview ? "Change photo" : "Upload photo"}
             </button>
             {photoPreview && (
               <button type="button" onClick={() => { onChange({ iconFile: null, icon: "📁" }); if (fileRef.current) fileRef.current.value = ""; }} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive">
-                <Trash2 className="h-3.5 w-3.5" />Pakai emoji lagi
+                <Trash2 className="h-3.5 w-3.5" />Back to emoji
               </button>
             )}
-            <span className="text-[10px] text-muted-foreground">PNG/JPG/SVG/WEBP, maks 5MB</span>
+            <span className="text-[10px] text-muted-foreground">PNG/JPG/SVG/WEBP, max 5MB</span>
             <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) onChange({ iconFile: f }); }} />
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -969,8 +969,8 @@ function FolderFormModal({ form, saving, canSave, onChange, onCancel, onSave }: 
           </div>
         </div>
         <div className="mt-5 flex justify-end gap-2">
-          <Button size="sm" variant="outline" onPress={onCancel}>Batal</Button>
-          <Button size="sm" variant="primary" isDisabled={!canSave || saving} onPress={onSave}>{saving ? "Nyimpen…" : "Simpan"}</Button>
+          <Button size="sm" variant="outline" onPress={onCancel}>Cancel</Button>
+          <Button size="sm" variant="primary" isDisabled={!canSave || saving} onPress={onSave}>{saving ? "Saving…" : "Save"}</Button>
         </div>
       </div>
     </div>

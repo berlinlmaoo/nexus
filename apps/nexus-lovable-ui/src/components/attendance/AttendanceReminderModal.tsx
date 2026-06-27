@@ -96,17 +96,17 @@ export function AttendanceReminderModal() {
             <div className="flex items-start justify-between gap-3 border-b border-border bg-gradient-to-br from-accent via-card to-secondary px-5 py-4">
               <div>
                 <p className="text-[11px] font-black uppercase tracking-[0.2em] text-primary">Attendance</p>
-                <h2 className="mt-0.5 font-display text-xl font-bold tracking-tight">{isCheckout ? "Selesaikan absen kemarin" : "Belum absen hari ini"}</h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">{isCheckout ? `Kamu lupa check-out ${pending?.attendanceDate ? fmtDate(pending.attendanceDate) : "kemarin"}.` : "Yuk absen — buka halaman absen buat selfie + GPS."}</p>
+                <h2 className="mt-0.5 font-display text-xl font-bold tracking-tight">{isCheckout ? "Wrap up yesterday's attendance" : "You haven't checked in today"}</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">{isCheckout ? `You forgot to check out ${pending?.attendanceDate ? fmtDate(pending.attendanceDate) : "yesterday"}.` : "Time to clock in — open the attendance page for selfie + GPS."}</p>
               </div>
-              <button onClick={() => setDismissed(true)} aria-label="Tutup" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+              <button onClick={() => setDismissed(true)} aria-label="Close" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
             </div>
 
             <div className="space-y-3 p-5">
               {isCheckout && (
                 <div className="flex items-start gap-2 rounded-2xl border border-amber-300/60 bg-amber-100 p-3 text-sm font-semibold text-amber-800">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>Wajib check-out dulu sebelum bisa check-in hari ini.</span>
+                  <span>You need to check out first before you can check in today.</span>
                 </div>
               )}
 
@@ -114,10 +114,10 @@ export function AttendanceReminderModal() {
                 onClick={goToAttendance}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.99]"
               >
-                {isCheckout ? "Check out kemarin" : "Check in sekarang"} <ArrowRight className="h-4 w-4" />
+                {isCheckout ? "Check out yesterday" : "Check in now"} <ArrowRight className="h-4 w-4" />
               </button>
-              <p className="text-center text-[11px] text-muted-foreground">Diarahkan ke halaman absen — kalau lagi di luar radius kantor pun bisa lewat opsi offsite di sana.</p>
-              <button onClick={() => setDismissed(true)} className="block w-full text-center text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground">Nanti aja</button>
+              <p className="text-center text-[11px] text-muted-foreground">We'll send you to the attendance page — even if you're outside the office radius, you can use the offsite option there.</p>
+              <button onClick={() => setDismissed(true)} className="block w-full text-center text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground">Later</button>
 
               {data?.today?.checkOutAt && <p className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Clock className="h-3 w-3" /> Out {fmtTime(data.today.checkOutAt)}</p>}
             </div>

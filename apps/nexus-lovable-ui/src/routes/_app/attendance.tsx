@@ -43,13 +43,13 @@ const sCls: Record<string, string> = {
   none: "bg-muted/40",
 };
 const toneLabel: Record<string, string> = {
-  present: "Hadir", wfh: "WFH", leave: "Cuti/Izin", sick: "Sakit", dayoff: "Day off / tgl merah", absent: "Absent", none: "",
+  present: "Present", wfh: "WFH", leave: "Leave/Permit", sick: "Sick", dayoff: "Day off / public holiday", absent: "Absent", none: "",
 };
-const REQ_LABEL: Record<string, string> = { LEAVE: "Cuti", SICK: "Sakit", PERMIT: "Izin", DAY_OFF: "Day Off", RED_DATE: "Tanggal Merah" };
+const REQ_LABEL: Record<string, string> = { LEAVE: "Leave", SICK: "Sick", PERMIT: "Permit", DAY_OFF: "Day Off", RED_DATE: "Public Holiday" };
 
 // Detail popup for an approved leave/sick/permit/day-off/red-date cell on the streak board.
 function LeaveDetailDrawer({ record, onClose, canOverride }: { record: HistRow; onClose: () => void; canOverride?: boolean }) {
-  const typeLabel = REQ_LABEL[(record.requestType || "").toUpperCase()] || "Cuti/Izin";
+  const typeLabel = REQ_LABEL[(record.requestType || "").toUpperCase()] || "Leave/Permit";
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
@@ -61,23 +61,23 @@ function LeaveDetailDrawer({ record, onClose, canOverride }: { record: HistRow; 
               <div className="text-xs text-muted-foreground">{record.user?.name || "Crew"}</div>
             </div>
           </div>
-          <button onClick={onClose} aria-label="Tutup" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
         <dl className="space-y-2 text-sm">
-          <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Tanggal</dt><dd className="font-semibold">{fmtDate(record.attendanceDate)}</dd></div>
+          <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Date</dt><dd className="font-semibold">{fmtDate(record.attendanceDate)}</dd></div>
           <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Status</dt><dd className="font-semibold text-emerald-600">Approved ✓</dd></div>
-          {record.reviewedBy?.name && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Disetujui oleh</dt><dd className="font-semibold">{record.reviewedBy.name}</dd></div>}
-          {record.reviewedAt && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Tgl approve</dt><dd className="font-semibold">{fmtDate(record.reviewedAt)}</dd></div>}
+          {record.reviewedBy?.name && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Approved by</dt><dd className="font-semibold">{record.reviewedBy.name}</dd></div>}
+          {record.reviewedAt && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Approved on</dt><dd className="font-semibold">{fmtDate(record.reviewedAt)}</dd></div>}
         </dl>
         {record.notes && (
           <div className="mt-3 rounded-xl bg-muted/40 p-3">
-            <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Alasan</div>
+            <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Reason</div>
             <p className="whitespace-pre-wrap text-sm">{record.notes}</p>
           </div>
         )}
         {record.supportingDocumentUrl && (
           <a href={record.supportingDocumentUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition hover:bg-accent">
-            <Download className="h-3.5 w-3.5" /> {record.supportingDocumentName || "Lihat lampiran"}
+            <Download className="h-3.5 w-3.5" /> {record.supportingDocumentName || "View attachment"}
           </a>
         )}
         {canOverride && record.user?.id && (
@@ -88,7 +88,7 @@ function LeaveDetailDrawer({ record, onClose, canOverride }: { record: HistRow; 
   );
 }
 
-const OVERRIDE_LABEL: Record<string, string> = { PRESENT: "Hadir", LEAVE: "Cuti", SICK: "Sakit", DAY_OFF: "Day off" };
+const OVERRIDE_LABEL: Record<string, string> = { PRESENT: "Present", LEAVE: "Leave", SICK: "Sick", DAY_OFF: "Day off" };
 
 /** BoD-only: rewrite one member-day's status (Hadir on-time / Cuti / Sakit / Day off) — XP penalties
  *  for that day are refunded + an auto-cut day-off restored — or just remove the punishment. */
@@ -101,26 +101,26 @@ function StatusOverridePanel({ userId, name, dateKey, onDone }: { userId: string
       qc.invalidateQueries({ queryKey: ["attendance-requests"] });
       qc.invalidateQueries({ queryKey: ["attendance-today"] });
       if (r.action === "CLEAR_PENALTY") {
-        celebrate(r.refunded ? `Punishment ${r.date} dihapus — XP & day-off balik 🛡️` : `Tidak ada potongan di ${r.date} — hari ini tetap diamankan dari potongan.`);
+        celebrate(r.refunded ? `Penalty for ${r.date} cleared — XP & day-off restored 🛡️` : `No penalty on ${r.date} — this day stays safe from deductions.`);
       } else {
-        celebrate(`${name ?? "Staff"} · ${r.date} → ${OVERRIDE_LABEL[r.action] ?? r.action}${r.refunded ? " (potongan dipulihkan)" : ""} ✅`);
+        celebrate(`${name ?? "Staff"} · ${r.date} → ${OVERRIDE_LABEL[r.action] ?? r.action}${r.refunded ? " (penalty restored)" : ""} ✅`);
       }
       if ((r.multiDayRequestsLeft ?? 0) > 0) {
-        alert(`Catatan: tanggal ini masih ketutup ${r.multiDayRequestsLeft} request multi-hari (cuti/izin beberapa hari). Kalau mau hari ini beneran tampil Hadir, atur request itu di bagian Requests.`);
+        alert(`Heads up: this date is still covered by ${r.multiDayRequestsLeft} multi-day request(s) (multi-day leave/permit). If you want today to actually show as Present, adjust that request in the Requests section.`);
       }
       onDone();
     },
-    onError: (e) => alert(e instanceof Error ? e.message : "Gagal mengubah status."),
+    onError: (e) => alert(e instanceof Error ? e.message : "Couldn’t change the status."),
   });
   const ask = (action: "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "CLEAR_PENALTY") => {
     const what = action === "CLEAR_PENALTY"
-      ? `Hapus punishment ${dateKey} buat ${name ?? "staff ini"}?\n\nXP yang kepotong (telat/lupa checkout/alpha) dibalikin + day-off yang kepotong otomatis dipulihkan. Status kehadiran TIDAK diubah.`
-      : `Ubah status ${dateKey} (${name ?? "staff ini"}) jadi ${OVERRIDE_LABEL[action]}?\n\nPotongan XP & day-off otomatis hari itu ikut dipulihkan.`;
+      ? `Clear the penalty for ${dateKey} for ${name ?? "this staff member"}?\n\nDeducted XP (late / forgot checkout / no-show) gets refunded + any auto-deducted day-off is restored. Attendance status is NOT changed.`
+      : `Change ${dateKey} (${name ?? "this staff member"}) to ${OVERRIDE_LABEL[action]}?\n\nThat day’s auto XP & day-off deductions get restored too.`;
     if (window.confirm(what)) override.mutate(action);
   };
   return (
     <div className="mt-4 rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-3">
-      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-primary"><Pencil className="h-3.5 w-3.5" /> Ubah status (BoD)</div>
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-primary"><Pencil className="h-3.5 w-3.5" /> Change status (BoD)</div>
       <div className="flex flex-wrap gap-1.5">
         {(["PRESENT", "LEAVE", "SICK", "DAY_OFF"] as const).map((a) => (
           <button key={a} disabled={override.isPending} onClick={() => ask(a)} className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-bold transition hover:border-primary hover:text-primary disabled:opacity-50">
@@ -129,9 +129,9 @@ function StatusOverridePanel({ userId, name, dateKey, onDone }: { userId: string
         ))}
       </div>
       <button disabled={override.isPending} onClick={() => ask("CLEAR_PENALTY")} className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 transition hover:bg-amber-100 disabled:opacity-50">
-        {override.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Scale className="h-3.5 w-3.5" />} Hapus punishment (balikin XP & day-off)
+        {override.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Scale className="h-3.5 w-3.5" />} Clear penalty (restore XP & day-off)
       </button>
-      <p className="mt-1.5 text-[10px] text-muted-foreground">Semua aksi otomatis balikin potongan XP & day-off hari itu, dan tercatat di audit log.</p>
+      <p className="mt-1.5 text-[10px] text-muted-foreground">Every action automatically restores that day’s XP & day-off deductions, and is recorded in the audit log.</p>
     </div>
   );
 }
@@ -145,25 +145,25 @@ function DeleteRecordPanel({ recordId, hasCheckOut, name, dateKey, onDone }: { r
     onSuccess: (_r, vars) => {
       qc.invalidateQueries({ queryKey: ["attendance-history"] });
       qc.invalidateQueries({ queryKey: ["attendance-today"] });
-      celebrate(vars.part === "checkout" ? `Check-out ${dateKey} dihapus — absen dibuka lagi 🔓` : `Absen ${dateKey} dihapus 🗑️`);
+      celebrate(vars.part === "checkout" ? `Check-out for ${dateKey} deleted — attendance reopened 🔓` : `Attendance for ${dateKey} deleted 🗑️`);
       onDone();
     },
-    onError: (e) => alert(e instanceof Error ? e.message : "Gagal menghapus."),
+    onError: (e) => alert(e instanceof Error ? e.message : "Couldn’t delete."),
   });
   return (
     <div className="mt-3 rounded-2xl border border-dashed border-rose-300/70 bg-rose-50/60 p-3">
-      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-600"><Trash2 className="h-3.5 w-3.5" /> Hapus data absen</div>
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-600"><Trash2 className="h-3.5 w-3.5" /> Delete attendance data</div>
       <div className="flex flex-wrap gap-1.5">
         {hasCheckOut && (
-          <button disabled={del.isPending} onClick={() => { if (window.confirm(`Hapus CHECK-OUT ${dateKey} (${name ?? "staff ini"})?\n\nCheck-in-nya tetap — record dibuka lagi jadi "masih clocked-in".`)) del.mutate({ part: "checkout" }); }} className="rounded-full border border-rose-300 bg-card px-3 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-100 disabled:opacity-50">
-            Hapus check-out
+          <button disabled={del.isPending} onClick={() => { if (window.confirm(`Delete the CHECK-OUT for ${dateKey} (${name ?? "this staff member"})?\n\nThe check-in stays — the record reopens to "still clocked in".`)) del.mutate({ part: "checkout" }); }} className="rounded-full border border-rose-300 bg-card px-3 py-1.5 text-xs font-bold text-rose-600 transition hover:bg-rose-100 disabled:opacity-50">
+            Delete check-out
           </button>
         )}
-        <button disabled={del.isPending} onClick={() => { if (window.confirm(`Hapus SELURUH absen ${dateKey} (${name ?? "staff ini"})?\n\nData check-in & check-out hari itu kehapus permanen. Potongan XP/day-off hari itu dibalikin & harinya diamankan dari potongan absen. Tercatat di audit log.`)) del.mutate({}); }} className="inline-flex items-center gap-1.5 rounded-full bg-rose-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-rose-700 disabled:opacity-50">
-          {del.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Hapus absen ini
+        <button disabled={del.isPending} onClick={() => { if (window.confirm(`Delete the ENTIRE attendance for ${dateKey} (${name ?? "this staff member"})?\n\nThat day’s check-in & check-out data is permanently removed. That day’s XP/day-off deductions are restored & the day is kept safe from attendance penalties. Recorded in the audit log.`)) del.mutate({}); }} className="inline-flex items-center gap-1.5 rounded-full bg-rose-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-rose-700 disabled:opacity-50">
+          {del.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Delete this attendance
         </button>
       </div>
-      <p className="mt-1.5 text-[10px] text-muted-foreground">Buat ngebersihin check-in yang kepencet gak sengaja. "Hapus absen ini" = record-nya ilang + hari itu diamankan dari potongan.</p>
+      <p className="mt-1.5 text-[10px] text-muted-foreground">For cleaning up an accidental check-in. "Delete this attendance" = the record is gone + the day is kept safe from deductions.</p>
     </div>
   );
 }
@@ -193,7 +193,7 @@ function Attendance() {
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["attendance-today"] });
       qc.invalidateQueries({ predicate: (q) => q.queryKey.map(String).includes("attendance-history") });
-      celebrate(`Proses bolos selesai — ${r.created} day-off dipotong (${r.from} … ${r.to}) ⚖️`);
+      celebrate(`No-show sweep done — ${r.created} day-off deducted (${r.from} … ${r.to}) ⚖️`);
     },
   });
   const outageRefund = useMutation({
@@ -201,32 +201,32 @@ function Attendance() {
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["attendance-today"] });
       qc.invalidateQueries({ predicate: (q) => q.queryKey.map(String).includes("attendance-history") });
-      const failNote = r.failed > 0 ? ` ⚠️ ${r.failed} gagal — klik lagi buat ulang (aman).` : "";
-      celebrate(`Sistem-down ${r.date} di-refund — XP balik ke ${r.refundedMembers} staff (+${r.totalXpRefunded} XP), ${r.totalDayOffsRestored} day-off dipulihkan 🛡️${failNote}`);
+      const failNote = r.failed > 0 ? ` ⚠️ ${r.failed} failed — click again to retry (safe).` : "";
+      celebrate(`System-down on ${r.date} refunded — XP returned to ${r.refundedMembers} staff (+${r.totalXpRefunded} XP), ${r.totalDayOffsRestored} day-off restored 🛡️${failNote}`);
     },
-    onError: (e) => { alert(e instanceof Error ? e.message : "Gagal refund hari sistem-down."); },
+    onError: (e) => { alert(e instanceof Error ? e.message : "Couldn’t refund the system-down day."); },
   });
   const [outageBusy, setOutageBusy] = useState(false);
   const runOutageRefund = async () => {
     const now = new Date();
     const def = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    const date = window.prompt("Refund penalti HARI SISTEM-DOWN (listrik mati / NEXUS down).\n\nSemua staff yang kepotong XP/day-off di tanggal ini bakal dibalikin. Yang udah request day-off hari itu di-skip. Status hadir/engga TIDAK diubah.\n\nTanggal (YYYY-MM-DD):", def);
+    const date = window.prompt("Refund penalties for a SYSTEM-DOWN DAY (power outage / NEXUS down).\n\nEvery staff member who lost XP/day-off on this date gets it back. Anyone who already requested a day-off that day is skipped. Present/absent status is NOT changed.\n\nDate (YYYY-MM-DD):", def);
     if (!date || !date.trim()) return;
     setOutageBusy(true);
     try {
       const p = await nexusApi.attendanceOutageRefund({ date: date.trim(), dryRun: true });
       const list = p.entries.filter((e) => !e.excludedReason).slice(0, 40)
-        .map((e) => `• ${e.name ?? e.userId}: +${e.xpRefund} XP${e.autoDayOffs ? `, ${e.autoDayOffs} day-off balik` : ""}`).join("\n");
-      const msg = `AUDIT ${p.date} (BELUM diubah apa-apa):\n\n`
-        + `${p.refundedMembers} staff bakal di-refund — total +${p.totalXpRefunded} XP, ${p.totalDayOffsRestored} day-off balik.\n`
-        + `${p.excludedMembers} staff di-skip (udah request day-off hari itu).\n\n`
-        + `${list || "(tidak ada penalti yang kepotong di tanggal ini)"}\n\n`
-        + `Lanjut refund beneran?`;
-      if (p.refundedMembers === 0) { alert(msg.replace("Lanjut refund beneran?", "Tidak ada yang perlu di-refund.")); return; }
+        .map((e) => `• ${e.name ?? e.userId}: +${e.xpRefund} XP${e.autoDayOffs ? `, ${e.autoDayOffs} day-off back` : ""}`).join("\n");
+      const msg = `AUDIT ${p.date} (NOTHING changed yet):\n\n`
+        + `${p.refundedMembers} staff will be refunded — total +${p.totalXpRefunded} XP, ${p.totalDayOffsRestored} day-off back.\n`
+        + `${p.excludedMembers} staff skipped (already requested a day-off that day).\n\n`
+        + `${list || "(no penalties were deducted on this date)"}\n\n`
+        + `Go ahead with the actual refund?`;
+      if (p.refundedMembers === 0) { alert(msg.replace("Go ahead with the actual refund?", "Nothing to refund.")); return; }
       if (!window.confirm(msg)) return;
       outageRefund.mutate({ date: date.trim() });
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Gagal ambil audit.");
+      alert(e instanceof Error ? e.message : "Couldn’t load the audit.");
     } finally {
       setOutageBusy(false);
     }
@@ -286,7 +286,7 @@ function Attendance() {
   return (
     <div>
       <PageHeader
-        title="Attendance Playground"
+        title="Attendance"
         subtitle="Team presence, leave, WFH, and check-in streaks — less spreadsheet, more vibe check."
         icon={<ClipboardCheck className="h-6 w-6 text-primary" />}
         actions={
@@ -297,17 +297,17 @@ function Attendance() {
                   onClick={runOutageRefund}
                   disabled={outageBusy || outageRefund.isPending}
                   className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm transition-colors duration-150 hover:bg-accent active:scale-[0.98] disabled:opacity-50"
-                  title="Balikin XP & day-off yang kepotong karena sistem/listrik down (preview dulu sebelum eksekusi)"
+                  title="Restore XP & day-off lost to a system/power outage (preview first before running)"
                 >
-                  {outageBusy || outageRefund.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <AlertTriangle className="h-3.5 w-3.5" />} Refund sistem-down
+                  {outageBusy || outageRefund.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <AlertTriangle className="h-3.5 w-3.5" />} Refund system-down
                 </button>
                 <button
-                  onClick={() => { if (confirm("Proses bolos & potong jatah day-off?\n\nUntuk tiap hari kerja yang lewat (s/d kemarin) di mana user TIDAK absen & TIDAK ada izin, sistem otomatis bikin DAY_OFF (potong kuota). Aman diulang.")) deduct.mutate(); }}
+                  onClick={() => { if (confirm("Run the no-show sweep & deduct day-off quota?\n\nFor every past work day (up to yesterday) where someone did NOT check in & had NO permit, the system auto-creates a DAY_OFF (deducts quota). Safe to re-run.")) deduct.mutate(); }}
                   disabled={deduct.isPending}
                   className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm transition-colors duration-150 hover:bg-accent active:scale-[0.98] disabled:opacity-50"
-                  title="Deteksi hari bolos & potong jatah day-off"
+                  title="Detect no-show days & deduct day-off quota"
                 >
-                  {deduct.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Scale className="h-3.5 w-3.5" />} Proses bolos
+                  {deduct.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Scale className="h-3.5 w-3.5" />} No-show sweep
                 </button>
               </>
             )}
@@ -353,15 +353,15 @@ function Attendance() {
             icon={<Sparkles className="h-5 w-5" />}
             label="Day-off tokens"
             value={`${today.data?.dayOffUsedThisMonth ?? 0}/${today.data?.dayOffQuota ?? 4} used`}
-            helper="Klik buat lihat log pemakaian day-off"
+            helper="Tap to see your day-off usage log"
             tone="amber"
             onClick={(origin) => setLogKind({ kind: "DAY_OFF", origin })}
           />
           <FunMetric
             icon={<Calendar className="h-5 w-5" />}
-            label="Tanggal merah"
+            label="Public holidays"
             value={`${today.data?.redDateUsedThisMonth ?? 0}/${today.data?.redDateQuota ?? 0} used`}
-            helper="Klik buat lihat log tanggal merah"
+            helper="Tap to see your public-holiday log"
             tone="rose"
             onClick={(origin) => setLogKind({ kind: "RED_DATE", origin })}
           />
@@ -370,16 +370,16 @@ function Attendance() {
         <div className="rounded-[28px] border border-border bg-card shadow-soft overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
             <div>
-              <h2 className="text-lg font-semibold tracking-tight">{viewMode === "grid" ? (canSeeBoard ? "Crew streak board" : "Riwayat absen kamu") : (canSeeBoard ? "Log absensi" : "Riwayat absen kamu")}</h2>
-              <p className="text-sm text-muted-foreground">{viewMode === "grid" ? "Green = hadir, purple = WFH, kuning = cuti/izin, rose = sakit, teal = day off / tgl merah. Klik cell buat detail." : (canSeeBoard ? "Riwayat absen tiap orang — foto selfie & lokasi check-in/out. Klik baris buat detail." : "Riwayat check-in/out kamu — foto selfie & lokasi. Klik baris buat detail.")}</p>
+              <h2 className="text-lg font-semibold tracking-tight">{viewMode === "grid" ? (canSeeBoard ? "Crew streak board" : "Your attendance history") : (canSeeBoard ? "Attendance log" : "Your attendance history")}</h2>
+              <p className="text-sm text-muted-foreground">{viewMode === "grid" ? "Green = present, purple = WFH, yellow = leave/permit, rose = sick, teal = day off / public holiday. Tap a cell for details." : (canSeeBoard ? "Everyone’s attendance history — check-in/out selfie & location. Tap a row for details." : "Your check-in/out history — selfie & location. Tap a row for details.")}</p>
             </div>
             <div className="flex items-center gap-3">
               {viewMode === "grid" && (
                 <div className="hidden gap-2 text-xs text-muted-foreground sm:flex">
                   <Legend cls="bg-success/40" label="Present" />
                   <Legend cls="bg-info/40" label="WFH" />
-                  <Legend cls="bg-warning/40" label="Cuti/Izin" />
-                  <Legend cls="bg-rose-400/50" label="Sakit" />
+                  <Legend cls="bg-warning/40" label="Leave/Permit" />
+                  <Legend cls="bg-rose-400/50" label="Sick" />
                   <Legend cls="bg-teal-400/45" label="Day off" />
                 </div>
               )}
@@ -392,13 +392,13 @@ function Attendance() {
           {/* Audit controls: month navigation + per-staff search. */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
             <div className="flex items-center gap-1.5">
-              <button onClick={() => shiftMonth(-1)} aria-label="Bulan sebelumnya" className="grid h-8 w-8 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><ChevronLeft className="h-4 w-4" /></button>
+              <button onClick={() => shiftMonth(-1)} aria-label="Previous month" className="grid h-8 w-8 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><ChevronLeft className="h-4 w-4" /></button>
               <span className="flex min-w-[8.5rem] flex-col items-center leading-tight">
                 <span className="text-sm font-semibold capitalize tabular-nums">{monthLabel}</span>
-                <span className="text-[10px] text-muted-foreground" title="Periode cut-off (28 → 27)">{periodLabel}</span>
+                <span className="text-[10px] text-muted-foreground" title="Cut-off period (28th → 27th)">{periodLabel}</span>
               </span>
-              <button onClick={() => shiftMonth(1)} disabled={isCurrentMonth} aria-label="Bulan berikutnya" className="grid h-8 w-8 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
-              {!isCurrentMonth && <button onClick={() => setMonthKey(nowKey)} className="ml-1 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">Bulan ini</button>}
+              <button onClick={() => shiftMonth(1)} disabled={isCurrentMonth} aria-label="Next month" className="grid h-8 w-8 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
+              {!isCurrentMonth && <button onClick={() => setMonthKey(nowKey)} className="ml-1 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">This month</button>}
             </div>
             <div className="flex w-full items-center gap-2 sm:w-auto">
               {/* Per-staff audit search — for anyone who sees the crew board (BoD: all; team-lead: their team). */}
@@ -408,11 +408,11 @@ function Attendance() {
                   <input
                     value={memberQuery}
                     onChange={(e) => setMemberQuery(e.target.value)}
-                    aria-label="Cari staff buat audit absensi"
-                    placeholder="Cari staff buat audit…"
+                    aria-label="Search staff for attendance audit"
+                    placeholder="Search staff to audit…"
                     className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-8 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20"
                   />
-                  {memberQuery && <button onClick={() => setMemberQuery("")} aria-label="Bersihkan pencarian" className="absolute right-2 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-3 w-3" /></button>}
+                  {memberQuery && <button onClick={() => setMemberQuery("")} aria-label="Clear search" className="absolute right-2 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-3 w-3" /></button>}
                 </div>
               )}
               {canSeeBoard && <ExportMenu monthKey={monthKey} monthLabel={monthLabel} />}
@@ -422,7 +422,7 @@ function Attendance() {
             <div className="divide-y divide-border">
               {history.isLoading && <div className="px-5 py-10 text-center text-sm text-muted-foreground"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></div>}
               {!history.isLoading && logRows.length === 0 && (
-                <div className="px-5 py-10 text-center text-sm text-muted-foreground">{q ? `Ga ada absen dari “${memberQuery.trim()}” di bulan ini.` : "Belum ada absen tercatat di bulan ini."}</div>
+                <div className="px-5 py-10 text-center text-sm text-muted-foreground">{q ? `No attendance from “${memberQuery.trim()}” this month.` : "No attendance recorded this month yet."}</div>
               )}
               {logRows.map((r) => {
                 const tone = recTone(r);
@@ -434,7 +434,7 @@ function Attendance() {
                         <span className={cn("inline-block h-2 w-2 shrink-0 rounded-full", sCls[tone])} />
                         <span className="truncate font-medium">{r.user?.name || "PATS Crew"}</span>
                         <span className="text-xs text-muted-foreground">{fmtDate(r.attendanceDate)}</span>
-                        {r.checkOutOffsite && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">Luar area</span>}
+                        {r.checkOutOffsite && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">Offsite</span>}
                       </div>
                       <div className="mt-0.5 truncate text-xs text-muted-foreground">
                         In {fmtTime(r.checkInAt)}{r.checkInAddress ? ` · ${r.checkInAddress}` : r.checkInDistanceMeters != null ? ` · ±${Math.round(r.checkInDistanceMeters)}m` : ""}
@@ -449,7 +449,7 @@ function Attendance() {
                 );
               })}
               {!history.isLoading && logRows.length >= 300 && (
-                <div className="px-5 py-3 text-center text-xs text-muted-foreground">Menampilkan 300 absen terbaru — pakai navigasi bulan / cari nama buat lihat sisanya.</div>
+                <div className="px-5 py-3 text-center text-xs text-muted-foreground">Showing the 300 most recent records — use the month navigation / name search to see the rest.</div>
               )}
             </div>
           ) : (
@@ -469,7 +469,7 @@ function Attendance() {
                   <tr><td colSpan={periodDays.length + 2} className="px-4 py-10 text-center text-sm text-muted-foreground"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></td></tr>
                 )}
                 {!history.isLoading && memberRows.length === 0 && (
-                  <tr><td colSpan={periodDays.length + 2} className="px-4 py-10 text-center text-sm text-muted-foreground">{q ? `Ga ada staff yang cocok sama “${memberQuery.trim()}”.` : "Belum ada data absensi di bulan ini."}</td></tr>
+                  <tr><td colSpan={periodDays.length + 2} className="px-4 py-10 text-center text-sm text-muted-foreground">{q ? `No staff match “${memberQuery.trim()}”.` : "No attendance data for this month yet."}</td></tr>
                 )}
                 {memberRows.map((u) => (
                   <tr key={u.id} className="border-b border-border last:border-0 hover:bg-muted/20">
@@ -494,7 +494,7 @@ function Attendance() {
                                 whileTap={reduceMotion ? undefined : { scale: 0.85 }}
                                 transition={{ type: "spring", stiffness: 500, damping: 18 }}
                                 onClick={(e) => { setCorrectOrigin(rectCenter(e.currentTarget)); setLeaveDetail(rec); }}
-                                title={`${fmtDate(rec.attendanceDate)} · ${toneLabel[tone]}${rec.notes ? " — " + rec.notes : ""} — klik buat detail`}
+                                title={`${fmtDate(rec.attendanceDate)} · ${toneLabel[tone]}${rec.notes ? " — " + rec.notes : ""} — tap for details`}
                                 className={cn("inline-block h-5 w-5 rounded-lg transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls[tone])}
                               />
                             ) : (
@@ -503,14 +503,14 @@ function Attendance() {
                                 whileTap={reduceMotion ? undefined : { scale: 0.85 }}
                                 transition={{ type: "spring", stiffness: 500, damping: 18 }}
                                 onClick={(e) => { setCorrectOrigin(rectCenter(e.currentTarget)); setCorrectRecord(rec); }}
-                                title={`${fmtDate(rec.attendanceDate)} · ${statusLabel(rec.status || "")} · in ${fmtTime(rec.checkInAt)} / out ${fmtTime(rec.checkOutAt)} — klik buat lihat lokasi & selfie`}
+                                title={`${fmtDate(rec.attendanceDate)} · ${statusLabel(rec.status || "")} · in ${fmtTime(rec.checkInAt)} / out ${fmtTime(rec.checkOutAt)} — tap to see location & selfie`}
                                 className={cn("inline-block h-5 w-5 rounded-lg transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls[tone])}
                               />
                             )
                           ) : canManage ? (
                             <button
                               onClick={() => setOverrideTarget({ userId: u.id, name: u.name ?? null, dateKey: pd.key })}
-                              title={`${pd.key} — kosong. Klik buat set status (Hadir/Cuti/Sakit/Day off).`}
+                              title={`${pd.key} — empty. Tap to set a status (Present/Leave/Sick/Day off).`}
                               className="inline-block h-5 w-5 rounded-lg bg-muted/30 transition-[box-shadow] hover:ring-2 hover:ring-primary/50"
                             />
                           ) : (
@@ -523,7 +523,7 @@ function Attendance() {
                   </tr>
                 ))}
                 {!history.isLoading && hiddenCount > 0 && (
-                  <tr><td colSpan={periodDays.length + 2} className="px-4 py-3 text-center text-xs text-muted-foreground">+{hiddenCount} staff lagi — ketik nama di kolom cari buat audit yang lain.</td></tr>
+                  <tr><td colSpan={periodDays.length + 2} className="px-4 py-3 text-center text-xs text-muted-foreground">+{hiddenCount} more staff — type a name in the search box to audit someone else.</td></tr>
                 )}
               </tbody>
             </table>
@@ -543,9 +543,9 @@ function Attendance() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="font-display text-lg font-bold tracking-tight">{overrideTarget.name ?? "Staff"}</h2>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{fmtDate(overrideTarget.dateKey)} — belum ada catatan kehadiran.</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{fmtDate(overrideTarget.dateKey)} — no attendance record yet.</p>
                 </div>
-                <button onClick={() => setOverrideTarget(null)} aria-label="Tutup" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+                <button onClick={() => setOverrideTarget(null)} aria-label="Close" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
               </div>
               <StatusOverridePanel userId={overrideTarget.userId} name={overrideTarget.name} dateKey={overrideTarget.dateKey} onDone={() => setOverrideTarget(null)} />
             </div>
@@ -577,7 +577,7 @@ function ExportMenu({ monthKey, monthLabel }: { monthKey: string; monthLabel: st
     try {
       await downloadFile(`/api/attendance/history?scope=workspace&month=${monthKey}&format=${format}`, `absensi-${monthKey}.${format}`);
     } catch (e) {
-      alert(e instanceof ApiError ? e.message : "Export gagal — coba lagi ya.");
+      alert(e instanceof ApiError ? e.message : "Export failed — give it another go.");
     } finally {
       setBusy(null);
     }
@@ -591,8 +591,8 @@ function ExportMenu({ monthKey, monthLabel }: { monthKey: string; monthLabel: st
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className="absolute right-0 z-50 mt-1 w-60 overflow-hidden rounded-xl border border-border bg-card shadow-pop">
-            <button onClick={() => run("xlsx")} className="flex w-full flex-col items-start px-3 py-2.5 text-left transition-colors hover:bg-muted/40"><span className="text-sm font-semibold">Rekap bulanan (Excel)</span><span className="text-xs text-muted-foreground">Sheet absensi internal · {monthLabel}</span></button>
-            <button onClick={() => run("csv")} className="flex w-full flex-col items-start border-t border-border px-3 py-2.5 text-left transition-colors hover:bg-muted/40"><span className="text-sm font-semibold">Detail log (CSV)</span><span className="text-xs text-muted-foreground">Per absen: jam, status, telat</span></button>
+            <button onClick={() => run("xlsx")} className="flex w-full flex-col items-start px-3 py-2.5 text-left transition-colors hover:bg-muted/40"><span className="text-sm font-semibold">Monthly recap (Excel)</span><span className="text-xs text-muted-foreground">Internal attendance sheet · {monthLabel}</span></button>
+            <button onClick={() => run("csv")} className="flex w-full flex-col items-start border-t border-border px-3 py-2.5 text-left transition-colors hover:bg-muted/40"><span className="text-sm font-semibold">Detail log (CSV)</span><span className="text-xs text-muted-foreground">Per record: time, status, lateness</span></button>
           </div>
         </>
       )}
@@ -624,7 +624,7 @@ function AttendanceEvidence({ kind, photoUrl, address, lat, lng, distanceMeters,
         {atIso && <span className="text-[11px] tabular-nums text-muted-foreground">{fmtTime(atIso)}</span>}
       </div>
       {!hasAny ? (
-        <p className="mt-2 text-xs text-muted-foreground/70">Belum ada bukti {kind === "in" ? "check-in" : "check-out"}.</p>
+        <p className="mt-2 text-xs text-muted-foreground/70">No {kind === "in" ? "check-in" : "check-out"} evidence yet.</p>
       ) : (
         <div className="mt-2 flex gap-3">
           {photoUrl ? (
@@ -635,11 +635,11 @@ function AttendanceEvidence({ kind, photoUrl, address, lat, lng, distanceMeters,
             <div className="grid h-20 w-20 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground/40"><Camera className="h-5 w-5" /></div>
           )}
           <div className="min-w-0 flex-1 space-y-1 text-xs">
-            {offsite && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">Luar area</span>}
-            <p className="leading-snug text-foreground/80">{address || (lat != null ? `${lat.toFixed(5)}, ${lng?.toFixed(5)}` : "Lokasi tidak tercatat")}</p>
+            {offsite && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">Offsite</span>}
+            <p className="leading-snug text-foreground/80">{address || (lat != null ? `${lat.toFixed(5)}, ${lng?.toFixed(5)}` : "Location not recorded")}</p>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-muted-foreground">
-              {distanceMeters != null && <span>±{Math.round(distanceMeters)}m dari kantor</span>}
-              {mapUrl && <a href={mapUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-primary underline-offset-2 hover:underline"><MapPin className="h-3 w-3" /> peta</a>}
+              {distanceMeters != null && <span>±{Math.round(distanceMeters)}m from office</span>}
+              {mapUrl && <a href={mapUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-primary underline-offset-2 hover:underline"><MapPin className="h-3 w-3" /> map</a>}
             </div>
             {reason && <p className="italic text-muted-foreground">“{reason}”</p>}
           </div>
@@ -679,10 +679,10 @@ function AttendanceCorrectionDrawer({ record, origin, onClose, canOverride }: { 
         }
       }
       const uid = record.user?.id;
-      if (!uid) throw new Error("User tidak diketahui.");
+      if (!uid) throw new Error("Unknown user.");
       return nexusApi.attendanceOverride({ userId: uid, date: (record.attendanceDate || "").slice(0, 10), action: "PRESENT", checkInAt: checkInISO, checkOutAt: checkOutISO, note: reason.trim() });
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["attendance-history"] }); celebrate("Absen tersimpan ✅"); onClose(); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["attendance-history"] }); celebrate("Attendance saved ✅"); onClose(); },
   });
 
   const field = "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20";
@@ -698,18 +698,18 @@ function AttendanceCorrectionDrawer({ record, origin, onClose, canOverride }: { 
           <button onClick={onClose} aria-label="Close" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"><X className="h-4 w-4" /></button>
         </div>
         <div className="mt-4 space-y-2">
-          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Bukti absensi · lokasi & selfie</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Attendance evidence · location & selfie</p>
           <AttendanceEvidence kind="in" photoUrl={record.checkInPhotoUrl} address={record.checkInAddress} lat={record.checkInLat} lng={record.checkInLng} distanceMeters={record.checkInDistanceMeters} atIso={record.checkInAt} />
           <AttendanceEvidence kind="out" photoUrl={record.checkOutPhotoUrl} address={record.checkOutAddress} lat={record.checkOutLat} lng={record.checkOutLng} distanceMeters={record.checkOutDistanceMeters} atIso={record.checkOutAt} offsite={record.checkOutOffsite} reason={record.checkOutReason} />
         </div>
         {record.checkOutReflection && (
           <div className="mt-4 rounded-2xl border border-border bg-muted/30 p-3">
-            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground"><PenLine className="h-3.5 w-3.5" /> Refleksi harian</p>
+            <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground"><PenLine className="h-3.5 w-3.5" /> Daily reflection</p>
             <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-foreground">{record.checkOutReflection}</p>
           </div>
         )}
         <div className="mt-4 border-t border-border pt-4">
-          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Koreksi manual</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Manual correction</p>
         </div>
         <div className="mt-3 space-y-3">
           <div className="grid grid-cols-2 gap-3">
@@ -718,7 +718,7 @@ function AttendanceCorrectionDrawer({ record, origin, onClose, canOverride }: { 
           </div>
           <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">Notes<textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional note…" className={cn(field, "mt-1 min-h-16")} /></label>
           <label className="block text-xs font-bold uppercase tracking-wide text-muted-foreground">Correction reason<input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why is this being corrected?" className={cn(field, "mt-1")} /></label>
-          {save.isError && <p className="text-sm text-destructive">Gagal: {save.error instanceof Error && save.error.message ? save.error.message : "koreksi gagal — cek izin / urutan waktu."}</p>}
+          {save.isError && <p className="text-sm text-destructive">Failed: {save.error instanceof Error && save.error.message ? save.error.message : "correction failed — check permissions / time order."}</p>}
           <button disabled={!checkInAt || !reason.trim() || save.isPending} onClick={() => save.mutate()} className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-default disabled:opacity-50">{save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Save correction</button>
         </div>
         {canOverride && record.user?.id && (
@@ -808,13 +808,13 @@ function OfficeComposer({ office, onClose, onCreated }: { office?: NexusOffice; 
               bukan per office. Office cuma nyimpen default fallback (gak ditampilin di sini). */}
           <div className="flex flex-wrap gap-4">
             <label className="block text-[11px] font-bold text-muted-foreground">Radius (m)<input value={radius} onChange={(e) => setRadius(e.target.value.replace(/[^0-9]/g, ""))} className="mt-1 w-32 rounded-xl border border-border bg-background px-2 py-2 text-sm" /></label>
-            <label className="block text-[11px] font-bold text-muted-foreground">Toleransi telat (menit)<input value={grace} onChange={(e) => setGrace(e.target.value.replace(/[^0-9]/g, ""))} className="mt-1 w-32 rounded-xl border border-border bg-background px-2 py-2 text-sm" /><span className="mt-1 block font-normal text-muted-foreground/70">0 = ketat, telat dari menit ke-1</span></label>
+            <label className="block text-[11px] font-bold text-muted-foreground">Late grace (minutes)<input value={grace} onChange={(e) => setGrace(e.target.value.replace(/[^0-9]/g, ""))} className="mt-1 w-32 rounded-xl border border-border bg-background px-2 py-2 text-sm" /><span className="mt-1 block font-normal text-muted-foreground/70">0 = strict, late from the very first minute</span></label>
           </div>
         </div>
         <div className="mt-5 flex items-center gap-2">
           <button disabled={!name.trim() || !lat || !lng || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {editing ? "Save changes" : "Create office"}</button>
           <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent">Cancel</button>
-          {create.isError && <span className="text-xs font-semibold text-destructive">Gagal — butuh role supervisor.</span>}
+          {create.isError && <span className="text-xs font-semibold text-destructive">Failed — supervisor role required.</span>}
         </div>
       </div>
     </div>
@@ -843,7 +843,7 @@ function RequestsSection({ canReview }: { canReview: boolean }) {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
         <div>
           <h2 className="text-lg font-semibold tracking-tight">Leave & permit requests</h2>
-          <p className="text-sm text-muted-foreground">{canReview ? "Review pending requests (izin, day-off, checkout di luar) & submit your own." : "Submit leave, sick, or permit requests."}</p>
+          <p className="text-sm text-muted-foreground">{canReview ? "Review pending requests (permit, day-off, offsite checkout) & submit your own." : "Submit leave, sick, or permit requests."}</p>
         </div>
         <button onClick={() => setComposerOpen(true)} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><ClipboardCheck className="h-3.5 w-3.5" /> New request</button>
       </div>
@@ -858,13 +858,13 @@ function RequestsSection({ canReview }: { canReview: boolean }) {
             <div key={`offsite-${it.id}`} className="flex flex-wrap items-center gap-3 px-5 py-3">
               <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusTone(it.approval)}`}>{offsiteStatusLabel(it.approval)}</span>
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold">Checkout di luar {it.user?.name ? <span className="font-normal text-muted-foreground">· {it.user.name}</span> : null}</div>
+                <div className="text-sm font-semibold">Offsite checkout {it.user?.name ? <span className="font-normal text-muted-foreground">· {it.user.name}</span> : null}</div>
                 <div className="text-xs text-muted-foreground">{fmtDateShort(it.attendanceDate)} · out {fmtTime(it.checkOutAt)}{it.reason ? ` · ${it.reason}` : ""}</div>
                 <div className="text-xs text-muted-foreground">
-                  {it.distanceMeters != null ? `±${Math.round(it.distanceMeters)}m dari ${it.officeName ?? "kantor"}` : ""}
-                  {mapUrl && <> · <a href={mapUrl} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">lihat peta</a></>}
-                  {it.photoUrl && <> · <a href={it.photoUrl} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">foto</a></>}
-                  {!isPending && it.approverName ? ` · oleh ${it.approverName}` : ""}
+                  {it.distanceMeters != null ? `±${Math.round(it.distanceMeters)}m from ${it.officeName ?? "office"}` : ""}
+                  {mapUrl && <> · <a href={mapUrl} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">view map</a></>}
+                  {it.photoUrl && <> · <a href={it.photoUrl} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">photo</a></>}
+                  {!isPending && it.approverName ? ` · by ${it.approverName}` : ""}
                 </div>
               </div>
               {canReview && isPending && (
@@ -933,8 +933,8 @@ function RequestComposer({ onClose, onCreated }: { onClose: () => void; onCreate
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
-        <h2 className="font-display text-lg font-bold tracking-tight">{grantingToUser ? "Kasih izin ke user" : "New attendance request"}</h2>
-        {!canGrant && <p className="mt-1 text-xs text-muted-foreground">Staff bisa ajuin <b>Izin (Permit)</b>, <b>Sick</b>, <b>Day Off</b> & <b>Tanggal Merah</b>. Sakit wajib lampirin foto surat sakit. Cuti (Leave) diberikan oleh BoD.</p>}
+        <h2 className="font-display text-lg font-bold tracking-tight">{grantingToUser ? "Grant a permit to a user" : "New attendance request"}</h2>
+        {!canGrant && <p className="mt-1 text-xs text-muted-foreground">Staff can request <b>Permit</b>, <b>Sick</b>, <b>Day Off</b> & <b>Public Holiday</b>. Sick requires a photo of the doctor’s note. Leave is granted by the BoD.</p>}
         <div className="mt-4 space-y-3">
           <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Type
             <select value={type} onChange={(e) => { const v = e.target.value; setType(v); if (v !== "SICK" && v !== "PERMIT") setAttachment(null); }} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary">
@@ -942,9 +942,9 @@ function RequestComposer({ onClose, onCreated }: { onClose: () => void; onCreate
             </select>
           </label>
           {grantingToUser && (
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Kasih ke
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Grant to
               <select value={targetUserId} onChange={(e) => setTargetUserId(e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary">
-                <option value="">— Diri sendiri —</option>
+                <option value="">— Myself —</option>
                 {otherMembers.map((m) => <option key={m.userId} value={m.userId}>{m.name || m.email}</option>)}
               </select>
             </label>
@@ -957,22 +957,22 @@ function RequestComposer({ onClose, onCreated }: { onClose: () => void; onCreate
           {showAttachment && (
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                {type === "SICK" ? `Foto surat sakit${attachmentRequired ? " (wajib)" : " (opsional)"}` : "Foto pendukung (opsional)"}
+                {type === "SICK" ? `Doctor’s note photo${attachmentRequired ? " (required)" : " (optional)"}` : "Supporting photo (optional)"}
               </label>
               <label className={cn("mt-1 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed px-3 py-2.5 text-sm transition-colors hover:border-primary", attachment ? "border-primary/50 bg-primary/5" : "border-border")}>
                 <Camera className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className={cn("min-w-0 flex-1 truncate", attachment ? "font-semibold" : "text-muted-foreground")}>{attachment ? attachment.name : "Pilih foto / file (maks 10MB)"}</span>
+                <span className={cn("min-w-0 flex-1 truncate", attachment ? "font-semibold" : "text-muted-foreground")}>{attachment ? attachment.name : "Pick a photo / file (max 10MB)"}</span>
                 {attachment && <button type="button" onClick={(e) => { e.preventDefault(); setAttachment(null); }} className="shrink-0 rounded-full p-0.5 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>}
-                <input type="file" accept="image/*,.pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0] ?? null; if (f && f.size > 10 * 1024 * 1024) { alert("Maks 10MB."); return; } setAttachment(f); e.target.value = ""; }} />
+                <input type="file" accept="image/*,.pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0] ?? null; if (f && f.size > 10 * 1024 * 1024) { alert("Max 10MB."); return; } setAttachment(f); e.target.value = ""; }} />
               </label>
-              {attachmentRequired && !attachment && <p className="mt-1 text-[11px] font-semibold text-destructive">Wajib lampirkan foto surat sakit.</p>}
+              {attachmentRequired && !attachment && <p className="mt-1 text-[11px] font-semibold text-destructive">A doctor’s note photo is required.</p>}
             </div>
           )}
         </div>
         <div className="mt-5 flex items-center gap-2">
-          <button disabled={!reason.trim() || (attachmentRequired && !attachment) || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {grantingToUser && targetUserId ? "Kasih izin" : "Submit request"}</button>
+          <button disabled={!reason.trim() || (attachmentRequired && !attachment) || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {grantingToUser && targetUserId ? "Grant permit" : "Submit request"}</button>
           <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent">Cancel</button>
-          {create.isError && <span className="text-xs font-semibold text-destructive">{(create.error as Error)?.message ?? "Gagal kirim request."}</span>}
+          {create.isError && <span className="text-xs font-semibold text-destructive">{(create.error as Error)?.message ?? "Couldn’t send the request."}</span>}
         </div>
       </div>
     </div>
@@ -1017,15 +1017,15 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
     mutationFn: (payload: AttendanceActionPayload) => nexusApi.attendanceCheckOut(payload),
     onSuccess: (data) => {
       refresh(); pick(null); setOffsitePrompt(null); setOffsiteReason(""); setReflection("");
-      if (data?.pendingApproval) setOkMessage("Checkout di luar area terkirim — nunggu approval BoD ⏳");
+      if (data?.pendingApproval) setOkMessage("Offsite checkout submitted — waiting for BoD approval ⏳");
       else { setOkMessage(""); celebrate("Checked out. Good run today 🏁"); }
     },
     onError: (e) => {
       const payload = e instanceof ApiError ? (e.payload as { code?: string; officeName?: string; distanceMeters?: number } | null) : null;
       if (e instanceof ApiError && e.status === 422 && payload?.code === "OUTSIDE_RADIUS") {
         setMessage(""); setOffsiteReason("");
-        setOffsitePrompt({ officeName: payload.officeName ?? "kantor", distanceMeters: payload.distanceMeters ?? 0 });
-      } else { setMessage(e instanceof ApiError ? ((e.payload as { error?: string } | null)?.error ?? "Gagal check-out.") : "Gagal check-out."); }
+        setOffsitePrompt({ officeName: payload.officeName ?? "office", distanceMeters: payload.distanceMeters ?? 0 });
+      } else { setMessage(e instanceof ApiError ? ((e.payload as { error?: string } | null)?.error ?? "Check-out failed.") : "Check-out failed."); }
     },
   });
   const submitOffsite = () => { if (!lastOut.current || !offsiteReason.trim()) return; checkOut.mutate({ ...lastOut.current, offsite: true, reason: offsiteReason.trim() }); };
@@ -1042,10 +1042,10 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
     setMessage("");
     if (mode === "done") return;
     if (mode === "check-out" && reflection.trim().length < REFLECTION_MIN) {
-      setMessage(`Isi refleksi harian dulu (min ${REFLECTION_MIN} karakter) sebelum check-out.`);
+      setMessage(`Fill in your daily reflection first (min ${REFLECTION_MIN} characters) before checking out.`);
       return;
     }
-    if (!selfie) { setMessage("Ambil selfie dulu — klik tile selfie buat buka kamera."); return; }
+    if (!selfie) { setMessage("Take a selfie first — tap the selfie tile to open the camera."); return; }
     setLocating(true);
     getAttendanceFix()
       .then((fix) => {
@@ -1055,7 +1055,7 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
       })
       .catch((err) => {
         setLocating(false);
-        setMessage(err instanceof GeoError ? err.message : "Gagal ambil lokasi. Attendance butuh GPS buat geofence.");
+        setMessage(err instanceof GeoError ? err.message : "Couldn’t get your location. Attendance needs GPS for the geofence.");
       });
   }
 
@@ -1064,7 +1064,7 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.2em] text-primary">Attendance</p>
-          <h2 className="mt-1 font-display text-2xl font-bold tracking-tight">{forcePending ? "Selesaikan absen sebelumnya" : mode === "check-in" ? "Start your day" : mode === "check-out" ? "Wrap the day" : "All done today 🎉"}</h2>
+          <h2 className="mt-1 font-display text-2xl font-bold tracking-tight">{forcePending ? "Finish your previous attendance" : mode === "check-in" ? "Start your day" : mode === "check-out" ? "Wrap the day" : "All done today 🎉"}</h2>
           <p className="mt-1 inline-flex items-center gap-2 text-sm text-muted-foreground">
             {effCheckInAt && <span className="inline-flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5 text-success" /> In {fmtTime(effCheckInAt)}{forcePending && pendingDateLabel ? ` · ${pendingDateLabel}` : ""}</span>}
             {!forcePending && checkOutAt && <span className="inline-flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5 text-success" /> Out {fmtTime(checkOutAt)}</span>}
@@ -1077,12 +1077,12 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
       {forcePending && (
         <div className="mt-4 flex items-start gap-2 rounded-2xl border border-amber-300/60 bg-amber-100 p-3 text-sm font-semibold text-amber-800">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>Kamu lupa check-out tanggal {pendingDateLabel || "sebelumnya"}. Wajib check-out dulu sebelum bisa check-in hari ini.</span>
+          <span>You forgot to check out on {pendingDateLabel || "the previous day"}. You need to check out first before you can check in today.</span>
         </div>
       )}
 
       {mode === "done" ? (
-        <div className="mt-4 flex items-center gap-3 rounded-2xl bg-success/10 p-4 text-sm font-semibold text-success"><CheckCircle2 className="h-5 w-5" /> Attendance lengkap hari ini. Mantap! 🙌</div>
+        <div className="mt-4 flex items-center gap-3 rounded-2xl bg-success/10 p-4 text-sm font-semibold text-success"><CheckCircle2 className="h-5 w-5" /> Attendance complete for today. Nice one! 🙌</div>
       ) : (
         <div className="mt-4 grid gap-4 sm:grid-cols-[auto_1fr]">
           {/* selfie (live camera + file fallback) */}
@@ -1098,33 +1098,33 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
             {mode === "check-out" && (
               <div className="rounded-xl border border-primary/20 bg-card/80 p-2.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-foreground">Refleksi harian <span className="font-medium text-muted-foreground">· wajib, min {REFLECTION_MIN} karakter</span></span>
+                  <span className="text-xs font-bold text-foreground">Daily reflection <span className="font-medium text-muted-foreground">· required, min {REFLECTION_MIN} characters</span></span>
                   <span className={cn("text-[11px] font-semibold", reflection.trim().length >= REFLECTION_MIN ? "text-success" : "text-muted-foreground")}>{reflection.trim().length}/{REFLECTION_MIN}</span>
                 </div>
-                <textarea value={reflection} onChange={(e) => setReflection(e.target.value)} rows={4} placeholder="Apa yang dikerjain hari ini, progress, kendala, dan prioritas berikutnya…" className="mt-1.5 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm leading-relaxed outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20" />
+                <textarea value={reflection} onChange={(e) => setReflection(e.target.value)} rows={4} placeholder="What you worked on today, progress, blockers, and what’s next…" className="mt-1.5 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm leading-relaxed outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20" />
               </div>
             )}
             <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional note: traffic, WFH context, etc." className="rounded-xl border border-border bg-card/80 px-3 py-2 text-sm outline-none transition-shadow focus:border-primary focus:ring-2 focus:ring-primary/20" />
             <button disabled={disabled || busy} onClick={submit} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50">
-              {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> {locating ? "Locating…" : "Recording…"}</> : <><Camera className="h-4 w-4" /> {forcePending ? "Check out kemarin" : mode === "check-in" ? "Check in now" : "Check out now"}</>}
+              {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> {locating ? "Locating…" : "Recording…"}</> : <><Camera className="h-4 w-4" /> {forcePending ? "Check out yesterday" : mode === "check-in" ? "Check in now" : "Check out now"}</>}
             </button>
           </div>
         </div>
       )}
       {offsitePrompt && (
         <div className="mt-3 space-y-2 rounded-2xl border border-amber-300 bg-amber-50 p-3">
-          <div className="text-sm font-bold text-amber-800">Kamu di luar area kantor</div>
-          <p className="text-xs text-amber-700">±{Math.round(offsitePrompt.distanceMeters)}m dari {offsitePrompt.officeName}. Checkout dari sini? <span className="font-semibold">Wajib isi alasan</span> — nunggu approval BoD dulu.</p>
-          <textarea value={offsiteReason} onChange={(e) => setOffsiteReason(e.target.value)} rows={2} placeholder="Alasan (mis. shoot konten / meeting client di X)" className="w-full resize-none rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500" />
+          <div className="text-sm font-bold text-amber-800">You’re outside the office area</div>
+          <p className="text-xs text-amber-700">±{Math.round(offsitePrompt.distanceMeters)}m from {offsitePrompt.officeName}. Check out from here? <span className="font-semibold">A reason is required</span> — it’ll wait for BoD approval first.</p>
+          <textarea value={offsiteReason} onChange={(e) => setOffsiteReason(e.target.value)} rows={2} placeholder="Reason (e.g. content shoot / client meeting at X)" className="w-full resize-none rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500" />
           <div className="flex gap-2">
-            <button onClick={() => { setOffsitePrompt(null); setOffsiteReason(""); }} disabled={busy} className="flex-1 rounded-lg border border-border bg-white py-2 text-xs font-semibold text-muted-foreground transition hover:bg-accent disabled:opacity-50">Batal</button>
-            <button onClick={submitOffsite} disabled={!offsiteReason.trim() || busy} className="flex-[1.6] rounded-lg bg-amber-600 py-2 text-xs font-bold text-white transition hover:bg-amber-700 disabled:opacity-50">{busy ? "Mengirim…" : "Checkout & minta approval"}</button>
+            <button onClick={() => { setOffsitePrompt(null); setOffsiteReason(""); }} disabled={busy} className="flex-1 rounded-lg border border-border bg-white py-2 text-xs font-semibold text-muted-foreground transition hover:bg-accent disabled:opacity-50">Cancel</button>
+            <button onClick={submitOffsite} disabled={!offsiteReason.trim() || busy} className="flex-[1.6] rounded-lg bg-amber-600 py-2 text-xs font-bold text-white transition hover:bg-amber-700 disabled:opacity-50">{busy ? "Sending…" : "Check out & request approval"}</button>
           </div>
         </div>
       )}
       {okMessage && !offsitePrompt && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">{okMessage}</p>}
-      {checkOutApproval === "PENDING" && !offsitePrompt && !okMessage && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">⏳ Checkout di luar area — nunggu approval BoD</p>}
-      {(message || checkIn.isError) && <p className="mt-3 text-sm font-semibold text-destructive">{message || "Attendance gagal — cek session, selfie, GPS, atau kamu di luar radius office."}</p>}
+      {checkOutApproval === "PENDING" && !offsitePrompt && !okMessage && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">⏳ Offsite checkout — waiting for BoD approval</p>}
+      {(message || checkIn.isError) && <p className="mt-3 text-sm font-semibold text-destructive">{message || "Attendance failed — check your session, selfie, GPS, or whether you’re outside the office radius."}</p>}
     </section>
   );
 }
@@ -1195,20 +1195,20 @@ function DayOffLogModal({ kind, origin, onClose }: { kind: "DAY_OFF" | "RED_DATE
     .filter((r) => (r.type ?? "").toUpperCase() === kind)
     .filter((r) => { const d = (r.startDate ?? "").slice(0, 10); return d >= periodStartKey && d <= periodEndKey; })
     .sort((a, b) => (b.startDate ?? "").localeCompare(a.startDate ?? ""));
-  const title = kind === "DAY_OFF" ? "Log Day-off" : "Log Tanggal Merah";
-  const subtitle = kind === "DAY_OFF" ? "Day-off / kepotong (telat >120 menit) di periode ini" : "Tanggal merah yang kepakai di periode ini";
+  const title = kind === "DAY_OFF" ? "Day-off log" : "Public holiday log";
+  const subtitle = kind === "DAY_OFF" ? "Day-off / deductions (late >120 min) this period" : "Public holidays used this period";
 
   return (
     <MorphPanel origin={origin} onClose={onClose}>
       <div className="flex items-center gap-3 border-b border-border bg-muted/30 px-5 py-4">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary">{kind === "DAY_OFF" ? <Sparkles className="h-5 w-5" /> : <Calendar className="h-5 w-5" />}</span>
         <div className="min-w-0 flex-1"><div className="font-display text-lg font-bold tracking-tight">{title}</div><div className="text-xs text-muted-foreground">{subtitle}</div></div>
-        <button onClick={onClose} aria-label="Tutup" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+        <button onClick={onClose} aria-label="Close" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-5">
-        <p className="mb-3 text-[11px] font-medium text-muted-foreground">Periode berjalan: <span className="font-semibold text-foreground">{periodLabel}</span></p>
+        <p className="mb-3 text-[11px] font-medium text-muted-foreground">Current period: <span className="font-semibold text-foreground">{periodLabel}</span></p>
         {q.isLoading && <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-muted/40" />)}</div>}
-        {!q.isLoading && rows.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">Belum ada {kind === "DAY_OFF" ? "day-off" : "tanggal merah"} kepakai di periode ini ({periodLabel}).</p>}
+        {!q.isLoading && rows.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No {kind === "DAY_OFF" ? "day-off" : "public holiday"} used this period ({periodLabel}).</p>}
         {!q.isLoading && rows.length > 0 && (
           <div className="space-y-2">
             {rows.map((r) => {
@@ -1218,7 +1218,7 @@ function DayOffLogModal({ kind, origin, onClose }: { kind: "DAY_OFF" | "RED_DATE
                 <div key={r.id} className="rounded-2xl border border-border bg-muted/20 p-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-semibold">{range}</span>
-                    {kind === "DAY_OFF" && <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", auto ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700")}>{auto ? "Auto · telat >120m" : "Manual"}</span>}
+                    {kind === "DAY_OFF" && <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", auto ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700")}>{auto ? "Auto · late >120m" : "Manual"}</span>}
                   </div>
                   {r.reason && <p className="mt-1 text-xs text-muted-foreground">{r.reason}</p>}
                   <p className="mt-0.5 text-[11px] text-muted-foreground">Status: {statusLabel(r.status || "")}</p>

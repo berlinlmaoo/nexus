@@ -39,8 +39,8 @@ function Docs() {
         </aside>
         <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4">
           {docs.isLoading && <Empty title="Opening library..." message="Pulling live docs from NEXUS." />}
-          {docs.isError && <Empty title="Library locked" message="Login/session diperlukan untuk baca live docs." />}
-          {!docs.isLoading && !docs.isError && filtered.length === 0 && <Empty title={query ? "No matches" : "Shelf masih kosong"} message={query ? `Tidak ada doc cocok "${query}".` : "Belum ada docs yang kebaca di workspace ini."} />}
+          {docs.isError && <Empty title="Library locked" message="Login/session needed to read live docs." />}
+          {!docs.isLoading && !docs.isError && filtered.length === 0 && <Empty title={query ? "No matches" : "Shelf's still empty"} message={query ? `No docs match "${query}".` : "No docs visible in this workspace yet."} />}
           {filtered.map((d) => <DocCard key={d.id} doc={d} />)}
         </div>
       </div>

@@ -68,7 +68,7 @@ export function AutomationsView({ projectId }: { projectId: string }) {
 
       {list.isLoading && <p className="text-sm text-muted-foreground">Loading automations…</p>}
       {!list.isLoading && rows.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Zap className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">No automations yet</div><p className="mt-2 text-sm text-muted-foreground">Buat rule pertama, atau pakai Suggest untuk ide otomatis.</p></div>
+        <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Zap className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">No automations yet</div><p className="mt-2 text-sm text-muted-foreground">Create your first rule, or hit Suggest for some auto ideas.</p></div>
       )}
 
       <div className="space-y-2">
@@ -150,7 +150,7 @@ function AutomationComposer({ projectId, onClose, onCreated }: { projectId: stri
         <div className="mt-5 flex items-center gap-2">
           <button disabled={!name.trim() || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Create rule</button>
           <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent">Cancel</button>
-          {create.isError && <span className="text-xs font-semibold text-destructive">Gagal — butuh role LEAD di project.</span>}
+          {create.isError && <span className="text-xs font-semibold text-destructive">Failed — you need the LEAD role on this project.</span>}
         </div>
       </div>
     </div>

@@ -16,6 +16,7 @@ import {
   type SupportedCustomFieldType,
 } from "@/lib/custom-fields"
 import {
+  AlignLeft,
   ArrowDown,
   ArrowUp,
   BookOpen,
@@ -25,6 +26,7 @@ import {
   Link2,
   Loader2,
   MapPin,
+  Paperclip,
   Plus,
   Save,
   Settings2,
@@ -63,6 +65,21 @@ const TYPE_META: Record<
     icon: typeof Hash
   }
 > = {
+  TEXT: {
+    label: "Text",
+    description: "Free-form short or long text.",
+    icon: AlignLeft,
+  },
+  URL: {
+    label: "URL",
+    description: "A web link.",
+    icon: Link2,
+  },
+  FILE: {
+    label: "Files & media",
+    description: "Attach files, images, or media.",
+    icon: Paperclip,
+  },
   NUMBER: {
     label: "Number",
     description: "For budget, quota, score, or any numeric value.",

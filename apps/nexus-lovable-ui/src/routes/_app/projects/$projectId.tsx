@@ -16,6 +16,7 @@ import { AutomationsView } from "@/components/automations/AutomationsView";
 import { ChatThread } from "@/components/messages/ChatThread";
 import { ProjectFormsView } from "@/components/forms/form-kit";
 import { ProjectFiles } from "@/components/projects/ProjectFiles";
+import { ProjectTableView } from "@/components/projects/ProjectTableView";
 import { FinanceDashboardView } from "@/components/finance/FinanceDashboardView";
 import { PnlDashboardView } from "@/components/pnl/PnlDashboardView";
 import { cn } from "@/lib/utils";
@@ -43,6 +44,7 @@ import {
   CornerDownRight,
   LayoutGrid,
   List,
+  Table2,
   ListChecks,
   Loader2,
   MessageSquare,
@@ -64,7 +66,7 @@ import {
 
 export const Route = createFileRoute("/_app/projects/$projectId")({ component: ProjectDetail });
 
-type ViewId = "overview" | "board" | "list" | "calendar" | "timeline" | "sprints" | "automations" | "pages" | "forms" | "finance" | "pnl" | "files" | "chat";
+type ViewId = "overview" | "board" | "list" | "table" | "calendar" | "timeline" | "sprints" | "automations" | "pages" | "forms" | "finance" | "pnl" | "files" | "chat";
 // cfSelections: per custom-field-id, the set of values to keep (OR within a field, AND across fields).
 type BoardFilters = { query: string; section: string; priority: string; hideDone: boolean; assigneeId: string; cfSelections: Record<string, string[]> };
 const EMPTY_FILTERS: BoardFilters = { query: "", section: "ALL", priority: "ALL", hideDone: false, assigneeId: "ALL", cfSelections: {} };
@@ -79,6 +81,7 @@ const TABS: { id: ViewId; label: string; icon: typeof LayoutGrid }[] = [
   { id: "pnl", label: "P&L", icon: Wallet },
   { id: "board", label: "Board", icon: LayoutGrid },
   { id: "list", label: "List", icon: List },
+  { id: "table", label: "Table", icon: Table2 },
   { id: "calendar", label: "Calendar", icon: CalIcon },
   { id: "timeline", label: "Timeline", icon: GanttChart },
   { id: "sprints", label: "Sprints", icon: Target },
@@ -198,13 +201,14 @@ function ProjectDetail() {
       )}
 
       {project.isLoading && <div className="p-8"><Card><CardBody className="text-sm text-muted-foreground">Loading mission lanes...</CardBody></Card></div>}
-      {project.isError && <div className="p-8"><Empty title="Board locked" message="Login/session atau project access dibutuhkan untuk buka board live ini." /></div>}
+      {project.isError && <div className="p-8"><Empty title="Board locked" message="You need a login/session or project access to open this live board." /></div>}
       {!project.isLoading && !project.isError && data && (
         // Provider gates multi-select duplicate behind the project's "Task duplicate mode" flag.
         <TaskBulkProvider projectId={data.id} enabled={!!data.enableTaskBatchDuplicate}>
           {view === "overview" && <OverviewView project={data} tasks={filteredTasks} progress={progress} />}
           {view === "board" && <BoardView project={data} taskLists={listsWithSubtasks} onOpen={setOpenTask} onCreate={setComposerListId} />}
           {view === "list" && <ListView taskLists={listsWithSubtasks} onOpen={setOpenTask} />}
+          {view === "table" && <ProjectTableView project={data} taskLists={listsWithSubtasks} onOpen={setOpenTask} />}
           {view === "calendar" && <CalendarView projectId={data.id} tasks={filteredTasks} onOpen={setOpenTask} onCreate={(due) => { setComposerDueDate(due); setComposerListId(taskLists[0]?.id ?? null); }} onSetDue={(taskId, due) => setTaskDue.mutate({ taskId, dueDate: due })} />}
           {view === "timeline" && <TimelineView projectId={data.id} taskLists={filteredTaskLists} onOpen={setOpenTask} />}
           {view === "sprints" && <SprintsView project={data} tasks={filteredTasks} onOpenTask={setOpenTask} />}
@@ -397,7 +401,7 @@ function BoardView({ project, taskLists, onOpen, onCreate }: { project: NexusPro
     onSettled: () => qc.invalidateQueries({ queryKey: ["nexus", "project", project.id] }),
   });
 
-  if (taskLists.length === 0) return <div className="p-8"><Empty title="No lanes yet" message="Project ini belum punya task list/lane yang kebaca dari NEXUS." /></div>;
+  if (taskLists.length === 0) return <div className="p-8"><Empty title="No lanes yet" message="This project doesn't have any task list/lane that NEXUS can read yet." /></div>;
 
   // Tasks linked into this project from elsewhere → grouped into read-only lanes by their source project.
   const linkedBySource = new Map<string, { name: string; tasks: NexusTask[] }>();
@@ -407,7 +411,7 @@ function BoardView({ project, taskLists, onOpen, onCreate }: { project: NexusPro
       if (!t?.id) continue;
       const srcId = t.taskList?.projectId ?? "linked";
       if (srcId === project.id) continue;
-      const g = linkedBySource.get(srcId) ?? { name: t.taskList?.project?.name ?? "Project lain", tasks: [] };
+      const g = linkedBySource.get(srcId) ?? { name: t.taskList?.project?.name ?? "Another project", tasks: [] };
       if (!g.tasks.some((x) => x.id === t.id)) g.tasks.push(t);
       linkedBySource.set(srcId, g);
     }
@@ -460,7 +464,7 @@ function BoardView({ project, taskLists, onOpen, onCreate }: { project: NexusPro
                   draggable
                   onDragStart={(e) => { setDraggingLaneId(list.id); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", list.id); }}
                   onDragEnd={() => setDraggingLaneId(null)}
-                  title="Geser buat pindahin urutan section"
+                  title="Drag to reorder sections"
                   className="grid h-8 w-8 shrink-0 cursor-grab place-items-center rounded-2xl bg-primary/10 text-sm font-black text-primary transition hover:bg-primary/20 active:cursor-grabbing"
                 >
                   {laneIndex + 1}
@@ -470,8 +474,8 @@ function BoardView({ project, taskLists, onOpen, onCreate }: { project: NexusPro
                   <p className="text-[11px] text-muted-foreground">{items.length} cards in play</p>
                 </div>
                 <div className="flex shrink-0 items-center">
-                  <Button isIconOnly size="sm" variant="ghost" aria-label="Pindah section ke kiri" className="rounded-full" isDisabled={laneIndex === 0 || reorderLane.isPending} onClick={() => reorderLane.mutate({ id: list.id, position: laneIndex - 1 })}><ChevronLeft className="h-4 w-4" /></Button>
-                  <Button isIconOnly size="sm" variant="ghost" aria-label="Pindah section ke kanan" className="rounded-full" isDisabled={laneIndex === lanes.length - 1 || reorderLane.isPending} onClick={() => reorderLane.mutate({ id: list.id, position: laneIndex + 1 })}><ChevronRight className="h-4 w-4" /></Button>
+                  <Button isIconOnly size="sm" variant="ghost" aria-label="Move section left" className="rounded-full" isDisabled={laneIndex === 0 || reorderLane.isPending} onClick={() => reorderLane.mutate({ id: list.id, position: laneIndex - 1 })}><ChevronLeft className="h-4 w-4" /></Button>
+                  <Button isIconOnly size="sm" variant="ghost" aria-label="Move section right" className="rounded-full" isDisabled={laneIndex === lanes.length - 1 || reorderLane.isPending} onClick={() => reorderLane.mutate({ id: list.id, position: laneIndex + 1 })}><ChevronRight className="h-4 w-4" /></Button>
                   <ListMenu projectId={project.id} list={{ id: list.id, name: list.name }} />
                   <Button isIconOnly size="sm" variant="ghost" className="rounded-full" onClick={() => onCreate(list.id)}><Plus className="h-4 w-4" /></Button>
                 </div>
@@ -516,7 +520,7 @@ function AddListColumn({ projectId }: { projectId: string }) {
         >
           {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add list
         </button>
-        {create.isError && <p className="mt-1 text-xs font-semibold text-destructive">Gagal bikin list.</p>}
+        {create.isError && <p className="mt-1 text-xs font-semibold text-destructive">Couldn't create list.</p>}
       </div>
     </div>
   );
@@ -535,7 +539,7 @@ function ListMenu({ projectId, list }: { projectId: string; list: { id: string; 
         title="Rename list"
       ><Pencil className="h-3.5 w-3.5" /></button>
       <button
-        onClick={() => { if (window.confirm(`Delete list "${list.name}"? Pindahkan/ kosongkan task dulu.`)) del.mutate(); }}
+        onClick={() => { if (window.confirm(`Delete list "${list.name}"? Move or clear out its tasks first.`)) del.mutate(); }}
         className="rounded-lg p-1 text-muted-foreground transition-colors hover:text-destructive"
         title="Delete list"
       ><Trash2 className="h-3.5 w-3.5" /></button>
@@ -583,6 +587,8 @@ function customFieldChip(cfv: NonNullable<NexusTask["customFieldValues"]>[number
     catch { return { id: cfv.customFieldId, label: raw, tone: "neutral" }; }
   }
   if (type === "DATE" || type === "CREATED") { const d = new Date(raw); return { id: cfv.customFieldId, label: Number.isNaN(d.getTime()) ? raw : fmtDate(raw), tone: "neutral" }; }
+  if (type === "URL") { let label = raw; try { label = new URL(raw).hostname.replace(/^www\./, "") || raw; } catch { /* keep raw */ } return { id: cfv.customFieldId, label, tone: "neutral" }; }
+  if (type === "FILE") { try { const a = JSON.parse(raw); const n = Array.isArray(a) ? a.length : 0; return n > 0 ? { id: cfv.customFieldId, label: `📎 ${n} file${n === 1 ? "" : "s"}`, tone: "neutral" } : null; } catch { return null; } }
   return { id: cfv.customFieldId, label: raw, tone: "neutral" };
 }
 
@@ -612,7 +618,7 @@ function QuestChip({ task, className }: { task: NexusTask; className?: string })
   const xp = quests.reduce((s, q) => s + (q.xpReward ?? 0), 0);
   return (
     <span
-      title={`Quest: ${quests.map((q) => q.title).join(", ")} — selesaiin buat +${xp} XP`}
+      title={`Quest: ${quests.map((q) => q.title).join(", ")} — finish it for +${xp} XP`}
       className={cn("inline-flex shrink-0 items-center gap-0.5 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary", className)}
     >
       +{xp} XP
@@ -643,7 +649,7 @@ function TaskCard({ task, currentProjectId, onOpen, onDrag, moving }: { task: Ne
   const assignee = task.assignees?.[0]?.user;
   const tags = task.tags ?? [];
   const isDone = (task.status ?? "").toUpperCase() === "DONE";
-  const linkedFrom = task.taskList?.projectId && currentProjectId && task.taskList.projectId !== currentProjectId ? (task.taskList.project?.name ?? "project lain") : null;
+  const linkedFrom = task.taskList?.projectId && currentProjectId && task.taskList.projectId !== currentProjectId ? (task.taskList.project?.name ?? "another project") : null;
   const toggleDone = useMutation({
     mutationFn: () => nexusApi.updateTask(task.id, { status: isDone ? "TODO" : "DONE" }),
     onSuccess: () => {
@@ -676,7 +682,7 @@ function TaskCard({ task, currentProjectId, onOpen, onDrag, moving }: { task: Ne
           <div className="min-w-0 flex-1">
             {linkedFrom && <span className="mb-1 block truncate text-[11px] font-semibold text-muted-foreground">From {linkedFrom}</span>}
             {task.parentId && (
-              <span className="mb-1 inline-flex max-w-full items-center gap-1 rounded-md bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700" title={task.parent?.title ? `Subtask dari: ${task.parent.title}` : "Subtask"}>
+              <span className="mb-1 inline-flex max-w-full items-center gap-1 rounded-md bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700" title={task.parent?.title ? `Subtask of: ${task.parent.title}` : "Subtask"}>
                 <CornerDownRight className="h-3 w-3 shrink-0" />
                 <span className="truncate">{task.parent?.title ? `Subtask · ${task.parent.title}` : "Subtask"}</span>
               </span>
@@ -731,8 +737,8 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
 
   return (
     <div className="relative">
-      <button type="button" onClick={() => setOpen((v) => !v)} className="inline-flex items-center rounded-full transition hover:opacity-80" title="Lihat / kelola anggota project" aria-label="Anggota project">
-        {ids.length > 0 ? <AvatarStack ids={ids} size={26} /> : <span className="rounded-full border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground">+ Anggota</span>}
+      <button type="button" onClick={() => setOpen((v) => !v)} className="inline-flex items-center rounded-full transition hover:opacity-80" title="View / manage project members" aria-label="Project members">
+        {ids.length > 0 ? <AvatarStack ids={ids} size={26} /> : <span className="rounded-full border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground">+ Members</span>}
       </button>
       {open && (
         <>
@@ -740,7 +746,7 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
           <div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-border bg-card p-2 shadow-pop">
             {mode === "list" && (
               <>
-                <div className={labelCls}>Anggota project · {members.length}</div>
+                <div className={labelCls}>Project members · {members.length}</div>
                 <div className="max-h-72 space-y-0.5 overflow-y-auto">
                   {members.map((m) => {
                     const uid = m.userId || m.user?.id || "";
@@ -757,7 +763,7 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
                 </div>
                 {canAdd && (
                   <button onClick={() => setMode("add")} className="mt-1 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border px-2 py-2 text-sm font-semibold text-primary transition hover:bg-accent">
-                    <Plus className="h-4 w-4" /> Tambah orang ke project
+                    <Plus className="h-4 w-4" /> Add people to project
                   </button>
                 )}
               </>
@@ -766,12 +772,12 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
             {mode === "add" && (
               <>
                 <div className="flex items-center justify-between">
-                  <span className={labelCls}>Tambah orang</span>
-                  <button onClick={() => { setMode("list"); setSearch(""); }} className="px-2 text-xs font-semibold text-muted-foreground hover:text-foreground">Kembali</button>
+                  <span className={labelCls}>Add people</span>
+                  <button onClick={() => { setMode("list"); setSearch(""); }} className="px-2 text-xs font-semibold text-muted-foreground hover:text-foreground">Back</button>
                 </div>
-                <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari nama / email…" className="mb-1 w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary" />
+                <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name / email…" className="mb-1 w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary" />
                 <div className="max-h-64 space-y-0.5 overflow-y-auto">
-                  {addable.length === 0 && <div className="px-2 py-3 text-center text-xs text-muted-foreground">Semua udah jadi member / nggak ketemu.</div>}
+                  {addable.length === 0 && <div className="px-2 py-3 text-center text-xs text-muted-foreground">Everyone's already a member / no match found.</div>}
                   {addable.map((m) => (
                     <button key={m.userId} disabled={addPerson.isPending} onClick={() => addPerson.mutate(m.userId, { onSuccess: () => { setPending({ id: m.userId, name: m.name }); setMode("team"); setSearch(""); } })} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-accent disabled:opacity-50">
                       <Avatar userId={m.userId} name={m.name} avatar={m.avatar} size={26} />
@@ -785,7 +791,7 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
 
             {mode === "team" && pending && (
               <>
-                <div className="px-2 py-1.5 text-sm"><b>{pending.name}</b> ✅ masuk project.<div className="mt-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Masukin ke team mana?</div></div>
+                <div className="px-2 py-1.5 text-sm"><b>{pending.name}</b> ✅ added to project.<div className="mt-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Which team should they join?</div></div>
                 <div className="max-h-56 space-y-0.5 overflow-y-auto">
                   {(teamsQ.data ?? []).map((t) => (
                     <button key={t.id} disabled={addToTeam.isPending} onClick={() => addToTeam.mutate({ teamId: t.id, userId: pending.id }, { onSuccess: () => { setMode("list"); setPending(null); } })} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition hover:bg-accent disabled:opacity-50">
@@ -794,9 +800,9 @@ function ProjectMembersAvatars({ project }: { project: NexusProject }) {
                       {addToTeam.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
                     </button>
                   ))}
-                  {(teamsQ.data ?? []).length === 0 && <div className="px-2 py-3 text-center text-xs text-muted-foreground">Belum ada team.</div>}
+                  {(teamsQ.data ?? []).length === 0 && <div className="px-2 py-3 text-center text-xs text-muted-foreground">No teams yet.</div>}
                 </div>
-                <button onClick={() => { setMode("list"); setPending(null); }} className="mt-1 w-full rounded-lg px-2 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-accent">Nanti aja / skip team</button>
+                <button onClick={() => { setMode("list"); setPending(null); }} className="mt-1 w-full rounded-lg px-2 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-accent">Later / skip team</button>
               </>
             )}
           </div>
@@ -903,10 +909,10 @@ function TaskComposer({ project, selectedListId, initialDueDate, onClose }: { pr
   const onFinish = () => {
     if (timer.current) clearTimeout(timer.current);
     setFinishing(true);
-    void enqueueSave().then(() => { celebrate(draftId.current ? "Task kesimpen 🎉" : "Task baru dibuat 🎉"); onClose(); }).finally(() => setFinishing(false));
+    void enqueueSave().then(() => { celebrate(draftId.current ? "Task saved 🎉" : "New task created 🎉"); onClose(); }).finally(() => setFinishing(false));
   };
   const discard = async () => {
-    if (draftId.current && !window.confirm("Buang draft task ini? Yang udah keisi bakal kehapus.")) return;
+    if (draftId.current && !window.confirm("Discard this draft task? Anything you've filled in will be deleted.")) return;
     cancelled.current = true;
     if (timer.current) clearTimeout(timer.current);
     onClose();
@@ -927,12 +933,12 @@ function TaskComposer({ project, selectedListId, initialDueDate, onClose }: { pr
           </div>
           <div className="space-y-4 p-6">
             <div className="space-y-1">
-              <label className={labelCls}>Judul</label>
-              <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Mau ngerjain apa?" className={cn(inputCls, "text-base font-semibold")} />
+              <label className={labelCls}>Title</label>
+              <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What are you working on?" className={cn(inputCls, "text-base font-semibold")} />
             </div>
             <div className="space-y-1">
-              <label className={labelCls}>Deskripsi</label>
-              <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Konteks singkat (opsional)" className={cn(inputCls, "min-h-20 resize-y")} />
+              <label className={labelCls}>Description</label>
+              <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="A bit of context (optional)" className={cn(inputCls, "min-h-20 resize-y")} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2 space-y-1">
@@ -942,7 +948,7 @@ function TaskComposer({ project, selectedListId, initialDueDate, onClose }: { pr
                 </select>
               </div>
               <div className="space-y-1">
-                <label className={labelCls}>Prioritas</label>
+                <label className={labelCls}>Priority</label>
                 <select value={priority} onChange={(e) => setPriority(e.target.value as CreateTaskPayload["priority"])} className={inputCls}>
                   {(["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"] as const).map((p) => <option key={p} value={p}>{statusLabel(p)}</option>)}
                 </select>
@@ -998,6 +1004,10 @@ function TaskComposer({ project, selectedListId, initialDueDate, onClose }: { pr
                             return <button key={c} type="button" onClick={() => setCf(f.id, on ? arr.filter((x) => x !== c) : [...arr, c])} className={cn("rounded-full border px-2.5 py-1 text-xs font-semibold transition", on ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}>{c}</button>;
                           })}
                         </div>
+                      ) : type === "FILE" ? (
+                        <p className="text-xs text-muted-foreground">Save the task first, then attach files in its detail panel.</p>
+                      ) : type === "URL" ? (
+                        <input type="url" value={typeof val === "string" ? val : ""} onChange={(e) => setCf(f.id, e.target.value)} placeholder="https://…" className={inputCls} />
                       ) : (
                         <input value={typeof val === "string" ? val : ""} onChange={(e) => setCf(f.id, e.target.value)} className={inputCls} />
                       )}
@@ -1010,14 +1020,14 @@ function TaskComposer({ project, selectedListId, initialDueDate, onClose }: { pr
           </div>
           <div className="sticky bottom-0 flex items-center justify-between gap-2 border-t border-border bg-card px-6 py-4">
             <span className="flex items-center gap-1.5 text-xs font-semibold">
-              {saveState === "saving" ? <span className="flex items-center gap-1.5 text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Menyimpan…</span>
-                : saveState === "saved" ? <span className="flex items-center gap-1.5 text-emerald-600"><Check className="h-3.5 w-3.5" /> Tersimpan otomatis</span>
-                : saveState === "error" ? <span className="text-rose-600">Gagal nyimpen — coba lagi</span>
-                : <span className="text-muted-foreground">Auto-save aktif</span>}
+              {saveState === "saving" ? <span className="flex items-center gap-1.5 text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…</span>
+                : saveState === "saved" ? <span className="flex items-center gap-1.5 text-emerald-600"><Check className="h-3.5 w-3.5" /> Saved automatically</span>
+                : saveState === "error" ? <span className="text-rose-600">Save failed — try again</span>
+                : <span className="text-muted-foreground">Auto-save on</span>}
             </span>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" onClick={discard}>{draftId.current ? <><Trash2 className="h-4 w-4" /> Buang</> : "Batal"}</Button>
-              <Button variant="primary" isDisabled={finishing || !title.trim() || !taskListId} onClick={onFinish}>{finishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Selesai</Button>
+              <Button variant="ghost" onClick={discard}>{draftId.current ? <><Trash2 className="h-4 w-4" /> Discard</> : "Cancel"}</Button>
+              <Button variant="primary" isDisabled={finishing || !title.trim() || !taskListId} onClick={onFinish}>{finishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Done</Button>
             </div>
           </div>
         </CardBody>
@@ -1143,7 +1153,7 @@ function ListView({ taskLists, onOpen }: { taskLists: NonNullable<NexusProject["
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const toggle = (id: string) => setCollapsed((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const total = taskLists.reduce((n, l) => n + (l.tasks?.length ?? 0), 0);
-  if (total === 0) return <div className="p-4 md:p-8"><Empty title="No tasks here" message="Belum ada task di filter ini — bikin satu lewat Add task." /></div>;
+  if (total === 0) return <div className="p-4 md:p-8"><Empty title="No tasks here" message="No tasks in this filter yet — make one with Add task." /></div>;
   return (
     <div className="space-y-5 p-4 md:p-8">
       {taskLists.map((list) => {
@@ -1313,7 +1323,7 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
               <Button size="sm" variant="outline" onClick={addRule}><Plus className="h-3.5 w-3.5" />Add rule</Button>
             </div>
             {colorRules.length === 0 ? (
-              <p className="text-xs text-muted-foreground">Belum ada rule. Warnai task di kalender berdasarkan status, priority, assignee, list, atau custom field.</p>
+              <p className="text-xs text-muted-foreground">No rules yet. Color tasks on the calendar by status, priority, assignee, list, or custom field.</p>
             ) : (
               <div className="space-y-2">
                 {colorRules.map((rule) => {
@@ -1325,13 +1335,13 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
                       </select>
                       {rule.source === "custom_field" && (
                         <select value={rule.customFieldId ?? ""} onChange={(e) => updateRule(rule.id, { customFieldId: e.target.value })} className="rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-semibold">
-                          <option value="">Pilih field…</option>
+                          <option value="">Pick a field…</option>
                           {cfFields.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
                         </select>
                       )}
                       <span className="text-xs font-bold text-muted-foreground">=</span>
                       <select value={rule.value} onChange={(e) => updateRule(rule.id, { value: e.target.value })} className="min-w-[120px] flex-1 rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-semibold">
-                        <option value="">Pilih nilai…</option>
+                        <option value="">Pick a value…</option>
                         {valueOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
                       <div className="flex items-center gap-1">
@@ -1390,7 +1400,7 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
               </div>
             );
           })}
-          {agenda.length === 0 && dated.length > 0 && <p className="rounded-2xl border border-dashed border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground shadow-soft">Gak ada task jatuh tempo di {viewMonth.toLocaleDateString("en-US", { month: "long" })}.</p>}
+          {agenda.length === 0 && dated.length > 0 && <p className="rounded-2xl border border-dashed border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground shadow-soft">No tasks due in {viewMonth.toLocaleDateString("en-US", { month: "long" })}.</p>}
         </div>
       ) : (
       <Card className="overflow-hidden border border-border shadow-soft">
@@ -1416,7 +1426,7 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
                   <div className="mb-1 flex items-center justify-between">
                     <div className={cn("grid h-6 w-6 place-items-center rounded-full text-[11px] font-black", isToday ? "bg-primary text-primary-foreground" : inMonth ? "text-foreground" : "text-muted-foreground/40")}>{day.getDate()}</div>
                     {/* always visible on touch screens (no hover there); hover-reveal on desktop */}
-                    {inMonth && <button type="button" onClick={() => onCreate(ymd(day))} title="Tambah task tanggal ini" className="grid h-6 w-6 place-items-center rounded-lg bg-muted/60 text-muted-foreground transition hover:bg-accent hover:text-primary focus-visible:opacity-100 sm:h-5 sm:w-5 sm:bg-transparent sm:opacity-0 sm:group-hover/cal:opacity-100"><Plus className="h-3.5 w-3.5 sm:h-3 sm:w-3" /></button>}
+                    {inMonth && <button type="button" onClick={() => onCreate(ymd(day))} title="Add a task on this date" className="grid h-6 w-6 place-items-center rounded-lg bg-muted/60 text-muted-foreground transition hover:bg-accent hover:text-primary focus-visible:opacity-100 sm:h-5 sm:w-5 sm:bg-transparent sm:opacity-0 sm:group-hover/cal:opacity-100"><Plus className="h-3.5 w-3.5 sm:h-3 sm:w-3" /></button>}
                   </div>
                   <div className="space-y-0.5">
                     {dayTasks.slice(0, 3).map((task) => {
@@ -1431,10 +1441,10 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
                     {dayTasks.length > 3 && (
                       <Popover>
                         <PopoverTrigger asChild>
-                          <button type="button" className="w-full px-1 text-left text-[10px] font-bold text-muted-foreground transition hover:text-primary">+{dayTasks.length - 3} lagi</button>
+                          <button type="button" className="w-full px-1 text-left text-[10px] font-bold text-muted-foreground transition hover:text-primary">+{dayTasks.length - 3} more</button>
                         </PopoverTrigger>
                         <PopoverContent align="start" className="w-60 p-2">
-                          <div className="mb-1.5 px-1 text-[11px] font-bold text-muted-foreground">{day.getDate()} {viewMonth.toLocaleDateString("en-US", { month: "short" })} · {dayTasks.length} task</div>
+                          <div className="mb-1.5 px-1 text-[11px] font-bold text-muted-foreground">{day.getDate()} {viewMonth.toLocaleDateString("en-US", { month: "short" })} · {dayTasks.length} task{dayTasks.length === 1 ? "" : "s"}</div>
                           <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
                             {dayTasks.map((task) => {
                               const done = isDone(task.status);
@@ -1459,7 +1469,7 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
       )}
       {undated.length > 0 && (
         <div className="mt-3 rounded-2xl border border-dashed border-border bg-muted/20 p-3">
-          <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Tanpa due date · {undated.length}</div>
+          <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">No due date · {undated.length}</div>
           <div className="flex flex-wrap gap-1.5">
             {undated.map((task) => (
               <button
@@ -1468,17 +1478,17 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
                 onDragStart={() => setDragTaskId(task.id)}
                 onDragEnd={() => { setDragTaskId(null); setDropKey(null); }}
                 onClick={() => onOpen(task)}
-                title="Seret ke tanggal buat kasih due date, atau klik buat buka"
+                title="Drag onto a date to set a due date, or click to open"
                 className={cn("max-w-[200px] cursor-grab truncate rounded-lg border border-border bg-card px-2 py-1 text-[11px] font-semibold transition hover:border-primary/40 active:cursor-grabbing", CAL_CHIP[(task.priority ?? "NONE").toUpperCase()] ?? "")}
               >
                 {task.title}
               </button>
             ))}
           </div>
-          <p className="mt-2 text-[10px] text-muted-foreground">Seret ke tanggal di kalender buat ngasih due date, atau klik buat buka.</p>
+          <p className="mt-2 text-[10px] text-muted-foreground">Drag onto a date in the calendar to set a due date, or click to open.</p>
         </div>
       )}
-      {dated.length === 0 && undated.length === 0 && <Empty title="Belum ada task" message="Klik + di tanggal buat bikin task baru, atau tambah lewat board." />}
+      {dated.length === 0 && undated.length === 0 && <Empty title="No tasks yet" message="Click + on a date to create a new task, or add one from the board." />}
     </div>
   );
 }
@@ -1551,7 +1561,7 @@ function TimelineView({ projectId: _projectId, taskLists, onOpen }: { projectId:
   const allWins = groups.flatMap((g) => g.tasks.map((t) => t.win));
 
   if (allWins.length === 0) {
-    return <div className="p-4 md:p-8"><Empty title="Belum ada timeline" message="Tambahkan task (start/due date opsional) biar muncul di Gantt." /></div>;
+    return <div className="p-4 md:p-8"><Empty title="No timeline yet" message="Add tasks (start/due date optional) so they show up on the Gantt." /></div>;
   }
 
   let min = allWins.reduce((a, w) => (w.start < a ? w.start : a), allWins[0].start);
@@ -1717,7 +1727,7 @@ function PagesView({ project, onCreate, onOpen }: { project: NexusProject; onCre
         <Button variant="primary" onClick={onCreate}><Plus className="h-4 w-4" />Add page</Button>
       </div>
       {docs.isLoading && <Card><CardBody className="p-6 text-sm text-muted-foreground">Loading project lore...</CardBody></Card>}
-      {docs.isError && <Empty title="Pages locked" message="Login/session atau project access dibutuhkan untuk load docs project ini." />}
+      {docs.isError && <Empty title="Pages locked" message="You need a login/session or project access to load this project's docs." />}
       {!docs.isLoading && !docs.isError && items.length === 0 && <Empty title="No project pages yet" message="Spawn the first page for briefs, SOP, meeting notes, or project lore." />}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {items.map((doc) => (
@@ -1765,7 +1775,7 @@ function PageComposer({ project, onClose }: { project: NexusProject; onClose: ()
             <Button isIconOnly size="sm" variant="ghost" className="rounded-full" onClick={onClose}><X className="h-4 w-4" /></Button>
           </div>
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Page title — e.g. Client Brief / MOM / SOP" className="rounded-xl border border-border bg-background px-3 py-2 text-sm" />
-          <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Drop notes here. Gue convert jadi TipTap doc JSON before sending." className="min-h-52 rounded-xl border border-border bg-background px-3 py-2 text-sm leading-relaxed" />
+          <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Drop notes here. We'll convert them to TipTap doc JSON before sending." className="min-h-52 rounded-xl border border-border bg-background px-3 py-2 text-sm leading-relaxed" />
           {create.isError && <p className="text-sm font-semibold text-red-600">Create page failed. Check permission/session.</p>}
           <div className="flex flex-wrap justify-end gap-2">
             <Button variant="ghost" onClick={onClose}>Cancel</Button>
@@ -1907,7 +1917,7 @@ function SprintsView({ project, tasks, onOpenTask }: { project: NexusProject; ta
       </section>
 
       {sprintsQuery.isLoading && <Card><CardBody className="p-6 text-sm text-muted-foreground">Loading sprint cycles...</CardBody></Card>}
-      {sprintsQuery.isError && <Empty title="Sprint arena locked" message="Login/session atau project access dibutuhkan untuk ambil /api/sprints." />}
+      {sprintsQuery.isError && <Empty title="Sprint arena locked" message="You need a login/session or project access to fetch /api/sprints." />}
       {updateSprint.isError && <p className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{updateError}</p>}
       {!sprintsQuery.isLoading && !sprintsQuery.isError && sprints.length === 0 && <Empty title="No sprint cycles yet" message="Create a sprint to group this mission into a focused execution window." />}
 
@@ -1977,7 +1987,7 @@ function SprintsView({ project, tasks, onOpenTask }: { project: NexusProject; ta
         <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-4 backdrop-blur-sm" onClick={() => setCompleting(null)}>
           <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-display text-lg font-bold tracking-tight">{completing.incomplete.length} card{completing.incomplete.length === 1 ? "" : "s"} not done</h3>
-            <p className="mt-1 text-sm text-muted-foreground">Pindahkan card yang belum selesai ke sprint lain, atau lepas ke backlog saat menutup sprint ini.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Move the unfinished cards to another sprint, or drop them to the backlog as you close this sprint.</p>
             <div className="mt-4 space-y-2">
               {sprints.filter((s) => s.id !== completing.sprintId && s.status !== "COMPLETED").map((s) => (
                 <button key={s.id} disabled={updateSprint.isPending} onClick={() => updateSprint.mutate({ id: completing.sprintId, status: "COMPLETED", moveIncompleteTo: s.id })} className="flex w-full items-center justify-between rounded-xl border border-border px-3 py-2.5 text-sm font-semibold transition-colors hover:border-primary/40 hover:bg-accent active:scale-[0.98] disabled:opacity-50">
@@ -2012,7 +2022,7 @@ function ProjectChat({ projectId }: { projectId: string }) {
     <div className="p-4 md:p-8">
       <div className="mx-auto h-[70vh] max-w-2xl overflow-hidden rounded-3xl border border-border bg-card shadow-soft">
         {convos.isLoading && <div className="flex h-full items-center justify-center text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
-        {!convos.isLoading && !room && <div className="grid h-full place-items-center p-8 text-center text-sm text-muted-foreground"><div><MessageSquare className="mx-auto mb-3 h-8 w-8 opacity-40" />Project chat room belum aktif (perlu backend Messages).</div></div>}
+        {!convos.isLoading && !room && <div className="grid h-full place-items-center p-8 text-center text-sm text-muted-foreground"><div><MessageSquare className="mx-auto mb-3 h-8 w-8 opacity-40" />Project chat room isn't active yet (needs the Messages backend).</div></div>}
         {room && <ChatThread conversationId={room.id} meId={me.data?.user?.id} />}
       </div>
     </div>

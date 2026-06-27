@@ -39,13 +39,13 @@ function FieldPreview({ field }: { field: NexusFormField }) {
       {field.type === "textarea" ? (
         <textarea disabled rows={2} placeholder="Long text answer" className={cn(base, "resize-none")} />
       ) : field.type === "dropdown" || field.type === "select" ? (
-        <select disabled className={base}>{opts.length ? opts.map((o, i) => <option key={i}>{o}</option>) : <option>Pilih opsi…</option>}</select>
+        <select disabled className={base}>{opts.length ? opts.map((o, i) => <option key={i}>{o}</option>) : <option>Choose an option…</option>}</select>
       ) : field.type === "multi_select" ? (
         <div className="max-h-44 space-y-1 overflow-y-auto rounded-md border border-border bg-card p-2">
-          {(() => { const shown = opts.map(String).filter((o) => o.trim()); return (shown.length ? shown : ["Opsi"]).map((o, i) => <label key={i} className="flex items-center gap-2 text-xs"><input type="checkbox" disabled className="h-3.5 w-3.5" /> {o}</label>); })()}
+          {(() => { const shown = opts.map(String).filter((o) => o.trim()); return (shown.length ? shown : ["Option"]).map((o, i) => <label key={i} className="flex items-center gap-2 text-xs"><input type="checkbox" disabled className="h-3.5 w-3.5" /> {o}</label>); })()}
         </div>
       ) : field.type === "file" ? (
-        <div className={cn(base, "flex items-center gap-2")}><Paperclip className="h-3.5 w-3.5" /> Pilih file…</div>
+        <div className={cn(base, "flex items-center gap-2")}><Paperclip className="h-3.5 w-3.5" /> Choose a file…</div>
       ) : (
         <input disabled type={field.type === "number" ? "number" : field.type === "date" ? "date" : field.type === "email" ? "email" : "text"} placeholder={field.type === "email" ? "email@example.com" : field.type === "number" ? "0" : field.type === "date" ? "" : "Short text answer"} className={base} />
       )}
@@ -60,28 +60,28 @@ type FMapping = { target?: string; customFieldId?: string };
 export type RichField = NexusFormField & { name?: string; showIf?: FCond | null; routingRules?: FRule[]; mapping?: FMapping | null; attachmentEnabled?: boolean; autofill?: "name" | "email"; numberFormat?: "currency-idr" };
 
 const OPERATORS = [
-  { value: "equals", label: "sama dengan" },
-  { value: "not_equals", label: "tidak sama dengan" },
-  { value: "contains", label: "mengandung" },
-  { value: "is_empty", label: "kosong" },
-  { value: "is_not_empty", label: "tidak kosong" },
+  { value: "equals", label: "equals" },
+  { value: "not_equals", label: "does not equal" },
+  { value: "contains", label: "contains" },
+  { value: "is_empty", label: "is empty" },
+  { value: "is_not_empty", label: "is not empty" },
 ];
 const needsValue = (op: string) => op !== "is_empty" && op !== "is_not_empty";
 const MAPPING_TARGETS = [
-  { value: "none", label: "— tidak dipetakan —" },
-  { value: "task_title", label: "Judul task" },
-  { value: "task_description", label: "Deskripsi task" },
-  { value: "task_due_date", label: "Tanggal due" },
+  { value: "none", label: "— not mapped —" },
+  { value: "task_title", label: "Task title" },
+  { value: "task_description", label: "Task description" },
+  { value: "task_due_date", label: "Due date" },
   { value: "task_status", label: "Status" },
-  { value: "task_priority", label: "Prioritas" },
+  { value: "task_priority", label: "Priority" },
   { value: "task_list", label: "Section / list" },
   { value: "custom_field", label: "Custom field" },
 ];
 const ROUTING_ACTIONS = [
-  { value: "set_task_list", label: "Pindah ke section" },
-  { value: "assign_user", label: "Assign ke member" },
+  { value: "set_task_list", label: "Move to section" },
+  { value: "assign_user", label: "Assign to member" },
 ];
-const WEEKDAYS = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function fieldName(f: RichField) { return f.name || f.label || "Untitled"; }
 function optionsOf(f: RichField): string[] {
@@ -100,12 +100,12 @@ function AccessScheduleEditor({ value, onChange }: { value: { enabled?: boolean;
   const base = { enabled, daysOfWeek: days, startTime: s.startTime ?? "00:00", endTime: s.endTime ?? "23:59", timezone: s.timezone ?? "Asia/Jakarta", ...(override ? { override } : {}) };
   const patch = (p: Record<string, unknown>) => onChange({ ...base, enabled: true, ...p });
   const fieldCls = "rounded-lg border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary";
-  const OV: { v: "open" | "closed" | undefined; l: string }[] = [{ v: undefined, l: "Auto" }, { v: "open", l: "Buka paksa" }, { v: "closed", l: "Tutup paksa" }];
+  const OV: { v: "open" | "closed" | undefined; l: string }[] = [{ v: undefined, l: "Auto" }, { v: "open", l: "Force open" }, { v: "closed", l: "Force closed" }];
   return (
     <div className="space-y-3 rounded-xl border border-border bg-background p-3">
       {/* Master on/off override — beats the schedule (force open / force closed). */}
       <div>
-        <div className="mb-1.5 text-sm font-semibold">Status form</div>
+        <div className="mb-1.5 text-sm font-semibold">Form status</div>
         <div className="inline-flex rounded-lg border border-border p-0.5">
           {OV.map((o) => (
             <button key={o.l} type="button" onClick={() => onChange({ ...base, override: o.v })}
@@ -113,18 +113,18 @@ function AccessScheduleEditor({ value, onChange }: { value: { enabled?: boolean;
           ))}
         </div>
         <p className="mt-1 text-[11px] text-muted-foreground">
-          {override === "open" ? "🟢 Dibuka paksa — selalu nerima submit, jadwal diabaikan." : override === "closed" ? "🔴 Ditutup paksa — gak nerima submit sementara." : "Ikut jadwal di bawah (kalau jadwal mati = selalu buka)."}
+          {override === "open" ? "🟢 Forced open — always accepting submissions, schedule ignored." : override === "closed" ? "🔴 Forced closed — not accepting submissions for now." : "Following the schedule below (if the schedule is off = always open)."}
         </p>
       </div>
 
       <label className={cn("flex items-center gap-2 text-sm font-semibold", override && "opacity-50")}>
         <input type="checkbox" checked={enabled} onChange={(e) => onChange({ ...base, enabled: e.target.checked, daysOfWeek: e.target.checked && days.length === 0 ? [1, 2, 3, 4, 5] : days })} className="h-4 w-4 accent-primary" />
-        Batasi jadwal akses form {override && <span className="text-[11px] font-normal text-muted-foreground">(diabaikan selama override aktif)</span>}
+        Limit form access by schedule {override && <span className="text-[11px] font-normal text-muted-foreground">(ignored while override is active)</span>}
       </label>
       {enabled && (
         <div className="mt-3 space-y-3">
           <div>
-            <div className="mb-1 text-[11px] font-semibold text-muted-foreground">Hari</div>
+            <div className="mb-1 text-[11px] font-semibold text-muted-foreground">Days</div>
             <div className="flex flex-wrap gap-1.5">
               {WEEKDAYS.map((d, i) => {
                 const on = days.includes(i);
@@ -133,7 +133,7 @@ function AccessScheduleEditor({ value, onChange }: { value: { enabled?: boolean;
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <label className="text-[11px] font-semibold text-muted-foreground">Jam</label>
+            <label className="text-[11px] font-semibold text-muted-foreground">Time</label>
             <input type="time" value={s.startTime ?? "00:00"} onChange={(e) => patch({ startTime: e.target.value })} className={fieldCls} />
             <span className="text-muted-foreground">–</span>
             <input type="time" value={s.endTime ?? "23:59"} onChange={(e) => patch({ endTime: e.target.value })} className={fieldCls} />
@@ -169,12 +169,12 @@ function AdvancedFieldEditor({ field, others, taskLists, members, customFields, 
         <div>
           <label className="flex items-center gap-2 text-xs font-semibold">
             <input type="checkbox" checked={!!showIf} onChange={(e) => onChange({ showIf: e.target.checked ? { fieldId: others[0]?.id ?? "", operator: "equals", value: "" } : null })} className="h-3.5 w-3.5 accent-primary" />
-            Tampilkan field ini hanya jika…
+            Only show this field if…
           </label>
           {showIf && (
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <select value={showIf.fieldId} onChange={(e) => onChange({ showIf: { ...showIf, fieldId: e.target.value, value: "" } })} className={sel}>
-                {others.length === 0 && <option value="">(tidak ada field lain)</option>}
+                {others.length === 0 && <option value="">(no other fields)</option>}
                 {others.map((o) => <option key={o.id} value={o.id}>{fieldName(o)}</option>)}
               </select>
               <select value={showIf.operator} onChange={(e) => onChange({ showIf: { ...showIf, operator: e.target.value } })} className={sel}>
@@ -183,7 +183,7 @@ function AdvancedFieldEditor({ field, others, taskLists, members, customFields, 
               {needsValue(showIf.operator) && (
                 parentOpts.length
                   ? <select value={showIf.value} onChange={(e) => onChange({ showIf: { ...showIf, value: e.target.value } })} className={sel}><option value="">—</option>{parentOpts.map((o) => <option key={o} value={o}>{o}</option>)}</select>
-                  : <input value={showIf.value} onChange={(e) => onChange({ showIf: { ...showIf, value: e.target.value } })} placeholder="nilai" className={sel} />
+                  : <input value={showIf.value} onChange={(e) => onChange({ showIf: { ...showIf, value: e.target.value } })} placeholder="value" className={sel} />
               )}
             </div>
           )}
@@ -195,23 +195,23 @@ function AdvancedFieldEditor({ field, others, taskLists, members, customFields, 
             <span className="text-xs font-semibold">Routing</span>
             <button type="button" onClick={() => onChange({ routingRules: [...rules, { id: genId(), operator: "equals", value: "", action: "assign_user" }] })} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] font-semibold transition-colors hover:bg-accent"><Plus className="h-3 w-3" /> Rule</button>
           </div>
-          {rules.length === 0 && <p className="text-[11px] text-muted-foreground">Belum ada rule.</p>}
+          {rules.length === 0 && <p className="text-[11px] text-muted-foreground">No rules yet.</p>}
           <div className="space-y-1.5">
             {rules.map((r, i) => {
               const setRule = (p: Partial<FRule>) => onChange({ routingRules: rules.map((x, xi) => (xi === i ? { ...x, ...p } : x)) });
               return (
                 <div key={r.id} className="flex flex-wrap items-center gap-1.5 rounded-lg border border-border bg-card p-1.5">
-                  <span className="text-[11px] text-muted-foreground">jika</span>
+                  <span className="text-[11px] text-muted-foreground">if</span>
                   <select value={r.operator} onChange={(e) => setRule({ operator: e.target.value })} className={sel}>{OPERATORS.map((op) => <option key={op.value} value={op.value}>{op.label}</option>)}</select>
-                  {needsValue(r.operator) && (ownOpts.length ? <select value={r.value} onChange={(e) => setRule({ value: e.target.value })} className={sel}><option value="">—</option>{ownOpts.map((o) => <option key={o} value={o}>{o}</option>)}</select> : <input value={r.value} onChange={(e) => setRule({ value: e.target.value })} placeholder="nilai" className={sel} />)}
+                  {needsValue(r.operator) && (ownOpts.length ? <select value={r.value} onChange={(e) => setRule({ value: e.target.value })} className={sel}><option value="">—</option>{ownOpts.map((o) => <option key={o} value={o}>{o}</option>)}</select> : <input value={r.value} onChange={(e) => setRule({ value: e.target.value })} placeholder="value" className={sel} />)}
                   <span className="text-[11px] text-muted-foreground">→</span>
                   <select value={r.action} onChange={(e) => setRule({ action: e.target.value })} className={sel}>{ROUTING_ACTIONS.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}</select>
                   {r.action === "set_task_list" ? (
-                    <select value={r.targetTaskListId ?? ""} onChange={(e) => setRule({ targetTaskListId: e.target.value })} className={sel}><option value="">pilih section</option>{taskLists.map((tl) => <option key={tl.id} value={tl.id}>{tl.name}</option>)}</select>
+                    <select value={r.targetTaskListId ?? ""} onChange={(e) => setRule({ targetTaskListId: e.target.value })} className={sel}><option value="">choose section</option>{taskLists.map((tl) => <option key={tl.id} value={tl.id}>{tl.name}</option>)}</select>
                   ) : (
-                    <select value={r.targetUserId ?? ""} onChange={(e) => setRule({ targetUserId: e.target.value })} className={sel}><option value="">pilih member</option>{members.map((m) => <option key={m.userId} value={m.userId}>{m.name}</option>)}</select>
+                    <select value={r.targetUserId ?? ""} onChange={(e) => setRule({ targetUserId: e.target.value })} className={sel}><option value="">choose member</option>{members.map((m) => <option key={m.userId} value={m.userId}>{m.name}</option>)}</select>
                   )}
-                  <button type="button" onClick={() => onChange({ routingRules: rules.filter((_, xi) => xi !== i) })} aria-label="Hapus rule" className="ml-auto rounded p-1 text-muted-foreground transition-colors hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
+                  <button type="button" onClick={() => onChange({ routingRules: rules.filter((_, xi) => xi !== i) })} aria-label="Delete rule" className="ml-auto rounded p-1 text-muted-foreground transition-colors hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
                 </div>
               );
             })}
@@ -220,13 +220,13 @@ function AdvancedFieldEditor({ field, others, taskLists, members, customFields, 
 
         {/* mapping */}
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold">Petakan jawaban ke</span>
+          <span className="text-xs font-semibold">Map answer to</span>
           <select value={mapping.target ?? "none"} onChange={(e) => onChange({ mapping: { ...mapping, target: e.target.value } })} className={sel}>
             {MAPPING_TARGETS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
           </select>
           {mapping.target === "custom_field" && (
             <select value={mapping.customFieldId ?? ""} onChange={(e) => onChange({ mapping: { ...mapping, target: "custom_field", customFieldId: e.target.value } })} className={sel}>
-              <option value="">pilih custom field</option>
+              <option value="">choose custom field</option>
               {customFields.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           )}
@@ -236,21 +236,21 @@ function AdvancedFieldEditor({ field, others, taskLists, members, customFields, 
             project's sections + a one-click fill so the dropdown options match the section names exactly. */}
         {mapping.target === "task_list" && (
           <div className="mt-1 rounded-lg border border-border bg-muted/30 p-2.5 text-[11px] leading-relaxed">
-            <p className="text-muted-foreground">Jawaban field ini nentuin task masuk <b>section mana</b> — dicocokin sama <b>nama section</b>-nya. Jadi opsi field-nya harus persis sama kayak nama section di project (kalau gak ketemu, masuk section pertama).</p>
+            <p className="text-muted-foreground">This field's answer decides <b>which section</b> the task lands in — it's matched against the <b>section name</b>. So the field's options need to match the project's section names exactly (if there's no match, it goes to the first section).</p>
             {taskLists.length > 0 ? (
               <>
-                <div className="mt-2 mb-1 font-semibold text-muted-foreground">Section di project ini:</div>
+                <div className="mt-2 mb-1 font-semibold text-muted-foreground">Sections in this project:</div>
                 <div className="flex flex-wrap gap-1">
                   {taskLists.map((tl) => <span key={tl.id} className="rounded bg-card px-1.5 py-0.5 font-medium ring-1 ring-border">{tl.name}</span>)}
                 </div>
                 {(field.type === "dropdown" || field.type === "select") && (
                   <button type="button" onClick={() => onChange({ options: taskLists.map((tl) => tl.name) })} className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2.5 py-1.5 font-bold text-primary transition hover:bg-primary/20">
-                    <Copy className="h-3 w-3" /> Pakai {taskLists.length} section ini sebagai opsi
+                    <Copy className="h-3 w-3" /> Use these {taskLists.length} sections as options
                   </button>
                 )}
               </>
             ) : (
-              <p className="mt-2 font-semibold text-amber-600">⚠️ Project ini belum punya section. Bikin section dulu di board, baru mapping ini jalan.</p>
+              <p className="mt-2 font-semibold text-amber-600">⚠️ This project doesn't have any sections yet. Create a section on the board first, then this mapping will work.</p>
             )}
           </div>
         )}
@@ -339,7 +339,7 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
       catch (e) {
         // Backend guard (form still has submissions): re-confirm, then force.
         if (!force && e instanceof ApiError && e.status === 409) {
-          if (!confirm("⚠️ Form ini masih punya pengajuan — kalau dihapus, semua pengajuan + history-nya ikut KEHAPUS permanen. Lanjut hapus?")) throw e;
+          if (!confirm("⚠️ This form still has submissions — deleting it will PERMANENTLY remove every submission and its history. Delete anyway?")) throw e;
           return await nexusApi.deleteForm(form!.id, true);
         }
         throw e;
@@ -381,7 +381,7 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Form name" className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="Description (optional)…" className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
           <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} className="h-4 w-4 accent-primary" /> Public form (shareable link, no login)</label>
-          <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={requireAuth} onChange={(e) => setRequireAuth(e.target.checked)} className="h-4 w-4 accent-primary" /> Wajib login NEXUS untuk submit <span className="font-normal text-muted-foreground">(siapa pun yang login; pengajuan bisa dilacak di “Pengajuan Saya”)</span></label>
+          <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={requireAuth} onChange={(e) => setRequireAuth(e.target.checked)} className="h-4 w-4 accent-primary" /> Require NEXUS login to submit <span className="font-normal text-muted-foreground">(anyone logged in; submissions are tracked in “My Submissions”)</span></label>
           <AccessScheduleEditor value={accessSchedule as { enabled?: boolean; daysOfWeek?: number[]; startTime?: string; endTime?: string; timezone?: string } | null} onChange={setAccessSchedule} />
 
           <div className="space-y-3">
@@ -392,14 +392,14 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
                 <div key={f.id} onDragOver={(e) => e.preventDefault()} onDrop={() => reorder(idx)} className="rounded-xl border border-border bg-background p-3">
                   {/* header: index + delete */}
                   <div className="mb-2 flex items-center gap-2">
-                    <span draggable onDragStart={() => { dragFrom.current = idx; }} onDragEnd={() => { dragFrom.current = null; }} title="Geser untuk ubah urutan" className="cursor-grab text-muted-foreground/40 active:cursor-grabbing"><GripVertical className="h-4 w-4 shrink-0" /></span>
+                    <span draggable onDragStart={() => { dragFrom.current = idx; }} onDragEnd={() => { dragFrom.current = null; }} title="Drag to reorder" className="cursor-grab text-muted-foreground/40 active:cursor-grabbing"><GripVertical className="h-4 w-4 shrink-0" /></span>
                     <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Field {idx + 1}</span>
                     <button onClick={() => remove(f.id)} aria-label="Delete field" className="ml-auto rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
 
                   {/* field name */}
                   <label className="mb-1 block text-[11px] font-semibold text-muted-foreground">Field name</label>
-                  <input value={f.name ?? f.label} onChange={(e) => update(f.id, { name: e.target.value, label: e.target.value })} placeholder="e.g. Nominal pengajuan" className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium outline-none focus:border-primary" />
+                  <input value={f.name ?? f.label} onChange={(e) => update(f.id, { name: e.target.value, label: e.target.value })} placeholder="e.g. Request amount" className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium outline-none focus:border-primary" />
 
                   {/* type + required */}
                   <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -416,12 +416,12 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
                       <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                     </div>
                     <div className="ml-auto flex items-center gap-2">
-                      <span className={cn("text-xs font-semibold", f.required ? "text-primary" : "text-muted-foreground")}>{f.required ? "Wajib" : "Opsional"}</span>
+                      <span className={cn("text-xs font-semibold", f.required ? "text-primary" : "text-muted-foreground")}>{f.required ? "Required" : "Optional"}</span>
                       <button
                         type="button"
                         role="switch"
                         aria-checked={f.required ?? false}
-                        aria-label="Wajib diisi"
+                        aria-label="Required"
                         onClick={() => update(f.id, { required: !f.required })}
                         className={cn("relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors", f.required ? "bg-primary" : "bg-muted")}
                       >
@@ -437,13 +437,13 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
                         type="button"
                         role="switch"
                         aria-checked={!!f.attachmentEnabled}
-                        aria-label="Izinkan lampiran file"
+                        aria-label="Allow file attachment"
                         onClick={() => update(f.id, { attachmentEnabled: !f.attachmentEnabled })}
                         className={cn("relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors", f.attachmentEnabled ? "bg-primary" : "bg-muted")}
                       >
                         <span className={cn("inline-block h-4 w-4 rounded-full bg-card shadow transition-transform", f.attachmentEnabled ? "translate-x-4" : "translate-x-0.5")} />
                       </button>
-                      <span className="inline-flex items-center gap-1"><Paperclip className="h-3.5 w-3.5" /> Izinkan lampiran file (opsional)</span>
+                      <span className="inline-flex items-center gap-1"><Paperclip className="h-3.5 w-3.5" /> Allow file attachment (optional)</span>
                     </label>
                   )}
 
@@ -451,20 +451,20 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
                       "Request by" gak perlu diketik manual (auto + terkunci, gak bisa diisi nama orang lain). */}
                   {(f.type === "text" || f.type === "email") && (
                     <label className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <span className="inline-flex items-center gap-1"><User className="h-3.5 w-3.5" /> Auto-isi dari akun login</span>
+                      <span className="inline-flex items-center gap-1"><User className="h-3.5 w-3.5" /> Auto-fill from logged-in account</span>
                       <select value={f.autofill ?? ""} onChange={(e) => update(f.id, { autofill: (e.target.value || undefined) as RichField["autofill"] })} className="rounded-lg border border-border bg-background px-2 py-1 text-xs outline-none focus:border-primary">
-                        <option value="">— tidak —</option>
-                        <option value="name">Nama user</option>
-                        <option value="email">Email user</option>
+                        <option value="">— none —</option>
+                        <option value="name">User's name</option>
+                        <option value="email">User's email</option>
                       </select>
-                      {f.autofill && <span className="text-[10px] font-semibold text-primary">user gak isi — auto + terkunci</span>}
+                      {f.autofill && <span className="text-[10px] font-semibold text-primary">user doesn't fill it — auto + locked</span>}
                     </label>
                   )}
 
                   {/* number formatting — Rupiah (thousand separators + Rp) for price-style fields */}
                   {f.type === "number" && (
                     <label className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <span className="inline-flex items-center gap-1"><Hash className="h-3.5 w-3.5" /> Format angka</span>
+                      <span className="inline-flex items-center gap-1"><Hash className="h-3.5 w-3.5" /> Number format</span>
                       <select value={f.numberFormat ?? "plain"} onChange={(e) => update(f.id, { numberFormat: e.target.value === "currency-idr" ? "currency-idr" : undefined } as Partial<RichField>)} className="rounded-lg border border-border bg-background px-2 py-1 text-xs outline-none focus:border-primary">
                         <option value="plain">Plain (9240943)</option>
                         <option value="currency-idr">Rupiah (Rp 9.240.943)</option>
@@ -484,13 +484,13 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
                             <input
                               value={opt}
                               onChange={(e) => { const next = [...rows]; next[i] = e.target.value; update(f.id, { options: next }); }}
-                              placeholder={`Opsi ${i + 1}`}
+                              placeholder={`Option ${i + 1}`}
                               className="flex-1 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs outline-none focus:border-primary"
                             />
-                            <button type="button" onClick={() => update(f.id, { options: rows.filter((_, j) => j !== i) })} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:text-destructive" aria-label="Hapus opsi"><X className="h-3.5 w-3.5" /></button>
+                            <button type="button" onClick={() => update(f.id, { options: rows.filter((_, j) => j !== i) })} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:text-destructive" aria-label="Delete option"><X className="h-3.5 w-3.5" /></button>
                           </div>
                         ))}
-                        <button type="button" onClick={() => update(f.id, { options: [...rows, ""] })} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary"><Plus className="h-3.5 w-3.5" /> Tambah opsi</button>
+                        <button type="button" onClick={() => update(f.id, { options: [...rows, ""] })} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary"><Plus className="h-3.5 w-3.5" /> Add option</button>
                       </div>
                     );
                   })()}
@@ -511,15 +511,15 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
         </div>
         <div className="sticky bottom-0 flex items-center gap-2 border-t border-border bg-card/95 px-5 py-4 backdrop-blur">
           <button disabled={!name.trim() || fields.length === 0 || save.isPending} onClick={() => save.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{save.isPending && <Loader2 className="h-4 w-4 animate-spin" />}{editing ? "Save form" : "Create form"}</button>
-          {editing && <button onClick={() => { setDupName(name); setDupOpen(true); }} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-semibold transition-colors hover:bg-accent active:scale-[0.98]"><Copy className="h-4 w-4" /> Duplikat ke project lain</button>}
+          {editing && <button onClick={() => { setDupName(name); setDupOpen(true); }} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2.5 text-sm font-semibold transition-colors hover:bg-accent active:scale-[0.98]"><Copy className="h-4 w-4" /> Duplicate to another project</button>}
           {editing && <button onClick={() => {
             const n = form?._count?.submissions ?? 0;
             const msg = n > 0
-              ? `⚠️ Form ini punya ${n} pengajuan.\n\nKalau dihapus, SEMUA ${n} pengajuan + history "Pengajuan Saya"-nya ikut KEHAPUS PERMANEN — gak bisa di-undo.\n\nYakin hapus form-nya?`
-              : "Hapus form ini?";
+              ? `⚠️ This form has ${n} submission${n === 1 ? "" : "s"}.\n\nDeleting it will PERMANENTLY remove all ${n} submission${n === 1 ? "" : "s"} and their "My Submissions" history — this can't be undone.\n\nDelete this form?`
+              : "Delete this form?";
             if (confirm(msg)) del.mutate(n > 0);
           }} className="inline-flex items-center gap-1.5 rounded-xl bg-destructive/10 px-3 py-2.5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.98]"><Trash2 className="h-4 w-4" /> Delete</button>}
-          {save.isError && <span className="text-xs font-semibold text-destructive">Gagal menyimpan form.</span>}
+          {save.isError && <span className="text-xs font-semibold text-destructive">Couldn't save the form.</span>}
         </div>
       </aside>
 
@@ -527,14 +527,14 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
         <div className="fixed inset-0 z-[80] grid place-items-center bg-black/50 p-4" onClick={() => setDupOpen(false)}>
           <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-4 shadow-pop" onClick={(e) => e.stopPropagation()}>
             <div className="mb-1 flex items-center justify-between">
-              <h3 className="font-display text-base font-bold">Duplikat form</h3>
-              <button onClick={() => setDupOpen(false)} aria-label="Tutup" className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+              <h3 className="font-display text-base font-bold">Duplicate form</h3>
+              <button onClick={() => setDupOpen(false)} aria-label="Close" className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
             </div>
-            <p className="mb-3 text-xs text-muted-foreground">Copy struktur form ini ke project lain — field-nya doang. Submission & task lama <b>gak ikut</b>. Mapping task-list / custom-field bakal direset (ID-nya beda antar project) — set ulang di project tujuan ya.</p>
-            <input value={dupName} onChange={(e) => setDupName(e.target.value)} placeholder="Nama form baru" className="mb-3 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
-            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Pilih project tujuan</div>
+            <p className="mb-3 text-xs text-muted-foreground">Copy this form's structure to another project — just the fields. Old submissions & tasks <b>don't come along</b>. Task-list / custom-field mappings get reset (the IDs differ between projects) — set them up again in the target project.</p>
+            <input value={dupName} onChange={(e) => setDupName(e.target.value)} placeholder="New form name" className="mb-3 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
+            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Choose target project</div>
             <div className="mt-1 max-h-72 space-y-0.5 overflow-y-auto">
-              {projectsQ.isLoading && <div className="py-4 text-center text-sm text-muted-foreground">Memuat project…</div>}
+              {projectsQ.isLoading && <div className="py-4 text-center text-sm text-muted-foreground">Loading projects…</div>}
               {(projectsQ.data ?? []).filter((p) => p.id !== projectId).map((p) => (
                 <button key={p.id} disabled={dup.isPending || !dupName.trim()} onClick={() => dup.mutate(p.id)} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-accent disabled:opacity-50">
                   <span className="grid h-6 w-6 shrink-0 place-items-center rounded bg-muted text-sm">{p.icon && !p.icon.startsWith("/") ? p.icon : "📁"}</span>
@@ -543,7 +543,7 @@ export function FormBuilder({ projectId, form, onClose }: { projectId: string; f
                 </button>
               ))}
             </div>
-            {dup.isError && <p className="mt-2 text-xs font-semibold text-destructive">Gagal duplikat: {dup.error instanceof Error ? dup.error.message : "coba lagi"}.</p>}
+            {dup.isError && <p className="mt-2 text-xs font-semibold text-destructive">Couldn't duplicate: {dup.error instanceof Error ? dup.error.message : "try again"}.</p>}
           </div>
         </div>
       )}
@@ -576,7 +576,7 @@ export function ProjectFormsView({ projectId }: { projectId: string }) {
         </div>
       )}
       {!forms.isLoading && rows.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><FileText className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">No forms yet</div><p className="mt-2 text-sm text-muted-foreground">Buat intake form pertama untuk project ini.</p></div>
+        <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><FileText className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">No forms yet</div><p className="mt-2 text-sm text-muted-foreground">Create the first intake form for this project.</p></div>
       )}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {rows.map((f, i) => <Reveal key={f.id} delay={Math.min(i, 8) * 0.05} className="h-full"><FormCard form={f} onEdit={() => setBuilder({ form: f })} /></Reveal>)}

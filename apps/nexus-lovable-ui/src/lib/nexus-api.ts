@@ -153,6 +153,7 @@ export type NexusProject = {
   autoAssignEnabled?: boolean;
   autoAssignAssigneeIds?: string[];
   enablePnlDashboard?: boolean;
+  tableColumns?: string[] | null;
   _count?: { members?: number; taskLists?: number; tasks?: number };
   members?: Array<{ userId?: string; role?: string; user?: NexusUser }>;
   taskLists?: Array<{ id: string; name: string; position?: number; tasks?: NexusTask[]; taskProjects?: Array<{ id: string; position?: number; task: NexusTask }> }>;
@@ -778,17 +779,18 @@ export type NexusCustomFieldOptions = {
 };
 
 /** Supported field types (uppercase enum from core NEXUS). */
-export const CUSTOM_FIELD_TYPES = ["SELECT", "MULTI_SELECT", "STATUS", "NUMBER", "DATE", "PLACE", "CREATED"] as const;
+export const CUSTOM_FIELD_TYPES = ["TEXT", "SELECT", "MULTI_SELECT", "STATUS", "NUMBER", "DATE", "URL", "FILE", "PLACE", "CREATED"] as const;
+export type CustomFieldFile = { url: string; name: string; size?: number; type?: string };
 export type NexusCustomFieldType = (typeof CUSTOM_FIELD_TYPES)[number];
 
 export type NexusCustomField = {
   id: string;
   projectId?: string;
   name: string;
-  type: string; // NUMBER | SELECT | MULTI_SELECT | STATUS | DATE | PLACE | CREATED
+  type: string; // TEXT | URL | FILE | NUMBER | SELECT | MULTI_SELECT | STATUS | DATE | PLACE | CREATED
   position?: number;
   options?: NexusCustomFieldOptions | { choices?: string[] } | string[] | null;
-  value?: string | string[] | { label?: string; mapUrl?: string } | null;
+  value?: string | string[] | { label?: string; mapUrl?: string } | CustomFieldFile[] | null;
   // CREATED-type fields: who created/submitted + when (backend fills userName = task creator).
   createdMeta?: { userName?: string | null; timestamp?: string | null } | null;
   libraryId?: string | null;
@@ -914,6 +916,14 @@ export type NexusCalendarEvent = {
 
 export const ROOM_BOOKING_ROOMS = ["Ruang Meeting VIP", "Ruang Meeting", "Studio"] as const;
 export type NexusRoomName = (typeof ROOM_BOOKING_ROOMS)[number];
+// DISPLAY-only English labels. The stored/matched values above stay Indonesian (existing bookings +
+// the backend's ROOM_BOOKING_ROOMS validate against them) — only the rendered text is localized.
+export const ROOM_LABEL: Record<string, string> = {
+  "Ruang Meeting VIP": "VIP Meeting Room",
+  "Ruang Meeting": "Meeting Room",
+  "Studio": "Studio",
+};
+export const roomLabel = (room?: string | null) => (room ? (ROOM_LABEL[room] ?? room) : "");
 
 export type NexusRoomBooking = {
   id: string;
@@ -944,6 +954,30 @@ export type CalendarEventPayload = {
   attendeeIds?: string[];
   location?: string | null;
   description?: string | null;
+};
+
+export type NexusCalendar = {
+  id: string;
+  name: string;
+  color?: string | null;
+  projectIds: string[];
+  workspaceId: string;
+  createdById: string;
+  createdAt?: string;
+  createdBy?: { id: string; name?: string | null } | null;
+};
+
+export type CalendarTaskItem = {
+  id: string;
+  title: string;
+  status?: string | null;
+  priority?: string | null;
+  dueDate?: string | null;
+  startDate?: string | null;
+  projectId: string;
+  projectName: string;
+  projectColor?: string | null;
+  projectIcon?: string | null;
 };
 
 export type NexusMilestone = {
@@ -1050,7 +1084,7 @@ export async function downloadFile(path: string, fallbackName: string) {
   if (!res.ok) {
     let payload: unknown = null;
     try { payload = await res.json(); } catch { /* non-json error body */ }
-    const message = payload && typeof payload === "object" && "error" in payload ? String((payload as { error?: unknown }).error) : `Download gagal (${res.status})`;
+    const message = payload && typeof payload === "object" && "error" in payload ? String((payload as { error?: unknown }).error) : `Download failed (${res.status})`;
     throw new ApiError(res.status, message, payload);
   }
   const blob = await res.blob();
@@ -1144,7 +1178,7 @@ export const nexusApi = {
   workspaceProjects: (workspaceId: string) => apiFetch<NexusProject[]>(`/api/projects?workspaceId=${encodeURIComponent(workspaceId)}`),
   createProject: (payload: CreateProjectPayload) => apiFetch<NexusProject>("/api/projects", { method: "POST", body: JSON.stringify(payload) }),
   project: (projectId: string) => apiFetch<NexusProject>(`/api/projects/${projectId}`),
-  updateProject: (projectId: string, payload: Partial<Pick<NexusProject, "name" | "description" | "color" | "icon" | "status" | "enableTaskBatchDuplicate" | "autoAssignEnabled" | "autoAssignAssigneeIds" | "enablePnlDashboard">> & { folderId?: string | null; position?: number }) => apiFetch<NexusProject>(`/api/projects/${projectId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  updateProject: (projectId: string, payload: Partial<Pick<NexusProject, "name" | "description" | "color" | "icon" | "status" | "enableTaskBatchDuplicate" | "autoAssignEnabled" | "autoAssignAssigneeIds" | "enablePnlDashboard">> & { folderId?: string | null; position?: number; tableColumns?: string[] }) => apiFetch<NexusProject>(`/api/projects/${projectId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteProject: (projectId: string) => apiFetch<{ success?: boolean }>(`/api/projects/${projectId}`, { method: "DELETE" }),
   duplicateProject: (projectId: string) => apiFetch<NexusProject>(`/api/projects/${projectId}/duplicate`, { method: "POST" }),
   workflowBundles: () => apiFetch<{ bundles: NexusWorkflowBundle[] }>("/api/workflow-bundles"),
@@ -1214,7 +1248,7 @@ export const nexusApi = {
   updateOffice: (officeId: string, payload: Partial<OfficePayload>) => apiFetch<{ office?: NexusOffice }>(`/api/attendance/offices/${officeId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   tasks: (query = "") => apiFetch<NexusTask[]>(`/api/tasks${query ? `?${query}` : ""}`),
   createTask: (payload: CreateTaskPayload) => apiFetch<NexusTask>("/api/tasks", { method: "POST", body: JSON.stringify(payload) }),
-  updateTask: (taskId: string, payload: Partial<Pick<NexusTask, "title" | "status" | "priority" | "dueDate">> & { description?: string | null; taskListId?: string; position?: number; projectContextId?: string }) => apiFetch<NexusTask>(`/api/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  updateTask: (taskId: string, payload: Partial<Pick<NexusTask, "title" | "status" | "priority" | "dueDate" | "tags">> & { description?: string | null; taskListId?: string; position?: number; projectContextId?: string }) => apiFetch<NexusTask>(`/api/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   goals: () => apiFetch<{ goals: NexusGoal[] }>("/api/goals"),
   createGoal: (payload: { title: string; description?: string | null; workspaceId: string; dueDate?: string | null; parentId?: string | null }) => apiFetch<{ goal: NexusGoal }>("/api/goals", { method: "POST", body: JSON.stringify(payload) }),
   goal: (goalId: string) => apiFetch<{ goal: NexusGoalDetail }>(`/api/goals/${goalId}`),
@@ -1390,6 +1424,11 @@ export const nexusApi = {
   taskCustomFields: (projectId: string, taskId: string) => apiFetch<{ fields: NexusCustomField[] }>(`/api/custom-fields?projectId=${encodeURIComponent(projectId)}&taskId=${encodeURIComponent(taskId)}`),
   projectCustomFields: (projectId: string) => apiFetch<{ fields: NexusCustomField[] }>(`/api/custom-fields?projectId=${encodeURIComponent(projectId)}`),
   setCustomFieldValue: (id: string, taskId: string, value: unknown) => apiFetch<{ success?: boolean }>("/api/custom-fields", { method: "PATCH", body: JSON.stringify({ id, taskId, value }) }),
+  uploadCustomFieldFile: (projectId: string, file: File) => {
+    const fd = new FormData();
+    fd.set("projectId", projectId); fd.set("file", file);
+    return apiFetch<CustomFieldFile>("/api/custom-fields/upload", { method: "POST", body: fd });
+  },
   // --- Custom field DEFINITIONS (manage per-project) ---
   createCustomField: (projectId: string, payload: { name: string; type: string; options?: NexusCustomFieldOptions | null }) => apiFetch<{ field: NexusCustomField }>("/api/custom-fields", { method: "POST", body: JSON.stringify({ projectId, name: payload.name, type: payload.type, options: payload.options ?? undefined, saveToLibrary: false }) }),
   updateCustomField: (id: string, payload: { name?: string; type?: string; options?: NexusCustomFieldOptions | null }) => apiFetch<{ field: NexusCustomField }>("/api/custom-fields", { method: "PATCH", body: JSON.stringify({ id, ...payload }) }),
@@ -1431,9 +1470,9 @@ export const nexusApi = {
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) {
             try { resolve(JSON.parse(xhr.responseText) as NexusAttachment); } catch { resolve({} as NexusAttachment); }
-          } else reject(new ApiError(xhr.status, "Upload gagal.", null));
+          } else reject(new ApiError(xhr.status, "Upload failed.", null));
         };
-        xhr.onerror = () => reject(new Error("Upload gagal."));
+        xhr.onerror = () => reject(new Error("Upload failed."));
         xhr.send(fd);
       });
     }
@@ -1486,17 +1525,17 @@ export const nexusApi = {
             // 409 (finalize busy) / 429 (too many sessions) are transient → back off and retry.
             if (res.status === 409 || res.status === 429) throw new Error(`retry ${res.status}`);
             // other 4xx = permanent (bad request / task gone / too big) → surface, don't retry.
-            if (res.status >= 400 && res.status < 500) throw new ApiError(res.status, res.body?.error || "Upload ditolak server.", null);
+            if (res.status >= 400 && res.status < 500) throw new ApiError(res.status, res.body?.error || "Upload rejected by server.", null);
             throw new Error(`server ${res.status}`); // 5xx → retryable
           } catch (err) {
             if (err instanceof ApiError) throw err;
-            if (attempt >= 3) throw new ApiError(0, "Upload gagal (koneksi putus). Coba lagi.", null);
+            if (attempt >= 3) throw new ApiError(0, "Upload failed (connection dropped). Try again.", null);
             await new Promise((r) => setTimeout(r, 500 * attempt));
           }
         }
       }
       onProgress(100);
-      if (!last || !last.id) throw new ApiError(0, "Upload selesai tapi attachment tidak kembali dari server.", null);
+      if (!last || !last.id) throw new ApiError(0, "Upload finished but the server didn't return the attachment.", null);
       return last as NexusAttachment;
     })();
   },
@@ -1662,6 +1701,12 @@ export const nexusApi = {
   createCalendarEvent: (payload: CalendarEventPayload) => apiFetch<{ event: NexusCalendarEvent }>("/api/master-calendar", { method: "POST", body: JSON.stringify(payload) }),
   updateCalendarEvent: (eventId: string, payload: Partial<CalendarEventPayload>) => apiFetch<{ event: NexusCalendarEvent }>(`/api/master-calendar/${eventId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteCalendarEvent: (eventId: string) => apiFetch<{ success?: boolean }>(`/api/master-calendar/${eventId}`, { method: "DELETE" }),
+  // --- Calendars (saved project-task-aggregating views) ---
+  calendars: () => apiFetch<{ calendars: NexusCalendar[] }>("/api/calendars"),
+  createCalendar: (payload: { name: string; workspaceId: string; color?: string | null; projectIds?: string[] }) => apiFetch<{ calendar: NexusCalendar }>("/api/calendars", { method: "POST", body: JSON.stringify(payload) }),
+  updateCalendar: (calendarId: string, payload: { name?: string; color?: string | null; projectIds?: string[] }) => apiFetch<{ calendar: NexusCalendar }>(`/api/calendars/${calendarId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteCalendar: (calendarId: string) => apiFetch<{ success?: boolean }>(`/api/calendars/${calendarId}`, { method: "DELETE" }),
+  calendarTasks: (projectIds: string[], rangeStart: string, rangeEnd: string) => apiFetch<{ tasks: CalendarTaskItem[] }>(`/api/calendar-tasks?projectIds=${encodeURIComponent(projectIds.join(","))}&rangeStart=${encodeURIComponent(rangeStart)}&rangeEnd=${encodeURIComponent(rangeEnd)}`),
   // --- Room bookings ---
   roomBookings: (rangeStart: string, rangeEnd: string, room?: string) => apiFetch<{ bookings: NexusRoomBooking[] }>(`/api/room-bookings?rangeStart=${encodeURIComponent(rangeStart)}&rangeEnd=${encodeURIComponent(rangeEnd)}${room ? `&room=${encodeURIComponent(room)}` : ""}`),
   createRoomBooking: (payload: RoomBookingPayload) => apiFetch<{ booking: NexusRoomBooking }>("/api/room-bookings", { method: "POST", body: JSON.stringify(payload) }),

@@ -40,9 +40,9 @@ export function AnnouncementModal() {
             <div className={cn("flex items-center justify-between gap-3 border-b border-border bg-gradient-to-br px-5 py-3.5", tone.head)}>
               <div className="flex items-center gap-2">
                 <Megaphone className={cn("h-4 w-4", tone.accent)} />
-                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-foreground/70">Pengumuman</p>
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-foreground/70">Announcement</p>
               </div>
-              <button onClick={() => dismiss.mutate(current.id)} aria-label="Tutup" className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+              <button onClick={() => dismiss.mutate(current.id)} aria-label="Close" className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
             </div>
 
             <div className="space-y-3 p-5">
@@ -61,9 +61,9 @@ export function AnnouncementModal() {
                 disabled={dismiss.isPending}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.99] disabled:opacity-50"
               >
-                Oke, ngerti
+                Got it
               </button>
-              {list.length > 1 && <p className="text-center text-[11px] text-muted-foreground">+{list.length - 1} pengumuman lagi setelah ini</p>}
+              {list.length > 1 && <p className="text-center text-[11px] text-muted-foreground">+{list.length - 1} more after this</p>}
             </div>
           </motion.div>
         </div>

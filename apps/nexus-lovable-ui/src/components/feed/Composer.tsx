@@ -60,7 +60,7 @@ export function Composer({ me, members, onPost, autoFocus }: { me?: MentionUser;
             onChange={mention.onChange}
             onKeyDown={mention.onKeyDown}
             rows={2}
-            placeholder="Apa yang baru?"
+            placeholder="What's new?"
             className="w-full resize-none border-0 bg-transparent px-0 py-1.5 text-[15px] outline-none placeholder:text-muted-foreground"
           />
           {mention.open && <MentionList matches={mention.matches} active={mention.active} onPick={mention.pick} />}
@@ -84,7 +84,7 @@ export function Composer({ me, members, onPost, autoFocus }: { me?: MentionUser;
           disabled={pics.length >= IMG_MAX}
           className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-semibold text-primary transition hover:bg-primary/10 disabled:opacity-40"
         >
-          <ImageIcon className="h-4 w-4" /> Foto {pics.length > 0 && `(${pics.length}/${IMG_MAX})`}
+          <ImageIcon className="h-4 w-4" /> Photo {pics.length > 0 && `(${pics.length}/${IMG_MAX})`}
         </button>
         <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
 

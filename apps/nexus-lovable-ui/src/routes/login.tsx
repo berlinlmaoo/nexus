@@ -20,7 +20,7 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(search.error ? "Access denied. Coba cek email/password lagi." : null);
+  const [error, setError] = useState<string | null>(search.error ? "Access denied. Double-check your email/password." : null);
   const callbackUrl = getSafeCallbackUrl(search.callbackUrl);
 
   useEffect(() => {
@@ -34,7 +34,7 @@ function LoginPage() {
 
     const emailValue = email.trim();
     if (!emailValue || !password) {
-      setError("Isi Access ID dan Encryption Key dulu ya.");
+      setError("Fill in your Access ID and Encryption Key first.");
       return;
     }
 
@@ -48,11 +48,11 @@ function LoginPage() {
       setTimeout(() => navigate({ to: target }), 250);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        setError("Kode akses belum cocok. Email/password perlu dicek lagi.");
+        setError("That access code doesn't match. Give your email/password another look.");
       } else if (err instanceof ApiError && err.status === 403) {
-        setError("Origin login belum dipercaya sama core NEXUS. Proxy/config perlu dicek.");
+        setError("The NEXUS core doesn't trust this login origin yet. Check the proxy/config.");
       } else {
-        setError("Login uplink gagal. Pastikan core NEXUS di port 3000 lagi nyala.");
+        setError("Login uplink failed. Make sure the NEXUS core on port 3000 is up.");
       }
     } finally {
       setLoading(false);

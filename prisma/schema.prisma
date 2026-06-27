@@ -54,6 +54,7 @@ model User {
   teamCalendarEvents TeamCalendarEvent[]         @relation("TeamCalendarEventCreator")
   roomBookings       RoomBooking[]               @relation("RoomBookingCreator")
   teamCalendarEventAttendances TeamCalendarEventAttendee[]
+  calendars          Calendar[]                  @relation("CalendarCreator")
   emailOtps          EmailOtpVerification[]
   attendanceRecords  AttendanceRecord[]
   attendanceCorrections AttendanceRecord[] @relation("AttendanceRecordCorrectedBy")
@@ -187,6 +188,7 @@ model Workspace {
   ssoConfig       SsoConfig?
   workflowBundles WorkflowBundle[]
   teamCalendarEvents TeamCalendarEvent[]
+  calendars          Calendar[]
   roomBookings       RoomBooking[]
   officeLocations    OfficeLocation[]
   attendanceRecords  AttendanceRecord[]
@@ -279,6 +281,9 @@ model Project {
   // Standalone per-project P&L dashboard (transaction-level expenses + income pipeline, BoD-only).
   // Toggled from the Tune drawer; unrelated to the legacy FinanceValue monthly matrix.
   enablePnlDashboard Boolean @default(false)
+  // Notion-style Table view: shared, ordered list of column keys ("assignee"/"dueDate"/"priority"/
+  // "status"/"tags" or "cf:<customFieldId>"). Name is always the implicit first column. Null = defaults.
+  tableColumns Json?
   status      ProjectStatus @default(ACTIVE)
   // Manual sidebar ordering within its container (folder or root). Default 0 = falls back to A-Z.
   position    Int      @default(0)
@@ -865,6 +870,27 @@ model TeamCalendarEventAttendee {
   @@index([userId])
 }
 
+/// A saved, shareable calendar view that aggregates project task deadlines. Workspace-scoped:
+/// any workspace member can view it; managing (create/edit/delete) is gated to BoD/Manager.
+/// projectIds = the curated set of source projects whose tasks (by dueDate/startDate) populate it.
+/// Stale ids (deleted projects) are harmless — the task feed re-checks viewer access per project.
+model Calendar {
+  id          String   @id @default(cuid())
+  name        String
+  color       String?
+  projectIds  String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  createdById String
+  createdBy   User      @relation("CalendarCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
 model TeamProject {
   id        String  @id @default(cuid())
   teamId    String
@@ -1146,6 +1172,8 @@ enum SprintStatus {
 
 enum CustomFieldType {
   TEXT
+  URL
+  FILE
   NUMBER
   DATE
   DROPDOWN

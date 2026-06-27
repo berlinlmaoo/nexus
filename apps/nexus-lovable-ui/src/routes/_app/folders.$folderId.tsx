@@ -90,7 +90,7 @@ function FolderAggregatePage() {
               <ArrowLeft className="h-3.5 w-3.5" /> Projects
             </button>
             <button onClick={() => setPickerOpen(true)} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-              <SlidersHorizontal className="h-3.5 w-3.5" /> Pilih project
+              <SlidersHorizontal className="h-3.5 w-3.5" /> Pick projects
             </button>
           </div>
         }
@@ -99,9 +99,9 @@ function FolderAggregatePage() {
       <div className="p-4 md:p-8">
         {selectedProjects.length > 0 && <ProjectColorLegend projects={selectedProjects} />}
         {tasksQuery.isLoading ? (
-          <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Memuat task…</div>
+          <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading tasks…</div>
         ) : selectedIds.length === 0 ? (
-          <EmptyState text="Folder ini belum punya project. Pindahin project ke sini dulu, atau pilih project lewat 'Pilih project'." />
+          <EmptyState text="This folder doesn't have any projects yet. Move a project in here first, or add one via 'Pick projects'." />
         ) : (
           <CalendarView tasks={tasks} projById={projById} />
         )}
@@ -154,7 +154,7 @@ function ProjectColorLegend({ projects }: { projects: NexusProject[] }) {
         className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground transition hover:bg-accent"
       >
         <ChevronRight className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-90")} />
-        Warna project
+        Project colors
         <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">{projects.length}</span>
         {!open && (
           <span className="ml-1 flex items-center -space-x-1">
@@ -175,7 +175,7 @@ function ProjectColorLegend({ projects }: { projects: NexusProject[] }) {
                 <PopoverTrigger asChild>
                   <button
                     type="button"
-                    title="Klik buat ganti warna project"
+                    title="Click to change the project color"
                     className="inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-medium transition hover:brightness-105"
                     style={{ borderColor: tint(color, 0.4), background: tint(color, 0.12), color }}
                   >
@@ -185,7 +185,7 @@ function ProjectColorLegend({ projects }: { projects: NexusProject[] }) {
                   </button>
                 </PopoverTrigger>
                 <PopoverContent align="start" className="w-auto p-2">
-                  <div className="mb-1.5 px-1 text-[11px] font-medium text-muted-foreground">Warna untuk “{p.name}”</div>
+                  <div className="mb-1.5 px-1 text-[11px] font-medium text-muted-foreground">Color for “{p.name}”</div>
                   <div className="flex items-center gap-1.5">
                     {COLORS.map((c) => (
                       <button
@@ -194,7 +194,7 @@ function ProjectColorLegend({ projects }: { projects: NexusProject[] }) {
                         onClick={() => recolor.mutate({ id: p.id, color: c })}
                         className={cn("h-6 w-6 rounded-full ring-2 transition", color.toLowerCase() === c ? "ring-foreground" : "ring-transparent hover:ring-border")}
                         style={{ background: c }}
-                        aria-label={`Set warna ${c}`}
+                        aria-label={`Set color ${c}`}
                       />
                     ))}
                   </div>
@@ -251,7 +251,7 @@ function DesktopCalendarView({ tasks, projById }: { tasks: NexusTask[]; projById
         <button onClick={() => setMonthOffset((o) => o + 1)} className="grid h-8 w-8 place-items-center rounded-lg hover:bg-accent"><ChevronRight className="h-4 w-4" /></button>
       </div>
       <div className="grid grid-cols-7 gap-1">
-        {["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"].map((d) => (
+        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
           <div key={d} className="py-1 text-center text-[11px] font-semibold text-muted-foreground">{d}</div>
         ))}
         {Array.from({ length: leadingBlanks }).map((_, i) => <div key={`b${i}`} />)}
@@ -279,10 +279,10 @@ function DesktopCalendarView({ tasks, projById }: { tasks: NexusTask[]; projById
                 {items.length > 3 && (
                   <Popover>
                     <PopoverTrigger asChild>
-                      <button type="button" className="px-1 text-left text-[10px] font-semibold text-muted-foreground transition hover:text-foreground">+{items.length - 3} lagi</button>
+                      <button type="button" className="px-1 text-left text-[10px] font-semibold text-muted-foreground transition hover:text-foreground">+{items.length - 3} more</button>
                     </PopoverTrigger>
                     <PopoverContent align="start" className="w-60 p-2">
-                      <div className="mb-1.5 px-1 text-[11px] font-bold text-muted-foreground">{day} {month.toLocaleDateString("id-ID", { month: "short" })} · {items.length} task</div>
+                      <div className="mb-1.5 px-1 text-[11px] font-bold text-muted-foreground">{day} {month.toLocaleDateString("en-GB", { month: "short" })} · {items.length} task</div>
                       <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
                         {items.map((t) => {
                           const c = colorOf(projectOf(t, projById));
@@ -346,7 +346,7 @@ function MobileTaskRow({ t, projById }: { t: NexusTask; projById: ProjLookup }) 
         <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
           {proj && <span className="grid h-3.5 w-3.5 shrink-0 place-items-center"><ProjectIcon icon={proj.icon} className="max-h-3.5 max-w-3.5" /></span>}
           <span className="truncate font-medium" style={{ color }}>{proj?.name ?? projectName(t, projById)}</span>
-          {due && <><span className="shrink-0">·</span><Clock className="h-3 w-3 shrink-0" /><span className="shrink-0">{due.toLocaleDateString("id-ID", { day: "numeric", month: "short" })}</span></>}
+          {due && <><span className="shrink-0">·</span><Clock className="h-3 w-3 shrink-0" /><span className="shrink-0">{due.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span></>}
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
@@ -393,11 +393,11 @@ function MobileCalendarView({ tasks, projById }: { tasks: NexusTask[]; projById:
       <div className="rounded-[28px] border border-border bg-card p-3 shadow-soft">
         <div className="mb-2 flex items-center justify-between">
           <button onClick={() => goMonth(-1)} className="grid h-9 w-9 place-items-center rounded-xl hover:bg-accent"><ChevronLeft className="h-5 w-5" /></button>
-          <h3 className="text-base font-bold capitalize">{month.toLocaleDateString("id-ID", { month: "long", year: "numeric" })}</h3>
+          <h3 className="text-base font-bold capitalize">{month.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}</h3>
           <button onClick={() => goMonth(1)} className="grid h-9 w-9 place-items-center rounded-xl hover:bg-accent"><ChevronRight className="h-5 w-5" /></button>
         </div>
         <div className="grid grid-cols-7 gap-1">
-          {["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"].map((d) => (
+          {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
             <div key={d} className="py-1 text-center text-[11px] font-semibold text-muted-foreground">{d}</div>
           ))}
           {Array.from({ length: leadingBlanks }).map((_, i) => <div key={`b${i}`} />)}
@@ -425,11 +425,11 @@ function MobileCalendarView({ tasks, projById }: { tasks: NexusTask[]; projById:
 
       <div className="mt-4">
         <div className="mb-2 flex items-center justify-between px-1">
-          <h4 className="text-sm font-bold">Tanggal {selected ?? "—"}</h4>
+          <h4 className="text-sm font-bold">Day {selected ?? "—"}</h4>
           <span className="text-xs text-muted-foreground">{dayTasks.length} task</span>
         </div>
         {dayTasks.length === 0 ? (
-          <EmptyState text="Gaada task jatuh tempo di tanggal ini." />
+          <EmptyState text="No tasks due on this day." />
         ) : (
           <div className="flex flex-col gap-2">
             {dayTasks.map((t) => <MobileTaskRow key={t.id} t={t} projById={projById} />)}
@@ -460,19 +460,19 @@ function ProjectPicker({ folderId, allProjects, selected, usingAll, onClose }: {
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-[28px] border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
-          <h3 className="text-lg font-bold">Pilih project</h3>
+          <h3 className="text-lg font-bold">Pick projects</h3>
           <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
         <p className="mb-3 text-xs text-muted-foreground">
-          Pilih project mana yang masuk board + calendar folder ini. {usingAll && "Sekarang lagi nampilin SEMUA project di folder."}
+          Choose which projects show up in this folder's board + calendar. {usingAll && "Right now it's showing ALL projects in the folder."}
         </p>
         <div className="mb-2 flex gap-2 text-xs">
-          <button onClick={() => setPicked(new Set(allProjects.map((p) => p.id)))} className="rounded-lg border border-border px-2 py-1 hover:bg-accent">Pilih semua</button>
-          <button onClick={() => setPicked(new Set())} className="rounded-lg border border-border px-2 py-1 hover:bg-accent">Kosongkan</button>
+          <button onClick={() => setPicked(new Set(allProjects.map((p) => p.id)))} className="rounded-lg border border-border px-2 py-1 hover:bg-accent">Select all</button>
+          <button onClick={() => setPicked(new Set())} className="rounded-lg border border-border px-2 py-1 hover:bg-accent">Clear</button>
         </div>
         <div className="max-h-72 space-y-1 overflow-y-auto">
           {allProjects.length === 0 ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">Folder ini belum punya project.</p>
+            <p className="py-4 text-center text-sm text-muted-foreground">This folder doesn't have any projects yet.</p>
           ) : allProjects.map((p) => (
             <button key={p.id} onClick={() => toggle(p.id)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-accent">
               <span className={cn("grid h-4 w-4 shrink-0 place-items-center rounded border", picked.has(p.id) ? "border-primary bg-primary text-primary-foreground" : "border-border")}>
@@ -484,9 +484,9 @@ function ProjectPicker({ folderId, allProjects, selected, usingAll, onClose }: {
           ))}
         </div>
         <div className="mt-4 flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-xl border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent">Batal</button>
+          <button onClick={onClose} className="rounded-xl border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent">Cancel</button>
           <button onClick={() => save.mutate()} disabled={save.isPending} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
-            {save.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Simpan
+            {save.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Save
           </button>
         </div>
       </div>

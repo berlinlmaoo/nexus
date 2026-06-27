@@ -25,7 +25,7 @@ function Settings() {
   const [active, setActive] = useState("profile");
   return (
     <div>
-      <PageHeader title="Tuning Room" subtitle="Workspace preferences, personal setup, and tiny switches that make NEXUS feel yours." icon={<SettingsIcon className="h-6 w-6 text-primary" />} />
+      <PageHeader title="Settings" subtitle="Workspace preferences, personal setup, and tiny switches that make NEXUS feel yours." icon={<SettingsIcon className="h-6 w-6 text-primary" />} />
       <div className="p-4 md:p-8 grid grid-cols-1 lg:grid-cols-4 gap-6">
         <aside className="lg:col-span-1 space-y-1">
           {sections.map((s) => (
@@ -85,8 +85,8 @@ function WorkspaceMembersSection() {
     return (
       <div className="rounded-xl border border-dashed border-border bg-card p-8 text-center shadow-soft">
         <ShieldCheck className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
-        <div className="text-lg font-bold">Workspace tidak ditemukan</div>
-        <p className="mt-2 text-sm text-muted-foreground">Login/sesi diperlukan untuk kelola member.</p>
+        <div className="text-lg font-bold">Workspace not found</div>
+        <p className="mt-2 text-sm text-muted-foreground">You need to be logged in to manage members.</p>
       </div>
     );
   }
@@ -100,11 +100,11 @@ function WorkspaceMembersSection() {
         <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-4">
           <div>
             <h2 className="font-semibold">Invite member</h2>
-            <p className="text-xs text-muted-foreground">Tambah orang ke workspace & set role-nya (sesuai level kamu).</p>
+            <p className="text-xs text-muted-foreground">Add someone to the workspace and set their role (within your level).</p>
           </div>
           <div className="flex flex-wrap items-end gap-2">
             <label className="flex-1 min-w-[200px]"><span className="text-xs font-medium text-muted-foreground">Email</span>
-              <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="orang@patsgroup.id" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+              <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="someone@patsgroup.id" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
             </label>
             <label><span className="text-xs font-medium text-muted-foreground">Role</span>
               <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as OrgRole)} className="mt-1 block rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-60">
@@ -113,14 +113,14 @@ function WorkspaceMembersSection() {
             </label>
             <button disabled={!email.trim() || invite.isPending} onClick={() => invite.mutate()} className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{invite.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />} Invite</button>
           </div>
-          {invite.isError && <p className="text-xs font-semibold text-destructive">{(invite.error as Error)?.message ?? "Gagal invite."}</p>}
+          {invite.isError && <p className="text-xs font-semibold text-destructive">{(invite.error as Error)?.message ?? "Couldn't send invite."}</p>}
         </div>
       )}
 
       <div className="rounded-xl border border-border bg-card shadow-soft">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
-          <div><h2 className="font-semibold">Workspace members</h2><p className="text-xs text-muted-foreground">{data?.members.length ?? 0} orang · role kamu: <RoleBadge role={myRole} /></p></div>
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari nama/email…" className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-primary" />
+          <div><h2 className="font-semibold">Workspace members</h2><p className="text-xs text-muted-foreground">{data?.members.length ?? 0} people · your role: <RoleBadge role={myRole} /></p></div>
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name/email…" className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-primary" />
         </div>
         {q.isLoading ? (
           <div className="grid place-items-center py-12 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>
@@ -132,7 +132,7 @@ function WorkspaceMembersSection() {
                 <div key={m.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                   {m.avatar ? <img src={m.avatar} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-border" /> : <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-bold text-primary ring-1 ring-border">{(m.name ?? m.email ?? "?").trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("")}</span>}
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold">{m.name}{isSelf && <span className="ml-1 text-xs font-normal text-muted-foreground">(kamu)</span>}</div>
+                    <div className="truncate text-sm font-semibold">{m.name}{isSelf && <span className="ml-1 text-xs font-normal text-muted-foreground">(you)</span>}</div>
                     <div className="truncate text-xs text-muted-foreground">{m.email}</div>
                   </div>
                   <MemberPhoneEditor member={m} workspaceId={wsId} canEdit={canManage} />
@@ -142,14 +142,14 @@ function WorkspaceMembersSection() {
                     </select>
                   ) : <RoleBadge role={m.role} />}
                   {isBodPlus && !isSelf && canEditTier(myRole, m.role) && <button onClick={() => setPwTarget({ memberId: m.id, name: m.name })} className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-accent hover:text-foreground" aria-label="Reset password" title="Reset password"><KeyRound className="h-4 w-4" /></button>}
-                  {canManage && !isSelf && <button onClick={() => { if (confirm(`Keluarkan ${m.name} dari workspace?`)) remove.mutate(m.id); }} className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive" aria-label="Remove"><Trash2 className="h-4 w-4" /></button>}
+                  {canManage && !isSelf && <button onClick={() => { if (confirm(`Remove ${m.name} from the workspace?`)) remove.mutate(m.id); }} className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive" aria-label="Remove"><Trash2 className="h-4 w-4" /></button>}
                 </div>
               );
             })}
-            {members.length === 0 && <div className="px-4 py-8 text-center text-sm text-muted-foreground">Nggak ada member yang cocok.</div>}
+            {members.length === 0 && <div className="px-4 py-8 text-center text-sm text-muted-foreground">No members match.</div>}
           </div>
         )}
-        {changeRole.isError && <p className="border-t border-border px-4 py-2 text-xs font-semibold text-destructive">{(changeRole.error as Error)?.message ?? "Gagal ubah role."}</p>}
+        {changeRole.isError && <p className="border-t border-border px-4 py-2 text-xs font-semibold text-destructive">{(changeRole.error as Error)?.message ?? "Couldn't change role."}</p>}
       </div>
       {pwTarget && <PasswordResetModal target={pwTarget} onClose={() => setPwTarget(null)} />}
     </div>
@@ -168,8 +168,8 @@ function MemberPhoneEditor({ member, workspaceId, canEdit }: { member: NexusWork
   if (!canEdit) return member.phoneNumber ? <span className="hidden text-xs text-muted-foreground sm:inline">{member.phoneNumber}</span> : null;
   return (
     <div className="flex items-center gap-1">
-      <input value={val} onChange={(e) => setVal(e.target.value)} placeholder="08xx / +65…" inputMode="tel" title="Nomor HP / WhatsApp — nomor luar pakai + kode negara" className="w-28 rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-primary" />
-      {dirty && <button onClick={() => save.mutate()} disabled={save.isPending} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" aria-label="Simpan nomor" title="Simpan">{save.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}</button>}
+      <input value={val} onChange={(e) => setVal(e.target.value)} placeholder="08xx / +65…" inputMode="tel" title="Phone / WhatsApp number — for non-local numbers use + and the country code" className="w-28 rounded-lg border border-border bg-background px-2 py-1.5 text-xs outline-none focus:border-primary" />
+      {dirty && <button onClick={() => save.mutate()} disabled={save.isPending} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" aria-label="Save number" title="Save">{save.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}</button>}
     </div>
   );
 }
@@ -198,25 +198,25 @@ function PasswordResetModal({ target, onClose }: { target: { memberId: string; n
         <div className="space-y-4 p-5">
           {reset.isSuccess ? (
             <div className="space-y-3">
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">Password <b>{target.name}</b> berhasil diubah ✅</div>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"><b>{target.name}</b>'s password was changed ✅</div>
               <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
                 <code className="flex-1 truncate text-sm font-semibold">{pw}</code>
-                <button onClick={copy} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-primary hover:bg-accent">{copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}{copied ? "Tersalin" : "Salin"}</button>
+                <button onClick={copy} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-primary hover:bg-accent">{copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}{copied ? "Copied" : "Copy"}</button>
               </div>
-              <p className="text-xs text-muted-foreground">Kasih password ini ke {target.name} lewat jalur aman. Sarankan dia ganti sendiri di Security.</p>
-              <button onClick={onClose} className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">Selesai</button>
+              <p className="text-xs text-muted-foreground">Send this password to {target.name} through a secure channel. Suggest they change it themselves in Security.</p>
+              <button onClick={onClose} className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">Done</button>
             </div>
           ) : (
             <>
-              <p className="text-sm text-muted-foreground">Set password baru buat <b className="text-foreground">{target.name}</b>. Minimal 8 karakter.</p>
+              <p className="text-sm text-muted-foreground">Set a new password for <b className="text-foreground">{target.name}</b>. At least 8 characters.</p>
               <div className="flex items-center gap-2">
-                <input type={show ? "text" : "password"} value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Password baru" autoFocus className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+                <input type={show ? "text" : "password"} value={pw} onChange={(e) => setPw(e.target.value)} placeholder="New password" autoFocus className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
                 <button onClick={() => setShow((v) => !v)} className="rounded-lg border border-border px-2.5 py-2 text-xs font-semibold text-muted-foreground hover:bg-accent">{show ? "Hide" : "Show"}</button>
               </div>
-              <button onClick={() => { setPw(randomPassword()); setShow(true); }} className="text-xs font-semibold text-primary hover:underline">Buat password acak</button>
-              {reset.isError && <p className="text-xs font-semibold text-destructive">{(reset.error as Error)?.message ?? "Gagal reset password."}</p>}
+              <button onClick={() => { setPw(randomPassword()); setShow(true); }} className="text-xs font-semibold text-primary hover:underline">Generate a random password</button>
+              {reset.isError && <p className="text-xs font-semibold text-destructive">{(reset.error as Error)?.message ?? "Couldn't reset password."}</p>}
               <div className="flex justify-end gap-2 pt-1">
-                <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-accent">Batal</button>
+                <button onClick={onClose} className="rounded-lg px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-accent">Cancel</button>
                 <button disabled={pw.length < 8 || reset.isPending} onClick={() => reset.mutate()} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">{reset.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />} Set password</button>
               </div>
             </>
@@ -266,8 +266,8 @@ function ProfileSection() {
               <button onClick={() => fileRef.current?.click()} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-semibold transition hover:bg-accent disabled:opacity-50"><ImagePlus className="h-4 w-4" />Change photo</button>
               {u?.avatar && <button onClick={() => removeAvatar.mutate()} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"><Trash2 className="h-4 w-4" />Remove</button>}
             </div>
-            <p className="text-xs text-muted-foreground">PNG, JPG, atau WEBP. Maks 5MB.</p>
-            {uploadAvatar.isError && <p className="text-xs font-semibold text-destructive">{(uploadAvatar.error as Error)?.message ?? "Upload gagal."}</p>}
+            <p className="text-xs text-muted-foreground">PNG, JPG, or WEBP. Max 5MB.</p>
+            {uploadAvatar.isError && <p className="text-xs font-semibold text-destructive">{(uploadAvatar.error as Error)?.message ?? "Upload failed."}</p>}
             <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={onPick} />
           </div>
         </div>
@@ -275,9 +275,9 @@ function ProfileSection() {
           <label className="block"><span className="text-xs font-medium text-muted-foreground">Full name</span><input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" /></label>
           <label className="block"><span className="text-xs font-medium text-muted-foreground">Email</span><input value={u?.email ?? ""} disabled className="mt-1 w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground" /></label>
           <label className="block sm:col-span-2">
-            <span className="text-xs font-medium text-muted-foreground">Nomor HP (WhatsApp)</span>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="08xxxxxxxxxx · nomor luar pakai + (mis. +65…)" inputMode="tel" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
-            <span className="mt-1 block text-[11px] text-muted-foreground">Dipakai buat notif WhatsApp (assign &amp; mention) dan fallback kalau belum link akun WA. Nomor luar negeri ketik pakai <code>+</code> kode negara.</span>
+            <span className="text-xs font-medium text-muted-foreground">Phone number (WhatsApp)</span>
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="08xxxxxxxxxx · for non-local numbers use + (e.g. +65…)" inputMode="tel" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+            <span className="mt-1 block text-[11px] text-muted-foreground">Used for WhatsApp notifications (assigns &amp; mentions) and as a fallback if you haven't linked your WA account yet. For international numbers, type <code>+</code> and the country code.</span>
           </label>
         </div>
         <div className="pt-4 border-t border-border flex justify-end gap-2">
@@ -303,7 +303,7 @@ function PasswordSection() {
       </div>
       <div className="flex items-center justify-end gap-2">
         {change.isSuccess && <span className="text-xs font-semibold text-success">Password updated.</span>}
-        {change.isError && <span className="text-xs font-semibold text-destructive">Gagal — cek password lama.</span>}
+        {change.isError && <span className="text-xs font-semibold text-destructive">Failed — check your current password.</span>}
         <button disabled={!current || next.length < 6 || change.isPending} onClick={() => change.mutate()} className="inline-flex items-center gap-2 text-sm rounded-md bg-primary text-primary-foreground px-4 py-1.5 shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{change.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Change password</button>
       </div>
     </div>
@@ -358,27 +358,27 @@ function WhatsAppLinkCard() {
       <div className="flex items-center gap-2">
         <MessageCircle className="h-4 w-4 text-primary" />
         <h2 className="font-semibold">WhatsApp (Gideon)</h2>
-        {linked && <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold text-success">Terhubung</span>}
+        {linked && <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold text-success">Connected</span>}
       </div>
-      <p className="text-xs text-muted-foreground">Hubungkan WhatsApp kamu biar bisa pakai perintah cepat (<code>/today</code>, <code>/done</code>, …) langsung dari chat, dan notif assign/mention nyampe tepat ke kamu.</p>
+      <p className="text-xs text-muted-foreground">Link your WhatsApp so you can use quick commands (<code>/today</code>, <code>/done</code>, …) right from chat, and assign/mention notifications reach you directly.</p>
 
       {linked ? (
         <div className="flex items-center justify-between rounded-lg border border-success/30 bg-success/5 p-3">
-          <span className="text-sm font-medium text-success">✅ WhatsApp terhubung</span>
-          <button onClick={() => unlink.mutate()} disabled={unlink.isPending} className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50">{unlink.isPending ? "…" : "Putuskan"}</button>
+          <span className="text-sm font-medium text-success">✅ WhatsApp connected</span>
+          <button onClick={() => unlink.mutate()} disabled={unlink.isPending} className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50">{unlink.isPending ? "…" : "Disconnect"}</button>
         </div>
       ) : gen ? (
         <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
-          <div className="text-xs text-muted-foreground">Kirim pesan ini ke bot WhatsApp NEXUS (nomor yang biasa ngirim notif):</div>
+          <div className="text-xs text-muted-foreground">Send this message to the NEXUS WhatsApp bot (the number that usually sends your notifications):</div>
           <div className="flex items-center gap-2">
             <code className="flex-1 rounded-md bg-background px-3 py-2 text-sm font-bold tracking-wider">/link {gen.code}</code>
-            <button onClick={() => { navigator.clipboard?.writeText(`/link ${gen.code}`); setCopied(true); setTimeout(() => setCopied(false), 1500); }} className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent" aria-label="Salin">{copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}</button>
+            <button onClick={() => { navigator.clipboard?.writeText(`/link ${gen.code}`); setCopied(true); setTimeout(() => setCopied(false), 1500); }} className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent" aria-label="Copy">{copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}</button>
           </div>
-          {gen.deepLink && <a href={gen.deepLink} target="_blank" rel="noreferrer" className="block rounded-lg bg-primary py-2 text-center text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90">Buka WhatsApp →</a>}
-          <p className="text-[11px] text-muted-foreground">Kode berlaku 10 menit. Halaman ini otomatis update begitu kamu kirim.</p>
+          {gen.deepLink && <a href={gen.deepLink} target="_blank" rel="noreferrer" className="block rounded-lg bg-primary py-2 text-center text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90">Open WhatsApp →</a>}
+          <p className="text-[11px] text-muted-foreground">Code is valid for 10 minutes. This page updates automatically once you send it.</p>
         </div>
       ) : (
-        <button onClick={() => generate.mutate()} disabled={generate.isPending} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60">{generate.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />} Hubungkan WhatsApp</button>
+        <button onClick={() => generate.mutate()} disabled={generate.isPending} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60">{generate.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />} Link WhatsApp</button>
       )}
     </div>
   );
@@ -453,7 +453,7 @@ function WebhooksSection() {
           ))}
         </div>
         <button disabled={!url.includes("http") || events.length === 0 || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Add webhook</button>
-        {create.isError && <span className="ml-2 text-xs font-semibold text-destructive">Gagal — cek URL/akses.</span>}
+        {create.isError && <span className="ml-2 text-xs font-semibold text-destructive">Failed — check the URL/access.</span>}
       </div>
     </div>
   );
@@ -489,7 +489,7 @@ function Step({ n, children }: { n: number; children: React.ReactNode }) {
 function McpTutorial() {
   const [tab, setTab] = useState<"app" | "cli" | "desktop">("app");
   const tabs = [
-    { id: "app" as const, label: "Aplikasi Claude", icon: Globe },
+    { id: "app" as const, label: "Claude app", icon: Globe },
     { id: "cli" as const, label: "Claude Code", icon: Terminal },
     { id: "desktop" as const, label: "Claude Desktop", icon: Monitor },
   ];
@@ -498,13 +498,13 @@ function McpTutorial() {
     "nexus": {
       "command": "npx",
       "args": ["mcp-remote@latest", "${MCP_URL}",
-               "--header", "Authorization: Bearer nxs_TOKEN_KAMU"]
+               "--header", "Authorization: Bearer nxs_YOUR_TOKEN"]
     }
   }
 }`;
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-4">
-      <h2 className="font-semibold">Cara pasang</h2>
+      <h2 className="font-semibold">How to set it up</h2>
       <div className="flex flex-wrap gap-1.5">
         {tabs.map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)}
@@ -516,47 +516,47 @@ function McpTutorial() {
 
       {tab === "app" && (
         <div className="space-y-4">
-          <p className="text-xs text-muted-foreground">Buat Claude di <span className="font-semibold">web (claude.ai), desktop, atau HP</span>. Paling gampang — nggak perlu token, tinggal login.</p>
+          <p className="text-xs text-muted-foreground">For Claude on <span className="font-semibold">web (claude.ai), desktop, or mobile</span>. Easiest option — no token needed, just log in.</p>
           <ol className="space-y-3">
-            <Step n={1}>Buka Claude → <span className="font-semibold">Settings → Connectors</span> (di HP: Settings → Connectors).</Step>
+            <Step n={1}>Open Claude → <span className="font-semibold">Settings → Connectors</span> (on mobile: Settings → Connectors).</Step>
             <Step n={2}>Tap <span className="font-semibold">“Add custom connector”</span>.</Step>
-            <Step n={3}>Tempel URL ini sebagai server URL-nya:</Step>
+            <Step n={3}>Paste this URL as the server URL:</Step>
           </ol>
           <CopyBox value={MCP_URL} />
           <ol className="space-y-3" start={4}>
-            <Step n={4}>Claude bakal buka halaman <span className="font-semibold">NEXUS</span> — login (kalau belum) terus tap <span className="font-semibold">“Izinkan”</span>.</Step>
-            <Step n={5}>Kelar! Tool NEXUS langsung muncul di Claude. 🎉</Step>
+            <Step n={4}>Claude will open a <span className="font-semibold">NEXUS</span> page — log in (if you haven't) and tap <span className="font-semibold">“Allow”</span>.</Step>
+            <Step n={5}>Done! The NEXUS tools show up in Claude right away. 🎉</Step>
           </ol>
         </div>
       )}
 
       {tab === "cli" && (
         <div className="space-y-4">
-          <p className="text-xs text-muted-foreground">Buat <span className="font-semibold">Claude Code</span> (CLI di terminal). Pakai token.</p>
+          <p className="text-xs text-muted-foreground">For <span className="font-semibold">Claude Code</span> (CLI in your terminal). Uses a token.</p>
           <ol className="space-y-3">
-            <Step n={1}>Generate token di bawah (bagian “Generate a token”), terus copy.</Step>
-            <Step n={2}>Jalanin command ini di terminal (ganti <span className="font-mono text-xs">nxs_…</span> sama token kamu):</Step>
+            <Step n={1}>Generate a token below (the “Generate a token” section), then copy it.</Step>
+            <Step n={2}>Run this command in your terminal (replace <span className="font-mono text-xs">nxs_…</span> with your token):</Step>
           </ol>
-          <CopyBox value={`claude mcp add --transport http nexus ${MCP_URL} --header "Authorization: Bearer nxs_TOKEN_KAMU"`} />
+          <CopyBox value={`claude mcp add --transport http nexus ${MCP_URL} --header "Authorization: Bearer nxs_YOUR_TOKEN"`} />
           <ol className="space-y-3" start={3}>
-            <Step n={3}>Cek dengan <span className="font-mono text-xs">/mcp</span> di dalam Claude Code — server “nexus” harus connected.</Step>
+            <Step n={3}>Check with <span className="font-mono text-xs">/mcp</span> inside Claude Code — the “nexus” server should be connected.</Step>
           </ol>
         </div>
       )}
 
       {tab === "desktop" && (
         <div className="space-y-4">
-          <p className="text-xs text-muted-foreground">Buat <span className="font-semibold">Claude Desktop</span> lewat file config (alternatif kalau nggak mau pakai Connectors UI). Butuh <span className="font-semibold">Node.js</span> keinstall.</p>
+          <p className="text-xs text-muted-foreground">For <span className="font-semibold">Claude Desktop</span> via a config file (an alternative if you'd rather not use the Connectors UI). Requires <span className="font-semibold">Node.js</span> installed.</p>
           <ol className="space-y-3">
-            <Step n={1}>Generate token di bawah, terus copy.</Step>
-            <Step n={2}>Buka <span className="font-semibold">Claude Desktop → Settings → Developer → Edit Config</span>.</Step>
-            <Step n={3}>Isi (atau gabung) seperti ini — ganti token-nya:</Step>
+            <Step n={1}>Generate a token below, then copy it.</Step>
+            <Step n={2}>Open <span className="font-semibold">Claude Desktop → Settings → Developer → Edit Config</span>.</Step>
+            <Step n={3}>Fill in (or merge) it like this — swap in your token:</Step>
           </ol>
           <CopyBox value={desktopConfig} />
           <ol className="space-y-3" start={4}>
-            <Step n={4}><span className="font-semibold">Restart</span> Claude Desktop. Tool NEXUS muncul di ikon connector.</Step>
+            <Step n={4}><span className="font-semibold">Restart</span> Claude Desktop. The NEXUS tools show up under the connector icon.</Step>
           </ol>
-          <p className="text-xs text-muted-foreground">Kalau gagal connect, tambahin <span className="font-mono">"--transport", "http-only"</span> di <span className="font-mono">args</span>.</p>
+          <p className="text-xs text-muted-foreground">If it fails to connect, add <span className="font-mono">"--transport", "http-only"</span> to <span className="font-mono">args</span>.</p>
         </div>
       )}
     </div>
@@ -618,7 +618,7 @@ function McpTokensSection() {
         <button disabled={create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">
           {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plug className="h-4 w-4" />} Generate token
         </button>
-        {create.isError && <span className="ml-2 text-xs font-semibold text-destructive">{(create.error as Error)?.message ?? "Gagal bikin token."}</span>}
+        {create.isError && <span className="ml-2 text-xs font-semibold text-destructive">{(create.error as Error)?.message ?? "Couldn't create token."}</span>}
       </div>
 
       <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-3">

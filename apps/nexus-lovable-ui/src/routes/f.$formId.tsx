@@ -132,7 +132,7 @@ function PublicForm() {
             {scheduleMsg ? (
               <>
                 <Clock className="mx-auto mb-4 h-10 w-10 text-warning-foreground" />
-                <div className="text-lg font-bold">Form belum dibuka</div>
+                <div className="text-lg font-bold">Form not open yet</div>
                 <p className="mt-2 text-sm text-muted-foreground">{scheduleMsg}</p>
               </>
             ) : (
@@ -156,12 +156,12 @@ function PublicForm() {
           <div className="rounded-3xl border border-border bg-card p-10 text-center shadow-soft">
             <LogIn className="mx-auto mb-4 h-10 w-10 text-primary" />
             <h1 className="font-display text-2xl font-bold tracking-tight">{f.name}</h1>
-            <p className="mt-2 text-sm text-muted-foreground">Form ini wajib login NEXUS dulu sebelum mengajukan, biar pengajuanmu bisa kamu lacak di “Pengajuan Saya”.</p>
+            <p className="mt-2 text-sm text-muted-foreground">This form needs a NEXUS login before you submit, so you can track your request under “My Requests”.</p>
             <a
               href={`/login?callbackUrl=${encodeURIComponent(`/f/${formId}`)}`}
               className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.99]"
             >
-              <LogIn className="h-4 w-4" /> Login untuk mengajukan
+              <LogIn className="h-4 w-4" /> Log in to submit
             </a>
           </div>
         )}
@@ -177,10 +177,10 @@ function PublicForm() {
                   ? <img src={me.data.user.avatar} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
                   : <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/15 text-xs font-bold text-primary">{(me.data.user.name ?? me.data.user.email ?? "?").slice(0, 1).toUpperCase()}</span>}
                 <div className="min-w-0 flex-1 leading-tight">
-                  <div className="text-[11px] text-muted-foreground">Mengajukan sebagai</div>
+                  <div className="text-[11px] text-muted-foreground">Submitting as</div>
                   <div className="truncate text-sm font-semibold">{me.data.user.name ?? me.data.user.email}{me.data.user.name && me.data.user.email ? <span className="font-normal text-muted-foreground"> · {me.data.user.email}</span> : null}</div>
                 </div>
-                <a href={`/login?callbackUrl=${encodeURIComponent(`/f/${formId}`)}`} className="shrink-0 text-xs font-semibold text-primary hover:underline">Ganti akun</a>
+                <a href={`/login?callbackUrl=${encodeURIComponent(`/f/${formId}`)}`} className="shrink-0 text-xs font-semibold text-primary hover:underline">Switch account</a>
               </div>
             )}
 
@@ -224,7 +224,7 @@ function PublicForm() {
                     ) : field.type === "file" ? (
                       <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-border bg-background px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:border-primary">
                         <Paperclip className="h-4 w-4 shrink-0" />
-                        <span className="truncate">{val instanceof File ? val.name : "Pilih file…"}</span>
+                        <span className="truncate">{val instanceof File ? val.name : "Choose a file…"}</span>
                         <input type="file" required={field.required} className="hidden" onChange={(e) => set(field.id, e.target.files?.[0] ?? "")} />
                       </label>
                     ) : field.type === "number" && field.numberFormat === "currency-idr" ? (
@@ -240,13 +240,13 @@ function PublicForm() {
                     ) : (
                       <input required={field.required} type={field.type === "email" ? "email" : field.type === "number" ? "number" : field.type === "date" ? "date" : "text"} placeholder={field.placeholder} value={String(val ?? "")} onChange={(e) => set(field.id, e.target.value)} className={input} />
                     )}
-                    {field.autofill && <p className="mt-1 text-[11px] text-muted-foreground">🔒 otomatis dari akun login kamu</p>}
+                    {field.autofill && <p className="mt-1 text-[11px] text-muted-foreground">🔒 auto-filled from your logged-in account</p>}
 
                     {/* optional extra attachment on non-file fields */}
                     {field.attachmentEnabled && field.type !== "file" && (
                       <label className="mt-1 flex cursor-pointer items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-primary">
                         <Paperclip className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">{values[`attachment:${field.id}`] instanceof File ? (values[`attachment:${field.id}`] as File).name : "Lampirkan file (opsional)"}</span>
+                        <span className="truncate">{values[`attachment:${field.id}`] instanceof File ? (values[`attachment:${field.id}`] as File).name : "Attach a file (optional)"}</span>
                         <input type="file" className="hidden" onChange={(e) => set(`attachment:${field.id}`, e.target.files?.[0] ?? "")} />
                       </label>
                     )}
@@ -257,9 +257,9 @@ function PublicForm() {
                 {submit.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Submit
               </button>
               {!canSubmit && missingRequired.length > 0 && (
-                <p className="text-center text-xs text-muted-foreground">Lengkapi dulu yang wajib <span className="text-destructive">*</span>: <span className="font-semibold text-foreground">{missingRequired.join(", ")}</span></p>
+                <p className="text-center text-xs text-muted-foreground">Fill in the required ones first <span className="text-destructive">*</span>: <span className="font-semibold text-foreground">{missingRequired.join(", ")}</span></p>
               )}
-              {submit.isError && <p className="text-center text-xs font-semibold text-destructive">{(submit.error as Error)?.message || "Submission failed. Coba lagi."}</p>}
+              {submit.isError && <p className="text-center text-xs font-semibold text-destructive">{(submit.error as Error)?.message || "Submission failed. Try again."}</p>}
             </form>
           </div>
         )}

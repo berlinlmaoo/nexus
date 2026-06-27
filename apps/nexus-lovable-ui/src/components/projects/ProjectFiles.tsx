@@ -75,12 +75,12 @@ export function ProjectFiles({ projectId }: { projectId: string }) {
     mutationFn: async (files: File[]) => {
       for (const f of files) await nexusApi.uploadProjectFile(projectId, f, path);
     },
-    onSuccess: (_d, files) => { refresh(); celebrate(`${files.length} file diunggah 📦`); },
+    onSuccess: (_d, files) => { refresh(); celebrate(`${files.length} file${files.length === 1 ? '' : 's'} uploaded 📦`); },
   });
 
   const mkdir = useMutation({
     mutationFn: (name: string) => nexusApi.createProjectFolder(projectId, name, path),
-    onSuccess: () => { refresh(); celebrate("Folder dibuat 📁"); },
+    onSuccess: () => { refresh(); celebrate("Folder created 📁"); },
   });
 
   const remove = useMutation({
@@ -98,12 +98,12 @@ export function ProjectFiles({ projectId }: { projectId: string }) {
   };
 
   const newFolder = () => {
-    const name = window.prompt("Nama folder baru:");
+    const name = window.prompt("New folder name:");
     if (name?.trim()) mkdir.mutate(name.trim());
   };
 
   const onDelete = (f: NexusProjectFile) => {
-    if (window.confirm(`Hapus "${f.name}"${f.isdir ? " beserta isinya" : ""}?`)) remove.mutate(f.relPath);
+    if (window.confirm(`Delete "${f.name}"${f.isdir ? " and everything inside it" : ""}?`)) remove.mutate(f.relPath);
   };
 
   const files = list.data?.files ?? [];
@@ -141,8 +141,8 @@ export function ProjectFiles({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      {upload.isError && <p className="text-sm font-semibold text-destructive">Gagal upload: {(upload.error as Error)?.message}</p>}
-      {list.isError && <p className="text-sm font-semibold text-destructive">Gagal memuat file: {(list.error as Error)?.message}. Pastikan storage NAS sudah terhubung.</p>}
+      {upload.isError && <p className="text-sm font-semibold text-destructive">Upload failed: {(upload.error as Error)?.message}</p>}
+      {list.isError && <p className="text-sm font-semibold text-destructive">Couldn't load files: {(list.error as Error)?.message}. Make sure the NAS storage is connected.</p>}
 
       {list.isLoading ? (
         <div className="grid place-items-center py-16 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>
@@ -150,8 +150,8 @@ export function ProjectFiles({ projectId }: { projectId: string }) {
         <Card className="border border-dashed border-border bg-card shadow-soft">
           <CardBody className="flex flex-col items-center gap-3 p-12 text-center">
             <div className="grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary"><Folder className="h-7 w-7" /></div>
-            <div className="text-lg font-black">Folder kosong</div>
-            <p className="max-w-sm text-sm text-muted-foreground">Drag &amp; drop file ke sini, atau klik Upload untuk menyimpan file project di NAS.</p>
+            <div className="text-lg font-black">Empty folder</div>
+            <p className="max-w-sm text-sm text-muted-foreground">Drag &amp; drop files here, or click Upload to stash project files on the NAS.</p>
             <Button size="sm" variant="primary" onClick={() => inputRef.current?.click()} isDisabled={busy}><Upload className="h-4 w-4" />Upload file</Button>
           </CardBody>
         </Card>
@@ -175,7 +175,7 @@ export function ProjectFiles({ projectId }: { projectId: string }) {
                         <div className="truncate text-sm font-bold">{f.name}</div>
                         <div className="text-xs text-muted-foreground">{fmtWhen(f.modified)}</div>
                       </div>
-                      <button onClick={(e) => { e.stopPropagation(); onDelete(f); }} className="absolute right-2 top-2 hidden rounded-lg p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive group-hover:block" aria-label="Hapus folder"><Trash2 className="h-3.5 w-3.5" /></button>
+                      <button onClick={(e) => { e.stopPropagation(); onDelete(f); }} className="absolute right-2 top-2 hidden rounded-lg p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive group-hover:block" aria-label="Delete folder"><Trash2 className="h-3.5 w-3.5" /></button>
                     </motion.button>
                   ))}
                 </AnimatePresence>
@@ -207,7 +207,7 @@ export function ProjectFiles({ projectId }: { projectId: string }) {
                           className="rounded-lg p-2 text-muted-foreground opacity-0 transition hover:bg-primary/10 hover:text-primary group-hover:opacity-100"
                           aria-label="Download"
                         ><Download className="h-4 w-4" /></a>
-                        <button onClick={() => onDelete(f)} className="rounded-lg p-2 text-muted-foreground opacity-0 transition hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100" aria-label="Hapus"><Trash2 className="h-4 w-4" /></button>
+                        <button onClick={() => onDelete(f)} className="rounded-lg p-2 text-muted-foreground opacity-0 transition hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100" aria-label="Delete"><Trash2 className="h-4 w-4" /></button>
                       </motion.div>
                     );
                   })}

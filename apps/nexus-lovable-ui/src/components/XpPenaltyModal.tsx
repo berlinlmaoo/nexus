@@ -23,19 +23,19 @@ function penaltyLabel(p: NexusXpPenalty): string {
   switch (p.kind) {
     case "late": {
       // Exact (uncapped) minutes when the backend has them; else derive from the capped XP (-1/min, max 120).
-      if (typeof p.lateMinutes === "number" && p.lateMinutes > 0) return `Telat absen ${p.lateMinutes} menit`;
+      if (typeof p.lateMinutes === "number" && p.lateMinutes > 0) return `Checked in ${p.lateMinutes} min late`;
       const m = Math.abs(p.amount);
-      return m ? `Telat absen ${m >= 120 ? "120+" : m} menit` : "Telat absen";
+      return m ? `Checked in ${m >= 120 ? "120+" : m} min late` : "Checked in late";
     }
-    case "nocheckout": return "Lupa check-out";
-    case "alpha": return "Alpha — tanpa kabar";
+    case "nocheckout": return "Forgot to check out";
+    case "alpha": return "Absent — no notice";
     case "admin": {
       const note = p.reason.startsWith("admin:adjust:") ? p.reason.slice("admin:adjust:".length) : "";
-      return note ? `XP dikurangi admin · ${note}` : "XP dikurangi admin";
+      return note ? `XP cut by admin · ${note}` : "XP cut by admin";
     }
     // Unknown negative reasons: never show a raw machine string to staff.
     // (New penalty types should be added to kindOf() on the backend + a case here.)
-    default: return "XP berkurang";
+    default: return "XP lost";
   }
 }
 
@@ -81,12 +81,12 @@ export function XpPenaltyModal() {
               <div className="flex items-start gap-3">
                 <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-rose-500/15 text-rose-600"><TrendingDown className="h-5 w-5" /></div>
                 <div>
-                  <p className="text-[11px] font-black uppercase tracking-[0.2em] text-rose-600">XP berkurang</p>
-                  <h2 className="mt-0.5 font-display text-xl font-bold tracking-tight">Yah, XP kamu kepotong</h2>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{fresh.length} hal bikin XP kamu turun.</p>
+                  <p className="text-[11px] font-black uppercase tracking-[0.2em] text-rose-600">XP lost</p>
+                  <h2 className="mt-0.5 font-display text-xl font-bold tracking-tight">Ouch, your XP took a hit</h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{fresh.length} thing{fresh.length === 1 ? "" : "s"} knocked your XP down.</p>
                 </div>
               </div>
-              <button onClick={dismiss} aria-label="Tutup" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+              <button onClick={dismiss} aria-label="Close" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
             </div>
 
             <div className="space-y-2 p-5">
@@ -105,8 +105,8 @@ export function XpPenaltyModal() {
                   <span>Total</span><span className="tabular-nums">{total} XP</span>
                 </div>
               )}
-              <button onClick={dismiss} className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.99]">Oke, ngerti</button>
-              <p className="text-center text-[11px] text-muted-foreground">Telat = −1 XP/menit (maks −120). Absen tepat waktu biar aman ✨</p>
+              <button onClick={dismiss} className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.99]">Got it</button>
+              <p className="text-center text-[11px] text-muted-foreground">Late = −1 XP/min (max −120). Check in on time to stay safe ✨</p>
             </div>
           </motion.div>
         </div>

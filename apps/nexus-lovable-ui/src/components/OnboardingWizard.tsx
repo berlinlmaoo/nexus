@@ -8,10 +8,10 @@ type Slide = { key: string; title: string; img: string; imgMobile: string; point
 
 // Screenshots live in /public/onboarding/. Missing images degrade gracefully.
 const SLIDES: Slide[] = [
-  { key: "dashboard", title: "Morning Brief & navigasi", img: "/onboarding/dashboard.png", imgMobile: "/onboarding/dashboard-mobile.png", points: ["Dashboard = ringkasan harian kamu: task, quest, inbox.", "Sidebar kiri (web) / tab bawah (mobile) buat pindah halaman.", "Avatar + level kamu ada di pojok bawah."] },
-  { key: "board", title: "Projects & Board + Add task", img: "/onboarding/board.png", imgMobile: "/onboarding/board-mobile.png", points: ["Buka project → tab Board.", "Klik “Add task” buat bikin task: judul, lane, prioritas, deadline.", "Isi custom field (Harga, Status, dll) langsung di form-nya."] },
-  { key: "attendance", title: "Absen (Attendance)", img: "/onboarding/attendance.png", imgMobile: "/onboarding/attendance-mobile.png", points: ["Check-in & check-out tiap hari kerja (selfie + GPS).", "Bisa ajuin Day Off & Sick sendiri (Leave/Permit dari BoD).", "Jatah day-off 4/bulan — kelewat absen kepotong otomatis."] },
-  { key: "leaderboard", title: "Leaderboard & XP", img: "/onboarding/leaderboard.png", imgMobile: "/onboarding/leaderboard-mobile.png", points: ["Selesaiin task buat dapet XP, hindari penalti absen.", "Naik tier tiap periode (reset tiap tgl 1).", "Cek posisi kamu di Leaderboard."] },
+  { key: "dashboard", title: "Dashboard & navigation", img: "/onboarding/dashboard.png", imgMobile: "/onboarding/dashboard-mobile.png", points: ["Dashboard = your daily snapshot: tasks, quests, inbox.", "Left sidebar (web) / bottom tabs (mobile) to switch pages.", "Your avatar + level live in the bottom corner."] },
+  { key: "board", title: "Projects & Board + Add task", img: "/onboarding/board.png", imgMobile: "/onboarding/board-mobile.png", points: ["Open a project → Board tab.", "Hit “Add task” to make one: title, lane, priority, deadline.", "Fill in custom fields (Price, Status, etc.) right in the form."] },
+  { key: "attendance", title: "Attendance", img: "/onboarding/attendance.png", imgMobile: "/onboarding/attendance-mobile.png", points: ["Check in & check out every workday (selfie + GPS).", "Request Day Off & Sick yourself (Leave/Permit come from BoD).", "4 day-offs/month — miss attendance and it gets docked automatically."] },
+  { key: "leaderboard", title: "Leaderboard & XP", img: "/onboarding/leaderboard.png", imgMobile: "/onboarding/leaderboard-mobile.png", points: ["Finish tasks to earn XP, dodge attendance penalties.", "Climb tiers each period (resets on the 1st).", "Check where you stand on the Leaderboard."] },
 ];
 
 function Shot({ src, alt, mobile }: { src: string; alt: string; mobile?: boolean }) {
@@ -96,17 +96,17 @@ export function OnboardingWizard() {
           {/* STEP 0 — photo */}
           {step === 0 && (
             <div className="space-y-4 text-center">
-              <h2 className="text-xl font-black tracking-tight">Selamat datang di NEXUS 👋</h2>
-              <p className="text-sm text-muted-foreground">Yuk lengkapin profil dulu. Pertama, <b>foto profil</b> kamu.</p>
+              <h2 className="text-xl font-black tracking-tight">Welcome to NEXUS 👋</h2>
+              <p className="text-sm text-muted-foreground">Let's get your profile set up. First, your <b>profile photo</b>.</p>
               <div className="mx-auto grid h-28 w-28 place-items-center overflow-hidden rounded-full bg-primary/10 ring-2 ring-border">
                 {me.avatar ? <img src={me.avatar} alt="" className="h-full w-full object-cover" /> : <ImagePlus className="h-8 w-8 text-muted-foreground" />}
               </div>
               <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); }} />
               <button onClick={() => fileRef.current?.click()} disabled={upload.isPending} className="inline-flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold transition hover:bg-accent disabled:opacity-50">
-                {upload.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />} {hasAvatar ? "Ganti foto" : "Upload foto"}
+                {upload.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />} {hasAvatar ? "Change photo" : "Upload photo"}
               </button>
-              {upload.isError && <p className="text-xs font-semibold text-destructive">Gagal upload — coba lagi.</p>}
-              {!hasAvatar && <p className="text-[11px] text-muted-foreground">Wajib upload foto buat lanjut.</p>}
+              {upload.isError && <p className="text-xs font-semibold text-destructive">Upload failed — try again.</p>}
+              {!hasAvatar && <p className="text-[11px] text-muted-foreground">A photo is required to continue.</p>}
             </div>
           )}
 
@@ -114,12 +114,12 @@ export function OnboardingWizard() {
           {step === 1 && (
             <div className="space-y-4">
               <div className="text-center">
-                <h2 className="text-xl font-black tracking-tight">Nama lengkap kamu</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Pakai <b>nama lengkap</b> (bukan nickname) biar gampang dikenali tim.</p>
+                <h2 className="text-xl font-black tracking-tight">Your full name</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Use your <b>full name</b> (not a nickname) so the team can spot you easily.</p>
               </div>
-              <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={me.name || "Nama lengkap…"} className="w-full rounded-xl border border-border bg-background px-4 py-3 text-base font-semibold outline-none focus:border-primary" />
-              {!nameValid && name.length > 0 && <p className="text-xs font-semibold text-amber-600">Masukin nama lengkap (min. 2 kata).</p>}
-              {saveName.isError && <p className="text-xs font-semibold text-destructive">Gagal simpan nama.</p>}
+              <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={me.name || "Full name…"} className="w-full rounded-xl border border-border bg-background px-4 py-3 text-base font-semibold outline-none focus:border-primary" />
+              {!nameValid && name.length > 0 && <p className="text-xs font-semibold text-amber-600">Enter your full name (min. 2 words).</p>}
+              {saveName.isError && <p className="text-xs font-semibold text-destructive">Couldn't save your name.</p>}
             </div>
           )}
 
@@ -139,21 +139,21 @@ export function OnboardingWizard() {
           {isDone && (
             <div className="space-y-4 py-6 text-center">
               <PartyPopper className="mx-auto h-12 w-12 text-primary" />
-              <h2 className="text-2xl font-black tracking-tight">Siap jalan! 🚀</h2>
-              <p className="text-sm text-muted-foreground">Profil lengkap & kamu udah kenal NEXUS. Selamat berkarya, {me.name?.split(" ")[0] || "tim"}!</p>
+              <h2 className="text-2xl font-black tracking-tight">You're all set! 🚀</h2>
+              <p className="text-sm text-muted-foreground">Profile done & you know your way around NEXUS. Go make magic, {me.name?.split(" ")[0] || "team"}!</p>
             </div>
           )}
         </div>
 
         {/* footer nav */}
         <div className="flex items-center justify-between gap-2 border-t border-border px-6 py-4">
-          <button onClick={back} disabled={step === 0} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-accent disabled:opacity-0"><ArrowLeft className="h-4 w-4" /> Kembali</button>
+          <button onClick={back} disabled={step === 0} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-accent disabled:opacity-0"><ArrowLeft className="h-4 w-4" /> Back</button>
           <div className="flex items-center gap-2">
-            {isSlide && <button onClick={() => setStep(TOTAL)} className="rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-accent">Lewati tutorial</button>}
-            {step === 0 && <button onClick={next} disabled={!hasAvatar} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">Lanjut <ArrowRight className="h-4 w-4" /></button>}
-            {step === 1 && <button onClick={() => saveName.mutate(name, { onSuccess: next })} disabled={!nameValid || saveName.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{saveName.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />} Simpan & lanjut</button>}
-            {isSlide && <button onClick={next} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90">{step === TOTAL - 1 ? "Selesai" : "Lanjut"} <ArrowRight className="h-4 w-4" /></button>}
-            {isDone && <button onClick={() => finish.mutate()} disabled={finish.isPending} className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{finish.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Mulai pakai NEXUS</button>}
+            {isSlide && <button onClick={() => setStep(TOTAL)} className="rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-accent">Skip tutorial</button>}
+            {step === 0 && <button onClick={next} disabled={!hasAvatar} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">Next <ArrowRight className="h-4 w-4" /></button>}
+            {step === 1 && <button onClick={() => saveName.mutate(name, { onSuccess: next })} disabled={!nameValid || saveName.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{saveName.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />} Save & continue</button>}
+            {isSlide && <button onClick={next} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90">{step === TOTAL - 1 ? "Done" : "Next"} <ArrowRight className="h-4 w-4" /></button>}
+            {isDone && <button onClick={() => finish.mutate()} disabled={finish.isPending} className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{finish.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Start using NEXUS</button>}
           </div>
         </div>
       </div>

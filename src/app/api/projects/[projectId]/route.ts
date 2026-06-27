@@ -179,6 +179,7 @@ export async function PATCH(
       autoAssignEnabled,
       autoAssignAssigneeIds,
       enablePnlDashboard,
+      tableColumns,
     } = body
 
     const existing = await prisma.project.findUnique({
@@ -256,6 +257,7 @@ export async function PATCH(
         ...(Number.isInteger(position) && position >= 0 && { position }),
         ...(enableTaskBatchDuplicate !== undefined && { enableTaskBatchDuplicate }),
         ...(enablePnlDashboard !== undefined && { enablePnlDashboard: !!enablePnlDashboard }),
+        ...(Array.isArray(tableColumns) && { tableColumns: tableColumns.filter((c: unknown) => typeof c === "string") }),
         ...(normalizedAutoAssignConfig && normalizedAutoAssignConfig),
       },
       include: {

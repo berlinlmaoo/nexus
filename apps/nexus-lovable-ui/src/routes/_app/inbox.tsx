@@ -26,7 +26,7 @@ function InboxPage() {
 
   return (
     <div>
-      <PageHeader title="Signal Inbox" subtitle="Live mentions, assignments, pings, and the stuff that needs your magic." actions={
+      <PageHeader title="Notification" subtitle="Live mentions, assignments, pings, and the stuff that needs your magic." actions={
         <button onClick={() => markAll.mutate()} disabled={markAll.isPending} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm transition-colors duration-150 hover:bg-accent active:scale-[0.98] active:scale-95 transition disabled:opacity-60">
           {markAll.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Mark all read
         </button>
@@ -43,7 +43,7 @@ function InboxPage() {
                 <div className="flex-1 space-y-1.5"><Skeleton className="h-3.5 w-1/3" /><Skeleton className="h-3 w-2/3" /><Skeleton className="h-2.5 w-24" /></div>
               </div>
             ))}
-            {inbox.isError && <Empty title="Signal locked" message="Login/session diperlukan untuk buka live inbox." />}
+            {inbox.isError && <Empty title="Signal locked" message="You need to log in to open your live inbox." />}
             {!inbox.isLoading && !inbox.isError && notifications.length === 0 && <Empty title="Inbox clean" message="No pings. Enjoy the rare silence." />}
             {!inbox.isLoading && notifications.map((n, idx) => <NotificationRow key={n.id} notification={n} idx={idx} />)}
           </div>
@@ -99,7 +99,7 @@ function NotificationRow({ notification, idx }: { notification: NexusNotificatio
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold">{notification.title || signalTitle(notification)}</p>
         <p className="text-sm text-muted-foreground mt-0.5">{notification.message || "New NEXUS signal arrived."}</p>
-        <p className="text-xs text-muted-foreground mt-1">{fmtDate(notification.createdAt)} · {notification.type || "signal"}{target ? " · ketuk buka" : ""}</p>
+        <p className="text-xs text-muted-foreground mt-1">{fmtDate(notification.createdAt)} · {notification.type || "signal"}{target ? " · tap to open" : ""}</p>
         {(markRead.isError || remove.isError) && <p className="mt-1 text-xs font-semibold text-destructive">Action failed. Check permission/session.</p>}
       </div>
       <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
