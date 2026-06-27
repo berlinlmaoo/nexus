@@ -5,14 +5,14 @@ import { Loader2, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import { nexusApi, type NexusFinanceDashboard } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const rp = (n: number) => "Rp " + new Intl.NumberFormat("id-ID").format(Math.round(n || 0));
 const rpShort = (n: number) => {
   const a = Math.abs(n);
-  if (a >= 1e9) return `${(n / 1e9).toFixed(1)} M`;
-  if (a >= 1e6) return `${(n / 1e6).toFixed(0)} jt`;
-  if (a >= 1e3) return `${(n / 1e3).toFixed(0)} rb`;
+  if (a >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
+  if (a >= 1e6) return `${(n / 1e6).toFixed(0)}M`;
+  if (a >= 1e3) return `${(n / 1e3).toFixed(0)}K`;
   return String(Math.round(n || 0));
 };
 
@@ -74,7 +74,7 @@ export function FinanceDashboardView({ projectId, canEdit = true }: { projectId:
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-display text-lg font-bold tracking-tight">Finance Dashboard</h2>
-          <p className="text-xs text-muted-foreground">OPEX & Revenue bulanan — input tiap bulan, total & profit otomatis.</p>
+          <p className="text-xs text-muted-foreground">Monthly OPEX & Revenue — type in each month, totals & profit auto-calc.</p>
         </div>
         <div className="flex items-center gap-1.5">
           <button onClick={() => setYear((y) => y - 1)} className="rounded-lg border border-border px-2.5 py-1.5 text-sm font-semibold hover:bg-accent">‹</button>
@@ -84,7 +84,7 @@ export function FinanceDashboardView({ projectId, canEdit = true }: { projectId:
       </div>
 
       {q.isLoading && <div className="flex justify-center py-20 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
-      {q.isError && <div className="rounded-2xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground shadow-sm">Gagal memuat. Butuh akses member project ini.</div>}
+      {q.isError && <div className="rounded-2xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground shadow-sm">Couldn't load. You need to be a member of this project.</div>}
 
       {d && !q.isLoading && (
         <>
@@ -98,7 +98,7 @@ export function FinanceDashboardView({ projectId, canEdit = true }: { projectId:
 
           {/* Monthly chart */}
           <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
-            <div className="mb-2 text-sm font-bold">Tren bulanan {year}</div>
+            <div className="mb-2 text-sm font-bold">Monthly trend {year}</div>
             <ResponsiveContainer width="100%" height={240}>
               <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
@@ -115,7 +115,7 @@ export function FinanceDashboardView({ projectId, canEdit = true }: { projectId:
 
           {/* OPEX breakdown by category */}
           <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
-            <div className="mb-2 text-sm font-bold">Breakdown OPEX per kategori</div>
+            <div className="mb-2 text-sm font-bold">OPEX breakdown by category</div>
             <ResponsiveContainer width="100%" height={Math.max(120, opexCats.length * 34)}>
               <BarChart data={opexCats.map((c) => ({ name: c.name, total: c.subtotal }))} layout="vertical" margin={{ left: 8, right: 16 }}>
                 <XAxis type="number" tickFormatter={rpShort} tick={{ fontSize: 11 }} />
@@ -133,7 +133,7 @@ export function FinanceDashboardView({ projectId, canEdit = true }: { projectId:
             <table className="w-full border-collapse text-xs">
               <thead className="sticky top-0">
                 <tr className="border-b border-border bg-muted/40 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-                  <th className="sticky left-0 z-10 min-w-52 bg-muted/40 px-3 py-2 text-left">Pos</th>
+                  <th className="sticky left-0 z-10 min-w-52 bg-muted/40 px-3 py-2 text-left">Item</th>
                   {MONTHS.map((m) => <th key={m} className="px-1.5 py-2 text-right font-semibold">{m}</th>)}
                   <th className="px-3 py-2 text-right">TOTAL</th>
                   <th className="px-2 py-2 text-right">%</th>
@@ -164,7 +164,7 @@ export function FinanceDashboardView({ projectId, canEdit = true }: { projectId:
               </tbody>
             </table>
           </div>
-          <p className="text-center text-[11px] text-muted-foreground">Klik cell buat input angka bulanan. Subtotal, total, % & profit dihitung otomatis.</p>
+          <p className="text-center text-[11px] text-muted-foreground">Click a cell to type in monthly numbers. Subtotals, totals, % & profit are calculated automatically.</p>
         </>
       )}
     </div>

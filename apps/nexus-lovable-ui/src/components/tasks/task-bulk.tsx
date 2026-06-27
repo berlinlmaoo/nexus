@@ -52,11 +52,11 @@ export function TaskBulkProvider({ projectId, enabled, children }: { projectId: 
 
   const dupMut = useMutation({
     mutationFn: async ({ ids, dueDate }: { ids: string[]; dueDate?: string | null }) => { for (const id of ids) await nexusApi.duplicateTask(id, dueDate); return ids.length; },
-    onSuccess: (n) => { refresh(); clear(); setDatePopup(null); celebrate(n > 1 ? `${n} task diduplikat` : "Task diduplikat"); },
+    onSuccess: (n) => { refresh(); clear(); setDatePopup(null); celebrate(n > 1 ? `${n} tasks duplicated` : "Task duplicated"); },
   });
   const delMut = useMutation({
     mutationFn: async (ids: string[]) => { for (const id of ids) await nexusApi.deleteTask(id); return ids.length; },
-    onSuccess: (n) => { refresh(); clear(); setMenu(null); celebrate(n > 1 ? `${n} task dihapus` : "Task dihapus"); },
+    onSuccess: (n) => { refresh(); clear(); setMenu(null); celebrate(n > 1 ? `${n} tasks deleted` : "Task deleted"); },
   });
 
   const bindCard = useCallback((task: NexusTask, onOpen: () => void): CardProps => {
@@ -131,7 +131,7 @@ function BulkLayer({ menu, onCloseMenu, selectedIds, onBeginSelect, onDuplicateN
               onSelect={() => onBeginSelect(menu.task)}
               onDuplicate={() => { onDuplicateNow([menu.task.id]); onCloseMenu(); }}
               onDuplicateDate={() => onDuplicateWithDate([menu.task.id])}
-              onCopyLink={() => { navigator.clipboard?.writeText(`${window.location.origin}/tasks/${menu.task.id}`); celebrate("Link disalin"); onCloseMenu(); }}
+              onCopyLink={() => { navigator.clipboard?.writeText(`${window.location.origin}/tasks/${menu.task.id}`); celebrate("Link copied"); onCloseMenu(); }}
               onDelete={() => onDelete([menu.task.id])}
             />
           </>
@@ -148,11 +148,11 @@ function BulkLayer({ menu, onCloseMenu, selectedIds, onBeginSelect, onDuplicateN
             transition={{ type: "spring", stiffness: 360, damping: 30 }}
             className="fixed bottom-5 left-1/2 z-[94] flex -translate-x-1/2 items-center gap-1.5 rounded-2xl border border-border bg-popover px-2 py-2 shadow-pop"
           >
-            <span className="px-2 text-sm font-bold tabular-nums">{selectedIds.length} dipilih</span>
-            <button disabled={busy} onClick={() => onDuplicateNow(selectedIds)} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm font-semibold transition-colors hover:bg-accent disabled:opacity-50"><Copy className="h-3.5 w-3.5" /> Duplikat</button>
-            <button disabled={busy} onClick={() => onDuplicateWithDate(selectedIds)} title="Duplikat + atur due date" className="grid h-8 w-8 place-items-center rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"><CalendarDays className="h-4 w-4" /></button>
-            <button disabled={busy} onClick={() => { if (window.confirm(`Hapus ${selectedIds.length} task?`)) onDelete(selectedIds); }} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /> Hapus</button>
-            <button onClick={onClear} className="grid h-8 w-8 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-accent" aria-label="Batal"><X className="h-4 w-4" /></button>
+            <span className="px-2 text-sm font-bold tabular-nums">{selectedIds.length} selected</span>
+            <button disabled={busy} onClick={() => onDuplicateNow(selectedIds)} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm font-semibold transition-colors hover:bg-accent disabled:opacity-50"><Copy className="h-3.5 w-3.5" /> Duplicate</button>
+            <button disabled={busy} onClick={() => onDuplicateWithDate(selectedIds)} title="Duplicate + set due date" className="grid h-8 w-8 place-items-center rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"><CalendarDays className="h-4 w-4" /></button>
+            <button disabled={busy} onClick={() => { if (window.confirm(`Delete ${selectedIds.length} task${selectedIds.length === 1 ? '' : 's'}?`)) onDelete(selectedIds); }} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /> Delete</button>
+            <button onClick={onClear} className="grid h-8 w-8 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-accent" aria-label="Cancel"><X className="h-4 w-4" /></button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -183,10 +183,10 @@ function ContextMenu({ menu, reduce, onSelect, onDuplicate, onDuplicateDate, onC
       className="fixed z-[95] w-52 rounded-xl border border-border bg-popover p-1 text-foreground shadow-pop"
     >
       <div className="truncate px-2 py-1.5 text-[11px] font-semibold text-muted-foreground">{menu.task.title || "Task"}</div>
-      <MenuRow icon={CheckSquare} label="Pilih beberapa" onClick={onSelect} />
-      <MenuRow icon={Copy} label="Duplikat" onClick={onDuplicate} />
-      <MenuRow icon={CopyPlus} label="Duplikat + tanggal…" onClick={onDuplicateDate} />
-      <MenuRow icon={Link2} label="Salin link" onClick={onCopyLink} />
+      <MenuRow icon={CheckSquare} label="Select multiple" onClick={onSelect} />
+      <MenuRow icon={Copy} label="Duplicate" onClick={onDuplicate} />
+      <MenuRow icon={CopyPlus} label="Duplicate + date…" onClick={onDuplicateDate} />
+      <MenuRow icon={Link2} label="Copy link" onClick={onCopyLink} />
       <hr className="my-1 border-border" />
       <HoldDelete onConfirm={onDelete} />
     </motion.div>
@@ -220,7 +220,7 @@ function HoldDelete({ onConfirm }: { onConfirm: () => void }) {
       onMouseDown={start} onMouseUp={stop} onMouseLeave={stop} onTouchStart={start} onTouchEnd={stop}
       className="relative flex w-full select-none items-center justify-between overflow-hidden rounded-lg px-2 py-1.5 text-sm text-destructive transition-colors hover:bg-destructive/10"
     >
-      <span className="relative z-10">{pct > 0 ? "Tahan buat hapus…" : "Hapus"}</span>
+      <span className="relative z-10">{pct > 0 ? "Hold to delete…" : "Delete"}</span>
       <Trash2 className="relative z-10 h-4 w-4" />
       <span className="absolute inset-y-0 left-0 bg-destructive/20" style={{ width: `${pct}%` }} />
     </button>
@@ -241,17 +241,17 @@ function DatePopup({ ids, reduce, busy, onClose, onConfirm }: { ids: string[]; r
       >
         <div className="flex items-center gap-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary"><CopyPlus className="h-5 w-5" /></span>
-          <div className="min-w-0 flex-1"><div className="font-display text-lg font-bold tracking-tight">Duplikat {ids.length} task</div><div className="text-xs text-muted-foreground">Set due date baru buat salinannya (opsional).</div></div>
-          <button onClick={onClose} aria-label="Tutup" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+          <div className="min-w-0 flex-1"><div className="font-display text-lg font-bold tracking-tight">Duplicate {ids.length} task{ids.length === 1 ? '' : 's'}</div><div className="text-xs text-muted-foreground">Set a new due date for the copies (optional).</div></div>
+          <button onClick={onClose} aria-label="Close" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
         <div className="mt-4">
-          <label className="mb-1 block text-xs font-semibold text-muted-foreground">Due date salinan</label>
+          <label className="mb-1 block text-xs font-semibold text-muted-foreground">Copy's due date</label>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm outline-none transition focus:border-primary" />
-          <p className="mt-1 text-[11px] text-muted-foreground">Kosongin = pakai tanggal asli task-nya.</p>
+          <p className="mt-1 text-[11px] text-muted-foreground">Leave blank = keep the task's original date.</p>
         </div>
         <div className="mt-5 flex items-center justify-end gap-2">
-          <button disabled={busy} onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50">Batal</button>
-          <button disabled={busy} onClick={() => onConfirm(ids, date ? new Date(date).toISOString() : null)} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"><CopyPlus className="h-4 w-4" /> Duplikat</button>
+          <button disabled={busy} onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50">Cancel</button>
+          <button disabled={busy} onClick={() => onConfirm(ids, date ? new Date(date).toISOString() : null)} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"><CopyPlus className="h-4 w-4" /> Duplicate</button>
         </div>
       </motion.div>
     </div>

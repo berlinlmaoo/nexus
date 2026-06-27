@@ -54,12 +54,12 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
     if (successTimer.current) clearTimeout(successTimer.current);
     successTimer.current = setTimeout(() => setSuccess(null), 2800);
   };
-  const checkIn = useMutation({ mutationFn: (p: AttendanceActionPayload) => nexusApi.attendanceCheckIn(p), onSuccess: () => { setMsg(null); refresh(); celebrate("Checked in. Let's cook ☕✨"); showSuccess("in"); }, onError: (e) => { setMsgOk(false); setMsg(errOf(e, "Gagal check-in.")); } });
+  const checkIn = useMutation({ mutationFn: (p: AttendanceActionPayload) => nexusApi.attendanceCheckIn(p), onSuccess: () => { setMsg(null); refresh(); celebrate("Checked in. Let's cook ☕✨"); showSuccess("in"); }, onError: (e) => { setMsgOk(false); setMsg(errOf(e, "Couldn't check in.")); } });
   const checkOut = useMutation({
     mutationFn: (p: AttendanceActionPayload) => nexusApi.attendanceCheckOut(p),
     onSuccess: (data) => {
       setOffsitePrompt(null); setOffsiteReason(""); setReflection(""); refresh();
-      if (data?.pendingApproval) { setMsgOk(true); setMsg("Checkout di luar area terkirim — nunggu approval BoD ⏳"); }
+      if (data?.pendingApproval) { setMsgOk(true); setMsg("Offsite checkout sent — waiting on BoD approval ⏳"); }
       else { setMsg(null); celebrate("Checked out. Good run today 🏁"); showSuccess("out"); }
     },
     onError: (e) => {
@@ -67,8 +67,8 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
       if (e instanceof ApiError && e.status === 422 && payload?.code === "OUTSIDE_RADIUS") {
         // Outside the geofence → offer an offsite checkout with a reason (pending BoD approval).
         setMsg(null); setOffsiteReason("");
-        setOffsitePrompt({ officeName: payload.officeName ?? "kantor", distanceMeters: payload.distanceMeters ?? 0 });
-      } else { setMsgOk(false); setMsg(errOf(e, "Gagal check-out.")); }
+        setOffsitePrompt({ officeName: payload.officeName ?? "the office", distanceMeters: payload.distanceMeters ?? 0 });
+      } else { setMsgOk(false); setMsg(errOf(e, "Couldn't check out.")); }
     },
   });
   const submitOffsite = () => { if (!lastOut.current || !offsiteReason.trim()) return; checkOut.mutate({ ...lastOut.current, offsite: true, reason: offsiteReason.trim() }); };
@@ -109,7 +109,7 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
       .catch((err) => {
         setLocating(false);
         setMsgOk(false);
-        setMsg(err instanceof GeoError ? err.message : "Gagal ambil lokasi. Coba lagi.");
+        setMsg(err instanceof GeoError ? err.message : "Couldn't get your location. Try again.");
       });
   };
 
@@ -182,7 +182,7 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
     if (map && userPos) map.setView([userPos.lat, userPos.lng], 16);
   };
 
-  const status = forcePending ? "Selesaikan absen kemarin" : checkedOut ? "Selesai hari ini 🎉" : checkedIn ? "Lagi clocked-in" : "Siap check-in";
+  const status = forcePending ? "Finish yesterday's attendance" : checkedOut ? "Done for today 🎉" : checkedIn ? "Clocked in" : "Ready to check in";
 
   return (
     <div className="space-y-3">
@@ -199,7 +199,7 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
           <div className="mt-2 flex justify-center">
             <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold">
               {shift?.flexi
-                ? `Flexi ${shift.startTime}–${shift.endTime} · +9j`
+                ? `Flexi ${shift.startTime}–${shift.endTime} · +9h`
                 : `My Work Schedule ${shift ? `${shift.startTime} – ${shift.endTime}` : "—"}`}
             </span>
           </div>
@@ -220,7 +220,7 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
             {status}{officeName ? ` · ${officeName}` : ""}
           </span>
           {today?.noGeofence && (
-            <span className="rounded-full bg-sky-500/90 px-3 py-1 text-xs font-bold text-white shadow ring-1 ring-sky-300 backdrop-blur">📍 Bebas lokasi — absen di mana aja</span>
+            <span className="rounded-full bg-sky-500/90 px-3 py-1 text-xs font-bold text-white shadow ring-1 ring-sky-300 backdrop-blur">📍 Location-free — clock in from anywhere</span>
           )}
         </div>
       </section>
@@ -246,22 +246,22 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
       {/* Offsite checkout prompt — shown when the user is outside the office geofence on check-out */}
       {offsitePrompt && (
         <div className="space-y-2 rounded-2xl border border-amber-300 bg-amber-50 p-3">
-          <div className="text-sm font-bold text-amber-800">Kamu di luar area kantor</div>
-          <p className="text-xs text-amber-700">±{Math.round(offsitePrompt.distanceMeters)}m dari {offsitePrompt.officeName}. Mau checkout dari sini? <span className="font-semibold">Wajib isi alasan</span> — checkout-nya nunggu approval BoD dulu.</p>
-          <textarea value={offsiteReason} onChange={(e) => setOffsiteReason(e.target.value)} rows={2} placeholder="Alasan (mis. shoot konten di X / meeting client di Y)" className="w-full resize-none rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500" />
+          <div className="text-sm font-bold text-amber-800">You're outside the office area</div>
+          <p className="text-xs text-amber-700">±{Math.round(offsitePrompt.distanceMeters)}m from {offsitePrompt.officeName}. Want to check out from here? <span className="font-semibold">A reason is required</span> — your checkout waits on BoD approval first.</p>
+          <textarea value={offsiteReason} onChange={(e) => setOffsiteReason(e.target.value)} rows={2} placeholder="Reason (e.g. content shoot at X / client meeting at Y)" className="w-full resize-none rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500" />
           <div className="flex gap-2">
-            <button onClick={() => { setOffsitePrompt(null); setOffsiteReason(""); }} disabled={busy} className="flex-1 rounded-lg border border-border bg-white py-2 text-xs font-semibold text-muted-foreground transition hover:bg-accent disabled:opacity-50">Batal</button>
-            <button onClick={submitOffsite} disabled={!offsiteReason.trim() || busy} className="flex-[1.6] rounded-lg bg-amber-600 py-2 text-xs font-bold text-white transition hover:bg-amber-700 disabled:opacity-50">{busy ? "Mengirim…" : "Checkout & minta approval"}</button>
+            <button onClick={() => { setOffsitePrompt(null); setOffsiteReason(""); }} disabled={busy} className="flex-1 rounded-lg border border-border bg-white py-2 text-xs font-semibold text-muted-foreground transition hover:bg-accent disabled:opacity-50">Cancel</button>
+            <button onClick={submitOffsite} disabled={!offsiteReason.trim() || busy} className="flex-[1.6] rounded-lg bg-amber-600 py-2 text-xs font-bold text-white transition hover:bg-amber-700 disabled:opacity-50">{busy ? "Sending…" : "Check out & request approval"}</button>
           </div>
         </div>
       )}
 
       {/* Pending offsite-checkout state */}
       {today?.today?.checkOutApproval === "PENDING" && !offsitePrompt && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-700">⏳ Checkout di luar area — nunggu approval BoD</div>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-700">⏳ Offsite checkout — waiting on BoD approval</div>
       )}
       {today?.today?.checkOutApproval === "REJECTED" && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-center text-xs font-semibold text-rose-700">Checkout di luar area kamu ditolak BoD.</div>
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-center text-xs font-semibold text-rose-700">Your offsite checkout was rejected by the BoD.</div>
       )}
 
       {msg && (
@@ -291,18 +291,18 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
               <div className="flex items-center gap-3">
                 <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary"><PenLine className="h-5 w-5" /></div>
                 <div>
-                  <div className="text-base font-black text-foreground">Refleksi Harian</div>
-                  <div className="text-xs font-medium text-muted-foreground">Wajib diisi sebelum check-out · min {REFLECTION_MIN} karakter</div>
+                  <div className="text-base font-black text-foreground">Daily Reflection</div>
+                  <div className="text-xs font-medium text-muted-foreground">Required before check-out · min {REFLECTION_MIN} characters</div>
                 </div>
               </div>
               <p className="mt-3 rounded-xl bg-muted/60 px-3 py-2 text-[11px] font-medium leading-relaxed text-muted-foreground">
-                Ceritakan: apa yang dikerjain hari ini, progress yang dicapai, kendala/obstacle, dan prioritas berikutnya.
+                Tell us: what you worked on today, the progress you made, any blockers, and what's next.
               </p>
               <textarea
                 value={reflection}
                 onChange={(e) => setReflection(e.target.value)}
                 rows={5}
-                placeholder="Hari ini gue ngerjain… progressnya… kendalanya… besok mau lanjut…"
+                placeholder="Today I worked on… the progress was… the blocker was… tomorrow I'll continue…"
                 className="mt-3 w-full resize-none rounded-2xl border border-border bg-background px-3 py-2.5 text-sm leading-relaxed outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
               />
               <div className="mt-1.5 flex items-center justify-between text-[11px] font-semibold">
@@ -310,17 +310,17 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
                   {reflection.trim().length}/{REFLECTION_MIN}
                 </span>
                 {reflection.trim().length < REFLECTION_MIN && (
-                  <span className="text-muted-foreground">kurang {REFLECTION_MIN - reflection.trim().length} karakter</span>
+                  <span className="text-muted-foreground">{REFLECTION_MIN - reflection.trim().length} characters to go</span>
                 )}
               </div>
               <div className="mt-3 flex gap-2">
-                <button onClick={() => setReflectOpen(false)} className="flex-1 rounded-2xl border border-border bg-background py-3 text-sm font-semibold text-muted-foreground transition hover:bg-accent active:scale-[0.98]">Batal</button>
+                <button onClick={() => setReflectOpen(false)} className="flex-1 rounded-2xl border border-border bg-background py-3 text-sm font-semibold text-muted-foreground transition hover:bg-accent active:scale-[0.98]">Cancel</button>
                 <button
                   onClick={proceedCheckout}
                   disabled={reflection.trim().length < REFLECTION_MIN}
                   className="flex-[1.6] rounded-2xl bg-rose-500 py-3 text-sm font-bold text-white shadow-lg transition active:scale-[0.98] disabled:opacity-40"
                 >
-                  Lanjut · ambil selfie
+                  Continue · take selfie
                 </button>
               </div>
             </motion.div>
@@ -344,7 +344,7 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
               <div className="flex items-center gap-3">
                 <Loader2 className="h-6 w-6 shrink-0 animate-spin text-primary" />
                 <div className="text-sm font-bold text-foreground">
-                  {locating ? "Lagi ngambil lokasi GPS kamu…" : checkIn.isPending ? "Lagi ngirim check-in ke server…" : checkOut.isPending ? "Lagi ngirim check-out ke server…" : "Lagi proses…"}
+                  {locating ? "Grabbing your GPS location…" : checkIn.isPending ? "Sending your check-in to the server…" : checkOut.isPending ? "Sending your check-out to the server…" : "Processing…"}
                 </div>
               </div>
               <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-primary/15">
@@ -354,7 +354,7 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
                   <motion.div className="h-full w-1/2 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500" animate={{ x: ["-60%", "220%"] }} transition={{ duration: 1.05, repeat: Infinity, ease: "easeInOut" }} />
                 )}
               </div>
-              <p className="mt-3 text-center text-[11px] font-medium text-muted-foreground">Bentar ya, jangan tutup halaman ini dulu…</p>
+              <p className="mt-3 text-center text-[11px] font-medium text-muted-foreground">One sec — don't close this page just yet…</p>
             </motion.div>
           </motion.div>
         )}
@@ -385,13 +385,13 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
                 <CheckCircle2 className="h-12 w-12" strokeWidth={2.5} />
               </motion.div>
               <div className="mt-4 text-xl font-black text-foreground">
-                {success.kind === "in" ? "Berhasil Check-In! ☕" : "Berhasil Check-Out! 🏁"}
+                {success.kind === "in" ? "Checked In! ☕" : "Checked Out! 🏁"}
               </div>
               <div className="mt-1 text-sm font-semibold text-muted-foreground">
-                Jam {success.time} · {success.kind === "in" ? "Semangat ya, selamat kerja!" : "Mantap, good run today!"}
+                {success.time} · {success.kind === "in" ? "Have a great one, happy working!" : "Nice, good run today!"}
               </div>
               <button onClick={() => setSuccess(null)} className="mt-5 w-full rounded-2xl bg-primary py-3 text-sm font-bold text-primary-foreground transition active:scale-[0.98]">
-                Oke, sip
+                Got it
               </button>
             </motion.div>
           </motion.div>

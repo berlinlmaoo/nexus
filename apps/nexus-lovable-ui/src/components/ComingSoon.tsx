@@ -18,10 +18,10 @@ export function ComingSoon({ feature, note }: { feature: string; note?: string }
         <span className="mb-3 inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-primary">
           Coming Soon
         </span>
-        <h1 className="text-2xl font-black text-foreground md:text-3xl">{feature} lagi disiapin</h1>
+        <h1 className="text-2xl font-black text-foreground md:text-3xl">{feature} is in the works</h1>
         <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground">
           {note ??
-            `Fitur ${feature} belum kebuka untuk role kamu. Masih dalam pengembangan dan bakal dibuka buat semua nanti — stay tuned! 🚀`}
+            `${feature} isn't unlocked for your role yet. It's still in the works and we'll open it up for everyone soon — stay tuned! 🚀`}
         </p>
       </Reveal>
     </div>

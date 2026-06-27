@@ -40,7 +40,7 @@ function Reports() {
       />
       <div className="p-4 md:p-8 space-y-6">
         {report.isLoading && <ReportsSkeleton />}
-        {report.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><BarChart3 className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">Reports unavailable</div><p className="mt-2 text-sm text-muted-foreground">Login/session diperlukan untuk live analytics.</p></div>}
+        {report.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><BarChart3 className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">Reports unavailable</div><p className="mt-2 text-sm text-muted-foreground">You'll need to be logged in to see live analytics.</p></div>}
 
         {d && (
           <>

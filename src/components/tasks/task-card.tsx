@@ -38,7 +38,7 @@ export interface TaskCardData {
     id: string
     fieldId: string
     fieldName: string
-    fieldType: "NUMBER" | "SELECT" | "MULTI_SELECT" | "STATUS" | "DATE" | "CREATED" | "PLACE"
+    fieldType: "NUMBER" | "SELECT" | "MULTI_SELECT" | "STATUS" | "DATE" | "CREATED" | "PLACE" | "TEXT" | "URL" | "FILE"
     label: string
     value?: string
   }[]

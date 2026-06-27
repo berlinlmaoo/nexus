@@ -43,13 +43,14 @@ export function buildTaskCardCustomFieldChips(
 
     if (Array.isArray(parsed)) {
       for (const option of parsed.filter(Boolean)) {
+        const optLabel = typeof option === "string" ? option : (option.name || option.url)
         chips.push({
-          id: `${fieldValue.customFieldId}:${option}`,
+          id: `${fieldValue.customFieldId}:${optLabel}`,
           fieldId: fieldValue.customFieldId,
           fieldName,
           fieldType: normalizedType,
-          label: option,
-          value: option,
+          label: optLabel,
+          value: optLabel,
         })
       }
       continue

@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { notifyTaskAssigned } from "@/lib/notification-service"
+import { checkProjectAccess } from "@/lib/rbac"
 
 export async function POST(
   request: NextRequest,
@@ -29,6 +30,10 @@ export async function POST(
     if (!task) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 })
     }
+
+    // Authz: only a member (contributor) of the task's project may change its assignees.
+    const access = await checkProjectAccess(session.user.id!, task.taskList.projectId, ["MEMBER"])
+    if (!access.allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     const existing = await prisma.taskAssignee.findUnique({
       where: {
@@ -103,6 +108,10 @@ export async function DELETE(
     if (!task) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 })
     }
+
+    // Authz: only a member (contributor) of the task's project may change its assignees.
+    const access = await checkProjectAccess(session.user.id!, task.taskList.projectId, ["MEMBER"])
+    if (!access.allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     const existing = await prisma.taskAssignee.findUnique({
       where: {

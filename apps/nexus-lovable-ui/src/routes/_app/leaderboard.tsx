@@ -45,15 +45,15 @@ function Leaderboard() {
 
   return (
     <div>
-      <PageHeader title="Leaderboard" subtitle="Peringkat poin (XP) crew bulan ini — reset tiap tanggal 1." />
+      <PageHeader title="Leaderboard" subtitle="The crew's XP rankings this month — resets on the 1st." />
       <div className="p-4 md:p-8">
         <div className="mx-auto max-w-3xl">
           {board.data?.period && (
             <div className="mb-4 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-2xl border border-border bg-card px-4 py-2.5 text-center text-xs text-muted-foreground shadow-soft">
-              <span className="font-bold text-foreground">Periode berjalan</span>
+              <span className="font-bold text-foreground">Current period</span>
               <span>{fmtDate(board.data.period.start)} → {fmtDate(board.data.period.end)}</span>
               <span className="hidden sm:inline">·</span>
-              <span>poin reset otomatis tiap tgl <span className="font-bold text-foreground">1</span> jam 00:00 WIB</span>
+              <span>points reset automatically on the <span className="font-bold text-foreground">1st</span> at 00:00 WIB</span>
             </div>
           )}
           {board.isLoading && (
@@ -69,22 +69,22 @@ function Leaderboard() {
 
           {board.isError && (
             <div className="rounded-2xl border border-dashed bg-card p-8 text-center shadow-sm">
-              <div className="text-lg font-black">Leaderboard terkunci</div>
-              <p className="mt-2 text-sm text-muted-foreground">Login/sesi diperlukan untuk narik ranking poin dari core NEXUS.</p>
+              <div className="text-lg font-black">Leaderboard locked</div>
+              <p className="mt-2 text-sm text-muted-foreground">You need to be logged in to pull the point rankings from NEXUS core.</p>
             </div>
           )}
 
           {!board.isLoading && !board.isError && ranked.length === 0 && (
             <div className="rounded-2xl border border-dashed bg-card p-8 text-center shadow-sm">
-              <div className="text-lg font-black">Belum ada poin bulan ini</div>
-              <p className="mt-2 text-sm text-muted-foreground">Selesaikan task (+10 & bonus prioritas), streak, atau hindari penalti absen buat naikin XP — ranking periode ini muncul di sini. Poin reset tiap tgl 1.</p>
+              <div className="text-lg font-black">No points yet this month</div>
+              <p className="mt-2 text-sm text-muted-foreground">Finish tasks (+10 & priority bonus), keep a streak, or dodge attendance penalties to rack up XP — this period's ranking shows up here. Points reset on the 1st.</p>
             </div>
           )}
 
           {!board.isLoading && !board.isError && ranked.length > 0 && (
             <LeaderboardCard
               title="Leaderboard"
-              subtitle="Peringkat XP seluruh crew"
+              subtitle="XP rankings for the whole crew"
               podiumRankings={podiumRankings}
               rankings={rankings}
               currentUserId={meId}

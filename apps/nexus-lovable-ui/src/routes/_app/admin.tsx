@@ -69,20 +69,20 @@ function Admin() {
 
   return (
     <div>
-      <PageHeader title="Control Room" subtitle="Semua user + atur role org (One Above All › BoD › Manager › Staff)." />
+      <PageHeader title="Control Room" subtitle="Everyone + manage org roles (One Above All › BoD › Manager › Staff)." />
       <div className="p-4 md:p-8 space-y-5">
         <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-0.5 w-fit">
           <button onClick={() => setView("users")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "users" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><UsersIcon className="h-3.5 w-3.5" /> Users</button>
           <button onClick={() => setView("audit")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "audit" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><ScrollText className="h-3.5 w-3.5" /> Audit log</button>
           <button onClick={() => setView("quests")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "quests" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Trophy className="h-3.5 w-3.5" /> Quests</button>
-          <button onClick={() => setView("announcements")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "announcements" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Megaphone className="h-3.5 w-3.5" /> Pengumuman</button>
+          <button onClick={() => setView("announcements")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "announcements" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Megaphone className="h-3.5 w-3.5" /> Announcements</button>
         </div>
 
         {view === "audit" && <AuditLog />}
         {view === "quests" && <AdminQuests />}
         {view === "announcements" && <AnnouncementsAdmin />}
 
-        {view === "users" && users.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Shield className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">Admin access required</div><p className="mt-2 text-sm text-muted-foreground">Butuh role system-admin untuk lihat user management.</p></div>}
+        {view === "users" && users.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Shield className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">Admin access required</div><p className="mt-2 text-sm text-muted-foreground">You need the system-admin role to view user management.</p></div>}
 
         {view === "users" && !users.isError && (
           <>
@@ -95,8 +95,8 @@ function Admin() {
             </div>
             <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
               <Shield className="h-3.5 w-3.5 shrink-0" />
-              <span>Hierarki role: <b className="text-foreground">One Above All › BoD › Manager › Staff</b>. Kamu cuma bisa kasih role yang di bawah level kamu.</span>
-              <Link to="/settings" className="ml-auto font-semibold text-primary hover:underline">Buka juga di Members →</Link>
+              <span>Role hierarchy: <b className="text-foreground">One Above All › BoD › Manager › Staff</b>. You can only assign roles below your own level.</span>
+              <Link to="/settings" className="ml-auto font-semibold text-primary hover:underline">Also open in Members →</Link>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -112,7 +112,7 @@ function Admin() {
               )}
               {canManageShift && (
                 <button onClick={() => setRedDateOpen(true)} className="ml-auto inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-100">
-                  <CalendarX2 className="h-3.5 w-3.5" /> Jatah Tanggal Merah
+                  <CalendarX2 className="h-3.5 w-3.5" /> Holiday Quota
                 </button>
               )}
             </div>
@@ -124,7 +124,7 @@ function Admin() {
                   <tr className="border-b border-border text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                     <th className="px-4 py-2.5">User</th>
                     <th className="hidden px-4 py-2.5 md:table-cell">Joined</th>
-                    <th className="px-4 py-2.5">Shift <span className="font-normal normal-case text-muted-foreground/70">(jam masuk–keluar)</span></th>
+                    <th className="px-4 py-2.5">Shift <span className="font-normal normal-case text-muted-foreground/70">(clock in–out)</span></th>
                     <th className="px-4 py-2.5">Day off</th>
                     <th className="px-4 py-2.5 text-right">Role</th>
                   </tr>
@@ -169,29 +169,29 @@ function RedDateQuotaModal({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
-          <h2 className="font-display text-base font-bold tracking-tight">Jatah Tanggal Merah — {monthLabel}</h2>
-          <button onClick={onClose} aria-label="Tutup" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+          <h2 className="font-display text-base font-bold tracking-tight">Holiday Quota — {monthLabel}</h2>
+          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
-        <p className="mb-4 text-xs text-muted-foreground">Jatah <b className="text-foreground">tanggal merah</b> per staff buat bulan ini — berlaku sama ke semua staff. Di-input tiap bulan. Staff ajuin sendiri lewat "New request" di Attendance.</p>
+        <p className="mb-4 text-xs text-muted-foreground">Per-staff <b className="text-foreground">public holiday</b> quota for this month — applies equally to all staff. Set it each month. Staff request their own via "New request" in Attendance.</p>
 
         {q.isLoading ? (
           <div className="flex justify-center py-6 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
             <input type="number" inputMode="numeric" min={0} max={31} value={val} onChange={(e) => setVal(e.target.value)} placeholder="0" className="w-24 rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
-            <span className="text-xs text-muted-foreground">hari / staff bulan ini</span>
+            <span className="text-xs text-muted-foreground">days / staff this month</span>
             <button type="button" disabled={!dirty || m.isPending} onClick={() => m.mutate(n)} className="rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-40">
-              {m.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Simpan"}
+              {m.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
             </button>
           </div>
         )}
-        {q.data && q.data.quota === 0 && <p className="mt-2 text-[11px] text-amber-600">Jatah masih 0 — staff belum bisa ajuin tanggal merah bulan ini sampai diisi.</p>}
+        {q.data && q.data.quota === 0 && <p className="mt-2 text-[11px] text-amber-600">Quota is still 0 — staff can't request public holidays this month until it's set.</p>}
       </div>
     </div>
   );
 }
 
-const WEEKDAYS: Array<[string, string]> = [["1", "Sen"], ["2", "Sel"], ["3", "Rab"], ["4", "Kam"], ["5", "Jum"], ["6", "Sab"], ["7", "Min"]];
+const WEEKDAYS: Array<[string, string]> = [["1", "Mon"], ["2", "Tue"], ["3", "Wed"], ["4", "Thu"], ["5", "Fri"], ["6", "Sat"], ["7", "Sun"]];
 
 function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canManageShift, shiftPending, onSaveShift, shiftByDayPending, onSaveShiftByDay, flexiPending, onToggleFlexi, geofencePending, onToggleGeofence, onDayoff, canDelete, isMember, onDelete }: { user: NexusAdminUser; orgInfo?: { memberId: string; role: string; shiftStart: string | null; shiftEnd: string | null; shiftByDay: Record<string, { start: string; end: string }> | null; flexi: boolean; noGeofence: boolean }; assignable: OrgRole[]; canEdit: boolean; onOrgRole: (role: string) => void; pending: boolean; canManageShift: boolean; shiftPending: boolean; onSaveShift: (start: string | null, end: string | null) => void; shiftByDayPending: boolean; onSaveShiftByDay: (byDay: Record<string, { start: string; end: string }>) => void; flexiPending: boolean; onToggleFlexi: () => void; geofencePending: boolean; onToggleGeofence: () => void; onDayoff: () => void; canDelete: boolean; isMember: boolean; onDelete: () => void }) {
   const [expanded, setExpanded] = useState(false);
@@ -221,22 +221,22 @@ function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canMa
             <span className="text-xs text-muted-foreground/60">—</span>
           ) : (
             <div className="flex flex-wrap items-center gap-2">
-              <div className={cn(orgInfo.flexi && "opacity-40")} title={orgInfo.flexi ? "Flexi aktif — shift tetap ini diabaikan" : undefined}>
+              <div className={cn(orgInfo.flexi && "opacity-40")} title={orgInfo.flexi ? "Flexi on — this fixed shift is ignored" : undefined}>
                 <ShiftCell start={orgInfo.shiftStart} end={orgInfo.shiftEnd} canEdit={canManageShift && !orgInfo.flexi} pending={shiftPending} onSave={onSaveShift} />
               </div>
               {canManageShift && !orgInfo.flexi && (
-                <button type="button" onClick={() => setExpanded((v) => !v)} title="Shift khusus per hari" className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] font-semibold transition", overrideCount > 0 ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}>
+                <button type="button" onClick={() => setExpanded((v) => !v)} title="Per-day custom shift" className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] font-semibold transition", overrideCount > 0 ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}>
                   <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />
-                  {overrideCount > 0 ? `${overrideCount} hari` : "per-hari"}
+                  {overrideCount > 0 ? `${overrideCount} day${overrideCount === 1 ? "" : "s"}` : "per-day"}
                 </button>
               )}
               {canManageShift && (
-                <button type="button" onClick={onToggleFlexi} disabled={flexiPending} title="Flexi Time — check-in bebas 12:00–15:00, jam pulang = jam masuk + 9 jam" className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] font-semibold transition disabled:opacity-50", orgInfo.flexi ? "border-amber-300 bg-amber-50 text-amber-700" : "border-border text-muted-foreground hover:bg-accent")}>
+                <button type="button" onClick={onToggleFlexi} disabled={flexiPending} title="Flexi Time — check in anytime 12:00–15:00, clock-out = clock-in + 9 hours" className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] font-semibold transition disabled:opacity-50", orgInfo.flexi ? "border-amber-300 bg-amber-50 text-amber-700" : "border-border text-muted-foreground hover:bg-accent")}>
                   <Zap className={cn("h-3.5 w-3.5", orgInfo.flexi && "fill-amber-400")} /> Flexi
                 </button>
               )}
               {canManageShift && (
-                <button type="button" onClick={onToggleGeofence} disabled={geofencePending} title="Custom/Mobile — bisa absen di mana aja (geofence mati, checkout luar kantor gak perlu approval)" className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] font-semibold transition disabled:opacity-50", orgInfo.noGeofence ? "border-sky-300 bg-sky-50 text-sky-700" : "border-border text-muted-foreground hover:bg-accent")}>
+                <button type="button" onClick={onToggleGeofence} disabled={geofencePending} title="Custom/Mobile — check in/out from anywhere (geofence off, off-site checkout needs no approval)" className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] font-semibold transition disabled:opacity-50", orgInfo.noGeofence ? "border-sky-300 bg-sky-50 text-sky-700" : "border-border text-muted-foreground hover:bg-accent")}>
                   <Smartphone className="h-3.5 w-3.5" /> Mobile
                 </button>
               )}
@@ -246,7 +246,7 @@ function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canMa
         <td className="px-4 py-3">
           {orgInfo && canManageShift ? (
             <button type="button" onClick={onDayoff} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1 text-xs font-semibold text-muted-foreground transition hover:border-primary hover:text-primary">
-              <CalendarDays className="h-3.5 w-3.5" /> Atur
+              <CalendarDays className="h-3.5 w-3.5" /> Manage
             </button>
           ) : (
             <span className="text-xs text-muted-foreground/50">—</span>
@@ -255,7 +255,7 @@ function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canMa
         <td className="px-4 py-3 text-right">
           <div className="flex items-center justify-end gap-2">
             {!orgInfo ? (
-              <span className="text-xs text-muted-foreground/60">bukan member</span>
+              <span className="text-xs text-muted-foreground/60">not a member</span>
             ) : canEdit ? (
               <select value={orgInfo.role} disabled={pending} onChange={(e) => onOrgRole(e.target.value)} className="rounded-lg border border-border bg-background px-2 py-1 text-xs font-semibold outline-none focus:border-primary disabled:opacity-50">
                 {[...assignable].reverse().map((r) => <option key={r} value={r}>{ORG_ROLE_LABEL[r]}</option>)}
@@ -264,8 +264,8 @@ function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canMa
               <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", ORG_ROLE_TONE[orgInfo.role] ?? "bg-muted text-muted-foreground")}>{ORG_ROLE_LABEL[orgInfo.role] ?? orgInfo.role}</span>
             )}
             {canDelete && !isMember && (
-              <button type="button" onClick={onDelete} title="Hapus akun permanen" className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-700 transition hover:bg-rose-100">
-                <Trash2 className="h-3.5 w-3.5" /> Hapus
+              <button type="button" onClick={onDelete} title="Delete account permanently" className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-700 transition hover:bg-rose-100">
+                <Trash2 className="h-3.5 w-3.5" /> Delete
               </button>
             )}
           </div>
@@ -275,7 +275,7 @@ function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canMa
         <tr className="border-b border-border bg-muted/10">
           <td colSpan={5} className="px-4 py-3">
             <div className="rounded-lg border border-border bg-background p-3">
-              <div className="mb-2 text-xs font-semibold text-muted-foreground">Shift khusus per hari <span className="font-normal text-muted-foreground/70">— kosongin = pakai shift default di atas. Cuma hari yang diisi yang beda.</span></div>
+              <div className="mb-2 text-xs font-semibold text-muted-foreground">Per-day custom shift <span className="font-normal text-muted-foreground/70">— leave blank = use the default shift above. Only the days you fill in differ.</span></div>
               <div className="space-y-1.5">
                 {WEEKDAYS.map(([wd, label]) => (
                   <div key={wd} className="flex items-center gap-3">
@@ -357,19 +357,19 @@ function ShiftCell({ start, end, canEdit, pending, onSave }: { start: string | n
       <input type="text" inputMode="text" placeholder="09:00 AM" value={s} disabled={pending} onChange={(evt) => setS(evt.target.value)} onBlur={() => snap(s, setS)} className={inputCls(ps === "invalid")} />
       <span className="text-muted-foreground">–</span>
       <input type="text" inputMode="text" placeholder="06:00 PM" value={e} disabled={pending} onChange={(evt) => setE(evt.target.value)} onBlur={() => snap(e, setE)} className={inputCls(pe === "invalid")} />
-      {overnight && <span title="Lintas tengah malam — jam keluar di hari berikutnya" role="img" aria-label="lintas tengah malam" className="ml-0.5 text-sm">🌙</span>}
+      {overnight && <span title="Overnight — clock-out is the next day" role="img" aria-label="overnight shift" className="ml-0.5 text-sm">🌙</span>}
       {dirty ? (
         <button
           type="button"
           disabled={pending || invalid}
           onClick={() => onSave(startVal, endVal)}
-          title={badFmt ? "Format jam belum bener (cth: 09:00 AM)" : partial ? "Isi jam masuk & keluar dua-duanya" : sameTime ? "Jam masuk & keluar gak boleh sama" : overnight ? "Simpan shift (lintas tengah malam)" : "Simpan shift"}
+          title={badFmt ? "Time format isn't right (e.g. 09:00 AM)" : partial ? "Fill in both clock-in & clock-out" : sameTime ? "Clock-in & clock-out can't be the same" : overnight ? "Save shift (overnight)" : "Save shift"}
           className="ml-0.5 rounded-md bg-primary px-2 py-1 text-[11px] font-bold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-40"
         >
-          {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Simpan"}
+          {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
         </button>
       ) : hasShift ? (
-        <button type="button" disabled={pending} onClick={() => onSave(null, null)} title="Hapus shift (balik ke default)" className="ml-0.5 rounded-md border border-border px-1.5 py-1 text-[11px] font-semibold text-muted-foreground transition hover:bg-accent hover:text-rose-600">×</button>
+        <button type="button" disabled={pending} onClick={() => onSave(null, null)} title="Clear shift (back to default)" className="ml-0.5 rounded-md border border-border px-1.5 py-1 text-[11px] font-semibold text-muted-foreground transition hover:bg-accent hover:text-rose-600">×</button>
       ) : null}
     </div>
   );
@@ -390,16 +390,16 @@ function QuotaEditor({ userId, quota, override, defaultQuota }: { userId: string
 
   return (
     <div className="mb-4 rounded-xl border border-border bg-muted/20 p-3">
-      <div className="mb-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground">Jatah day-off / bulan</div>
+      <div className="mb-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground">Day-off quota / month</div>
       <div className="flex flex-wrap items-center gap-2">
         <input type="number" min={0} max={366} value={val} onChange={(e) => setVal(e.target.value)} className="w-20 rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm font-semibold outline-none focus:border-primary" />
-        <span className="text-xs text-muted-foreground">hari / bulan</span>
+        <span className="text-xs text-muted-foreground">days / month</span>
         <button type="button" disabled={!dirty || m.isPending} onClick={() => m.mutate(n)} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-40">
-          {m.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Simpan"}
+          {m.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
         </button>
-        {override !== null && <button type="button" disabled={m.isPending} onClick={() => m.mutate(null)} className="text-xs font-semibold text-muted-foreground transition hover:text-foreground hover:underline">Reset ke default ({defaultQuota})</button>}
+        {override !== null && <button type="button" disabled={m.isPending} onClick={() => m.mutate(null)} className="text-xs font-semibold text-muted-foreground transition hover:text-foreground hover:underline">Reset to default ({defaultQuota})</button>}
       </div>
-      <p className="mt-1.5 text-[11px] text-muted-foreground">{override === null ? `Pakai default workspace (${defaultQuota} hari).` : `Custom: ${override} hari (default ${defaultQuota}).`}</p>
+      <p className="mt-1.5 text-[11px] text-muted-foreground">{override === null ? `Using workspace default (${defaultQuota} days).` : `Custom: ${override} days (default ${defaultQuota}).`}</p>
     </div>
   );
 }
@@ -414,7 +414,7 @@ function DayoffModal({ user, canEdit, onClose }: { user: { id: string; name: str
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="font-display text-base font-bold tracking-tight">Day off — {user.name}</h2>
-          <button onClick={onClose} aria-label="Tutup" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
 
         {q.isLoading && <div className="flex justify-center py-6 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
@@ -424,8 +424,8 @@ function DayoffModal({ user, canEdit, onClose }: { user: { id: string; name: str
 
         {data && (
           <p className="text-xs text-muted-foreground">
-            Kepakai bulan ini: <b className="text-foreground">{data.used} / {data.quota}</b>
-            {data.used > data.quota && <span className="ml-1 font-semibold text-amber-600">(lebih dari jatah)</span>}
+            Used this month: <b className="text-foreground">{data.used} / {data.quota}</b>
+            {data.used > data.quota && <span className="ml-1 font-semibold text-amber-600">(over quota)</span>}
           </p>
         )}
       </div>
@@ -444,42 +444,42 @@ function DeleteUserModal({ user, onClose }: { user: { id: string; name: string; 
   });
   const result = m.data;
   const err = m.error as ApiError | undefined;
-  const ready = confirmTxt.trim().toUpperCase() === "HAPUS";
+  const ready = confirmTxt.trim().toUpperCase() === "DELETE";
   const reassignedTotal = result ? Object.values(result.reassigned).reduce((a, b) => a + b, 0) : 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-display text-base font-bold tracking-tight text-rose-700">Hapus akun permanen</h2>
-          <button onClick={onClose} aria-label="Tutup" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+          <h2 className="font-display text-base font-bold tracking-tight text-rose-700">Delete account permanently</h2>
+          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
 
         {result ? (
           <div className="space-y-3">
-            <p className="text-sm">✅ Akun <b>{result.deletedUser.name}</b> <span className="text-muted-foreground">({result.deletedUser.email})</span> udah dihapus permanen.</p>
-            {reassignedTotal > 0 && <p className="text-xs text-muted-foreground">{reassignedTotal} item (task/file/quest/portfolio) yang dia bikin dialihkan ke akun kamu biar gak ilang.</p>}
-            <button onClick={onClose} className="w-full rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90">Selesai</button>
+            <p className="text-sm">✅ Account <b>{result.deletedUser.name}</b> <span className="text-muted-foreground">({result.deletedUser.email})</span> has been permanently deleted.</p>
+            {reassignedTotal > 0 && <p className="text-xs text-muted-foreground">{reassignedTotal} item{reassignedTotal === 1 ? "" : "s"} (task/file/quest/portfolio) they created were reassigned to your account so nothing is lost.</p>}
+            <button onClick={onClose} className="w-full rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90">Done</button>
           </div>
         ) : (
           <>
             <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
-              <p>Kamu akan <b>menghapus permanen</b> akun:</p>
+              <p>You're about to <b>permanently delete</b> the account:</p>
               <p className="mt-1 font-bold">{user.name} <span className="font-normal">· {user.email}</span></p>
               <ul className="mt-2 list-disc space-y-0.5 pl-4">
-                <li>Task, file, quest, portfolio, goal, doc & jadwal yang dia bikin <b>dialihkan ke kamu</b> (gak ilang).</li>
-                <li>Status update, undangan pending & jejak audit-nya dihapus. Komentar dia juga ikut kehapus.</li>
-                <li>Tindakan ini <b>gak bisa di-undo</b>.</li>
+                <li>Tasks, files, quests, portfolios, goals, docs & schedules they created are <b>reassigned to you</b> (not lost).</li>
+                <li>Their status updates, pending invites & audit trail are deleted. Their comments are removed too.</li>
+                <li>This action <b>can't be undone</b>.</li>
               </ul>
             </div>
-            <label className="block text-xs font-semibold text-muted-foreground">Ketik <b className="text-rose-700">HAPUS</b> buat konfirmasi
-              <input autoFocus value={confirmTxt} onChange={(e) => setConfirmTxt(e.target.value)} placeholder="HAPUS" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-rose-400" />
+            <label className="block text-xs font-semibold text-muted-foreground">Type <b className="text-rose-700">DELETE</b> to confirm
+              <input autoFocus value={confirmTxt} onChange={(e) => setConfirmTxt(e.target.value)} placeholder="DELETE" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-rose-400" />
             </label>
             {err && <p className="mt-2 text-xs font-semibold text-rose-600">{(err.payload as { message?: string } | undefined)?.message ?? err.message}</p>}
             <div className="mt-4 flex items-center justify-end gap-2">
-              <button onClick={onClose} className="rounded-xl border border-border px-3 py-2 text-sm font-semibold hover:bg-accent">Batal</button>
+              <button onClick={onClose} className="rounded-xl border border-border px-3 py-2 text-sm font-semibold hover:bg-accent">Cancel</button>
               <button disabled={!ready || m.isPending} onClick={() => m.mutate()} className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-rose-700 disabled:opacity-40">
-                {m.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Hapus permanen
+                {m.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Delete permanently
               </button>
             </div>
           </>
@@ -495,7 +495,7 @@ function AuditLog() {
   const rows = logs.data?.logs ?? [];
   return (
     <div className="space-y-4">
-      {logs.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><ScrollText className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">Audit access required</div><p className="mt-2 text-sm text-muted-foreground">Butuh role admin/owner untuk lihat audit log.</p></div>}
+      {logs.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><ScrollText className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">Audit access required</div><p className="mt-2 text-sm text-muted-foreground">You need the admin/owner role to view the audit log.</p></div>}
       {!logs.isError && (
         <>
           <div className="relative max-w-sm">
@@ -526,11 +526,11 @@ function AuditLog() {
 }
 
 const REQ_TYPES = [
-  { value: "specific_tasks", label: "Selesaikan task tertentu (pilih task)" },
+  { value: "specific_tasks", label: "Complete specific tasks (pick tasks)" },
   { value: "task_count", label: "Complete N tasks" },
   { value: "overdue_cleared", label: "Clear N overdue" },
   { value: "priority_done", label: "Complete N Urgent" },
-  { value: "has_overdue", label: "Punya ≥N task overdue (penalti)" },
+  { value: "has_overdue", label: "Have ≥N overdue tasks (penalty)" },
 ];
 
 function AdminQuests() {
@@ -576,36 +576,36 @@ function AdminQuests() {
 
   return (
     <div className="space-y-4">
-      {list.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Trophy className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">Akses BoD diperlukan</div><p className="mt-2 text-sm text-muted-foreground">Butuh role BoD/Manager untuk kelola quest.</p></div>}
+      {list.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Trophy className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">BoD access required</div><p className="mt-2 text-sm text-muted-foreground">You need the BoD/Manager role to manage quests.</p></div>}
       {!list.isError && (
         <>
           <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-            <h2 className="mb-1 font-display text-base font-bold tracking-tight">Assign quest baru</h2>
-            <p className="mb-3 text-xs text-muted-foreground">Bikin quest buat crew: selesaikan task dengan target & deadline, hadiah XP (maks 50).</p>
+            <h2 className="mb-1 font-display text-base font-bold tracking-tight">Assign a new quest</h2>
+            <p className="mb-3 text-xs text-muted-foreground">Create a quest for the crew: finish tasks against a target & deadline, reward XP (max 50).</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Judul quest (cth: Selesaikan 5 task minggu ini)" className={cn(inputCls, "sm:col-span-2")} />
-              <label className="text-xs font-semibold text-muted-foreground">Jenis
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Quest title (e.g. Finish 5 tasks this week)" className={cn(inputCls, "sm:col-span-2")} />
+              <label className="text-xs font-semibold text-muted-foreground">Type
                 <select value={requirementType} onChange={(e) => setRequirementType(e.target.value)} className={cn(inputCls, "mt-1 w-full font-normal")}>
                   {REQ_TYPES.filter((r) => r.value !== "penalty").map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
               </label>
               {!isTasks && (
-                <label className="text-xs font-semibold text-muted-foreground">Target (jumlah task)
+                <label className="text-xs font-semibold text-muted-foreground">Target (number of tasks)
                   <input value={requiredCount} onChange={(e) => setRequiredCount(e.target.value.replace(/[^0-9]/g, ""))} className={cn(inputCls, "mt-1 w-full")} />
                 </label>
               )}
-              <label className="text-xs font-semibold text-muted-foreground">Deadline (jangka waktu)
+              <label className="text-xs font-semibold text-muted-foreground">Deadline (time limit)
                 <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} className={cn(inputCls, "mt-1 w-full")} />
               </label>
-              <label className="text-xs font-semibold text-muted-foreground">Hadiah XP (maks 50)
+              <label className="text-xs font-semibold text-muted-foreground">XP reward (max 50)
                 <input type="number" min={0} max={50} value={xpReward} onChange={(e) => setXpReward(String(Math.min(50, Math.max(0, parseInt(e.target.value, 10) || 0))))} className={cn(inputCls, "mt-1 w-full")} />
               </label>
             </div>
             {isTasks ? (
               <div className="mt-3">
-                <span className="text-xs font-semibold text-muted-foreground">Task buat quest ini <span className="font-normal">(selesai kalau semua DONE · XP buat yang ngerjain · kelihatan ke member project task-nya)</span></span>
+                <span className="text-xs font-semibold text-muted-foreground">Tasks for this quest <span className="font-normal">(complete when all are DONE · XP goes to whoever does them · visible to members of the task's project)</span></span>
                 <div className="mt-1.5 space-y-1">
-                  {questTasks.length === 0 && <p className="text-xs text-muted-foreground">Belum ada task kepilih. Cari di bawah.</p>}
+                  {questTasks.length === 0 && <p className="text-xs text-muted-foreground">No tasks picked yet. Search below.</p>}
                   {questTasks.map((t) => (
                     <div key={t.id} className="flex items-center gap-2 rounded-lg bg-muted px-2 py-1.5 text-sm">
                       <span className="min-w-0 flex-1 truncate">{t.title}</span>
@@ -615,7 +615,7 @@ function AdminQuests() {
                 </div>
                 <div className="relative mt-1.5">
                   <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <input value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} placeholder="Cari task buat ditambah (min 2 huruf)…" className={cn(inputCls, "w-full border-dashed pl-8")} />
+                  <input value={taskSearch} onChange={(e) => setTaskSearch(e.target.value)} placeholder="Search tasks to add (min 2 letters)…" className={cn(inputCls, "w-full border-dashed pl-8")} />
                 </div>
                 {taskResults.length > 0 && (
                   <div className="mt-1 max-h-48 space-y-1 overflow-y-auto rounded-lg border border-border bg-background p-1">
@@ -630,9 +630,9 @@ function AdminQuests() {
               </div>
             ) : (
               <div className="mt-3">
-                <span className="text-xs font-semibold text-muted-foreground">Assign ke team <span className="font-normal">(pilih satu/lebih · kosong = semua crew)</span></span>
+                <span className="text-xs font-semibold text-muted-foreground">Assign to team <span className="font-normal">(pick one or more · empty = whole crew)</span></span>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {teams.length === 0 && <span className="text-xs text-muted-foreground">Belum ada team.</span>}
+                  {teams.length === 0 && <span className="text-xs text-muted-foreground">No teams yet.</span>}
                   {teams.map((t) => {
                     const on = selectedTeams.has(t.id);
                     return <button key={t.id} type="button" onClick={() => toggleTeam(t.id)} className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition", on ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}><span className="h-2 w-2 rounded-full" style={{ background: t.color ?? "#7b68ee" }} />{t.name}</button>;
@@ -640,8 +640,8 @@ function AdminQuests() {
                 </div>
               </div>
             )}
-            <button disabled={!title.trim() || !workspaceId || create.isPending || (isTasks && questTasks.length === 0)} onClick={() => create.mutate()} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} {isTasks ? "Buat quest" : "Assign quest"}</button>
-            {create.isError && <span className="ml-2 text-xs font-semibold text-destructive">Gagal — cek akses.</span>}
+            <button disabled={!title.trim() || !workspaceId || create.isPending || (isTasks && questTasks.length === 0)} onClick={() => create.mutate()} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} {isTasks ? "Create quest" : "Assign quest"}</button>
+            {create.isError && <span className="ml-2 text-xs font-semibold text-destructive">Failed — check your access.</span>}
           </div>
           <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
             {list.isLoading && <div className="flex justify-center py-10 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
@@ -652,19 +652,19 @@ function AdminQuests() {
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold">{q.title}</div>
                     <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                      <span>{REQ_TYPES.find((r) => r.value === q.requirementType)?.label ?? q.requirementType}{q.requirementType === "specific_tasks" ? ` · ${q.requiredCount} task` : ` · target ${q.requiredCount}`}</span>
+                      <span>{REQ_TYPES.find((r) => r.value === q.requirementType)?.label ?? q.requirementType}{q.requirementType === "specific_tasks" ? ` · ${q.requiredCount} task${q.requiredCount === 1 ? "" : "s"}` : ` · target ${q.requiredCount}`}</span>
                       <span className="font-bold text-success">+{q.xpReward} XP</span>
-                      {q.deadline && <span>· ⏰ s/d {fmtDate(q.deadline)}</span>}
+                      {q.deadline && <span>· ⏰ until {fmtDate(q.deadline)}</span>}
                       {q.requirementType === "specific_tasks"
-                        ? <span>· member project task-nya</span>
-                        : <span>· {q.teamIds && q.teamIds.length > 0 ? q.teamIds.map(teamName).join(", ") : "Semua crew"}</span>}
+                        ? <span>· members of the task's project</span>
+                        : <span>· {q.teamIds && q.teamIds.length > 0 ? q.teamIds.map(teamName).join(", ") : "Whole crew"}</span>}
                     </div>
                   </div>
-                  <button onClick={() => { if (confirm("Hapus quest ini?")) del.mutate(q.id); }} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
+                  <button onClick={() => { if (confirm("Delete this quest?")) del.mutate(q.id); }} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
                 </div>
               ))}
             </div>
-            {!list.isLoading && rows.length === 0 && <div className="py-10 text-center text-sm text-muted-foreground">Belum ada quest. Bikin di atas.</div>}
+            {!list.isLoading && rows.length === 0 && <div className="py-10 text-center text-sm text-muted-foreground">No quests yet. Create one above.</div>}
           </div>
         </>
       )}
@@ -712,21 +712,21 @@ function AnnouncementsAdmin() {
 
   return (
     <div className="space-y-5">
-      {list.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Megaphone className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">Akses BoD diperlukan</div><p className="mt-2 text-sm text-muted-foreground">Butuh role BoD ke atas untuk kelola pengumuman.</p></div>}
+      {list.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Megaphone className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">BoD access required</div><p className="mt-2 text-sm text-muted-foreground">You need the BoD role or above to manage announcements.</p></div>}
       {!list.isError && (
         <>
           <div className="space-y-3 rounded-2xl border border-border bg-card p-4 shadow-soft">
-            <div className="text-sm font-bold">Buat pengumuman pop-up</div>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Judul pengumuman" className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
-            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} placeholder="Isi pengumuman… (boleh beberapa baris)" className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+            <div className="text-sm font-bold">Create a pop-up announcement</div>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Announcement title" className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
+            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} placeholder="Announcement body… (multiple lines OK)" className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
 
             {/* Audience: everyone, or specific people */}
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Tujuan</span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Audience</span>
                 <div className="flex rounded-lg border border-border p-0.5">
                   {(["all", "some"] as const).map((a) => (
-                    <button key={a} onClick={() => setAudience(a)} className={cn("rounded-md px-2.5 py-1 text-xs font-bold transition-colors", audience === a ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}>{a === "all" ? "Semua orang" : "Orang tertentu"}</button>
+                    <button key={a} onClick={() => setAudience(a)} className={cn("rounded-md px-2.5 py-1 text-xs font-bold transition-colors", audience === a ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}>{a === "all" ? "Everyone" : "Specific people"}</button>
                   ))}
                 </div>
               </div>
@@ -736,14 +736,14 @@ function AnnouncementsAdmin() {
                     <div className="flex flex-wrap gap-1.5">
                       {targetIds.map((id) => { const u = members.find((m) => m.id === id); return (
                         <span key={id} className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                          {u?.name ?? "user"} <button onClick={() => toggleTarget(id)} aria-label="Hapus"><X className="h-3 w-3" /></button>
+                          {u?.name ?? "user"} <button onClick={() => toggleTarget(id)} aria-label="Remove"><X className="h-3 w-3" /></button>
                         </span>
                       ); })}
                     </div>
                   )}
                   <div className="relative">
                     <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                    <input value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} placeholder="Cari nama buat ditambah…" className="w-full rounded-lg border border-border bg-card py-1.5 pl-8 pr-3 text-sm outline-none focus:border-primary" />
+                    <input value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} placeholder="Search a name to add…" className="w-full rounded-lg border border-border bg-card py-1.5 pl-8 pr-3 text-sm outline-none focus:border-primary" />
                   </div>
                   {memberSearch && (
                     <div className="max-h-40 space-y-0.5 overflow-y-auto">
@@ -761,14 +761,14 @@ function AnnouncementsAdmin() {
 
             <div className="flex flex-wrap items-center gap-2">
               <select value={tone} onChange={(e) => setTone(e.target.value)} className="rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary">
-                <option value="info">Info (biru)</option>
-                <option value="success">Success (hijau)</option>
-                <option value="warning">Warning (kuning)</option>
+                <option value="info">Info (blue)</option>
+                <option value="success">Success (green)</option>
+                <option value="warning">Warning (yellow)</option>
               </select>
               <button onClick={() => create.mutate()} disabled={!title.trim() || !body.trim() || create.isPending || (audience === "some" && targetIds.length === 0)} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">
-                {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Megaphone className="h-4 w-4" />} Posting
+                {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Megaphone className="h-4 w-4" />} Post
               </button>
-              <span className="text-xs text-muted-foreground">{audience === "some" ? `Muncul cuma ke ${targetIds.length} orang yang dipilih.` : "Muncul sekali ke semua user."}</span>
+              <span className="text-xs text-muted-foreground">{audience === "some" ? `Shows only to the ${targetIds.length} selected ${targetIds.length === 1 ? "person" : "people"}.` : "Shows once to every user."}</span>
             </div>
           </div>
 
@@ -779,19 +779,19 @@ function AnnouncementsAdmin() {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-bold">{a.title}</span>
-                    <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold uppercase", a.active ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground")}>{a.active ? "Aktif" : "Nonaktif"}</span>
+                    <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold uppercase", a.active ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground")}>{a.active ? "Active" : "Inactive"}</span>
                     <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">{a.tone}</span>
                   </div>
                   <p className="mt-1 whitespace-pre-line text-xs text-muted-foreground">{a.body}</p>
-                  <p className="mt-1.5 text-[11px] text-muted-foreground">{fmtDate(a.createdAt)} · {a.targetCount ? `ke ${a.targetCount} orang` : "ke semua"} · dibaca {a.seenCount}</p>
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">{fmtDate(a.createdAt)} · {a.targetCount ? `to ${a.targetCount} ${a.targetCount === 1 ? "person" : "people"}` : "to everyone"} · {a.seenCount} read</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
-                  <button onClick={() => toggle.mutate({ id: a.id, active: !a.active })} className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold hover:bg-accent">{a.active ? "Nonaktifin" : "Aktifin"}</button>
-                  <button onClick={() => del.mutate(a.id)} aria-label="Hapus" className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
+                  <button onClick={() => toggle.mutate({ id: a.id, active: !a.active })} className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold hover:bg-accent">{a.active ? "Deactivate" : "Activate"}</button>
+                  <button onClick={() => del.mutate(a.id)} aria-label="Delete" className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
                 </div>
               </div>
             ))}
-            {!list.isLoading && rows.length === 0 && <div className="rounded-2xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground shadow-sm">Belum ada pengumuman.</div>}
+            {!list.isLoading && rows.length === 0 && <div className="rounded-2xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground shadow-sm">No announcements yet.</div>}
           </div>
         </>
       )}

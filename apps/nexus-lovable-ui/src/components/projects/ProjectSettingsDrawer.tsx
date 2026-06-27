@@ -105,7 +105,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
   const invite = useMutation({
     mutationFn: () => nexusApi.inviteToProject(project.id, inviteEmail.trim()),
     onSuccess: () => { setInviteMsg(`Invite sent to ${inviteEmail.trim()}`); setInviteEmail(""); },
-    onError: () => setInviteMsg("Invite gagal — cek email / akses."),
+    onError: () => setInviteMsg("Invite failed — check the email / access."),
   });
   const duplicate = useMutation({
     mutationFn: () => nexusApi.duplicateProject(project.id),
@@ -133,7 +133,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
     settings.mutate({ enablePnlDashboard: checked }, { onError: () => setEnablePnl(!checked) });
   };
   const toggleAutoAssign = (checked: boolean) => {
-    if (checked && autoAssignIds.length === 0) { setAutoAssignError("Pilih minimal satu member dulu sebelum nyalain auto assign."); return; }
+    if (checked && autoAssignIds.length === 0) { setAutoAssignError("Pick at least one member before turning on auto assign."); return; }
     setAutoAssignError(null);
     setAutoAssignEnabled(checked);
     settings.mutate({ autoAssignEnabled: checked });
@@ -195,11 +195,11 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button onClick={() => iconFileRef.current?.click()} disabled={uploadIcon.isPending} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition hover:bg-accent disabled:opacity-50"><ImagePlus className="h-3.5 w-3.5" />Upload icon image</button>
-              {iconIsImage && <button onClick={() => { setIcon("🚀"); settings.mutate({ icon: "🚀" }); }} disabled={uploadIcon.isPending} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" />Pakai emoji lagi</button>}
-              <span className="text-[11px] text-muted-foreground">PNG/JPG/SVG/WEBP, maks 5MB</span>
+              {iconIsImage && <button onClick={() => { setIcon("🚀"); settings.mutate({ icon: "🚀" }); }} disabled={uploadIcon.isPending} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" />Use an emoji again</button>}
+              <span className="text-[11px] text-muted-foreground">PNG/JPG/SVG/WEBP, max 5MB</span>
               <input ref={iconFileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden onChange={onPickIcon} />
             </div>
-            {uploadIcon.isError && <p className="text-xs font-semibold text-destructive">{(uploadIcon.error as Error)?.message ?? "Upload icon gagal."}</p>}
+            {uploadIcon.isError && <p className="text-xs font-semibold text-destructive">{(uploadIcon.error as Error)?.message ?? "Icon upload failed."}</p>}
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="Description…" className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Color</span>
@@ -216,7 +216,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
             <button onClick={() => save.mutate()} disabled={save.isPending || !name.trim()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">
               {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Save changes
             </button>
-            {save.isError && <p className="text-xs font-semibold text-destructive">Gagal menyimpan.</p>}
+            {save.isError && <p className="text-xs font-semibold text-destructive">Couldn't save.</p>}
           </div>
 
           {/* customize project — task duplicate mode + auto assign (parity with core NEXUS) */}
@@ -227,7 +227,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-sm font-semibold">Task duplicate mode</div>
-                <p className="mt-0.5 text-xs text-muted-foreground">Nyalain multi-select duplicate dengan popup due date buat set task berulang (mis. PATS Socials).</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">Turn on multi-select duplicate with a due-date popup for setting up recurring tasks (e.g. PATS Socials).</p>
               </div>
               <Toggle checked={enableBatch} onChange={toggleBatch} disabled={settings.isPending} />
             </div>
@@ -237,7 +237,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-sm font-semibold">P&L Dashboard</div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">View keuangan standalone: catat pengeluaran harian (+nota), pipeline uang masuk (DP/termin), budget bulanan. Cuma keliatan buat BoD ke atas.</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Standalone finance view: log daily expenses (+receipts), incoming-money pipeline (deposits/installments), monthly budget. Only visible to BoD and above.</p>
                 </div>
                 <Toggle checked={enablePnl} onChange={togglePnl} disabled={settings.isPending} />
               </div>
@@ -248,7 +248,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-sm font-semibold">Auto assign</div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">Otomatis assign member terpilih ke task baru di project ini. Kalau assignee dipilih manual pas bikin task, auto assign dilewat.</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Automatically assign the selected members to new tasks in this project. If you pick an assignee manually while creating a task, auto assign is skipped.</p>
                 </div>
                 <Toggle checked={autoAssignEnabled} onChange={toggleAutoAssign} disabled={settings.isPending} />
               </div>
@@ -256,7 +256,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
 
               <div className="rounded-2xl border border-border bg-muted/30 p-2">
                 <div className="px-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Default assignees · {autoAssignIds.length}</div>
-                {currentMembers.length === 0 && <p className="px-1 py-1 text-xs text-muted-foreground">Belum ada member di project ini — tambah member dulu di bawah.</p>}
+                {currentMembers.length === 0 && <p className="px-1 py-1 text-xs text-muted-foreground">No members in this project yet — add some below first.</p>}
                 <div className="space-y-1">
                   {currentMembers.map((m) => {
                     const id = (m.userId || m.user?.id) ?? "";
@@ -287,7 +287,7 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
               <button disabled={!bundleId || applyBundle.isPending} onClick={() => applyBundle.mutate()} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50">{applyBundle.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Apply</button>
             </div>
             {applyBundle.isSuccess && <p className="text-xs font-semibold text-success">Bundle applied ✓</p>}
-            {applyBundle.isError && <p className="text-xs font-semibold text-destructive">Apply gagal — cek akses / bundle.</p>}
+            {applyBundle.isError && <p className="text-xs font-semibold text-destructive">Apply failed — check your access / bundle.</p>}
           </div>
 
           {/* custom fields */}

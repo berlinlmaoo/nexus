@@ -50,7 +50,7 @@ function MoveTargets({ folders, currentFolderId, excludeIds, onPick, rootLabel }
       </ContextMenuItem>
       <ContextMenuSeparator />
       {targets.length === 0 ? (
-        <ContextMenuItem disabled>(tidak ada folder lain)</ContextMenuItem>
+        <ContextMenuItem disabled>(no other folders)</ContextMenuItem>
       ) : (
         targets.map((t) => (
           <ContextMenuItem key={t.id} disabled={t.id === currentFolderId} onClick={() => onPick(t.id)}>
@@ -74,21 +74,21 @@ export function ProjectRowMenu({ project, actions, children }: { project: NexusP
           <Pencil className="mr-2 h-3.5 w-3.5" /> Rename
         </ContextMenuItem>
         <ContextMenuSub>
-          <ContextMenuSubTrigger><FolderInput className="mr-2 h-3.5 w-3.5" /> Pindah ke folder</ContextMenuSubTrigger>
+          <ContextMenuSubTrigger><FolderInput className="mr-2 h-3.5 w-3.5" /> Move to folder</ContextMenuSubTrigger>
           <MoveTargets
             folders={actions.folders}
             currentFolderId={project.folderId ?? null}
             onPick={(fid) => actions.moveProject(project.id, fid)}
-            rootLabel="Keluarkan dari folder"
+            rootLabel="Remove from folder"
           />
         </ContextMenuSub>
         <ContextMenuItem onClick={() => actions.togglePin(project.id)}>
           {pinned ? <PinOff className="mr-2 h-3.5 w-3.5" /> : <Pin className="mr-2 h-3.5 w-3.5" />}
-          {pinned ? "Lepas pin" : "Pin ke atas"}
+          {pinned ? "Unpin" : "Pin to top"}
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem className="text-destructive focus:text-destructive" onClick={() => actions.removeProject(project)}>
-          <Trash2 className="mr-2 h-3.5 w-3.5" /> Hapus project
+          <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete project
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
@@ -110,31 +110,31 @@ export function FolderRowMenu({ folder, actions, children }: { folder: NexusProj
         </ContextMenuLabel>
         <ContextMenuSeparator />
         <ContextMenuItem onClick={() => actions.openFolderView(folder.id)}>
-          <Maximize2 className="mr-2 h-3.5 w-3.5" /> Buka tampilan folder
+          <Maximize2 className="mr-2 h-3.5 w-3.5" /> Open folder view
         </ContextMenuItem>
         <ContextMenuItem onClick={() => actions.createSubfolder(folder)}>
-          <FolderPlus className="mr-2 h-3.5 w-3.5" /> Subfolder baru
+          <FolderPlus className="mr-2 h-3.5 w-3.5" /> New subfolder
         </ContextMenuItem>
         <ContextMenuItem onClick={() => actions.renameFolder(folder)}>
           <Pencil className="mr-2 h-3.5 w-3.5" /> Rename folder
         </ContextMenuItem>
         <ContextMenuSub>
-          <ContextMenuSubTrigger><FolderInput className="mr-2 h-3.5 w-3.5" /> Pindah folder ke</ContextMenuSubTrigger>
+          <ContextMenuSubTrigger><FolderInput className="mr-2 h-3.5 w-3.5" /> Move folder to</ContextMenuSubTrigger>
           <MoveTargets
             folders={actions.folders}
             currentFolderId={folder.parentFolderId ?? null}
             excludeIds={exclude}
             onPick={(fid) => actions.moveFolder(folder.id, fid)}
-            rootLabel="Ke paling atas (root)"
+            rootLabel="To the top (root)"
           />
         </ContextMenuSub>
         <ContextMenuItem onClick={() => actions.toggleFolderPin(folder.id)}>
           {actions.isPinnedFolder(folder.id) ? <PinOff className="mr-2 h-3.5 w-3.5" /> : <Pin className="mr-2 h-3.5 w-3.5" />}
-          {actions.isPinnedFolder(folder.id) ? "Lepas pin folder" : "Pin folder ke atas"}
+          {actions.isPinnedFolder(folder.id) ? "Unpin folder" : "Pin folder to top"}
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem className="text-destructive focus:text-destructive" onClick={() => actions.removeFolder(folder)}>
-          <Trash2 className="mr-2 h-3.5 w-3.5" /> Hapus folder
+          <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete folder
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

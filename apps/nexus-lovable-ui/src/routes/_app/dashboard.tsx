@@ -37,7 +37,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/_app/dashboard")({
   component: Dashboard,
-  head: () => ({ meta: [{ title: "NEXUS Phaëthon — Morning Brief" }] }),
+  head: () => ({ meta: [{ title: "NEXUS Phaëthon — Dashboard" }] }),
 });
 
 const fallbackDashboard: NexusDashboardResponse = {
@@ -214,7 +214,7 @@ function NotificationsModal({ open, onClose, list, unread, loading, error }: { o
               className="min-h-0 flex-1 overflow-y-auto p-2"
             >
               {loading && <p className="p-3 text-sm text-muted-foreground">Loading…</p>}
-              {error && <p className="p-3 text-sm text-muted-foreground">Login/session diperlukan untuk buka inbox.</p>}
+              {error && <p className="p-3 text-sm text-muted-foreground">You need to be logged in to open your inbox.</p>}
               {!loading && !error && list.length === 0 && <p className="p-3 text-sm text-muted-foreground">No notifications. Enjoy the silence.</p>}
               {list.map((n) => (
                 <button
@@ -651,9 +651,9 @@ function LevelModal({ open, onClose, info, totalXp, streak }: { open: boolean; o
 
 /* ---------- your quests ---------- */
 const QUEST_REQ_DESC: Record<string, (n: number) => string> = {
-  task_count: (n) => `Selesaikan ${n} task yang kamu kerjain.`,
-  overdue_cleared: (n) => `Beresin ${n} task yang udah overdue.`,
-  priority_done: (n) => `Tutup ${n} task prioritas Urgent.`,
+  task_count: (n) => `Finish ${n} task${n === 1 ? "" : "s"} you're working on.`,
+  overdue_cleared: (n) => `Clear ${n} overdue task${n === 1 ? "" : "s"}.`,
+  priority_done: (n) => `Close ${n} Urgent-priority task${n === 1 ? "" : "s"}.`,
 };
 function questReqDesc(q: NexusQuest) {
   const t = (q as { requirementType?: string }).requirementType ?? "task_count";
@@ -666,7 +666,7 @@ function QuestTile({ q, onClaim, claiming, onOpenDetail }: { q: NexusQuest; onCl
       <QuestIcon questKey={q.key} title={q.title} size={64} className="mx-auto" />
       <div className="mt-2 truncate text-sm font-semibold" title={q.title}>{q.title}</div>
       <div className="text-xs text-muted-foreground">{q.progress}/{q.target} · +{q.xpReward} XP</div>
-      {q.deadline && <div className="text-[10px] font-semibold text-amber-600">⏰ s/d {fmtDate(q.deadline)}</div>}
+      {q.deadline && <div className="text-[10px] font-semibold text-amber-600">⏰ until {fmtDate(q.deadline)}</div>}
       {q.claimed ? (
         <div className="mt-2.5 inline-flex w-full items-center justify-center gap-1 rounded-lg bg-success/15 py-1.5 text-xs font-bold text-success"><Check className="h-3.5 w-3.5" /> Claimed</div>
       ) : q.claimable ? (
@@ -692,7 +692,7 @@ function QuestDetailModal({ q, onClose, onClaim, claiming }: { q: NexusQuest; on
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-black leading-tight tracking-tight">{q.title}</h2>
-              {q.source === "admin" && <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">Dari BoD</span>}
+              {q.source === "admin" && <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">From BoD</span>}
             </div>
             {q.description && <p className="mt-0.5 text-sm text-muted-foreground">{q.description}</p>}
           </div>
@@ -700,7 +700,7 @@ function QuestDetailModal({ q, onClose, onClaim, claiming }: { q: NexusQuest; on
         </div>
         <div className="space-y-4 p-5">
           <div className="rounded-2xl border border-dashed border-border p-3">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Yang harus dilakuin</div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">What to do</div>
             <p className="mt-1 text-sm font-semibold">{questReqDesc(q)}</p>
           </div>
           <div>
@@ -712,11 +712,11 @@ function QuestDetailModal({ q, onClose, onClaim, claiming }: { q: NexusQuest; on
             {q.deadline && <span className="font-semibold text-amber-600">⏰ Deadline {fmtDate(q.deadline)}</span>}
           </div>
           {q.claimed ? (
-            <div className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-success/15 py-2.5 text-sm font-bold text-success"><Check className="h-4 w-4" /> Udah di-claim</div>
+            <div className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-success/15 py-2.5 text-sm font-bold text-success"><Check className="h-4 w-4" /> Claimed</div>
           ) : q.claimable ? (
             <button disabled={claiming} onClick={() => onClaim(q.key)} className="w-full rounded-xl bg-warning py-2.5 text-sm font-bold text-warning-foreground transition active:scale-[0.98] disabled:opacity-50">{claiming ? "Claiming…" : `Claim +${q.xpReward} XP`}</button>
           ) : (
-            <div className="rounded-xl bg-muted py-2.5 text-center text-sm font-medium text-muted-foreground">Selesaiin {q.target - q.progress} task lagi buat bisa claim</div>
+            <div className="rounded-xl bg-muted py-2.5 text-center text-sm font-medium text-muted-foreground">Finish {q.target - q.progress} more task{q.target - q.progress === 1 ? "" : "s"} to claim</div>
           )}
         </div>
       </motion.div>
@@ -746,7 +746,7 @@ function YourQuests() {
             ))}
           </div>
         )}
-        {!g.isLoading && quests.length === 0 && <p className="text-sm text-muted-foreground">Belum ada quest aktif. XP kamu jalan dari task, streak, & absen — cek "Aturan XP" di bawah.</p>}
+        {!g.isLoading && quests.length === 0 && <p className="text-sm text-muted-foreground">No active quests yet. Your XP still rolls in from tasks, streaks & attendance — check "XP Rules" below.</p>}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {quests.slice(0, 4).map((q) => <QuestTile key={q.key} q={q} onClaim={claim.mutate} claiming={claim.isPending} onOpenDetail={() => setDetail(q)} />)}
         </div>
@@ -766,11 +766,11 @@ function YourQuests() {
                 className="relative max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-border bg-card p-6 shadow-pop"
               >
                 <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-lg font-black tracking-tight">Semua Quest</h2>
+                  <h2 className="text-lg font-black tracking-tight">All Quests</h2>
                   <button onClick={() => setShowAll(false)} className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
                 </div>
                 {quests.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-muted-foreground">Belum ada quest aktif.</p>
+                  <p className="py-8 text-center text-sm text-muted-foreground">No active quests yet.</p>
                 ) : (
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
                     {quests.map((q) => <QuestTile key={q.key} q={q} onClaim={claim.mutate} claiming={claim.isPending} onOpenDetail={() => setDetail(q)} />)}
@@ -809,7 +809,7 @@ function ProfileCard({ userName, avatarUrl }: { userName: string; avatarUrl?: st
         )}
         <div className="min-w-0 flex-1 space-y-1.5">
           <div className="flex items-baseline justify-between gap-2"><span className="text-xs uppercase tracking-wide text-muted-foreground">Level</span><span className="text-sm font-bold">{info.level} · {info.name}</span></div>
-          <div className="flex items-baseline justify-between gap-2"><span className="text-xs uppercase tracking-wide text-muted-foreground">Poin periode</span><span className="text-sm font-bold tabular-nums">{totalXp.toLocaleString()}</span></div>
+          <div className="flex items-baseline justify-between gap-2"><span className="text-xs uppercase tracking-wide text-muted-foreground">Period points</span><span className="text-sm font-bold tabular-nums">{totalXp.toLocaleString()}</span></div>
         </div>
       </div>
       <Link to="/settings" className="mt-4 flex h-11 items-center justify-center gap-2 rounded-xl border border-primary/40 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
@@ -1039,8 +1039,8 @@ function LeaderboardExpandModal({ origin, originScale, onClose, onSelect, myId }
       >
         <motion.div variants={{ hide: { opacity: 0, y: -6 }, show: { opacity: 1, y: 0 } }} className="flex items-center gap-3 border-b border-border bg-muted/30 px-5 py-4">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary"><Crown className="h-5 w-5" /></span>
-          <div className="min-w-0 flex-1"><div className="font-display text-lg font-bold tracking-tight">Leaderboard</div><div className="text-xs text-muted-foreground">Ketuk orang buat lihat log XP-nya</div></div>
-          <button onClick={onClose} aria-label="Tutup" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+          <div className="min-w-0 flex-1"><div className="font-display text-lg font-bold tracking-tight">Leaderboard</div><div className="text-xs text-muted-foreground">Tap someone to see their XP log</div></div>
+          <button onClick={onClose} aria-label="Close" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
         </motion.div>
         <motion.div className="min-h-0 flex-1 overflow-y-auto p-2" variants={{ hide: {}, show: { transition: { staggerChildren: reduce ? 0 : 0.022 } } }}>
           {rows.map((r, i) => (
@@ -1052,7 +1052,7 @@ function LeaderboardExpandModal({ origin, originScale, onClose, onSelect, myId }
             </motion.button>
           ))}
         </motion.div>
-        <motion.div variants={{ hide: { opacity: 0 }, show: { opacity: 1 } }} className="border-t border-border p-3"><Link to="/leaderboard" onClick={onClose} className="block w-full rounded-xl bg-primary py-2.5 text-center text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90">Halaman penuh →</Link></motion.div>
+        <motion.div variants={{ hide: { opacity: 0 }, show: { opacity: 1 } }} className="border-t border-border p-3"><Link to="/leaderboard" onClick={onClose} className="block w-full rounded-xl bg-primary py-2.5 text-center text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90">Full page →</Link></motion.div>
       </motion.div>
     </MorphPanel>
   );

@@ -6,15 +6,15 @@ import { cn } from "@/lib/utils";
 import type { FeedImage } from "@/lib/nexus-api";
 import type { MentionUser } from "@/hooks/useMentionAutocomplete";
 
-/** Compact Indonesian relative time: "baru aja", "5m", "3j", "2h", then a date. */
+/** Compact relative time: "just now", "5m", "3h", "2d", then a date. */
 export function timeAgo(iso: string): string {
   const t = new Date(iso).getTime();
   const s = Math.floor((Date.now() - t) / 1000);
-  if (s < 45) return "baru aja";
+  if (s < 45) return "just now";
   const m = Math.floor(s / 60); if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60); if (h < 24) return `${h}j`;
-  const d = Math.floor(h / 24); if (d < 7) return `${d}h`;
-  return new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+  const h = Math.floor(m / 60); if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24); if (d < 7) return `${d}d`;
+  return new Date(iso).toLocaleDateString("en-US", { day: "numeric", month: "short" });
 }
 
 const MENTION_RE = /(@[\p{L}\p{N}._-]+)/gu;

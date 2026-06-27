@@ -1,4 +1,7 @@
 export const SUPPORTED_CUSTOM_FIELD_TYPES = [
+  "TEXT",
+  "URL",
+  "FILE",
   "NUMBER",
   "SELECT",
   "MULTI_SELECT",
@@ -31,6 +34,23 @@ const CREATED_FIELD_TIMEZONE = "Asia/Jakarta"
 export interface PlaceFieldValue {
   label: string
   mapUrl: string
+}
+
+export interface FileFieldEntry {
+  url: string
+  name: string
+}
+export type FileFieldValue = FileFieldEntry[]
+
+function toFileEntries(value: unknown): FileFieldValue {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((v) =>
+      v && typeof v === "object" && !Array.isArray(v)
+        ? { url: String((v as { url?: unknown }).url ?? "").trim(), name: String((v as { name?: unknown }).name ?? "").trim() }
+        : null,
+    )
+    .filter((v): v is FileFieldEntry => !!v && v.url.length > 0)
 }
 
 const SUPPORTED_TYPE_SET = new Set<string>(SUPPORTED_CUSTOM_FIELD_TYPES)
@@ -128,8 +148,9 @@ export function normalizeCustomFieldOptions(
 export function getDefaultCustomFieldValue(
   type: SupportedCustomFieldType,
   taskCreatedAt?: Date | string | null
-): string | string[] | PlaceFieldValue {
+): string | string[] | PlaceFieldValue | FileFieldValue {
   if (type === "MULTI_SELECT") return []
+  if (type === "FILE") return []
   if (type === "PLACE") return { label: "", mapUrl: "" }
   if (type === "CREATED") {
     const sourceDate = taskCreatedAt ? new Date(taskCreatedAt) : new Date()
@@ -150,6 +171,10 @@ export function serializeCustomFieldValue(
     return JSON.stringify(Array.isArray(nextValue) ? nextValue : [])
   }
 
+  if (type === "FILE") {
+    return JSON.stringify(toFileEntries(nextValue))
+  }
+
   if (type === "PLACE") {
     const placeValue = (nextValue ?? fallback) as Partial<PlaceFieldValue> | null
     return JSON.stringify({
@@ -166,9 +191,13 @@ export function coerceCustomFieldValueForType(
   type: SupportedCustomFieldType,
   value: unknown,
   taskCreatedAt?: Date | string | null
-): string | string[] | PlaceFieldValue {
+): string | string[] | PlaceFieldValue | FileFieldValue {
   if (value === null || value === undefined || value === "") {
     return getDefaultCustomFieldValue(type, taskCreatedAt)
+  }
+
+  if (type === "FILE") {
+    return toFileEntries(value)
   }
 
   if (type === "MULTI_SELECT") {
@@ -226,9 +255,17 @@ export function parseCustomFieldValue(
   type: SupportedCustomFieldType,
   value: string | null | undefined,
   taskCreatedAt?: Date | string | null
-): string | string[] | PlaceFieldValue {
+): string | string[] | PlaceFieldValue | FileFieldValue {
   if (!value) {
     return getDefaultCustomFieldValue(type, taskCreatedAt)
+  }
+
+  if (type === "FILE") {
+    try {
+      return toFileEntries(JSON.parse(value))
+    } catch {
+      return []
+    }
   }
 
   if (type === "MULTI_SELECT") {
@@ -261,7 +298,11 @@ export function formatCustomFieldValueForExport(
 ): string {
   const parsed = parseCustomFieldValue(type, value)
 
-  if (Array.isArray(parsed)) return parsed.join("; ")
+  if (Array.isArray(parsed)) {
+    return parsed
+      .map((p) => (p && typeof p === "object" ? (p as FileFieldEntry).name || (p as FileFieldEntry).url : String(p)))
+      .join("; ")
+  }
   if (typeof parsed === "object" && parsed !== null) {
     const place = parsed as PlaceFieldValue
     return [place.label, place.mapUrl].filter(Boolean).join(" - ")

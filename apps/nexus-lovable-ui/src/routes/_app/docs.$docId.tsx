@@ -46,7 +46,7 @@ function DocEditor() {
       </div>
 
       {doc.isLoading && <div className="flex justify-center py-20 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
-      {doc.isError && <p className="py-20 text-center text-sm font-semibold text-destructive">Gagal memuat doc. Cek sesi / akses.</p>}
+      {doc.isError && <p className="py-20 text-center text-sm font-semibold text-destructive">Couldn't load this doc. Check your session / access.</p>}
 
       {d && (
         <div className="space-y-4">
@@ -67,7 +67,7 @@ function DocEditor() {
               {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Save
             </button>
             {dirty && <span className="text-xs font-medium text-warning-foreground">Unsaved changes</span>}
-            {save.isError && <span className="text-xs font-semibold text-destructive">Save gagal.</span>}
+            {save.isError && <span className="text-xs font-semibold text-destructive">Save failed.</span>}
           </div>
         </div>
       )}

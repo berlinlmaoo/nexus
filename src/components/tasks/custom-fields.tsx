@@ -27,13 +27,16 @@ import {
 } from "@/lib/custom-fields"
 import { cn } from "@/lib/utils"
 import {
+  AlignLeft,
   Calendar,
   Check,
   ChevronDown,
   Hash,
+  Link2,
   ListFilter,
   Loader2,
   MapPin,
+  Paperclip,
   Settings2,
 } from "lucide-react"
 import { format } from "date-fns"
@@ -51,6 +54,9 @@ interface CustomFieldRecord {
 }
 
 const FIELD_ICONS: Record<SupportedCustomFieldType, typeof Hash> = {
+  TEXT: AlignLeft,
+  URL: Link2,
+  FILE: Paperclip,
   NUMBER: Hash,
   SELECT: ListFilter,
   MULTI_SELECT: ListFilter,

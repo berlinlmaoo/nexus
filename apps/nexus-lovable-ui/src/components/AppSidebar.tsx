@@ -25,13 +25,13 @@ const groups = [
     label: "Home Base",
     items: [
       { title: "Oracle", url: "/oracle", icon: Sparkles },
-      { title: "Morning Brief", url: "/dashboard", icon: LayoutDashboard },
+      { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
       { title: "Messages", url: "/messages", icon: MessageCircle },
-      { title: "Signal Inbox", url: "/inbox", icon: Inbox },
+      { title: "Notification", url: "/inbox", icon: Inbox },
       { title: "Threads", url: "/threads", icon: AtSign },
       { title: "My Mission", url: "/my-tasks", icon: CheckSquare },
-      { title: "Pengajuan Saya", url: "/submissions", icon: FileText },
-      { title: "Time Map", url: "/master-calendar", icon: Calendar },
+      { title: "My Submissions", url: "/submissions", icon: FileText },
+      { title: "Team Calendar", url: "/master-calendar", icon: Calendar },
       { title: "Room Booking", url: "/room-booking", icon: CalendarClock },
     ],
   },
@@ -53,7 +53,7 @@ const groups = [
   {
     label: "Pulse Check",
     items: [
-      { title: "Attendance Playground", url: "/attendance", icon: ClipboardCheck },
+      { title: "Attendance", url: "/attendance", icon: ClipboardCheck },
     ],
   },
   {
@@ -61,7 +61,7 @@ const groups = [
     items: [
       { title: "Ticket", url: "/complaints", icon: Ticket },
       { title: "Crew Hub", url: "/teams", icon: Users },
-      { title: "Tuning Room", url: "/settings", icon: Settings },
+      { title: "Setting", url: "/settings", icon: Settings },
       { title: "Control Room", url: "/admin", icon: Shield },
     ],
   },
@@ -104,7 +104,7 @@ function ProjectNavItem({ project, active, collapsed, depth = 0, pinned, onToggl
         <button
           type="button"
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTogglePin(); }}
-          title={pinned ? "Lepas pin" : "Pin ke atas"}
+          title={pinned ? "Unpin" : "Pin to top"}
           aria-label={pinned ? "Unpin project" : "Pin project"}
           className={cn(
             "absolute right-1 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded transition-opacity hover:text-foreground",
@@ -216,7 +216,7 @@ export function AppSidebar() {
 
   // ── Right-click actions (rename / move / delete / new subfolder) for projects & folders ──
   const invalidateSidebar = () => invalidateProjectData(qc);
-  const onMutationError = (e: unknown) => window.alert(e instanceof Error ? e.message : "Gagal — coba lagi.");
+  const onMutationError = (e: unknown) => window.alert(e instanceof Error ? e.message : "Something went wrong — try again.");
   const renameProjectM = useMutation({ mutationFn: (v: { id: string; name: string }) => nexusApi.updateProject(v.id, { name: v.name }), onSuccess: invalidateSidebar, onError: onMutationError });
   const moveProjectM = useMutation({ mutationFn: (v: { id: string; folderId: string | null }) => nexusApi.updateProject(v.id, { folderId: v.folderId }), onSuccess: invalidateSidebar, onError: onMutationError });
   const deleteProjectM = useMutation({ mutationFn: (id: string) => nexusApi.deleteProject(id), onSuccess: invalidateSidebar, onError: onMutationError });
@@ -232,10 +232,10 @@ export function AppSidebar() {
     onError: onMutationError,
   });
   const newProjectFromSidebar = () => {
-    const name = window.prompt("Nama project baru:", "");
+    const name = window.prompt("New project name:", "");
     if (!name || !name.trim()) return;
     const workspaceId = folders[0]?.workspaceId ?? projects.find((p) => p.workspaceId)?.workspaceId;
-    if (!workspaceId) { window.alert("Workspace tidak diketahui."); return; }
+    if (!workspaceId) { window.alert("Workspace unknown."); return; }
     createProjectM.mutate({ workspaceId, name: name.trim() });
   };
   const [addMenuOpen, setAddMenuOpen] = useState(false);
@@ -244,22 +244,22 @@ export function AppSidebar() {
     folders,
     isPinned: (id) => pinnedIds.has(id),
     isPinnedFolder: (id) => pinnedFolderIds.has(id),
-    renameProject: (p) => { const name = window.prompt("Nama project baru:", p.name); if (name && name.trim() && name.trim() !== p.name) renameProjectM.mutate({ id: p.id, name: name.trim() }); },
+    renameProject: (p) => { const name = window.prompt("New project name:", p.name); if (name && name.trim() && name.trim() !== p.name) renameProjectM.mutate({ id: p.id, name: name.trim() }); },
     moveProject: (id, folderId) => moveProjectM.mutate({ id, folderId }),
-    removeProject: (p) => { if (window.confirm(`Hapus project "${p.name}"?\n\nIni PERMANEN dan menghapus semua task di dalamnya.`)) deleteProjectM.mutate(p.id); },
+    removeProject: (p) => { if (window.confirm(`Delete project "${p.name}"?\n\nThis is PERMANENT and removes every task inside it.`)) deleteProjectM.mutate(p.id); },
     togglePin: (id) => onTogglePin(id),
     toggleFolderPin: (id) => onToggleFolderPin(id),
     openFolderView: (id) => navigate({ to: "/folders/$folderId", params: { folderId: id } }),
     createSubfolder: (parent) => {
-      const name = window.prompt(parent ? `Nama subfolder di dalam "${parent.name}":` : "Nama folder baru:", "");
+      const name = window.prompt(parent ? `Subfolder name inside "${parent.name}":` : "New folder name:", "");
       if (!name || !name.trim()) return;
       const workspaceId = parent?.workspaceId ?? folders[0]?.workspaceId;
-      if (!workspaceId) { window.alert("Workspace tidak diketahui."); return; }
+      if (!workspaceId) { window.alert("Workspace unknown."); return; }
       createFolderM.mutate({ workspaceId, name: name.trim(), parentFolderId: parent?.id ?? null });
     },
-    renameFolder: (f) => { const name = window.prompt("Nama folder baru:", f.name); if (name && name.trim() && name.trim() !== f.name) renameFolderM.mutate({ id: f.id, name: name.trim() }); },
+    renameFolder: (f) => { const name = window.prompt("New folder name:", f.name); if (name && name.trim() && name.trim() !== f.name) renameFolderM.mutate({ id: f.id, name: name.trim() }); },
     moveFolder: (id, parentFolderId) => moveFolderM.mutate({ id, parentFolderId }),
-    removeFolder: (f) => { if (window.confirm(`Hapus folder "${f.name}"?\n\nProject & subfolder di dalamnya TIDAK ikut terhapus — dipindah keluar satu level.`)) deleteFolderM.mutate(f.id); },
+    removeFolder: (f) => { if (window.confirm(`Delete folder "${f.name}"?\n\nProjects & subfolders inside it are NOT deleted — they get moved out one level.`)) deleteFolderM.mutate(f.id); },
   };
 
   // ── Drag & drop: drag a project/folder onto a folder (move into) or the root zone (move to top) ──
@@ -364,7 +364,7 @@ export function AppSidebar() {
               <Link
                 to="/folders/$folderId"
                 params={{ folderId: folder.id }}
-                title="Buka tampilan folder"
+                title="Open folder view"
                 onClick={(e) => e.stopPropagation()}
                 className="hidden shrink-0 rounded p-1 text-muted-foreground/70 hover:bg-primary/15 hover:text-primary group-hover/folder:block"
               >
@@ -467,14 +467,14 @@ export function AppSidebar() {
               <SidebarGroupLabel className="m-0">Projects</SidebarGroupLabel>
               <Popover open={addMenuOpen} onOpenChange={setAddMenuOpen}>
                 <PopoverTrigger asChild>
-                  <button type="button" title="Tambah project / folder" className="text-muted-foreground hover:text-foreground p-0.5 rounded"><Plus className="h-3.5 w-3.5" /></button>
+                  <button type="button" title="Add project / folder" className="text-muted-foreground hover:text-foreground p-0.5 rounded"><Plus className="h-3.5 w-3.5" /></button>
                 </PopoverTrigger>
                 <PopoverContent align="end" className="w-48 p-1.5">
                   <button type="button" onClick={() => { setAddMenuOpen(false); newProjectFromSidebar(); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-accent">
-                    <Rocket className="h-3.5 w-3.5 text-primary" /> Project baru
+                    <Rocket className="h-3.5 w-3.5 text-primary" /> New project
                   </button>
                   <button type="button" onClick={() => { setAddMenuOpen(false); sidebarActions.createSubfolder(null); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-accent">
-                    <FolderPlus className="h-3.5 w-3.5 text-muted-foreground" /> Folder baru
+                    <FolderPlus className="h-3.5 w-3.5 text-muted-foreground" /> New folder
                   </button>
                 </PopoverContent>
               </Popover>
@@ -511,7 +511,7 @@ export function AppSidebar() {
                 className={cn("rounded-md", dropTarget === "ROOT" && "bg-primary/10 ring-2 ring-inset ring-primary")}
               >
                 {drag && !collapsed && (
-                  <div className="px-2 py-1 text-[10px] italic text-muted-foreground/60">↩︎ Lepas di sini buat keluarin dari folder</div>
+                  <div className="px-2 py-1 text-[10px] italic text-muted-foreground/60">↩︎ Drop here to pull it out of the folder</div>
                 )}
                 {unfiled.map((p) => (
                   <Fragment key={p.id}>
@@ -541,8 +541,8 @@ export function AppSidebar() {
           </div>
           <button
             onClick={toggleTheme}
-            aria-label="Ganti tema"
-            title={isDark ? "Mode terang" : "Mode gelap"}
+            aria-label="Toggle theme"
+            title={isDark ? "Light mode" : "Dark mode"}
             className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:hidden"
           >
             {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}

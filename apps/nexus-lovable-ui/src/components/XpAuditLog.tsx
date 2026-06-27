@@ -61,10 +61,10 @@ export function XpAuditLog() {
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-sm font-black">
-            Audit Log XP
+            XP Audit Log
             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">Admin</span>
           </div>
-          <div className="text-xs text-muted-foreground">Semua perubahan XP (nambah & berkurang) seluruh crew</div>
+          <div className="text-xs text-muted-foreground">Every XP change (added & deducted) across the whole crew</div>
         </div>
         <ChevronDown className={cn("h-5 w-5 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
       </button>
@@ -76,24 +76,24 @@ export function XpAuditLog() {
               value={sign}
               onChange={setSign}
               options={[
-                { value: "all", label: "Semua" },
-                { value: "pos", label: "Nambah (+)" },
-                { value: "neg", label: "Berkurang (−)" },
+                { value: "all", label: "All" },
+                { value: "pos", label: "Added (+)" },
+                { value: "neg", label: "Deducted (−)" },
               ]}
             />
             <Segmented<Scope>
               value={scope}
               onChange={setScope}
               options={[
-                { value: "period", label: "Periode ini" },
-                { value: "all", label: "Semua waktu" },
+                { value: "period", label: "This period" },
+                { value: "all", label: "All time" },
               ]}
             />
             <button
               onClick={() => setAdjustOpen(true)}
               className="ml-auto inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-bold shadow-soft transition-colors hover:bg-accent"
             >
-              <SlidersHorizontal className="h-3.5 w-3.5" /> Atur XP
+              <SlidersHorizontal className="h-3.5 w-3.5" /> Adjust XP
             </button>
           </div>
           {adjustOpen && <XpAdjustModal onClose={() => setAdjustOpen(false)} />}
@@ -106,13 +106,13 @@ export function XpAuditLog() {
 
           {log.isError && (
             <div className="px-4 pb-5 pt-1 text-center text-sm text-muted-foreground">
-              Gagal memuat log — butuh akses BoD ke atas.
+              Couldn't load the log — needs BoD access or higher.
             </div>
           )}
 
           {!log.isLoading && !log.isError && rows.length === 0 && (
             <div className="px-4 pb-6 pt-1 text-center text-sm text-muted-foreground">
-              Belum ada perubahan XP {scope === "period" ? "di periode ini" : ""}.
+              No XP changes yet {scope === "period" ? "this period" : ""}.
             </div>
           )}
 
@@ -147,7 +147,7 @@ export function XpAuditLog() {
                 disabled={log.isFetchingNextPage}
                 className="w-full rounded-xl border border-border bg-muted/40 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-60"
               >
-                {log.isFetchingNextPage ? "Memuat…" : "Muat lebih banyak"}
+                {log.isFetchingNextPage ? "Loading…" : "Load more"}
               </button>
             </div>
           )}
@@ -183,7 +183,7 @@ function XpAdjustModal({ onClose }: { onClose: () => void }) {
         const k = q.queryKey.map(String);
         return k.includes("xp-audit") || k.includes("leaderboard") || k.includes("gamification") || k.includes("my-penalties");
       } });
-      celebrate(sign > 0 ? "XP ditambahin ✨" : "XP dikurangin ⚖️");
+      celebrate(sign > 0 ? "XP added ✨" : "XP deducted ⚖️");
       onClose();
     },
   });
@@ -196,31 +196,31 @@ function XpAdjustModal({ onClose }: { onClose: () => void }) {
       <div className="w-full max-w-md overflow-hidden rounded-3xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
           <div>
-            <h2 className="font-display text-lg font-bold tracking-tight">Atur XP crew</h2>
-            <p className="mt-0.5 text-xs text-muted-foreground">Tambah atau kurangi XP manual. Tercatat di audit log.</p>
+            <h2 className="font-display text-lg font-bold tracking-tight">Adjust crew XP</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">Add or deduct XP manually. Logged in the audit log.</p>
           </div>
-          <button onClick={onClose} aria-label="Tutup" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} aria-label="Close" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
 
         <div className="space-y-3 p-5">
           {/* user picker */}
           <div>
-            <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-muted-foreground">Crew</label>
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-muted-foreground">Crew member</label>
             {selected ? (
               <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/20 px-3 py-2">
                 <Avatar userId={selected.userId} name={selected.name} avatar={selected.avatar} size={28} />
                 <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{selected.name ?? "—"}</div><div className="text-[11px] text-muted-foreground tabular-nums">{selected.totalXp} XP · Lv.{selected.level}</div></div>
-                <button onClick={() => { setUserId(""); setSearch(""); }} className="text-xs font-semibold text-primary hover:underline">Ganti</button>
+                <button onClick={() => { setUserId(""); setSearch(""); }} className="text-xs font-semibold text-primary hover:underline">Change</button>
               </div>
             ) : (
               <div className="rounded-xl border border-border">
                 <div className="relative border-b border-border">
                   <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/50" />
-                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari nama crew…" className="w-full bg-transparent py-2 pl-8 pr-3 text-sm outline-none" autoFocus />
+                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search crew name…" className="w-full bg-transparent py-2 pl-8 pr-3 text-sm outline-none" autoFocus />
                 </div>
                 <div className="max-h-44 overflow-y-auto">
-                  {lb.isLoading && <div className="px-3 py-3 text-center text-xs text-muted-foreground">Memuat…</div>}
-                  {!lb.isLoading && filtered.length === 0 && <div className="px-3 py-3 text-center text-xs text-muted-foreground">Ga ketemu.</div>}
+                  {lb.isLoading && <div className="px-3 py-3 text-center text-xs text-muted-foreground">Loading…</div>}
+                  {!lb.isLoading && filtered.length === 0 && <div className="px-3 py-3 text-center text-xs text-muted-foreground">No matches.</div>}
                   {filtered.slice(0, 50).map((u) => (
                     <button key={u.userId} onClick={() => setUserId(u.userId)} className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-muted/40">
                       <Avatar userId={u.userId} name={u.name} avatar={u.avatar} size={24} />
@@ -235,32 +235,32 @@ function XpAdjustModal({ onClose }: { onClose: () => void }) {
 
           {/* add / reduce */}
           <div>
-            <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-muted-foreground">Aksi & jumlah</label>
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-muted-foreground">Action & amount</label>
             <div className="flex gap-2">
               <div className="inline-flex shrink-0 rounded-xl border border-border p-0.5">
-                <button onClick={() => setSign(-1)} className={cn("inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors", sign === -1 ? "bg-rose-500 text-white" : "text-muted-foreground hover:text-foreground")}><Minus className="h-3.5 w-3.5" /> Kurangi</button>
-                <button onClick={() => setSign(1)} className={cn("inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors", sign === 1 ? "bg-emerald-500 text-white" : "text-muted-foreground hover:text-foreground")}><Plus className="h-3.5 w-3.5" /> Tambah</button>
+                <button onClick={() => setSign(-1)} className={cn("inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors", sign === -1 ? "bg-rose-500 text-white" : "text-muted-foreground hover:text-foreground")}><Minus className="h-3.5 w-3.5" /> Deduct</button>
+                <button onClick={() => setSign(1)} className={cn("inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors", sign === 1 ? "bg-emerald-500 text-white" : "text-muted-foreground hover:text-foreground")}><Plus className="h-3.5 w-3.5" /> Add</button>
               </div>
-              <input value={magnitude} onChange={(e) => setMagnitude(e.target.value.replace(/[^0-9]/g, ""))} inputMode="numeric" placeholder="Jumlah XP" className={fieldCls} />
+              <input value={magnitude} onChange={(e) => setMagnitude(e.target.value.replace(/[^0-9]/g, ""))} inputMode="numeric" placeholder="XP amount" className={fieldCls} />
             </div>
-            {mag > 1000 && <p className="mt-1 text-xs text-destructive">Maksimal ±1000 XP per penyesuaian.</p>}
+            {mag > 1000 && <p className="mt-1 text-xs text-destructive">Max ±1000 XP per adjustment.</p>}
           </div>
 
           {/* note */}
           <div>
-            <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-muted-foreground">Alasan <span className="font-normal normal-case text-muted-foreground/70">(opsional, kelihatan di popup user)</span></label>
-            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={120} placeholder="Mis. telat meeting / bonus inisiatif" className={fieldCls} />
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-muted-foreground">Reason <span className="font-normal normal-case text-muted-foreground/70">(optional, shown in the user's popup)</span></label>
+            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={120} placeholder="e.g. late to meeting / initiative bonus" className={fieldCls} />
           </div>
 
           {amount !== 0 && selected && (
             <div className={cn("rounded-xl px-3 py-2 text-sm font-semibold", sign > 0 ? "bg-emerald-500/10 text-emerald-700" : "bg-rose-500/10 text-rose-700")}>
-              {selected.name}: {sign > 0 ? "+" : ""}{amount} XP → jadi {selected.totalXp + amount} XP
+              {selected.name}: {sign > 0 ? "+" : ""}{amount} XP → now {selected.totalXp + amount} XP
             </div>
           )}
-          {adjust.isError && <p className="text-sm text-destructive">{adjust.error instanceof ApiError ? adjust.error.message : "Gagal — cek izin / koneksi."}</p>}
+          {adjust.isError && <p className="text-sm text-destructive">{adjust.error instanceof ApiError ? adjust.error.message : "Something went wrong — check your permissions / connection."}</p>}
 
           <button disabled={!canSubmit || adjust.isPending} onClick={() => adjust.mutate()} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.99] disabled:cursor-default disabled:opacity-50">
-            {adjust.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {sign > 0 ? "Tambah" : "Kurangi"} XP
+            {adjust.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {sign > 0 ? "Add" : "Deduct"} XP
           </button>
         </div>
       </div>

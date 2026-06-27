@@ -116,7 +116,7 @@ function FeedPage() {
       id: tempId, _tempId: tempId, _pending: true,
       text: payload.text, createdAt: new Date().toISOString(), editedAt: null,
       likeCount: 0, commentCount: 0,
-      author: { id: me.id, name: me.name ?? "Saya", avatar: me.avatar },
+      author: { id: me.id, name: me.name ?? "Me", avatar: me.avatar },
       images: payload.images.map((f, i) => ({ id: `t${i}`, url: URL.createObjectURL(f), width: payload.imageMeta[i]?.w ?? null, height: payload.imageMeta[i]?.h ?? null, position: i })),
       mentions: [], likedByMe: false, canDelete: true, canEdit: true,
     };
@@ -165,7 +165,7 @@ function FeedPage() {
 
       {/* underline tabs */}
       <div className="sticky top-[49px] z-20 flex border-b border-border bg-background/80 backdrop-blur-md">
-        {([["all", "Semua"], ["mentions", "Nyebut kamu"]] as const).map(([t, label]) => (
+        {([["all", "All"], ["mentions", "Mentions"]] as const).map(([t, label]) => (
           <button key={t} onClick={() => setTab(t)} className="relative flex-1 py-3.5 text-sm font-bold transition hover:bg-muted/30">
             <span className={cn(tab === t ? "text-foreground" : "text-muted-foreground")}>{label}</span>
             {tab === t && <motion.span layoutId="wire-tab" className="absolute bottom-0 left-1/2 h-1 w-14 -translate-x-1/2 rounded-full bg-primary" transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
@@ -185,7 +185,7 @@ function FeedPage() {
               className="pointer-events-auto mt-2 inline-flex items-center gap-2 rounded-full bg-primary px-3.5 py-1.5 text-sm font-bold text-primary-foreground shadow-pop"
             >
               <ArrowUp className="h-3.5 w-3.5" />
-              {newPosts.length} post baru
+              {newPosts.length} new post{newPosts.length === 1 ? "" : "s"}
               <AvatarStack ids={newPosts.slice(0, 3).map((p) => p.author.id)} size={20} max={3} />
             </motion.button>
           )}
@@ -199,8 +199,8 @@ function FeedPage() {
         {empty && (
           <div className="px-6 py-16 text-center">
             <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary"><AtSign className="h-7 w-7" /></div>
-            <div className="text-base font-black">{tab === "mentions" ? "Belum ada yang nyebut kamu ✨" : "Sepi nih, mulai obrolannya"}</div>
-            <p className="mt-1 text-sm text-muted-foreground">{tab === "mentions" ? "Nanti kalau ada yang nge-tag kamu, muncul di sini." : "Post pertama tentang apa yang lagi kamu kerjain hari ini 🚀"}</p>
+            <div className="text-base font-black">{tab === "mentions" ? "No one's mentioned you yet ✨" : "It's quiet here — start the conversation"}</div>
+            <p className="mt-1 text-sm text-muted-foreground">{tab === "mentions" ? "When someone tags you, it'll show up here." : "Post the first thing about what you're working on today 🚀"}</p>
           </div>
         )}
 

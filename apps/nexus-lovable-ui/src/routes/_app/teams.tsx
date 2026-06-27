@@ -32,7 +32,7 @@ function Teams() {
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["nexus", "teams"] });
   const create = useMutation({ mutationFn: (name: string) => nexusApi.createTeam(name), onSuccess: refresh });
-  const newTeam = () => { const name = window.prompt("Nama team baru:"); if (name?.trim()) create.mutate(name.trim()); };
+  const newTeam = () => { const name = window.prompt("New team name:"); if (name?.trim()) create.mutate(name.trim()); };
 
   // Group teams by division. Real divisions come first (in stored order), then the
   // "Belum dikelompokin" bucket last.
@@ -51,13 +51,13 @@ function Teams() {
 
   return (
     <div>
-      <PageHeader title="Teams" subtitle="Grup akses: anggota team otomatis dapat akses ke project yang di-link. Team dikelompokin per divisi/perusahaan." />
+      <PageHeader title="Teams" subtitle="Access groups: team members automatically get access to linked projects. Teams are grouped by division/company." />
       <div className="p-4 md:p-8 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-muted-foreground">{rows.length} team{rows.length === 1 ? "" : "s"} · {divisions.length} divisi{!canManage && " · view-only (butuh BoD/Manager untuk kelola)"}</p>
+          <p className="text-sm text-muted-foreground">{rows.length} team{rows.length === 1 ? "" : "s"} · {divisions.length} division{divisions.length === 1 ? "" : "s"}{!canManage && " · view-only (need BoD/Manager to manage)"}</p>
           {canManage && (
             <div className="flex items-center gap-2">
-              <button onClick={() => setShowDivisions((v) => !v)} className="inline-flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground shadow-soft transition-all hover:bg-accent active:scale-[0.98]"><FolderTree className="h-4 w-4" /> Kelola divisi</button>
+              <button onClick={() => setShowDivisions((v) => !v)} className="inline-flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground shadow-soft transition-all hover:bg-accent active:scale-[0.98]"><FolderTree className="h-4 w-4" /> Manage divisions</button>
               <button onClick={newTeam} disabled={create.isPending} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} New team</button>
             </div>
           )}
@@ -76,7 +76,7 @@ function Teams() {
           </div>
         )}
         {!teams.isLoading && rows.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Users className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">Belum ada team</div><p className="mt-2 text-sm text-muted-foreground">{canManage ? "Bikin team pertama buat ngegrup crew + akses project." : "Belum ada team di workspace kamu."}</p></div>
+          <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Users className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">No teams yet</div><p className="mt-2 text-sm text-muted-foreground">{canManage ? "Create your first team to group your crew + project access." : "No teams in your workspace yet."}</p></div>
         )}
 
         {/* Grouped sections per division */}
@@ -95,7 +95,7 @@ function Teams() {
         ))}
         {ungrouped.length > 0 && (
           <DivisionSection
-            title="Belum dikelompokin"
+            title="Not grouped yet"
             color="#94A3B8"
             muted
             teams={ungrouped}
@@ -131,7 +131,7 @@ function DivisionSection({ title, color, teams, divisions, canManage, allMembers
         <span className="ml-2 h-px flex-1 bg-border" />
       </div>
       {teams.length === 0 ? (
-        <p className="text-xs text-muted-foreground">Belum ada team di divisi ini — pindahin team lewat dropdown di kartu.</p>
+        <p className="text-xs text-muted-foreground">No teams in this division yet — move teams here using the dropdown on each card.</p>
       ) : (
         <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
           {teams.map((t, i) => (
@@ -157,16 +157,16 @@ function DivisionManager({ divisions, teams }: { divisions: NexusDivision[]; tea
   return (
     <div className="rounded-2xl border border-border bg-card p-5 shadow-soft space-y-4">
       <div>
-        <h3 className="font-semibold">Divisi / Perusahaan</h3>
-        <p className="text-xs text-muted-foreground">Grup di atas team. Atur nama & warna, lalu pindahin team ke divisinya lewat dropdown di tiap kartu.</p>
+        <h3 className="font-semibold">Divisions / Companies</h3>
+        <p className="text-xs text-muted-foreground">A layer above teams. Set the name & color, then move teams into their division using the dropdown on each card.</p>
       </div>
       <div className="flex items-center gap-2">
-        <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) create.mutate(); }} placeholder="Nama divisi baru…" className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
-        <button onClick={() => name.trim() && create.mutate()} disabled={!name.trim() || create.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Tambah</button>
+        <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) create.mutate(); }} placeholder="New division name…" className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+        <button onClick={() => name.trim() && create.mutate()} disabled={!name.trim() || create.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add</button>
       </div>
-      {create.isError && <p className="text-xs font-semibold text-destructive">{(create.error as Error)?.message ?? "Gagal bikin divisi."}</p>}
+      {create.isError && <p className="text-xs font-semibold text-destructive">{(create.error as Error)?.message ?? "Couldn't create division."}</p>}
       <div className="space-y-1.5">
-        {divisions.length === 0 && <p className="text-xs text-muted-foreground">Belum ada divisi. Tambah di atas.</p>}
+        {divisions.length === 0 && <p className="text-xs text-muted-foreground">No divisions yet. Add one above.</p>}
         {divisions.map((d) => <DivisionRow key={d.id} division={d} count={countByDiv.get(d.id) ?? 0} onChange={refresh} />)}
       </div>
     </div>
@@ -182,19 +182,19 @@ function DivisionRow({ division, count, onChange }: { division: NexusDivision; c
 
   return (
     <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2">
-      <input type="color" value={color} onChange={(e) => setColor(e.target.value)} onBlur={() => { if (color !== (division.color ?? "#64748B")) update.mutate({ color }); }} className="h-6 w-6 shrink-0 cursor-pointer rounded border border-border bg-transparent p-0" title="Warna divisi" />
+      <input type="color" value={color} onChange={(e) => setColor(e.target.value)} onBlur={() => { if (color !== (division.color ?? "#64748B")) update.mutate({ color }); }} className="h-6 w-6 shrink-0 cursor-pointer rounded border border-border bg-transparent p-0" title="Division color" />
       {editing ? (
         <input value={name} autoFocus onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) update.mutate({ name: name.trim() }); if (e.key === "Escape") { setName(division.name); setEditing(false); } }} className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm outline-none focus:border-primary" />
       ) : (
         <span className="flex-1 truncate text-sm font-semibold">{division.name}</span>
       )}
-      <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-bold text-muted-foreground">{count} team</span>
+      <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-bold text-muted-foreground">{count} team{count === 1 ? "" : "s"}</span>
       {editing ? (
-        <button onClick={() => name.trim() && update.mutate({ name: name.trim() })} disabled={update.isPending} className="rounded-md p-1.5 text-emerald-600 transition hover:bg-emerald-50 disabled:opacity-50" aria-label="Simpan">{update.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}</button>
+        <button onClick={() => name.trim() && update.mutate({ name: name.trim() })} disabled={update.isPending} className="rounded-md p-1.5 text-emerald-600 transition hover:bg-emerald-50 disabled:opacity-50" aria-label="Save">{update.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}</button>
       ) : (
-        <button onClick={() => setEditing(true)} className="rounded-md p-1.5 text-muted-foreground transition hover:bg-accent" aria-label="Ubah nama"><Pencil className="h-3.5 w-3.5" /></button>
+        <button onClick={() => setEditing(true)} className="rounded-md p-1.5 text-muted-foreground transition hover:bg-accent" aria-label="Rename"><Pencil className="h-3.5 w-3.5" /></button>
       )}
-      <button onClick={() => { if (window.confirm(`Hapus divisi "${division.name}"? Team-nya tetap ada, cuma jadi nggak ada divisi.`)) del.mutate(); }} disabled={del.isPending} className="rounded-md p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50" aria-label="Hapus divisi">{del.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}</button>
+      <button onClick={() => { if (window.confirm(`Delete division "${division.name}"? Its teams stick around, they just won't belong to a division anymore.`)) del.mutate(); }} disabled={del.isPending} className="rounded-md p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50" aria-label="Delete division">{del.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}</button>
     </div>
   );
 }
@@ -213,21 +213,21 @@ function TeamShiftControl({ team }: { team: NexusTeam }) {
   const dirty = enabled !== !!team.attendanceShiftOverrideEnabled || (enabled && (start !== baseStart || end !== baseEnd));
   return (
     <div className="mt-4">
-      <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Jam masuk team</span>
+      <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Team work hours</span>
       <label className="mt-1.5 flex items-center gap-2 text-xs font-semibold">
         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-3.5 w-3.5 accent-primary" />
-        Pakai jam shift khusus team ini
+        Use a custom shift just for this team
       </label>
       {enabled ? (
         <div className="mt-2 grid grid-cols-2 gap-2">
-          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Masuk<input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="mt-0.5 w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs" /></label>
-          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Pulang<input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="mt-0.5 w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs" /></label>
+          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Clock in<input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="mt-0.5 w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs" /></label>
+          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Clock out<input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="mt-0.5 w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs" /></label>
         </div>
       ) : (
-        <p className="mt-1 text-[11px] text-muted-foreground">Ikut jam default workspace.</p>
+        <p className="mt-1 text-[11px] text-muted-foreground">Follows the workspace default hours.</p>
       )}
-      {dirty && <button onClick={() => save.mutate()} disabled={save.isPending} className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{save.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Simpan jam</button>}
-      {save.isError && <p className="mt-1 text-[11px] font-semibold text-destructive">Gagal simpan — cek format jam.</p>}
+      {dirty && <button onClick={() => save.mutate()} disabled={save.isPending} className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{save.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Save hours</button>}
+      {save.isError && <p className="mt-1 text-[11px] font-semibold text-destructive">Couldn't save — check the time format.</p>}
     </div>
   );
 }
@@ -267,19 +267,19 @@ function TeamCard({ team, canManage, divisions, allMembers, allProjects, onChang
           {team.workspace?.name && <p className="text-xs text-muted-foreground">{team.workspace.name}</p>}
         </div>
         <span className="ml-auto rounded-full bg-muted px-2.5 py-0.5 text-xs font-bold text-muted-foreground">{members.length} member{members.length === 1 ? "" : "s"}</span>
-        {canManage && <button onClick={() => { if (window.confirm(`Hapus team "${team.name}"?`)) del.mutate(); }} disabled={del.isPending} className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50" aria-label="Hapus team">{del.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}</button>}
+        {canManage && <button onClick={() => { if (window.confirm(`Delete team "${team.name}"?`)) del.mutate(); }} disabled={del.isPending} className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50" aria-label="Delete team">{del.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}</button>}
       </div>
 
       {canManage && (
         <div className="mt-3">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Divisi</span>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Division</span>
           <select
             value={team.divisionId ?? ""}
             onChange={(e) => setDivision.mutate(e.target.value || null)}
             disabled={setDivision.isPending}
             className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-semibold outline-none focus:border-primary disabled:opacity-60"
           >
-            <option value="">— Tanpa divisi —</option>
+            <option value="">— No division —</option>
             {divisions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
         </div>
@@ -288,7 +288,7 @@ function TeamCard({ team, canManage, divisions, allMembers, allProjects, onChang
       <div className="mt-4">
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Crew</span>
-          {canManageAtt && <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"><Star className="h-3 w-3 text-amber-500" /> = tim absen utama</span>}
+          {canManageAtt && <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"><Star className="h-3 w-3 text-amber-500" /> = primary attendance team</span>}
         </div>
         <div className="mt-1.5 flex flex-wrap gap-1.5">
           {members.map((m) => {
@@ -300,20 +300,20 @@ function TeamCard({ team, canManage, divisions, allMembers, allProjects, onChang
                 <span className="max-w-[120px] truncate font-semibold" title={m.user?.name ?? ""}>{m.user?.name ?? "—"}</span>
                 {m.role === "LEAD" && <span className="shrink-0 rounded bg-primary/15 px-1 text-[9px] font-black uppercase tracking-wide text-primary">Lead</span>}
                 {canManage ? (
-                  <button onClick={() => setLead.mutate({ userId: uid, isLead: m.role !== "LEAD" })} disabled={setLead.isPending} title={m.role === "LEAD" ? "Lead tim (klik buat lepas) — bisa lihat & approve absensi tim ini" : "Jadikan Lead tim — biar bisa lihat & approve absensi tim ini"} className={cn("shrink-0 rounded-full p-0.5 transition", m.role === "LEAD" ? "text-primary" : "text-muted-foreground/40 hover:text-primary")}><Crown className={cn("h-3.5 w-3.5", m.role === "LEAD" && "fill-current")} /></button>
+                  <button onClick={() => setLead.mutate({ userId: uid, isLead: m.role !== "LEAD" })} disabled={setLead.isPending} title={m.role === "LEAD" ? "Team lead (click to unset) — can view & approve this team's attendance" : "Make team lead — so they can view & approve this team's attendance"} className={cn("shrink-0 rounded-full p-0.5 transition", m.role === "LEAD" ? "text-primary" : "text-muted-foreground/40 hover:text-primary")}><Crown className={cn("h-3.5 w-3.5", m.role === "LEAD" && "fill-current")} /></button>
                 ) : null}
                 {canManageAtt ? (
-                  <button onClick={() => setPrimary.mutate({ userId: uid, value: !isPrimary })} disabled={setPrimary.isPending} title={isPrimary ? "Tim absen utama dia (klik buat lepas)" : "Jadikan tim absen utama dia"} className={cn("shrink-0 rounded-full p-0.5 transition", isPrimary ? "text-amber-500" : "text-muted-foreground/40 hover:text-amber-500")}><Star className={cn("h-3.5 w-3.5", isPrimary && "fill-current")} /></button>
+                  <button onClick={() => setPrimary.mutate({ userId: uid, value: !isPrimary })} disabled={setPrimary.isPending} title={isPrimary ? "Their primary attendance team (click to unset)" : "Make this their primary attendance team"} className={cn("shrink-0 rounded-full p-0.5 transition", isPrimary ? "text-amber-500" : "text-muted-foreground/40 hover:text-amber-500")}><Star className={cn("h-3.5 w-3.5", isPrimary && "fill-current")} /></button>
                 ) : isPrimary ? <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" /> : null}
-                {canManage && <button onClick={() => removeMember.mutate(uid)} className="shrink-0 text-muted-foreground/50 transition hover:text-destructive" aria-label="Keluarkan"><X className="h-3 w-3" /></button>}
+                {canManage && <button onClick={() => removeMember.mutate(uid)} className="shrink-0 text-muted-foreground/50 transition hover:text-destructive" aria-label="Remove"><X className="h-3 w-3" /></button>}
               </span>
             );
           })}
-          {members.length === 0 && <span className="text-xs text-muted-foreground">Belum ada anggota</span>}
+          {members.length === 0 && <span className="text-xs text-muted-foreground">No members yet</span>}
         </div>
         {canManage && addableMembers.length > 0 && (
           <select value="" onChange={(e) => { if (e.target.value) addMember.mutate(e.target.value); }} disabled={addMember.isPending} className="mt-2 w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-semibold text-muted-foreground outline-none focus:border-primary">
-            <option value="">+ Tambah anggota…</option>
+            <option value="">+ Add member…</option>
             {addableMembers.map((m) => <option key={m.userId} value={m.userId}>{m.name}</option>)}
           </select>
         )}
@@ -331,7 +331,7 @@ function TeamCard({ team, canManage, divisions, allMembers, allProjects, onChang
               {canManage && <button onClick={() => unlinkProject.mutate(p!.id)} className="ml-0.5 hidden text-muted-foreground hover:text-destructive group-hover:inline" aria-label="Unlink"><X className="h-3 w-3" /></button>}
             </span>
           ))}
-          {projects.length === 0 && <span className="text-xs text-muted-foreground">Belum ada project</span>}
+          {projects.length === 0 && <span className="text-xs text-muted-foreground">No projects yet</span>}
         </div>
         {canManage && linkableProjects.length > 0 && (
           <select value="" onChange={(e) => { if (e.target.value) linkProject.mutate(e.target.value); }} disabled={linkProject.isPending} className="mt-2 w-full rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-semibold text-muted-foreground outline-none focus:border-primary">
@@ -342,7 +342,7 @@ function TeamCard({ team, canManage, divisions, allMembers, allProjects, onChang
       </div>
 
       {(addMember.isError || removeMember.isError || linkProject.isError || unlinkProject.isError || setDivision.isError || del.isError) && (
-        <p className="mt-3 text-xs font-semibold text-destructive">Ada aksi yang gagal — cek akses/koneksi.</p>
+        <p className="mt-3 text-xs font-semibold text-destructive">Something didn't go through — check your access/connection.</p>
       )}
     </div>
   );

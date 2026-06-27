@@ -47,17 +47,17 @@ import {
 import { Reveal } from "@/components/motion";
 import { cn } from "@/lib/utils";
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
-const MONTHS_FULL = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 const rp = (n: number) => "Rp " + new Intl.NumberFormat("id-ID").format(Math.round(n || 0));
 const rpShort = (n: number) => {
   const a = Math.abs(n);
   const sign = n < 0 ? "-" : "";
   const abs = Math.abs(n);
-  if (a >= 1e9) return `${sign}${(abs / 1e9).toFixed(1)} M`;
-  if (a >= 1e6) return `${sign}${(abs / 1e6).toFixed(1)} jt`;
-  if (a >= 1e3) return `${sign}${(abs / 1e3).toFixed(0)} rb`;
+  if (a >= 1e9) return `${sign}${(abs / 1e9).toFixed(1)} B`;
+  if (a >= 1e6) return `${sign}${(abs / 1e6).toFixed(1)} M`;
+  if (a >= 1e3) return `${sign}${(abs / 1e3).toFixed(0)} K`;
   return sign + String(Math.round(abs));
 };
 /** "1.500.000" / "1500000" / "Rp 1,5jt-style junk" → number (digits only). */
@@ -195,8 +195,8 @@ export function PnlDashboardView({ projectId }: { projectId: string }) {
     () =>
       MONTHS.map((m, i) => ({
         name: m,
-        Masuk: d?.months.income[i] ?? 0,
-        Keluar: d?.months.expense[i] ?? 0,
+        In: d?.months.income[i] ?? 0,
+        Out: d?.months.expense[i] ?? 0,
         Profit: (d?.months.income[i] ?? 0) - (d?.months.expense[i] ?? 0),
         Budget: d?.months.budget[i] ?? null,
       })),
@@ -206,7 +206,7 @@ export function PnlDashboardView({ projectId }: { projectId: string }) {
   if (q.isLoading) {
     return (
       <div className="grid place-items-center p-16 text-muted-foreground">
-        <div className="flex items-center gap-2 text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Memuat P&L…</div>
+        <div className="flex items-center gap-2 text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Loading P&L…</div>
       </div>
     );
   }
@@ -216,11 +216,11 @@ export function PnlDashboardView({ projectId }: { projectId: string }) {
     return (
       <div className="p-8">
         <div className="rounded-3xl border border-border bg-card p-8 text-center shadow-soft">
-          <div className="font-display text-base font-extrabold">{forbidden ? "P&L khusus BoD ke atas" : "Gagal memuat P&L"}</div>
-          <p className="mt-1 text-sm text-muted-foreground">{forbidden ? "Akses view keuangan ini dibatasi ke BoD dan One Above All." : "Jaringan atau server lagi bermasalah — coba lagi."}</p>
+          <div className="font-display text-base font-extrabold">{forbidden ? "P&L is BoD-and-up only" : "Couldn't load P&L"}</div>
+          <p className="mt-1 text-sm text-muted-foreground">{forbidden ? "Access to this finance view is limited to BoD and One Above All." : "Network or server's acting up — give it another shot."}</p>
           {!forbidden && (
             <button onClick={() => q.refetch()} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition hover:bg-primary/90">
-              {q.isFetching && <Loader2 className="h-4 w-4 animate-spin" />} Coba lagi
+              {q.isFetching && <Loader2 className="h-4 w-4 animate-spin" />} Try again
             </button>
           )}
         </div>
@@ -242,11 +242,11 @@ export function PnlDashboardView({ projectId }: { projectId: string }) {
           <button onClick={() => setYear((y) => Math.min(2100, y + 1))} className="rounded-lg p-1.5 transition hover:bg-accent"><ChevronRight className="h-4 w-4" /></button>
         </div>
         {/* #1 mobile flow — always reachable without scrolling */}
-        <button onClick={() => setExpenseModal({ open: true })} className="inline-flex items-center gap-1 rounded-xl bg-rose-500 px-3 py-1.5 text-xs font-bold text-white shadow-soft transition hover:bg-rose-600 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" />Pengeluaran</button>
+        <button onClick={() => setExpenseModal({ open: true })} className="inline-flex items-center gap-1 rounded-xl bg-rose-500 px-3 py-1.5 text-xs font-bold text-white shadow-soft transition hover:bg-rose-600 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" />Expense</button>
         <button onClick={() => setIncomeModal({ open: true })} className="inline-flex items-center gap-1 rounded-xl bg-[#0091ff] px-3 py-1.5 text-xs font-bold text-white shadow-soft transition hover:bg-[#0080e0] active:scale-[0.98]"><Plus className="h-3.5 w-3.5" />Deal</button>
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
-          <button onClick={() => setShowCategories(true)} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold shadow-soft transition hover:bg-accent"><Tags className="h-3.5 w-3.5" />Kategori</button>
-          <button onClick={() => setShowRecurring(true)} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold shadow-soft transition hover:bg-accent"><Repeat className="h-3.5 w-3.5" />Rutin</button>
+          <button onClick={() => setShowCategories(true)} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold shadow-soft transition hover:bg-accent"><Tags className="h-3.5 w-3.5" />Categories</button>
+          <button onClick={() => setShowRecurring(true)} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold shadow-soft transition hover:bg-accent"><Repeat className="h-3.5 w-3.5" />Recurring</button>
           <a href={nexusApi.pnlExportUrl(projectId, year)} download className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold shadow-soft transition hover:bg-accent"><Download className="h-3.5 w-3.5" />CSV</a>
         </div>
       </div>
@@ -254,18 +254,18 @@ export function PnlDashboardView({ projectId }: { projectId: string }) {
       {/* summary cards */}
       <Reveal>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <SummaryCard label="Uang Masuk" value={d.totals.income} sub={`${year} · beneran cair`} icon={<TrendingUp className="h-3.5 w-3.5" />} gradient="bg-gradient-to-br from-emerald-500 to-emerald-700" />
-          <SummaryCard label="Pengeluaran" value={d.totals.expense} sub={`${year}`} icon={<TrendingDown className="h-3.5 w-3.5" />} gradient="bg-gradient-to-br from-rose-500 to-rose-700" />
-          <SummaryCard label="Profit" value={d.totals.profit} negative={d.totals.profit < 0} sub={d.totals.profit < 0 ? "rugi 😬" : "masuk − keluar"} icon={<Wallet className="h-3.5 w-3.5" />} gradient="bg-gradient-to-br from-[#7b68ee] to-[#5b48ce]" />
-          <SummaryCard label="Pipeline" value={d.totals.pipelineOutstanding} sub={`${d.incomes.filter((i) => i.outstanding > 0).length} deal belum cair`} icon={<Hourglass className="h-3.5 w-3.5" />} gradient="bg-gradient-to-br from-[#0091ff] to-[#0066cc]" />
+          <SummaryCard label="Money In" value={d.totals.income} sub={`${year} · actually cashed in`} icon={<TrendingUp className="h-3.5 w-3.5" />} gradient="bg-gradient-to-br from-emerald-500 to-emerald-700" />
+          <SummaryCard label="Expenses" value={d.totals.expense} sub={`${year}`} icon={<TrendingDown className="h-3.5 w-3.5" />} gradient="bg-gradient-to-br from-rose-500 to-rose-700" />
+          <SummaryCard label="Profit" value={d.totals.profit} negative={d.totals.profit < 0} sub={d.totals.profit < 0 ? "in the red 😬" : "in − out"} icon={<Wallet className="h-3.5 w-3.5" />} gradient="bg-gradient-to-br from-[#7b68ee] to-[#5b48ce]" />
+          <SummaryCard label="Pipeline" value={d.totals.pipelineOutstanding} sub={`${d.incomes.filter((i) => i.outstanding > 0).length} deals not yet cashed`} icon={<Hourglass className="h-3.5 w-3.5" />} gradient="bg-gradient-to-br from-[#0091ff] to-[#0066cc]" />
         </div>
       </Reveal>
 
       {/* monthly trend */}
       <div className="rounded-3xl border border-border bg-card p-4 shadow-soft">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <div className="font-display text-sm font-extrabold">Tren bulanan {year}</div>
-          <div className="text-[11px] text-muted-foreground">ketuk chip bulan di bawah buat detail harian</div>
+          <div className="font-display text-sm font-extrabold">Monthly trend {year}</div>
+          <div className="text-[11px] text-muted-foreground">tap a month chip below for the daily breakdown</div>
         </div>
         <div className="h-56 md:h-64">
           <ResponsiveContainer width="100%" height="100%">
@@ -274,10 +274,10 @@ export function PnlDashboardView({ projectId }: { projectId: string }) {
               <XAxis dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tickFormatter={(v: number) => rpShort(v)} tick={{ fontSize: 10 }} width={48} axisLine={false} tickLine={false} />
               <Tooltip formatter={(v: number | string, n: string) => [rp(Number(v)), n]} contentStyle={{ borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)", fontSize: 12 }} />
-              <Bar dataKey="Masuk" fill="#10b981" radius={[6, 6, 0, 0]} maxBarSize={26} onClick={(_: unknown, idx: number) => setMonth(idx + 1)} className="cursor-pointer">
+              <Bar dataKey="In" fill="#10b981" radius={[6, 6, 0, 0]} maxBarSize={26} onClick={(_: unknown, idx: number) => setMonth(idx + 1)} className="cursor-pointer">
                 {chartData.map((_, i) => <Cell key={i} fillOpacity={month === i + 1 ? 1 : 0.55} />)}
               </Bar>
-              <Bar dataKey="Keluar" fill="#f43f5e" radius={[6, 6, 0, 0]} maxBarSize={26} onClick={(_: unknown, idx: number) => setMonth(idx + 1)} className="cursor-pointer">
+              <Bar dataKey="Out" fill="#f43f5e" radius={[6, 6, 0, 0]} maxBarSize={26} onClick={(_: unknown, idx: number) => setMonth(idx + 1)} className="cursor-pointer">
                 {chartData.map((_, i) => <Cell key={i} fillOpacity={month === i + 1 ? 1 : 0.55} />)}
               </Bar>
               <Line type="monotone" dataKey="Profit" stroke="#7b68ee" strokeWidth={2.5} dot={{ r: 2.5 }} />
@@ -359,22 +359,22 @@ function BudgetStrip({ projectId, year, month, budget, actual, pct, onSaved }: {
     <div className="rounded-3xl border border-border bg-card p-4 shadow-soft">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm font-bold">
-          <Banknote className="h-4 w-4 text-amber-500" /> Budget {MONTHS_FULL[month - 1]}
+          <Banknote className="h-4 w-4 text-amber-500" /> {MONTHS_FULL[month - 1]} budget
           {budget !== null && (
             <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide", over ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400" : warn ? "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400")}>
-              {over ? "OVER BUDGET" : warn ? "MEPET" : "AMAN"}
+              {over ? "OVER BUDGET" : warn ? "CUTTING IT CLOSE" : "ON TRACK"}
             </span>
           )}
         </div>
         {!editing ? (
           <button onClick={() => { setVal(budget ?? 0); setEditing(true); }} className="inline-flex items-center gap-1 text-xs font-semibold text-primary transition hover:underline">
-            <Pencil className="h-3 w-3" /> {budget === null ? "Set budget" : "Ubah"}
+            <Pencil className="h-3 w-3" /> {budget === null ? "Set budget" : "Edit"}
           </button>
         ) : (
           <div className="flex items-center gap-1.5">
             <div className="w-36"><RpInput defaultValue={budget ?? 0} onValue={setVal} autoFocus /></div>
             <button onClick={() => save.mutate()} disabled={save.isPending} className="rounded-lg bg-primary px-2.5 py-1.5 text-xs font-bold text-primary-foreground disabled:opacity-50">{save.isPending ? "…" : "OK"}</button>
-            <button onClick={() => setEditing(false)} className="rounded-lg px-2 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-accent">Batal</button>
+            <button onClick={() => setEditing(false)} className="rounded-lg px-2 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-accent">Cancel</button>
           </div>
         )}
       </div>
@@ -389,12 +389,12 @@ function BudgetStrip({ projectId, year, month, budget, actual, pct, onSaved }: {
             />
           </div>
           <div className="mt-1.5 flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
-            <span>Terpakai {rp(actual)}{over && <span className="ml-1 text-red-600">(+{rp(actual - budget)} lewat)</span>}</span>
+            <span>Spent {rp(actual)}{over && <span className="ml-1 text-red-600">(+{rp(actual - budget)} over)</span>}</span>
             <span>Target {rp(budget)}</span>
           </div>
         </>
       ) : (
-        <p className="mt-2 text-xs text-muted-foreground">Belum ada target budget buat bulan ini — set biar keliatan aman/over-nya.</p>
+        <p className="mt-2 text-xs text-muted-foreground">No budget target for this month yet — set one so you can see if you're on track or over.</p>
       )}
     </div>
   );
@@ -412,11 +412,11 @@ function CategoryBreakdown({ d, month, onManage }: { d: PnlDashboard; month: num
   return (
     <div className="rounded-3xl border border-border bg-card p-4 shadow-soft">
       <div className="mb-3 flex items-center justify-between">
-        <div className="font-display text-sm font-extrabold">Pengeluaran per kategori <span className="font-semibold text-muted-foreground">· {month ? MONTHS_FULL[month - 1] : `setahun ${d.year}`}</span></div>
-        <button onClick={onManage} className="text-xs font-semibold text-primary transition hover:underline">Kelola</button>
+        <div className="font-display text-sm font-extrabold">Expenses by category <span className="font-semibold text-muted-foreground">· {month ? MONTHS_FULL[month - 1] : `all of ${d.year}`}</span></div>
+        <button onClick={onManage} className="text-xs font-semibold text-primary transition hover:underline">Manage</button>
       </div>
       {rows.length === 0 ? (
-        <p className="py-6 text-center text-sm text-muted-foreground">Belum ada pengeluaran {month ? `di ${MONTHS_FULL[month - 1]}` : "tahun ini"}.</p>
+        <p className="py-6 text-center text-sm text-muted-foreground">No expenses {month ? `in ${MONTHS_FULL[month - 1]}` : "this year"} yet.</p>
       ) : (
         <div className="space-y-2.5">
           {rows.map((c) => (
@@ -447,23 +447,23 @@ function PipelineBoard({ d, onAddIncome, onEditIncome, onAddPayment, onManageSta
   return (
     <div className="rounded-3xl border border-border bg-card p-4 shadow-soft">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="font-display text-sm font-extrabold">Pipeline uang masuk</div>
+        <div className="font-display text-sm font-extrabold">Income pipeline</div>
         <div className="flex items-center gap-2">
-          <button onClick={onManageStages} className="text-xs font-semibold text-primary transition hover:underline">Kelola stage</button>
+          <button onClick={onManageStages} className="text-xs font-semibold text-primary transition hover:underline">Manage stages</button>
           <button onClick={onAddIncome} className="inline-flex items-center gap-1 rounded-xl bg-primary px-2.5 py-1.5 text-xs font-bold text-primary-foreground transition hover:bg-primary/90 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" />Deal</button>
         </div>
       </div>
       {d.incomes.length === 0 ? (
-        <p className="py-6 text-center text-sm text-muted-foreground">Belum ada deal — tambahin deal/invoice pertama lo. Uang yang beneran masuk dicatat per pembayaran (DP, termin, pelunasan).</p>
+        <p className="py-6 text-center text-sm text-muted-foreground">No deals yet — add your first deal/invoice. Actual money in gets logged per payment (deposit, installment, final).</p>
       ) : (
         <div className="max-h-[26rem] space-y-3 overflow-y-auto pr-1">
           {groups.filter((g) => g.incomes.length > 0 || g.stage).map((g) => (
             <div key={g.stage?.id ?? "none"}>
               <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider" style={{ color: g.stage?.color ?? "#94a3b8" }}>
                 <span className="h-2 w-2 rounded-full" style={{ background: g.stage?.color ?? "#94a3b8" }} />
-                {g.stage?.name ?? "Tanpa stage"} <span className="font-bold text-muted-foreground">({g.incomes.length})</span>
+                {g.stage?.name ?? "No stage"} <span className="font-bold text-muted-foreground">({g.incomes.length})</span>
               </div>
-              {g.incomes.length === 0 && <p className="rounded-xl border border-dashed border-border px-3 py-2 text-[11px] text-muted-foreground">Kosong</p>}
+              {g.incomes.length === 0 && <p className="rounded-xl border border-dashed border-border px-3 py-2 text-[11px] text-muted-foreground">Empty</p>}
               <div className="space-y-1.5">
                 {g.incomes.map((inc) => {
                   const paidPct = inc.totalAmount ? Math.min(100, Math.round((inc.paid / inc.totalAmount) * 100)) : 0;
@@ -473,17 +473,17 @@ function PipelineBoard({ d, onAddIncome, onEditIncome, onAddPayment, onManageSta
                         <button onClick={() => onEditIncome(inc)} className="min-w-0 text-left">
                           <div className="truncate text-sm font-bold hover:text-primary">{inc.title}</div>
                           <div className="text-[11px] text-muted-foreground">
-                            {rp(inc.totalAmount)}{inc.expectedDate && <> · cair ~{new Date(inc.expectedDate).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}</>}
+                            {rp(inc.totalAmount)}{inc.expectedDate && <> · due ~{new Date(inc.expectedDate).toLocaleDateString("en-US", { day: "numeric", month: "short" })}</>}
                           </div>
                         </button>
-                        <button onClick={() => onAddPayment(inc)} className="shrink-0 rounded-lg bg-emerald-100 px-2 py-1 text-[10px] font-extrabold text-emerald-700 transition hover:bg-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-400 dark:hover:bg-emerald-500/25">+ BAYARAN</button>
+                        <button onClick={() => onAddPayment(inc)} className="shrink-0 rounded-lg bg-emerald-100 px-2 py-1 text-[10px] font-extrabold text-emerald-700 transition hover:bg-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-400 dark:hover:bg-emerald-500/25">+ PAYMENT</button>
                       </div>
                       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
                         <div className="h-full rounded-full bg-emerald-500" style={{ width: `${paidPct}%` }} />
                       </div>
                       <div className="mt-1 flex items-center justify-between text-[10px] font-semibold text-muted-foreground">
-                        <span className="text-emerald-600 dark:text-emerald-400">Masuk {rpShort(inc.paid)} ({paidPct}%)</span>
-                        {inc.outstanding > 0 ? <span>Sisa {rpShort(inc.outstanding)}</span> : <span className="text-emerald-600 dark:text-emerald-400">LUNAS ✓</span>}
+                        <span className="text-emerald-600 dark:text-emerald-400">In {rpShort(inc.paid)} ({paidPct}%)</span>
+                        {inc.outstanding > 0 ? <span>Left {rpShort(inc.outstanding)}</span> : <span className="text-emerald-600 dark:text-emerald-400">PAID ✓</span>}
                       </div>
                     </div>
                   );
@@ -502,7 +502,7 @@ function PipelineBoard({ d, onAddIncome, onEditIncome, onAddPayment, onManageSta
 function MonthDetail({ d, year, month, onAddExpense, onEditExpense, onChanged }: { d: PnlDashboard; year: number; month: number; onAddExpense: () => void; onEditExpense: (e: PnlExpense) => void; onChanged: () => void }) {
   const md = d.monthDetail!;
   const catOf = (id: string | null | undefined) => d.categories.find((c) => c.id === id);
-  const dailyData = md.days.map((day) => ({ name: String(day.day), Masuk: day.income, Keluar: day.expense }));
+  const dailyData = md.days.map((day) => ({ name: String(day.day), In: day.income, Out: day.expense }));
   const hasAny = md.expenses.length > 0 || md.payments.length > 0;
 
   // group transactions per day (descending)
@@ -522,8 +522,8 @@ function MonthDetail({ d, year, month, onAddExpense, onEditExpense, onChanged }:
   return (
     <div className="rounded-3xl border border-border bg-card p-4 shadow-soft">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="font-display text-sm font-extrabold">Detail {MONTHS_FULL[month - 1]} {year}</div>
-        <button onClick={onAddExpense} className="inline-flex items-center gap-1 rounded-xl bg-rose-500 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-rose-600 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" />Catat pengeluaran</button>
+        <div className="font-display text-sm font-extrabold">{MONTHS_FULL[month - 1]} {year} detail</div>
+        <button onClick={onAddExpense} className="inline-flex items-center gap-1 rounded-xl bg-rose-500 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-rose-600 active:scale-[0.98]"><Plus className="h-3.5 w-3.5" />Log expense</button>
       </div>
 
       {/* daily bars */}
@@ -532,16 +532,16 @@ function MonthDetail({ d, year, month, onAddExpense, onEditExpense, onChanged }:
           <BarChart data={dailyData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }} barCategoryGap={2}>
             <XAxis dataKey="name" tick={{ fontSize: 9 }} interval={2} axisLine={false} tickLine={false} />
             <YAxis tickFormatter={(v: number) => rpShort(v)} tick={{ fontSize: 9 }} width={42} axisLine={false} tickLine={false} />
-            <Tooltip formatter={(v: number | string, n: string) => [rp(Number(v)), n]} labelFormatter={(l) => `Tanggal ${l}`} contentStyle={{ borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)", fontSize: 12 }} />
-            <Bar dataKey="Masuk" fill="#10b981" radius={[3, 3, 0, 0]} />
-            <Bar dataKey="Keluar" fill="#f43f5e" radius={[3, 3, 0, 0]} />
+            <Tooltip formatter={(v: number | string, n: string) => [rp(Number(v)), n]} labelFormatter={(l) => `Day ${l}`} contentStyle={{ borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)", fontSize: 12 }} />
+            <Bar dataKey="In" fill="#10b981" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="Out" fill="#f43f5e" radius={[3, 3, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
 
       {/* transaction list */}
       {!hasAny ? (
-        <p className="py-6 text-center text-sm text-muted-foreground">Belum ada transaksi di bulan ini.</p>
+        <p className="py-6 text-center text-sm text-muted-foreground">No transactions this month yet.</p>
       ) : (
         <div className="mt-3 space-y-3">
           {days.map((day) => {
@@ -595,16 +595,16 @@ function ExpenseRow({ expense, category, onEdit, onChanged }: { expense: PnlExpe
         <ArrowDownCircle className="h-4 w-4 shrink-0 text-rose-500" />
         <button onClick={onEdit} className="min-w-0 flex-1 text-left">
           <div className="flex items-center gap-1.5">
-            <span className="truncate text-sm font-semibold hover:text-primary">{expense.description || "Pengeluaran"}</span>
+            <span className="truncate text-sm font-semibold hover:text-primary">{expense.description || "Expense"}</span>
             {expense.recurringId && <Repeat className="h-3 w-3 shrink-0 text-muted-foreground" />}
           </div>
           {category && <span className="inline-flex items-center gap-1 text-[11px] font-semibold" style={{ color: category.color }}><span className="h-1.5 w-1.5 rounded-full" style={{ background: category.color }} />{category.name}</span>}
         </button>
         <div className="text-sm font-extrabold tabular-nums text-rose-600 dark:text-rose-400">-{rp(expense.amount)}</div>
-        <button onClick={() => fileRef.current?.click()} disabled={upload.isPending} title="Lampirin nota/foto" className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50">
+        <button onClick={() => fileRef.current?.click()} disabled={upload.isPending} title="Attach receipt/photo" className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50">
           {upload.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
         </button>
-        <button onClick={() => { if (confirm("Hapus pengeluaran ini?")) del.mutate(); }} disabled={del.isPending} className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /></button>
+        <button onClick={() => { if (confirm("Delete this expense?")) del.mutate(); }} disabled={del.isPending} className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /></button>
         <input ref={fileRef} type="file" accept="image/*,application/pdf" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); e.target.value = ""; }} />
       </div>
       {expense.attachments.length > 0 && (
@@ -617,7 +617,7 @@ function ExpenseRow({ expense, category, onEdit, onChanged }: { expense: PnlExpe
           ))}
         </div>
       )}
-      {(upload.isError || del.isError) && <p className="mt-1 pl-6 text-[11px] font-semibold text-destructive">{((upload.error || del.error) as Error)?.message ?? "Gagal."}</p>}
+      {(upload.isError || del.isError) && <p className="mt-1 pl-6 text-[11px] font-semibold text-destructive">{((upload.error || del.error) as Error)?.message ?? "Something went wrong."}</p>}
     </div>
   );
 }
@@ -656,7 +656,7 @@ function ExpenseComposer({ projectId, year, month, categories, edit, onClose, on
         try {
           await nexusApi.pnlUploadExpenseAttachment(id, pendingFile);
         } catch {
-          throw new Error("Pengeluaran TERSIMPAN, tapi upload nota gagal — klik tombol lagi buat coba upload ulang.");
+          throw new Error("Expense SAVED, but the receipt upload failed — hit the button again to retry the upload.");
         }
       }
     },
@@ -667,30 +667,30 @@ function ExpenseComposer({ projectId, year, month, categories, edit, onClose, on
 
   const realCats = categories.filter((c) => c.id);
   return (
-    <Modal title={edit ? "Edit pengeluaran" : "Catat pengeluaran"} onClose={onClose}>
+    <Modal title={edit ? "Edit expense" : "Log expense"} onClose={onClose}>
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Tanggal"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} /></Field>
-          <Field label="Jumlah (Rp)"><RpInput defaultValue={edit?.amount} onValue={setAmount} autoFocus={!edit} /></Field>
+          <Field label="Date"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} /></Field>
+          <Field label="Amount (Rp)"><RpInput defaultValue={edit?.amount} onValue={setAmount} autoFocus={!edit} /></Field>
         </div>
-        <Field label="Kategori">
+        <Field label="Category">
           <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={inputCls}>
-            <option value="">Tanpa kategori</option>
+            <option value="">No category</option>
             {realCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </Field>
-        <Field label="Keterangan"><input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="mis. Sewa studio, konsumsi shooting…" className={inputCls} /></Field>
-        <Field label="Nota / foto (opsional)">
+        <Field label="Description"><input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Studio rental, shoot catering…" className={inputCls} /></Field>
+        <Field label="Receipt / photo (optional)">
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-xs font-semibold transition hover:bg-accent"><Camera className="h-3.5 w-3.5" />{pendingFile ? "Ganti file" : "Pilih file"}</button>
+            <button type="button" onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-xs font-semibold transition hover:bg-accent"><Camera className="h-3.5 w-3.5" />{pendingFile ? "Change file" : "Choose file"}</button>
             {pendingFile && <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{pendingFile.name}</span>}
             {pendingFile && <button type="button" onClick={() => setPendingFile(null)} className="text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>}
             <input ref={fileRef} type="file" accept="image/*,application/pdf" hidden onChange={(e) => setPendingFile(e.target.files?.[0] ?? null)} />
           </div>
         </Field>
-        {save.isError && <p className="text-xs font-semibold text-destructive">{(save.error as Error)?.message ?? "Gagal menyimpan."}</p>}
+        {save.isError && <p className="text-xs font-semibold text-destructive">{(save.error as Error)?.message ?? "Couldn't save."}</p>}
         <button onClick={() => save.mutate()} disabled={save.isPending || !date || amount <= 0} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-rose-500 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-rose-600 active:scale-[0.99] disabled:opacity-50">
-          {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {edit ? "Simpan perubahan" : "Catat pengeluaran"}
+          {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {edit ? "Save changes" : "Log expense"}
         </button>
       </div>
     </Modal>
@@ -719,41 +719,41 @@ function IncomeComposer({ projectId, stages, edit, onClose, onSaved }: { project
   const delPayment = useMutation({ mutationFn: (id: string) => nexusApi.pnlDeletePayment(id), onSuccess: onSaved });
 
   return (
-    <Modal title={edit ? "Edit deal" : "Tambah deal / invoice"} onClose={onClose}>
+    <Modal title={edit ? "Edit deal" : "Add deal / invoice"} onClose={onClose}>
       <div className="space-y-3">
-        <Field label="Nama deal / client"><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="mis. Wedding A&B — paket platinum" className={inputCls} autoFocus={!edit} /></Field>
+        <Field label="Deal / client name"><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Wedding A&B — platinum package" className={inputCls} autoFocus={!edit} /></Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Nilai total (Rp)"><RpInput defaultValue={edit?.totalAmount} onValue={setTotalAmount} /></Field>
-          <Field label="Perkiraan cair"><input type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} className={inputCls} /></Field>
+          <Field label="Total value (Rp)"><RpInput defaultValue={edit?.totalAmount} onValue={setTotalAmount} /></Field>
+          <Field label="Expected payout"><input type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} className={inputCls} /></Field>
         </div>
         <Field label="Stage">
           <select value={stageId} onChange={(e) => setStageId(e.target.value)} className={inputCls}>
-            <option value="">Tanpa stage</option>
+            <option value="">No stage</option>
             {stages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </Field>
-        <Field label="Catatan"><input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="opsional" className={inputCls} /></Field>
+        <Field label="Notes"><input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="optional" className={inputCls} /></Field>
 
         {edit && edit.payments.length > 0 && (
           <div className="rounded-2xl border border-border bg-muted/30 p-2.5">
-            <div className="px-0.5 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Pembayaran masuk · {rp(edit.paid)}</div>
+            <div className="px-0.5 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Payments received · {rp(edit.paid)}</div>
             <div className="space-y-1">
               {edit.payments.map((p) => (
                 <div key={p.id} className="flex items-center gap-2 rounded-lg bg-background px-2.5 py-1.5 text-xs">
                   <span className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">+{rp(p.amount)}</span>
-                  <span className="flex-1 truncate text-muted-foreground">{new Date(p.date).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}{p.note ? ` · ${p.note}` : ""}</span>
-                  <button onClick={() => { if (confirm("Hapus pembayaran ini?")) delPayment.mutate(p.id); }} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
+                  <span className="flex-1 truncate text-muted-foreground">{new Date(p.date).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })}{p.note ? ` · ${p.note}` : ""}</span>
+                  <button onClick={() => { if (confirm("Delete this payment?")) delPayment.mutate(p.id); }} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {(save.isError || del.isError) && <p className="text-xs font-semibold text-destructive">{((save.error || del.error) as Error)?.message ?? "Gagal."}</p>}
+        {(save.isError || del.isError) && <p className="text-xs font-semibold text-destructive">{((save.error || del.error) as Error)?.message ?? "Something went wrong."}</p>}
         <div className="flex items-center gap-2">
-          {edit && <button onClick={() => { if (confirm("Hapus deal ini beserta seluruh catatan pembayarannya?")) del.mutate(); }} disabled={del.isPending} className="rounded-xl px-3 py-2.5 text-sm font-bold text-destructive transition hover:bg-destructive/10 disabled:opacity-50"><Trash2 className="h-4 w-4" /></button>}
+          {edit && <button onClick={() => { if (confirm("Delete this deal and all its payment records?")) del.mutate(); }} disabled={del.isPending} className="rounded-xl px-3 py-2.5 text-sm font-bold text-destructive transition hover:bg-destructive/10 disabled:opacity-50"><Trash2 className="h-4 w-4" /></button>}
           <button onClick={() => save.mutate()} disabled={save.isPending || !title.trim() || totalAmount <= 0} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#0091ff] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#0080e0] active:scale-[0.99] disabled:opacity-50">
-            {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {edit ? "Simpan perubahan" : "Tambah deal"}
+            {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {edit ? "Save changes" : "Add deal"}
           </button>
         </div>
       </div>
@@ -770,27 +770,27 @@ function PaymentComposer({ income, onClose, onSaved }: { income: PnlIncome; onCl
     onSuccess: () => { onSaved(); onClose(); },
   });
   return (
-    <Modal title={`Catat uang masuk — ${income.title}`} onClose={onClose}>
+    <Modal title={`Log money in — ${income.title}`} onClose={onClose}>
       <div className="space-y-3">
         <div className="rounded-xl bg-muted/50 px-3 py-2 text-xs font-semibold text-muted-foreground">
-          Total {rp(income.totalAmount)} · sudah masuk {rp(income.paid)} · sisa <span className="text-foreground">{rp(income.outstanding)}</span>
+          Total {rp(income.totalAmount)} · received {rp(income.paid)} · remaining <span className="text-foreground">{rp(income.outstanding)}</span>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Tanggal masuk"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} /></Field>
-          <Field label="Jumlah (Rp)"><RpInput value={amount} onValue={setAmount} autoFocus /></Field>
+          <Field label="Date received"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} /></Field>
+          <Field label="Amount (Rp)"><RpInput value={amount} onValue={setAmount} autoFocus /></Field>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {income.outstanding > 0 && (
-            <button type="button" onClick={() => setAmount(income.outstanding)} className="rounded-lg bg-emerald-100 px-2.5 py-1 text-[11px] font-extrabold text-emerald-700 transition hover:bg-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-400">PELUNASAN ({rpShort(income.outstanding)})</button>
+            <button type="button" onClick={() => setAmount(income.outstanding)} className="rounded-lg bg-emerald-100 px-2.5 py-1 text-[11px] font-extrabold text-emerald-700 transition hover:bg-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-400">PAY IN FULL ({rpShort(income.outstanding)})</button>
           )}
           {[0.3, 0.5].map((f) => (
             <button key={f} type="button" onClick={() => setAmount(Math.round(income.totalAmount * f))} className="rounded-lg bg-muted px-2.5 py-1 text-[11px] font-bold text-muted-foreground transition hover:bg-accent hover:text-foreground">{f * 100}% ({rpShort(income.totalAmount * f)})</button>
           ))}
         </div>
-        <Field label="Catatan"><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="mis. DP 50%, termin 2…" className={inputCls} /></Field>
-        {save.isError && <p className="text-xs font-semibold text-destructive">{(save.error as Error)?.message ?? "Gagal."}</p>}
+        <Field label="Notes"><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. 50% deposit, installment 2…" className={inputCls} /></Field>
+        {save.isError && <p className="text-xs font-semibold text-destructive">{(save.error as Error)?.message ?? "Something went wrong."}</p>}
         <button onClick={() => save.mutate()} disabled={save.isPending || !date || amount <= 0} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-700 active:scale-[0.99] disabled:opacity-50">
-          {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Catat pembayaran
+          {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Log payment
         </button>
       </div>
     </Modal>
@@ -807,7 +807,7 @@ function CategoryManager({ projectId, categories, onClose, onChanged }: { projec
   const del = useMutation({ mutationFn: (id: string) => nexusApi.pnlDeleteCategory(id), onSuccess: onChanged });
   const realCats = categories.filter((c) => c.id);
   return (
-    <Modal title="Kategori pengeluaran" onClose={onClose}>
+    <Modal title="Expense categories" onClose={onClose}>
       <div className="space-y-3">
         <div className="space-y-1.5">
           {realCats.map((c) => (
@@ -815,16 +815,16 @@ function CategoryManager({ projectId, categories, onClose, onChanged }: { projec
               <ColorSwatchButton color={c.color} onPick={(col) => update.mutate({ id: c.id, payload: { color: col } })} />
               <input defaultValue={c.name} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== c.name) update.mutate({ id: c.id, payload: { name: v } }); }} className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none" />
               <span className="text-[10px] font-bold tabular-nums text-muted-foreground">{rpShort(c.total)}</span>
-              <button onClick={() => { if (confirm(`Hapus kategori "${c.name}"? Transaksinya tetap ada (jadi tanpa kategori).`)) del.mutate(c.id); }} className="text-muted-foreground transition hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+              <button onClick={() => { if (confirm(`Delete the "${c.name}" category? Its transactions stay (they just become uncategorized).`)) del.mutate(c.id); }} className="text-muted-foreground transition hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
             </div>
           ))}
-          {realCats.length === 0 && <p className="py-3 text-center text-xs text-muted-foreground">Belum ada kategori.</p>}
+          {realCats.length === 0 && <p className="py-3 text-center text-xs text-muted-foreground">No categories yet.</p>}
         </div>
         <div className="space-y-2 border-t border-border pt-3">
-          <Field label="Kategori baru"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="mis. Marketing" className={inputCls} /></Field>
+          <Field label="New category"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Marketing" className={inputCls} /></Field>
           <ColorDots value={color} onChange={setColor} />
           <button onClick={() => create.mutate()} disabled={create.isPending || !name.trim()} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">
-            {create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} <Plus className="h-3.5 w-3.5" /> Tambah kategori
+            {create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} <Plus className="h-3.5 w-3.5" /> Add category
           </button>
         </div>
       </div>
@@ -856,9 +856,9 @@ function StageManager({ projectId, stages, onClose, onChanged }: { projectId: st
   const del = useMutation({ mutationFn: (id: string) => nexusApi.pnlDeleteStage(id), onSuccess: onChanged });
   const sorted = [...stages].sort((a, b) => a.order - b.order);
   return (
-    <Modal title="Stage pipeline" onClose={onClose}>
+    <Modal title="Pipeline stages" onClose={onClose}>
       <div className="space-y-3">
-        <p className="text-xs text-muted-foreground">Urutan stage = alur deal lo (atas → bawah). Stage bebas diubah — ini punya project ini doang.</p>
+        <p className="text-xs text-muted-foreground">Stage order = your deal flow (top → bottom). Tweak them however you like — these are just for this project.</p>
         <div className="space-y-1.5">
           {sorted.map((s, idx) => (
             <div key={s.id} className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2">
@@ -868,16 +868,16 @@ function StageManager({ projectId, stages, onClose, onChanged }: { projectId: st
               </div>
               <ColorSwatchButton color={s.color} onPick={(col) => update.mutate({ id: s.id, payload: { color: col } })} />
               <input defaultValue={s.name} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== s.name) update.mutate({ id: s.id, payload: { name: v } }); }} className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none" />
-              <span className="text-[10px] font-bold text-muted-foreground">{s.count} deal</span>
-              <button onClick={() => { if (confirm(`Hapus stage "${s.name}"? Deal di dalamnya jadi tanpa stage.`)) del.mutate(s.id); }} className="text-muted-foreground transition hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+              <span className="text-[10px] font-bold text-muted-foreground">{s.count} {s.count === 1 ? "deal" : "deals"}</span>
+              <button onClick={() => { if (confirm(`Delete the "${s.name}" stage? Deals in it become stage-less.`)) del.mutate(s.id); }} className="text-muted-foreground transition hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
             </div>
           ))}
         </div>
         <div className="space-y-2 border-t border-border pt-3">
-          <Field label="Stage baru"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="mis. Kontrak ditandatangani" className={inputCls} /></Field>
+          <Field label="New stage"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Contract signed" className={inputCls} /></Field>
           <ColorDots value={color} onChange={setColor} />
           <button onClick={() => create.mutate()} disabled={create.isPending || !name.trim()} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">
-            {create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} <Plus className="h-3.5 w-3.5" /> Tambah stage
+            {create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} <Plus className="h-3.5 w-3.5" /> Add stage
           </button>
         </div>
       </div>
@@ -899,47 +899,47 @@ function RecurringManager({ projectId, recurring, categories, onClose, onChanged
   const realCats = categories.filter((c) => c.id);
   const catName = (id?: string | null) => realCats.find((c) => c.id === id)?.name;
   return (
-    <Modal title="Pengeluaran rutin bulanan" onClose={onClose} wide>
+    <Modal title="Monthly recurring expenses" onClose={onClose} wide>
       <div className="space-y-3">
-        <p className="text-xs text-muted-foreground">Otomatis kecatat tiap bulan di tanggal yang lo set (gaji, sewa, langganan). Mulai jalan bulan berikutnya setelah dibuat.</p>
+        <p className="text-xs text-muted-foreground">Logged automatically every month on the day you set (payroll, rent, subscriptions). Kicks in the month after you create it.</p>
         <div className="space-y-1.5">
           {recurring.map((r) => (
             <div key={r.id} className={cn("flex items-center gap-2.5 rounded-xl border border-border bg-background px-3 py-2", !r.active && "opacity-50")}>
               <Repeat className="h-4 w-4 shrink-0 text-primary" />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-semibold">{r.description}</div>
-                <div className="text-[11px] text-muted-foreground">{rp(r.amount)} · tiap tgl {r.dayOfMonth}{catName(r.categoryId) ? ` · ${catName(r.categoryId)}` : ""}</div>
+                <div className="text-[11px] text-muted-foreground">{rp(r.amount)} · every month on the {r.dayOfMonth}{catName(r.categoryId) ? ` · ${catName(r.categoryId)}` : ""}</div>
               </div>
               <button onClick={() => update.mutate({ id: r.id, payload: { active: !r.active } })}
                 className={cn("rounded-lg px-2 py-1 text-[10px] font-extrabold uppercase transition", r.active ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-400" : "bg-muted text-muted-foreground hover:bg-accent")}>
-                {r.active ? "Aktif" : "Pause"}
+                {r.active ? "Active" : "Paused"}
               </button>
-              <button onClick={() => { if (confirm(`Hapus rutin "${r.description}"? Entri yang sudah tercatat tetap ada.`)) del.mutate(r.id); }} className="text-muted-foreground transition hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+              <button onClick={() => { if (confirm(`Delete the "${r.description}" recurring expense? Entries already logged stay put.`)) del.mutate(r.id); }} className="text-muted-foreground transition hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
             </div>
           ))}
-          {recurring.length === 0 && <p className="py-3 text-center text-xs text-muted-foreground">Belum ada pengeluaran rutin.</p>}
+          {recurring.length === 0 && <p className="py-3 text-center text-xs text-muted-foreground">No recurring expenses yet.</p>}
         </div>
         <div className="space-y-3 border-t border-border pt-3">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Deskripsi"><input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="mis. Gaji tim" className={inputCls} /></Field>
-            <Field label="Jumlah (Rp)"><RpInput onValue={setAmount} /></Field>
+            <Field label="Description"><input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Team payroll" className={inputCls} /></Field>
+            <Field label="Amount (Rp)"><RpInput onValue={setAmount} /></Field>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Kategori">
+            <Field label="Category">
               <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={inputCls}>
-                <option value="">Tanpa kategori</option>
+                <option value="">No category</option>
                 {realCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </Field>
-            <Field label="Tanggal posting tiap bulan">
+            <Field label="Posting day each month">
               <select value={dayOfMonth} onChange={(e) => setDayOfMonth(Number(e.target.value))} className={inputCls}>
-                {Array.from({ length: 28 }, (_, i) => i + 1).map((dd) => <option key={dd} value={dd}>Tanggal {dd}</option>)}
+                {Array.from({ length: 28 }, (_, i) => i + 1).map((dd) => <option key={dd} value={dd}>Day {dd}</option>)}
               </select>
             </Field>
           </div>
-          {create.isError && <p className="text-xs font-semibold text-destructive">{(create.error as Error)?.message ?? "Gagal."}</p>}
+          {create.isError && <p className="text-xs font-semibold text-destructive">{(create.error as Error)?.message ?? "Something went wrong."}</p>}
           <button onClick={() => create.mutate()} disabled={create.isPending || !description.trim() || amount <= 0} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">
-            {create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} <Plus className="h-3.5 w-3.5" /> Tambah rutin
+            {create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} <Plus className="h-3.5 w-3.5" /> Add recurring
           </button>
         </div>
       </div>

@@ -34,16 +34,16 @@ function RegisterPage() {
     e.preventDefault();
     setError(null);
     if (!name.trim() || !email.trim() || password.length < 8) {
-      setError("Lengkapi nama, email, dan password minimal 8 karakter.");
+      setError("Fill in your name, email, and a password of at least 8 characters.");
       return;
     }
     setLoading(true);
     try {
       await nexusApi.register({ name: name.trim(), email: email.trim(), password });
-      setInfo(`Kode verifikasi dikirim ke ${email.trim()}. Cek inbox (atau folder spam).`);
+      setInfo(`Verification code sent to ${email.trim()}. Check your inbox (or spam folder).`);
       setStep("otp");
     } catch (err) {
-      setError(errMsg(err, "Gagal mendaftar. Coba lagi."));
+      setError(errMsg(err, "Couldn't sign you up. Try again."));
     } finally {
       setLoading(false);
     }
@@ -53,17 +53,17 @@ function RegisterPage() {
     e.preventDefault();
     setError(null);
     if (!code.trim()) {
-      setError("Masukin kode verifikasi dari email.");
+      setError("Enter the verification code from your email.");
       return;
     }
     setLoading(true);
     try {
       await nexusApi.verifyRegister({ email: email.trim(), code: code.trim() });
       const res = await nexusApi.login(email.trim(), password, "/dashboard").catch(() => ({ ok: false } as { ok: boolean }));
-      celebrate("Akun dibuat — selamat datang! 🚀");
+      celebrate("Account created — welcome aboard! 🚀");
       setTimeout(() => navigate({ to: res.ok ? "/dashboard" : "/login" }), 300);
     } catch (err) {
-      setError(errMsg(err, "Kode salah atau kadaluarsa."));
+      setError(errMsg(err, "Wrong or expired code."));
     } finally {
       setLoading(false);
     }
@@ -74,9 +74,9 @@ function RegisterPage() {
     setInfo(null);
     try {
       await nexusApi.resendRegisterOtp(email.trim());
-      setInfo("Kode baru udah dikirim ke email kamu.");
+      setInfo("A new code is on its way to your email.");
     } catch (err) {
-      setError(errMsg(err, "Gagal kirim ulang kode."));
+      setError(errMsg(err, "Couldn't resend the code."));
     }
   };
 
@@ -91,52 +91,52 @@ function RegisterPage() {
         </div>
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold uppercase tracking-[0.2em] text-foreground">Request Access</h1>
-          <p className="mt-2 text-sm text-muted-foreground">{step === "form" ? "Bikin akun NEXUS baru." : "Masukin kode verifikasi dari email kamu."}</p>
+          <p className="mt-2 text-sm text-muted-foreground">{step === "form" ? "Create a new NEXUS account." : "Enter the verification code from your email."}</p>
         </div>
 
         {step === "form" ? (
           <form className="space-y-5" onSubmit={submitForm}>
             <div className="space-y-1.5">
-              <label className={labelCls}>Nama Lengkap</label>
-              <input type="text" required disabled={loading} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nama kamu" className={input} />
+              <label className={labelCls}>Full Name</label>
+              <input type="text" required disabled={loading} value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" className={input} />
             </div>
             <div className="space-y-1.5">
               <label className={labelCls}>Email</label>
-              <input type="email" required disabled={loading} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="kamu@email.com" autoComplete="username" className={input} />
+              <input type="email" required disabled={loading} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" autoComplete="username" className={input} />
             </div>
             <div className="space-y-1.5">
               <label className={labelCls}>Password</label>
-              <input type="password" required disabled={loading} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min. 8 karakter" autoComplete="new-password" className={input} />
+              <input type="password" required disabled={loading} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min. 8 characters" autoComplete="new-password" className={input} />
             </div>
 
             {error && <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">{error}</div>}
 
             <button type="submit" disabled={loading} className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 font-bold text-primary-foreground shadow-xl shadow-primary/25 transition-all active:scale-[0.98] disabled:opacity-70">
-              {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Mengirim kode…</> : <>Lanjut <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></>}
+              {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending code…</> : <>Continue <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></>}
             </button>
           </form>
         ) : (
           <form className="space-y-5" onSubmit={submitOtp}>
             {info && <div className="flex items-start gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700"><MailCheck className="mt-0.5 h-4 w-4 shrink-0" /> {info}</div>}
             <div className="space-y-1.5">
-              <label className={labelCls}>Kode Verifikasi</label>
+              <label className={labelCls}>Verification Code</label>
               <input type="text" inputMode="numeric" required disabled={loading} value={code} onChange={(e) => setCode(e.target.value)} placeholder="6 digit" className={`${input} text-center text-lg tracking-[0.5em]`} />
             </div>
 
             {error && <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">{error}</div>}
 
             <button type="submit" disabled={loading} className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 font-bold text-primary-foreground shadow-xl shadow-primary/25 transition-all active:scale-[0.98] disabled:opacity-70">
-              {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Memverifikasi…</> : <>Verifikasi & Masuk <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></>}
+              {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Verifying…</> : <>Verify & Sign In <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></>}
             </button>
             <div className="flex items-center justify-between text-xs">
-              <button type="button" onClick={() => { setStep("form"); setError(null); }} className="inline-flex items-center gap-1 font-semibold text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3 w-3" /> Ubah data</button>
-              <button type="button" onClick={resend} className="font-semibold text-primary hover:underline">Kirim ulang kode</button>
+              <button type="button" onClick={() => { setStep("form"); setError(null); }} className="inline-flex items-center gap-1 font-semibold text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3 w-3" /> Edit details</button>
+              <button type="button" onClick={resend} className="font-semibold text-primary hover:underline">Resend code</button>
             </div>
           </form>
         )}
 
         <div className="mt-8 text-center">
-          <p className="text-sm text-muted-foreground">Udah punya akun? <a href="/login" className="ml-1 font-bold text-primary underline-offset-4 hover:underline">Login</a></p>
+          <p className="text-sm text-muted-foreground">Already have an account? <a href="/login" className="ml-1 font-bold text-primary underline-offset-4 hover:underline">Login</a></p>
         </div>
       </div>
     </div>

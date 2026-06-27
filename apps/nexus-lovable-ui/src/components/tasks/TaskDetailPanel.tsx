@@ -38,6 +38,7 @@ import {
   nexusApi,
   statusLabel,
   textToBlocks,
+  type CustomFieldFile,
   type NexusAttachment,
   type NexusComment,
   type NexusCustomField,
@@ -353,7 +354,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
       qc.invalidateQueries({ queryKey: ["task-cf", taskId] });
       qc.invalidateQueries({ queryKey: ["project-custom-fields", projectId] });
     },
-    onError: (e: unknown) => toast.error("Gagal bikin field", { description: e instanceof Error ? e.message : "Butuh akses LEAD." }),
+    onError: (e: unknown) => toast.error("Couldn't create field", { description: e instanceof Error ? e.message : "You need LEAD access." }),
   });
   const linkProjectMut = useMutation({
     mutationFn: async (projectId: string) => {
@@ -459,7 +460,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               <Heart className={cn("h-4 w-4", t?.liked && "fill-destructive")} /> {t?.likeCount ?? 0}
             </button>
             {canMakeQuest && t && (
-              <button onClick={() => setQuestOpen(true)} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary" title="Jadiin quest">
+              <button onClick={() => setQuestOpen(true)} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary" title="Make a quest">
                 <Trophy className="h-4 w-4" />
               </button>
             )}
@@ -476,7 +477,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
           <div className="flex flex-1 items-center justify-center text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>
         )}
         {task.isError && (
-          <div className="p-6 text-sm font-semibold text-destructive">Gagal memuat task. Cek sesi / koneksi.</div>
+          <div className="p-6 text-sm font-semibold text-destructive">Couldn't load this task. Check your session / connection.</div>
         )}
 
         {t && (
@@ -487,9 +488,9 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 <Trophy className="h-5 w-5 shrink-0 text-primary" />
                 <div className="min-w-0 flex-1 text-sm">
                   <div className="font-bold text-primary">
-                    {(q.total ?? 1) <= 1 ? <>Selesaiin task ini → <span className="tabular-nums">+{q.xpReward} XP</span> 🎯</> : <>Bagian dari quest “{q.title}” → <span className="tabular-nums">+{q.xpReward} XP</span> 🎯</>}
+                    {(q.total ?? 1) <= 1 ? <>Finish this task → <span className="tabular-nums">+{q.xpReward} XP</span> 🎯</> : <>Part of the quest “{q.title}” → <span className="tabular-nums">+{q.xpReward} XP</span> 🎯</>}
                   </div>
-                  {(q.total ?? 1) > 1 && <div className="text-xs text-muted-foreground">Beresin semua {q.total} task-nya ({q.done ?? 0}/{q.total} kelar) buat dapet XP-nya.</div>}
+                  {(q.total ?? 1) > 1 && <div className="text-xs text-muted-foreground">Wrap up all {q.total} tasks ({q.done ?? 0}/{q.total} done) to grab the XP.</div>}
                 </div>
               </div>
             ))}
@@ -530,7 +531,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 className="inline-flex max-w-full items-center gap-1.5 rounded-lg bg-accent px-2.5 py-1 text-xs font-semibold text-accent-foreground transition hover:opacity-80"
               >
                 <ListChecks className="h-3 w-3 shrink-0" />
-                <span className="shrink-0 text-accent-foreground/70">Subtask dari</span>
+                <span className="shrink-0 text-accent-foreground/70">Subtask of</span>
                 <span className="truncate">{t.parent.title}</span>
               </button>
             )}
@@ -560,11 +561,11 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                       <div className="absolute z-20 mt-1 w-60 rounded-xl border border-border bg-popover p-1 shadow-pop">
                         <div className="relative p-1">
                           <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                          <input autoFocus value={assignSearch} onChange={(e) => setAssignSearch(e.target.value)} placeholder="Cari anggota tim…" className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none transition focus:border-primary" />
+                          <input autoFocus value={assignSearch} onChange={(e) => setAssignSearch(e.target.value)} placeholder="Search team members…" className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none transition focus:border-primary" />
                         </div>
                         <div className="max-h-56 overflow-y-auto">
                           {assignPickerLoading && <div className="px-3 py-2 text-xs text-muted-foreground">Loading…</div>}
-                          {!assignPickerLoading && assignableMembers.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">{assignSearch.trim() ? "Gak ada anggota yang cocok." : "Semua anggota tim project udah di-assign."}</div>}
+                          {!assignPickerLoading && assignableMembers.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">{assignSearch.trim() ? "No matching members." : "Everyone on the project team is already assigned."}</div>}
                           {assignableMembers.map((m) => (
                             <button key={m.id} onClick={() => assignMut.mutate({ userId: m.id, add: true })} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent">
                               <MiniAvatar user={m} size={22} /> <span className="truncate">{m.name}</span>
@@ -589,7 +590,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 icon={SlidersHorizontal}
                 label="Fields"
                 action={
-                  <button onClick={() => setCfAdding((v) => !v)} title="Field baru" className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary">
+                  <button onClick={() => setCfAdding((v) => !v)} title="New field" className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary">
                     <Plus className="h-3.5 w-3.5" /> New field
                   </button>
                 }
@@ -603,12 +604,12 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                   <div className="[column-gap:0.75rem] sm:columns-2">
                     {customFields.data!.fields.map((f) => (
                       <div key={f.id} className="mb-3 break-inside-avoid">
-                        <CustomFieldInput field={f} onSet={(value) => setCfMut.mutate({ id: f.id, value })} />
+                        <CustomFieldInput field={f} projectId={projectId} onSet={(value) => setCfMut.mutate({ id: f.id, value })} />
                       </div>
                     ))}
                   </div>
                 ) : !cfAdding ? (
-                  <p className="text-xs text-muted-foreground">Belum ada field. Klik <span className="font-semibold">New field</span> buat nambah.</p>
+                  <p className="text-xs text-muted-foreground">No fields yet. Click <span className="font-semibold">New field</span> to add one.</p>
                 ) : null}
               </SecCard>
             )}
@@ -674,7 +675,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                           <button
                             onClick={() => toggleSubtask.mutate({ id: st.id, done: st.status !== "DONE" })}
                             disabled={toggleSubtask.isPending}
-                            title={st.status === "DONE" ? "Balikin ke To-do" : "Tandai selesai"}
+                            title={st.status === "DONE" ? "Move back to To-do" : "Mark done"}
                             className="shrink-0 transition active:scale-90 disabled:opacity-50"
                           >
                             {st.status === "DONE"
@@ -702,7 +703,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                       value={newSubTitle}
                       onChange={(e) => setNewSubTitle(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter" && newSubTitle.trim() && !addSubtask.isPending) addSubtask.mutate(newSubTitle.trim()); }}
-                      placeholder="+ Tambah subtask… (Enter)"
+                      placeholder="+ Add subtask… (Enter)"
                       className="min-w-0 flex-1 rounded-xl border border-dashed border-border bg-transparent px-3 py-2 text-sm outline-none transition focus:border-primary"
                     />
                     <button
@@ -714,7 +715,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     </button>
                   </div>
                   )}
-                  {addSubtask.isError && <p className="mt-1 text-[11px] font-semibold text-destructive">{(addSubtask.error as Error)?.message ?? "Gagal menambah subtask."}</p>}
+                  {addSubtask.isError && <p className="mt-1 text-[11px] font-semibold text-destructive">{(addSubtask.error as Error)?.message ?? "Couldn't add subtask."}</p>}
                 </SecCard>
               );
             })()}
@@ -725,13 +726,13 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               label="Attachments"
               action={
                 <div className="flex items-center gap-2">
-                  <span className="hidden text-[11px] text-muted-foreground sm:inline">Maks {MAX_ATTACH_LABEL}</span>
+                  <span className="hidden text-[11px] text-muted-foreground sm:inline">Max {MAX_ATTACH_LABEL}</span>
                   <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary">
                     {uploadMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Upload
                     <input type="file" className="hidden" disabled={uploadMut.isPending} onChange={(e) => {
                       const f = e.target.files?.[0]; e.target.value = "";
                       if (!f) return;
-                      if (f.size > MAX_ATTACH_BYTES) { setSizeWarn(`File ${(f.size / 1024 / 1024).toFixed(1)} MB — melebihi maks ${MAX_ATTACH_LABEL}. Upload ditolak.`); return; }
+                      if (f.size > MAX_ATTACH_BYTES) { setSizeWarn(`File is ${(f.size / 1024 / 1024).toFixed(1)} MB — over the ${MAX_ATTACH_LABEL} max. Upload rejected.`); return; }
                       setSizeWarn(null); uploadMut.mutate(f);
                     }} />
                   </label>
@@ -742,7 +743,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 {uploadPct != null && (
                   <div className="rounded-xl border border-border bg-background px-3 py-2">
                     <div className="mb-1 flex items-center justify-between text-xs">
-                      <span className="font-semibold text-muted-foreground">Mengupload…</span>
+                      <span className="font-semibold text-muted-foreground">Uploading…</span>
                       <span className="font-bold tabular-nums text-primary">{uploadPct}%</span>
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-muted">
@@ -757,7 +758,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     ) : (
                       <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" />
                     )}
-                    <button onClick={() => setPreviewAtt(att)} className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:text-primary hover:underline">{att.name || "(tanpa nama)"}</button>
+                    <button onClick={() => setPreviewAtt(att)} className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:text-primary hover:underline">{att.name || "(unnamed)"}</button>
                     {att.size != null && <span className="shrink-0 text-xs text-muted-foreground">{Math.round(att.size / 1024)} KB</span>}
                     <button onClick={() => setPreviewAtt(att)} title="Preview" className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Eye className="h-3.5 w-3.5" /></button>
                     {att.url && <a href={`${att.url}?download=${encodeURIComponent(att.name || "file")}`} download={att.name || ""} title="Download" className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Download className="h-3.5 w-3.5" /></a>}
@@ -770,7 +771,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     <X className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {sizeWarn}
                   </div>
                 )}
-                {uploadMut.isError && <p className="text-xs font-semibold text-destructive">{(uploadMut.error as Error)?.message || `Upload gagal — maks ${MAX_ATTACH_LABEL}.`}</p>}
+                {uploadMut.isError && <p className="text-xs font-semibold text-destructive">{(uploadMut.error as Error)?.message || `Upload failed — max ${MAX_ATTACH_LABEL}.`}</p>}
               </div>
             </SecCard>
 
@@ -806,7 +807,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                           <video src={rangeSrc} controls playsInline preload="metadata" className="mx-auto max-h-[72vh] rounded-lg" />
                           {maybeUnplayableVideo(previewAtt) && (
                             <p className="mx-auto mt-2 max-w-md text-center text-[11px] text-muted-foreground">
-                              Format <span className="font-semibold">.mov</span> (HEVC) sering nggak jalan di Android/webview — kalau cuma muncul layar item, pakai tombol Download buat nonton.
+                              The <span className="font-semibold">.mov</span> (HEVC) format often won't play on Android/webview — if you just get a black screen, hit Download to watch it.
                             </p>
                           )}
                         </div>
@@ -815,7 +816,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                       return (
                         <div className="grid place-items-center gap-2 py-16 text-center text-sm text-muted-foreground">
                           <Paperclip className="h-8 w-8" />
-                          Preview nggak tersedia buat tipe file ini.
+                          Preview isn't available for this file type.
                           <a href={`${previewAtt.url}?download=${encodeURIComponent(previewAtt.name || "file")}`} download={previewAtt.name || ""} className="mt-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground">Download</a>
                         </div>
                       );
@@ -929,18 +930,18 @@ function QuestComposer({ initialTask, onClose }: { initialTask: { id: string; ti
   const results = (taskSearch.data ?? []).filter((r) => !tasks.some((t) => t.id === r.id)).slice(0, 8);
   const create = useMutation({
     mutationFn: () => nexusApi.createAdminQuest({ title: title.trim() || "Quest", xpReward: xp, requirementType: "specific_tasks", taskIds: tasks.map((t) => t.id) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["gamification", "me"] }); toast.success("Quest dibuat 🎯"); onClose(); },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Gagal bikin quest"),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["gamification", "me"] }); toast.success("Quest created 🎯"); onClose(); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Couldn't create quest"),
   });
   return createPortal(
     <div className="fixed inset-0 z-[90] grid place-items-center bg-black/50 p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-3xl border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 flex items-center gap-2"><Trophy className="h-5 w-5 text-primary" /><h3 className="text-lg font-bold">Jadiin quest</h3></div>
-        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Judul quest</label>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} className="mb-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder="Nama quest" />
-        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Hadiah XP (maks 50)</label>
+        <div className="mb-3 flex items-center gap-2"><Trophy className="h-5 w-5 text-primary" /><h3 className="text-lg font-bold">Make a quest</h3></div>
+        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Quest title</label>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} className="mb-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder="Quest name" />
+        <label className="mb-1 block text-xs font-semibold text-muted-foreground">XP reward (max 50)</label>
         <input type="number" min={0} max={50} value={xp} onChange={(e) => setXp(Math.max(0, Math.min(50, Number(e.target.value) || 0)))} className="mb-3 block w-28 rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
-        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Task ({tasks.length})</label>
+        <label className="mb-1 block text-xs font-semibold text-muted-foreground">Tasks ({tasks.length})</label>
         <div className="mb-2 space-y-1">
           {tasks.map((t) => (
             <div key={t.id} className="flex items-center gap-2 rounded-lg bg-muted px-2 py-1.5 text-sm">
@@ -949,7 +950,7 @@ function QuestComposer({ initialTask, onClose }: { initialTask: { id: string; ti
             </div>
           ))}
         </div>
-        <input value={search} onChange={(e) => setSearch(e.target.value)} className="w-full rounded-xl border border-dashed border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder="+ Cari task buat ditambah (min 2 huruf)…" />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} className="w-full rounded-xl border border-dashed border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" placeholder="+ Search tasks to add (min 2 letters)…" />
         {results.length > 0 && (
           <div className="mt-1 max-h-44 space-y-1 overflow-y-auto rounded-xl border border-border bg-popover p-1">
             {results.map((r) => (
@@ -960,12 +961,12 @@ function QuestComposer({ initialTask, onClose }: { initialTask: { id: string; ti
           </div>
         )}
         <div className="mt-4 flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-xl border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent">Batal</button>
+          <button onClick={onClose} className="rounded-xl border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent">Cancel</button>
           <button onClick={() => create.mutate()} disabled={create.isPending || tasks.length === 0 || !title.trim()} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
-            {create.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Buat quest
+            {create.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Create quest
           </button>
         </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">Quest kelar kalau semua task DONE. XP buat yang ngerjain; kelihatan ke member project task-nya.</p>
+        <p className="mt-2 text-[11px] text-muted-foreground">The quest completes once every task is DONE. XP goes to whoever did them; visible to the tasks' project members.</p>
       </div>
     </div>,
     document.body,
@@ -991,7 +992,7 @@ function fmtCreatedDateTime(ts: string): string {
   return `${m.day} ${m.month} ${m.year} • ${m.hour}:${m.minute}`;
 }
 
-function CustomFieldInput({ field, onSet }: { field: NexusCustomField; onSet: (value: unknown) => void }) {
+export function CustomFieldInput({ field, projectId, onSet, hideLabel }: { field: NexusCustomField; projectId?: string; onSet: (value: unknown) => void; hideLabel?: boolean }) {
   const type = (field.type ?? "").toUpperCase();
   const choices = customFieldChoices(field.options);
   const cls = "w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-primary";
@@ -1000,7 +1001,7 @@ function CustomFieldInput({ field, onSet }: { field: NexusCustomField; onSet: (v
   const arrVal = Array.isArray(field.value) ? field.value.map(String) : [];
   const placeInit = field.value && typeof field.value === "object" && !Array.isArray(field.value) ? (field.value as { label?: string; mapUrl?: string }) : { label: "", mapUrl: "" };
 
-  const [local, setLocal] = useState<string>(strVal.includes("T") ? strVal.slice(0, 10) : strVal);
+  const [local, setLocal] = useState<string>(type === "DATE" && strVal.includes("T") ? strVal.slice(0, 10) : strVal);
   const [place, setPlace] = useState({ label: placeInit.label ?? "", mapUrl: placeInit.mapUrl ?? "" });
 
   let body: ReactNode;
@@ -1028,8 +1029,8 @@ function CustomFieldInput({ field, onSet }: { field: NexusCustomField; onSet: (v
   } else if (type === "PLACE") {
     body = (
       <div className="space-y-1.5">
-        <input value={place.label} onChange={(e) => setPlace((p) => ({ ...p, label: e.target.value }))} onBlur={() => onSet(place)} placeholder="Lokasi / nama tempat" className={cls} />
-        <input value={place.mapUrl} onChange={(e) => setPlace((p) => ({ ...p, mapUrl: e.target.value }))} onBlur={() => onSet(place)} placeholder="Link Google Maps" className={cls} />
+        <input value={place.label} onChange={(e) => setPlace((p) => ({ ...p, label: e.target.value }))} onBlur={() => onSet(place)} placeholder="Location / place name" className={cls} />
+        <input value={place.mapUrl} onChange={(e) => setPlace((p) => ({ ...p, mapUrl: e.target.value }))} onBlur={() => onSet(place)} placeholder="Google Maps link" className={cls} />
       </div>
     );
   } else if (type === "CREATED") {
@@ -1044,6 +1045,19 @@ function CustomFieldInput({ field, onSet }: { field: NexusCustomField; onSet: (v
         <div className={cn("text-muted-foreground", name ? "text-xs" : "text-sm")}>{when || strVal || "—"}</div>
       </div>
     );
+  } else if (type === "URL") {
+    body = (
+      <div className="space-y-1">
+        <input type="url" value={local} onChange={(e) => setLocal(e.target.value)} onBlur={() => { if (local !== strVal) onSet(local); }} placeholder="https://…" className={cls} />
+        {strVal.trim() && (
+          <a href={strVal} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+            <Link2 className="h-3 w-3" /> Open link
+          </a>
+        )}
+      </div>
+    );
+  } else if (type === "FILE") {
+    body = <FileFieldEditor projectId={projectId} value={Array.isArray(field.value) ? (field.value as CustomFieldFile[]) : []} onSet={onSet} />;
   } else if (type === "NUMBER" && field.options && typeof field.options === "object" && !Array.isArray(field.options) && (field.options as { format?: string }).format === "currency-idr") {
     // Rupiah-formatted number: show "Rp 9.240.943" (id-ID separators), store the raw digits.
     body = (
@@ -1064,17 +1078,74 @@ function CustomFieldInput({ field, onSet }: { field: NexusCustomField; onSet: (v
         type={type === "NUMBER" ? "number" : type === "DATE" ? "date" : "text"}
         value={local}
         onChange={(e) => setLocal(e.target.value)}
-        onBlur={() => { if (local !== (strVal.includes("T") ? strVal.slice(0, 10) : strVal)) onSet(local); }}
+        onBlur={() => { if (local !== (type === "DATE" && strVal.includes("T") ? strVal.slice(0, 10) : strVal)) onSet(local); }}
         className={cls}
       />
     );
   }
 
+  if (hideLabel) return <div className="block">{body}</div>;
   return (
     <label className="block space-y-1">
       <span className="text-[11px] font-semibold text-muted-foreground">{field.name}</span>
       {body}
     </label>
+  );
+}
+
+function FileFieldEditor({ projectId, value, onSet }: { projectId?: string; value: CustomFieldFile[]; onSet: (value: unknown) => void }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const files = value.filter((f) => f && f.url);
+  const isImg = (f: CustomFieldFile) => /\.(png|jpe?g|gif|webp|svg|avif|bmp)(\?|$)/i.test(f.url) || (f.type ?? "").startsWith("image/");
+
+  const onPick = async (list: FileList | null) => {
+    if (!list || list.length === 0 || !projectId) return;
+    setBusy(true);
+    try {
+      const next = [...files];
+      for (const file of Array.from(list)) {
+        const up = await nexusApi.uploadCustomFieldFile(projectId, file);
+        next.push({ url: up.url, name: up.name, size: up.size, type: up.type });
+      }
+      onSet(next);
+    } catch {
+      toast.error("Upload failed", { description: "Check the file size (max 250MB) and your project access." });
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+  const remove = (url: string) => onSet(files.filter((f) => f.url !== url));
+
+  return (
+    <div className="space-y-1.5">
+      {files.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {files.map((f) => (
+            <div key={f.url} className="group relative">
+              {isImg(f) ? (
+                <a href={f.url} target="_blank" rel="noopener noreferrer" title={f.name}>
+                  <img src={f.url} alt={f.name} className="h-14 w-14 rounded-lg border border-border object-cover" />
+                </a>
+              ) : (
+                <a href={f.url} target="_blank" rel="noopener noreferrer" title={f.name} className="flex max-w-[10rem] items-center gap-1.5 rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-primary/40">
+                  <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{f.name}</span>
+                </a>
+              )}
+              <button type="button" onClick={() => remove(f.url)} className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full bg-foreground/80 text-background opacity-0 transition-opacity group-hover:opacity-100" aria-label="Remove">
+                <X className="h-2.5 w-2.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <input ref={fileRef} type="file" multiple hidden onChange={(e) => onPick(e.target.files)} />
+      <button type="button" disabled={busy || !projectId} onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:opacity-50">
+        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {busy ? "Uploading…" : "Add files"}
+      </button>
+    </div>
   );
 }
 
@@ -1139,7 +1210,7 @@ function CommentComposer({ members, pending, onSubmit }: { members: NexusUser[];
   return (
     <div className="flex items-start gap-2">
       <div className="relative flex-1">
-        <textarea ref={ref} value={text} onChange={onChange} onKeyDown={onKeyDown} rows={2} placeholder="Write a comment… (@ buat mention)" className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary" />
+        <textarea ref={ref} value={text} onChange={onChange} onKeyDown={onKeyDown} rows={2} placeholder="Write a comment… (@ to mention)" className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary" />
         {query !== null && matches.length > 0 && (
           <div className="absolute bottom-full left-0 z-20 mb-1 max-h-56 w-64 overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-pop">
             {matches.map((u, i) => (

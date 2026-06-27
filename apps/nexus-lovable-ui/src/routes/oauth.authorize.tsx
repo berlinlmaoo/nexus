@@ -52,7 +52,7 @@ function OAuthAuthorizePage() {
       if (err instanceof ApiError && err.status === 401) {
         setPhase("login");
       } else {
-        setError(err instanceof ApiError ? String((err.payload as { error_description?: string })?.error_description || err.message) : "Gagal memuat permintaan koneksi.");
+        setError(err instanceof ApiError ? String((err.payload as { error_description?: string })?.error_description || err.message) : "Couldn't load the connection request.");
         setPhase("error");
       }
     }
@@ -60,7 +60,7 @@ function OAuthAuthorizePage() {
 
   useEffect(() => {
     if (missing) {
-      setError("Permintaan koneksi tidak lengkap (parameter OAuth kurang). Coba mulai ulang dari aplikasi Claude.");
+      setError("This connection request is incomplete (missing OAuth parameters). Try starting over from the Claude app.");
       setPhase("error");
       return;
     }
@@ -72,7 +72,7 @@ function OAuthAuthorizePage() {
     e.preventDefault();
     setLoginErr(null);
     if (!email.trim() || !password) {
-      setLoginErr("Isi email dan password dulu ya.");
+      setLoginErr("Enter your email and password first.");
       return;
     }
     setLoggingIn(true);
@@ -83,8 +83,8 @@ function OAuthAuthorizePage() {
       setPhase("loading");
       await loadInfo();
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) setLoginErr("Email/password belum cocok.");
-      else setLoginErr("Login gagal. Coba lagi.");
+      if (err instanceof ApiError && err.status === 401) setLoginErr("Email or password doesn't match.");
+      else setLoginErr("Login failed. Try again.");
     } finally {
       setLoggingIn(false);
     }
@@ -106,7 +106,7 @@ function OAuthAuthorizePage() {
       // Hard-navigate back to the client (Claude). redirectTo is server-built from the *registered* uri.
       window.location.href = res.redirectTo;
     } catch (err) {
-      setError(err instanceof ApiError ? String((err.payload as { error_description?: string })?.error_description || err.message) : "Gagal memproses keputusan.");
+      setError(err instanceof ApiError ? String((err.payload as { error_description?: string })?.error_description || err.message) : "Couldn't process your decision.");
       setPhase("error");
     }
   };
@@ -126,14 +126,14 @@ function OAuthAuthorizePage() {
         {phase === "loading" && (
           <div className="flex flex-col items-center gap-3 py-10 text-muted-foreground">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            <p className="text-sm">Memuat permintaan koneksi…</p>
+            <p className="text-sm">Loading connection request…</p>
           </div>
         )}
 
         {phase === "error" && (
           <div className="space-y-4 text-center">
             <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-red-50"><AlertTriangle className="h-6 w-6 text-red-500" /></div>
-            <h1 className="text-lg font-bold">Tidak bisa melanjutkan</h1>
+            <h1 className="text-lg font-bold">Can't continue</h1>
             <p className="text-sm text-muted-foreground">{error}</p>
           </div>
         )}
@@ -141,8 +141,8 @@ function OAuthAuthorizePage() {
         {phase === "login" && (
           <div className="space-y-5">
             <div className="text-center">
-              <h1 className="text-lg font-bold">Masuk ke NEXUS</h1>
-              <p className="mt-1 text-sm text-muted-foreground">Login dulu buat menyambungkan akun kamu ke Claude.</p>
+              <h1 className="text-lg font-bold">Sign in to NEXUS</h1>
+              <p className="mt-1 text-sm text-muted-foreground">Log in first to connect your account to Claude.</p>
             </div>
             <form className="space-y-3" onSubmit={onLogin}>
               <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" autoComplete="username"
@@ -151,7 +151,7 @@ function OAuthAuthorizePage() {
                 className="w-full rounded-xl border border-border bg-white/70 px-4 py-3 text-sm outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20" />
               {loginErr && <p className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600">{loginErr}</p>}
               <button type="submit" disabled={loggingIn} className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/25 transition active:scale-[0.98] disabled:opacity-60">
-                {loggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Masuk
+                {loggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Sign in
               </button>
             </form>
           </div>
@@ -160,33 +160,33 @@ function OAuthAuthorizePage() {
         {(phase === "consent" || phase === "submitting") && info && (
           <div className="space-y-5">
             <div className="text-center">
-              <h1 className="text-lg font-bold"><span className="text-primary">{info.clientName}</span> mau nyambung ke NEXUS</h1>
-              <p className="mt-1 text-sm text-muted-foreground">Login sebagai <span className="font-semibold text-foreground">{info.user.email ?? info.user.name ?? "kamu"}</span></p>
+              <h1 className="text-lg font-bold"><span className="text-primary">{info.clientName}</span> wants to connect to NEXUS</h1>
+              <p className="mt-1 text-sm text-muted-foreground">Signed in as <span className="font-semibold text-foreground">{info.user.email ?? info.user.name ?? "you"}</span></p>
             </div>
 
             <div className="rounded-2xl border border-border bg-white/60 p-4">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">Akan dikasih izin buat:</p>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">It'll be allowed to:</p>
               <ul className="space-y-2 text-sm">
-                <li className="flex items-start gap-2"><Eye className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> Lihat project &amp; task yang kamu punya akses</li>
-                <li className="flex items-start gap-2"><ListChecks className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> Bikin &amp; ubah task (pindah section, status, assignee, dll)</li>
+                <li className="flex items-start gap-2"><Eye className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> View the projects &amp; tasks you have access to</li>
+                <li className="flex items-start gap-2"><ListChecks className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> Create &amp; edit tasks (move section, status, assignee, etc.)</li>
               </ul>
-              <p className="mt-3 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">Claude bertindak <span className="font-semibold">sebagai kamu</span> — akses sama persis kayak punya kamu. <span className="font-semibold">Nggak bisa</span> nyentuh XP, day-off, absensi, atau setting admin.</p>
+              <p className="mt-3 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">Claude acts <span className="font-semibold">as you</span> — exactly the same access you have. It <span className="font-semibold">can't</span> touch XP, day-off, attendance, or admin settings.</p>
             </div>
 
             {info.redirectHost && (
               <div className={`rounded-xl border px-3 py-2 text-xs ${isTrustedHost(info.redirectHost) ? "border-border bg-white/60 text-muted-foreground" : "border-amber-300 bg-amber-50 text-amber-800"}`}>
-                {!isTrustedHost(info.redirectHost) && <span className="mb-0.5 flex items-center gap-1 font-bold"><AlertTriangle className="h-3.5 w-3.5" /> Aplikasi ini belum diverifikasi NEXUS</span>}
-                Kode otorisasi dikirim ke: <span className="font-mono font-semibold">{info.redirectHost}</span>
-                {!isTrustedHost(info.redirectHost) && <span className="mt-0.5 block">Kalau kamu nggak kenal host ini, jangan diizinkan.</span>}
+                {!isTrustedHost(info.redirectHost) && <span className="mb-0.5 flex items-center gap-1 font-bold"><AlertTriangle className="h-3.5 w-3.5" /> This app isn't verified by NEXUS</span>}
+                Authorization code sent to: <span className="font-mono font-semibold">{info.redirectHost}</span>
+                {!isTrustedHost(info.redirectHost) && <span className="mt-0.5 block">If you don't recognize this host, don't allow it.</span>}
               </div>
             )}
 
             <div className="flex gap-2">
               <button onClick={() => decide(false)} disabled={phase === "submitting"} className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-white/70 py-3 text-sm font-semibold transition hover:bg-accent active:scale-[0.98] disabled:opacity-60">
-                <X className="h-4 w-4" /> Tolak
+                <X className="h-4 w-4" /> Deny
               </button>
               <button onClick={() => decide(true)} disabled={phase === "submitting"} className="flex flex-[1.4] items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/25 transition active:scale-[0.98] disabled:opacity-60">
-                {phase === "submitting" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Izinkan
+                {phase === "submitting" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Allow
               </button>
             </div>
           </div>

@@ -14,10 +14,10 @@ export const Route = createFileRoute("/_app/oracle")({ component: OraclePage });
 const SUGGESTIONS = [
   "Task Bagas Putro",
   "Project Jagain Agency",
-  "Siapa yang overdue?",
-  "Siapa paling sibuk?",
-  "Task due hari ini",
-  "Ada project apa aja?",
+  "Who's overdue?",
+  "Who's busiest?",
+  "Tasks due today",
+  "What projects are there?",
 ];
 
 function iconFor(kind: OracleNode["kind"]) {
@@ -25,8 +25,8 @@ function iconFor(kind: OracleNode["kind"]) {
 }
 function statusTone(s: OracleNode["status"]) {
   switch (s) {
-    case "completed": return { dot: "bg-emerald-400", ring: "border-emerald-300/60", badge: "bg-emerald-500/15 text-emerald-300 border-emerald-400/40", bar: "from-emerald-400 to-teal-300", label: "SELESAI" };
-    case "in-progress": return { dot: "bg-sky-400", ring: "border-sky-300/60", badge: "bg-sky-500/15 text-sky-300 border-sky-400/40", bar: "from-sky-400 to-indigo-400", label: "JALAN" };
+    case "completed": return { dot: "bg-emerald-400", ring: "border-emerald-300/60", badge: "bg-emerald-500/15 text-emerald-300 border-emerald-400/40", bar: "from-emerald-400 to-teal-300", label: "DONE" };
+    case "in-progress": return { dot: "bg-sky-400", ring: "border-sky-300/60", badge: "bg-sky-500/15 text-sky-300 border-sky-400/40", bar: "from-sky-400 to-indigo-400", label: "IN PROGRESS" };
     default: return { dot: "bg-slate-300", ring: "border-slate-300/40", badge: "bg-slate-500/15 text-slate-300 border-slate-400/30", bar: "from-slate-400 to-slate-300", label: "PENDING" };
   }
 }
@@ -80,13 +80,13 @@ function OraclePage() {
       setResult(res);
       if (ttsOn && res.answer) speak(res.answer);
     } catch {
-      setResult({ intent: "error", subject: "Error", answer: "Gagal ngambil data. Coba lagi ya.", nodes: [] });
+      setResult({ intent: "error", subject: "Error", answer: "Couldn't pull the data. Give it another shot.", nodes: [] });
     } finally { setLoading(false); }
   }, [query, ttsOn, speak]);
 
   const startListening = useCallback(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) { setVoiceErr("Browser ini gak support voice — ketik aja ya."); return; }
+    if (!SR) { setVoiceErr("This browser doesn't do voice — just type it."); return; }
     try {
       const rec = new SR();
       rec.lang = "id-ID"; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
@@ -97,17 +97,17 @@ function OraclePage() {
         if (e.results[e.results.length - 1].isFinal) {
           setListening(false);
           if (txt.trim().length >= 2) submit(txt);
-          else setVoiceErr("Gak kedengeran jelas — coba lagi atau ketik.");
+          else setVoiceErr("Didn't catch that clearly — try again or type it.");
         }
       };
       rec.onerror = (e: any) => {
         setListening(false);
-        setVoiceErr(e.error === "not-allowed" ? "Mic-nya belum diizinin. Cek permission browser." : e.error === "no-speech" ? "Gak kedengeran — coba lagi." : "Voice error, ketik aja.");
+        setVoiceErr(e.error === "not-allowed" ? "Mic isn't allowed yet. Check your browser permissions." : e.error === "no-speech" ? "Didn't hear anything — try again." : "Voice error, just type it.");
       };
       rec.onend = () => setListening(false);
       recognitionRef.current = rec;
       setVoiceErr(null); setQuery(""); setListening(true); rec.start();
-    } catch { setVoiceErr("Gagal mulai voice — ketik aja."); }
+    } catch { setVoiceErr("Couldn't start voice — just type it."); }
   }, [submit]);
 
   const stopListening = useCallback(() => { try { recognitionRef.current?.stop(); } catch { /* noop */ } setListening(false); }, []);
@@ -119,8 +119,8 @@ function OraclePage() {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-3 bg-[#070b1a] text-white">
         <Sparkles className="h-10 w-10 text-indigo-400/60" />
-        <div className="text-lg font-bold">Oracle khusus One Above All</div>
-        <p className="max-w-sm text-center text-sm text-white/50">Dashboard ini cuma buat role tertinggi. Kalau ini salah, hubungi admin.</p>
+        <div className="text-lg font-bold">Oracle is for One Above All only</div>
+        <p className="max-w-sm text-center text-sm text-white/50">This dashboard is just for the top role. If this looks wrong, ping an admin.</p>
       </div>
     );
   }
@@ -139,14 +139,14 @@ function OraclePage() {
           <div className="flex items-center gap-2 font-display text-lg font-bold tracking-tight">
             <Sparkles className="h-5 w-5 text-indigo-400" /> Oracle
           </div>
-          <p className="text-xs text-white/40">Tanya apa aja soal NEXUS — pakai suara atau ketik.</p>
+          <p className="text-xs text-white/40">Ask anything about NEXUS — by voice or type.</p>
         </div>
         <button
           onClick={() => setTtsOn((v) => !v)}
-          title={ttsOn ? "Suara jawaban: ON" : "Suara jawaban: OFF"}
+          title={ttsOn ? "Spoken answers: ON" : "Spoken answers: OFF"}
           className={cn("inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition", ttsOn ? "border-indigo-400/40 bg-indigo-500/10 text-indigo-200" : "border-white/15 text-white/50 hover:bg-white/5")}
         >
-          {ttsOn ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />} Suara
+          {ttsOn ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />} Voice
         </button>
       </div>
 
@@ -166,7 +166,7 @@ function OraclePage() {
                 : <div className="grid h-12 w-12 place-items-center rounded-full bg-white/15 backdrop-blur"><Sparkles className="h-5 w-5 text-white" /></div>}
             </div>
             <div className="mt-3 max-w-[180px] truncate text-center text-sm font-bold tracking-wide text-white/90">
-              {loading ? "Mikir…" : result?.subject ?? "NEXUS"}
+              {loading ? "Thinking…" : result?.subject ?? "NEXUS"}
             </div>
           </div>
 
@@ -227,12 +227,12 @@ function OraclePage() {
 
                       {node.href && node.kind === "task" && (
                         <Link to="/tasks/$taskId" params={{ taskId: node.id }} className="mt-3 inline-flex items-center gap-1 rounded-lg border border-indigo-400/40 bg-indigo-500/10 px-2.5 py-1 text-[11px] font-semibold text-indigo-200 transition hover:bg-indigo-500/20">
-                          Buka di NEXUS <ArrowUpRight size={12} />
+                          Open in NEXUS <ArrowUpRight size={12} />
                         </Link>
                       )}
                       {node.href && node.kind === "project" && (
                         <Link to="/projects/$projectId" params={{ projectId: node.id }} className="mt-3 inline-flex items-center gap-1 rounded-lg border border-indigo-400/40 bg-indigo-500/10 px-2.5 py-1 text-[11px] font-semibold text-indigo-200 transition hover:bg-indigo-500/20">
-                          Buka di NEXUS <ArrowUpRight size={12} />
+                          Open in NEXUS <ArrowUpRight size={12} />
                         </Link>
                       )}
                     </motion.div>
@@ -252,9 +252,9 @@ function OraclePage() {
             className="absolute left-1/2 top-[88px] z-20 w-[min(92vw,560px)] -translate-x-1/2 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-center backdrop-blur"
           >
             <p className="text-sm text-white/85">{stripMd(result.answer)}</p>
-            {result.usedLlm ? <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-indigo-300/80"><Sparkles className="h-3 w-3" /> dijawab AI</p> : null}
-            {result.truncated ? <p className="mt-1 text-[11px] text-white/40">+{result.truncated} lagi gak ditampilin biar gak penuh.</p> : null}
-            {result.needsLlm && !result.usedLlm ? <p className="mt-1 text-[11px] text-amber-300/70">Belum nemu yang pas — coba reword pertanyaannya ya.</p> : null}
+            {result.usedLlm ? <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-indigo-300/80"><Sparkles className="h-3 w-3" /> answered by AI</p> : null}
+            {result.truncated ? <p className="mt-1 text-[11px] text-white/40">+{result.truncated} more hidden to keep it tidy.</p> : null}
+            {result.needsLlm && !result.usedLlm ? <p className="mt-1 text-[11px] text-amber-300/70">Couldn't find a good match — try rewording your question.</p> : null}
           </motion.div>
         )}
       </AnimatePresence>
@@ -277,7 +277,7 @@ function OraclePage() {
           <div className="flex w-full items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-2 backdrop-blur">
             <button
               onClick={listening ? stopListening : startListening}
-              title={listening ? "Berhenti" : "Tekan & ngomong"}
+              title={listening ? "Stop" : "Tap & talk"}
               className={cn("grid h-11 w-11 shrink-0 place-items-center rounded-xl transition", listening ? "bg-rose-500 text-white shadow-[0_0_24px_-2px_rgba(244,63,94,0.7)]" : "bg-gradient-to-br from-indigo-500 to-violet-500 text-white hover:opacity-90")}
             >
               {listening ? <span className="relative flex h-4 w-4"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white/70" /><span className="relative inline-flex h-4 w-4 rounded-full bg-white" /></span> : <Mic className="h-5 w-5" />}
@@ -286,7 +286,7 @@ function OraclePage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
-              placeholder={listening ? "Lagi dengerin…" : "Tanya, atau tekan mic & ngomong…"}
+              placeholder={listening ? "Listening…" : "Ask, or tap the mic & talk…"}
               className="min-w-0 flex-1 bg-transparent px-2 text-sm text-white outline-none placeholder:text-white/35"
             />
             {result && (

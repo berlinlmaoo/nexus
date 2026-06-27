@@ -23,17 +23,17 @@ function ComplaintsGate() {
 }
 
 const CATEGORIES: { key: string; label: string; emoji: string }[] = [
-  { key: "ATTENDANCE", label: "Absensi", emoji: "🕐" },
-  { key: "EXP", label: "EXP / Gamifikasi", emoji: "⭐" },
-  { key: "DAY_OFF", label: "Cuti / Day-Off", emoji: "🌴" },
-  { key: "OTHER", label: "Lainnya", emoji: "💬" },
+  { key: "ATTENDANCE", label: "Attendance", emoji: "🕐" },
+  { key: "EXP", label: "EXP / Gamification", emoji: "⭐" },
+  { key: "DAY_OFF", label: "Leave / Day-Off", emoji: "🌴" },
+  { key: "OTHER", label: "Other", emoji: "💬" },
 ];
 const catOf = (k: string) => CATEGORIES.find((c) => c.key === k);
 const STATUS: Record<string, { label: string; cls: string }> = {
-  OPEN: { label: "Baru", cls: "bg-amber-100 text-amber-700 ring-amber-200" },
-  IN_REVIEW: { label: "Ditangani", cls: "bg-sky-100 text-sky-700 ring-sky-200" },
-  RESOLVED: { label: "Selesai", cls: "bg-emerald-100 text-emerald-700 ring-emerald-200" },
-  CLOSED: { label: "Ditutup", cls: "bg-slate-100 text-slate-500 ring-slate-200" },
+  OPEN: { label: "New", cls: "bg-amber-100 text-amber-700 ring-amber-200" },
+  IN_REVIEW: { label: "In progress", cls: "bg-sky-100 text-sky-700 ring-sky-200" },
+  RESOLVED: { label: "Resolved", cls: "bg-emerald-100 text-emerald-700 ring-emerald-200" },
+  CLOSED: { label: "Closed", cls: "bg-slate-100 text-slate-500 ring-slate-200" },
 };
 const fmtWhen = (iso: string) => new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
@@ -60,14 +60,14 @@ function ComplaintsPage() {
     <div className="mx-auto w-full max-w-3xl">
       <PageHeader
         title="Ticket"
-        subtitle="Saluran ke BoD untuk masalah operasional/HR. Cuma dibaca BoD."
+        subtitle="A direct line to the BoD for ops/HR issues. Only the BoD can read it."
         icon={<Ticket className="h-6 w-6 text-primary" />}
-        actions={<button onClick={() => setComposing(true)} className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-bold text-primary-foreground shadow-sm transition active:scale-[0.97]"><Plus className="h-4 w-4" /> Ajukan keluhan</button>}
+        actions={<button onClick={() => setComposing(true)} className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-sm font-bold text-primary-foreground shadow-sm transition active:scale-[0.97]"><Plus className="h-4 w-4" /> Submit a complaint</button>}
       />
 
       {viewerIsBod && (
         <div className="mb-3 flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1">
-          {([["open", "Masuk"], ["review", "Diproses"], ["all", "Semua"]] as [Tab, string][]).map(([t, label]) => (
+          {([["open", "Inbox"], ["review", "In progress"], ["all", "All"]] as [Tab, string][]).map(([t, label]) => (
             <button key={t} onClick={() => setTab(t)} className="relative shrink-0 rounded-lg px-3 py-1.5 text-sm font-bold transition">
               {tab === t && <motion.span layoutId="complaint-tab" className="absolute inset-0 rounded-lg bg-primary" transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
               <span className={cn("relative flex items-center gap-1.5", tab === t ? "text-primary-foreground" : "text-muted-foreground")}>
@@ -84,8 +84,8 @@ function ComplaintsPage() {
         {!listQ.isLoading && complaints.length === 0 && (
           <div className="rounded-2xl border border-dashed border-border bg-card/50 px-6 py-14 text-center">
             <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary"><InboxIcon className="h-7 w-7" /></div>
-            <div className="text-base font-black">{viewerIsBod ? "Belum ada keluhan di sini" : "Belum ada keluhan"}</div>
-            <p className="mt-1 text-sm text-muted-foreground">{viewerIsBod ? "Keluhan dari staff bakal muncul di sini." : "Ada masalah operasional / HR? Ajukan ke BoD di sini."}</p>
+            <div className="text-base font-black">{viewerIsBod ? "No complaints here yet" : "No complaints yet"}</div>
+            <p className="mt-1 text-sm text-muted-foreground">{viewerIsBod ? "Complaints from staff will show up here." : "Got an ops / HR issue? Send it to the BoD here."}</p>
           </div>
         )}
         {complaints.map((c) => <ComplaintCard key={c.id} c={c} viewerIsBod={viewerIsBod} onOpen={() => setOpenId(c.id)} />)}
@@ -104,7 +104,7 @@ function ComplaintsPage() {
 function ComplaintCard({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: boolean; onOpen: () => void }) {
   const st = STATUS[c.status];
   const cat = catOf(c.category);
-  const who = viewerIsBod ? (c.reporter?.name ?? "—") : "Kamu";
+  const who = viewerIsBod ? (c.reporter?.name ?? "—") : "You";
   return (
     <button onClick={onOpen} className="block w-full rounded-2xl border border-border bg-card p-3.5 text-left shadow-soft transition hover:border-primary/40 hover:shadow-pop active:scale-[0.99]">
       <div className="flex items-center gap-2">
@@ -114,7 +114,7 @@ function ComplaintCard({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: 
       </div>
       <div className="mt-1.5 line-clamp-1 text-sm font-bold">{c.subject}</div>
       <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-        <MessageSquare className="h-3 w-3" /> {c.messageCount} pesan · {viewerIsBod ? `dari ${who}` : "keluhan kamu"}
+        <MessageSquare className="h-3 w-3" /> {c.messageCount} message{c.messageCount === 1 ? "" : "s"} · {viewerIsBod ? `from ${who}` : "your complaint"}
       </div>
     </button>
   );
@@ -145,12 +145,12 @@ function Composer({ onClose, onDone }: { onClose: () => void; onDone: () => void
   return (
     <Backdrop onClose={onClose}>
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
-        <h2 className="text-lg font-black">Ajukan keluhan</h2>
+        <h2 className="text-lg font-black">Submit a complaint</h2>
         <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
       </div>
       <div className="space-y-4 overflow-y-auto p-5">
         <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Kategori</label>
+          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Category</label>
           <div className="flex flex-wrap gap-1.5">
             {CATEGORIES.map((c) => (
               <button key={c.key} onClick={() => setCategory(c.key)} className={cn("rounded-full border px-2.5 py-1 text-xs font-semibold transition", category === c.key ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}>
@@ -161,41 +161,41 @@ function Composer({ onClose, onDone }: { onClose: () => void; onDone: () => void
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Judul singkat</label>
-          <input value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={140} placeholder="Mis. Salah potong jatah cuti bulan ini" className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Short title</label>
+          <input value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={140} placeholder="e.g. My leave balance got deducted wrong this month" className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Ceritakan keluhannya</label>
-          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={5} maxLength={4000} placeholder="Jelaskan masalahnya sedetail mungkin — apa yang terjadi, kapan, dan apa yang kamu harapkan." className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Tell us what happened</label>
+          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={5} maxLength={4000} placeholder="Describe the issue in as much detail as you can — what happened, when, and what you're hoping for." className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
           <p className="text-right text-[11px] text-muted-foreground">{body.trim().length}/4000</p>
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Foto bukti <span className="text-rose-500">*wajib</span></label>
+          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Photo evidence <span className="text-rose-500">*required</span></label>
           {previewUrl ? (
             <div className="relative overflow-hidden rounded-xl border border-border">
-              <img src={previewUrl} alt="bukti" className="max-h-56 w-full object-cover" />
+              <img src={previewUrl} alt="evidence" className="max-h-56 w-full object-cover" />
               <button onClick={() => { setEvidence(null); if (fileRef.current) fileRef.current.value = ""; }} className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-black/60 text-white"><X className="h-4 w-4" /></button>
             </div>
           ) : (
             <button onClick={() => fileRef.current?.click()} className="flex w-full flex-col items-center gap-1.5 rounded-xl border border-dashed border-border bg-background py-6 text-muted-foreground transition hover:border-primary/40 hover:text-primary">
               <Camera className="h-6 w-6" />
-              <span className="text-sm font-semibold">Ambil / pilih foto bukti</span>
+              <span className="text-sm font-semibold">Take / pick a photo for evidence</span>
             </button>
           )}
           <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setEvidence(f); }} />
         </div>
 
         <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-800">
-          🔒 Keluhan ini cuma dibaca <b>BoD</b> — gak masuk feed atau dilihat staff lain. BoD bakal balas di sini.
+          🔒 Only the <b>BoD</b> can read this complaint — it won't hit the feed or be seen by other staff. The BoD will reply right here.
         </div>
-        {create.isError && <p className="text-sm font-semibold text-rose-600">Gagal mengirim. Cek koneksi.</p>}
+        {create.isError && <p className="text-sm font-semibold text-rose-600">Couldn't send. Check your connection.</p>}
       </div>
       <div className="flex justify-end gap-2 border-t border-border px-5 py-4">
-        <button onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-accent">Batal</button>
+        <button onClick={onClose} className="rounded-xl px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-accent">Cancel</button>
         <button onClick={() => create.mutate()} disabled={!canSubmit || create.isPending} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground disabled:opacity-40">
-          {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ticket className="h-4 w-4" />} Kirim keluhan
+          {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ticket className="h-4 w-4" />} Send complaint
         </button>
       </div>
     </Backdrop>
@@ -246,8 +246,8 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
         {detailQ.isLoading && <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-12 animate-pulse rounded-2xl bg-muted" />)}</div>}
         {c?.evidenceUrl && (
           <div className="rounded-2xl border border-border bg-card p-3">
-            <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground"><Camera className="h-3.5 w-3.5" /> Foto bukti</div>
-            <img src={c.evidenceUrl} alt="bukti" className="max-h-80 w-full rounded-xl border border-border object-contain" />
+            <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground"><Camera className="h-3.5 w-3.5" /> Photo evidence</div>
+            <img src={c.evidenceUrl} alt="evidence" className="max-h-80 w-full rounded-xl border border-border object-contain" />
           </div>
         )}
         {c?.messages.map((m) => (
@@ -260,17 +260,17 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
           </div>
         ))}
         {c && c.status !== "OPEN" && c.resolvedAt && (c.status === "RESOLVED" || c.status === "CLOSED") && (
-          <div className="py-1 text-center text-[11px] font-semibold text-muted-foreground">— {c.status === "RESOLVED" ? "Ditandai selesai" : "Ditutup"} {c.resolvedBy ? `oleh ${c.resolvedBy.name}` : ""} —</div>
+          <div className="py-1 text-center text-[11px] font-semibold text-muted-foreground">— {c.status === "RESOLVED" ? "Marked resolved" : "Closed"} {c.resolvedBy ? `by ${c.resolvedBy.name}` : ""} —</div>
         )}
       </div>
 
       {/* BoD status controls */}
       {c?.canManage && (
         <div className="flex flex-wrap gap-1.5 border-t border-border px-4 py-2">
-          {c.status !== "IN_REVIEW" && c.status !== "CLOSED" && c.status !== "RESOLVED" && <button onClick={() => setStatus.mutate("IN_REVIEW")} disabled={busy} className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700 transition hover:bg-sky-100 disabled:opacity-50">Tangani</button>}
-          {c.status !== "RESOLVED" && c.status !== "CLOSED" && <button onClick={() => setStatus.mutate("RESOLVED")} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"><CheckCircle2 className="h-3.5 w-3.5" /> Tandai selesai</button>}
-          {c.status !== "CLOSED" && <button onClick={() => setStatus.mutate("CLOSED")} disabled={busy} className="rounded-lg border border-border px-2.5 py-1 text-xs font-bold text-muted-foreground transition hover:bg-accent disabled:opacity-50">Tutup</button>}
-          {c.status === "CLOSED" && <button onClick={() => setStatus.mutate("IN_REVIEW")} disabled={busy} className="rounded-lg border border-border px-2.5 py-1 text-xs font-bold text-muted-foreground transition hover:bg-accent disabled:opacity-50">Buka lagi</button>}
+          {c.status !== "IN_REVIEW" && c.status !== "CLOSED" && c.status !== "RESOLVED" && <button onClick={() => setStatus.mutate("IN_REVIEW")} disabled={busy} className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700 transition hover:bg-sky-100 disabled:opacity-50">Take it on</button>}
+          {c.status !== "RESOLVED" && c.status !== "CLOSED" && <button onClick={() => setStatus.mutate("RESOLVED")} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"><CheckCircle2 className="h-3.5 w-3.5" /> Mark resolved</button>}
+          {c.status !== "CLOSED" && <button onClick={() => setStatus.mutate("CLOSED")} disabled={busy} className="rounded-lg border border-border px-2.5 py-1 text-xs font-bold text-muted-foreground transition hover:bg-accent disabled:opacity-50">Close</button>}
+          {c.status === "CLOSED" && <button onClick={() => setStatus.mutate("IN_REVIEW")} disabled={busy} className="rounded-lg border border-border px-2.5 py-1 text-xs font-bold text-muted-foreground transition hover:bg-accent disabled:opacity-50">Reopen</button>}
         </div>
       )}
 
@@ -284,7 +284,7 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (reply.trim().length >= 10) send.mutate(); } }}
               rows={1}
               maxLength={4000}
-              placeholder={viewerIsBod ? "Balas keluhan ini…" : "Tulis balasan…"}
+              placeholder={viewerIsBod ? "Reply to this complaint…" : "Write a reply…"}
               className="max-h-32 min-h-[2.5rem] flex-1 resize-none rounded-2xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
             />
             <button onClick={() => send.mutate()} disabled={busy || reply.trim().length < 10} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition active:scale-95 disabled:opacity-40">
@@ -292,11 +292,11 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
             </button>
           </div>
           {reply.trim().length > 0 && reply.trim().length < 10 && (
-            <p className="mt-1 pl-1 text-[11px] text-muted-foreground">Minimal 10 karakter ({reply.trim().length}/10)</p>
+            <p className="mt-1 pl-1 text-[11px] text-muted-foreground">At least 10 characters ({reply.trim().length}/10)</p>
           )}
         </div>
       ) : (
-        c && <div className="border-t border-border px-4 py-3 text-center text-xs font-semibold text-muted-foreground">Keluhan ini sudah ditutup.</div>
+        c && <div className="border-t border-border px-4 py-3 text-center text-xs font-semibold text-muted-foreground">This complaint has been closed.</div>
       )}
     </Backdrop>
   );

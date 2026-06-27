@@ -5,11 +5,14 @@ import { CUSTOM_FIELD_TYPES, nexusApi, type NexusCustomField, type NexusCustomFi
 import { cn } from "@/lib/utils";
 
 const TYPE_LABELS: Record<string, string> = {
+  TEXT: "Text",
   SELECT: "Dropdown",
   MULTI_SELECT: "Multi-select",
   STATUS: "Status",
   NUMBER: "Number",
   DATE: "Date",
+  URL: "URL",
+  FILE: "Files & media",
   PLACE: "Place / Map",
   CREATED: "Created (auto)",
 };
@@ -59,7 +62,7 @@ export function FieldEditor({ initial, saving, onSave, onCancel }: { initial?: N
 
   return (
     <div className="space-y-3 rounded-2xl border border-primary/30 bg-primary/5 p-3">
-      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Field name (mis. Status Produksi)" className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Field name (e.g. Production Status)" className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
 
       <div className="flex flex-wrap gap-1.5">
         {CUSTOM_FIELD_TYPES.map((t) => (
@@ -135,7 +138,7 @@ export function ProjectCustomFieldsManager({ projectId }: { projectId: string })
         <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Fields · {fields.length}</span>
         {!adding && <button onClick={() => { setAdding(true); setEditingId(null); }} className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary active:scale-[0.98]"><Plus className="h-3.5 w-3.5" /> New field</button>}
       </div>
-      <p className="text-xs text-muted-foreground">Metadata khusus project ini — muncul di tiap task detail (mis. Status Produksi, Budget, Lokasi).</p>
+      <p className="text-xs text-muted-foreground">Metadata just for this project — shows up in every task's details (e.g. Production Status, Budget, Location).</p>
 
       {fieldsQuery.isLoading && <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>}
 
@@ -153,16 +156,16 @@ export function ProjectCustomFieldsManager({ projectId }: { projectId: string })
                 </div>
               </div>
               <button onClick={() => { setEditingId(f.id); setAdding(false); }} className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground" title="Edit"><Pencil className="h-3.5 w-3.5" /></button>
-              <button onClick={() => { if (confirm(`Hapus custom field "${f.name}"? Nilai di semua task ikut kehapus.`)) del.mutate(f.id); }} disabled={del.isPending} className="rounded-lg p-1.5 text-muted-foreground hover:text-destructive disabled:opacity-50" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>
+              <button onClick={() => { if (confirm(`Delete custom field "${f.name}"? Its value on every task gets wiped too.`)) del.mutate(f.id); }} disabled={del.isPending} className="rounded-lg p-1.5 text-muted-foreground hover:text-destructive disabled:opacity-50" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>
             </div>
           )
         ))}
-        {!fieldsQuery.isLoading && fields.length === 0 && !adding && <p className="text-xs text-muted-foreground">Belum ada field.</p>}
+        {!fieldsQuery.isLoading && fields.length === 0 && !adding && <p className="text-xs text-muted-foreground">No fields yet.</p>}
       </div>
 
       {adding && <FieldEditor saving={create.isPending} onCancel={() => setAdding(false)} onSave={(payload) => create.mutate(payload)} />}
 
-      {(create.isError || update.isError || del.isError) && <p className="text-xs font-semibold text-destructive">Aksi gagal — butuh role LEAD / cek akses.</p>}
+      {(create.isError || update.isError || del.isError) && <p className="text-xs font-semibold text-destructive">That didn't go through — you need the LEAD role, or check your access.</p>}
     </div>
   );
 }

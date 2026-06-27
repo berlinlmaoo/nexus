@@ -71,9 +71,9 @@ function AppLayout() {
       <div className="flex min-h-screen items-center justify-center bg-background p-6 text-foreground">
         <div className="max-w-md rounded-3xl border border-border bg-card p-8 text-center shadow-sm">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-warning/15 text-2xl">🛰️</div>
-          <h1 className="text-xl font-semibold text-foreground">Core NEXUS lagi nggak kejangkau</h1>
+          <h1 className="text-xl font-semibold text-foreground">Can't reach NEXUS core right now</h1>
           <p className="mt-3 text-sm font-medium text-muted-foreground">
-            Revamp UI jalan, tapi live API belum bisa dihubungi. Pastikan core app di port 3000 nyala, lalu refresh.
+            The new UI is up, but we can't connect to the live API. Make sure the core app on port 3000 is running, then refresh.
           </p>
           <button
             className="mt-6 rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
