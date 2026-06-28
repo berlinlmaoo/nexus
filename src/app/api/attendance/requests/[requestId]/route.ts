@@ -5,7 +5,7 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { getAttendanceWorkspaceContext, serializeAttendanceRequest } from "@/lib/attendance"
-import { clearLeaveCoveredOpenRecords } from "@/lib/attendance-absence"
+import { cancelAttendancePenaltiesForRange, clearLeaveCoveredOpenRecords, processAbsenceDeductions } from "@/lib/attendance-absence"
 import { attendanceRequestPatchSchema } from "@/lib/validations"
 
 export async function PATCH(
@@ -81,6 +81,10 @@ export async function PATCH(
         },
       })
 
+      // Requester withdrew a pending excuse → re-derive penalties for the now-uncovered dates (re-applies
+      // the absence penalty for any genuinely-absent covered workday). Window-independent.
+      try { await processAbsenceDeductions({ from: updated.startDate, to: updated.endDate }) } catch (err) { console.error("processAbsenceDeductions (cancel) failed:", err) }
+
       await logAudit({
         action: "update",
         entityType: "attendance_request",
@@ -140,6 +144,13 @@ export async function PATCH(
     // record (can't check out, blocks next day's check-in). Clear it here so it never enters that loop.
     if (nextStatus === "APPROVED") {
       try { await clearLeaveCoveredOpenRecords(updated.userId, updated.workspaceId) } catch (err) { console.error("clearLeaveCoveredOpenRecords (approve) failed:", err) }
+      // Approved excuse → clear any attendance penalty already applied for the covered days, no matter
+      // how old (the nightly cron only re-reaches the last 14 days).
+      try { await cancelAttendancePenaltiesForRange(updated.userId, updated.workspaceId, updated.startDate, updated.endDate) } catch (err) { console.error("cancelAttendancePenaltiesForRange (approve) failed:", err) }
+    } else {
+      // Rejected excuse → re-derive penalties for the covered dates so a genuinely-absent day is
+      // (re-)penalized even if it has aged out of the cron's 14-day window.
+      try { await processAbsenceDeductions({ from: updated.startDate, to: updated.endDate }) } catch (err) { console.error("processAbsenceDeductions (reject) failed:", err) }
     }
 
     await logAudit({

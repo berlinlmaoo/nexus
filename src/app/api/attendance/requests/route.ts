@@ -17,6 +17,7 @@ import {
   serializeAttendanceRequest,
   startOfAttendanceMonth,
 } from "@/lib/attendance"
+import { cancelAttendancePenaltiesForRange } from "@/lib/attendance-absence"
 import {
   attendanceRequestCreateSchema,
   attendanceRequestQuerySchema,
@@ -432,6 +433,12 @@ export async function POST(request: NextRequest) {
         targetUserId: effectiveUserId,
       },
     })
+
+    // Filing an excuse (pending self-submit or admin grant) immediately clears any attendance penalty
+    // already applied for the covered days — a window-independent hold. Reject/cancel later re-derives.
+    try {
+      await cancelAttendancePenaltiesForRange(effectiveUserId, context.workspace.id, attendanceRequest.startDate, attendanceRequest.endDate)
+    } catch (err) { console.error("cancelAttendancePenaltiesForRange (file) failed:", err) }
 
     // Ping approvers on WhatsApp (fire-and-forget) so a BoD can /approve straight from chat.
     if (!isGrant && attendanceRequest.status === "PENDING") {

@@ -174,7 +174,8 @@ function Attendance() {
   const [logKind, setLogKind] = useState<{ kind: "DAY_OFF" | "RED_DATE"; origin?: MorphOrigin } | null>(null);
   const [correctOrigin, setCorrectOrigin] = useState<MorphOrigin | undefined>(undefined);
   // Audit board state: which month to inspect + per-staff search.
-  const [monthKey, setMonthKey] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
+  // Default to the CURRENT payroll period (cut-off 28th → 27th): past the 27th, roll to next month.
+  const [monthKey, setMonthKey] = useState(() => { const d = new Date(); const a = new Date(d.getFullYear(), d.getMonth() + (d.getDate() > 27 ? 1 : 0), 1); return `${a.getFullYear()}-${String(a.getMonth() + 1).padStart(2, "0")}`; });
   const [memberQuery, setMemberQuery] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "log">("grid");
   // Pull the WHOLE selected month (not just today) so every past day is auditable — backend defaults
@@ -270,7 +271,9 @@ function Attendance() {
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     periodDays.push({ key, day: d.getDate() });
   }
-  const nowKey = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; })();
+  // Cut-off aware: past the 27th we're already in NEXT month's payroll period, so the board's
+  // "current period" (and the Next-button guard) must roll over on the 28th, not on the 1st.
+  const nowKey = (() => { const d = new Date(); const a = new Date(d.getFullYear(), d.getMonth() + (d.getDate() > CUTOFF_DAY ? 1 : 0), 1); return `${a.getFullYear()}-${String(a.getMonth() + 1).padStart(2, "0")}`; })();
   const isCurrentMonth = monthKey === nowKey;
   const monthLabel = new Date(year, month, 1).toLocaleDateString("id-ID", { month: "long", year: "numeric" });
   const periodLabel = `${periodStart.toLocaleDateString("id-ID", { day: "numeric", month: "short" })} – ${periodEnd.toLocaleDateString("id-ID", { day: "numeric", month: "short" })}`;
