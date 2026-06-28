@@ -68,6 +68,21 @@ export async function cancelAttendancePenaltiesForDate(userId: string, workspace
 }
 
 /**
+ * Refund EVERY attendance penalty across a date range (inclusive) — used the moment a leave/permit/
+ * day-off is FILED or APPROVED, so the covered days are cleared immediately and independently of the
+ * nightly cron's 14-day window (which otherwise can't reach older dates). Idempotent: each per-date
+ * cancel only refunds what actually exists. Returns the number of days that had a penalty undone.
+ */
+export async function cancelAttendancePenaltiesForRange(userId: string, workspaceId: string, start: Date, end: Date): Promise<number> {
+  let cleared = 0
+  for (const date of enumerateAttendanceDates(start, end)) {
+    const dateKey = formatAttendanceDateKey(date)
+    if (await cancelAttendancePenaltiesForDate(userId, workspaceId, date, dateKey)) cleared++
+  }
+  return cleared
+}
+
+/**
  * Per-member-per-day penalty WAIVER ("hapus punishment" from the BoD board). Stored as a 0-XP ledger
  * row so it survives restarts and is visible in audits. While it exists, NO attendance penalty may be
  * (re-)applied for that member-day: without it, a penalty refund would not stick — the nightly cron
