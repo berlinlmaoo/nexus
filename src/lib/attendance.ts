@@ -541,8 +541,8 @@ export function attendanceMonthRange(monthKey: string) {
 
 // Company payroll cut-off: the attendance period closes on the 27th. The period labeled by `monthKey`
 // runs from the 28th of the PREVIOUS month through the 27th of monthKey's month.
-// e.g. "2026-06" → 2026-05-28 .. 2026-06-27. Used for the attendance recap/board/export ONLY
-// (day-off & leave quota stay on the calendar month via attendanceMonthRange).
+// e.g. "2026-06" → 2026-05-28 .. 2026-06-27. Used for the attendance recap/board/export AND the
+// DAY_OFF quota (since 2026-06-30). RED_DATE quota stays on the calendar month (attendanceMonthRange).
 export const ATTENDANCE_CUTOFF_DAY = 27
 export function attendancePeriodRange(monthKey: string, cutoffDay = ATTENDANCE_CUTOFF_DAY) {
   const [year, month] = monthKey.split("-").map(Number)
@@ -551,6 +551,16 @@ export function attendancePeriodRange(monthKey: string, cutoffDay = ATTENDANCE_C
   // start = the day after the cut-off, in the previous month
   const start = new Date(Date.UTC(year, month - 2, cutoffDay + 1))
   return { start, end }
+}
+
+// Which attendance PERIOD ("YYYY-MM", cut-off 28→27) a given attendance date-key ("YYYY-MM-DD") falls
+// in: a day ON/AFTER the 28th belongs to the NEXT month's period. Defaults to today's attendance date.
+// Cut-off-aware counterpart of slicing "YYYY-MM" off a calendar date.
+export function attendancePeriodKey(dateKey: string = formatAttendanceDateKey(), cutoffDay = ATTENDANCE_CUTOFF_DAY): string {
+  const [year, month, day] = dateKey.split("-").map(Number)
+  let y = year, m = month
+  if (day > cutoffDay) { m += 1; if (m > 12) { m = 1; y += 1 } }
+  return `${y}-${String(m).padStart(2, "0")}`
 }
 
 export function parseDateOnlyToUtc(value: string) {

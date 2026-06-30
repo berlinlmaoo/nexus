@@ -9,8 +9,11 @@ import { logAudit } from "@/lib/audit"
 import { notifyApproversOfRequest } from "@/lib/wa-bot"
 import {
   attendanceMonthRange,
+  attendancePeriodKey,
+  attendancePeriodRange,
   endOfAttendanceMonth,
   enumerateAttendanceDates,
+  formatAttendanceDateKey,
   getAttendanceWorkspaceContext,
   getPrimaryAttendanceTeam,
   parseDateOnlyToUtc,
@@ -296,17 +299,21 @@ export async function POST(request: NextRequest) {
     // so the two buckets are independent. Admin grants (isGrant) bypass the cap.
     if (validation.data.type === "DAY_OFF" || validation.data.type === "RED_DATE") {
       const reqType = validation.data.type
+      // DAY_OFF quota resets on the 28→27 payroll period; RED_DATE stays on the calendar month.
+      const isDayOff = reqType === "DAY_OFF"
+      const keyOf = (d: Date) => (isDayOff ? attendancePeriodKey(formatAttendanceDateKey(d)) : formatMonthKey(d))
+      const rangeOf = (mk: string) => (isDayOff ? attendancePeriodRange(mk) : attendanceMonthRange(mk))
       const requestDates = enumerateAttendanceDates(parsedStartDate, parsedEndDate)
       const monthCounts = new Map<string, number>()
 
       for (const date of requestDates) {
-        const monthKey = formatMonthKey(date)
+        const monthKey = keyOf(date)
         monthCounts.set(monthKey, (monthCounts.get(monthKey) ?? 0) + 1)
       }
 
       const monthWindows = Array.from(monthCounts.keys()).map((monthKey) => ({
         monthKey,
-        ...attendanceMonthRange(monthKey),
+        ...rangeOf(monthKey),
       }))
 
       const existingSameType = await prisma.attendanceRequest.findMany({
@@ -325,7 +332,7 @@ export async function POST(request: NextRequest) {
       const existingMonthCounts = new Map<string, number>()
       for (const requestItem of existingSameType) {
         for (const date of enumerateAttendanceDates(requestItem.startDate, requestItem.endDate)) {
-          const monthKey = formatMonthKey(date)
+          const monthKey = keyOf(date)
           if (!monthCounts.has(monthKey)) continue
           existingMonthCounts.set(monthKey, (existingMonthCounts.get(monthKey) ?? 0) + 1)
         }
