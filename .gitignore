@@ -46,6 +46,9 @@ next-env.d.ts
 /var/
 # sibling runtime-data dirs: beta/staging Postgres volumes + uploads, prod DB backups (var-beta/, var-prod-backups/, var-staging/, …)
 /var-*/
+# runtime user uploads (avatars, project-icons, attachments, …) — written to Docker-mounted volumes at
+# runtime, NOT source. The Dockerfile mkdir -p's these dirs on build, so they don't need to be tracked.
+/public/uploads/
 /backups/
 *.sql
 *.sql.gz
