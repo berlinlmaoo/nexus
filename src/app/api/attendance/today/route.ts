@@ -4,6 +4,8 @@ import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import {
+  attendancePeriodKey,
+  attendancePeriodRange,
   endOfAttendanceMonth,
   formatAttendanceDateKey,
   getAttendanceDate,
@@ -27,6 +29,8 @@ export async function GET() {
     }
 
     const attendanceDate = getAttendanceDate()
+    // DAY_OFF quota counts within the 28→27 payroll period (RED_DATE below stays on the calendar month).
+    const dayOffPeriod = attendancePeriodRange(attendancePeriodKey())
     const [todayRecord, activeOfficeCount, todayRequest, dayOffRequests, pendingCheckoutRecord] = await prisma.$transaction([
       prisma.attendanceRecord.findUnique({
         where: {
@@ -99,8 +103,8 @@ export async function GET() {
           workspaceId: context.workspace.id,
           type: "DAY_OFF",
           status: { in: ["PENDING", "APPROVED"] },
-          startDate: { lte: endOfAttendanceMonth(new Date()) },
-          endDate: { gte: startOfAttendanceMonth(new Date()) },
+          startDate: { lte: dayOffPeriod.end },
+          endDate: { gte: dayOffPeriod.start },
         },
         select: {
           startDate: true,
@@ -180,8 +184,8 @@ export async function GET() {
       todayRequest: todayRequest ? serializeAttendanceRequest(todayRequest) : null,
       dayOffQuota: quotaMember?.dayOffQuota ?? 4,
       dayOffUsedThisMonth: dayOffRequests.reduce((count: number, requestItem) => {
-        const start = startOfAttendanceMonth(new Date())
-        const end = endOfAttendanceMonth(new Date())
+        const start = dayOffPeriod.start
+        const end = dayOffPeriod.end
         const days = Math.max(
           0,
           Math.floor((Math.min(requestItem.endDate.getTime(), end.getTime()) - Math.max(requestItem.startDate.getTime(), start.getTime())) / 86_400_000) + 1

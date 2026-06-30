@@ -5,9 +5,9 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import {
-  attendanceMonthRange,
+  attendancePeriodKey,
+  attendancePeriodRange,
   enumerateAttendanceDates,
-  formatAttendanceDateKey,
   getAttendanceWorkspaceContext,
   getPrimaryAttendanceTeam,
   parseDateOnlyToUtc,
@@ -40,9 +40,10 @@ export async function GET(req: NextRequest) {
 
     const userId = (req.nextUrl.searchParams.get("userId") ?? "").trim()
     if (!userId) return NextResponse.json({ error: "userId is required" }, { status: 400 })
-    const month = (req.nextUrl.searchParams.get("month") ?? "").trim() || formatAttendanceDateKey().slice(0, 7)
+    // DAY_OFF quota window = the 28→27 payroll period (default: the period today falls in).
+    const month = (req.nextUrl.searchParams.get("month") ?? "").trim() || attendancePeriodKey()
     if (!MONTH_RE.test(month)) return NextResponse.json({ error: "Bulan harus format YYYY-MM." }, { status: 400 })
-    const { start, end } = attendanceMonthRange(month)
+    const { start, end } = attendancePeriodRange(month)
 
     const member = await prisma.workspaceMember.findUnique({
       where: { userId_workspaceId: { userId, workspaceId } },
