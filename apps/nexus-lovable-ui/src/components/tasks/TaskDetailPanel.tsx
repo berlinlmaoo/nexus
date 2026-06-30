@@ -236,9 +236,9 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   const [previewAtt, setPreviewAtt] = useState<NexusAttachment | null>(null);
   const [uploadPct, setUploadPct] = useState<number | null>(null);
   const [sizeWarn, setSizeWarn] = useState<string | null>(null);
-  // Files >80MB auto-chunk client-side (see uploadAttachmentProgress) so they slip under Cloudflare's
-  // ~100MB cap and get reassembled server-side — so the real ceiling is the app/nginx limit, 250MB.
-  const MAX_ATTACH_MB = 1024; // 1GB — uploads stream in <100MB chunks, so Cloudflare's per-request cap doesn't apply
+  // Files >20MB auto-chunk client-side into 10MB pieces (see uploadAttachmentProgress) so each request stays
+  // far below Cloudflare's 100MB cap and gets reassembled server-side — the real ceiling is the app/nginx limit.
+  const MAX_ATTACH_MB = 1024; // 1GB — uploads stream in 10MB chunks, so Cloudflare's per-request cap doesn't apply
   const MAX_ATTACH_BYTES = MAX_ATTACH_MB * 1024 * 1024;
   const MAX_ATTACH_LABEL = "1 GB";
   const favorites = useQuery({ queryKey: ["favorites"], queryFn: () => nexusApi.favorites(), staleTime: 60_000 });

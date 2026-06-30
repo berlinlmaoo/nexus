@@ -1455,7 +1455,11 @@ export const nexusApi = {
   // stays under Cloudflare's ~100MB cap. Only genuinely small files use the single-shot path (which
   // buffers the whole file in memory + gets spooled to an nginx temp file), so we keep that band small.
   uploadAttachmentProgress: (taskId: string, file: File, onProgress: (pct: number) => void): Promise<NexusAttachment> => {
-    const CHUNK_SIZE = 80 * 1024 * 1024; // 80MB max per chunk — comfortably under Cloudflare's 100MB cap
+    // 10MB per chunk. NOT just "under Cloudflare's 100MB cap" — bodies anywhere near that cap (tested: a
+    // 90MB body 502s through the CF tunnel after 30s, an 80MB chunk would upload to the edge then never get
+    // a response → progress freezes at the chunk boundary, e.g. ~8% of a 1GB file). 10MB transmits in
+    // seconds, stays far below the cap, gives smooth progress + cheap retries. Total file size unaffected.
+    const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB max per chunk — far below Cloudflare's 100MB cap for reliability
     const CHUNK_THRESHOLD = 20 * 1024 * 1024; // >20MB → stream via the chunk endpoint instead of buffering
 
     // ---- small file: single request, native upload progress ----
