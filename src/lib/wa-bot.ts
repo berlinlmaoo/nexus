@@ -5,6 +5,8 @@ import prisma from "@/lib/prisma"
 import { TaskStatus } from "@/generated/prisma"
 import { logAudit } from "@/lib/audit"
 import { postWaBridge } from "@/lib/wa-bridge"
+import { createInAppNotification } from "@/lib/notification-service"
+import { applyAttendanceReviewSideEffects } from "@/lib/attendance-absence"
 
 const BRIDGE_URL =
   process.env.WA_WEBHOOK_URL ||
@@ -240,9 +242,15 @@ export async function handleWaInbound(input: { chatId: string; senderId: string;
 
     const updated = await prisma.attendanceRequest.findUnique({
       where: { id: targetId },
-      select: { type: true, startDate: true, endDate: true, userId: true, user: { select: { name: true, phoneNumber: true, whatsappId: true } } },
+      select: { type: true, startDate: true, endDate: true, userId: true, workspaceId: true, user: { select: { name: true, phoneNumber: true, whatsappId: true } } },
     })
     if (!updated) return
+    // Same penalty side-effects as the web review path — without this a WA approval left the XP penalty
+    // in place until the nightly cron (max 14d back) and could leave a stuck open record. Mirror exactly.
+    await applyAttendanceReviewSideEffects(
+      { userId: updated.userId, workspaceId: updated.workspaceId, startDate: updated.startDate, endDate: updated.endDate },
+      cmd === "approve",
+    )
     // Audit the off-platform approval (mirror the in-app PATCH; tag via:whatsapp).
     await logAudit({
       action: "update",
@@ -255,16 +263,11 @@ export async function handleWaInbound(input: { chatId: string; senderId: string;
 
     const label = REQ_TYPE_LABEL[updated.type] ?? updated.type
     const range = fmtDateRange(updated.startDate, updated.endDate)
+    // Confirmation to the approver who typed the command.
     await sendWaChat(input.chatId, `${cmd === "approve" ? "✅" : "❌"} *${label}* ${updated.user.name} (${range}) di-${cmd === "approve" ? "APPROVE" : "TOLAK"}.`)
-    // Notify the requester (skip if they somehow approved their own).
-    const reqChat = recipientChatId(updated.user)
-    if (reqChat && updated.userId !== user.id) {
-      const approver = user.name?.split(" ")[0] ?? "BoD"
-      const msg = cmd === "approve"
-        ? `✅ *${label}* kamu (${range}) di-*APPROVE* sama ${approver}. 🎉`
-        : `❌ *${label}* kamu (${range}) di-*TOLAK* sama ${approver}.${note ? `\nAlasan: "${note}"` : ""}`
-      await sendWaChat(reqChat, msg)
-    }
+    // Tell the requester (outcome + who) AND the other approvers (handled → no double-action). In-app + WA.
+    notifyAttendanceRequestReviewed({ requestId: targetId, reviewerId: user.id, reviewerName: user.name, approved: cmd === "approve", note })
+      .catch((e) => console.error("[wa-bot] notifyAttendanceRequestReviewed failed", e))
     return
   }
 
@@ -284,18 +287,7 @@ export async function notifyApproversOfRequest(requestId: string): Promise<void>
   })
   if (!req || req.status !== "PENDING") return
 
-  const [members, admins] = await Promise.all([
-    prisma.workspaceMember.findMany({
-      where: { workspaceId: req.workspaceId, role: { in: ["BOD", "ONE_ABOVE_ALL"] } },
-      select: { user: { select: { id: true, name: true, phoneNumber: true, whatsappId: true } } },
-    }),
-    // System admins are globally privileged, but only ping the ones who are members of THIS workspace
-    // — avoids blasting (and leaking the requester's name/reason to) admins of unrelated workspaces.
-    prisma.user.findMany({ where: { role: "ADMIN", workspaceMembers: { some: { workspaceId: req.workspaceId } } }, select: { id: true, name: true, phoneNumber: true, whatsappId: true } }),
-  ])
-  const approvers = new Map<string, { id: string; name: string; phoneNumber: string | null; whatsappId: string | null }>()
-  for (const m of members) approvers.set(m.user.id, m.user)
-  for (const a of admins) approvers.set(a.id, a)
+  const approvers = await getRequestApprovers(req.workspaceId)
   approvers.delete(req.userId) // don't ask someone to approve their own request
 
   const label = REQ_TYPE_LABEL[req.type] ?? req.type
@@ -354,4 +346,183 @@ export async function sendDigestToAll(opts?: { onlyUserId?: string; includeEmpty
     sent++
   }
   return { users: users.length, sent }
+}
+
+// ── Outbound notifications: attendance approvals & admin overrides ────────────────────────────
+// In-app bell (always) + WhatsApp via Gideon (kill-switchable, default-on). Fire-and-forget from the
+// route/command handlers so they never block or fail a review. Routed here because this module already
+// owns WA delivery (recipientChatId prefers the link-verified WA id over an unverified phone) + the
+// approver lookup + the type labels.
+
+type ApproverUser = { id: string; name: string | null; phoneNumber: string | null; whatsappId: string | null }
+
+/** Default-on env flag (NEXUS_WA_…=false|0|off to mute that WA family). The in-app bell is never muted. */
+function waNotifEnabled(name: string): boolean {
+  const raw = process.env[name]
+  if (raw === undefined || raw === "") return true
+  return !["0", "false", "no", "off"].includes(raw.toLowerCase())
+}
+
+const firstNameOf = (n: string | null | undefined) => (n ?? "").trim().split(/\s+/)[0] || "BoD"
+
+/** The attendance approvers of a workspace: org BoD / One-Above-All members + system admins who are
+ *  members of it. Shared by the new-request ping and the reviewed/handled fan-outs. */
+async function getRequestApprovers(workspaceId: string): Promise<Map<string, ApproverUser>> {
+  const [members, admins] = await Promise.all([
+    prisma.workspaceMember.findMany({
+      where: { workspaceId, role: { in: ["BOD", "ONE_ABOVE_ALL"] } },
+      select: { user: { select: { id: true, name: true, phoneNumber: true, whatsappId: true } } },
+    }),
+    // System admins are globally privileged, but only the ones who are members of THIS workspace —
+    // avoids blasting (and leaking the requester's name/reason to) admins of unrelated workspaces.
+    prisma.user.findMany({
+      where: { role: "ADMIN", workspaceMembers: { some: { workspaceId } } },
+      select: { id: true, name: true, phoneNumber: true, whatsappId: true },
+    }),
+  ])
+  const approvers = new Map<string, ApproverUser>()
+  for (const m of members) approvers.set(m.user.id, m.user)
+  for (const a of admins) approvers.set(a.id, a)
+  return approvers
+}
+
+/** Tell the OTHER approvers (BoD/admins of the workspace, minus the reviewer + requester) that a
+ *  pending item was handled, so nobody double-acts. In-app + WA. */
+async function fanOutHandledToApprovers(opts: {
+  workspaceId: string; reviewerId: string; requesterId: string; waEnabled: boolean
+  type: string; title: string; inApp: string; wa: string
+}): Promise<void> {
+  const approvers = await getRequestApprovers(opts.workspaceId)
+  approvers.delete(opts.requesterId)
+  approvers.delete(opts.reviewerId)
+  for (const a of approvers.values()) {
+    await createInAppNotification({ userId: a.id, type: opts.type, title: opts.title, message: opts.inApp, link: "/attendance" }).catch(() => {})
+    if (opts.waEnabled) { const c = recipientChatId(a); if (c) await sendWaChat(c, opts.wa) }
+  }
+}
+
+/** After an attendance request is approved/rejected (web PATCH OR the /approve|/reject command): tell the
+ *  requester the outcome + who decided, and tell the other approvers it's handled. In-app + WA. */
+export async function notifyAttendanceRequestReviewed(input: {
+  requestId: string; reviewerId: string; reviewerName: string | null; approved: boolean; note?: string | null
+}): Promise<void> {
+  const req = await prisma.attendanceRequest.findUnique({
+    where: { id: input.requestId },
+    select: {
+      type: true, startDate: true, endDate: true, userId: true, workspaceId: true,
+      user: { select: { id: true, name: true, phoneNumber: true, whatsappId: true } },
+    },
+  })
+  if (!req) return
+  const label = REQ_TYPE_LABEL[req.type] ?? req.type
+  const range = fmtDateRange(req.startDate, req.endDate)
+  const who = firstNameOf(input.reviewerName)
+  const verb = input.approved ? "APPROVE" : "TOLAK"
+  const waOn = waNotifEnabled("NEXUS_WA_ATTENDANCE_REVIEW_ENABLED")
+
+  // 1) the requester (skip the degenerate self-review)
+  if (req.userId !== input.reviewerId) {
+    await createInAppNotification({
+      userId: req.userId,
+      type: "attendance_request_reviewed",
+      title: input.approved ? "Permintaan absen di-approve" : "Permintaan absen ditolak",
+      message: `${label} kamu (${range}) di-${verb} sama ${who}.`,
+      link: "/attendance",
+    }).catch(() => {})
+    if (waOn) {
+      const c = recipientChatId(req.user)
+      if (c) {
+        await sendWaChat(c, input.approved
+          ? `✅ *${label}* kamu (${range}) di-*APPROVE* sama ${who}. 🎉`
+          : `❌ *${label}* kamu (${range}) di-*TOLAK* sama ${who}.${input.note ? `\nAlasan: "${input.note}"` : ""}`)
+      }
+    }
+  }
+
+  // 2) the other approvers — handled, don't double-act
+  await fanOutHandledToApprovers({
+    workspaceId: req.workspaceId, reviewerId: input.reviewerId, requesterId: req.userId, waEnabled: waOn,
+    type: "attendance_request_handled",
+    title: "Permintaan absen sudah diproses",
+    inApp: `${label} ${req.user.name ?? "staff"} (${range}) di-${verb} sama ${who}.`,
+    wa: `ℹ️ *${label}* ${req.user.name ?? "staff"} (${range}) udah di-*${verb}* sama ${who}.`,
+  })
+}
+
+const OVERRIDE_STATUS_LABEL: Record<string, string> = { PRESENT: "Hadir", LEAVE: "Cuti", SICK: "Sakit", DAY_OFF: "Day off" }
+
+/** A BoD rewrote a member-day from the crew board (status change or clear-penalty) → tell that member. */
+export async function notifyAttendanceOverride(input: {
+  workspaceId: string; targetUserId: string; actorId: string; actorName?: string | null
+  dateKey: string; action: "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "CLEAR_PENALTY"; note?: string | null
+}): Promise<void> {
+  if (input.targetUserId === input.actorId) return // BoD changed their own day → no self-notify
+  const [target, actorName] = await Promise.all([
+    prisma.user.findUnique({ where: { id: input.targetUserId }, select: { id: true, name: true, phoneNumber: true, whatsappId: true } }),
+    input.actorName != null
+      ? Promise.resolve(input.actorName)
+      : prisma.user.findUnique({ where: { id: input.actorId }, select: { name: true } }).then((u) => u?.name ?? null),
+  ])
+  if (!target) return
+  const who = firstNameOf(actorName)
+  const d = new Date(`${input.dateKey}T00:00:00+07:00`)
+  const dateStr = isNaN(d.getTime()) ? input.dateKey : fmtDateRange(d, d)
+
+  let title: string, inApp: string, wa: string
+  if (input.action === "CLEAR_PENALTY") {
+    title = "Penalty absen dibersihin"
+    inApp = `Penalty absen kamu (${dateStr}) dibersihin sama ${who} — XP & jatah day-off dipulihin.`
+    wa = `♻️ ${inApp}`
+  } else {
+    const sl = OVERRIDE_STATUS_LABEL[input.action] ?? input.action
+    title = "Status absen kamu diubah"
+    inApp = `Status absen kamu (${dateStr}) diubah jadi ${sl} sama ${who}.`
+    wa = `📝 Status absen kamu (${dateStr}) diubah jadi *${sl}* sama ${who}.${input.note ? `\nCatatan: "${input.note}"` : ""}`
+  }
+  await createInAppNotification({ userId: target.id, type: "attendance_override", title, message: inApp, link: "/attendance" }).catch(() => {})
+  if (waNotifEnabled("NEXUS_WA_ATTENDANCE_OVERRIDE_ENABLED")) {
+    const c = recipientChatId(target)
+    if (c) await sendWaChat(c, wa)
+  }
+}
+
+/** An offsite checkout was approved/rejected → tell the staff (+ the other approvers it's handled). */
+export async function notifyOffsiteCheckoutReviewed(input: {
+  recordId: string; reviewerId: string; reviewerName?: string | null; approved: boolean
+}): Promise<void> {
+  const rec = await prisma.attendanceRecord.findUnique({
+    where: { id: input.recordId },
+    select: { userId: true, workspaceId: true, attendanceDate: true, user: { select: { id: true, name: true, phoneNumber: true, whatsappId: true } } },
+  })
+  if (!rec) return
+  const who = firstNameOf(input.reviewerName)
+  const dateStr = fmtDateRange(rec.attendanceDate, rec.attendanceDate)
+  const verb = input.approved ? "APPROVE" : "TOLAK"
+  const waOn = waNotifEnabled("NEXUS_WA_ATTENDANCE_REVIEW_ENABLED")
+
+  if (rec.userId !== input.reviewerId) {
+    await createInAppNotification({
+      userId: rec.userId,
+      type: "offsite_checkout_reviewed",
+      title: input.approved ? "Checkout di luar di-approve" : "Checkout di luar ditolak",
+      message: `Check-out di luar (${dateStr}) di-${verb} sama ${who}.`,
+      link: "/attendance",
+    }).catch(() => {})
+    if (waOn) {
+      const c = recipientChatId(rec.user)
+      if (c) {
+        await sendWaChat(c, input.approved
+          ? `✅ Check-out di luar kantor (${dateStr}) kamu di-*APPROVE* sama ${who}.`
+          : `❌ Check-out di luar kantor (${dateStr}) kamu di-*TOLAK* sama ${who}. (dihitung kayak nggak check-out → -25 XP)`)
+      }
+    }
+  }
+
+  await fanOutHandledToApprovers({
+    workspaceId: rec.workspaceId, reviewerId: input.reviewerId, requesterId: rec.userId, waEnabled: waOn,
+    type: "offsite_checkout_handled",
+    title: "Checkout di luar sudah diproses",
+    inApp: `Offsite checkout ${rec.user.name ?? "staff"} (${dateStr}) di-${verb} sama ${who}.`,
+    wa: `ℹ️ Offsite checkout ${rec.user.name ?? "staff"} (${dateStr}) udah di-*${verb}* sama ${who}.`,
+  })
 }

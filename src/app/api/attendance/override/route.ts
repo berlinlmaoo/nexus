@@ -14,6 +14,7 @@ import {
   getAttendanceDate,
 } from "@/lib/attendance"
 import { cancelAttendancePenaltiesForDate, isAutoDeduction, grantAttendanceWaiver } from "@/lib/attendance-absence"
+import { notifyAttendanceOverride } from "@/lib/wa-bot"
 
 type OverrideAction = "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "CLEAR_PENALTY"
 const ACTIONS = new Set<OverrideAction>(["PRESENT", "LEAVE", "SICK", "DAY_OFF", "CLEAR_PENALTY"])
@@ -73,6 +74,8 @@ export async function POST(req: NextRequest) {
       // (crons + check-in all skip penalty work for a waived member-day) without touching the status.
       await grantAttendanceWaiver(targetUserId, dateKey)
       await logOverride(req, session.user.id, workspaceId, targetUserId, dateKey, action, { refunded })
+      notifyAttendanceOverride({ workspaceId, targetUserId, actorId: session.user.id, actorName: session.user.name ?? null, dateKey, action: "CLEAR_PENALTY", note: (body?.note ?? "").trim() || null })
+        .catch((e) => console.error("[wa] notifyAttendanceOverride (clear) failed", e))
       return NextResponse.json({ ok: true, action, date: dateKey, refunded })
     }
 
@@ -149,6 +152,8 @@ export async function POST(req: NextRequest) {
       }
 
       await logOverride(req, session.user.id, workspaceId, targetUserId, dateKey, action, { refunded, canceledRequests: singleDay.length })
+      notifyAttendanceOverride({ workspaceId, targetUserId, actorId: session.user.id, actorName: session.user.name ?? null, dateKey, action: "PRESENT", note: (body?.note ?? "").trim() || null })
+        .catch((e) => console.error("[wa] notifyAttendanceOverride (present) failed", e))
       return NextResponse.json({ ok: true, action, date: dateKey, refunded, canceledRequests: singleDay.length, multiDayRequestsLeft: multiDay })
     }
 
@@ -213,6 +218,8 @@ export async function POST(req: NextRequest) {
     })
 
     await logOverride(req, session.user.id, workspaceId, targetUserId, dateKey, action, { refunded, replacedRequests: conflicting.length, closedAttendance: closed.count })
+    notifyAttendanceOverride({ workspaceId, targetUserId, actorId: session.user.id, actorName: session.user.name ?? null, dateKey, action, note: (body?.note ?? "").trim() || null })
+      .catch((e) => console.error("[wa] notifyAttendanceOverride (status) failed", e))
     return NextResponse.json({ ok: true, action, date: dateKey, refunded, replacedRequests: conflicting.length, closedAttendance: closed.count })
   } catch (error) {
     console.error("attendance override error:", error)

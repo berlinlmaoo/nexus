@@ -7,6 +7,7 @@ import { logAudit } from "@/lib/audit"
 import { getAttendanceWorkspaceContext, formatAttendanceDateKey } from "@/lib/attendance"
 import { awardXpOnce } from "@/lib/gamification"
 import { startFloor } from "@/lib/attendance-absence"
+import { notifyOffsiteCheckoutReviewed } from "@/lib/wa-bot"
 
 // Approve / reject an offsite checkout (BoD only).
 // Semantics: APPROVE = the offsite checkout is valid, nothing else changes. REJECT = treated like a
@@ -73,6 +74,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   } catch {
     /* best-effort */
   }
+
+  // Tell the staff (offsite checkout approved/rejected + who) and the other approvers it's handled.
+  notifyOffsiteCheckoutReviewed({ recordId: record.id, reviewerId: session.user.id, reviewerName: session.user.name ?? null, approved: nextStatus === "APPROVED" })
+    .catch((e) => console.error("[wa] notifyOffsiteCheckoutReviewed failed", e))
 
   return NextResponse.json({ ok: true, id: record.id, approval: nextStatus })
 }

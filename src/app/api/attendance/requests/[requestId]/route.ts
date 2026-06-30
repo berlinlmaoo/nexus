@@ -5,7 +5,8 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { getAttendanceWorkspaceContext, serializeAttendanceRequest } from "@/lib/attendance"
-import { cancelAttendancePenaltiesForRange, clearLeaveCoveredOpenRecords, processAbsenceDeductions } from "@/lib/attendance-absence"
+import { applyAttendanceReviewSideEffects, processAbsenceDeductions } from "@/lib/attendance-absence"
+import { notifyAttendanceRequestReviewed } from "@/lib/wa-bot"
 import { attendanceRequestPatchSchema } from "@/lib/validations"
 
 export async function PATCH(
@@ -142,16 +143,12 @@ export async function PATCH(
 
     // Approving a leave/day-off that covers a day the staff already checked into leaves a stuck open
     // record (can't check out, blocks next day's check-in). Clear it here so it never enters that loop.
-    if (nextStatus === "APPROVED") {
-      try { await clearLeaveCoveredOpenRecords(updated.userId, updated.workspaceId) } catch (err) { console.error("clearLeaveCoveredOpenRecords (approve) failed:", err) }
-      // Approved excuse → clear any attendance penalty already applied for the covered days, no matter
-      // how old (the nightly cron only re-reaches the last 14 days).
-      try { await cancelAttendancePenaltiesForRange(updated.userId, updated.workspaceId, updated.startDate, updated.endDate) } catch (err) { console.error("cancelAttendancePenaltiesForRange (approve) failed:", err) }
-    } else {
-      // Rejected excuse → re-derive penalties for the covered dates so a genuinely-absent day is
-      // (re-)penalized even if it has aged out of the cron's 14-day window.
-      try { await processAbsenceDeductions({ from: updated.startDate, to: updated.endDate }) } catch (err) { console.error("processAbsenceDeductions (reject) failed:", err) }
-    }
+    // Refund-on-approve (clear stuck open record + cancel covered-day penalties, window-independent) /
+    // re-derive-on-reject. Shared verbatim with the WA /approve|/reject command path.
+    await applyAttendanceReviewSideEffects(
+      { userId: updated.userId, workspaceId: updated.workspaceId, startDate: updated.startDate, endDate: updated.endDate },
+      nextStatus === "APPROVED",
+    )
 
     await logAudit({
       action: "update",
@@ -165,6 +162,16 @@ export async function PATCH(
         approvalSource,
       },
     })
+
+    // Tell the requester (outcome + who decided) AND the other approvers (handled → no double-action).
+    // In-app bell + WhatsApp via Gideon. Fire-and-forget so it never blocks/fails the review response.
+    notifyAttendanceRequestReviewed({
+      requestId: updated.id,
+      reviewerId: session.user.id,
+      reviewerName: updated.reviewedBy?.name ?? null,
+      approved: nextStatus === "APPROVED",
+      note: updated.reviewNote,
+    }).catch((e) => console.error("[wa] notifyAttendanceRequestReviewed failed", e))
 
     return NextResponse.json({ request: serializeAttendanceRequest(updated) })
   } catch (error) {

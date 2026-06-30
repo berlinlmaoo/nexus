@@ -116,6 +116,25 @@ export function isAutoDeduction(r: { reason: string | null; reviewedById: string
 }
 
 /**
+ * The penalty side-effects of reviewing an attendance request, shared by the web PATCH and the WA
+ * `/approve`|`/reject` command so both behave identically. Approve → clear any stuck leave-covered open
+ * record + refund every penalty on the covered days (window-independent). Reject → re-derive penalties
+ * for the covered days (re-applies a genuinely-absent day even if aged out of the cron's 14-day window).
+ * Each step is best-effort (a failure is logged, never throws) so it can't break the review response.
+ */
+export async function applyAttendanceReviewSideEffects(
+  req: { userId: string; workspaceId: string; startDate: Date; endDate: Date },
+  approved: boolean,
+): Promise<void> {
+  if (approved) {
+    try { await clearLeaveCoveredOpenRecords(req.userId, req.workspaceId) } catch (err) { console.error("clearLeaveCoveredOpenRecords (review) failed:", err) }
+    try { await cancelAttendancePenaltiesForRange(req.userId, req.workspaceId, req.startDate, req.endDate) } catch (err) { console.error("cancelAttendancePenaltiesForRange (review) failed:", err) }
+  } else {
+    try { await processAbsenceDeductions({ from: req.startDate, to: req.endDate }) } catch (err) { console.error("processAbsenceDeductions (review) failed:", err) }
+  }
+}
+
+/**
  * Delete dangling OPEN check-ins (status CHECKED_IN, no check-out) whose date is now covered by a REAL
  * approved leave/day-off (mirrors exactly what blocks check-out). When a day-off/leave request is
  * approved AFTER the staff already checked in, the open record can never be checked out (the covering
