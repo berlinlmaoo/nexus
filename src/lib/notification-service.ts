@@ -199,7 +199,7 @@ async function sendSlack(webhookUrl: string, message: string) {
   }
 }
 
-async function createInAppNotification(data: {
+export async function createInAppNotification(data: {
   userId: string
   type: string
   title: string
