@@ -456,7 +456,7 @@ export async function notifyAttendanceOverride(input: {
   workspaceId: string; targetUserId: string; actorId: string; actorName?: string | null
   dateKey: string; action: "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "CLEAR_PENALTY"; note?: string | null
 }): Promise<void> {
-  if (input.targetUserId === input.actorId) return // BoD changed their own day → no self-notify
+  const isSelf = input.targetUserId === input.actorId // self-changes still notify (user opted in)
   const [target, actorName] = await Promise.all([
     prisma.user.findUnique({ where: { id: input.targetUserId }, select: { id: true, name: true, phoneNumber: true, whatsappId: true } }),
     input.actorName != null
@@ -465,19 +465,20 @@ export async function notifyAttendanceOverride(input: {
   ])
   if (!target) return
   const who = firstNameOf(actorName)
+  const by = isSelf ? "" : ` sama ${who}` // omit "by X" when you changed your own day
   const d = new Date(`${input.dateKey}T00:00:00+07:00`)
   const dateStr = isNaN(d.getTime()) ? input.dateKey : fmtDateRange(d, d)
 
   let title: string, inApp: string, wa: string
   if (input.action === "CLEAR_PENALTY") {
     title = "Penalty absen dibersihin"
-    inApp = `Penalty absen kamu (${dateStr}) dibersihin sama ${who} — XP & jatah day-off dipulihin.`
+    inApp = `Penalty absen kamu (${dateStr}) dibersihin${by} — XP & jatah day-off dipulihin.`
     wa = `♻️ ${inApp}`
   } else {
     const sl = OVERRIDE_STATUS_LABEL[input.action] ?? input.action
     title = "Status absen kamu diubah"
-    inApp = `Status absen kamu (${dateStr}) diubah jadi ${sl} sama ${who}.`
-    wa = `📝 Status absen kamu (${dateStr}) diubah jadi *${sl}* sama ${who}.${input.note ? `\nCatatan: "${input.note}"` : ""}`
+    inApp = `Status absen kamu (${dateStr}) diubah jadi ${sl}${by}.`
+    wa = `📝 Status absen kamu (${dateStr}) diubah jadi *${sl}*${by}.${input.note ? `\nCatatan: "${input.note}"` : ""}`
   }
   await createInAppNotification({ userId: target.id, type: "attendance_override", title, message: inApp, link: "/attendance" }).catch(() => {})
   if (waNotifEnabled("NEXUS_WA_ATTENDANCE_OVERRIDE_ENABLED")) {
