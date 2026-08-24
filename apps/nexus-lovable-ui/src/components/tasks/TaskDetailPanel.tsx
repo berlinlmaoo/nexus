@@ -12,6 +12,7 @@ import {
   Clock,
   Download,
   Eye,
+  FileSignature,
   FolderPlus,
   Heart,
   Link2,
@@ -25,6 +26,7 @@ import {
   SlidersHorizontal,
   Star,
   Trash2,
+  FolderInput,
   Trophy,
   User,
   UserPlus,
@@ -48,6 +50,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { FieldEditor } from "@/components/projects/ProjectCustomFieldsManager";
+import { CopyToProjectDialog } from "@/components/tasks/CopyToProjectDialog";
 
 // On every pointer-down we record both the tap point AND the rect of the tapped card (the element with a
 // `data-morph-id`). The panel uses that rect to do a MANUAL FLIP morph — it starts the box exactly on the
@@ -235,6 +238,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   const attachments = useQuery({ queryKey: ["task-attachments", taskId], queryFn: () => nexusApi.taskAttachments(taskId) });
   const [previewAtt, setPreviewAtt] = useState<NexusAttachment | null>(null);
   const [uploadPct, setUploadPct] = useState<number | null>(null);
+  const [proofPct, setProofPct] = useState<number | null>(null);
   const [sizeWarn, setSizeWarn] = useState<string | null>(null);
   // Files >20MB auto-chunk client-side into 10MB pieces (see uploadAttachmentProgress) so each request stays
   // far below Cloudflare's 100MB cap and gets reassembled server-side — the real ceiling is the app/nginx limit.
@@ -251,8 +255,12 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   const projectId = task.data?.taskList?.project?.id || task.data?.taskList?.projectId;
   const customFields = useQuery({ queryKey: ["task-cf", taskId], queryFn: () => nexusApi.taskCustomFields(projectId!, taskId), enabled: !!projectId });
   // Project's sections (board columns = TaskLists) so the top dropdown follows the actual project.
+  const [copyOpen, setCopyOpen] = useState(false);
   const projDetail = useQuery({ queryKey: ["nexus", "project", projectId], queryFn: () => nexusApi.project(projectId!), enabled: !!projectId, staleTime: 60_000 });
   const sections = (projDetail.data?.taskLists ?? []).slice().sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  // Calendar-only project (Master Calendar): hide the done toggle + status select. The Section
+  // picker stays — that's the board column, not a status.
+  const noStatus = !!projDetail.data?.disableTaskStatus;
   const deps = useQuery({ queryKey: ["task-deps", taskId], queryFn: () => nexusApi.taskDependencies(taskId) });
   const times = useQuery({ queryKey: ["task-times", taskId], queryFn: () => nexusApi.timeEntries(taskId) });
   // Only fetch the whole-workspace member list as a FALLBACK for tasks with no project. For a project
@@ -282,6 +290,8 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
   const update = useMutation({
     mutationFn: (payload: Parameters<typeof nexusApi.updateTask>[1]) => nexusApi.updateTask(taskId, payload),
     onSuccess: invalidateAll,
+    // Surfaces the "wajib lampiran sebelum Done" gate (and any other reject) instead of failing silently.
+    onError: (e: unknown) => { invalidateAll(); toast.error(e instanceof Error ? e.message : "Gagal update task"); },
   });
   // --- subtasks (Asana-style: full tasks linked via parentId; hidden from board, live here) ---
   const [openSub, setOpenSub] = useState<string | null>(null);
@@ -330,6 +340,27 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
     onSettled: () => setUploadPct(null),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["task-attachments", taskId] }),
   });
+  // Separate "Bukti Pencairan" (PROOF) channel — this is what the requireAttachmentForDone gate checks.
+  const uploadProofMut = useMutation({
+    mutationFn: (file: File) => nexusApi.uploadAttachmentProgress(taskId, file, setProofPct, "PROOF"),
+    onMutate: () => setProofPct(0),
+    onSettled: () => setProofPct(null),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["task-attachments", taskId] }),
+  });
+  // "Generate dokumen" only shows on a document-request task — detected by the presence of the
+  // "Jenis Dokumen" field rather than a hardcoded project id, so it also works if the Legal field set
+  // is copied to another project later.
+  const docTypeField = customFields.data?.fields?.find((f) => f.name?.trim().toLowerCase() === "jenis dokumen");
+  const docNumberField = customFields.data?.fields?.find((f) => f.name?.trim().toLowerCase() === "nomor dokumen");
+  const issuedNumber = typeof docNumberField?.value === "string" ? docNumberField.value.trim() : "";
+  const genDoc = useMutation({
+    mutationFn: () => nexusApi.generateLegalDocument(taskId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["task-attachments", taskId] });
+      qc.invalidateQueries({ queryKey: ["task-cf", taskId] });
+    },
+  });
+
   const delAttachment = useMutation({
     mutationFn: (id: string) => nexusApi.deleteAttachment(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["task-attachments", taskId] }),
@@ -464,6 +495,11 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 <Trophy className="h-4 w-4" />
               </button>
             )}
+            {/* Copy this one task into another project (the bulk bar covers many at once, but it's
+                gated behind the project's duplicate-mode toggle — this is always available). */}
+            <button onClick={() => setCopyOpen(true)} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary" title="Copy ke project lain">
+              <FolderInput className="h-4 w-4" />
+            </button>
             <button onClick={() => { if (confirm("Delete this task?")) delTask.mutate(); }} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title="Delete task">
               <Trash2 className="h-4 w-4" />
             </button>
@@ -496,9 +532,11 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
             ))}
             {/* toolbar: mark done + status + priority (old-NEXUS pills) */}
             <div className="flex flex-wrap items-center gap-2">
-              <button onClick={() => update.mutate({ status: (isDoneStatus(t.status) ? "TODO" : "DONE") as never })} className={cn("inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-bold uppercase tracking-wider transition-colors", isDoneStatus(t.status) ? "border-success/30 bg-success/10 text-success" : "border-border bg-card text-foreground hover:bg-accent")}>
-                {isDoneStatus(t.status) ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4 text-muted-foreground" />} {isDoneStatus(t.status) ? "Done" : "Mark done"}
-              </button>
+              {!noStatus && (
+                <button onClick={() => update.mutate({ status: (isDoneStatus(t.status) ? "TODO" : "DONE") as never })} className={cn("inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-bold uppercase tracking-wider transition-colors", isDoneStatus(t.status) ? "border-success/30 bg-success/10 text-success" : "border-border bg-card text-foreground hover:bg-accent")}>
+                  {isDoneStatus(t.status) ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4 text-muted-foreground" />} {isDoneStatus(t.status) ? "Done" : "Mark done"}
+                </button>
+              )}
               {/* Section = the project's board column (TaskList). Falls back to global status if the
                   task isn't in a project (no sections). */}
               {sections.length > 0 ? (
@@ -508,7 +546,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 </div>
-              ) : (
+              ) : noStatus ? null : (
                 <div className="relative">
                   <select value={t.status ?? "TODO"} onChange={(e) => update.mutate({ status: e.target.value as never })} className="appearance-none rounded-full border border-border bg-card px-3.5 py-2 pr-8 text-xs font-bold uppercase tracking-wider outline-none transition focus:border-primary">
                     {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
@@ -611,6 +649,40 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                 ) : !cfAdding ? (
                   <p className="text-xs text-muted-foreground">No fields yet. Click <span className="font-semibold">New field</span> to add one.</p>
                 ) : null}
+              </SecCard>
+            )}
+
+            {/* Legal: issue the number + generate the invoice/PKS from the Google Docs master. */}
+            {docTypeField && (
+              <SecCard icon={FileSignature} label="Dokumen resmi">
+                {issuedNumber ? (
+                  <p className="text-xs">
+                    Nomor terbit: <span className="font-mono font-bold">{issuedNumber}</span>
+                    <span className="text-muted-foreground"> — file PDF + DOCX ada di Attachments.</span>
+                  </p>
+                ) : (
+                  <p className="mb-2 text-xs text-muted-foreground">
+                    Nomor dan isi dokumennya digenerate dari field di atas. Cek dulu datanya bener, karena nomor
+                    yang udah terbit nggak bisa dipakai ulang.
+                  </p>
+                )}
+                <button
+                  onClick={() => genDoc.mutate()}
+                  disabled={genDoc.isPending}
+                  className="mt-1 inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition active:scale-[0.97] disabled:opacity-40"
+                >
+                  {genDoc.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSignature className="h-3.5 w-3.5" />}
+                  {issuedNumber ? "Generate ulang (nomor baru)" : "Generate dokumen"}
+                </button>
+                {genDoc.isError && (
+                  <p className="mt-2 text-xs font-semibold text-rose-600">{(genDoc.error as Error)?.message}</p>
+                )}
+                {genDoc.isSuccess && genDoc.data?.webViewLink && (
+                  <a href={genDoc.data.webViewLink} target="_blank" rel="noreferrer"
+                     className="mt-2 block text-xs font-semibold text-primary underline">
+                    Buka di Google Docs
+                  </a>
+                )}
               </SecCard>
             )}
 
@@ -751,7 +823,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     </div>
                   </div>
                 )}
-                {(attachments.data ?? []).map((att) => (
+                {(attachments.data ?? []).filter((a) => a.kind !== "PROOF").map((att) => (
                   <div key={att.id} className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2">
                     {mediaKind(att) === "image" && att.url ? (
                       <button onClick={() => setPreviewAtt(att)} className="shrink-0"><img src={att.url} alt="" className="h-9 w-9 rounded-md object-cover" /></button>
@@ -765,13 +837,67 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
                     <button onClick={() => delAttachment.mutate(att.id)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
-                {(attachments.data?.length ?? 0) === 0 && <p className="text-xs text-muted-foreground">No attachments.</p>}
+                {(attachments.data ?? []).filter((a) => a.kind !== "PROOF").length === 0 && <p className="text-xs text-muted-foreground">No attachments.</p>}
                 {sizeWarn && (
                   <div className="flex items-start gap-2 rounded-xl border border-rose-300/60 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
                     <X className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {sizeWarn}
                   </div>
                 )}
                 {uploadMut.isError && <p className="text-xs font-semibold text-destructive">{(uploadMut.error as Error)?.message || `Upload failed — max ${MAX_ATTACH_LABEL}.`}</p>}
+              </div>
+            </SecCard>
+
+            {/* Bukti Pencairan — the SEPARATE proof channel the "wajib lampiran sebelum Done" gate checks */}
+            <SecCard
+              icon={Paperclip}
+              label="Bukti Pencairan"
+              action={
+                <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-dashed border-emerald-400/60 px-2.5 py-1 text-xs font-semibold text-emerald-600 transition-colors hover:border-emerald-500 hover:text-emerald-700">
+                  {uploadProofMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Upload bukti
+                  <input type="file" className="hidden" disabled={uploadProofMut.isPending} onChange={(e) => {
+                    const f = e.target.files?.[0]; e.target.value = "";
+                    if (!f) return;
+                    if (f.size > MAX_ATTACH_BYTES) { setSizeWarn(`File is ${(f.size / 1024 / 1024).toFixed(1)} MB — over the ${MAX_ATTACH_LABEL} max. Upload rejected.`); return; }
+                    setSizeWarn(null); uploadProofMut.mutate(f);
+                  }} />
+                </label>
+              }
+            >
+              <div className="space-y-1.5">
+                {proofPct != null && (
+                  <div className="rounded-xl border border-border bg-background px-3 py-2">
+                    <div className="mb-1 flex items-center justify-between text-xs">
+                      <span className="font-semibold text-muted-foreground">Uploading bukti…</span>
+                      <span className="font-bold tabular-nums text-emerald-600">{proofPct}%</span>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-emerald-500 transition-all duration-150" style={{ width: `${proofPct}%` }} /></div>
+                  </div>
+                )}
+                {(attachments.data ?? []).filter((a) => a.kind === "PROOF").map((att) => (
+                  <div key={att.id} className="flex items-center gap-2 rounded-xl border border-emerald-300/40 bg-emerald-50/40 px-3 py-2">
+                    {mediaKind(att) === "image" && att.url ? (
+                      <button onClick={() => setPreviewAtt(att)} className="shrink-0"><img src={att.url} alt="" className="h-9 w-9 rounded-md object-cover" /></button>
+                    ) : (
+                      <Paperclip className="h-4 w-4 shrink-0 text-emerald-600" />
+                    )}
+                    <button onClick={() => setPreviewAtt(att)} className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:text-primary hover:underline">{att.name || "(unnamed)"}</button>
+                    {att.size != null && <span className="shrink-0 text-xs text-muted-foreground">{Math.round(att.size / 1024)} KB</span>}
+                    <button onClick={() => setPreviewAtt(att)} title="Preview" className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Eye className="h-3.5 w-3.5" /></button>
+                    {att.url && <a href={`${att.url}?download=${encodeURIComponent(att.name || "file")}`} download={att.name || ""} title="Download" className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><Download className="h-3.5 w-3.5" /></a>}
+                    <button onClick={() => delAttachment.mutate(att.id)} className="rounded-lg p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                  </div>
+                ))}
+                {(attachments.data ?? []).filter((a) => a.kind === "PROOF").length === 0 && (
+                  // Say what's actually true for THIS project. The old copy said "wajib kalau project
+                  // ini butuh" for everyone, which reads as a warning even where nothing is enforced.
+                  <p className="text-xs text-muted-foreground">
+                    Belum ada bukti pencairan.{" "}
+                    {projDetail.data?.requireAttachmentForDone
+                      ? <b className="text-foreground">Wajib diisi sebelum task ini bisa ditandai Done.</b>
+                      : "Opsional — task tetap bisa ditandai Done tanpa ini."}
+                  </p>
+                )}
+                {uploadProofMut.isError && <p className="text-xs font-semibold text-destructive">{(uploadProofMut.error as Error)?.message || "Upload bukti gagal."}</p>}
               </div>
             </SecCard>
 
@@ -908,6 +1034,7 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
               this one — recursive, so sub-subtasks work; no morphId (plain fade, no card source). */}
           {openSub && <TaskDetailPanel taskId={openSub} onClose={() => setOpenSub(null)} />}
           {questOpen && t && <QuestComposer initialTask={{ id: t.id, title: t.title }} onClose={() => setQuestOpen(false)} />}
+          {copyOpen && t && <CopyToProjectDialog taskIds={[t.id]} sourceProjectId={projectId} onClose={() => setCopyOpen(false)} />}
     </div>,
     document.body,
   );

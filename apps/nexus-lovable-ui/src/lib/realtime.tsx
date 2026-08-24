@@ -25,21 +25,42 @@ const INVALIDATION: Record<string, string[]> = {
   "message-created": ["messages", "conversation"],
 };
 
+/**
+ * Query keys that must never be blanket-invalidated, matched as a substring like the terms above.
+ *
+ * The matching here is deliberately loose — a key part only has to CONTAIN a term — which is how
+ * `["nexus","project-sheets",id]` gets swept up by the term "project" and a task update ends up
+ * refetching a spreadsheet. For most views that's just wasted bandwidth; for the sheet grid it's
+ * destructive, because a refetch landing mid-typing unmounts the cell being edited and the user
+ * loses what they were writing.
+ *
+ * Anything listed here refreshes through its own explicit handler instead (the sheet does surgical
+ * setQueryData patches after each save).
+ */
+const NEVER_BLANKET_INVALIDATE = ["sheet"];
+
 function keyHasTerm(key: unknown, terms: string[]): boolean {
-  const parts = Array.isArray(key) ? key.map((k) => String(k)) : [String(key)];
-  return parts.some((p) => terms.some((t) => p.toLowerCase().includes(t)));
+  const parts = Array.isArray(key) ? key.map((k) => String(k).toLowerCase()) : [String(key).toLowerCase()];
+  if (parts.some((p) => NEVER_BLANKET_INVALIDATE.some((x) => p.includes(x)))) return false;
+  return parts.some((p) => terms.some((t) => p.includes(t)));
 }
 
 interface RealtimeContextValue {
   connected: boolean;
   join: (room: string) => void;
   leave: (room: string) => void;
+  /**
+   * The raw socket, for features that need their own events rather than query invalidation.
+   * Null until the connection is established — every caller must handle that.
+   */
+  socket: Socket | null;
 }
 
 const RealtimeContext = createContext<RealtimeContextValue>({
   connected: false,
   join: () => {},
   leave: () => {},
+  socket: null,
 });
 
 export function useRealtime() {
@@ -69,6 +90,8 @@ export function RealtimeProvider({
   const socketRef = useRef<Socket | null>(null);
   const joinedRooms = useRef<Set<string>>(new Set());
   const [connected, setConnected] = useState(false);
+  // State as well as a ref, so consumers re-render once the socket actually exists.
+  const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
     if (!userId) return;
@@ -79,6 +102,7 @@ export function RealtimeProvider({
       .then((socket) => {
         if (cancelled) return;
         socketRef.current = socket;
+        setSocket(socket);
 
         const joinAll = () => {
           socket.emit("join-room", { room: `user:${userId}`, userId, name: userName });
@@ -136,6 +160,6 @@ export function RealtimeProvider({
   }, []);
 
   return (
-    <RealtimeContext.Provider value={{ connected, join, leave }}>{children}</RealtimeContext.Provider>
+    <RealtimeContext.Provider value={{ connected, join, leave, socket }}>{children}</RealtimeContext.Provider>
   );
 }

@@ -294,8 +294,11 @@ export async function POST(
       return NextResponse.json({ error: "data is required" }, { status: 400 })
     }
 
-    const form = await prisma.form.findUnique({
-      where: { id: formId },
+    // Resolve by id OR slug — must mirror the public form route (which renders this form and
+    // matches either). A form opened via its slug URL submits with the slug as `formId`; an
+    // id-only lookup here fails as "Form not found" even though the form loaded fine.
+    const form = await prisma.form.findFirst({
+      where: { OR: [{ id: formId }, { slug: formId }] },
       include: {
         project: {
           include: {
@@ -505,7 +508,7 @@ export async function POST(
       const submission = await tx.formSubmission.create({
         data: {
           data: data as InputJsonValue,
-          formId,
+          formId: form.id, // param may be a slug; store the canonical form id (FK)
           taskId: task.id,
           submitterId: userId,
         },
@@ -516,7 +519,7 @@ export async function POST(
 
     const attachments = await createTaskAttachments(files, result.task.id, fallbackCreatorId)
 
-    logAudit({ action: "create", entityType: "formSubmission", entityId: result.submission.id, entityName: form.name, userId: fallbackCreatorId, request, metadata: { formId, taskId: result.task.id } })
+    logAudit({ action: "create", entityType: "formSubmission", entityId: result.submission.id, entityName: form.name, userId: fallbackCreatorId, request, metadata: { formId: form.id, taskId: result.task.id } })
 
     for (const attachment of attachments) {
       logAudit({
@@ -555,7 +558,7 @@ export async function POST(
       taskListId: result.task.taskListId,
       creatorId: fallbackCreatorId,
       source: "form",
-      formId,
+      formId: form.id,
       attachmentCount: attachments.length,
     }, form.projectId).catch(() => {})
 

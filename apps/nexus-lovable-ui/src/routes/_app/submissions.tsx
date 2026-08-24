@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { FileText, Inbox, Lock, X, Trash2, Loader2 } from "lucide-react";
+import { FileText, Inbox, Lock, X, Trash2, Loader2, Paperclip, Download } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -99,6 +99,26 @@ function SubmissionDetailDrawer({ id, onClose }: { id: string; onClose: () => vo
                       <div className="mt-0.5 whitespace-pre-wrap break-words text-sm">{fmtVal(a.value)}</div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Bukti Pencairan uploaded by the finance team — visible to the submitter here. */}
+              {(sub.proofs?.length ?? 0) > 0 && (
+                <div className="mt-5">
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wide text-emerald-600">Bukti Pencairan</p>
+                  <div className="space-y-2">
+                    {sub.proofs!.map((p) => (
+                      <div key={p.id} className="flex items-center gap-2 rounded-xl border border-emerald-300/50 bg-emerald-50/50 p-2.5">
+                        {p.mimeType?.startsWith("image/") && p.url ? (
+                          <a href={p.url} target="_blank" rel="noreferrer" className="shrink-0"><img src={p.url} alt="" className="h-10 w-10 rounded-md object-cover" /></a>
+                        ) : (
+                          <Paperclip className="h-4 w-4 shrink-0 text-emerald-600" />
+                        )}
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium">{p.name || "bukti"}</span>
+                        {p.url && <a href={`${p.url}?download=${encodeURIComponent(p.name || "bukti")}`} download={p.name || ""} title="Download" className="rounded-lg p-1 text-emerald-700 transition hover:bg-emerald-100"><Download className="h-4 w-4" /></a>}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </>

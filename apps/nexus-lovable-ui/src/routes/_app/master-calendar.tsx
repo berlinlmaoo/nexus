@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { ProjectIcon } from "@/components/projects/ProjectIcon";
-import { nexusApi, ORG_HIERARCHY, type CalendarTaskItem, type NexusCalendar, type NexusProject } from "@/lib/nexus-api";
+import { nexusApi, ORG_HIERARCHY, ROOM_SOURCES, type CalendarBookingItem, type CalendarTaskItem, type NexusCalendar, type NexusProject } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/master-calendar")({ component: MasterCalendar });
@@ -53,6 +53,41 @@ function MasterCalendar() {
 
   const active = calendars.find((c) => c.id === activeId) ?? calendars[0];
   const activeProjectIds = useMemo(() => active?.projectIds ?? [], [active]);
+  const activeRooms = useMemo(() => active?.roomSources ?? [], [active]);
+  const roomsKey = activeRooms.join(",");
+  // Projects and rooms are interchangeable as sources — every "is this calendar set up?" check goes
+  // through this, so a rooms-only calendar is never mistaken for an empty one.
+  const hasSources = activeProjectIds.length > 0 || activeRooms.length > 0;
+
+  // Reorder a calendar left/right by swapping its `position` with the neighbour it moves past. Only
+  // two rows change; the GET re-sorts by position. Optimistic so the tab slides immediately.
+  const qc = useQueryClient();
+  const moveCalendar = useMutation({
+    mutationFn: async ({ id, dir }: { id: string; dir: -1 | 1 }) => {
+      const idx = calendars.findIndex((c) => c.id === id);
+      const j = idx + dir;
+      if (idx < 0 || j < 0 || j >= calendars.length) return;
+      const a = calendars[idx];
+      const b = calendars[j];
+      // Assign each other's array index as the new position (post-backfill positions are a 0..n-1
+      // permutation, so swapping neighbour indices keeps them distinct and ordered).
+      await Promise.all([nexusApi.updateCalendar(a.id, { position: j }), nexusApi.updateCalendar(b.id, { position: idx })]);
+    },
+    onMutate: async ({ id, dir }) => {
+      await qc.cancelQueries({ queryKey: ["nexus", "calendars"] });
+      const prev = qc.getQueryData<{ calendars: NexusCalendar[] }>(["nexus", "calendars"]);
+      if (prev) {
+        const arr = [...prev.calendars];
+        const idx = arr.findIndex((c) => c.id === id);
+        const j = idx + dir;
+        if (idx >= 0 && j >= 0 && j < arr.length) { [arr[idx], arr[j]] = [arr[j], arr[idx]]; qc.setQueryData(["nexus", "calendars"], { ...prev, calendars: arr }); }
+      }
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(["nexus", "calendars"], ctx.prev); },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["nexus", "calendars"] }),
+  });
+  const activeIdx = calendars.findIndex((c) => c.id === active?.id);
   const pidsKey = activeProjectIds.join(",");
 
   const days = useMemo(() => monthGrid(anchor), [anchor]);
@@ -64,12 +99,13 @@ function MasterCalendar() {
   }, [days]);
 
   const tasksQ = useQuery({
-    queryKey: ["nexus", "calendar-tasks", active?.id, pidsKey, rangeStart, rangeEnd],
-    queryFn: () => nexusApi.calendarTasks(activeProjectIds, rangeStart, rangeEnd),
-    enabled: !!active && activeProjectIds.length > 0,
+    queryKey: ["nexus", "calendar-tasks", active?.id, pidsKey, roomsKey, rangeStart, rangeEnd],
+    queryFn: () => nexusApi.calendarTasks(activeProjectIds, rangeStart, rangeEnd, activeRooms),
+    enabled: !!active && (activeProjectIds.length > 0 || activeRooms.length > 0),
     retry: false,
   });
   const tasks = tasksQ.data?.tasks ?? [];
+  const bookings = tasksQ.data?.bookings ?? [];
 
   const byDay = useMemo(() => {
     const map = new Map<string, CalendarTaskItem[]>();
@@ -79,6 +115,17 @@ function MasterCalendar() {
     }
     return map;
   }, [tasks]);
+
+  // Bookings live in their own day map: they're time-ranged events, not deadlines, so they render
+  // above the task pills instead of being flattened into them.
+  const bookingsByDay = useMemo(() => {
+    const map = new Map<string, CalendarBookingItem[]>();
+    for (const b of bookings) {
+      const k = dayKey(new Date(b.startsAt));
+      map.set(k, [...(map.get(k) ?? []), b]);
+    }
+    return map;
+  }, [bookings]);
 
   // The projects this calendar pulls from (resolved against the visible project list, for the legend).
   const sourceProjects = useMemo(
@@ -92,7 +139,7 @@ function MasterCalendar() {
     <div>
       <PageHeader
         title="Team Calendar"
-        subtitle="A calendar per project — pick your source projects and their deadlines show up automatically."
+        subtitle="Pick your sources — project deadlines and room bookings (meeting / studio) show up automatically."
         actions={canManage ? (
           <button onClick={() => setSetup({ mode: "create" })} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]">
             <Plus className="h-3.5 w-3.5" /> New calendar
@@ -111,9 +158,21 @@ function MasterCalendar() {
                   <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: c.color ?? "#7B2FBE" }} />
                   {c.name}
                   {canManage && on && (
-                    <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); setSetup({ mode: "edit", calendar: c }); }} onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); setSetup({ mode: "edit", calendar: c }); } }} className="-mr-1 ml-0.5 grid h-5 w-5 place-items-center rounded-full text-primary/70 hover:bg-primary/15 hover:text-primary">
-                      <Pencil className="h-3 w-3" />
-                    </span>
+                    <>
+                      {activeIdx > 0 && (
+                        <span role="button" tabIndex={0} aria-label="Move left" title="Geser ke kiri" onClick={(e) => { e.stopPropagation(); if (!moveCalendar.isPending) moveCalendar.mutate({ id: c.id, dir: -1 }); }} onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); moveCalendar.mutate({ id: c.id, dir: -1 }); } }} className="ml-0.5 grid h-5 w-5 place-items-center rounded-full text-primary/70 hover:bg-primary/15 hover:text-primary">
+                          <ChevronLeft className="h-3.5 w-3.5" />
+                        </span>
+                      )}
+                      {activeIdx < calendars.length - 1 && (
+                        <span role="button" tabIndex={0} aria-label="Move right" title="Geser ke kanan" onClick={(e) => { e.stopPropagation(); if (!moveCalendar.isPending) moveCalendar.mutate({ id: c.id, dir: 1 }); }} onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); moveCalendar.mutate({ id: c.id, dir: 1 }); } }} className="grid h-5 w-5 place-items-center rounded-full text-primary/70 hover:bg-primary/15 hover:text-primary">
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </span>
+                      )}
+                      <span role="button" tabIndex={0} aria-label="Edit calendar" onClick={(e) => { e.stopPropagation(); setSetup({ mode: "edit", calendar: c }); }} onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); setSetup({ mode: "edit", calendar: c }); } }} className="-mr-1 grid h-5 w-5 place-items-center rounded-full text-primary/70 hover:bg-primary/15 hover:text-primary">
+                        <Pencil className="h-3 w-3" />
+                      </span>
+                    </>
                   )}
                 </button>
               );
@@ -151,19 +210,21 @@ function MasterCalendar() {
           />
         )}
 
-        {active && activeProjectIds.length === 0 && (
+        {/* A calendar is "empty" only when it has NEITHER projects NOR rooms — a rooms-only calendar
+            is perfectly valid and must still render the grid. */}
+        {active && !hasSources && (
           <Empty
-            title="This calendar has no projects yet"
-            message="Pick which projects feed it — their task deadlines will show up here."
-            action={canManage ? <button onClick={() => setSetup({ mode: "edit", calendar: active })} className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98]"><Pencil className="h-4 w-4" /> Set up projects</button> : undefined}
+            title="This calendar has no sources yet"
+            message="Pick the projects and/or rooms that feed it — task deadlines and room bookings show up here."
+            action={canManage ? <button onClick={() => setSetup({ mode: "edit", calendar: active })} className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98]"><Pencil className="h-4 w-4" /> Set up sources</button> : undefined}
           />
         )}
 
-        {active && activeProjectIds.length > 0 && tasksQ.isLoading && <CenterLoader />}
-        {active && activeProjectIds.length > 0 && tasksQ.isError && <Empty title="Couldn't load tasks" message="Check your session / project access." />}
+        {active && hasSources && tasksQ.isLoading && <CenterLoader />}
+        {active && hasSources && tasksQ.isError && <Empty title="Couldn't load the calendar" message="Check your session / project access." />}
 
         {/* CALENDAR (month grid) view */}
-        {active && activeProjectIds.length > 0 && !tasksQ.isError && (
+        {active && hasSources && !tasksQ.isError && (
           <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
             <div className="grid grid-cols-7 border-b border-border bg-muted/40 text-center text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
               {WEEKDAYS.map((d) => <div key={d} className="py-2">{d}</div>)}
@@ -174,13 +235,21 @@ function MasterCalendar() {
                 const inMonth = d.getMonth() === anchor.getMonth();
                 const weekend = d.getDay() === 0 || d.getDay() === 6;
                 const dayTasks = byDay.get(k) ?? [];
+                const dayBookings = bookingsByDay.get(k) ?? [];
+                // Room bookings are timed events — they sit above the deadline pills, and their slots
+                // count toward the same "+N more" budget so a busy day can't overflow the cell.
+                const shownBookings = dayBookings.slice(0, 2);
+                const roomBudget = Math.max(0, 4 - shownBookings.length);
+                const shownTasks = dayTasks.slice(0, roomBudget);
+                const hidden = (dayTasks.length - shownTasks.length) + (dayBookings.length - shownBookings.length);
                 return (
                   <div key={k} className={cn("min-h-24 border-b border-r border-border p-1.5 last:border-r-0", weekend && "bg-muted/20", !inMonth && "bg-muted/30 text-muted-foreground/50")}>
                     <div className={cn("flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold", k === todayKey && "bg-primary text-primary-foreground")}>{d.getDate()}</div>
                     <div className="mt-1 space-y-1">
-                      {dayTasks.slice(0, 4).map((t) => <TaskPill key={t.id} task={t} />)}
-                      {dayTasks.length > 4 && (
-                        <button onClick={() => setDayDetail(k)} className="w-full rounded-md px-1.5 py-0.5 text-left text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">+{dayTasks.length - 4} more</button>
+                      {shownBookings.map((b) => <BookingPill key={b.id} booking={b} />)}
+                      {shownTasks.map((t) => <TaskPill key={t.id} task={t} />)}
+                      {hidden > 0 && (
+                        <button onClick={() => setDayDetail(k)} className="w-full rounded-md px-1.5 py-0.5 text-left text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">+{hidden} more</button>
                       )}
                     </div>
                   </div>
@@ -192,10 +261,17 @@ function MasterCalendar() {
 
         {/* Project legend — moved to the bottom so the calendar grid sits up top even when a calendar
             aggregates many projects (the source list can get very long). */}
-        {active && sourceProjects.length > 0 && (
+        {active && (sourceProjects.length > 0 || activeRooms.length > 0) && (
           <div className="mt-6 border-t border-border pt-4">
-            <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Source projects ({sourceProjects.length})</div>
+            <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Sources ({sourceProjects.length + activeRooms.length})</div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+              {activeRooms.map((r) => (
+                <span key={r} className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: roomColor(r) }} />
+                  <span className="font-semibold text-foreground">{r}</span>
+                  <span className="text-[10px] uppercase tracking-wider">booking</span>
+                </span>
+              ))}
               {sourceProjects.map((p) => (
                 <span key={p.id} className="inline-flex items-center gap-1.5 text-muted-foreground">
                   <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: p.color ?? "#7B2FBE" }} />
@@ -221,22 +297,36 @@ function MasterCalendar() {
       )}
 
       {dayDetail && (
-        <DayDetailModal dateKey={dayDetail} tasks={byDay.get(dayDetail) ?? []} onClose={() => setDayDetail(null)} />
+        <DayDetailModal dateKey={dayDetail} tasks={byDay.get(dayDetail) ?? []} bookings={bookingsByDay.get(dayDetail) ?? []} onClose={() => setDayDetail(null)} />
       )}
     </div>
   );
 }
 
-function DayDetailModal({ dateKey, tasks, onClose }: { dateKey: string; tasks: CalendarTaskItem[]; onClose: () => void }) {
+function DayDetailModal({ dateKey, tasks, bookings, onClose }: { dateKey: string; tasks: CalendarTaskItem[]; bookings: CalendarBookingItem[]; onClose: () => void }) {
   const d = dateFromKey(dateKey);
+  const counts = [
+    bookings.length ? `${bookings.length} booking${bookings.length === 1 ? "" : "s"}` : "",
+    `${tasks.length} task${tasks.length === 1 ? "" : "s"}`,
+  ].filter(Boolean).join(" · ");
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h2 className="font-display text-lg font-bold tracking-tight">{d.toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long", year: "numeric" })} · {tasks.length} task{tasks.length === 1 ? "" : "s"}</h2>
+          <h2 className="font-display text-lg font-bold tracking-tight">{d.toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long", year: "numeric" })} · {counts}</h2>
           <button onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
         <div className="mt-4 -mr-2 space-y-2 overflow-y-auto pr-2">
+          {bookings.map((b) => (
+            <Link key={b.id} to="/room-booking" className="group flex items-center gap-3 rounded-2xl border border-border bg-card p-3 shadow-soft transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-pop">
+              <span className="w-1.5 shrink-0 self-stretch rounded-full" style={{ backgroundColor: roomColor(b.room) }} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold group-hover:text-primary">{b.title}</div>
+                <div className="mt-0.5 truncate text-xs text-muted-foreground">{b.room} · {clock(b.startsAt)}–{clock(b.endsAt)}{b.bookedByName ? ` · ${b.bookedByName}` : ""}</div>
+              </div>
+              <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase" style={{ backgroundColor: `${roomColor(b.room)}1f`, color: roomColor(b.room) }}>Booking</span>
+            </Link>
+          ))}
           {tasks.map((t) => (
             <Link key={t.id} to="/projects/$projectId" params={{ projectId: t.projectId }} className="group flex items-center gap-3 rounded-2xl border border-border bg-card p-3 shadow-soft transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-pop">
               <span className="w-1.5 shrink-0 self-stretch rounded-full" style={{ backgroundColor: t.projectColor ?? "#7B2FBE" }} />
@@ -250,6 +340,30 @@ function DayDetailModal({ dateKey, tasks, onClose }: { dateKey: string; tasks: C
         </div>
       </div>
     </div>
+  );
+}
+
+// One colour per room so a glance at the grid tells you which space is booked.
+const ROOM_COLOR: Record<string, string> = {
+  "Ruang Meeting VIP": "#7c3aed",
+  "Ruang Meeting": "#0ea5e9",
+  "Studio": "#f59e0b",
+};
+const roomColor = (room: string) => ROOM_COLOR[room] ?? "#64748b";
+const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+function BookingPill({ booking }: { booking: CalendarBookingItem }) {
+  const c = roomColor(booking.room);
+  return (
+    <Link
+      to="/room-booking"
+      title={`${clock(booking.startsAt)}–${clock(booking.endsAt)} · ${booking.room} · ${booking.title}${booking.bookedByName ? ` (${booking.bookedByName})` : ""}`}
+      className="flex w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-left transition-opacity hover:opacity-80"
+      style={{ backgroundColor: `${c}1f`, boxShadow: `inset 2px 0 0 ${c}` }}
+    >
+      <span className="shrink-0 text-[10px] font-bold tabular-nums" style={{ color: c }}>{clock(booking.startsAt)}</span>
+      <span className="truncate text-[11px] font-semibold text-foreground">{booking.title}</span>
+    </Link>
   );
 }
 
@@ -276,8 +390,10 @@ function CalendarSetup({ mode, calendar, workspaceId, allProjects, onSaved, onDe
   const [name, setName] = useState(calendar?.name ?? "");
   const [color, setColor] = useState(calendar?.color ?? PALETTE[0]);
   const [picked, setPicked] = useState<Set<string>>(new Set(calendar?.projectIds ?? []));
+  const [pickedRooms, setPickedRooms] = useState<Set<string>>(new Set(calendar?.roomSources ?? []));
   const [q, setQ] = useState("");
   const toggle = (id: string) => setPicked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleRoom = (room: string) => setPickedRooms((prev) => { const n = new Set(prev); n.has(room) ? n.delete(room) : n.add(room); return n; });
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
     return s ? allProjects.filter((p) => p.name.toLowerCase().includes(s)) : allProjects;
@@ -286,7 +402,7 @@ function CalendarSetup({ mode, calendar, workspaceId, allProjects, onSaved, onDe
 
   const save = useMutation({
     mutationFn: async () => {
-      const payload = { name: name.trim(), color, projectIds: [...picked] };
+      const payload = { name: name.trim(), color, projectIds: [...picked], roomSources: [...pickedRooms] };
       if (editing && calendar) return (await nexusApi.updateCalendar(calendar.id, payload)).calendar;
       return (await nexusApi.createCalendar({ ...payload, workspaceId })).calendar;
     },
@@ -316,6 +432,24 @@ function CalendarSetup({ mode, calendar, workspaceId, allProjects, onSaved, onDe
                 <button key={c} onClick={() => setColor(c)} className={cn("h-7 w-7 rounded-full ring-2 ring-offset-2 ring-offset-card transition-transform active:scale-95", color === c ? "ring-foreground" : "ring-transparent")} style={{ backgroundColor: c }} aria-label={c} />
               ))}
             </div>
+          </div>
+
+          {/* Room Booking sources — picked like projects, so a calendar can mix deadlines + bookings. */}
+          <div>
+            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Room booking ({pickedRooms.size})</div>
+            <div className="space-y-1 rounded-xl border border-border p-1">
+              {ROOM_SOURCES.map((r) => (
+                <button key={r} onClick={() => toggleRoom(r)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-accent">
+                  <span className={cn("grid h-4 w-4 shrink-0 place-items-center rounded border", pickedRooms.has(r) ? "border-primary bg-primary text-primary-foreground" : "border-border")}>
+                    {pickedRooms.has(r) && <Check className="h-3 w-3" />}
+                  </span>
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: roomColor(r) }} />
+                  <span className="grid h-5 w-5 shrink-0 place-items-center"><CalendarDays className="h-3.5 w-3.5 text-muted-foreground" /></span>
+                  <span className="truncate">{r}</span>
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">Semua booking aktif di ruangan ini muncul di kalender, lengkap dengan jamnya.</p>
           </div>
 
           <div>

@@ -11,6 +11,7 @@ import {
 } from "@/lib/email"
 import { createLogger } from "@/lib/logger"
 import { normalizeIndonesianPhoneNumber } from "@/lib/phone-number"
+import { publicBaseUrl, publicUrl } from "./public-url"
 
 const log = createLogger("notifications")
 
@@ -127,16 +128,8 @@ function envFlagEnabled(name: string, defaultValue = true): boolean {
 // are one-tap → straight into the task. NEXUS_PUBLIC_URL is required on backends that sit behind an nginx
 // proxy with a localhost NEXTAUTH_URL (e.g. the beta backend serving nexus.patsgroup.id); we fall back to
 // NEXTAUTH_URL only when it's already a public https URL.
-function publicBaseUrl(): string {
-  const explicit = process.env.NEXUS_PUBLIC_URL
-  if (explicit) return explicit.replace(/\/+$/, "")
-  const authUrl = process.env.NEXTAUTH_URL || ""
-  if (/^https:\/\//.test(authUrl) && !/(localhost|127\.0\.0\.1)/.test(authUrl)) return authUrl.replace(/\/+$/, "")
-  return "" // no usable public URL → omit the link rather than send a broken localhost one
-}
 function taskUrl(taskId: string): string {
-  const base = publicBaseUrl()
-  return base ? `${base}/tasks/${taskId}` : ""
+  return publicUrl(`tasks/${taskId}`)
 }
 
 export async function sendWA(phone: string, message: string) {

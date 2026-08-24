@@ -10,6 +10,7 @@ import {
 import { isHoliday } from "@/lib/holidays"
 import { isOutageDate } from "@/lib/attendance-absence"
 import { sendWA } from "@/lib/notification-service"
+import { publicBaseUrl } from "./public-url"
 
 // WhatsApp reminders: nudge staff 15 minutes before their shift to check IN, and 15 minutes before
 // shift end to check OUT. Driven by a per-minute cron (same cadence as accrue-late).
@@ -67,7 +68,9 @@ function zoneParts(date: Date, tz: string): { ymd: string; hm: string; key: stri
 }
 
 function attendanceUrl(): string {
-  const base = (process.env.NEXUS_PUBLIC_URL || process.env.NEXTAUTH_URL || "").replace(/\/+$/, "")
+  // Was `NEXUS_PUBLIC_URL || NEXTAUTH_URL` with no filter, so behind nginx it happily emitted a
+  // 127.0.0.1 link into a WhatsApp reminder.
+  const base = publicBaseUrl()
   return base && !/(localhost|127\.0\.0\.1)/.test(base) ? `${base}/attendance` : ""
 }
 

@@ -261,7 +261,9 @@ function AdvancedFieldEditor({ field, others, taskLists, members, customFields, 
 
 export function FormCard({ form, projectName, onEdit }: { form: NexusForm; projectName?: string; onEdit: () => void }) {
   const [copied, setCopied] = useState(false);
-  const publicUrl = `${window.location.origin}/f/${form.id}`;
+  // Prefer the readable, STABLE slug (e.g. /f/pengajuan-finance-outlet) over the opaque id — the public
+  // form route resolves either. Falls back to id only if a form somehow has no slug.
+  const publicUrl = `${window.location.origin}/f/${form.slug || form.id}`;
   const copy = () => { navigator.clipboard?.writeText(publicUrl); setCopied(true); setTimeout(() => setCopied(false), 1500); };
   return (
     <div className="flex flex-col rounded-2xl border border-border bg-card p-5 shadow-soft transition-all hover:border-primary/30 hover:shadow-pop">

@@ -57,8 +57,21 @@ export async function GET(
       )
     }
 
+    // AUTO-SYNC: any dropdown mapped to `task_list` (the "Divisi" field) gets its options from the
+    // project's CURRENT sections — so adding/removing/moving a section is reflected instantly, no need
+    // to re-edit the form. (Routing is by section NAME, so live names stay valid.)
+    const liveSectionNames = form.project.taskLists.map((tl) => tl.name)
+    const fields = Array.isArray(form.fields)
+      ? (form.fields as Array<Record<string, unknown>>).map((f) =>
+          (f?.mapping as { target?: string } | undefined)?.target === "task_list"
+            ? { ...f, options: liveSectionNames }
+            : f,
+        )
+      : form.fields
+
     return NextResponse.json({
       ...form,
+      fields,
       taskLists: form.project.taskLists,
       project: undefined,
     })

@@ -282,7 +282,9 @@ function Composer({ onClose, onDone }: { onClose: () => void; onDone: () => void
               <span className="text-sm font-semibold">Take / pick a photo as evidence</span>
             </button>
           )}
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setEvidence(f); }} />
+          {/* Same fix as Ticket: `capture` sent phones straight to the camera, but evidence is
+              almost always a screenshot from the gallery. Dropping it restores the OS chooser. */}
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setEvidence(f); }} />
         </div>
 
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">

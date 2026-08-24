@@ -93,9 +93,12 @@ function PublicForm() {
       const data: Record<string, unknown> = {};
       for (const field of visible) {
         const v = values[field.id];
-        if (field.type === "file" && v instanceof File) {
-          data[field.id] = v.name;
-          fd.append(`file:${field.id}`, v);
+        if (field.type === "file") {
+          // Multi-file: the input yields File[] (single File tolerated for back-compat). Each file is
+          // appended under the same `file:<id>` key — the submit route loops all of them into task attachments.
+          const files = Array.isArray(v) ? (v as File[]) : v instanceof File ? [v] : [];
+          data[field.id] = files.map((f) => f.name).join(", ");
+          for (const f of files) fd.append(`file:${field.id}`, f);
         } else {
           data[field.id] = v ?? "";
         }
@@ -224,8 +227,8 @@ function PublicForm() {
                     ) : field.type === "file" ? (
                       <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-border bg-background px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:border-primary">
                         <Paperclip className="h-4 w-4 shrink-0" />
-                        <span className="truncate">{val instanceof File ? val.name : "Choose a file…"}</span>
-                        <input type="file" required={field.required} className="hidden" onChange={(e) => set(field.id, e.target.files?.[0] ?? "")} />
+                        <span className="truncate">{Array.isArray(val) && val.length ? `${val.length} file dipilih` : val instanceof File ? val.name : "Pilih file (boleh lebih dari 1)…"}</span>
+                        <input type="file" multiple required={field.required} className="hidden" onChange={(e) => set(field.id, Array.from(e.target.files ?? []))} />
                       </label>
                     ) : field.type === "number" && field.numberFormat === "currency-idr" ? (
                       <div className="relative">

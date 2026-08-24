@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
 import { fmtDate, nexusApi, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusWorkspaceMember } from "@/lib/nexus-api";
 import { Settings as SettingsIcon, User, Bell, Lock, Palette, Webhook, Zap, CreditCard, Loader2, Trash2, ImagePlus, Users, UserPlus, ShieldCheck, KeyRound, Copy, Check, X, Plug, Sparkles, AlertTriangle, Globe, Terminal, Monitor, MessageCircle } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/settings")({ component: Settings });
@@ -227,6 +227,80 @@ function PasswordResetModal({ target, onClose }: { target: { memberId: string; n
   );
 }
 
+// Self-service email change with OTP-to-the-new-address (backend: /api/user/email/request + /verify).
+function EmailChangeField({ currentEmail, onChanged }: { currentEmail: string; onChanged: () => void }) {
+  const [mode, setMode] = useState<"idle" | "editing" | "sent">("idle");
+  const [newEmail, setNewEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [cooldown, setCooldown] = useState(0);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setInterval(() => setCooldown((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [cooldown]);
+
+  const reset = () => { setMode("idle"); setNewEmail(""); setCode(""); setMsg(null); };
+  const request = useMutation({
+    mutationFn: () => nexusApi.requestEmailChange(newEmail.trim()),
+    onSuccess: (r) => { setMode("sent"); setCode(""); setMsg(null); setCooldown(r.resendInSeconds ?? 60); },
+    onError: (e) => setMsg(e instanceof Error ? e.message : "Gagal ngirim kode."),
+  });
+  const verify = useMutation({
+    mutationFn: () => nexusApi.verifyEmailChange(newEmail.trim(), code.trim()),
+    onSuccess: () => { onChanged(); reset(); },
+    onError: (e) => setMsg(e instanceof Error ? e.message : "Kode salah."),
+  });
+
+  return (
+    <div className="block">
+      <span className="text-xs font-medium text-muted-foreground">Email</span>
+      {mode === "idle" ? (
+        <div className="mt-1 flex items-center gap-2">
+          <input value={currentEmail} disabled className="w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground" />
+          <button type="button" onClick={() => { setMode("editing"); setMsg(null); }} className="shrink-0 rounded-lg border border-border px-3 py-2 text-xs font-semibold transition hover:bg-accent">Ubah</button>
+        </div>
+      ) : (
+        <div className="mt-1 space-y-2 rounded-lg border border-border bg-muted/20 p-3">
+          <input
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            disabled={mode === "sent" || request.isPending}
+            type="email"
+            placeholder="email baru kamu"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-60"
+          />
+          {mode === "editing" && (
+            <div className="flex items-center gap-2">
+              <button type="button" disabled={!newEmail.trim() || request.isPending} onClick={() => request.mutate()} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{request.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Kirim kode</button>
+              <button type="button" onClick={reset} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-accent">Batal</button>
+            </div>
+          )}
+          {mode === "sent" && (
+            <>
+              <p className="text-[11px] text-muted-foreground">Kode 6 digit dikirim ke <b>{newEmail.trim()}</b>. Cek inbox (& spam).</p>
+              <input
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                inputMode="numeric"
+                placeholder="______"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-center text-sm font-bold tracking-[0.4em] outline-none focus:border-primary"
+              />
+              <div className="flex items-center gap-2">
+                <button type="button" disabled={code.length !== 6 || verify.isPending} onClick={() => verify.mutate()} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50">{verify.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Verifikasi & ganti</button>
+                <button type="button" disabled={cooldown > 0 || request.isPending} onClick={() => request.mutate()} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-accent disabled:opacity-50">{cooldown > 0 ? `Kirim ulang (${cooldown}s)` : "Kirim ulang kode"}</button>
+                <button type="button" onClick={reset} className="ml-auto rounded-lg px-2 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-accent">Batal</button>
+              </div>
+            </>
+          )}
+          {msg && <p className="text-[11px] font-semibold text-destructive">{msg}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProfileSection() {
   const qc = useQueryClient();
   const profile = useQuery({ queryKey: ["nexus", "profile"], queryFn: nexusApi.profile, retry: false });
@@ -273,7 +347,7 @@ function ProfileSection() {
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className="block"><span className="text-xs font-medium text-muted-foreground">Full name</span><input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" /></label>
-          <label className="block"><span className="text-xs font-medium text-muted-foreground">Email</span><input value={u?.email ?? ""} disabled className="mt-1 w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground" /></label>
+          <EmailChangeField currentEmail={u?.email ?? ""} onChanged={refreshProfile} />
           <label className="block sm:col-span-2">
             <span className="text-xs font-medium text-muted-foreground">Phone number (WhatsApp)</span>
             <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="08xxxxxxxxxx · for non-local numbers use + (e.g. +65…)" inputMode="tel" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />

@@ -279,6 +279,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { messages } = (await req.json()) as { messages: { role: string; content: string }[] }
+  const userId = session.user.id
 
   const encoder = new TextEncoder()
   const stream = new TransformStream()
@@ -307,7 +308,27 @@ export async function POST(req: NextRequest) {
       })
       if (!res.ok) { await sendEvent({ type: 'error', content: `Gideon error (${res.status}).` }); return }
       const data = (await res.json()) as { reply?: string }
-      await sendEvent({ type: 'text', content: (data.reply || '').trim() || '(Gideon balas kosong — coba ulang.)' })
+      const reply = (data.reply || '').trim()
+      await sendEvent({ type: 'text', content: reply || '(Gideon balas kosong — coba ulang.)' })
+
+      // Persist the turn so the panel can restore it later (survives close/refresh/device switch).
+      // Only completed turns are stored — a failed one would leave a question with no answer in the
+      // history. createdAt is stamped explicitly so the question always sorts before the answer.
+      if (reply) {
+        const asked = [...(messages || [])].reverse().find((m) => m?.role === 'user')?.content?.trim() || ''
+        const now = Date.now()
+        try {
+          await prisma.gideonMessage.createMany({
+            data: [
+              ...(asked ? [{ userId, role: 'user', content: asked, createdAt: new Date(now) }] : []),
+              { userId, role: 'assistant', content: reply, createdAt: new Date(now + 1) },
+            ],
+          })
+        } catch (persistError) {
+          // History is a convenience — never fail a reply the user already received.
+          console.error('GIDEON history persist error:', persistError)
+        }
+      }
     } catch (error) {
       console.error('GIDEON API error:', error)
       await sendEvent({ type: 'error', content: 'Gideon lagi gak bisa dihubungi. Coba lagi bentar ya.' })

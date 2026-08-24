@@ -203,6 +203,7 @@ export const updateProjectSchema = z.object({
   enableTaskBatchDuplicate: z.boolean().optional(),
   autoAssignEnabled: z.boolean().optional(),
   autoAssignAssigneeIds: z.array(z.string().cuid()).max(50).optional(),
+  requireAttachmentForDone: z.boolean().optional(),
 })
 
 // ── Webhooks ────────────────────────────────────────────────────

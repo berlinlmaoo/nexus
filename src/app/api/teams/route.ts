@@ -168,7 +168,7 @@ export async function GET(req: NextRequest) {
           }
         }
       },
-      orderBy: { name: 'asc' }
+      orderBy: [{ position: 'asc' }, { name: 'asc' }]
     })
 
     const teamsByKey = new Map<string, typeof rawTeams[number][]>()
@@ -685,6 +685,42 @@ export async function POST(req: NextRequest) {
       await prisma.division.delete({ where: { id: divisionId } })
       logAudit({ action: 'delete', entityType: 'division', entityId: divisionId, entityName: division.name, userId: user.id, request: req, metadata: { workspaceId: division.workspaceId } })
       return NextResponse.json({ deleted: true })
+    }
+
+    if (body.action === 'reorder-team') {
+      const { teamId } = body
+      if (!teamId) return NextResponse.json({ error: 'teamId is required' }, { status: 400 })
+      if (typeof body.position !== 'number' || !Number.isFinite(body.position)) {
+        return NextResponse.json({ error: 'position must be a number' }, { status: 400 })
+      }
+      const { team, canManage } = await getTeamContext(teamId, user.id)
+      if (!team || !canManage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      const updated = await prisma.team.update({ where: { id: teamId }, data: { position: Math.trunc(body.position) } })
+      return NextResponse.json(updated)
+    }
+
+    if (body.action === 'rename-team') {
+      const { teamId } = body
+      if (!teamId) return NextResponse.json({ error: 'teamId is required' }, { status: 400 })
+      const name = typeof body.name === 'string' ? body.name.trim() : ''
+      if (!name) return NextResponse.json({ error: 'name is required' }, { status: 400 })
+
+      const { team, canManage } = await getTeamContext(teamId, user.id)
+      if (!team || !canManage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+      // Only guard against a clash when the name actually changed (case-insensitively) — renaming a
+      // team to its own current casing must not 409 against itself.
+      if (normalizeTeamName(name) !== normalizeTeamName(team.name)) {
+        const clash = await prisma.team.findFirst({
+          where: { workspaceId: team.workspaceId, name: { equals: name, mode: 'insensitive' }, id: { not: teamId } },
+          select: { id: true },
+        })
+        if (clash) return NextResponse.json({ error: 'A team with this name already exists' }, { status: 409 })
+      }
+
+      const updated = await prisma.team.update({ where: { id: teamId }, data: { name } })
+      logAudit({ action: 'update', entityType: 'team', entityId: updated.id, entityName: updated.name, userId: user.id, request: req })
+      return NextResponse.json(updated)
     }
 
     if (body.action === 'set-team-division') {

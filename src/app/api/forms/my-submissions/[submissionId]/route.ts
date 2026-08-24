@@ -30,6 +30,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
             status: true,
             taskList: { select: { name: true } },
             customFieldValues: { where: { customField: { type: "STATUS" } }, select: { value: true }, take: 1 },
+            attachments: { where: { kind: "PROOF" }, orderBy: { createdAt: "desc" }, select: { id: true, filename: true, url: true, mimeType: true, size: true } },
           },
         },
       },
@@ -61,6 +62,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       status: sub.task?.status ?? null,
       stage: sub.task?.taskList?.name ?? null,
       procStatus: sub.task?.customFieldValues?.[0]?.value ?? null,
+      proofs: (sub.task?.attachments ?? []).map((a) => ({ id: a.id, name: a.filename, url: a.url, mimeType: a.mimeType, size: a.size })), // Bukti Pencairan from the finance team
       answers,
     })
   } catch (error) {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { BarChart2, Image as ImageIcon, Loader2, MoreHorizontal, Send, Sparkles, Wrench, X } from "lucide-react";
-import { streamGideon, type GideonMessage } from "@/lib/gideon";
+import { BarChart2, Image as ImageIcon, Loader2, MoreHorizontal, Send, Sparkles, Trash2, Wrench, X } from "lucide-react";
+import { clearGideonHistory, loadGideonHistory, streamGideon, type GideonMessage } from "@/lib/gideon";
 import { cn } from "@/lib/utils";
 
 type ChatTurn = GideonMessage & { tools?: string[]; streaming?: boolean };
@@ -9,11 +9,31 @@ export function GideonPanel({ onClose }: { onClose: () => void }) {
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [turns]);
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  // Restore the saved conversation on open. If the user already started typing a turn before the
+  // history landed, their turn wins — a late response must never wipe live messages.
+  useEffect(() => {
+    let cancelled = false;
+    loadGideonHistory().then((rows) => {
+      if (cancelled) return;
+      if (rows.length) setTurns((cur) => (cur.length ? cur : rows));
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const clearHistory = async () => {
+    if (busy || (!turns.length && !loading)) return;
+    if (!window.confirm("Hapus semua history chat Gideon? Ini permanen.")) return;
+    setTurns([]);
+    await clearGideonHistory();
+  };
 
   const send = async () => {
     const text = input.trim();
@@ -50,11 +70,17 @@ export function GideonPanel({ onClose }: { onClose: () => void }) {
       <div className="flex items-center gap-2 border-b border-border bg-card/95 px-4 py-3 backdrop-blur">
         <span className="grid h-8 w-8 place-items-center rounded-xl bg-primary/10 text-primary"><Sparkles className="h-4 w-4" /></span>
         <div className="min-w-0 flex-1"><div className="text-sm font-bold">Gideon</div><div className="text-[11px] text-muted-foreground">AI assistant · acts on your workspace</div></div>
-        <button onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
+        {turns.length > 0 && (
+          <button onClick={clearHistory} title="Hapus history chat" aria-label="Hapus history chat" className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><Trash2 className="h-4 w-4" /></button>
+        )}
+        <button onClick={onClose} aria-label="Tutup Gideon" className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
       </div>
 
       <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
-        {turns.length === 0 && (
+        {loading && turns.length === 0 && (
+          <div className="grid h-full place-items-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+        )}
+        {!loading && turns.length === 0 && (
           <div className="grid h-full place-items-center text-center">
             <div>
               <Sparkles className="mx-auto mb-3 h-8 w-8 text-primary/60" />
@@ -107,7 +133,7 @@ export function GideonPanel({ onClose }: { onClose: () => void }) {
           </div>
 
           {/* tags */}
-          {turns.length === 0 && (
+          {!loading && turns.length === 0 && (
             <div className="flex flex-wrap gap-2 py-3 text-xs">
               {SUGGESTIONS.map((tag) => (
                 <button key={tag} onClick={() => setInput(tag)} className="cursor-pointer select-none rounded-lg border border-gray-300 bg-white px-2 py-1 transition-colors hover:border-primary/50 hover:text-primary dark:border-gray-800 dark:bg-black">{tag}</button>
