@@ -82,6 +82,10 @@ model User {
   complaintsFiled      Complaint[]         @relation("ComplaintReporter")
   complaintsResolved   Complaint[]         @relation("ComplaintResolver")
   complaintMessages    ComplaintMessage[]
+  documentNumbers      DocumentNumber[]
+  sheetComments        SheetComment[]      @relation("SheetCommentAuthor")
+  sheetRevisions       SheetCellRevision[] @relation("SheetRevisionAuthor")
+  gideonMessages       GideonMessage[]
 }
 
 // Per-user API token for the MCP connector (and other integrations). Only the SHA-256 hash is
@@ -250,6 +254,12 @@ model WorkspaceMember {
   // Per-person monthly day-off quota override. Null = workspace default (4).
   dayOffQuota Int?
 
+  /// When this person STARTED WORKING — the basis for annual-leave eligibility (12 months).
+  /// NULL = not filled in yet, which means NOT eligible. It is deliberately not inferred from
+  /// joinedAt/createdAt: NEXUS only went live in April 2026, so those dates measure rollout, not
+  /// tenure, and would rule out everyone who genuinely qualifies.
+  employmentStartDate DateTime?
+
   // Flexi Time — when true, this member checks in any time in the flexi window (12:00–15:00) with no
   // late penalty, and their expected end = check-in + 9h (overrides any fixed/team/office shift).
   // Opt-in per person; default off = normal fixed shift.
@@ -281,6 +291,14 @@ model Project {
   // Standalone per-project P&L dashboard (transaction-level expenses + income pipeline, BoD-only).
   // Toggled from the Tune drawer; unrelated to the legacy FinanceValue monthly matrix.
   enablePnlDashboard Boolean @default(false)
+  // Gate: when true, a task in this project can't be moved to DONE until it has ≥1 attachment
+  // (finance proof-of-completion). Enforced in the task PATCH; toggled from the Tune drawer.
+  requireAttachmentForDone Boolean @default(false)
+  // Calendar-only projects (e.g. the per-division "Master Calendar"s) hold dated entries, not work
+  // items — so status/done is noise there. When true the UI hides the done checkbox, the status
+  // select and the Table view's status column. Purely presentational: the column still exists and
+  // tasks keep their default TODO, so flipping this back off loses nothing.
+  disableTaskStatus Boolean @default(false)
   // Notion-style Table view: shared, ordered list of column keys ("assignee"/"dueDate"/"priority"/
   // "status"/"tags" or "cf:<customFieldId>"). Name is always the implicit first column. Null = defaults.
   tableColumns Json?
@@ -305,6 +323,7 @@ model Project {
   customFieldLibraries CustomFieldLibrary[]
   docs           Doc[]
   forms          Form[]
+  sheets         ProjectSheet[]
   financeValues  FinanceValue[]
   statusUpdates  StatusUpdate[]
   pages          ProjectPage[]
@@ -455,6 +474,7 @@ model Task {
   notifications     Notification[]
   attachments       Attachment[]
   formSubmission    FormSubmission?
+  documentNumbers   DocumentNumber[]
   relationsFrom     TaskRelation[]   @relation("TaskRelationSource")
   relationsTo       TaskRelation[]   @relation("TaskRelationTarget")
   goalTasks         GoalTask[]
@@ -774,6 +794,7 @@ model Team {
   id                             String  @id @default(cuid())
   name                           String
   color                          String  @default("#7B2FBE")
+  position                       Int     @default(0) // manual order of team cards within a division
   attendanceShiftOverrideEnabled Boolean @default(false)
   attendanceShiftStartTime       String?
   attendanceShiftEndTime         String?
@@ -879,6 +900,11 @@ model Calendar {
   name        String
   color       String?
   projectIds  String[] @default([])
+  // Room Booking sources, picked alongside projects: canonical room names from ROOM_BOOKING_ROOMS
+  // ("Ruang Meeting VIP" | "Ruang Meeting" | "Studio"). Kept in their OWN column rather than stuffed
+  // into projectIds, because that array is fed straight into project-membership authz.
+  roomSources String[] @default([])
+  position    Int      @default(0) // left-to-right order of the calendar tabs, per workspace
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -998,6 +1024,16 @@ model AttendanceRequest {
   approvalSource        AttendanceApprovalSource?
   supportingDocumentUrl String?
   supportingDocumentName String?
+
+  /// Where the person was when they filed this, and how late they filed it. Only meaningful for
+  /// PERMIT self-submissions — the type that used to carry no evidence at all, which made it the
+  /// cheapest way to erase an attendance penalty.
+  submittedLat          Float?
+  submittedLng          Float?
+  submittedAddress      String?
+  /// Minutes between filing and that day's shift start. <=0 filed before the shift, >0 filed late,
+  /// null = not applicable. This is the number the approver judges "lupa absen" by.
+  reportDelayMinutes    Int?
   createdAt             DateTime                  @default(now())
   updatedAt             DateTime                  @updatedAt
   reviewedAt            DateTime?
@@ -1223,6 +1259,7 @@ enum PortfolioStatus {
 enum OtpPurpose {
   SIGNUP
   PASSWORD_RESET
+  EMAIL_CHANGE
 }
 
 // ─── PHASE 1A MODELS ─────────────────────────────────────────
@@ -1233,6 +1270,9 @@ model Attachment {
   url       String
   mimeType  String
   size      Int
+  // "GENERAL" = normal attachment / form-submission document; "PROOF" = "Bukti Pencairan" completion
+  // proof, a SEPARATE channel that the requireAttachmentForDone gate checks (never mixed with GENERAL).
+  kind      String   @default("GENERAL")
   createdAt DateTime @default(now())
 
   taskId    String
@@ -1295,6 +1335,32 @@ model FormSubmission {
   task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   submitterId String?
+}
+
+// --- Legal document requests (invoice / contract) ---
+// One row per number ACTUALLY issued. Numbers are handed out when a document is generated, not when
+// the request is filed, so a rejected or abandoned request never burns a number and leaves a hole in
+// the bookkeeping sequence. `seq` restarts at 1 every month (per series), which is how PATS/Jagain
+// have always numbered by hand.
+model DocumentNumber {
+  id       String @id @default(cuid())
+  series   String // key from DOCUMENT_SERIES, e.g. "PATS_INVOICE" — NOT the printed prefix
+  year     Int
+  month    Int    // 1-12
+  seq      Int    // resets to 1 each month
+  number   String @unique // the printed number; unique so a duplicate is impossible at the DB level
+
+  clientCode String? // the {KLIEN} segment when the series prints one (e.g. "JW")
+  subject    String? // what it was for, for a human scanning the register
+
+  taskId     String?
+  task       Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  issuedById String
+  issuedBy   User    @relation(fields: [issuedById], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([series, year, month, seq])
+  @@index([series, year, month])
 }
 
 // --- Finance dashboard (per Finance project, monthly OPEX + Revenue) ---
@@ -1941,6 +2007,101 @@ model PnlBudget {
 
 /// Recurring monthly expense template (gaji, sewa, langganan). Materialized lazily into
 /// PnlExpense rows by postDueRecurringPnlExpenses() whenever the dashboard loads — no cron.
+/// Per-project spreadsheet — free-form rows, NOT tasks (that's ProjectTableView / tableColumns).
+/// Auto-created the first time the tab is opened; see ensureProjectSheet in src/lib/project-sheets.ts.
+model ProjectSheet {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String   @default("Sheet 1")
+  /// [{ id, name, type, width?, options? }]. `id` is server-generated, permanent, and is the key
+  /// used in SheetRow.cells — never reused after a column is deleted. Keying by id (not by column
+  /// order) is what makes add/reorder/delete-column touch zero rows.
+  columns     Json     @default("[]")
+  position    Int      @default(0)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rows        SheetRow[]
+  comments    SheetComment[]
+  revisions   SheetCellRevision[]
+
+  /// The default sheet is always slot 0, so two simultaneous first-opens can't create two sheets.
+  @@unique([projectId, position])
+  @@index([projectId, position])
+}
+
+/// One spreadsheet row. `cells` is { [columnId]: string | number | boolean }; an absent key means an
+/// empty cell, which keeps the jsonb small and makes "clear" a key delete rather than a null.
+model SheetRow {
+  id          String       @id @default(cuid())
+  sheetId     String
+  sheet       ProjectSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  /// Float so inserting between two rows is ONE update (the midpoint), not a renumber of the sheet.
+  position    Float
+  cells       Json         @default("{}")
+  /// Pixels. NULL = use the app's default, so existing rows needed no backfill.
+  height      Int?
+  updatedById String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([sheetId, position])
+  comments    SheetComment[]
+  revisions   SheetCellRevision[]
+}
+
+/// A comment anchored to ONE CELL.
+///
+/// Anchored by rowId + columnId, never by "C5" — so sorting, filtering, inserting rows or moving
+/// columns can never detach a comment from the number it's about. Deleting the row takes its
+/// comments with it (cascade); deleting a column leaves them orphaned by columnId, which the API
+/// filters out rather than showing against a column that no longer exists.
+model SheetComment {
+  id         String       @id @default(cuid())
+  sheetId    String
+  sheet      ProjectSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  rowId      String
+  row        SheetRow     @relation(fields: [rowId], references: [id], onDelete: Cascade)
+  columnId   String
+  body       String
+  authorId   String
+  author     User         @relation("SheetCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  resolvedAt DateTime?
+  resolvedById String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@index([sheetId, resolvedAt])
+  @@index([rowId, columnId])
+}
+
+/// Who changed which cell, from what to what.
+///
+/// WRITTEN BY A POSTGRES TRIGGER (`sheet_row_revisions`), never by the app — see
+/// prisma/migrations/manual/2026-08-04-sheet-revisions.sql. Saving a cell has to stay one atomic
+/// statement; writing history from the API would mean reading the old value first, and that
+/// read-modify-write is the exact race the sheet was designed to avoid. Prisma does not manage the
+/// trigger, so it must be reapplied by hand if this table is ever rebuilt.
+model SheetCellRevision {
+  id        String       @id @default(dbgenerated("(gen_random_uuid())::text"))
+  sheetId   String
+  sheet     ProjectSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  rowId     String
+  row       SheetRow     @relation(fields: [rowId], references: [id], onDelete: Cascade)
+  columnId  String
+  oldValue  Json?
+  newValue  Json?
+  /// SetNull, not Cascade: someone leaving must not erase the record of what they changed.
+  authorId  String?
+  author    User?        @relation("SheetRevisionAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt DateTime     @default(now())
+
+  @@index([sheetId, createdAt(sort: Desc)])
+  @@index([rowId, columnId, createdAt(sort: Desc)])
+}
+
 model PnlRecurringExpense {
   id            String   @id @default(cuid())
   projectId     String
@@ -2151,9 +2312,26 @@ model Complaint {
   updatedAt     DateTime           @updatedAt
   messages      ComplaintMessage[]
   events        ComplaintEvent[]
+  // Evidence photos. A separate table rather than parallel `String[]` columns (url/mime/size arrays
+  // desync the moment one write goes wrong). The legacy single `evidenceUrl` above is still written
+  // with the FIRST photo so older complaints and any leftover reader keep working.
+  attachments   ComplaintAttachment[]
 
   @@index([reporterId, createdAt])
   @@index([status, lastMessageAt])
+}
+
+model ComplaintAttachment {
+  id          String    @id @default(cuid())
+  complaintId String
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  url         String    // gated /api/files/complaints/<name>
+  mimeType    String
+  size        Int
+  position    Int       @default(0) // order the reporter picked them in
+  createdAt   DateTime  @default(now())
+
+  @@index([complaintId, position])
 }
 
 model ComplaintMessage {
@@ -2180,4 +2358,19 @@ model ComplaintEvent {
   createdAt   DateTime  @default(now())
 
   @@index([complaintId, createdAt])
+}
+
+// Gideon chat history. One append-only row per turn, per user, written server-side after each
+// reply. Loaded when the panel opens, so the conversation survives closing the panel, a refresh,
+// and switching devices. Retention is capped per-user at read time (see /api/gideon/history).
+model GideonMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String   // "user" | "assistant"
+  content   String   @db.Text
+  tools     String[] @default([]) // tool names Gideon invoked on this turn
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }

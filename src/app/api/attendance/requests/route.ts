@@ -17,6 +17,7 @@ import {
   getAttendanceWorkspaceContext,
   getPrimaryAttendanceTeam,
   parseDateOnlyToUtc,
+  resolveEffectiveAttendanceShift,
   serializeAttendanceRequest,
   startOfAttendanceMonth,
 } from "@/lib/attendance"
@@ -25,6 +26,9 @@ import {
   attendanceRequestCreateSchema,
   attendanceRequestQuerySchema,
 } from "@/lib/validations"
+import { ANNUAL_LEAVE_DAYS, checkLeaveEligibility, leaveDaysInYear, leaveYearRange } from "@/lib/annual-leave"
+import { reverseGeocodeCoordinates } from "@/lib/reverse-geocode"
+import { isBackdated, reportDelayMinutes } from "@/lib/permit-rules"
 
 const MAX_SUPPORTING_DOCUMENT_SIZE = 10 * 1024 * 1024
 
@@ -195,6 +199,9 @@ export async function POST(request: NextRequest) {
     const reason = String(formData.get("reason") ?? "")
     const targetUserId = String(formData.get("targetUserId") ?? "").trim()
     const supportingDocument = formData.get("supportingDocument")
+    // Where the person was when they filed. Same pair check-in already collects.
+    const submittedLat = Number(formData.get("lat"))
+    const submittedLng = Number(formData.get("lng"))
 
     const validation = attendanceRequestCreateSchema.safeParse({
       type,
@@ -221,12 +228,30 @@ export async function POST(request: NextRequest) {
     // of a specific user.
     const canGrant = context.canManageAttendance // BoD / One Above All / system admin
     const reqType = validation.data.type
-    if (!canGrant && reqType === "LEAVE") {
-      return NextResponse.json({ error: "Leave (cuti) cuma bisa diberikan oleh BoD." }, { status: 403 })
-    }
     // Sick self-requests must include the doctor's note photo (BoD grants are exempt).
     if (!canGrant && reqType === "SICK" && !(supportingDocument instanceof File && supportingDocument.size > 0)) {
       return NextResponse.json({ error: "Request sakit wajib melampirkan foto surat sakit." }, { status: 400 })
+    }
+    // Izin now demands the same evidence check-in does — photo + coordinates. Without it, izin was
+    // strictly cheaper than showing up: no proof, no location, no time.
+    if (!canGrant && reqType === "PERMIT") {
+      if (!(supportingDocument instanceof File && supportingDocument.size > 0)) {
+        return NextResponse.json({ error: "Izin wajib melampirkan foto sebagai bukti." }, { status: 400 })
+      }
+      if (!Number.isFinite(submittedLat) || !Number.isFinite(submittedLng)) {
+        return NextResponse.json(
+          { error: "Izin wajib menyertakan lokasi. Aktifin izin lokasi di browser/HP kamu ya." },
+          { status: 400 }
+        )
+      }
+      // Today or later only. Yesterday's missed check-in goes through a BoD grant, where a human
+      // signs off on it — that's what kills "lupa absen kemarin".
+      if (isBackdated(parsedStartDate)) {
+        return NextResponse.json(
+          { error: "Izin nggak bisa diajukan buat tanggal yang udah lewat. Minta BoD yang input kalau memang perlu.", code: "PERMIT_BACKDATED" },
+          { status: 422 }
+        )
+      }
     }
     let effectiveUserId = session.user.id
     const isGrant = Boolean(targetUserId && targetUserId !== session.user.id)
@@ -371,6 +396,52 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ── Cuti tahunan ────────────────────────────────────────────────────────────────────────────
+    // Staff may now submit LEAVE themselves (it used to be BoD-grant only), gated on two things:
+    // 12 months of service, and 12 days per calendar year. Admin grants (isGrant) skip both — a BoD
+    // giving someone unpaid or exceptional leave shouldn't be blocked by the annual allowance.
+    if (reqType === "LEAVE" && !isGrant) {
+      const member = await prisma.workspaceMember.findUnique({
+        where: { userId_workspaceId: { userId: effectiveUserId, workspaceId: context.workspace.id } },
+        select: { employmentStartDate: true },
+      })
+      const eligibility = checkLeaveEligibility(member?.employmentStartDate ?? null)
+      if (!eligibility.eligible) {
+        return NextResponse.json({ error: eligibility.reason, code: "LEAVE_NOT_ELIGIBLE" }, { status: 403 })
+      }
+
+      // Charge each calendar year the request touches to that year's own allowance, so a request
+      // spanning New Year can't dodge either year's cap.
+      const yearsTouched = new Set<number>()
+      for (const d of enumerateAttendanceDates(parsedStartDate, parsedEndDate)) yearsTouched.add(d.getUTCFullYear())
+
+      for (const year of Array.from(yearsTouched)) {
+        const { start, end } = leaveYearRange(new Date(Date.UTC(year, 5, 1)))
+        const existing = await prisma.attendanceRequest.findMany({
+          where: {
+            userId: effectiveUserId,
+            type: "LEAVE",
+            status: { in: ["PENDING", "APPROVED"] },
+            startDate: { lte: end },
+            endDate: { gte: start },
+          },
+          select: { startDate: true, endDate: true },
+        })
+        const used = existing.reduce((sum, r) => sum + leaveDaysInYear(r.startDate, r.endDate, year), 0)
+        const asking = leaveDaysInYear(parsedStartDate, parsedEndDate, year)
+        if (used + asking > ANNUAL_LEAVE_DAYS) {
+          const left = Math.max(0, ANNUAL_LEAVE_DAYS - used)
+          return NextResponse.json(
+            {
+              error: `Jatah cuti tahunan ${year} nggak cukup. Sisa ${left} dari ${ANNUAL_LEAVE_DAYS} hari, kamu minta ${asking} hari.`,
+              code: "LEAVE_QUOTA_EXCEEDED",
+            },
+            { status: 422 }
+          )
+        }
+      }
+    }
+
     let supportingDocumentUrl: string | null = null
     let supportingDocumentName: string | null = null
 
@@ -385,6 +456,37 @@ export async function POST(request: NextRequest) {
       supportingDocumentName = supportingDocument.name
     }
 
+    // Evidence recorded on the request itself, so the approver judges from data and not from tone of
+    // voice. Only for self-submitted izin — a BoD grant is already a human vouching for it.
+    let permitLat: number | null = null
+    let permitLng: number | null = null
+    let permitAddress: string | null = null
+    let permitDelay: number | null = null
+    if (!canGrant && reqType === "PERMIT") {
+      permitLat = submittedLat
+      permitLng = submittedLng
+      try {
+        const geo = await reverseGeocodeCoordinates(submittedLat, submittedLng)
+        permitAddress = geo.displayName ?? null
+      } catch {
+        // Coordinates are the evidence; the street name is a convenience. A geocoder outage must not
+        // stop someone filing izin.
+        permitAddress = null
+      }
+      const office = await prisma.officeLocation.findFirst({
+        where: { workspaceId: context.workspace.id, isActive: true },
+      })
+      if (office) {
+        const shift = await resolveEffectiveAttendanceShift({
+          userId: effectiveUserId,
+          workspaceId: context.workspace.id,
+          office,
+          date: parsedStartDate,
+        })
+        permitDelay = reportDelayMinutes(new Date(), parsedStartDate, shift.shiftStartTime)
+      }
+    }
+
     const attendanceRequest = await prisma.attendanceRequest.create({
       data: {
         userId: effectiveUserId,
@@ -396,6 +498,10 @@ export async function POST(request: NextRequest) {
         reason: validation.data.reason.trim(),
         supportingDocumentUrl,
         supportingDocumentName,
+        submittedLat: permitLat,
+        submittedLng: permitLng,
+        submittedAddress: permitAddress,
+        reportDelayMinutes: permitDelay,
         // BoD granting on behalf of a user → already approved by that BoD.
         ...(isGrant ? { status: "APPROVED" as const, reviewedById: session.user.id, reviewedAt: new Date() } : {}),
       },

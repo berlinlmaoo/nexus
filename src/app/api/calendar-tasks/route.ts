@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { isSystemAdminUser } from "@/lib/rbac"
+import { ROOM_BOOKING_ROOMS } from "@/lib/validations"
+import { getUserWorkspaceIds } from "@/lib/workspace-scope"
 
 const ADMIN_ROLES: readonly string[] = ["BOD", "MANAGER", "ONE_ABOVE_ALL"]
 
@@ -21,13 +23,18 @@ export async function GET(request: NextRequest) {
     const sp = request.nextUrl.searchParams
     const rawIds = (sp.get("projectIds") ?? "").split(",").map((s) => s.trim()).filter(Boolean)
     const projectIds = Array.from(new Set(rawIds)).slice(0, 200)
+    // Room Booking sources ride along in the same request so the calendar needs one round-trip.
+    // Unknown names are dropped — the response must never depend on an arbitrary caller string.
+    const rooms = Array.from(new Set((sp.get("rooms") ?? "").split(",").map((s) => s.trim()).filter(Boolean)))
+      .filter((r) => (ROOM_BOOKING_ROOMS as readonly string[]).includes(r))
     const rangeStart = sp.get("rangeStart")
     const rangeEnd = sp.get("rangeEnd")
 
-    if (projectIds.length === 0 || !rangeStart || !rangeEnd) return NextResponse.json({ tasks: [] })
+    const empty = { tasks: [], bookings: [] }
+    if ((projectIds.length === 0 && rooms.length === 0) || !rangeStart || !rangeEnd) return NextResponse.json(empty)
     const start = new Date(rangeStart)
     const end = new Date(rangeEnd)
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return NextResponse.json({ tasks: [] })
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return NextResponse.json(empty)
 
     const isAdmin = await isSystemAdminUser(userId)
 
@@ -53,7 +60,7 @@ export async function GET(request: NextRequest) {
       ],
     }
 
-    const tasks = await prisma.task.findMany({
+    const tasks = projectIds.length === 0 ? [] : await prisma.task.findMany({
       where,
       orderBy: [{ dueDate: "asc" }],
       take: 2000,
@@ -80,7 +87,38 @@ export async function GET(request: NextRequest) {
       projectColor: t.taskList.project.color,
       projectIcon: t.taskList.project.icon,
     }))
-    return NextResponse.json({ tasks: result })
+
+    // Room bookings for the picked rooms. Scope = the viewer's own workspaces (same rule as
+    // /api/room-bookings): a booking is workspace-wide info, not project-scoped, so there's no
+    // per-project membership to intersect here. Cancelled bookings never reach the calendar.
+    const bookings = rooms.length === 0 ? [] : await (async () => {
+      const workspaceIds = await getUserWorkspaceIds(userId)
+      if (workspaceIds.length === 0) return []
+      const rows = await prisma.roomBooking.findMany({
+        where: {
+          workspaceId: { in: workspaceIds },
+          room: { in: rooms },
+          status: "ACTIVE",
+          startsAt: { gte: start, lte: end },
+        },
+        orderBy: [{ startsAt: "asc" }],
+        take: 2000,
+        select: {
+          id: true, room: true, title: true, startsAt: true, endsAt: true,
+          createdBy: { select: { id: true, name: true } },
+        },
+      })
+      return rows.map((b) => ({
+        id: b.id,
+        title: b.title,
+        room: b.room,
+        startsAt: b.startsAt,
+        endsAt: b.endsAt,
+        bookedByName: b.createdBy?.name ?? null,
+      }))
+    })()
+
+    return NextResponse.json({ tasks: result, bookings })
   } catch (error) {
     console.error("Error fetching calendar tasks:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

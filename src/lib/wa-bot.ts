@@ -202,7 +202,7 @@ export async function handleWaInbound(input: { chatId: string; senderId: string;
     const scope = await approverScope(user.id)
     if (!scope.all && scope.workspaceIds.length === 0) { await sendWaChat(input.chatId, "Kamu bukan approver absen di workspace manapun."); return }
     const mine = await prisma.attendanceRequest.findMany({
-      where: { status: "PENDING", ...(scope.all ? {} : { workspaceId: { in: scope.workspaceIds } }) },
+      where: { status: "PENDING", userId: { not: user.id }, ...(scope.all ? {} : { workspaceId: { in: scope.workspaceIds } }) },
       select: { id: true, type: true, startDate: true, endDate: true, user: { select: { name: true } } },
       orderBy: { createdAt: "asc" },
       take: 50,
@@ -222,7 +222,13 @@ export async function handleWaInbound(input: { chatId: string; senderId: string;
     if (!scope.all && scope.workspaceIds.length === 0) { await sendWaChat(input.chatId, "Kamu gak punya akses buat approve/reject permintaan absen."); return }
     // Only consider PENDING requests WITHIN the approver's scope, then match by id-suffix code.
     const candidates = await prisma.attendanceRequest.findMany({
-      where: { status: "PENDING", ...(scope.all ? {} : { workspaceId: { in: scope.workspaceIds } }) },
+      where: {
+        status: "PENDING",
+        // Four-eyes, same rule the web route enforces: your own request never appears as something
+        // you can act on, so /approve can't be used to route around it.
+        userId: { not: user.id },
+        ...(scope.all ? {} : { workspaceId: { in: scope.workspaceIds } }),
+      },
       select: { id: true },
       orderBy: { createdAt: "desc" },
       take: 500,

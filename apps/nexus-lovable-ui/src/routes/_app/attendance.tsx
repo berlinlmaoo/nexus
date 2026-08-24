@@ -13,6 +13,7 @@ import { SelfieCapture } from "@/components/attendance/SelfieCapture";
 import { MobileCheckInHero } from "@/components/attendance/MobileCheckInHero";
 import { MorphPanel, rectCenter, type MorphOrigin } from "@/components/motion/MorphPanel";
 import { cn } from "@/lib/utils";
+import { PERIOD_BASELINE_XP } from "@/lib/levels";
 
 type HistRow = NonNullable<NexusAttendanceHistory["rows"]>[number];
 
@@ -188,6 +189,15 @@ function Attendance() {
   // Privacy: managers (BoD/OAA/admin) see the whole crew board; everyone else only their OWN attendance.
   const boardScope = canSeeBoard ? "workspace" : "me";
   const history = useQuery({ queryKey: ["attendance-history", boardScope, monthKey], queryFn: () => nexusApi.attendanceHistory(`scope=${boardScope}&month=${monthKey}`), retry: 1 });
+  // Remaining day-off per person, one call for the whole crew instead of one per row.
+  const dayOffSummary = useQuery({
+    queryKey: ["attendance-dayoff-summary", monthKey],
+    queryFn: () => nexusApi.attendanceDayOffSummary(monthKey),
+    enabled: canManage, retry: 1, staleTime: 30_000,
+  });
+  const dayOffOf = (userId: string) => dayOffSummary.data?.members.find((m) => m.userId === userId) ?? null;
+  // Whose deduction log is open (opened by tapping a name/avatar in the table).
+  const [deductionsFor, setDeductionsFor] = useState<{ id: string; name: string | null } | null>(null);
   const qc = useQueryClient();
   const deduct = useMutation({
     mutationFn: () => nexusApi.deductAbsences(),
@@ -478,11 +488,60 @@ function Attendance() {
                   <tr key={u.id} className="border-b border-border last:border-0 hover:bg-muted/20">
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
-                        <MemberAvatar user={u} />
-                        <div>
-                          <div className="font-medium">{u.name || "PATS Crew"}</div>
-                          <div className="text-[10px] text-muted-foreground">{memberSubtitle(u)}</div>
-                        </div>
+                        {canManage ? (
+                          <button
+                            onClick={() => setDeductionsFor({ id: u.id, name: u.name ?? null })}
+                            title={`Lihat log potongan XP & day-off ${u.name ?? "orang ini"}`}
+                            className="flex items-center gap-2 rounded-lg px-1 py-0.5 text-left transition hover:bg-primary/10"
+                          >
+                            <MemberAvatar user={u} />
+                            <div>
+                              <div className="font-medium">{u.name || "PATS Crew"}</div>
+                              <div className="text-[10px] text-muted-foreground">{memberSubtitle(u)}</div>
+                            </div>
+                          </button>
+                        ) : (
+                          <>
+                            <MemberAvatar user={u} />
+                            <div>
+                              <div className="font-medium">{u.name || "PATS Crew"}</div>
+                              <div className="text-[10px] text-muted-foreground">{memberSubtitle(u)}</div>
+                            </div>
+                          </>
+                        )}
+                        {canManage && (() => {
+                          const d = dayOffOf(u.id);
+                          if (!d) return null;
+                          // Amber once they're down to their last one, rose when it's gone — a
+                          // number alone doesn't tell you when to worry.
+                          const quotaTone = (remaining: number) =>
+                            remaining === 0 ? "bg-rose-100 text-rose-700 ring-rose-200"
+                              : remaining <= 1 ? "bg-amber-100 text-amber-700 ring-amber-200"
+                              : "bg-muted text-muted-foreground ring-border";
+                          // XP sits at baseline 1000; below that means penalties are winning.
+                          const xpTone = d.xp.score < PERIOD_BASELINE_XP ? "bg-rose-100 text-rose-700 ring-rose-200"
+                            : d.xp.score > PERIOD_BASELINE_XP ? "bg-emerald-100 text-emerald-700 ring-emerald-200"
+                            : "bg-muted text-muted-foreground ring-border";
+                          const pill = "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ring-1";
+                          return (
+                            <div className="ml-1 flex shrink-0 flex-wrap items-center gap-1">
+                              <span title={`Sisa day off periode absensi ini: ${d.remaining} dari ${d.quota} (kepakai ${d.used})`}
+                                className={cn(pill, quotaTone(d.remaining))}>
+                                {d.remaining}/{d.quota} DO
+                              </span>
+                              <span title={d.redDate.quota === 0
+                                  ? "Jatah tanggal merah bulan ini belum di-set BoD"
+                                  : `Sisa tanggal merah bulan kalender ini: ${d.redDate.remaining} dari ${d.redDate.quota} (kepakai ${d.redDate.used})`}
+                                className={cn(pill, d.redDate.quota === 0 ? "bg-muted/50 text-muted-foreground/70 ring-border" : quotaTone(d.redDate.remaining))}>
+                                {d.redDate.remaining}/{d.redDate.quota} TM
+                              </span>
+                              <span title={`${d.xp.score} XP · ${d.xp.levelName} (Lv.${d.xp.level}) — periode XP itu bulan kalender, beda sama periode absensi 28→27`}
+                                className={cn(pill, xpTone)}>
+                                {d.xp.score} XP
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </td>
                     {periodDays.map((pd) => {
@@ -534,12 +593,21 @@ function Attendance() {
           )}
         </div>
 
-        <RequestsSection canReview={canReview} />
+        <RequestsSection canReview={canReview} viewerId={today.data?.viewerId ?? null} />
+        {canManage && <EmploymentStartSection />}
         {canManage && <OfficesSection />}
       </div>
       <AnimatePresence>
         {correctRecord && <AttendanceCorrectionDrawer key={correctRecord.id} record={correctRecord} origin={correctOrigin} onClose={() => setCorrectRecord(null)} canOverride={canManage} />}
         {leaveDetail && <LeaveDetailDrawer record={leaveDetail} onClose={() => setLeaveDetail(null)} canOverride={canManage} />}
+        {deductionsFor && (
+          <DeductionLogModal
+            userId={deductionsFor.id}
+            name={deductionsFor.name}
+            monthKey={monthKey}
+            onClose={() => setDeductionsFor(null)}
+          />
+        )}
         {overrideTarget && (
           <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-4 backdrop-blur-sm" onClick={() => setOverrideTarget(null)}>
             <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
@@ -559,6 +627,113 @@ function Attendance() {
         {logKind && <DayOffLogModal key={logKind.kind} kind={logKind.kind} origin={logKind.origin} onClose={() => setLogKind(null)} />}
       </AnimatePresence>
     </div>
+  );
+}
+
+/**
+ * BoD: every XP and day-off penalty one person took this period, why, and a button to undo each one.
+ *
+ * Undo reuses the existing CLEAR_PENALTY override rather than deleting rows: that path refunds the XP,
+ * restores an auto-cut day-off, AND writes the waiver marker — without the waiver the nightly cron
+ * re-derives the penalty and it comes straight back. It clears the whole DAY, so every entry sharing
+ * that date clears together; the UI says so instead of pretending otherwise.
+ */
+function DeductionLogModal({ userId, name, monthKey, onClose }: { userId: string; name: string | null; monthKey: string; onClose: () => void }) {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["attendance-deductions", userId, monthKey],
+    queryFn: () => nexusApi.attendanceDeductions(userId, monthKey),
+    retry: 1,
+  });
+  const clear = useMutation({
+    mutationFn: (dateKey: string) => nexusApi.attendanceOverride({ userId, date: dateKey, action: "CLEAR_PENALTY" }),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["attendance-deductions", userId, monthKey] });
+      qc.invalidateQueries({ queryKey: ["attendance-dayoff-summary"] });
+      qc.invalidateQueries({ predicate: (x) => x.queryKey.map(String).includes("attendance-history") });
+      celebrate(r.refunded ? `Potongan ${r.date} dibatalin — XP & day-off balik 🛡️` : `Nggak ada potongan di ${r.date}.`);
+    },
+    onError: (e) => alert(e instanceof Error ? e.message : "Gagal batalin potongan."),
+  });
+
+  const entries = q.data?.entries ?? [];
+  const active = entries.filter((e) => !e.cleared);
+  const cleared = entries.filter((e) => e.cleared);
+
+  const row = (e: NonNullable<typeof q.data>["entries"][number]) => (
+    <div key={e.id} className={cn("flex items-center gap-3 rounded-xl border border-border px-3 py-2", e.cleared && "opacity-55")}>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm font-semibold">{e.label}</span>
+          {e.cleared && <span className="rounded-full bg-emerald-100 px-1.5 text-[10px] font-bold text-emerald-700">udah dibatalin</span>}
+        </div>
+        <div className="text-[11px] text-muted-foreground">{fmtDate(e.dateKey)}{e.detail ? ` · ${e.detail}` : ""}</div>
+      </div>
+      <span className={cn("shrink-0 text-sm font-black tabular-nums", e.cleared ? "text-muted-foreground" : "text-rose-600")}>
+        {e.unit === "XP" ? `${e.amount} XP` : `${e.amount} day off`}
+      </span>
+      {!e.cleared && (
+        <button
+          disabled={clear.isPending}
+          onClick={() => {
+            const same = active.filter((x) => x.dateKey === e.dateKey);
+            const extra = same.length > 1 ? `\n\nTanggal ini punya ${same.length} potongan — semuanya kebatalin sekaligus.` : "";
+            if (window.confirm(`Batalin potongan ${fmtDate(e.dateKey)} buat ${name ?? "orang ini"}?${extra}\n\nXP dibalikin dan day-off yang kepotong otomatis dikembaliin. Status absennya nggak diubah.`)) {
+              clear.mutate(e.dateKey);
+            }
+          }}
+          className="shrink-0 rounded-lg border border-border p-1.5 text-muted-foreground transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+          title="Batalin potongan hari ini"
+        >
+          {clear.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+        </button>
+      )}
+    </div>
+  );
+
+  return (
+    <motion.div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm"
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
+      <motion.div initial={{ opacity: 0, scale: 0.96, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
+        transition={{ duration: 0.18, ease: "easeOut" }} onClick={(e) => e.stopPropagation()}
+        className="flex max-h-[86vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-pop">
+        <div className="flex items-start justify-between gap-2 border-b border-border px-5 py-4">
+          <div className="min-w-0">
+            <h2 className="truncate text-base font-black">{name ?? "Crew"}</h2>
+            <p className="text-xs text-muted-foreground">Potongan XP &amp; day-off · periode {monthKey}</p>
+          </div>
+          <button onClick={onClose} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+        </div>
+
+        {q.data && (
+          <div className="grid grid-cols-2 gap-2 border-b border-border px-5 py-3">
+            <div className="rounded-xl bg-muted/40 px-3 py-2">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Sisa day off</div>
+              <div className="text-lg font-black tabular-nums">{q.data.dayOff.remaining}<span className="text-sm font-bold text-muted-foreground">/{q.data.dayOff.quota}</span></div>
+            </div>
+            <div className="rounded-xl bg-muted/40 px-3 py-2">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">XP kepotong</div>
+              <div className="text-lg font-black tabular-nums text-rose-600">{q.data.totalXpLost}</div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex-1 space-y-2 overflow-y-auto p-4">
+          {q.isLoading && <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-muted" />)}</div>}
+          {q.isError && <p className="py-8 text-center text-sm font-semibold text-rose-600">Gagal ngambil datanya.</p>}
+          {q.data && entries.length === 0 && (
+            <p className="py-10 text-center text-sm text-muted-foreground">Nggak ada potongan periode ini. Bersih 🎉</p>
+          )}
+          {active.map(row)}
+          {cleared.length > 0 && (
+            <>
+              <div className="pt-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Udah dibatalin</div>
+              {cleared.map(row)}
+            </>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -824,7 +999,7 @@ function OfficeComposer({ office, onClose, onCreated }: { office?: NexusOffice; 
   );
 }
 
-function RequestsSection({ canReview }: { canReview: boolean }) {
+function RequestsSection({ canReview, viewerId }: { canReview: boolean; viewerId: string | null }) {
   const qc = useQueryClient();
   const [composerOpen, setComposerOpen] = useState(false);
   const requestsQuery = useQuery({ queryKey: ["attendance-requests"], queryFn: () => nexusApi.attendanceRequests("scope=workspace"), retry: 1 });
@@ -841,6 +1016,92 @@ function RequestsSection({ canReview }: { canReview: boolean }) {
   const pendingTotal = pending.length + offsiteItems.filter((i) => i.approval === "PENDING").length;
   const offsiteStatusLabel = (a?: string | null) => (a === "APPROVED" ? "Approved" : a === "REJECTED" ? "Rejected" : "Pending");
 
+  // Everything awaiting a decision floats to the very top, across BOTH lists — offsite checkouts and
+  // leave/permit requests are different shapes, so we split each into pending/resolved and render the
+  // two pending groups before the two resolved ones. Otherwise a wall of approved offsite checkouts
+  // (the common case) buries the one request that actually needs action.
+  const offsitePending = offsiteSorted.filter((i) => i.approval === "PENDING");
+  const offsiteResolved = offsiteSorted.filter((i) => i.approval !== "PENDING");
+  const rowsPending = rows.filter((r) => (r.status || "").toUpperCase() === "PENDING");
+  const rowsResolved = rows.filter((r) => (r.status || "").toUpperCase() !== "PENDING");
+
+  const renderOffsite = (it: (typeof offsiteItems)[number]) => {
+    const isPending = it.approval === "PENDING";
+    // Offsite checkouts have had a four-eyes guard server-side all along; hide the buttons to match
+    // so a BoD never clicks Approve on their own and gets a 403 back.
+    const isMine = Boolean(viewerId && it.user?.id === viewerId);
+    const mapUrl = it.lat != null && it.lng != null ? `https://www.google.com/maps?q=${it.lat},${it.lng}` : null;
+    return (
+      <div key={`offsite-${it.id}`} className="flex flex-wrap items-center gap-3 px-5 py-3">
+        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusTone(it.approval)}`}>{offsiteStatusLabel(it.approval)}</span>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold">Offsite checkout {it.user?.name ? <span className="font-normal text-muted-foreground">· {it.user.name}</span> : null}</div>
+          <div className="text-xs text-muted-foreground">{fmtDateShort(it.attendanceDate)} · out {fmtTime(it.checkOutAt)}{it.reason ? ` · ${it.reason}` : ""}</div>
+          <div className="text-xs text-muted-foreground">
+            {it.distanceMeters != null ? `±${Math.round(it.distanceMeters)}m from ${it.officeName ?? "office"}` : ""}
+            {mapUrl && <> · <a href={mapUrl} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">view map</a></>}
+            {it.photoUrl && <> · <a href={it.photoUrl} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">photo</a></>}
+            {!isPending && it.approverName ? ` · by ${it.approverName}` : ""}
+          </div>
+        </div>
+        {canReview && isPending && !isMine && (
+          <div className="flex items-center gap-1.5">
+            <button disabled={offsiteReview.isPending} onClick={() => offsiteReview.mutate({ id: it.id, action: "approve" })} className="rounded-lg bg-success/10 px-2.5 py-1 text-xs font-semibold text-success transition-colors hover:bg-success/20 active:scale-[0.97] disabled:opacity-50">Approve</button>
+            <button disabled={offsiteReview.isPending} onClick={() => offsiteReview.mutate({ id: it.id, action: "reject" })} className="rounded-lg bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.97] disabled:opacity-50">Reject</button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderRequest = (r: (typeof rows)[number]) => {
+    const isPending = (r.status || "").toUpperCase() === "PENDING";
+    // Your own request offers Cancel, never Approve/Reject — the server refuses self-review, so
+    // showing the buttons would only produce a 403 nobody can act on.
+    const isMine = Boolean(viewerId && r.user?.id === viewerId);
+    return (
+      <div key={r.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
+        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusTone(r.status)}`}>{statusLabel(r.status)}</span>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold">{statusLabel(r.type)} {r.user?.name ? <span className="font-normal text-muted-foreground">· {r.user.name}</span> : null}</div>
+          <div className="text-xs text-muted-foreground">{fmtDateShort(r.startDate)} → {fmtDateShort(r.endDate)}{r.reason ? ` · ${r.reason}` : ""}</div>
+          {/* Izin evidence, right under the reason — this is what separates a real errand from
+              "lupa absen", and it's useless if the approver has to click to find it. */}
+          {(r.submittedAddress || r.submittedLat != null || r.reportDelayMinutes != null || r.supportingDocumentUrl) && (
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+              {r.reportDelayMinutes != null && r.reportDelayMinutes > 0 && (
+                <span className="rounded-full bg-destructive/10 px-2 py-0.5 font-bold text-destructive">
+                  Telat lapor {Math.floor(r.reportDelayMinutes / 60) > 0 ? `${Math.floor(r.reportDelayMinutes / 60)}j ` : ""}{r.reportDelayMinutes % 60}m dari jam masuk
+                </span>
+              )}
+              {r.reportDelayMinutes === 0 && (
+                <span className="rounded-full bg-success/10 px-2 py-0.5 font-bold text-success">Lapor sebelum jam masuk</span>
+              )}
+              {r.submittedAddress && <span className="text-muted-foreground">{r.submittedAddress}</span>}
+              {r.submittedLat != null && r.submittedLng != null && (
+                <a href={`https://www.google.com/maps?q=${r.submittedLat},${r.submittedLng}`} target="_blank" rel="noreferrer"
+                   className="font-semibold text-primary underline-offset-2 hover:underline">lihat peta</a>
+              )}
+              {r.supportingDocumentUrl && (
+                <a href={r.supportingDocumentUrl} target="_blank" rel="noreferrer"
+                   className="font-semibold text-primary underline-offset-2 hover:underline">foto bukti</a>
+              )}
+            </div>
+          )}
+        </div>
+        {canReview && isPending && (
+          <div className="flex items-center gap-1.5">
+            <button disabled={review.isPending} onClick={() => review.mutate({ id: r.id, action: "approve" })} className="rounded-lg bg-success/10 px-2.5 py-1 text-xs font-semibold text-success transition-colors hover:bg-success/20 active:scale-[0.97] disabled:opacity-50">Approve</button>
+            <button disabled={review.isPending} onClick={() => review.mutate({ id: r.id, action: "reject" })} className="rounded-lg bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.97] disabled:opacity-50">Reject</button>
+          </div>
+        )}
+        {(!canReview || isMine) && isPending && (
+          <button disabled={review.isPending} onClick={() => review.mutate({ id: r.id, action: "cancel" })} className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-accent active:scale-[0.97] disabled:opacity-50">Cancel</button>
+        )}
+      </div>
+    );
+  };
+
   return (
     <section className="rounded-[28px] border border-border bg-card shadow-soft overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
@@ -853,56 +1114,90 @@ function RequestsSection({ canReview }: { canReview: boolean }) {
       <div className="divide-y divide-border">
         {requestsQuery.isLoading && <div className="px-5 py-4 text-sm text-muted-foreground">Loading requests…</div>}
         {!requestsQuery.isLoading && rows.length === 0 && offsiteSorted.length === 0 && <div className="px-5 py-6 text-center text-sm text-muted-foreground">No attendance requests yet.</div>}
-        {/* Offsite checkouts (need-approval) merged into the same list, shown first */}
-        {offsiteSorted.map((it) => {
-          const isPending = it.approval === "PENDING";
-          const mapUrl = it.lat != null && it.lng != null ? `https://www.google.com/maps?q=${it.lat},${it.lng}` : null;
-          return (
-            <div key={`offsite-${it.id}`} className="flex flex-wrap items-center gap-3 px-5 py-3">
-              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusTone(it.approval)}`}>{offsiteStatusLabel(it.approval)}</span>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold">Offsite checkout {it.user?.name ? <span className="font-normal text-muted-foreground">· {it.user.name}</span> : null}</div>
-                <div className="text-xs text-muted-foreground">{fmtDateShort(it.attendanceDate)} · out {fmtTime(it.checkOutAt)}{it.reason ? ` · ${it.reason}` : ""}</div>
-                <div className="text-xs text-muted-foreground">
-                  {it.distanceMeters != null ? `±${Math.round(it.distanceMeters)}m from ${it.officeName ?? "office"}` : ""}
-                  {mapUrl && <> · <a href={mapUrl} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">view map</a></>}
-                  {it.photoUrl && <> · <a href={it.photoUrl} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">photo</a></>}
-                  {!isPending && it.approverName ? ` · by ${it.approverName}` : ""}
-                </div>
-              </div>
-              {canReview && isPending && (
-                <div className="flex items-center gap-1.5">
-                  <button disabled={offsiteReview.isPending} onClick={() => offsiteReview.mutate({ id: it.id, action: "approve" })} className="rounded-lg bg-success/10 px-2.5 py-1 text-xs font-semibold text-success transition-colors hover:bg-success/20 active:scale-[0.97] disabled:opacity-50">Approve</button>
-                  <button disabled={offsiteReview.isPending} onClick={() => offsiteReview.mutate({ id: it.id, action: "reject" })} className="rounded-lg bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.97] disabled:opacity-50">Reject</button>
-                </div>
-              )}
-            </div>
-          );
-        })}
-        {rows.map((r) => {
-          const isPending = (r.status || "").toUpperCase() === "PENDING";
-          return (
-            <div key={r.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
-              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusTone(r.status)}`}>{statusLabel(r.status)}</span>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold">{statusLabel(r.type)} {r.user?.name ? <span className="font-normal text-muted-foreground">· {r.user.name}</span> : null}</div>
-                <div className="text-xs text-muted-foreground">{fmtDateShort(r.startDate)} → {fmtDateShort(r.endDate)}{r.reason ? ` · ${r.reason}` : ""}</div>
-              </div>
-              {canReview && isPending && (
-                <div className="flex items-center gap-1.5">
-                  <button disabled={review.isPending} onClick={() => review.mutate({ id: r.id, action: "approve" })} className="rounded-lg bg-success/10 px-2.5 py-1 text-xs font-semibold text-success transition-colors hover:bg-success/20 active:scale-[0.97] disabled:opacity-50">Approve</button>
-                  <button disabled={review.isPending} onClick={() => review.mutate({ id: r.id, action: "reject" })} className="rounded-lg bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.97] disabled:opacity-50">Reject</button>
-                </div>
-              )}
-              {!canReview && isPending && (
-                <button disabled={review.isPending} onClick={() => review.mutate({ id: r.id, action: "cancel" })} className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-accent active:scale-[0.97] disabled:opacity-50">Cancel</button>
-              )}
-            </div>
-          );
-        })}
+        {/* Pending first (both types), so approvals-needed never get buried under approved history. */}
+        {offsitePending.map(renderOffsite)}
+        {rowsPending.map(renderRequest)}
+        {offsiteResolved.map(renderOffsite)}
+        {rowsResolved.map(renderRequest)}
       </div>
       {canReview && pendingTotal > 0 && <div className="border-t border-border bg-warning/10 px-5 py-2 text-xs font-semibold text-warning-foreground">{pendingTotal} pending review</div>}
       {composerOpen && <RequestComposer onClose={() => setComposerOpen(false)} onCreated={invalidate} />}
+    </section>
+  );
+}
+
+/**
+ * Tanggal mulai kerja per orang — the input behind annual-leave eligibility.
+ *
+ * BoD-only, and deliberately a plain list of date fields rather than anything clever: this is data
+ * that only a human knows. NEXUS launched in April 2026, so nothing already stored measures how long
+ * someone has actually worked here, and guessing from account age would rule out everyone who
+ * genuinely qualifies.
+ */
+function EmploymentStartSection() {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["employment-start"], queryFn: () => nexusApi.employmentStartDates(), retry: 1 });
+  const save = useMutation({
+    mutationFn: ({ userId, date }: { userId: string; date: string | null }) => nexusApi.setEmploymentStartDate(userId, date),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["employment-start"] });
+      qc.invalidateQueries({ queryKey: ["attendance-today"] });
+    },
+    onError: (e) => alert(e instanceof Error ? e.message : "Gagal simpan tanggal."),
+  });
+
+  const rows = q.data?.members ?? [];
+  const filled = rows.filter((r) => r.employmentStartDate).length;
+  const eligible = rows.filter((r) => r.eligible).length;
+
+  return (
+    <section className="rounded-3xl border border-border bg-card">
+      <div className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-4">
+        <div className="min-w-0 flex-1">
+          <h2 className="font-display text-base font-bold tracking-tight">Tanggal mulai kerja</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Dasar hak <b>cuti tahunan</b> ({q.data?.quota ?? 12} hari/tahun, reset 1 Januari). Berhak setelah 12 bulan kerja.
+            Yang belum diisi = belum berhak.
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-[11px] font-bold">
+          {filled}/{rows.length} terisi · {eligible} berhak
+        </span>
+      </div>
+      <div className="divide-y divide-border">
+        {q.isLoading && <p className="px-5 py-4 text-sm text-muted-foreground">Loading…</p>}
+        {rows.map((m) => (
+          <div key={m.userId} className="flex flex-wrap items-center gap-3 px-5 py-2.5">
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold">{m.name || m.email}</div>
+              <div className="text-xs text-muted-foreground">
+                {!m.employmentStartDate
+                  ? "Belum diisi — belum bisa ajukan cuti"
+                  : m.eligible
+                    ? "Berhak cuti tahunan"
+                    : `Berhak mulai ${m.eligibleFrom ? new Date(m.eligibleFrom).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : "—"}`}
+              </div>
+            </div>
+            <input
+              type="date"
+              max={new Date().toISOString().slice(0, 10)}
+              defaultValue={m.employmentStartDate ? String(m.employmentStartDate).slice(0, 10) : ""}
+              // Saved on blur, not on every keystroke: a date input fires onChange for each partial
+              // value (0002-01-01 on the way to 2024-...), which the server would rightly reject.
+              onBlur={(e) => {
+                const next = e.target.value || null;
+                const current = m.employmentStartDate ? String(m.employmentStartDate).slice(0, 10) : null;
+                if (next !== current) save.mutate({ userId: m.userId, date: next });
+              }}
+              className="shrink-0 rounded-xl border border-border bg-background px-2 py-1.5 text-sm"
+            />
+            <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold",
+              m.eligible ? "bg-success/10 text-success" : "bg-muted text-muted-foreground")}>
+              {m.eligible ? "berhak" : "belum"}
+            </span>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
@@ -917,17 +1212,58 @@ function RequestComposer({ onClose, onCreated }: { onClose: () => void; onCreate
   const [attachment, setAttachment] = useState<File | null>(null);
 
   const wsm = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 });
+  const todayQ = useQuery({ queryKey: ["attendance-today"], queryFn: () => nexusApi.attendanceToday(), staleTime: 30_000 });
   const myRole = wsm.data?.role ?? "STAFF";
   const canGrant = myRole === "BOD" || myRole === "ONE_ABOVE_ALL"; // BoD ke atas
-  const TYPES = canGrant ? ["LEAVE", "SICK", "PERMIT", "DAY_OFF", "RED_DATE"] : ["PERMIT", "SICK", "DAY_OFF", "RED_DATE"];
-  const isGrantType = type === "LEAVE" || (canGrant && type === "PERMIT");
+  // Cuti tahunan is offered to everyone now; whether it's usable is decided by tenure + quota, not
+  // by role. Shown-but-disabled rather than hidden — an option that vanishes makes people ask why.
+  const TYPES = ["LEAVE", "SICK", "PERMIT", "DAY_OFF", "RED_DATE"];
+  const leave = todayQ.data?.annualLeave;
+  const leaveBlocked = !canGrant && type === "LEAVE" && !(leave?.eligible && (leave?.remaining ?? 0) > 0);
+  const leaveNote = !leave
+    ? null
+    : !leave.eligible
+      ? leave.reason
+      : leave.remaining > 0
+        ? `Sisa cuti tahunan ${leave.year}: ${leave.remaining} dari ${leave.quota} hari.`
+        : `Jatah cuti tahunan ${leave.year} udah habis (${leave.quota} hari terpakai).`;
+  const isGrantType = canGrant && (type === "LEAVE" || type === "PERMIT");
   const grantingToUser = canGrant && isGrantType;
   // Sakit (self-request) wajib lampirin foto surat sakit; Izin boleh lampirin foto (opsional).
-  const attachmentRequired = !canGrant && type === "SICK";
+  // Izin now carries the same evidence check-in does: photo + coordinates + when it was filed.
+  // Without it, izin was the cheapest way to erase an attendance penalty — nothing to verify.
+  const attachmentRequired = !canGrant && (type === "SICK" || type === "PERMIT");
   const showAttachment = type === "SICK" || type === "PERMIT";
+  const needsLocation = !canGrant && type === "PERMIT";
+  const permitBackdated = type === "PERMIT" && !canGrant && startDate < today;
+  const shiftStart = todayQ.data?.myShift?.startTime ?? null;
+  // Preview of how late this filing is, so the warning appears BEFORE submitting rather than as a
+  // surprise on the approver's screen.
+  const lateReportPreview = (() => {
+    if (type !== "PERMIT" || canGrant || startDate !== today || !shiftStart) return null;
+    const [h, m] = shiftStart.split(":").map(Number);
+    const now = new Date();
+    const mins = now.getHours() * 60 + now.getMinutes() - (h * 60 + m);
+    return mins > 0 ? mins : null;
+  })();
+
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [geoError, setGeoError] = useState<string | null>(null);
+  const [geoBusy, setGeoBusy] = useState(false);
+  const askLocation = () => {
+    if (!navigator.geolocation) { setGeoError("Browser kamu nggak support lokasi."); return; }
+    setGeoBusy(true); setGeoError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGeoBusy(false); },
+      () => { setGeoError("Lokasi ditolak. Nyalain izin lokasi buat browser ini dulu."); setGeoBusy(false); },
+      { enableHighAccuracy: true, timeout: 15_000 },
+    );
+  };
+  // Ask as soon as izin is picked — a permission prompt at submit time is where people give up.
+  useEffect(() => { if (needsLocation && !coords) askLocation(); }, [needsLocation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const create = useMutation({
-    mutationFn: () => nexusApi.createAttendanceRequest({ type, startDate, endDate, reason: reason.trim(), targetUserId: grantingToUser && targetUserId ? targetUserId : undefined, supportingDocument: attachment }),
+    mutationFn: () => nexusApi.createAttendanceRequest({ type, startDate, endDate, reason: reason.trim(), targetUserId: grantingToUser && targetUserId ? targetUserId : undefined, supportingDocument: attachment, lat: coords?.lat ?? null, lng: coords?.lng ?? null }),
     onSuccess: () => { onCreated(); onClose(); },
   });
 
@@ -937,13 +1273,44 @@ function RequestComposer({ onClose, onCreated }: { onClose: () => void; onCreate
     <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <h2 className="font-display text-lg font-bold tracking-tight">{grantingToUser ? "Grant a permit to a user" : "New attendance request"}</h2>
-        {!canGrant && <p className="mt-1 text-xs text-muted-foreground">Staff can request <b>Permit</b>, <b>Sick</b>, <b>Day Off</b> & <b>Public Holiday</b>. Sick requires a photo of the doctor’s note. Leave is granted by the BoD.</p>}
+        {!canGrant && <p className="mt-1 text-xs text-muted-foreground">Staff can request <b>Permit</b>, <b>Sick</b>, <b>Day Off</b> & <b>Public Holiday</b>. Sick requires a photo of the doctor’s note. <b>Cuti tahunan</b> needs 12 months of service.</p>}
         <div className="mt-4 space-y-3">
           <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Type
             <select value={type} onChange={(e) => { const v = e.target.value; setType(v); if (v !== "SICK" && v !== "PERMIT") setAttachment(null); }} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary">
               {TYPES.map((t) => <option key={t} value={t}>{statusLabel(t)}</option>)}
             </select>
           </label>
+          {needsLocation && (
+            <div className="space-y-1.5 rounded-xl border border-border bg-background/60 px-3 py-2">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Bukti izin</div>
+              <p className="text-xs text-muted-foreground">Izin wajib pakai <b>foto</b> + <b>lokasi</b>, dan sebaiknya diajukan sebelum jam masuk.</p>
+              {coords ? (
+                <p className="text-xs font-semibold text-success">Lokasi kekunci ({coords.lat.toFixed(5)}, {coords.lng.toFixed(5)})</p>
+              ) : (
+                <button type="button" onClick={askLocation} disabled={geoBusy}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold transition-colors hover:border-primary disabled:opacity-50">
+                  {geoBusy && <Loader2 className="h-3 w-3 animate-spin" />}{geoBusy ? "Ngambil lokasi…" : "Ambil lokasi saya"}
+                </button>
+              )}
+              {geoError && <p className="text-xs font-semibold text-destructive">{geoError}</p>}
+              {permitBackdated && (
+                <p className="text-xs font-semibold text-destructive">Izin nggak bisa buat tanggal yang udah lewat. Minta BoD yang input kalau memang perlu.</p>
+              )}
+              {lateReportPreview != null && !permitBackdated && (
+                <p className="text-xs font-semibold text-warning">
+                  Kamu ngajuin {Math.floor(lateReportPreview / 60) > 0 ? `${Math.floor(lateReportPreview / 60)} jam ` : ""}{lateReportPreview % 60} menit setelah jam masuk ({shiftStart}). Ini kecatat dan kelihatan sama approver.
+                </p>
+              )}
+            </div>
+          )}
+          {type === "LEAVE" && leaveNote && (
+            // Colour follows the MESSAGE, not the viewer's role. A BoD bypasses the gate, but the
+            // note still says "belum diisi" — showing that in green read as approval.
+            <p className={cn("rounded-xl px-3 py-2 text-xs font-semibold",
+              (!leave?.eligible || (leave?.remaining ?? 0) === 0)
+                ? "bg-destructive/10 text-destructive"
+                : "bg-success/10 text-success")}>{leaveNote}</p>
+          )}
           {grantingToUser && (
             <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Grant to
               <select value={targetUserId} onChange={(e) => setTargetUserId(e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary">
@@ -960,7 +1327,7 @@ function RequestComposer({ onClose, onCreated }: { onClose: () => void; onCreate
           {showAttachment && (
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                {type === "SICK" ? `Doctor’s note photo${attachmentRequired ? " (required)" : " (optional)"}` : "Supporting photo (optional)"}
+                {type === "SICK" ? `Doctor’s note photo${attachmentRequired ? " (required)" : " (optional)"}` : `Foto bukti${attachmentRequired ? " (wajib)" : " (opsional)"}`}
               </label>
               <label className={cn("mt-1 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed px-3 py-2.5 text-sm transition-colors hover:border-primary", attachment ? "border-primary/50 bg-primary/5" : "border-border")}>
                 <Camera className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -973,7 +1340,7 @@ function RequestComposer({ onClose, onCreated }: { onClose: () => void; onCreate
           )}
         </div>
         <div className="mt-5 flex items-center gap-2">
-          <button disabled={!reason.trim() || (attachmentRequired && !attachment) || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {grantingToUser && targetUserId ? "Grant permit" : "Submit request"}</button>
+          <button disabled={!reason.trim() || (attachmentRequired && !attachment) || (needsLocation && !coords) || permitBackdated || leaveBlocked || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {grantingToUser && targetUserId ? "Grant permit" : "Submit request"}</button>
           <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent">Cancel</button>
           {create.isError && <span className="text-xs font-semibold text-destructive">{(create.error as Error)?.message ?? "Couldn’t send the request."}</span>}
         </div>

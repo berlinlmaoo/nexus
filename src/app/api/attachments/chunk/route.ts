@@ -162,6 +162,7 @@ export async function POST(request: NextRequest) {
     const filename = sp.get("filename") ?? ""
     const mimeType = sp.get("mime") || "application/octet-stream"
     const taskId = sp.get("taskId") ?? ""
+    const kind = sp.get("kind") === "PROOF" ? "PROOF" : "GENERAL"
     const contentLength = Number(request.headers.get("content-length") ?? "NaN")
 
     // ---- validate the envelope (fail closed on anything malformed) ----
@@ -301,6 +302,7 @@ export async function POST(request: NextRequest) {
           url: `/api/files/attachments/${safeName}`,
           mimeType: resolveMime(mimeType, filename),
           size: assembled,
+          kind,
           taskId,
           uploaderId: userId,
         },

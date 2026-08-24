@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronRight, Plus, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Plus, X } from "lucide-react";
 import {
   nexusApi,
   statusLabel,
@@ -59,11 +59,14 @@ export function ProjectTableView({ project, taskLists, onOpen }: {
   const cfDefs = useMemo(() => cfDefsQ.data?.fields ?? [], [cfDefsQ.data]);
   const cfById = useMemo(() => new Map(cfDefs.map((f) => [f.id, f])), [cfDefs]);
 
-  // Resolve the active columns; drop any cf:<id> whose field was deleted.
+  // Resolve the active columns; drop any cf:<id> whose field was deleted, and drop Status entirely
+  // on calendar-only projects (disableTaskStatus) — the saved column list is left untouched, so
+  // turning the toggle back off restores it.
   const columns = useMemo(() => {
     const raw = project.tableColumns && project.tableColumns.length ? project.tableColumns : DEFAULT_COLUMNS;
-    return raw.filter((c) => (c.startsWith("cf:") ? cfById.has(c.slice(3)) : BUILTIN.some((b) => b.key === c)));
-  }, [project.tableColumns, cfById]);
+    return raw.filter((c) => (c.startsWith("cf:") ? cfById.has(c.slice(3)) : BUILTIN.some((b) => b.key === c)))
+      .filter((c) => !(project.disableTaskStatus && c === "status"));
+  }, [project.tableColumns, cfById, project.disableTaskStatus]);
 
   const colLabel = (key: string) => (key.startsWith("cf:") ? cfById.get(key.slice(3))?.name ?? "Field" : BUILTIN.find((b) => b.key === key)?.label ?? key);
 
@@ -87,13 +90,15 @@ export function ProjectTableView({ project, taskLists, onOpen }: {
   });
 
   const available = [
-    ...BUILTIN.filter((b) => !columns.includes(b.key)),
+    // Status is filtered out of `columns` on calendar-only projects, so exclude it here too —
+    // otherwise it would show up in "add column" as if it were merely hidden.
+    ...BUILTIN.filter((b) => !columns.includes(b.key) && !(project.disableTaskStatus && b.key === "status")),
     ...cfDefs.filter((f) => !columns.includes(`cf:${f.id}`)).map((f) => ({ key: `cf:${f.id}`, label: f.name })),
   ];
 
   // task edit helpers (invalidate on success — the table refetches the project)
   const patchTask = async (taskId: string, payload: Parameters<typeof nexusApi.updateTask>[1]) => {
-    try { await nexusApi.updateTask(taskId, payload); invalidate(); } catch { toast.error("Update failed", { description: "Check your access / session." }); }
+    try { await nexusApi.updateTask(taskId, payload); invalidate(); } catch (e) { toast.error("Update failed", { description: e instanceof Error ? e.message : "Check your access / session." }); }
   };
   const toggleAssignee = async (taskId: string, userId: string, has: boolean) => {
     try { has ? await nexusApi.removeAssignee(taskId, userId) : await nexusApi.addAssignee(taskId, userId); invalidate(); } catch { toast.error("Update failed"); }
@@ -219,6 +224,11 @@ function Cell({ colKey, task, members, cfById, projectId, patchTask, toggleAssig
     const rawCfv = (task.customFieldValues ?? []).find((c) => c.customFieldId === def.id);
     const raw = typeof rawCfv?.value === "string" ? rawCfv.value : "";
     const value = parseCfValue(def.type ?? "", raw);
+    // MULTI_SELECT (e.g. TALENT) can hold many options — rendered inline it stretches the whole table
+    // to the right. In the Table view collapse it to a compact summary + dropdown instead.
+    if ((def.type ?? "").toUpperCase() === "MULTI_SELECT") {
+      return <MultiSelectCell field={def} value={Array.isArray(value) ? (value as string[]) : []} onSet={(v) => setCf(def.id, task.id, v)} />;
+    }
     // key by the persisted raw value so the editor re-seeds its internal state after a save+refetch
     // (CustomFieldInput only reads field.value on mount). No focus loss: values only change on blur/select.
     return <CustomFieldInput key={raw} field={{ ...def, value: value as NexusCustomField["value"] }} projectId={projectId} hideLabel onSet={(v) => setCf(def.id, task.id, v)} />;
@@ -245,6 +255,56 @@ function Cell({ colKey, task, members, cfById, projectId, patchTask, toggleAssig
   if (colKey === "assignee") return <AssigneeCell task={task} members={members} onToggle={(uid, has) => toggleAssignee(task.id, uid, has)} />;
   if (colKey === "tags") return <TagsCell task={task} onSave={(tags) => patchTask(task.id, { tags })} />;
   return null;
+}
+
+// Options list for a select/multi-select custom field (mirrors customFieldChoices in TaskDetailPanel).
+function cfChoices(options: NexusCustomField["options"]): string[] {
+  if (!options) return [];
+  if (Array.isArray(options)) return options.map(String);
+  const o = options as { options?: unknown[]; choices?: unknown[] };
+  if (Array.isArray(o.options)) return o.options.map(String);
+  if (Array.isArray(o.choices)) return o.choices.map(String);
+  return [];
+}
+
+// Compact MULTI_SELECT cell for the Table view: a summary trigger (first pick + "+N") that opens a
+// checklist popover — so a field with many options (e.g. TALENT) doesn't stretch the table sideways.
+function MultiSelectCell({ field, value, onSet }: { field: NexusCustomField; value: string[]; onSet: (v: string[]) => void }) {
+  const choices = cfChoices(field.options);
+  const selected = value.filter(Boolean);
+  const toggle = (c: string) => onSet(selected.includes(c) ? selected.filter((x) => x !== c) : [...selected, c]);
+  // Show any selected values even if they're no longer in the option list, so nothing silently disappears.
+  const extra = selected.filter((s) => !choices.includes(s));
+  const list = [...choices, ...extra];
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button className="flex w-full min-w-0 items-center gap-1 rounded-md border border-transparent px-1 py-1 text-left hover:border-border">
+          {selected.length === 0 ? (
+            <span className="flex-1 text-xs text-muted-foreground">—</span>
+          ) : (
+            <>
+              <span className="min-w-0 flex-1 truncate rounded-full bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary" title={selected.join(", ")}>{selected[0]}</span>
+              {selected.length > 1 && <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-bold text-muted-foreground">+{selected.length - 1}</span>}
+            </>
+          )}
+          <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="max-h-64 w-56 overflow-y-auto p-1">
+        {list.length === 0 && <p className="px-2 py-3 text-center text-xs text-muted-foreground">No options.</p>}
+        {list.map((c) => {
+          const on = selected.includes(c);
+          return (
+            <button key={c} onClick={() => toggle(c)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs hover:bg-accent">
+              <span className={cn("grid h-4 w-4 shrink-0 place-items-center rounded border", on ? "border-primary bg-primary text-primary-foreground" : "border-border")}>{on && <Check className="h-3 w-3" />}</span>
+              <span className="truncate">{c}</span>
+            </button>
+          );
+        })}
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function AssigneeCell({ task, members, onToggle }: { task: NexusTask; members: NexusUser[]; onToggle: (userId: string, has: boolean) => void }) {

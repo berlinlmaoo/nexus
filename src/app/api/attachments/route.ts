@@ -53,6 +53,8 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData()
     const file = formData.get("file") as File | null
     const taskId = formData.get("taskId") as string | null
+    // "PROOF" = the separate "Bukti Pencairan" channel (gate check); anything else = normal attachment.
+    const kind = (formData.get("kind") as string | null) === "PROOF" ? "PROOF" : "GENERAL"
 
     if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 })
     if (!taskId) return NextResponse.json({ error: "taskId is required" }, { status: 400 })
@@ -83,6 +85,7 @@ export async function POST(request: NextRequest) {
         url,
         mimeType: resolveMime(file.type, file.name),
         size: file.size,
+        kind,
         taskId,
         uploaderId: session.user.id,
       },

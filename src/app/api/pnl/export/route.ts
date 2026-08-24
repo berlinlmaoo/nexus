@@ -5,16 +5,8 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { checkPnlAccess } from "@/lib/pnl"
-
-function csvCell(v: string | number | null | undefined): string {
-  if (v === null || v === undefined) return ""
-  let s = String(v)
-  // Excel/Sheets formula-injection guard (CWE-1236): they strip CSV quotes then EVALUATE cells
-  // starting with = + @ tab or -, so neutralize with a leading apostrophe (renders as text).
-  // Numeric columns (Jumlah) bypass csvCell, so real negative amounts are unaffected.
-  if (/^[=+@\t\r-]/.test(s)) s = "'" + s
-  return /[",\n\r;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-}
+// Shared with the spreadsheet export — one copy of the formula-injection guard, not two.
+import { csvCell } from "@/lib/csv"
 
 /** Year-scoped CSV of every transaction (expenses + income payments), Excel/Sheets-friendly. */
 export async function GET(request: NextRequest) {

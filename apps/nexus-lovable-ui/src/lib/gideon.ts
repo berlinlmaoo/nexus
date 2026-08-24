@@ -2,6 +2,7 @@
 // Backend emits `data: {json}\n\n` lines with {type:'text'|'tool_result'|'done'|'error', content}.
 
 export type GideonMessage = { role: "user" | "assistant"; content: string };
+export type GideonTurn = GideonMessage & { tools?: string[] };
 export type GideonEvent =
   | { type: "text"; content: string }
   | { type: "tool_result"; content?: unknown; name?: string }
@@ -49,5 +50,28 @@ export async function streamGideon(
         // ignore malformed frame
       }
     }
+  }
+}
+
+// Chat history is stored server-side per user (GET/DELETE /api/gideon/history), so a conversation
+// survives closing the panel, a refresh, and switching devices.
+export async function loadGideonHistory(): Promise<GideonTurn[]> {
+  try {
+    const res = await fetch("/api/gideon/history", { credentials: "include", headers: { Accept: "application/json" } });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { messages?: GideonTurn[] };
+    return Array.isArray(data.messages) ? data.messages : [];
+  } catch {
+    // An unreachable history endpoint must not block a fresh chat.
+    return [];
+  }
+}
+
+export async function clearGideonHistory(): Promise<boolean> {
+  try {
+    const res = await fetch("/api/gideon/history", { method: "DELETE", credentials: "include" });
+    return res.ok;
+  } catch {
+    return false;
   }
 }

@@ -159,6 +159,26 @@ export async function PATCH(
       return NextResponse.json({ error: "Forbidden: MEMBER role or higher required to update tasks" }, { status: 403 })
     }
 
+    // Gate: a project can require ≥1 attachment before a task may be marked DONE (finance
+    // proof-of-completion). Checked only on the TODO/…→DONE transition, against the task's home project.
+    if (status === "DONE" && existing.status !== "DONE") {
+      const gateProject = await prisma.project.findUnique({
+        where: { id: existing.taskList.projectId },
+        select: { requireAttachmentForDone: true },
+      })
+      if (gateProject?.requireAttachmentForDone) {
+        // Counts ONLY the separate "Bukti Pencairan" (PROOF) channel — form-submission docs / general
+        // attachments (kind=GENERAL) do NOT satisfy the gate.
+        const proofCount = await prisma.attachment.count({ where: { taskId, kind: "PROOF" } })
+        if (proofCount === 0) {
+          return NextResponse.json(
+            { error: "Task ini butuh minimal 1 Bukti Pencairan dulu sebelum bisa ditandai Done.", code: "PROOF_REQUIRED" },
+            { status: 400 }
+          )
+        }
+      }
+    }
+
     const updateData: Record<string, unknown> = {}
     const linkedPlacementData: Record<string, unknown> = {}
     if (title !== undefined) updateData.title = title

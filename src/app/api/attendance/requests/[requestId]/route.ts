@@ -105,6 +105,19 @@ export async function PATCH(
       return NextResponse.json({ error: "Only pending attendance requests can be reviewed." }, { status: 409 })
     }
 
+    // Four-eyes: nobody reviews their own request, whatever their role.
+    //
+    // The team-head branch below let this through for years: a manager leads a team AND is a member
+    // of it, so the "requester is in a team I lead" check matched the manager themselves. That is how
+    // 47 self-approvals happened. The offsite-checkout route already had this guard; this one didn't.
+    // Placed after the `cancel` branch on purpose — withdrawing your OWN request is legitimate.
+    if (attendanceRequest.userId === session.user.id) {
+      return NextResponse.json(
+        { error: "Kamu nggak bisa approve/reject permintaan absen kamu sendiri. Minta approver lain ya.", code: "SELF_REVIEW" },
+        { status: 403 }
+      )
+    }
+
     // A team-scoped MANAGER may review a request when its REQUESTER belongs to a team they lead
     // (checked by team membership, not the request's teamId, which can be null).
     const isTeamHead =

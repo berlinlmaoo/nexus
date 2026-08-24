@@ -198,7 +198,8 @@ function MoreSheet({ open, onClose, isActive, unread }: { open: boolean; onClose
   // Org role gates management-only nav (Control Room + Crew Hub) — hidden from Staff.
   const orgRole = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 }).data?.role;
   const canManageOrg = ["ONE_ABOVE_ALL", "BOD", "MANAGER"].includes(orgRole ?? "");
-  // Threads / Integrity / Ticket show in nav for ALL roles; Manager-and-below land on a "Coming Soon"
+  // Threads / Integrity show in nav for ALL roles; Manager-and-below land on a "Coming Soon"
+  // page there. Ticket is OPEN to everyone since 2026-07-29 (staff see only their own tickets).
   // page (gated inside each route component) — no ETA yet, so we tease, not hide.
   const visibleGroups = moreGroups
     .map((g) => ({ ...g, items: g.items.filter((i) => canManageOrg || (i.url !== "/admin" && i.url !== "/teams")) }))

@@ -163,7 +163,7 @@ export function AppSidebar() {
   const canManageOrg = ["ONE_ABOVE_ALL", "BOD", "MANAGER"].includes(orgRoleQuery.data?.role ?? "");
   const canManageAttendance = ["ONE_ABOVE_ALL", "BOD"].includes(orgRoleQuery.data?.role ?? "");
   const canSeeOracle = orgRoleQuery.data?.role === "ONE_ABOVE_ALL";
-  // Threads / Integrity / Ticket are visible in nav to ALL roles, but Manager-and-below land on a
+  // Threads / Integrity are visible in nav to ALL roles, but Manager-and-below land on a
   // "Coming Soon" page (gated inside each route component) — no ETA yet, so we tease, not hide.
   const MANAGER_ONLY_URLS = new Set(["/admin", "/teams"]);
   const ONE_ABOVE_ALL_URLS = new Set(["/oracle", "/social"]);

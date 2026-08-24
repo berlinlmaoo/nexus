@@ -4,7 +4,13 @@
 // Codex CLI (ChatGPT OAuth, gpt-5.5) to classify it into a structured intent JSON, and return that.
 // Codex ONLY classifies — it never touches the DB; the backend runs every query itself.
 //
-// Run detached:  ORACLE_LLM_SECRET=... node tools/codex-oracle-shim.js
+// PROD runs this under launchd as `com.nexus.gideon-shim`, from a COPY at
+//   ~/Library/Application Support/Nexus/codex-oracle-shim.js
+// (macOS TCC blocks launchd agents from reading ~/Documents). If you edit this file, re-copy it:
+//   cp tools/codex-oracle-shim.js "$HOME/Library/Application Support/Nexus/"
+//   launchctl kickstart -k gui/$(id -u)/com.nexus.gideon-shim
+//
+// Run detached (local only):  ORACLE_LLM_SECRET=... node tools/codex-oracle-shim.js
 // Env:  ORACLE_LLM_SECRET (required, shared with the backend)  ORACLE_LLM_PORT (default 8765)
 const http = require("http")
 const { spawn } = require("child_process")

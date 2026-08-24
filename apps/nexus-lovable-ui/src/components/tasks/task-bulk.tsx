@@ -2,7 +2,8 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState, type
 import { createPortal } from "react-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { CalendarDays, CheckSquare, Copy, CopyPlus, Link2, Trash2, X } from "lucide-react";
+import { CalendarDays, CheckSquare, Copy, CopyPlus, FolderInput, Link2, Trash2, X } from "lucide-react";
+import { CopyToProjectDialog } from "@/components/tasks/CopyToProjectDialog";
 import { cn } from "@/lib/utils";
 import { nexusApi, type NexusTask } from "@/lib/nexus-api";
 import { celebrate } from "@/components/Celebration";
@@ -41,6 +42,7 @@ export function TaskBulkProvider({ projectId, enabled, children }: { projectId: 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [menu, setMenu] = useState<{ task: NexusTask; x: number; y: number } | null>(null);
   const [datePopup, setDatePopup] = useState<{ ids: string[] } | null>(null);
+  const [copyIds, setCopyIds] = useState<string[] | null>(null);
   const lpTimer = useRef<number | undefined>(undefined);
   const lpFired = useRef(false);
 
@@ -93,6 +95,7 @@ export function TaskBulkProvider({ projectId, enabled, children }: { projectId: 
           onDuplicateNow={(ids) => dupMut.mutate({ ids })}
           onDuplicateWithDate={(ids) => { setMenu(null); setDatePopup({ ids }); }}
           onDelete={(ids) => delMut.mutate(ids)}
+          onCopyToProject={(ids) => { setMenu(null); setCopyIds(ids); }}
           onClear={clear}
           datePopup={datePopup}
           onCloseDate={() => setDatePopup(null)}
@@ -100,11 +103,19 @@ export function TaskBulkProvider({ projectId, enabled, children }: { projectId: 
           busy={dupMut.isPending || delMut.isPending}
         />
       )}
+      {copyIds && (
+        <CopyToProjectDialog
+          taskIds={copyIds}
+          sourceProjectId={projectId}
+          onClose={() => setCopyIds(null)}
+          onDone={() => { refresh(); clear(); }}
+        />
+      )}
     </Ctx.Provider>
   );
 }
 
-function BulkLayer({ menu, onCloseMenu, selectedIds, onBeginSelect, onDuplicateNow, onDuplicateWithDate, onDelete, onClear, datePopup, onCloseDate, onConfirmDate, busy }: {
+function BulkLayer({ menu, onCloseMenu, selectedIds, onBeginSelect, onDuplicateNow, onDuplicateWithDate, onDelete, onCopyToProject, onClear, datePopup, onCloseDate, onConfirmDate, busy }: {
   menu: { task: NexusTask; x: number; y: number } | null;
   onCloseMenu: () => void;
   selectedIds: string[];
@@ -112,6 +123,7 @@ function BulkLayer({ menu, onCloseMenu, selectedIds, onBeginSelect, onDuplicateN
   onDuplicateNow: (ids: string[]) => void;
   onDuplicateWithDate: (ids: string[]) => void;
   onDelete: (ids: string[]) => void;
+  onCopyToProject: (ids: string[]) => void;
   onClear: () => void;
   datePopup: { ids: string[] } | null;
   onCloseDate: () => void;
@@ -132,6 +144,7 @@ function BulkLayer({ menu, onCloseMenu, selectedIds, onBeginSelect, onDuplicateN
               onDuplicate={() => { onDuplicateNow([menu.task.id]); onCloseMenu(); }}
               onDuplicateDate={() => onDuplicateWithDate([menu.task.id])}
               onCopyLink={() => { navigator.clipboard?.writeText(`${window.location.origin}/tasks/${menu.task.id}`); celebrate("Link copied"); onCloseMenu(); }}
+              onCopyToProject={() => onCopyToProject([menu.task.id])}
               onDelete={() => onDelete([menu.task.id])}
             />
           </>
@@ -151,6 +164,7 @@ function BulkLayer({ menu, onCloseMenu, selectedIds, onBeginSelect, onDuplicateN
             <span className="px-2 text-sm font-bold tabular-nums">{selectedIds.length} selected</span>
             <button disabled={busy} onClick={() => onDuplicateNow(selectedIds)} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm font-semibold transition-colors hover:bg-accent disabled:opacity-50"><Copy className="h-3.5 w-3.5" /> Duplicate</button>
             <button disabled={busy} onClick={() => onDuplicateWithDate(selectedIds)} title="Duplicate + set due date" className="grid h-8 w-8 place-items-center rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"><CalendarDays className="h-4 w-4" /></button>
+            <button disabled={busy} onClick={() => onCopyToProject(selectedIds)} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm font-semibold transition-colors hover:bg-accent disabled:opacity-50"><FolderInput className="h-3.5 w-3.5" /> Copy to project</button>
             <button disabled={busy} onClick={() => { if (window.confirm(`Delete ${selectedIds.length} task${selectedIds.length === 1 ? '' : 's'}?`)) onDelete(selectedIds); }} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /> Delete</button>
             <button onClick={onClear} className="grid h-8 w-8 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-accent" aria-label="Cancel"><X className="h-4 w-4" /></button>
           </motion.div>
@@ -166,11 +180,11 @@ function BulkLayer({ menu, onCloseMenu, selectedIds, onBeginSelect, onDuplicateN
   );
 }
 
-function ContextMenu({ menu, reduce, onSelect, onDuplicate, onDuplicateDate, onCopyLink, onDelete }: {
+function ContextMenu({ menu, reduce, onSelect, onDuplicate, onDuplicateDate, onCopyLink, onCopyToProject, onDelete }: {
   menu: { task: NexusTask; x: number; y: number }; reduce: boolean | null;
-  onSelect: () => void; onDuplicate: () => void; onDuplicateDate: () => void; onCopyLink: () => void; onDelete: () => void;
+  onSelect: () => void; onDuplicate: () => void; onDuplicateDate: () => void; onCopyLink: () => void; onCopyToProject: () => void; onDelete: () => void;
 }) {
-  const W = 208, H = 240;
+  const W = 208, H = 272;   // +1 row (Copy ke project)
   const left = Math.min(menu.x, window.innerWidth - W - 8);
   const top = Math.min(menu.y, window.innerHeight - H - 8);
   return (

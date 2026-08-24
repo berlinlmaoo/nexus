@@ -23,4 +23,6 @@ export const BUS_EVENTS = {
   NOTIFICATION: "notification",
   SPRINT_UPDATED: "sprint-updated",
   MESSAGE_CREATED: "message-created",
+  SHEET_CELLS: "sheet-cells",
+  SHEET_STRUCTURE: "sheet-structure",
 } as const

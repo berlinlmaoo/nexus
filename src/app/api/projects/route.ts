@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { isSystemAdminUser } from "@/lib/rbac"
+import { ensureProjectSheet } from "@/lib/project-sheets"
 import { ensureProjectFolder } from "@/lib/nas-project"
 
 const projectListSelect = {
@@ -310,6 +311,12 @@ export async function POST(request: NextRequest) {
     // Never blocks project creation — lazy creation in the files route still covers any failure.
     ensureProjectFolder(project.id).catch((err) => {
       console.error("Failed to pre-create NAS folder for project", project.id, err)
+    })
+
+    // Same best-effort deal for the default spreadsheet. The sheets GET seeds lazily anyway (that's
+    // what covers projects created before this feature), so a failure here costs nothing.
+    ensureProjectSheet(project.id, userId).catch((err) => {
+      console.error("Failed to pre-create default sheet for project", project.id, err)
     })
 
     return NextResponse.json(project, { status: 201 })

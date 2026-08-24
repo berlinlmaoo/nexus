@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer"
+import { publicUrl } from "./public-url"
 
 const smtpConfigured = !!(
   process.env.SMTP_HOST &&
@@ -72,6 +73,9 @@ function paragraph(text: string): string {
 }
 
 function button(label: string, url: string): string {
+  // No public URL configured → render nothing. A button that goes to 127.0.0.1 looks like it works
+  // and then dead-ends on the recipient's phone, which is how this bug stayed invisible for months.
+  if (!url) return ""
   return `<div style="margin:24px 0;"><a href="${url}" style="display:inline-block;padding:10px 24px;background:#18181b;color:#fff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:500;">${label}</a></div>`
 }
 
@@ -90,7 +94,9 @@ export interface EmailPayload {
   html: string
 }
 
-const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000"
+// Read per-call, not once at import: a module-level const freezes whatever the env said when the
+// bundle first loaded, and made this impossible to reason about when it turned out to be wrong.
+const link = (path: string) => publicUrl(path)
 
 export function taskAssignedEmail(data: {
   recipientName: string
@@ -108,7 +114,7 @@ export function taskAssignedEmail(data: {
         paragraph(`<strong>${data.assignedBy}</strong> assigned you a task:`) +
         metaRow("Task", data.taskTitle) +
         metaRow("Project", data.projectName) +
-        button("View Task", `${baseUrl}/tasks/${data.taskId}`)
+        button("View Task", link(`tasks/${data.taskId}`))
     ),
   }
 }
@@ -126,7 +132,7 @@ export function taskDueSoonEmail(data: {
       "Task Due Soon",
       paragraph(`Hi ${data.recipientName},`) +
         paragraph(`Your task <strong>${data.taskTitle}</strong> is due on <strong>${data.dueDate}</strong>.`) +
-        button("View Task", `${baseUrl}/tasks/${data.taskId}`)
+        button("View Task", link(`tasks/${data.taskId}`))
     ),
   }
 }
@@ -148,7 +154,7 @@ export function commentMentionEmail(data: {
         `<div style="margin:16px 0;padding:12px 16px;background:#f4f4f5;border-radius:6px;border-left:3px solid #18181b;">
           <p style="margin:0;font-size:13px;color:#3f3f46;line-height:1.5;">${data.commentSnippet}</p>
         </div>` +
-        button("View Comment", `${baseUrl}/tasks/${data.taskId}`)
+        button("View Comment", link(`tasks/${data.taskId}`))
     ),
   }
 }
@@ -169,7 +175,7 @@ export function projectInviteEmail(data: {
         paragraph(`<strong>${data.invitedBy}</strong> invited you to join the project:`) +
         metaRow("Project", data.projectName) +
         metaRow("Role", data.role) +
-        button("Open Project", `${baseUrl}/projects/${data.projectId}`)
+        button("Open Project", link(`projects/${data.projectId}`))
     ),
   }
 }
@@ -190,6 +196,26 @@ export function signupOtpEmail(data: {
           <p style="margin:0;font-size:28px;line-height:1;font-weight:800;letter-spacing:0.24em;color:#18181b;">${data.otpCode}</p>
         </div>` +
         paragraph(`This code expires in ${data.expiresInMinutes} minutes. If you did not request access, you can ignore this email.`)
+    ),
+  }
+}
+
+export function emailChangeOtpEmail(data: {
+  recipientName: string
+  otpCode: string
+  expiresInMinutes: number
+}): EmailPayload {
+  return {
+    to: "",
+    subject: `Your NEXUS email-change code: ${data.otpCode}`,
+    html: wrapHtml(
+      "Confirm Your New Email",
+      paragraph(`Hi ${data.recipientName},`) +
+        paragraph("Someone (hopefully you) asked to change the email on a NEXUS account to this address. Use the code below to confirm it.") +
+        `<div style="margin:20px 0;padding:18px 20px;background:#f4f4f5;border:1px solid #e4e4e7;border-radius:10px;text-align:center;">
+          <p style="margin:0;font-size:28px;line-height:1;font-weight:800;letter-spacing:0.24em;color:#18181b;">${data.otpCode}</p>
+        </div>` +
+        paragraph(`This code expires in ${data.expiresInMinutes} minutes. If you did not request this, you can ignore this email — the account's email will not change.`)
     ),
   }
 }
@@ -233,7 +259,7 @@ export function statusUpdateEmail(data: {
         `<div style="margin:16px 0;padding:12px 16px;background:#f4f4f5;border-radius:6px;">
           <p style="margin:0;font-size:13px;color:#3f3f46;line-height:1.5;">${data.summary}</p>
         </div>` +
-        button("View Project", `${baseUrl}/projects/${data.projectId}`)
+        button("View Project", link(`projects/${data.projectId}`))
     ),
   }
 }

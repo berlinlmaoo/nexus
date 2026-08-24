@@ -17,6 +17,7 @@ import {
   serializeAttendanceRecord,
 } from "@/lib/attendance"
 import { clearLeaveCoveredOpenRecords } from "@/lib/attendance-absence"
+import { ANNUAL_LEAVE_DAYS, checkLeaveEligibility, leaveDaysInYear, leaveYearRange } from "@/lib/annual-leave"
 
 export async function GET() {
   try {
@@ -25,7 +26,8 @@ export async function GET() {
 
     const context = await getAttendanceWorkspaceContext(session.user.id)
     if (!context.workspace) {
-      return NextResponse.json({ error: "No workspace membership found" }, { status: 404 })
+
+    return NextResponse.json({ error: "No workspace membership found" }, { status: 404 })
     }
 
     const attendanceDate = getAttendanceDate()
@@ -175,6 +177,36 @@ export async function GET() {
     }
     const noGeofence = await getMemberNoGeofence(session.user.id, context.workspace.id)
 
+    // Cuti tahunan: eligibility + how many days are left this calendar year. Computed here so the
+    // form can disable the option WITH a reason, instead of letting someone fill it in and get a 403.
+    const leaveMember = await prisma.workspaceMember.findUnique({
+      where: { userId_workspaceId: { userId: session.user.id, workspaceId: context.workspace.id } },
+      select: { employmentStartDate: true },
+    })
+    const leaveEligibility = checkLeaveEligibility(leaveMember?.employmentStartDate ?? null)
+    const { year: leaveYear, start: leaveStart, end: leaveEnd } = leaveYearRange()
+    const leaveTaken = await prisma.attendanceRequest.findMany({
+      where: {
+        userId: session.user.id,
+        type: "LEAVE",
+        status: { in: ["PENDING", "APPROVED"] },
+        startDate: { lte: leaveEnd },
+        endDate: { gte: leaveStart },
+      },
+      select: { startDate: true, endDate: true },
+    })
+    const leaveUsed = leaveTaken.reduce((sum, r) => sum + leaveDaysInYear(r.startDate, r.endDate, leaveYear), 0)
+    const annualLeave = {
+      eligible: leaveEligibility.eligible,
+      reason: leaveEligibility.eligible ? null : leaveEligibility.reason,
+      employmentStartDate: leaveMember?.employmentStartDate ?? null,
+      eligibleFrom: leaveEligibility.since,
+      year: leaveYear,
+      quota: ANNUAL_LEAVE_DAYS,
+      used: leaveUsed,
+      remaining: Math.max(0, ANNUAL_LEAVE_DAYS - leaveUsed),
+    }
+
     return NextResponse.json({
       attendanceDateKey: formatAttendanceDateKey(),
       workspace: context.workspace,
@@ -198,6 +230,10 @@ export async function GET() {
       noGeofence,
       canManageAttendance: context.canManageAttendance,
       canReviewAttendanceRequests: context.canReviewAttendanceRequests,
+      annualLeave,
+      // The viewer's own id, so the approvals list can hide Approve/Reject on their OWN request
+      // instead of offering a button the server will refuse with SELF_REVIEW.
+      viewerId: session.user.id,
     })
   } catch (error) {
     console.error("Error fetching today's attendance:", error)

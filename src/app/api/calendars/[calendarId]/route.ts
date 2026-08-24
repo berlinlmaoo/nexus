@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { ROOM_BOOKING_ROOMS } from "@/lib/validations"
 import { isSystemAdminUser } from "@/lib/rbac"
 
 const MANAGER_ROLES: readonly string[] = ["BOD", "MANAGER", "ONE_ABOVE_ALL"]
@@ -20,6 +21,8 @@ const calendarSelect = {
   name: true,
   color: true,
   projectIds: true,
+  roomSources: true,
+  position: true,
   workspaceId: true,
   createdById: true,
   createdAt: true,
@@ -38,10 +41,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (!(await canManageCalendars(userId, existing.workspaceId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     const body = await request.json().catch(() => ({}))
-    const data: { name?: string; color?: string | null; projectIds?: string[] } = {}
+    const data: { name?: string; color?: string | null; projectIds?: string[]; roomSources?: string[]; position?: number } = {}
     if (typeof body?.name === "string" && body.name.trim()) data.name = body.name.trim()
     if (body?.color === null || typeof body?.color === "string") data.color = body.color || null
     if (Array.isArray(body?.projectIds)) data.projectIds = body.projectIds.filter((x: unknown) => typeof x === "string") as string[]
+    // Canonical room names only — same guard as POST, so an unknown room can't be persisted.
+    if (Array.isArray(body?.roomSources)) data.roomSources = body.roomSources.filter((x: unknown): x is string => typeof x === "string" && (ROOM_BOOKING_ROOMS as readonly string[]).includes(x))
+    if (Number.isInteger(body?.position)) data.position = body.position
 
     const calendar = await prisma.calendar.update({ where: { id: calendarId }, data, select: calendarSelect })
     return NextResponse.json({ calendar })

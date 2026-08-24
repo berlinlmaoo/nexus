@@ -30,12 +30,19 @@ export const SUBJECT_MAX = 140
 export const BODY_MIN = 10
 export const BODY_MAX = 4000
 
+// Evidence photos, oldest-first, so the gallery order matches the order they were picked.
+const ATTACHMENTS_INCLUDE = {
+  orderBy: [{ position: "asc" as const }, { createdAt: "asc" as const }],
+  select: { id: true, url: true, mimeType: true, size: true },
+}
 export const COMPLAINT_LIST_INCLUDE = {
   reporter: { select: { id: true, name: true, avatar: true } },
+  attachments: ATTACHMENTS_INCLUDE,
   _count: { select: { messages: true } },
 }
 export const COMPLAINT_DETAIL_INCLUDE = {
   reporter: { select: { id: true, name: true, avatar: true } },
+  attachments: ATTACHMENTS_INCLUDE,
   resolvedBy: { select: { id: true, name: true } },
   messages: {
     orderBy: { createdAt: "asc" as const },
@@ -44,6 +51,7 @@ export const COMPLAINT_DETAIL_INCLUDE = {
 }
 
 type Person = { id: string; name: string; avatar: string | null }
+type AttachmentRow = { id: string; url: string; mimeType: string; size: number }
 type ComplaintRow = {
   id: string
   category: string
@@ -55,6 +63,7 @@ type ComplaintRow = {
   createdAt: Date
   reporterId: string
   reporter: Person
+  attachments?: AttachmentRow[]
   _count?: { messages: number }
 }
 type MessageRow = {
@@ -82,6 +91,13 @@ export function serializeComplaint(c: ComplaintRow, viewerId: string, viewerIsBo
     category: c.category,
     subject: c.subject,
     evidenceUrl: c.evidenceUrl,
+    // A ticket can carry several photos now. Rows filed before that (and any include that skipped the
+    // relation) fall back to the single legacy column so old tickets still show their evidence.
+    attachments: c.attachments?.length
+      ? c.attachments.map((a) => ({ id: a.id, url: a.url, mimeType: a.mimeType, size: a.size }))
+      : c.evidenceUrl
+        ? [{ id: `legacy-${c.id}`, url: c.evidenceUrl, mimeType: "image/jpeg", size: 0 }]
+        : [],
     status: c.status,
     lastMessageAt: c.lastMessageAt,
     resolvedAt: c.resolvedAt,

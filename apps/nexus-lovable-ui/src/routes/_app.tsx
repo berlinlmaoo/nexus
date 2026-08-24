@@ -25,13 +25,24 @@ function AppLayout() {
   const profile = useQuery({
     queryKey: ["nexus", "profile"],
     queryFn: nexusApi.profile,
-    retry: false,
+    // Getting signed out is the most destructive thing this app can do to someone mid-task, so a
+    // single failed check must not trigger it: give one retry. Non-auth errors keep the default retries.
+    retry: (failureCount, error) => (isAuthError(error) ? failureCount < 1 : failureCount < 3),
+    retryDelay: 800,
+    // Validate the session ONCE per load, not on every window focus. Refetch-on-focus meant every
+    // phone unlock / tab-switch re-checked auth, and a focus refetch left the query `isFetching` — so
+    // the guard below (which defers while fetching) could never fire, leaving a signed-out visitor
+    // stuck on a blank app shell instead of being sent to /login.
+    refetchOnWindowFocus: false,
     staleTime: 60_000,
     enabled: !isPublicAuthRoute,
   });
 
   useEffect(() => {
     if (isPublicAuthRoute) return;
+    // `profile.error` survives in the cache while a refetch is in flight; redirecting on it then
+    // would kick the user out on a stale failure that is about to be disproven.
+    if (profile.isFetching) return;
     if (profile.error && isAuthError(profile.error)) {
       const callbackUrl = location.pathname === "/login" ? "/dashboard" : `${location.pathname}${location.searchStr || ""}`;
       navigate({
@@ -40,7 +51,7 @@ function AppLayout() {
         replace: true,
       });
     }
-  }, [isPublicAuthRoute, location.pathname, location.searchStr, navigate, profile.error]);
+  }, [isPublicAuthRoute, location.pathname, location.searchStr, navigate, profile.error, profile.isFetching]);
 
   // Restore the sidebar collapsed/expanded state from its cookie AFTER mount
   // (SSR renders expanded; applying post-hydration avoids a mismatch).

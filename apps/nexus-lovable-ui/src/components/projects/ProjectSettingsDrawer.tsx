@@ -77,6 +77,8 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
   const [autoAssignIds, setAutoAssignIds] = useState<string[]>(project.autoAssignAssigneeIds ?? []);
   const [autoAssignError, setAutoAssignError] = useState<string | null>(null);
   const [enablePnl, setEnablePnl] = useState(!!project.enablePnlDashboard);
+  const [reqAttach, setReqAttach] = useState(!!project.requireAttachmentForDone);
+  const [noStatus, setNoStatus] = useState(!!project.disableTaskStatus);
   // P&L toggle is BoD-and-above only (financial data) — hidden from managers/staff entirely.
   // Role is checked against THIS project's workspace, not the user's first workspace.
   const wsm = useQuery({
@@ -131,6 +133,14 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
   const togglePnl = (checked: boolean) => {
     setEnablePnl(checked);
     settings.mutate({ enablePnlDashboard: checked }, { onError: () => setEnablePnl(!checked) });
+  };
+  const toggleReqAttach = (checked: boolean) => {
+    setReqAttach(checked);
+    settings.mutate({ requireAttachmentForDone: checked }, { onError: () => setReqAttach(!checked) });
+  };
+  const toggleNoStatus = (checked: boolean) => {
+    setNoStatus(checked);
+    settings.mutate({ disableTaskStatus: checked }, { onError: () => setNoStatus(!checked) });
   };
   const toggleAutoAssign = (checked: boolean) => {
     if (checked && autoAssignIds.length === 0) { setAutoAssignError("Pick at least one member before turning on auto assign."); return; }
@@ -243,6 +253,24 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
               </div>
             )}
 
+            {/* Require ≥1 attachment before a task can be marked Done — finance proof-of-completion */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold">Wajib Bukti Pencairan sebelum Done</div>
+                <p className="mt-0.5 text-xs text-muted-foreground">Task di project ini nggak bisa dipindah ke <b>Done</b> sebelum ada minimal 1 <b>Bukti Pencairan</b> — slot terpisah dari Attachments biasa (dokumen pengajuan dari form nggak ke-hitung). Cocok buat pengajuan finance.</p>
+              </div>
+              <Toggle checked={reqAttach} onChange={toggleReqAttach} disabled={settings.isPending} />
+            </div>
+
+            {/* Calendar-only project (Master Calendar): status/done is noise, so hide it */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold">Mode kalender (matikan status)</div>
+                <p className="mt-0.5 text-xs text-muted-foreground">Buat project yang isinya cuma jadwal, bukan task — misal <b>Master Calendar</b>. Kalau nyala, <b>checkbox Done</b>, <b>pilihan status</b>, dan kolom <b>Status</b> di Table view disembunyiin. Datanya nggak dihapus, tinggal matiin lagi kalau mau balik.</p>
+              </div>
+              <Toggle checked={noStatus} onChange={toggleNoStatus} disabled={settings.isPending} />
+            </div>
+
             {/* auto assign */}
             <div className="space-y-2">
               <div className="flex items-start justify-between gap-3">
@@ -335,9 +363,13 @@ export function ProjectSettingsDrawer({ project, onClose, onDeleted }: { project
           <div className="mt-auto space-y-2 border-t border-border pt-5">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Danger zone</span>
             <div className="flex gap-2">
-              <button onClick={() => duplicate.mutate()} disabled={duplicate.isPending} className="flex-1 rounded-xl border border-border px-3 py-2 text-sm font-semibold transition-colors hover:bg-accent active:scale-[0.98] disabled:opacity-50">
-                {duplicate.isPending ? "Duplicating…" : "Duplicate"}
-              </button>
+              {/* BoD+ only — duplicating clones every task, assignee and member at once. The server
+                  enforces the same gate; this just keeps the button out of everyone else's way. */}
+              {isBod && (
+                <button onClick={() => duplicate.mutate()} disabled={duplicate.isPending} className="flex-1 rounded-xl border border-border px-3 py-2 text-sm font-semibold transition-colors hover:bg-accent active:scale-[0.98] disabled:opacity-50">
+                  {duplicate.isPending ? "Duplicating…" : "Duplicate"}
+                </button>
+              )}
               <button onClick={() => { if (confirm(`Delete project "${project.name}"? This cannot be undone.`)) del.mutate(); }} disabled={del.isPending} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-destructive/10 px-3 py-2 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.98] disabled:opacity-50">
                 <Trash2 className="h-4 w-4" /> Delete
               </button>

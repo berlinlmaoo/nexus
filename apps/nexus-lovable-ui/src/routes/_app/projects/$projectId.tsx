@@ -16,6 +16,7 @@ import { AutomationsView } from "@/components/automations/AutomationsView";
 import { ChatThread } from "@/components/messages/ChatThread";
 import { ProjectFormsView } from "@/components/forms/form-kit";
 import { ProjectFiles } from "@/components/projects/ProjectFiles";
+import { ProjectSheetView } from "@/components/sheets/ProjectSheetView";
 import { ProjectTableView } from "@/components/projects/ProjectTableView";
 import { FinanceDashboardView } from "@/components/finance/FinanceDashboardView";
 import { PnlDashboardView } from "@/components/pnl/PnlDashboardView";
@@ -62,11 +63,12 @@ import {
   Wallet,
   X,
   Zap,
+  Sheet as SheetIcon,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_app/projects/$projectId")({ component: ProjectDetail });
 
-type ViewId = "overview" | "board" | "list" | "table" | "calendar" | "timeline" | "sprints" | "automations" | "pages" | "forms" | "finance" | "pnl" | "files" | "chat";
+type ViewId = "overview" | "board" | "list" | "table" | "sheet" | "calendar" | "timeline" | "sprints" | "automations" | "pages" | "forms" | "finance" | "pnl" | "files" | "chat";
 // cfSelections: per custom-field-id, the set of values to keep (OR within a field, AND across fields).
 type BoardFilters = { query: string; section: string; priority: string; hideDone: boolean; assigneeId: string; cfSelections: Record<string, string[]> };
 const EMPTY_FILTERS: BoardFilters = { query: "", section: "ALL", priority: "ALL", hideDone: false, assigneeId: "ALL", cfSelections: {} };
@@ -82,6 +84,7 @@ const TABS: { id: ViewId; label: string; icon: typeof LayoutGrid }[] = [
   { id: "board", label: "Board", icon: LayoutGrid },
   { id: "list", label: "List", icon: List },
   { id: "table", label: "Table", icon: Table2 },
+  { id: "sheet", label: "Spreadsheet", icon: SheetIcon },
   { id: "calendar", label: "Calendar", icon: CalIcon },
   { id: "timeline", label: "Timeline", icon: GanttChart },
   { id: "sprints", label: "Sprints", icon: Target },
@@ -207,9 +210,18 @@ function ProjectDetail() {
         <TaskBulkProvider projectId={data.id} enabled={!!data.enableTaskBatchDuplicate}>
           {view === "overview" && <OverviewView project={data} tasks={filteredTasks} progress={progress} />}
           {view === "board" && <BoardView project={data} taskLists={listsWithSubtasks} onOpen={setOpenTask} onCreate={setComposerListId} />}
-          {view === "list" && <ListView taskLists={listsWithSubtasks} onOpen={setOpenTask} />}
+          {view === "list" && <ListView taskLists={listsWithSubtasks} onOpen={setOpenTask} hideStatus={!!data.disableTaskStatus} />}
           {view === "table" && <ProjectTableView project={data} taskLists={listsWithSubtasks} onOpen={setOpenTask} />}
-          {view === "calendar" && <CalendarView projectId={data.id} tasks={filteredTasks} onOpen={setOpenTask} onCreate={(due) => { setComposerDueDate(due); setComposerListId(taskLists[0]?.id ?? null); }} onSetDue={(taskId, due) => setTaskDue.mutate({ taskId, dueDate: due })} />}
+          {view === "sheet" && (
+            <ProjectSheetView
+              projectId={data.id}
+              onOpenTask={(taskId) => {
+                const found = allProjTasks.data?.find((t) => t.id === taskId);
+                if (found) setOpenTask(found);
+              }}
+            />
+          )}
+          {view === "calendar" && <CalendarView projectId={data.id} tasks={filteredTasks} hideStatus={!!data.disableTaskStatus} onOpen={setOpenTask} onCreate={(due) => { setComposerDueDate(due); setComposerListId(taskLists[0]?.id ?? null); }} onSetDue={(taskId, due) => setTaskDue.mutate({ taskId, dueDate: due })} />}
           {view === "timeline" && <TimelineView projectId={data.id} taskLists={filteredTaskLists} onOpen={setOpenTask} />}
           {view === "sprints" && <SprintsView project={data} tasks={filteredTasks} onOpenTask={setOpenTask} />}
           {view === "automations" && <AutomationsView projectId={data.id} />}
@@ -440,7 +452,7 @@ function BoardView({ project, taskLists, onOpen, onCreate }: { project: NexusPro
             </div>
             <div className="space-y-3 min-h-32">
               {lane.tasks.map((task) => (
-                <TaskCard key={task.id} task={task} currentProjectId={project.id} onOpen={() => onOpen(task)} onDrag={() => {}} moving={false} />
+                <TaskCard key={task.id} task={task} currentProjectId={project.id} onOpen={() => onOpen(task)} onDrag={() => {}} moving={false} hideStatus={!!project.disableTaskStatus} />
               ))}
             </div>
           </section>
@@ -483,7 +495,7 @@ function BoardView({ project, taskLists, onOpen, onCreate }: { project: NexusPro
               <div className="space-y-3 min-h-32">
                 <button onClick={() => onCreate(list.id)} className="w-full rounded-2xl border border-dashed border-border bg-muted/50 py-3 text-xs font-bold text-muted-foreground transition hover:border-primary/40 hover:text-primary">+ Spawn card</button>
                 {items.map((task) => (
-                  <TaskCard key={task.id} task={task} currentProjectId={project.id} onOpen={() => onOpen(task)} onDrag={() => setDraggingId(task.id)} moving={moveTask.isPending && draggingId === task.id} />
+                  <TaskCard key={task.id} task={task} currentProjectId={project.id} onOpen={() => onOpen(task)} onDrag={() => setDraggingId(task.id)} moving={moveTask.isPending && draggingId === task.id} hideStatus={!!project.disableTaskStatus} />
                 ))}
               </div>
             </section>
@@ -641,7 +653,7 @@ function TaskCfChips({ task, max = 2, className }: { task: NexusTask; max?: numb
   );
 }
 
-function TaskCard({ task, currentProjectId, onOpen, onDrag, moving }: { task: NexusTask; currentProjectId?: string; onOpen: () => void; onDrag: () => void; moving: boolean }) {
+function TaskCard({ task, currentProjectId, onOpen, onDrag, moving, hideStatus }: { task: NexusTask; currentProjectId?: string; onOpen: () => void; onDrag: () => void; moving: boolean; hideStatus?: boolean }) {
   const qc = useQueryClient();
   const bulk = useTaskBulk();
   const cardProps = bulk.bindCard(task, onOpen);
@@ -668,17 +680,20 @@ function TaskCard({ task, currentProjectId, onOpen, onDrag, moving }: { task: Ne
       <CardBody className="gap-3 p-4">
         <div className="flex items-start gap-2">
           <GripVertical className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50" />
-          <button
-            type="button"
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); toggleDone.mutate(); }}
-            disabled={toggleDone.isPending}
-            className="mt-0.5 shrink-0 rounded-full text-muted-foreground transition-colors hover:text-foreground active:scale-90"
-            aria-label={isDone ? "Mark as not done" : "Mark as done"}
-            title={isDone ? "Mark as not done" : "Mark as done"}
-          >
-            {toggleDone.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : isDone ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <Circle className="h-4 w-4 opacity-70" />}
-          </button>
+          {/* Calendar-only projects (disableTaskStatus) have no notion of done — hide the toggle. */}
+          {!hideStatus && (
+            <button
+              type="button"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); toggleDone.mutate(); }}
+              disabled={toggleDone.isPending}
+              className="mt-0.5 shrink-0 rounded-full text-muted-foreground transition-colors hover:text-foreground active:scale-90"
+              aria-label={isDone ? "Mark as not done" : "Mark as done"}
+              title={isDone ? "Mark as not done" : "Mark as done"}
+            >
+              {toggleDone.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : isDone ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <Circle className="h-4 w-4 opacity-70" />}
+            </button>
+          )}
           <div className="min-w-0 flex-1">
             {linkedFrom && <span className="mb-1 block truncate text-[11px] font-semibold text-muted-foreground">From {linkedFrom}</span>}
             {task.parentId && (
@@ -1149,7 +1164,7 @@ function ListRow({ task, onOpen }: { task: NexusTask; onOpen: (task: NexusTask) 
   );
 }
 
-function ListView({ taskLists, onOpen }: { taskLists: NonNullable<NexusProject["taskLists"]>; onOpen: (task: NexusTask) => void }) {
+function ListView({ taskLists, onOpen, hideStatus }: { taskLists: NonNullable<NexusProject["taskLists"]>; onOpen: (task: NexusTask) => void; hideStatus?: boolean }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const toggle = (id: string) => setCollapsed((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const total = taskLists.reduce((n, l) => n + (l.tasks?.length ?? 0), 0);
@@ -1167,7 +1182,7 @@ function ListView({ taskLists, onOpen }: { taskLists: NonNullable<NexusProject["
             <button onClick={() => toggle(list.id)} className="mb-2 flex w-full items-center gap-2 border-b border-border pb-1.5 text-left transition-colors hover:text-primary">
               <ChevronRight className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200", !isCollapsed && "rotate-90")} />
               <span className="font-display text-sm font-semibold tracking-tight">{list.name}</span>
-              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">{doneCount}/{tasks.length}</span>
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">{hideStatus ? tasks.length : `${doneCount}/${tasks.length}`}</span>
             </button>
             {!isCollapsed && (
               <div className="space-y-1.5 rounded-2xl bg-muted/40 p-2">
@@ -1225,7 +1240,7 @@ function calRuleValues(task: NexusTask, rule: CalColorRule): string[] {
   }
 }
 
-function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projectId: string; tasks: NexusTask[]; onOpen: (task: NexusTask) => void; onCreate: (dueDate: string) => void; onSetDue: (taskId: string, dueDate: string) => void }) {
+function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue, hideStatus }: { projectId: string; tasks: NexusTask[]; onOpen: (task: NexusTask) => void; onCreate: (dueDate: string) => void; onSetDue: (taskId: string, dueDate: string) => void; hideStatus?: boolean }) {
   const bulk = useTaskBulk();
   const isMobile = useIsMobile();
   const [colorPanelOpen, setColorPanelOpen] = useState(false);
@@ -1378,7 +1393,7 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
                     <span className="text-xs text-muted-foreground">· {items.length}</span>
                   </div>
                   {items.map((task) => {
-                    const done = isDone(task.status);
+                    const done = !hideStatus && isDone(task.status);
                     const assignee = task.assignees?.[0]?.user;
                     const cs = styleForTask(task);
                     return (
@@ -1420,7 +1435,24 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
                   key={key}
                   onDragOver={(e) => { if (dragTaskId && inMonth) { e.preventDefault(); setDropKey(key); } }}
                   onDragLeave={() => setDropKey((k) => (k === key ? null : k))}
-                  onDrop={(e) => { e.preventDefault(); if (dragTaskId && inMonth) onSetDue(dragTaskId, ymd(day)); setDragTaskId(null); setDropKey(null); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (dragTaskId && inMonth) {
+                      // Dropping a dated task back on its own day is a no-op, not a write.
+                      const src = dated.find((t) => t.id === dragTaskId);
+                      const prev = src?.dueDate ? parseDate(src.dueDate) : null;
+                      const srcKey = prev ? dayKey(prev) : null;
+                      if (srcKey !== key) {
+                        // Moving a task keeps its CLOCK TIME — these calendars hold timed events
+                        // ("10:00 PM"), and sending a bare date would silently reset them to midnight.
+                        // Undated tasks have no time to keep, so they still land on the plain date.
+                        onSetDue(dragTaskId, prev
+                          ? new Date(day.getFullYear(), day.getMonth(), day.getDate(), prev.getHours(), prev.getMinutes(), 0, 0).toISOString()
+                          : ymd(day));
+                      }
+                    }
+                    setDragTaskId(null); setDropKey(null);
+                  }}
                   className={cn("group/cal relative min-h-20 border-r border-t border-border p-1 last:border-r-0 sm:min-h-28 sm:p-1.5", !inMonth && "bg-muted/20", dropKey === key && "bg-primary/10 ring-2 ring-inset ring-primary")}
                 >
                   <div className="mb-1 flex items-center justify-between">
@@ -1430,10 +1462,23 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
                   </div>
                   <div className="space-y-0.5">
                     {dayTasks.slice(0, 3).map((task) => {
-                      const done = isDone(task.status);
+                      const done = !hideStatus && isDone(task.status);
                       const cs = styleForTask(task);
                       return (
-                        <motion.button key={task.id} layoutId={`calendar-taskcard-${task.id}`} data-morph-id={`calendar-taskcard-${task.id}`} style={cs && !done ? { borderRadius: 6, backgroundColor: cs.backgroundColor, color: cs.color, boxShadow: `inset 2px 0 0 ${cs.borderColor}` } : { borderRadius: 6 }} {...bulk.bindCard(task, () => onOpen(task))} title={task.parentId ? `↳ ${task.title} (subtask)` : task.title} className={cn("block w-full truncate px-1.5 py-0.5 text-left text-[10px] font-bold leading-tight", done ? "bg-muted text-muted-foreground line-through" : !cs && (CAL_CHIP[(task.priority ?? "NONE").toUpperCase()] ?? CAL_CHIP.NONE), bulk.isSelected(task.id) && "ring-1 ring-inset ring-primary")}>
+                        // Draggable so a dated task can be moved to another day — the day cells are
+                        // already drop targets (the undated tray uses the same dragTaskId handshake).
+                        <motion.button
+                          key={task.id}
+                          layoutId={`calendar-taskcard-${task.id}`}
+                          data-morph-id={`calendar-taskcard-${task.id}`}
+                          style={cs && !done ? { borderRadius: 6, backgroundColor: cs.backgroundColor, color: cs.color, boxShadow: `inset 2px 0 0 ${cs.borderColor}` } : { borderRadius: 6 }}
+                          {...bulk.bindCard(task, () => onOpen(task))}
+                          draggable
+                          onDragStart={() => setDragTaskId(task.id)}
+                          onDragEnd={() => { setDragTaskId(null); setDropKey(null); }}
+                          title={task.parentId ? `↳ ${task.title} (subtask) — drag to move to another date` : `${task.title} — drag to move to another date`}
+                          className={cn("block w-full cursor-grab truncate px-1.5 py-0.5 text-left text-[10px] font-bold leading-tight active:cursor-grabbing", done ? "bg-muted text-muted-foreground line-through" : !cs && (CAL_CHIP[(task.priority ?? "NONE").toUpperCase()] ?? CAL_CHIP.NONE), dragTaskId === task.id && "opacity-40", bulk.isSelected(task.id) && "ring-1 ring-inset ring-primary")}
+                        >
                           {task.parentId ? `↳ ${task.title}` : task.title}
                         </motion.button>
                       );
@@ -1447,7 +1492,7 @@ function CalendarView({ projectId, tasks, onOpen, onCreate, onSetDue }: { projec
                           <div className="mb-1.5 px-1 text-[11px] font-bold text-muted-foreground">{day.getDate()} {viewMonth.toLocaleDateString("en-US", { month: "short" })} · {dayTasks.length} task{dayTasks.length === 1 ? "" : "s"}</div>
                           <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
                             {dayTasks.map((task) => {
-                              const done = isDone(task.status);
+                              const done = !hideStatus && isDone(task.status);
                               const cs = styleForTask(task);
                               return (
                                 <button key={task.id} type="button" onClick={() => onOpen(task)} style={cs && !done ? { backgroundColor: cs.backgroundColor, color: cs.color, boxShadow: `inset 2px 0 0 ${cs.borderColor}` } : undefined} className={cn("truncate rounded px-1.5 py-1 text-left text-[11px] font-medium transition hover:brightness-95", done ? "bg-muted text-muted-foreground line-through" : !cs && (CAL_CHIP[(task.priority ?? "NONE").toUpperCase()] ?? CAL_CHIP.NONE))}>

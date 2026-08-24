@@ -34,3 +34,23 @@ export function emitSprintUpdated(projectId: string, sprint: Record<string, unkn
 export function emitMessageCreated(conversationId: string, message: Record<string, unknown>) {
   eventBus.emit(BUS_EVENTS.MESSAGE_CREATED, { conversationId, message })
 }
+
+/**
+ * Push a just-written block of cells to everyone else looking at the sheet.
+ *
+ * Emitted from the API route, NOT relayed from the sender's browser: the payload is then whatever
+ * the database actually accepted (already coerced to the column type), and no client can forge a
+ * value into someone else's grid. Same direction every other event in this file travels.
+ */
+export function emitSheetCells(
+  sheetId: string,
+  rows: { id: string; cells: Record<string, unknown>; updatedAt: Date | string }[],
+  actorId: string,
+) {
+  eventBus.emit(BUS_EVENTS.SHEET_CELLS, { sheetId, rows, actorId })
+}
+
+/** Rows added/removed/reordered, or columns changed — the receiver refetches rather than patches. */
+export function emitSheetStructure(sheetId: string, actorId: string) {
+  eventBus.emit(BUS_EVENTS.SHEET_STRUCTURE, { sheetId, actorId })
+}

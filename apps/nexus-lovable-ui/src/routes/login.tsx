@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate, useSearch, Link } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { ArrowRight, Loader2 } from "lucide-react";
 import nexusLogo from "@/assets/nexus-logo.png";
@@ -15,6 +16,7 @@ function getSafeCallbackUrl(value: unknown) {
 
 function LoginPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const search = useSearch({ strict: false }) as { callbackUrl?: string; error?: string };
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -42,6 +44,11 @@ function LoginPage() {
     try {
       const result = await nexusApi.login(emailValue, password, callbackUrl);
       if (!result.ok) throw new Error(result.error || "Login failed");
+      // Drop every cached query before leaving /login. The QueryClient outlives this route, so the
+      // 401 that bounced the user here is still cached: navigating back in would hand `_app` that
+      // stale error and it would redirect straight to /login again — an unbreakable loop that only
+      // a full page reload could clear. Clearing the cache makes the next screen refetch clean.
+      queryClient.clear();
       celebrate("Welcome back, Commander! 🚀");
       setPassword("");
       const target = getSafeCallbackUrl(result.redirectTo || callbackUrl);

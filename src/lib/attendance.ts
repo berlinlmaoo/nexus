@@ -82,6 +82,10 @@ type AttendanceRequestWithRelations = {
   approvalSource: "ADMIN" | "ATTENDANCE_SUPERVISOR" | "TEAM_HEAD" | null
   supportingDocumentUrl: string | null
   supportingDocumentName: string | null
+  submittedLat?: number | null
+  submittedLng?: number | null
+  submittedAddress?: string | null
+  reportDelayMinutes?: number | null
   createdAt: Date
   updatedAt: Date
   reviewedAt: Date | null
@@ -1021,6 +1025,11 @@ export function serializeAttendanceRequest(request: AttendanceRequestWithRelatio
     approvalSource: request.approvalSource,
     supportingDocumentUrl: request.supportingDocumentUrl,
     supportingDocumentName: request.supportingDocumentName,
+    // Izin evidence — the approver's whole basis for telling a real errand from "lupa absen".
+    submittedLat: request.submittedLat ?? null,
+    submittedLng: request.submittedLng ?? null,
+    submittedAddress: request.submittedAddress ?? null,
+    reportDelayMinutes: request.reportDelayMinutes ?? null,
     createdAt: request.createdAt.toISOString(),
     updatedAt: request.updatedAt.toISOString(),
     reviewedAt: request.reviewedAt?.toISOString() ?? null,

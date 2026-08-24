@@ -60,14 +60,62 @@ export type HallOfShameEntry = { id: string; category: string; at: string; repor
 export type HallOfShameOffender = { user: PeerReportUser; count: number };
 export type HallOfShame = { entries: HallOfShameEntry[]; offenders: HallOfShameOffender[] };
 
+// --- Project spreadsheet ---
+export type NexusSheetColumnType = "text" | "number" | "currency" | "date" | "select" | "multiselect" | "checkbox" | "task" | "link";
+export type NexusSheetRuleOp = "gt" | "lt" | "gte" | "lte" | "eq" | "neq" | "contains" | "empty" | "notEmpty";
+export type NexusSheetRuleStyle = "red" | "amber" | "green" | "blue" | "grey" | "bold";
+export type NexusSheetRule = { op: NexusSheetRuleOp; value?: string; style: NexusSheetRuleStyle };
+export type NexusSheetComment = {
+  id: string; rowId: string; columnId: string; body: string;
+  resolvedAt: string | null; createdAt: string; authorId: string;
+  author: { id: string; name: string | null; avatar: string | null };
+};
+/** One cell change, written by the `sheet_row_revisions` Postgres trigger — never by the app. */
+export type NexusSheetRevision = {
+  id: string; rowId: string; columnId: string;
+  oldValue: NexusSheetCellValue | null; newValue: NexusSheetCellValue | null;
+  createdAt: string;
+  /** Null when the person who made the edit has since been deleted (the FK is SET NULL). */
+  author: { id: string; name: string | null; avatar: string | null } | null;
+};
+export type NexusSheetColumnColor = "rose" | "amber" | "green" | "blue" | "violet" | "slate";
+export type NexusSheetColumn = {
+  id: string; name: string; type: NexusSheetColumnType;
+  width?: number; options?: string[];
+  /** Header tint; undefined = the default grey header. */
+  color?: NexusSheetColumnColor;
+  /** Per-choice chip colours, keyed by the choice itself. */
+  optionColors?: Record<string, NexusSheetColumnColor>;
+  rules?: NexusSheetRule[];
+};
+/** A clickable cell: `u` is the URL, `t` the label rendered in its place. */
+export type NexusSheetLink = { t: string; u: string };
+export type NexusSheetCellValue = string | number | boolean;
+export type NexusSheetRow = {
+  id: string; position: number; cells: Record<string, NexusSheetCellValue>;
+  /** Pixels; null means the grid's default. */
+  height: number | null;
+  updatedAt: string;
+};
+export type NexusSheet = {
+  id: string; projectId: string; name: string;
+  columns: NexusSheetColumn[];
+  rows: NexusSheetRow[];
+  /** Resolved server-side — never re-derive role rules in the client. */
+  canEdit: boolean;
+  canManage: boolean;
+};
+
 // --- Complaint & Escalation channel ---
 export type ComplaintStatusKey = "OPEN" | "IN_REVIEW" | "RESOLVED" | "CLOSED";
 export type ComplaintPerson = { id: string; name: string; avatar: string | null };
+export type ComplaintAttachment = { id: string; url: string; mimeType: string; size: number };
 export type Complaint = {
   id: string;
   category: string;
   subject: string;
-  evidenceUrl: string | null;
+  evidenceUrl: string | null;        // legacy single photo = attachments[0]; prefer `attachments`
+  attachments: ComplaintAttachment[];
   status: ComplaintStatusKey;
   lastMessageAt: string;
   resolvedAt: string | null;
@@ -153,6 +201,9 @@ export type NexusProject = {
   autoAssignEnabled?: boolean;
   autoAssignAssigneeIds?: string[];
   enablePnlDashboard?: boolean;
+  requireAttachmentForDone?: boolean;
+  /** Calendar-only project: hide the done checkbox, status select and Table status column. */
+  disableTaskStatus?: boolean;
   tableColumns?: string[] | null;
   _count?: { members?: number; taskLists?: number; tasks?: number };
   members?: Array<{ userId?: string; role?: string; user?: NexusUser }>;
@@ -164,6 +215,19 @@ export type NexusAttendanceToday = {
   activeOfficeCount?: number;
   canManageAttendance?: boolean;
   canReviewAttendanceRequests?: boolean;
+  /** The signed-in user's own id, for hiding self-review controls. */
+  viewerId?: string;
+  /** Cuti tahunan: eligibility + how many days are left this calendar year. */
+  annualLeave?: {
+    eligible: boolean;
+    reason: string | null;
+    employmentStartDate: string | null;
+    eligibleFrom: string | null;
+    year: number;
+    quota: number;
+    used: number;
+    remaining: number;
+  };
   dayOffUsedThisMonth?: number;
   dayOffQuota?: number;
   redDateUsedThisMonth?: number;
@@ -218,6 +282,10 @@ export type NexusAttendanceHistory = {
     reviewedBy?: { id?: string; name?: string | null; email?: string | null } | null;
     hasSupportingDocument?: boolean;
     supportingDocumentUrl?: string | null;
+  submittedLat?: number | null;
+  submittedLng?: number | null;
+  submittedAddress?: string | null;
+  reportDelayMinutes?: number | null;
     supportingDocumentName?: string | null;
     checkInAt?: string | null;
     checkOutAt?: string | null;
@@ -690,6 +758,7 @@ export type NexusMySubmission = {
   status?: "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE" | "CANCELLED" | null;
   stage?: string | null;
   procStatus?: string | null; // "Status" custom field value (null = belum diproses)
+  proofs?: Array<{ id: string; name?: string | null; url?: string | null; mimeType?: string | null; size?: number | null }>; // Bukti Pencairan from the finance team
 };
 
 export type NexusSubmissionDetail = NexusMySubmission & {
@@ -748,6 +817,7 @@ export type NexusTeam = {
   id: string;
   name: string;
   color?: string | null;
+  position?: number;
   members?: Array<{ userId?: string; role?: string; user?: NexusUser | null; isAttendancePrimary?: boolean }>;
   projects?: Array<{ project?: { id: string; name: string; color?: string | null; icon?: string | null; status?: string | null } | null }>;
   workspace?: { name?: string; slug?: string } | null;
@@ -818,6 +888,7 @@ export type NexusAttachment = {
   url?: string | null;
   size?: number | null;
   mimeType?: string | null;
+  kind?: string | null; // "GENERAL" | "PROOF" (Bukti Pencairan)
   createdAt?: string | null;
   uploader?: NexusUser | null;
 };
@@ -961,6 +1032,9 @@ export type NexusCalendar = {
   name: string;
   color?: string | null;
   projectIds: string[];
+  /** Room Booking sources on this calendar — canonical room names (see ROOM_SOURCES). */
+  roomSources?: string[];
+  position?: number;
   workspaceId: string;
   createdById: string;
   createdAt?: string;
@@ -979,6 +1053,19 @@ export type CalendarTaskItem = {
   projectColor?: string | null;
   projectIcon?: string | null;
 };
+
+/** A room booking plotted on a calendar, returned alongside tasks by /api/calendar-tasks. */
+export type CalendarBookingItem = {
+  id: string;
+  title: string;
+  room: string;
+  startsAt: string;
+  endsAt: string;
+  bookedByName?: string | null;
+};
+
+/** The rooms a calendar can pull from — must match ROOM_BOOKING_ROOMS on the backend. */
+export const ROOM_SOURCES = ["Ruang Meeting VIP", "Ruang Meeting", "Studio"] as const;
 
 export type NexusMilestone = {
   id: string;
@@ -1178,7 +1265,7 @@ export const nexusApi = {
   workspaceProjects: (workspaceId: string) => apiFetch<NexusProject[]>(`/api/projects?workspaceId=${encodeURIComponent(workspaceId)}`),
   createProject: (payload: CreateProjectPayload) => apiFetch<NexusProject>("/api/projects", { method: "POST", body: JSON.stringify(payload) }),
   project: (projectId: string) => apiFetch<NexusProject>(`/api/projects/${projectId}`),
-  updateProject: (projectId: string, payload: Partial<Pick<NexusProject, "name" | "description" | "color" | "icon" | "status" | "enableTaskBatchDuplicate" | "autoAssignEnabled" | "autoAssignAssigneeIds" | "enablePnlDashboard">> & { folderId?: string | null; position?: number; tableColumns?: string[] }) => apiFetch<NexusProject>(`/api/projects/${projectId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  updateProject: (projectId: string, payload: Partial<Pick<NexusProject, "name" | "description" | "color" | "icon" | "status" | "enableTaskBatchDuplicate" | "autoAssignEnabled" | "autoAssignAssigneeIds" | "enablePnlDashboard" | "requireAttachmentForDone" | "disableTaskStatus">> & { folderId?: string | null; position?: number; tableColumns?: string[] }) => apiFetch<NexusProject>(`/api/projects/${projectId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteProject: (projectId: string) => apiFetch<{ success?: boolean }>(`/api/projects/${projectId}`, { method: "DELETE" }),
   duplicateProject: (projectId: string) => apiFetch<NexusProject>(`/api/projects/${projectId}/duplicate`, { method: "POST" }),
   workflowBundles: () => apiFetch<{ bundles: NexusWorkflowBundle[] }>("/api/workflow-bundles"),
@@ -1208,6 +1295,10 @@ export const nexusApi = {
   createSection: (projectId: string, name: string) => apiFetch<{ id: string; name: string }>(`/api/projects/${projectId}/sections`, { method: "POST", body: JSON.stringify({ name }) }),
   updateSection: (projectId: string, payload: { id: string; name?: string; position?: number }) => apiFetch<{ id: string; name: string }>(`/api/projects/${projectId}/sections`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteSection: (projectId: string, id: string) => apiFetch<{ success?: boolean }>(`/api/projects/${projectId}/sections`, { method: "DELETE", body: JSON.stringify({ id }) }),
+  employmentStartDates: () =>
+    apiFetch<{ members: { userId: string; name: string | null; email: string | null; avatar: string | null; employmentStartDate: string | null; eligible: boolean; eligibleFrom: string | null }[]; quota: number }>(`/api/attendance/employment-start`),
+  setEmploymentStartDate: (userId: string, date: string | null) =>
+    apiFetch<{ employmentStartDate: string | null; eligibleFrom: string | null; eligible: boolean }>(`/api/attendance/employment-start`, { method: "PATCH", body: JSON.stringify({ userId, date }) }),
   attendanceToday: () => apiFetch<NexusAttendanceToday>("/api/attendance/today"),
   // Backend returns { scope, records: [...] }; older callers expect { rows }. Normalize both → { rows }.
   attendanceHistory: async (query = "scope=workspace"): Promise<NexusAttendanceHistory> => {
@@ -1222,13 +1313,33 @@ export const nexusApi = {
   deductAbsences: (payload?: { from?: string; to?: string }) => apiFetch<{ from: string; to: string; processedDates: string[]; created: number; skipped: number }>("/api/attendance/deduct-absences", { method: "POST", body: JSON.stringify(payload ?? {}) }),
   attendanceOutageRefund: (payload: { date: string; dryRun?: boolean }) => apiFetch<{ ok: boolean; date: string; dryRun: boolean; refundedMembers: number; excludedMembers: number; totalXpRefunded: number; totalDayOffsRestored: number; failed: number; entries: Array<{ userId: string; name: string | null; lateXp: number; noCheckoutXp: number; alphaXp: number; autoDayOffs: number; xpRefund: number; excludedReason: string | null }> }>("/api/attendance/outage-refund", { method: "POST", body: JSON.stringify(payload) }),
   attendanceRequests: (query = "scope=workspace") => apiFetch<{ requests?: NexusAttendanceRequest[] } | NexusAttendanceRequest[]>(`/api/attendance/requests?${query}`),
-  createAttendanceRequest: (payload: { type: string; startDate: string; endDate: string; reason: string; targetUserId?: string; supportingDocument?: File | null }) => {
+  createAttendanceRequest: (payload: { type: string; startDate: string; endDate: string; reason: string; targetUserId?: string; supportingDocument?: File | null; lat?: number | null; lng?: number | null }) => {
     const fd = new FormData();
     fd.set("type", payload.type); fd.set("startDate", payload.startDate); fd.set("endDate", payload.endDate); fd.set("reason", payload.reason);
     if (payload.targetUserId) fd.set("targetUserId", payload.targetUserId);
     if (payload.supportingDocument) fd.set("supportingDocument", payload.supportingDocument);
+    if (payload.lat != null && payload.lng != null) { fd.set("lat", String(payload.lat)); fd.set("lng", String(payload.lng)); }
     return apiFetch<{ request?: NexusAttendanceRequest }>("/api/attendance/requests", { method: "POST", body: fd });
   },
+  // Attendance deductions (BoD): no userId = day-off usage for the whole crew (the table's "sisa
+  // day off"); with userId = that person's XP + day-off penalty log.
+  attendanceDayOffSummary: (month?: string) =>
+    apiFetch<{
+      month: string; defaultQuota: number; redDateQuota: number;
+      members: {
+        userId: string; quota: number; used: number; remaining: number;
+        redDate: { quota: number; used: number; remaining: number };
+        xp: { score: number; level: number; levelName: string };
+      }[];
+    }>(`/api/attendance/deductions${month ? `?month=${month}` : ""}`),
+  attendanceDeductions: (userId: string, month?: string) =>
+    apiFetch<{
+      month: string; userId: string;
+      dayOff: { quota: number; used: number; remaining: number };
+      totalXpLost: number;
+      entries: { id: string; dateKey: string; kind: string; label: string; amount: number; unit: "XP" | "DAY_OFF"; detail: string | null; cleared: boolean }[];
+    }>(`/api/attendance/deductions?userId=${encodeURIComponent(userId)}${month ? `&month=${month}` : ""}`),
+
   attendanceOverride: (payload: { userId: string; date: string; action: "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "CLEAR_PENALTY"; note?: string; checkInAt?: string | null; checkOutAt?: string | null }) =>
     apiFetch<{ ok: boolean; action: string; date: string; refunded: boolean; alreadyCovered?: boolean; canceledRequests?: number; replacedRequests?: number; multiDayRequestsLeft?: number }>("/api/attendance/override", { method: "POST", body: JSON.stringify(payload) }),
   reviewAttendanceRequest: (requestId: string, action: "approve" | "reject" | "cancel") => apiFetch<{ request?: NexusAttendanceRequest }>(`/api/attendance/requests/${requestId}`, { method: "PATCH", body: JSON.stringify({ action }) }),
@@ -1313,7 +1424,17 @@ export const nexusApi = {
   taskDetail: (taskId: string) => apiFetch<NexusTaskDetail>(`/api/tasks/${taskId}`),
   deleteTask: (taskId: string) => apiFetch<{ success?: boolean }>(`/api/tasks/${taskId}`, { method: "DELETE" }),
   // Backend accepts an optional { dueDate } to override the copy's due date (used by batch duplicate).
-  duplicateTask: (taskId: string, dueDate?: string | null) => apiFetch<NexusTask>(`/api/tasks/${taskId}/duplicate`, { method: "POST", body: JSON.stringify(dueDate !== undefined ? { dueDate } : {}) }),
+  /**
+   * Duplicate a task. Pass `taskListId` to copy it into ANOTHER list — which may belong to a
+   * different project; `copiedTo` then reports what couldn't come along (custom fields with no
+   * counterpart there, assignees who aren't members). Omit it for the in-place duplicate.
+   * (The route has always wrapped its result in `{ task }`; the old `NexusTask` signature was wrong.)
+   */
+  duplicateTask: (taskId: string, dueDate?: string | null, taskListId?: string) =>
+    apiFetch<{ task: NexusTask; copiedTo: { projectId: string; droppedAssignees: number; droppedFields: string[] } | null }>(
+      `/api/tasks/${taskId}/duplicate`,
+      { method: "POST", body: JSON.stringify({ ...(dueDate !== undefined ? { dueDate } : {}), ...(taskListId ? { taskListId } : {}) }) },
+    ),
   taskComments: (taskId: string) => apiFetch<{ comments: NexusComment[]; currentUserId?: string }>(`/api/tasks/${taskId}/comments`),
   addComment: (taskId: string, content: string, opts?: { parentId?: string; mentionedUserIds?: string[] }) => apiFetch<NexusComment>(`/api/tasks/${taskId}/comments`, { method: "POST", body: JSON.stringify({ content, ...(opts?.parentId ? { parentId: opts.parentId } : {}), ...(opts?.mentionedUserIds?.length ? { mentionedUserIds: opts.mentionedUserIds } : {}) }) }),
   updateComment: (taskId: string, commentId: string, content: string) => apiFetch<NexusComment>(`/api/tasks/${taskId}/comments/${commentId}`, { method: "PATCH", body: JSON.stringify({ content }) }),
@@ -1367,15 +1488,23 @@ export const nexusApi = {
   rebutPeerReport: (id: string, rebuttal: string) => apiFetch<PeerReport>(`/api/peer-reports/${id}/rebuttal`, { method: "POST", body: JSON.stringify({ rebuttal }) }),
   hallOfShame: () => apiFetch<HallOfShame>("/api/peer-reports/hall-of-shame"),
 
+  // --- Legal document generation (invoice / PKS) ---
+  generateLegalDocument: (taskId: string) =>
+    apiFetch<{
+      number: string; series: string; seriesLabel: string; documentId: string; webViewLink: string;
+      attachments: { id: string; filename: string; url: string }[];
+    }>("/api/legal/documents/generate", { method: "POST", body: JSON.stringify({ taskId }) }),
+
   // --- Complaint & Escalation channel ---
   complaints: (status?: string) => apiFetch<ComplaintList>(`/api/complaints${status && status !== "ALL" ? `?status=${status}` : ""}`),
   complaint: (id: string) => apiFetch<ComplaintDetail>(`/api/complaints/${id}`),
-  createComplaint: (payload: { category: string; subject: string; body: string; evidence: File }) => {
+  createComplaint: (payload: { category: string; subject: string; body: string; evidence: File[] }) => {
     const fd = new FormData();
     fd.set("category", payload.category);
     fd.set("subject", payload.subject);
     fd.set("body", payload.body);
-    fd.set("evidence", payload.evidence);
+    // append, not set — every photo rides under the same "evidence" key
+    for (const file of payload.evidence) fd.append("evidence", file);
     return apiFetch<Complaint>("/api/complaints", { method: "POST", body: fd });
   },
   replyComplaint: (id: string, body: string) => apiFetch<ComplaintDetail>(`/api/complaints/${id}/messages`, { method: "POST", body: JSON.stringify({ body }) }),
@@ -1444,9 +1573,9 @@ export const nexusApi = {
 
   // --- Attachments ---
   taskAttachments: (taskId: string) => apiFetch<NexusAttachment[]>(`/api/attachments?taskId=${encodeURIComponent(taskId)}`),
-  uploadAttachment: (taskId: string, file: File) => {
+  uploadAttachment: (taskId: string, file: File, kind: "GENERAL" | "PROOF" = "GENERAL") => {
     const fd = new FormData();
-    fd.set("taskId", taskId); fd.set("file", file);
+    fd.set("taskId", taskId); fd.set("file", file); fd.set("kind", kind);
     return apiFetch<NexusAttachment>("/api/attachments", { method: "POST", body: fd });
   },
   // XHR variant so we can report upload progress (fetch can't). onProgress gets 0..100.
@@ -1454,7 +1583,7 @@ export const nexusApi = {
   // constant memory (and nginx request-buffering is off for that path). Each chunk is ≤CHUNK_SIZE so it
   // stays under Cloudflare's ~100MB cap. Only genuinely small files use the single-shot path (which
   // buffers the whole file in memory + gets spooled to an nginx temp file), so we keep that band small.
-  uploadAttachmentProgress: (taskId: string, file: File, onProgress: (pct: number) => void): Promise<NexusAttachment> => {
+  uploadAttachmentProgress: (taskId: string, file: File, onProgress: (pct: number) => void, kind: "GENERAL" | "PROOF" = "GENERAL"): Promise<NexusAttachment> => {
     // 10MB per chunk. NOT just "under Cloudflare's 100MB cap" — bodies anywhere near that cap (tested: a
     // 90MB body 502s through the CF tunnel after 30s, an 80MB chunk would upload to the edge then never get
     // a response → progress freezes at the chunk boundary, e.g. ~8% of a 1GB file). 10MB transmits in
@@ -1466,7 +1595,7 @@ export const nexusApi = {
     if (file.size <= CHUNK_THRESHOLD) {
       return new Promise<NexusAttachment>((resolve, reject) => {
         const fd = new FormData();
-        fd.set("taskId", taskId); fd.set("file", file);
+        fd.set("taskId", taskId); fd.set("file", file); fd.set("kind", kind);
         const xhr = new XMLHttpRequest();
         xhr.open("POST", "/api/attachments");
         xhr.withCredentials = true;
@@ -1502,6 +1631,7 @@ export const nexusApi = {
           taskId,
           filename: file.name,
           mime: file.type || "application/octet-stream",
+          kind,
         });
         const xhr = new XMLHttpRequest();
         xhr.open("POST", `/api/attachments/chunk?${qs.toString()}`);
@@ -1590,6 +1720,8 @@ export const nexusApi = {
   bufferApprove: (postId: string, mode: "queue" | "schedule" | "now", dueAt?: string) => apiFetch<{ ok: boolean }>("/api/buffer/approve", { method: "POST", body: JSON.stringify({ postId, mode, dueAt }) }),
   bufferReject: (postId: string) => apiFetch<{ ok: boolean }>("/api/buffer/reject", { method: "POST", body: JSON.stringify({ postId }) }),
   updateProfile: (payload: { name?: string; phoneNumber?: string | null; dndUntil?: string | null; markOnboarded?: boolean }) => apiFetch<{ user?: NexusUser }>("/api/user/profile", { method: "PATCH", body: JSON.stringify(payload) }),
+  requestEmailChange: (email: string) => apiFetch<{ ok: boolean; resendInSeconds?: number }>("/api/user/email/request", { method: "POST", body: JSON.stringify({ email }) }),
+  verifyEmailChange: (email: string, code: string) => apiFetch<{ ok: boolean; email: string }>("/api/user/email/verify", { method: "POST", body: JSON.stringify({ email, code }) }),
   changePassword: (currentPassword: string, newPassword: string) => apiFetch<{ success?: boolean }>("/api/user/password", { method: "PATCH", body: JSON.stringify({ currentPassword, newPassword }) }),
   notificationPreferences: () => apiFetch<{ preferences?: NexusNotificationPrefs }>("/api/notifications/preferences"),
   updateNotificationPreferences: (payload: Partial<NexusNotificationPrefs>) => apiFetch<{ preferences?: NexusNotificationPrefs }>("/api/notifications/preferences", { method: "PATCH", body: JSON.stringify(payload) }),
@@ -1656,6 +1788,130 @@ export const nexusApi = {
   setFinanceValue: (payload: { projectId: string; lineItemId: string; year: number; month: number; amount: number }) => apiFetch<{ value: unknown }>("/api/finance/value", { method: "PATCH", body: JSON.stringify(payload) }),
 
   // --- P&L dashboard (standalone, BoD-only) ---
+  // --- Project spreadsheet ---
+  projectSheets: (projectId: string) =>
+    apiFetch<{ sheets: { id: string; name: string; position: number; rowCount: number }[] }>(
+      `/api/projects/${projectId}/sheets`),
+  sheet: (sheetId: string) => apiFetch<NexusSheet>(`/api/sheets/${sheetId}`),
+  createSheet: (projectId: string, name?: string) =>
+    apiFetch<{ id: string; name: string; position: number }>(`/api/projects/${projectId}/sheets`, { method: "POST", body: JSON.stringify({ name }) }),
+  deleteSheet: (sheetId: string) => apiFetch<{ ok: true }>(`/api/sheets/${sheetId}`, { method: "DELETE" }),
+  updateSheet: (sheetId: string, payload: { name?: string; columns?: NexusSheetColumn[] }) =>
+    apiFetch<{ id: string; name: string; columns: NexusSheetColumn[] }>(`/api/sheets/${sheetId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteSheetColumn: (sheetId: string, columnId: string) =>
+    apiFetch<{ ok: true }>(`/api/sheets/${sheetId}/columns/${columnId}`, { method: "DELETE" }),
+  // One shape for a single blur-save AND a pasted block.
+  /**
+   * Save cells, splitting the write to fit the server's per-request caps.
+   *
+   * The caps (500 rows / 5.000 cells) bound ONE transaction; they were never meant to bound what a
+   * person is allowed to do. Before this, clearing or filling a big selection just failed with
+   * "Maksimal 500 baris sekali kirim" and nothing was saved — the limit leaked out as a rule the user
+   * had to obey. Chunking here rather than at each call site covers every path at once: typing,
+   * paste, fill, clear, undo and redo all funnel through this one function.
+   *
+   * Batches go one after another, not in parallel: they're separate transactions, and interleaving
+   * them would make a mid-way failure land in an order nobody can reason about.
+   */
+  setSheetCells: async (sheetId: string, edits: { rowId: string; values: Record<string, unknown> }[]) => {
+    const MAX_ROWS = 500;
+    const MAX_CELLS = 5000;
+    const batches: { rowId: string; values: Record<string, unknown> }[][] = [];
+    let current: { rowId: string; values: Record<string, unknown> }[] = [];
+    let cells = 0;
+    for (const edit of edits) {
+      const n = Object.keys(edit.values).length;
+      if (current.length && (current.length + 1 > MAX_ROWS || cells + n > MAX_CELLS)) {
+        batches.push(current);
+        current = [];
+        cells = 0;
+      }
+      current.push(edit);
+      cells += n;
+    }
+    if (current.length) batches.push(current);
+
+    let updated = 0;
+    const rows: NexusSheetRow[] = [];
+    for (const batch of batches) {
+      const res = await apiFetch<{ updated: number; rows: NexusSheetRow[] }>(
+        `/api/sheets/${sheetId}/cells`,
+        { method: "PATCH", body: JSON.stringify({ edits: batch }) },
+      );
+      updated += res.updated;
+      rows.push(...res.rows);
+    }
+    return { updated, rows };
+  },
+  /**
+   * Add rows, splitting appends that exceed the server's 1.000-row insert cap.
+   *
+   * Only APPENDS are split. An insert anchored to a row (afterRowId/beforeRowId) always comes from the
+   * right-click menu and is a single row; splitting one would also mean recomputing the anchor between
+   * batches, which is a good way to scatter rows in the wrong order.
+   */
+  addSheetRows: async (
+    sheetId: string,
+    payload: { count?: number; afterRowId?: string; beforeRowId?: string; rows?: Record<string, unknown>[]; positions?: number[] },
+  ) => {
+    const MAX_INSERT = 1000;
+    const anchored = Boolean(payload.afterRowId || payload.beforeRowId || payload.positions);
+    const post = (body: typeof payload) =>
+      apiFetch<{ rows: NexusSheetRow[] }>(`/api/sheets/${sheetId}/rows`, { method: "POST", body: JSON.stringify(body) });
+
+    if (anchored) return post(payload);
+
+    if (payload.rows && payload.rows.length > MAX_INSERT) {
+      const rows: NexusSheetRow[] = [];
+      for (let i = 0; i < payload.rows.length; i += MAX_INSERT) {
+        const res = await post({ ...payload, rows: payload.rows.slice(i, i + MAX_INSERT) });
+        rows.push(...res.rows);
+      }
+      return { rows };
+    }
+    if (!payload.rows && (payload.count ?? 0) > MAX_INSERT) {
+      const rows: NexusSheetRow[] = [];
+      let left = payload.count ?? 0;
+      while (left > 0) {
+        const res = await post({ ...payload, count: Math.min(left, MAX_INSERT) });
+        rows.push(...res.rows);
+        left -= MAX_INSERT;
+      }
+      return { rows };
+    }
+    return post(payload);
+  },
+  reorderSheetRow: (sheetId: string, rowId: string, afterRowId: string | null) =>
+    apiFetch<{ ok: true; position: number }>(`/api/sheets/${sheetId}/rows`, { method: "PATCH", body: JSON.stringify({ rowId, afterRowId }) }),
+  importSheet: (sheetId: string, file: File, mode: "append" | "replace") => {
+    const fd = new FormData();
+    fd.set("file", file);
+    fd.set("mode", mode);
+    return apiFetch<{ imported: number; columns: number; mode: string; dropdowns?: number; links?: number }>(`/api/sheets/${sheetId}/import`, { method: "POST", body: fd });
+  },
+  sheetComments: (sheetId: string) =>
+    apiFetch<{ comments: NexusSheetComment[]; currentUserId: string }>(`/api/sheets/${sheetId}/comments`),
+  addSheetComment: (sheetId: string, payload: { rowId: string; columnId: string; body: string }) =>
+    apiFetch<NexusSheetComment>(`/api/sheets/${sheetId}/comments`, { method: "POST", body: JSON.stringify(payload) }),
+  updateSheetComment: (sheetId: string, payload: { commentId: string; body?: string; resolved?: boolean }) =>
+    apiFetch<NexusSheetComment>(`/api/sheets/${sheetId}/comments`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteSheetComment: (sheetId: string, commentId: string) =>
+    apiFetch<{ ok: true }>(`/api/sheets/${sheetId}/comments?commentId=${encodeURIComponent(commentId)}`, { method: "DELETE" }),
+  /** Omit rowId/columnId for the sheet's recent activity instead of one cell's history. */
+  sheetRevisions: (sheetId: string, cell?: { rowId: string; columnId: string }) =>
+    apiFetch<{ revisions: NexusSheetRevision[] }>(
+      `/api/sheets/${sheetId}/revisions${cell ? `?rowId=${encodeURIComponent(cell.rowId)}&columnId=${encodeURIComponent(cell.columnId)}` : ""}`,
+    ),
+  /** Batched so several selected rows resize in one write; height null resets to the default. */
+  resizeSheetRows: (sheetId: string, heights: { rowId: string; height: number | null }[]) =>
+    apiFetch<{ ok: true; resized: number }>(`/api/sheets/${sheetId}/rows`, {
+      method: "PATCH", body: JSON.stringify({ heights }),
+    }),
+  exportSheet: (sheetId: string, format: "csv" | "xlsx", fallbackName: string) =>
+    downloadFile(`/api/sheets/${sheetId}/export?format=${format}`, fallbackName),
+  deleteSheetRows: (sheetId: string, rowIds: string[]) =>
+    apiFetch<{ deleted: number }>(`/api/sheets/${sheetId}/rows`, { method: "DELETE", body: JSON.stringify({ rowIds }) }),
+
   pnlDashboard: (projectId: string, year: number, month?: number | null) => apiFetch<PnlDashboard>(`/api/pnl/dashboard?projectId=${encodeURIComponent(projectId)}&year=${year}${month ? `&month=${month}` : ""}`),
   pnlCreateExpense: (payload: { projectId: string; date: string; amount: number; description?: string | null; categoryId?: string | null }) => apiFetch<PnlExpense>("/api/pnl/expenses", { method: "POST", body: JSON.stringify(payload) }),
   pnlUpdateExpense: (expenseId: string, payload: { date?: string; amount?: number; description?: string | null; categoryId?: string | null }) => apiFetch<PnlExpense>(`/api/pnl/expenses/${expenseId}`, { method: "PATCH", body: JSON.stringify(payload) }),
@@ -1688,6 +1944,8 @@ export const nexusApi = {
   teams: () => apiFetch<NexusTeam[]>("/api/teams"),
   createTeam: (name: string, color?: string) => apiFetch<NexusTeam>("/api/teams", { method: "POST", body: JSON.stringify(color ? { name, color } : { name }) }),
   deleteTeam: (teamId: string) => apiFetch<{ deleted?: boolean }>("/api/teams", { method: "POST", body: JSON.stringify({ action: "delete-team", teamId }) }),
+  renameTeam: (teamId: string, name: string) => apiFetch<NexusTeam>("/api/teams", { method: "POST", body: JSON.stringify({ action: "rename-team", teamId, name }) }),
+  reorderTeam: (teamId: string, position: number) => apiFetch<NexusTeam>("/api/teams", { method: "POST", body: JSON.stringify({ action: "reorder-team", teamId, position }) }),
   addTeamMember: (teamId: string, userId: string) => apiFetch<unknown>("/api/teams", { method: "POST", body: JSON.stringify({ action: "add-member", teamId, userId }) }),
   removeTeamMember: (teamId: string, userId: string) => apiFetch<unknown>("/api/teams", { method: "POST", body: JSON.stringify({ action: "remove-member", teamId, userId }) }),
   linkTeamProject: (teamId: string, projectId: string) => apiFetch<unknown>("/api/teams", { method: "POST", body: JSON.stringify({ action: "link-project", teamId, projectId }) }),
@@ -1707,10 +1965,10 @@ export const nexusApi = {
   deleteCalendarEvent: (eventId: string) => apiFetch<{ success?: boolean }>(`/api/master-calendar/${eventId}`, { method: "DELETE" }),
   // --- Calendars (saved project-task-aggregating views) ---
   calendars: () => apiFetch<{ calendars: NexusCalendar[] }>("/api/calendars"),
-  createCalendar: (payload: { name: string; workspaceId: string; color?: string | null; projectIds?: string[] }) => apiFetch<{ calendar: NexusCalendar }>("/api/calendars", { method: "POST", body: JSON.stringify(payload) }),
-  updateCalendar: (calendarId: string, payload: { name?: string; color?: string | null; projectIds?: string[] }) => apiFetch<{ calendar: NexusCalendar }>(`/api/calendars/${calendarId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  createCalendar: (payload: { name: string; workspaceId: string; color?: string | null; projectIds?: string[]; roomSources?: string[] }) => apiFetch<{ calendar: NexusCalendar }>("/api/calendars", { method: "POST", body: JSON.stringify(payload) }),
+  updateCalendar: (calendarId: string, payload: { name?: string; color?: string | null; projectIds?: string[]; roomSources?: string[]; position?: number }) => apiFetch<{ calendar: NexusCalendar }>(`/api/calendars/${calendarId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteCalendar: (calendarId: string) => apiFetch<{ success?: boolean }>(`/api/calendars/${calendarId}`, { method: "DELETE" }),
-  calendarTasks: (projectIds: string[], rangeStart: string, rangeEnd: string) => apiFetch<{ tasks: CalendarTaskItem[] }>(`/api/calendar-tasks?projectIds=${encodeURIComponent(projectIds.join(","))}&rangeStart=${encodeURIComponent(rangeStart)}&rangeEnd=${encodeURIComponent(rangeEnd)}`),
+  calendarTasks: (projectIds: string[], rangeStart: string, rangeEnd: string, rooms: string[] = []) => apiFetch<{ tasks: CalendarTaskItem[]; bookings?: CalendarBookingItem[] }>(`/api/calendar-tasks?projectIds=${encodeURIComponent(projectIds.join(","))}&rooms=${encodeURIComponent(rooms.join(","))}&rangeStart=${encodeURIComponent(rangeStart)}&rangeEnd=${encodeURIComponent(rangeEnd)}`),
   // --- Room bookings ---
   roomBookings: (rangeStart: string, rangeEnd: string, room?: string) => apiFetch<{ bookings: NexusRoomBooking[] }>(`/api/room-bookings?rangeStart=${encodeURIComponent(rangeStart)}&rangeEnd=${encodeURIComponent(rangeEnd)}${room ? `&room=${encodeURIComponent(room)}` : ""}`),
   createRoomBooking: (payload: RoomBookingPayload) => apiFetch<{ booking: NexusRoomBooking }>("/api/room-bookings", { method: "POST", body: JSON.stringify(payload) }),

@@ -179,6 +179,8 @@ export async function PATCH(
       autoAssignEnabled,
       autoAssignAssigneeIds,
       enablePnlDashboard,
+      requireAttachmentForDone,
+      disableTaskStatus,
       tableColumns,
     } = body
 
@@ -257,6 +259,8 @@ export async function PATCH(
         ...(Number.isInteger(position) && position >= 0 && { position }),
         ...(enableTaskBatchDuplicate !== undefined && { enableTaskBatchDuplicate }),
         ...(enablePnlDashboard !== undefined && { enablePnlDashboard: !!enablePnlDashboard }),
+        ...(requireAttachmentForDone !== undefined && { requireAttachmentForDone: !!requireAttachmentForDone }),
+        ...(disableTaskStatus !== undefined && { disableTaskStatus: !!disableTaskStatus }),
         ...(Array.isArray(tableColumns) && { tableColumns: tableColumns.filter((c: unknown) => typeof c === "string") }),
         ...(normalizedAutoAssignConfig && normalizedAutoAssignConfig),
       },

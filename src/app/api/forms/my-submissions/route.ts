@@ -31,6 +31,12 @@ export async function GET() {
               select: { value: true },
               take: 1,
             },
+            // "Bukti Pencairan" the finance team attaches on completion — surfaced to the submitter here.
+            attachments: {
+              where: { kind: "PROOF" },
+              orderBy: { createdAt: "desc" },
+              select: { id: true, filename: true, url: true, mimeType: true, size: true },
+            },
           },
         },
       },
@@ -63,6 +69,7 @@ export async function GET() {
       status: s.task?.status ?? null, // task enum (TODO/DONE/…)
       stage: s.task?.taskList?.name ?? null, // board column (taskList)
       procStatus: s.task?.customFieldValues?.[0]?.value ?? null, // "Status" custom field — null = belum diproses
+      proofs: (s.task?.attachments ?? []).map((a) => ({ id: a.id, name: a.filename, url: a.url, mimeType: a.mimeType, size: a.size })), // Bukti Pencairan
     }))
 
     return NextResponse.json({ submissions: rows, statusColumns })
