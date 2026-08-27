@@ -61,6 +61,35 @@ Di Xcode:
 
 Alur harian OpenChamber (nulis kode) → Mac (build): lihat **[CARA-KERJA.md](CARA-KERJA.md)**.
 
+## Build tanpa GUI Xcode
+
+**IPA cuma bisa dibikin di macOS** — compiler iOS, SDK, dan code signing nggak ada di
+Linux/Proxmox. Yang bisa dihilangkan cuma GUI-nya.
+
+```sh
+./build.sh check    # cek compile doang — cepat, TANPA signing  ← dipakai sehari-hari
+./build.sh run      # build + pasang ke iPhone yang kecolok
+./build.sh ipa      # archive + export .ipa ke build/ipa/
+```
+
+`check` yang paling sering kepakai: dia nangkap **semua** error compile tanpa perlu
+signing, provisioning, device, atau packaging — persis yang dibutuhin buat verifikasi
+perubahan dari OpenChamber. IPA cuma perlu kalau mau bagiin app-nya ke orang lain.
+
+**Apple ID gratis:** `run` jalan (rebuild tiap 7 hari), tapi `ipa` sering gagal export —
+personal team nggak dapet provisioning profile yang bisa didistribusi. Butuh Apple
+Developer Program berbayar ($99/th) buat IPA yang beneran kepakai.
+
+### CI (opsional, tapi disarankan)
+
+`.github/workflows/ios-build.yml` nge-compile tiap push, jadi kode yang gagal build
+ketahuan dalam menit — bukan setelah numpuk belasan commit. Nggak butuh sertifikat
+(signing dimatiin).
+
+⚠️ Runner macOS di repo **private** dihitung **10x** menit. Kalau jatah Actions tipis,
+daftarin Mac sendiri sebagai self-hosted runner (gratis) lalu ganti `runs-on: macos-15`
+jadi `runs-on: self-hosted`.
+
 ### Scheme
 
 `⌘R` biasa jalanin **Release** (`-O`) — Debug SwiftUI di device jauh lebih lambat dan itu penyebab
