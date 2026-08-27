@@ -20,6 +20,15 @@ struct AttendanceView: View {
     @State private var pendingCoords: (lat: Double, lng: Double)?
     @State private var showOffsite = false
     @State private var offsiteReason = ""
+    @State private var reflection = ""
+
+    /// The server rejects a check-out whose reflection is shorter than this (mirrors the web's
+    /// "Daily Reflection · required before check-out · min 200 characters").
+    private let reflectionMin = 200
+    private var reflectionCount: Int { reflection.trimmingCharacters(in: .whitespacesAndNewlines).count }
+    private var reflectionOK: Bool { reflectionCount >= reflectionMin }
+    /// Only gate the flow while an open check-in is actually waiting to be closed.
+    private var needsReflection: Bool { (checkedIn || forcePending) && !checkedOut }
 
     enum Action { case checkIn, checkOut }
     struct Banner: Identifiable { let id = UUID(); let text: String; let good: Bool }
@@ -42,6 +51,7 @@ struct AttendanceView: View {
                     hero
                     if loading { loadingRow }
                     if let error { errorBanner(error) }
+                    if needsReflection { reflectionCard }
                     presenceButtons
                     if showOffsite { offsitePrompt }
                     if forcePending { infoBanner("⚠️ Masih ada absen sebelumnya yang belum di-check-out. Pencet PRESENCE OUT dulu buat nutup — baru bisa absen lagi.", tone: .warning) }
@@ -167,7 +177,8 @@ struct AttendanceView: View {
             presenceButton(title: "Presence In", system: "arrow.right.to.line", tint: Color(hex: "#10b981"),
                            action: .checkIn, disabled: checkedIn || forcePending || pending)
             presenceButton(title: "Presence Out", system: "arrow.left.to.line", tint: Color(hex: "#f43f5e"),
-                           action: .checkOut, disabled: (!checkedIn && !forcePending) || checkedOut || pending)
+                           action: .checkOut,
+                           disabled: (!checkedIn && !forcePending) || checkedOut || pending || !reflectionOK)
         }
     }
 
@@ -215,6 +226,33 @@ struct AttendanceView: View {
         .padding(12)
         .background(Color(hex: "#fffbeb"), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color(hex: "#fcd34d")))
+    }
+
+    /// The daily reflection the server demands before it will accept a check-out. Without this the
+    /// native app could never close a shift — the API just kept returning the 200-character error.
+    private var reflectionCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Refleksi harian").font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
+                Spacer()
+                Text("\(reflectionCount)/\(reflectionMin)")
+                    .font(NXFont.text(12, .bold)).monospacedDigit()
+                    .foregroundStyle(reflectionOK ? NX.success : NX.warning)
+            }
+            Text("Wajib diisi sebelum check-out. Ceritain apa yang kamu kerjain hari ini.")
+                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            TextField("Hari ini aku ngerjain…", text: $reflection, axis: .vertical)
+                .font(NXFont.text(14)).lineLimit(5...12)
+                .padding(10)
+                .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(reflectionOK ? NX.success.opacity(0.45) : NX.border))
+            if !reflectionOK {
+                Text("Kurang \(reflectionMin - reflectionCount) karakter lagi buat bisa check-out.")
+                    .font(NXFont.text(11, .semibold)).foregroundStyle(NX.warning)
+            }
+        }
+        .nexusCard()
     }
 
     /// Shown while `/api/attendance/today` is in flight — the hero's IN/OUT read "--:--" until it
@@ -276,13 +314,14 @@ struct AttendanceView: View {
             let outcome: AttendanceOutcome = try await {
                 switch action {
                 case .checkIn: return try await APIClient.shared.checkIn(lat: fix.latitude, lng: fix.longitude, selfie: selfie)
-                case .checkOut: return try await APIClient.shared.checkOut(lat: fix.latitude, lng: fix.longitude, selfie: selfie)
+                case .checkOut: return try await APIClient.shared.checkOut(lat: fix.latitude, lng: fix.longitude, selfie: selfie, reflection: reflection)
                 }
             }()
             switch outcome {
             case .success:
                 Haptics.success()
                 banner = Banner(text: action == .checkIn ? "Check-in berhasil ✓" : "Check-out berhasil ✓", good: true)
+                if action == .checkOut { reflection = "" }
                 await load()
             case .outsideRadius:
                 Haptics.warning()
@@ -297,9 +336,12 @@ struct AttendanceView: View {
         busy = true; defer { busy = false }
         do {
             let outcome = try await APIClient.shared.checkOut(lat: coords.lat, lng: coords.lng, selfie: selfie,
-                                                              offsite: true, reason: offsiteReason.trimmingCharacters(in: .whitespaces))
+                                                              reflection: reflection, offsite: true,
+                                                              reason: offsiteReason.trimmingCharacters(in: .whitespaces))
             if case .success = outcome {
-                banner = Banner(text: "Checkout terkirim — nunggu approval BoD ⏳", good: true); await load()
+                banner = Banner(text: "Checkout terkirim — nunggu approval BoD ⏳", good: true)
+                reflection = ""
+                await load()
             }
         } catch APIError.unauthorized { auth.logout() }
         catch { banner = Banner(text: (error as? LocalizedError)?.errorDescription ?? "Gagal.", good: false) }

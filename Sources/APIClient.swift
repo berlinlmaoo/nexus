@@ -817,8 +817,13 @@ struct APIClient {
         return try await attendanceUpload("/api/attendance/check-in", fields: fields, selfie: selfie)
     }
 
-    func checkOut(lat: Double, lng: Double, selfie: Data, offsite: Bool = false, reason: String? = nil) async throws -> AttendanceOutcome {
+    /// `reflection` is REQUIRED by the server on check-out (min 200 chars) — same field the web
+    /// sends. Without it the API rejects with "Refleksi harian wajib diisi minimal 200 karakter".
+    func checkOut(lat: Double, lng: Double, selfie: Data, reflection: String,
+                  offsite: Bool = false, reason: String? = nil) async throws -> AttendanceOutcome {
         var fields = ["lat": String(lat), "lng": String(lng)]
+        let trimmedReflection = reflection.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedReflection.isEmpty { fields["reflection"] = trimmedReflection }
         if offsite {
             fields["offsite"] = "1"
             if let reason, !reason.isEmpty { fields["reason"] = reason }

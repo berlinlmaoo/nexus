@@ -9,6 +9,7 @@ struct DashboardView: View {
     @State private var mission: (done: Int, total: Int) = (0, 0)
     @State private var unread = 0
     @State private var loaded = false
+    @State private var selectedDay = Date()
 
     // stat-card morph (web StatCardButton/StatCardModal — shared-id hero)
     @State private var projectsList: [Project] = []
@@ -73,6 +74,8 @@ struct DashboardView: View {
                     statCards
                     questsCard
                     xpRulesCard
+                    quickActions
+                    dailyCalendarCard
                     profileCard
                     Color.clear.frame(height: 8)
                 }
@@ -457,6 +460,108 @@ struct DashboardView: View {
             Image(systemName: "chevron.down").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.mutedFg)
         }
         .nexusCard(padding: 14)
+    }
+
+    // MARK: quick actions (Chat · Absensi)
+
+    private var quickActions: some View {
+        HStack(spacing: 12) {
+            quickTile("Chat", "bubble.left.and.bubble.right.fill", NX.blue) { MessagesView() }
+            quickTile("Absensi", "clock.badge.checkmark.fill", NX.success) { AttendanceView() }
+        }
+    }
+
+    private func quickTile<D: View>(_ title: String, _ icon: String, _ tint: Color,
+                                    @ViewBuilder dest: @escaping () -> D) -> some View {
+        NavigationLink { dest() } label: {
+            VStack(spacing: 8) {
+                Image(systemName: icon).font(.system(size: 20, weight: .semibold)).foregroundStyle(tint)
+                    .frame(width: 44, height: 44)
+                    .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                Text(title).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+            }
+            .frame(maxWidth: .infinity)
+            .nexusCard(padding: 14, radius: 18)
+        }
+        .buttonStyle(PressableCardStyle())
+    }
+
+    // MARK: personal daily calendar
+    //
+    // Built from the caller's own assigned tasks (already loaded for the Mission stat), so it costs
+    // no extra request: a 14-day strip with a dot on days that have something due + the picked day's list.
+
+    private var calDays: [Date] {
+        let start = ProjDate.cal.startOfDay(for: Date())
+        return (0..<14).compactMap { ProjDate.cal.date(byAdding: .day, value: $0, to: start) }
+    }
+    private func tasksDue(on day: Date) -> [MyTask] {
+        tasksList.filter {
+            guard let d = ProjDate.parse($0.dueDate) else { return false }
+            return ProjDate.cal.isDate(d, inSameDayAs: day)
+        }
+    }
+
+    private var dailyCalendarCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Agenda harian").font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground)
+                Spacer()
+                Text(ProjDate.fmt("MMMM yyyy").string(from: selectedDay).capitalized)
+                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(calDays, id: \.self) { d in dayChip(d) }
+                }
+            }
+            let items = tasksDue(on: selectedDay)
+            if items.isEmpty {
+                Text("Nggak ada task jatuh tempo di tanggal ini.")
+                    .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).padding(.vertical, 4)
+            } else {
+                ForEach(items) { t in dayRow(t) }
+            }
+        }
+        .nexusCard()
+    }
+
+    private func dayChip(_ d: Date) -> some View {
+        let on = ProjDate.cal.isDate(d, inSameDayAs: selectedDay)
+        let count = tasksDue(on: d).count
+        return Button { selectedDay = d } label: {
+            VStack(spacing: 3) {
+                Text(ProjDate.fmt("EEE").string(from: d)).font(NXFont.text(10, .semibold))
+                    .foregroundStyle(on ? Color.white.opacity(0.85) : NX.mutedFg)
+                Text("\(ProjDate.cal.component(.day, from: d))").font(NXFont.display(16, .bold))
+                    .foregroundStyle(on ? Color.white : NX.foreground)
+                Circle().fill(count > 0 ? (on ? Color.white : NX.violet) : Color.clear)
+                    .frame(width: 5, height: 5)
+            }
+            .frame(width: 46).padding(.vertical, 9)
+            .background(on ? NX.violet : NX.muted.opacity(0.5),
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func dayRow(_ t: MyTask) -> some View {
+        NavigationLink { TaskDetailView(taskId: t.id) } label: {
+            HStack(spacing: 10) {
+                Image(systemName: t.isDone ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 15)).foregroundStyle(t.isDone ? NX.success : NX.mutedFg.opacity(0.5))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(t.title ?? "Untitled").font(NXFont.text(13, .semibold))
+                        .foregroundStyle(t.isDone ? NX.mutedFg : NX.foreground)
+                        .strikethrough(t.isDone).lineLimit(1)
+                    Text(t.laneName).font(NXFont.text(10)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                if let p = t.priority, p.uppercased() != "NONE" { NexusChip(text: p.capitalized, tone: prioTone(p)) }
+            }
+            .padding(.vertical, 4)
+        }
+        .buttonStyle(.plain)
     }
 
     private var profileCard: some View {
