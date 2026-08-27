@@ -540,6 +540,7 @@ final class AppLanguage {
         "Mon": "Sen", "Tue": "Sel", "Wed": "Rab", "Thu": "Kam",
         "Fri": "Jum", "Sat": "Sab", "Sun": "Min",
         "Room bookings — VIP, Meeting, Studio.": "Booking ruangan — VIP, Meeting, Studio.",
+        "Auto-assign to:": "Assign otomatis ke:",
     ]
 }
 

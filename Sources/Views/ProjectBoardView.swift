@@ -15,9 +15,34 @@ struct ProjectDetailView: View {
     @State private var showCreate = false
     @State private var showSettings = false
     @State private var prefillDue: Date?
+    @State private var isBod = false
     @Environment(\.dismiss) private var dismiss
 
     private var canCreate: Bool { !(detail?.taskLists?.isEmpty ?? true) }
+
+    // MARK: which tabs this project actually gets
+    //
+    // Finance and P&L are opt-in per project and OFF by default — they were showing on every
+    // project here. Rules mirror the web's tab filter exactly:
+    //   Po.filter(t => (t.id !== "finance" || /finance/i.test(project.name))
+    //               && (t.id !== "pnl"     || (!!project.enablePnlDashboard && isBoD)))
+
+    /// Web gates Finance on the PROJECT NAME containing "finance" — there is no backend flag for it.
+    private var financeEnabled: Bool {
+        (detail?.name ?? projectName).range(of: "finance", options: .caseInsensitive) != nil
+    }
+    /// P&L needs the per-project flag AND a BoD-tier viewer.
+    private var pnlEnabled: Bool { (detail?.enablePnlDashboard ?? false) && isBod }
+
+    private var visibleTabs: [ProjectTab] {
+        ProjectTab.allCases.filter {
+            switch $0 {
+            case .finance: return financeEnabled
+            case .pnl:     return pnlEnabled
+            default:       return true
+            }
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -105,7 +130,7 @@ struct ProjectDetailView: View {
     private var tabBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 2) {
-                ForEach(ProjectTab.allCases) { t in
+                ForEach(visibleTabs) { t in
                     Button { tab = t } label: {
                         VStack(spacing: 5) {
                             HStack(spacing: 5) {
@@ -134,8 +159,13 @@ struct ProjectDetailView: View {
         case .chat:  ProjectChatTab(projectId: projectId, projectName: projectName)
         case .sprints: SprintsTab(projectId: projectId, onOpen: { openTaskId = $0 })
         case .automations: AutomationsTab(projectId: projectId)
-        case .finance: FinanceTab(projectId: projectId)
-        case .pnl: PnlTab(projectId: projectId)
+        // Belt-and-braces: `tab` could still hold a value that just became hidden after a reload.
+        case .finance:
+            if financeEnabled { FinanceTab(projectId: projectId) }
+            else { TabEmpty(icon: "banknote", text: T("Finance isn't available for this project yet.")) }
+        case .pnl:
+            if pnlEnabled { PnlTab(projectId: projectId) }
+            else { TabEmpty(icon: "dollarsign.circle", text: T("P&L isn't enabled / BoD access required.")) }
         default:
             if loading {
                 ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -194,6 +224,12 @@ struct ProjectDetailView: View {
             // subtasks into their lane (under the parent) for the board + list. Calendar/Timeline use detail.
             let all = (try? await APIClient.shared.projectTasks(projectId)) ?? []
             lanes = Self.mergeSubtasks(into: d.taskLists ?? [], all: all)
+            // P&L visibility depends on the viewer's org role, not just the project flag.
+            if let role = (try? await APIClient.shared.workspaceInfo())?.role {
+                isBod = role == "BOD" || role == "ONE_ABOVE_ALL"
+            }
+            // If the selected tab just became hidden (e.g. the flag was turned off), fall back.
+            if !visibleTabs.contains(tab) { tab = .board }
         }
         catch APIError.unauthorized { auth.logout() }
         catch APIError.http(403) { error = T("Project locked — you're not a member of this project.") }

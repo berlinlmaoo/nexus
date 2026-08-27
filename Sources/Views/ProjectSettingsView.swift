@@ -117,7 +117,7 @@ struct ProjectSettingsView: View {
             }
             if autoAssign {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Assign otomatis ke:").font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                    Text(T("Auto-assign to:")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
                     ForEach(projectMembers) { m in
                         Button {
                             if autoIds.contains(m.uid) { autoIds.remove(m.uid) } else { autoIds.insert(m.uid) }
