@@ -37,25 +37,6 @@ extension View {
     }
 }
 
-/// Placeholder for screens not yet ported (Tasks, Inbox).
-struct ComingSoonView: View {
-    let title: String
-    let systemImage: String
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                NX.background.ignoresSafeArea()
-                VStack(spacing: 12) {
-                    Image(systemName: systemImage).font(.system(size: 44)).foregroundStyle(NX.violet.opacity(0.6))
-                    Text("\(title) lagi dibangun").font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)
-                    Text("Layar ini bakal di-porting dari web.").font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
-                }
-            }
-            .navigationTitle(title)
-        }
-    }
-}
-
 /// "More" — app-launcher grid mirroring the web sidebar groups (Home Base / Missions /
 /// Knowledge / Pulse Check / System) + account footer.
 struct MoreView: View {

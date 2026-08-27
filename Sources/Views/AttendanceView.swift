@@ -40,6 +40,8 @@ struct AttendanceView: View {
             ScrollView {
                 VStack(spacing: 12) {
                     hero
+                    if loading { loadingRow }
+                    if let error { errorBanner(error) }
                     presenceButtons
                     if showOffsite { offsitePrompt }
                     if forcePending { infoBanner("⚠️ Masih ada absen sebelumnya yang belum di-check-out. Pencet PRESENCE OUT dulu buat nutup — baru bisa absen lagi.", tone: .warning) }
@@ -182,8 +184,8 @@ struct AttendanceView: View {
             .shadow(color: tint.opacity(0.4), radius: 12, y: 6)
         }
         .buttonStyle(.plain)
-        .disabled(disabled || busy)
-        .opacity(disabled ? 0.4 : 1)
+        .disabled(disabled || busy || loading)
+        .opacity(disabled || loading ? 0.4 : 1)
     }
 
     // MARK: offsite + banners
@@ -213,6 +215,34 @@ struct AttendanceView: View {
         .padding(12)
         .background(Color(hex: "#fffbeb"), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color(hex: "#fcd34d")))
+    }
+
+    /// Shown while `/api/attendance/today` is in flight — the hero's IN/OUT read "--:--" until it
+    /// lands, which used to be indistinguishable from "belum absen".
+    private var loadingRow: some View {
+        HStack(spacing: 8) {
+            ProgressView().tint(NX.violet)
+            Text("Memuat status absen…").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+        }
+        .frame(maxWidth: .infinity).padding(.vertical, 6)
+    }
+
+    /// A failed load used to be silent (the screen just rendered empty state), so a network blip
+    /// looked exactly like "kamu belum absen hari ini". Surface it with a retry.
+    private func errorBanner(_ msg: String) -> some View {
+        VStack(spacing: 8) {
+            Text(msg).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
+                .frame(maxWidth: .infinity).multilineTextAlignment(.center)
+            Button { Task { await load() } } label: {
+                Text("Coba lagi").font(NXFont.text(12, .bold)).foregroundStyle(.white)
+                    .padding(.horizontal, 16).padding(.vertical, 8)
+                    .background(NX.danger, in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(NX.danger.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.danger.opacity(0.25)))
     }
 
     private func infoBanner(_ text: String, tone: ChipTone) -> some View {

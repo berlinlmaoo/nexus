@@ -52,8 +52,8 @@ struct LoginView: View {
                         .onSubmit { focus = .password }
                 }
 
-                // Encryption Key + Forgot
-                fieldBlock(label: "ENCRYPTION KEY", trailing: "FORGOT?") {
+                // Encryption Key
+                fieldBlock(label: "ENCRYPTION KEY") {
                     inputField("••••••••", text: $password, field: .password, secure: true)
                         .submitLabel(.go)
                         .onSubmit(attemptLogin)
@@ -94,13 +94,14 @@ struct LoginView: View {
                 .opacity(auth.isLoggingIn ? 0.7 : 1)
                 .padding(.top, 26)
 
-                // New operative
-                HStack(spacing: 4) {
-                    Text("New operative?").foregroundStyle(NX.mutedFg)
-                    Text("Request access").foregroundStyle(NX.onyx).fontWeight(.bold)
-                }
-                .font(NXFont.text(14))
-                .padding(.top, 28)
+                // There is no self-serve reset or signup on mobile — access is granted by a workspace
+                // admin (Tuning Room → Members). The old "FORGOT?" / "Request access" looked like
+                // links but did nothing, so say what to actually do instead.
+                Text("Lupa password atau belum punya akses?\nHubungi admin workspace kamu.")
+                    .font(NXFont.text(13))
+                    .foregroundStyle(NX.mutedFg)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 28)
             }
             .padding(.horizontal, 30)
             .padding(.vertical, 40)
@@ -124,16 +125,11 @@ struct LoginView: View {
     }
 
     @ViewBuilder
-    private func fieldBlock<Content: View>(label: String, trailing: String? = nil, @ViewBuilder content: () -> Content) -> some View {
+    private func fieldBlock<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            HStack {
-                Text(label).font(NXFont.text(11, .bold)).tracking(1).foregroundStyle(NX.mutedFg)
-                if let trailing {
-                    Spacer()
-                    Text(trailing).font(NXFont.text(11, .bold)).tracking(1).foregroundStyle(NX.onyx)
-                }
-            }
-            .padding(.leading, 4)
+            Text(label).font(NXFont.text(11, .bold)).tracking(1).foregroundStyle(NX.mutedFg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, 4)
             content()
         }
     }

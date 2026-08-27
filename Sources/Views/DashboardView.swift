@@ -99,10 +99,19 @@ struct DashboardView: View {
 
     private var greeting: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Good Morning,").font(NXFont.text(20, .medium)).foregroundStyle(NX.foreground.opacity(0.8))
+            Text(greetingText).font(NXFont.text(20, .medium)).foregroundStyle(NX.foreground.opacity(0.8))
             Text("\(name)!").font(NXFont.display(32, .bold)).foregroundStyle(NX.foreground)
         }
         .padding(.top, 8)
+    }
+
+    /// Time-of-day greeting in Asia/Jakarta (this was hard-coded to "Good Morning," at any hour).
+    private var greetingText: String {
+        switch ProjDate.cal.component(.hour, from: Date()) {
+        case 4..<11:  return "Good Morning,"
+        case 11..<18: return "Good Afternoon,"
+        default:      return "Good Evening,"
+        }
     }
 
     // MARK: level/XP card
@@ -149,10 +158,7 @@ struct DashboardView: View {
     }
 
     private var xpLabel: String {
-        let xp = game?.xp.totalXp ?? 0
-        let s = xp.formatted(.number.grouping(.automatic))
-        if let next = game?.xp.nextFloor, next > 0 { return "\(s) XP" }
-        return "\(s) XP"
+        (game?.xp.totalXp ?? 0).formatted(.number.grouping(.automatic)) + " XP"
     }
 
     // MARK: search + bell
@@ -463,7 +469,8 @@ struct DashboardView: View {
                 }
                 Spacer()
             }
-            Button { } label: {
+            // Tuning Room is where name/password/members actually live — this used to be a no-op button.
+            NavigationLink { SettingsView() } label: {
                 HStack(spacing: 6) { Image(systemName: "pencil"); Text("Edit Profile") }
                     .font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                     .frame(maxWidth: .infinity).padding(.vertical, 12)

@@ -12,6 +12,8 @@ struct ProjectsView: View {
     @State private var showCreateFolder = false
     @State private var editFolder: ProjectFolder?
     @State private var collapsed: Set<String> = []
+    /// projectId → done/total task counts, filled in after the list renders (see `loadProgress`).
+    @State private var tallies: [String: ProjectTally] = [:]
 
     // grouping
     private var byFolder: [String: [Project]] {
@@ -80,11 +82,11 @@ struct ProjectsView: View {
 
                     ForEach(rootFolders) { f in
                         FolderNode(folder: f, depth: 0, allFolders: folders, projectsByFolder: byFolder,
-                                   collapsed: $collapsed, onMove: move, onDeleteFolder: deleteFolder,
-                                   onEditFolder: { editFolder = $0 })
+                                   tallies: tallies, collapsed: $collapsed, onMove: move,
+                                   onDeleteFolder: deleteFolder, onEditFolder: { editFolder = $0 })
                     }
                     ForEach(ungrouped) { p in
-                        ProjectFolderLink(project: p, folders: folders, onMove: move)
+                        ProjectFolderLink(project: p, folders: folders, tally: tallies[p.id], onMove: move)
                     }
                 }
                 .padding(16)
@@ -114,6 +116,27 @@ struct ProjectsView: View {
             self.error = (error as? LocalizedError)?.errorDescription ?? "Terjadi kesalahan."
         }
         loading = false
+        await loadProgress()   // secondary pass — the cards are already on screen
+    }
+
+    /// `/api/projects` carries per-lane task TOTALS but no completed count, so the card's progress
+    /// bar had nothing real to draw. One extra call covers every project at once (the same endpoint
+    /// the folder aggregate calendar uses) and we tally done/total client-side.
+    private func loadProgress() async {
+        let ids = projects.map(\.id)
+        guard !ids.isEmpty, let tasks = try? await APIClient.shared.folderTasks(projectIds: ids) else { return }
+        var done: [String: Int] = [:]
+        var total: [String: Int] = [:]
+        for t in tasks {
+            guard let pid = t.projectId else { continue }
+            total[pid, default: 0] += 1
+            if t.isDone { done[pid, default: 0] += 1 }
+        }
+        // uniquingKeysWith (not uniqueKeysWithValues) — a duplicate id in the payload would trap.
+        tallies = Dictionary(
+            ids.map { ($0, ProjectTally(done: done[$0] ?? 0, total: total[$0] ?? 0)) },
+            uniquingKeysWith: { first, _ in first }
+        )
     }
     private func move(_ p: Project, to folderId: String?) async {
         try? await APIClient.shared.setProjectFolder(projectId: p.id, folderId: folderId)
@@ -129,12 +152,13 @@ struct ProjectsView: View {
 struct ProjectFolderLink: View {
     let project: Project
     let folders: [ProjectFolder]
+    var tally: ProjectTally? = nil
     let onMove: (Project, String?) async -> Void
     var body: some View {
         NavigationLink {
             ProjectDetailView(projectId: project.id, projectName: project.name)
         } label: {
-            ProjectCard(project: project)
+            ProjectCard(project: project, tally: tally)
         }
         .buttonStyle(PressableCardStyle())
         .contextMenu {
@@ -154,6 +178,7 @@ struct FolderNode: View {
     let depth: Int
     let allFolders: [ProjectFolder]
     let projectsByFolder: [String: [Project]]
+    let tallies: [String: ProjectTally]
     @Binding var collapsed: Set<String>
     let onMove: (Project, String?) async -> Void
     let onDeleteFolder: (ProjectFolder) async -> Void
@@ -207,10 +232,11 @@ struct FolderNode: View {
             if isExpanded {
                 ForEach(subFolders) { sub in
                     FolderNode(folder: sub, depth: depth + 1, allFolders: allFolders, projectsByFolder: projectsByFolder,
-                               collapsed: $collapsed, onMove: onMove, onDeleteFolder: onDeleteFolder, onEditFolder: onEditFolder)
+                               tallies: tallies, collapsed: $collapsed, onMove: onMove,
+                               onDeleteFolder: onDeleteFolder, onEditFolder: onEditFolder)
                 }
                 ForEach(directProjects) { p in
-                    ProjectFolderLink(project: p, folders: allFolders, onMove: onMove)
+                    ProjectFolderLink(project: p, folders: allFolders, tally: tallies[p.id], onMove: onMove)
                 }
                 if directProjects.isEmpty && subFolders.isEmpty {
                     Text("Folder kosong.").font(NXFont.text(12)).foregroundStyle(NX.mutedFg).padding(.leading, 8)
@@ -449,13 +475,27 @@ struct PressableCardStyle: ButtonStyle {
     }
 }
 
+/// Done/total task counts for one project, tallied client-side (see `ProjectsView.loadProgress`).
+/// Both numbers come from the SAME fetch so the card's Cards/Done/% can never contradict each other.
+struct ProjectTally: Sendable {
+    let done: Int
+    let total: Int
+}
+
 struct ProjectCard: View {
     let project: Project
+    /// Filled in by ProjectsView's secondary pass; nil = still counting. `/api/projects` carries a
+    /// per-lane task TOTAL but no completed count, so the bar used to be hard-coded to 0 — every
+    /// project rendered as a permanent "0% mission energy".
+    var tally: ProjectTally? = nil
 
     private var accent: Color { Color(hex: project.color ?? "#a168be") }
-    private var done: Int { 0 }   // completed count not in the list endpoint (matches web's 0 for fresh)
-    private var total: Int { project.taskCount }
-    private var progress: Double { total > 0 ? Double(done) / Double(total) : 0 }
+    private var done: Int? { tally?.done }
+    private var total: Int { tally?.total ?? project.taskCount }
+    private var progress: Double {
+        guard let tally, tally.total > 0 else { return 0 }
+        return min(1, Double(tally.done) / Double(tally.total))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -486,7 +526,7 @@ struct ProjectCard: View {
             // metrics
             HStack(spacing: 8) {
                 metric("Cards", "\(total)")
-                metric("Done", "\(done)")
+                metric("Done", done.map { "\($0)" } ?? "—")
                 metric("Lanes", "\(project.laneCount)")
             }
             .padding(.top, 16)
@@ -494,9 +534,11 @@ struct ProjectCard: View {
             // progress
             VStack(spacing: 6) {
                 HStack {
-                    Text("\(Int(progress * 100))% mission energy").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    Text(done == nil ? "Menghitung…" : "\(Int(progress * 100))% mission energy")
+                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                     Spacer()
-                    Text("\(max(0, total - done)) left").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    Text(done.map { "\(max(0, total - $0)) left" } ?? "")
+                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 }
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
