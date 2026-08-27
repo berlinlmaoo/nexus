@@ -10,9 +10,9 @@ struct MessagesView: View {
 
     private var meId: String? { auth.session?.userId }
     private var groups: [(label: String, items: [Conversation])] {
-        [("Direct", convos.filter { $0.type == "DM" }),
-         ("Groups", convos.filter { $0.type == "GROUP" }),
-         ("Projects", convos.filter { $0.type == "PROJECT" })].filter { !$0.1.isEmpty }
+        [(T("Direct"), convos.filter { $0.type == "DM" }),
+         (T("Groups"), convos.filter { $0.type == "GROUP" }),
+         (T("Projects"), convos.filter { $0.type == "PROJECT" })].filter { !$0.1.isEmpty }
     }
 
     var body: some View {
@@ -20,7 +20,7 @@ struct MessagesView: View {
             NX.background.ignoresSafeArea()
             content
         }
-        .navigationTitle("Messages")
+        .navigationTitle(T("Messages"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
     }
@@ -32,12 +32,12 @@ struct MessagesView: View {
             VStack(spacing: 12) {
                 Image(systemName: "bubble.left.and.bubble.right").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
                 Text(error).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center)
-                Button("Coba lagi") { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
+                Button(T("Try again")) { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
             }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
         } else if convos.isEmpty {
             VStack(spacing: 8) {
                 Image(systemName: "bubble.left.and.bubble.right").font(.system(size: 42)).foregroundStyle(NX.mutedFg)
-                Text("Belum ada chat").font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+                Text(T("No chats yet")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView {
@@ -73,7 +73,7 @@ struct MessagesView: View {
         error = nil
         do { convos = try await APIClient.shared.conversations() }
         catch APIError.unauthorized { auth.logout() }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? "Gagal memuat chat." }
+        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load chats.") }
         loading = false
     }
 }
@@ -93,7 +93,7 @@ struct ConvoRow: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(convo.title(meId: meId)).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                Text(convo.lastMessage?.content ?? "Belum ada pesan").font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                Text(convo.lastMessage?.content ?? T("No message yet")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(1)
             }
             Spacer(minLength: 4)
             if let u = convo.unreadCount, u > 0 {
@@ -134,7 +134,7 @@ enum ChatPayload {
             let title = content[..<open.lowerBound]
                 .replacingOccurrences(of: "📋 Task:", with: "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            if !id.isEmpty { return .task(id: id, title: title.isEmpty ? "Buka task" : title) }
+            if !id.isEmpty { return .task(id: id, title: title.isEmpty ? T("Open task") : title) }
         }
         return .plain
     }
@@ -176,7 +176,7 @@ struct ChatThreadView: View {
                     LazyVStack(spacing: 6) {
                         if loading { ProgressView().tint(NX.violet).padding(.top, 40) }
                         else if messages.isEmpty {
-                            Text("Belum ada pesan. Say hi 👋").font(NXFont.text(14)).foregroundStyle(NX.mutedFg).padding(.top, 40)
+                            Text(T("No messages yet. Say hi 👋")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).padding(.top, 40)
                         }
                         ForEach(messages) { m in bubble(m) }
                         Color.clear.frame(height: 1).id("bottom")
@@ -229,8 +229,8 @@ struct ChatThreadView: View {
             }
             HStack(alignment: .bottom, spacing: 8) {
                 Menu {
-                    Button { Task { await sendLocation() } } label: { Label("Kirim lokasi", systemImage: "mappin.and.ellipse") }
-                    Button { showTaskPicker = true } label: { Label("Link ke task", systemImage: "checklist") }
+                    Button { Task { await sendLocation() } } label: { Label(T("Send location"), systemImage: "mappin.and.ellipse") }
+                    Button { showTaskPicker = true } label: { Label(T("Link to a task"), systemImage: "checklist") }
                 } label: {
                     Image(systemName: "plus").font(.system(size: 17, weight: .bold)).foregroundStyle(NX.violet)
                         .frame(width: 36, height: 36).background(NX.muted, in: Circle())
@@ -247,7 +247,7 @@ struct ChatThreadView: View {
                     .buttonStyle(.plain)
                 }
 
-                TextField("Tulis pesan…", text: $input, axis: .vertical)
+                TextField(T("Write a message…"), text: $input, axis: .vertical)
                     .font(NXFont.text(15)).lineLimit(1...4)
                     .padding(.horizontal, 14).padding(.vertical, 10)
                     .background(NX.muted, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -315,7 +315,7 @@ struct ChatThreadView: View {
                 Image(systemName: "mappin.circle.fill").font(.system(size: 22))
                     .foregroundStyle(mine ? Color.white : NX.violet)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Lokasi dibagikan").font(NXFont.text(13, .bold))
+                    Text(T("Shared location")).font(NXFont.text(13, .bold))
                         .foregroundStyle(mine ? Color.white : NX.foreground)
                     Text(String(format: "%.5f, %.5f", lat, lng)).font(NXFont.text(11))
                         .foregroundStyle(mine ? Color.white.opacity(0.75) : NX.mutedFg)
@@ -332,7 +332,7 @@ struct ChatThreadView: View {
                 Image(systemName: "checklist").font(.system(size: 18))
                     .foregroundStyle(mine ? Color.white : NX.violet)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("TASK").font(NXFont.text(10, .bold)).tracking(0.5)
+                    Text(T("TASK")).font(NXFont.text(10, .bold)).tracking(0.5)
                         .foregroundStyle(mine ? Color.white.opacity(0.7) : NX.mutedFg)
                     Text(title).font(NXFont.text(13, .bold)).lineLimit(2).multilineTextAlignment(.leading)
                         .foregroundStyle(mine ? Color.white : NX.foreground)
@@ -377,7 +377,7 @@ struct ChatThreadView: View {
             try await APIClient.shared.sendMessage(conversationId, content: text)
             await load()
         } catch {
-            notice = (error as? LocalizedError)?.errorDescription ?? "Gagal kirim lokasi."
+            notice = (error as? LocalizedError)?.errorDescription ?? T("Couldn't send your location.")
         }
     }
     private func sendTaskLink(_ t: ChatTaskRef) async {
@@ -418,7 +418,7 @@ struct TaskLinkPicker: View {
                 if loading {
                     ProgressView().tint(NX.violet)
                 } else if items.isEmpty {
-                    TabEmpty(icon: "checklist", text: "Nggak ada task yang bisa di-link dari sini.")
+                    TabEmpty(icon: "checklist", text: T("No tasks available to link from here."))
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 8) {
@@ -444,10 +444,10 @@ struct TaskLinkPicker: View {
                     }
                 }
             }
-            .searchable(text: $query, prompt: "Cari task")
-            .navigationTitle("Link ke task")
+            .searchable(text: $query, prompt: T("Search a task"))
+            .navigationTitle(T("Link to a task"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Batal") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
             .task { await load() }
         }
     }

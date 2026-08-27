@@ -35,7 +35,7 @@ struct ReportsView: View {
             VStack(spacing: 12) {
                 Image(systemName: "chart.bar.xaxis").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
                 Text(error).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
-                Button("Coba lagi") { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
+                Button(T("Try again")) { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
             }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
         } else if let r = report {
             ScrollView {
@@ -75,7 +75,7 @@ struct ReportsView: View {
         let maxV = max(1, rows.map(\.1).max() ?? 1)
         return VStack(alignment: .leading, spacing: 10) {
             Text(title).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
-            if rows.isEmpty { Text("Belum ada data.").font(NXFont.text(13)).foregroundStyle(NX.mutedFg) }
+            if rows.isEmpty { Text(T("No data yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg) }
             ForEach(rows, id: \.0) { row in
                 VStack(spacing: 4) {
                     HStack {

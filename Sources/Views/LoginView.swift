@@ -43,7 +43,7 @@ struct LoginView: View {
                     .padding(.bottom, 30)
 
                 // Access ID
-                fieldBlock(label: "ACCESS ID (EMAIL)") {
+                fieldBlock(label: T("ACCESS ID (EMAIL)")) {
                     inputField("commander@nexus.app", text: $email, field: .email, secure: false)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
@@ -53,7 +53,7 @@ struct LoginView: View {
                 }
 
                 // Encryption Key
-                fieldBlock(label: "ENCRYPTION KEY") {
+                fieldBlock(label: T("ENCRYPTION KEY")) {
                     inputField("••••••••", text: $password, field: .password, secure: true)
                         .submitLabel(.go)
                         .onSubmit(attemptLogin)
@@ -76,9 +76,9 @@ struct LoginView: View {
                     HStack(spacing: 8) {
                         if auth.isLoggingIn {
                             ProgressView().tint(.white)
-                            Text("Opening uplink…")
+                            Text(T("Opening uplink…"))
                         } else {
-                            Text("Enter Mission Control")
+                            Text(T("Enter Mission Control"))
                             Image(systemName: "arrow.right").font(.system(size: 14, weight: .bold))
                         }
                     }
@@ -97,7 +97,7 @@ struct LoginView: View {
                 // There is no self-serve reset or signup on mobile — access is granted by a workspace
                 // admin (Tuning Room → Members). The old "FORGOT?" / "Request access" looked like
                 // links but did nothing, so say what to actually do instead.
-                Text("Lupa password atau belum punya akses?\nHubungi admin workspace kamu.")
+                Text(T("Forgot your password or don't have access yet?\nContact your workspace admin."))
                     .font(NXFont.text(13))
                     .foregroundStyle(NX.mutedFg)
                     .multilineTextAlignment(.center)
@@ -159,7 +159,7 @@ struct LoginView: View {
         focus = nil
         let e = email.trimmingCharacters(in: .whitespaces)
         guard !e.isEmpty, !password.isEmpty else {
-            auth.loginError = "Isi Access ID dan Encryption Key dulu ya."
+            auth.loginError = T("Fill in your Access ID and Encryption Key first.")
             return
         }
         Task { await auth.login(email: e, password: password) }

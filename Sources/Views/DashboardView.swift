@@ -26,7 +26,7 @@ struct DashboardView: View {
     @State private var morphTarget: CGRect = .zero
     @State private var morphShowModal = true   // open: modal solid (FLIP scale). close: fades out as the card fades in.
 
-    private var name: String { profile?.name ?? auth.session?.userName ?? "Commander" }
+    private var name: String { profile?.name ?? auth.session?.userName ?? T("Commander") }
 
     private struct StatDatum {
         let value: Int; let total: Int?; let label: String; let icon: String
@@ -34,9 +34,9 @@ struct DashboardView: View {
     }
     private var statData: [StatDatum] {
         [
-            .init(value: projectCount, total: nil, label: "Projects", icon: "rectangle.stack.fill", from: "#c4b5fd", to: "#7c3aed", glow: "#a78bfa"),
-            .init(value: mission.done, total: mission.total, label: "Your Mission", icon: "checklist", from: "#6ee7b7", to: "#059669", glow: "#34d399"),
-            .init(value: game?.questsDone ?? 0, total: game?.questList.count ?? 0, label: "Monthly Quests", icon: "sparkles", from: "#fcd34d", to: "#ea580c", glow: "#fbbf24"),
+            .init(value: projectCount, total: nil, label: T("Projects"), icon: "rectangle.stack.fill", from: "#c4b5fd", to: "#7c3aed", glow: "#a78bfa"),
+            .init(value: mission.done, total: mission.total, label: T("Your Mission"), icon: "checklist", from: "#6ee7b7", to: "#059669", glow: "#34d399"),
+            .init(value: game?.questsDone ?? 0, total: game?.questList.count ?? 0, label: T("Monthly Quests"), icon: "sparkles", from: "#fcd34d", to: "#ea580c", glow: "#fbbf24"),
         ]
     }
     // Crisp transform-FLIP morph ported from the web's framer layout-spring — smoothness comes from the
@@ -111,9 +111,9 @@ struct DashboardView: View {
     /// Time-of-day greeting in Asia/Jakarta (this was hard-coded to "Good Morning," at any hour).
     private var greetingText: String {
         switch ProjDate.cal.component(.hour, from: Date()) {
-        case 4..<11:  return "Good Morning,"
-        case 11..<18: return "Good Afternoon,"
-        default:      return "Good Evening,"
+        case 4..<11:  return T("Good Morning,")
+        case 11..<18: return T("Good Afternoon,")
+        default:      return T("Good Evening,")
         }
     }
 
@@ -171,7 +171,7 @@ struct DashboardView: View {
             NavigationLink { SearchView() } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass").font(.system(size: 15)).foregroundStyle(NX.mutedFg)
-                    Text("Search..").font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+                    Text(T("Search..")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
                     Spacer()
                 }
                 .padding(.horizontal, 18).frame(height: 48)
@@ -263,8 +263,8 @@ struct DashboardView: View {
 
     @ViewBuilder private func statDetail(_ a: Int) -> some View {
         switch a {
-        case 0: detailList(projectsList.map { ($0.name, $0.statusLabel) }, empty: "Belum ada project.")
-        case 1: detailList(tasksList.map { ($0.title ?? "Untitled", $0.isDone ? "Done" : "Open") }, empty: "Belum ada task aktif.")
+        case 0: detailList(projectsList.map { ($0.name, $0.statusLabel) }, empty: T("No projects yet."))
+        case 1: detailList(tasksList.map { ($0.title ?? T("Untitled"), $0.isDone ? T("Done") : T("Open")) }, empty: T("No open tasks."))
         default: detailList((game?.questList ?? []).map { ($0.title, "\($0.progress)/\($0.target) · +\($0.xpReward) XP") }, empty: "Belum ada quest.")
         }
     }
@@ -333,9 +333,9 @@ struct DashboardView: View {
             }
             .opacity(morphReady ? 1 : 0)
             HStack(spacing: 10) {
-                levelStat("Streak", "\(g?.streakCurrent ?? 0) 🔥")
-                levelStat("Quest klaim", "\(g?.questsDone ?? 0)")
-                levelStat("Total XP", "\(g?.xp.totalXp ?? 0)")
+                levelStat(T("Streak"), "\(g?.streakCurrent ?? 0) 🔥")
+                levelStat(T("Quests claimed"), "\(g?.questsDone ?? 0)")
+                levelStat(T("Total XP"), "\(g?.xp.totalXp ?? 0)")
             }
             .opacity(morphReady ? 1 : 0)
         }
@@ -377,7 +377,7 @@ struct DashboardView: View {
                 Circle().fill(NX.violet.opacity(0.12)).frame(width: 44, height: 44)
                     .overlay(Image(systemName: "bell.fill").font(.system(size: 18)).foregroundStyle(NX.violet))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Notifikasi").font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)
+                    Text(T("Notifications")).font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)
                     Text(unread > 0 ? "\(unread) belum dibaca" : "Semua kebaca").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer()
@@ -388,7 +388,7 @@ struct DashboardView: View {
             }
             Group {
                 if notifs.isEmpty {
-                    Text("Belum ada notifikasi.").font(NXFont.text(13)).foregroundStyle(NX.mutedFg).padding(.vertical, 8)
+                    Text(T("No notifications yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).padding(.vertical, 8)
                 } else {
                     ScrollView {
                         VStack(spacing: 8) {
@@ -426,9 +426,9 @@ struct DashboardView: View {
     private var questsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Your Quests").font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground)
+                Text(T("Your Quests")).font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground)
                 Spacer()
-                Text("See All").font(NXFont.text(12, .medium)).foregroundStyle(NX.mutedFg)
+                Text(T("See All")).font(NXFont.text(12, .medium)).foregroundStyle(NX.mutedFg)
             }
             if (game?.questList.isEmpty ?? true) {
                 Text("Belum ada quest aktif. XP kamu jalan dari task, streak, & absen — cek \"Aturan XP\" di bawah.")
@@ -453,8 +453,8 @@ struct DashboardView: View {
             Image(systemName: "gift.fill").font(.system(size: 16)).foregroundStyle(NX.foreground)
                 .frame(width: 40, height: 40).background(NX.muted, in: Circle())
             VStack(alignment: .leading, spacing: 2) {
-                Text("Aturan XP / Poin").font(NXFont.text(15, .bold)).foregroundStyle(NX.foreground)
-                Text("Potongan, bonus, & reward tier bulanan").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                Text(T("XP / Points Rules")).font(NXFont.text(15, .bold)).foregroundStyle(NX.foreground)
+                Text(T("Deductions, bonuses & monthly reward tiers")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             }
             Spacer()
             Image(systemName: "chevron.down").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.mutedFg)
@@ -466,8 +466,8 @@ struct DashboardView: View {
 
     private var quickActions: some View {
         HStack(spacing: 12) {
-            quickTile("Chat", "bubble.left.and.bubble.right.fill", NX.blue) { MessagesView() }
-            quickTile("Absensi", "clock.badge.checkmark.fill", NX.success) { AttendanceView() }
+            quickTile(T("Chat"), "bubble.left.and.bubble.right.fill", NX.blue) { MessagesView() }
+            quickTile(T("Attendance"), "clock.badge.checkmark.fill", NX.success) { AttendanceView() }
         }
     }
 
@@ -505,7 +505,7 @@ struct DashboardView: View {
     private var dailyCalendarCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Agenda harian").font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground)
+                Text(T("Daily agenda")).font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground)
                 Spacer()
                 Text(ProjDate.fmt("MMMM yyyy").string(from: selectedDay).capitalized)
                     .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
@@ -517,7 +517,7 @@ struct DashboardView: View {
             }
             let items = tasksDue(on: selectedDay)
             if items.isEmpty {
-                Text("Nggak ada task jatuh tempo di tanggal ini.")
+                Text(T("Nothing due on this date."))
                     .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).padding(.vertical, 4)
             } else {
                 ForEach(items) { t in dayRow(t) }
@@ -551,7 +551,7 @@ struct DashboardView: View {
                 Image(systemName: t.isDone ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 15)).foregroundStyle(t.isDone ? NX.success : NX.mutedFg.opacity(0.5))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(t.title ?? "Untitled").font(NXFont.text(13, .semibold))
+                    Text(t.title ?? T("Untitled")).font(NXFont.text(13, .semibold))
                         .foregroundStyle(t.isDone ? NX.mutedFg : NX.foreground)
                         .strikethrough(t.isDone).lineLimit(1)
                     Text(t.laneName).font(NXFont.text(10)).foregroundStyle(NX.mutedFg).lineLimit(1)
@@ -570,13 +570,13 @@ struct DashboardView: View {
                 AvatarView(url: profile?.avatar, initial: String(name.first ?? "?").uppercased(), size: 64)
                 VStack(alignment: .leading, spacing: 8) {
                     row("LEVEL", "\(game?.xp.level ?? 0) · \(game?.xp.levelName ?? "—")")
-                    row("POIN PERIODE", (game?.xp.totalXp ?? 0).formatted(.number.grouping(.automatic)))
+                    row(T("POINTS THIS PERIOD"), (game?.xp.totalXp ?? 0).formatted(.number.grouping(.automatic)))
                 }
                 Spacer()
             }
             // Tuning Room is where name/password/members actually live — this used to be a no-op button.
             NavigationLink { SettingsView() } label: {
-                HStack(spacing: 6) { Image(systemName: "pencil"); Text("Edit Profile") }
+                HStack(spacing: 6) { Image(systemName: "pencil"); Text(T("Edit Profile")) }
                     .font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                     .frame(maxWidth: .infinity).padding(.vertical, 12)
                     .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(NX.border, lineWidth: 1))

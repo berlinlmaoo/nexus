@@ -32,7 +32,7 @@ final class AuthStore {
             Keychain.save(s)
             session = s
         } catch {
-            loginError = (error as? LocalizedError)?.errorDescription ?? "Login gagal. Cek email/password."
+            loginError = (error as? LocalizedError)?.errorDescription ?? T("Login failed. Check your email/password.")
         }
     }
 

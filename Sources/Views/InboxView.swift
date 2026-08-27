@@ -15,10 +15,10 @@ struct InboxView: View {
                 NX.background.ignoresSafeArea()
                 content
             }
-            .navigationTitle("Signal Inbox")
+            .navigationTitle(T("Signal Inbox"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { Task { await markAll() } } label: { Label("Mark all", systemImage: "checkmark.circle") }
+                    Button { Task { await markAll() } } label: { Label(T("Mark all"), systemImage: "checkmark.circle") }
                         .disabled(unread == 0)
                 }
             }
@@ -46,8 +46,8 @@ struct InboxView: View {
                     if items.isEmpty {
                         VStack(spacing: 8) {
                             Image(systemName: "tray").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
-                            Text("Inbox clean").font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
-                            Text("No pings. Enjoy the rare silence.").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                            Text(T("Inbox clean")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+                            Text(T("No pings. Enjoy the rare silence.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                         }.padding(.top, 50)
                     } else {
                         VStack(spacing: 0) {
@@ -73,7 +73,7 @@ struct InboxView: View {
         VStack(spacing: 12) {
             Image(systemName: "wifi.exclamationmark").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
             Text(msg).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
-            Button("Coba lagi") { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
+            Button(T("Try again")) { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
         }.padding(32).frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -84,7 +84,7 @@ struct InboxView: View {
             items = res.notifications ?? []
             unread = res.unreadCount ?? items.filter { !$0.isRead }.count
         } catch APIError.unauthorized { auth.logout() }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? "Login/session diperlukan untuk buka inbox." }
+        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Login required to open the inbox.") }
         loading = false
     }
 
@@ -111,7 +111,7 @@ struct NotificationRow: View {
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(notification.title ?? notification.typeLabel).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
-                Text(notification.message ?? "New NEXUS signal arrived.").font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(2)
+                Text(notification.message ?? T("New NEXUS signal arrived.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(2)
                 Text("\(dateText) · \(notification.type ?? "signal")").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             }
             Spacer(minLength: 4)

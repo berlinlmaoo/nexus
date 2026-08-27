@@ -83,7 +83,7 @@ struct AttendanceAdminSection: View {
                 ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if !allowed {
                 EmptyState(icon: "lock.fill", title: "Khusus BoD ke atas",
-                           subtitle: "Pengaturan shift, jatah libur & tanggal merah cuma bisa diatur BoD / One Above All.")
+                           subtitle: T("Shift, day-off and public-holiday settings can only be managed by BoD / One Above All."))
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
@@ -113,7 +113,7 @@ struct AttendanceAdminSection: View {
 
     private var membersCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SectionLabel("SHIFT & JATAH LIBUR").padding(.leading, 4)
+            SectionLabel(T("SHIFT & DAY-OFF ALLOWANCE")).padding(.leading, 4)
             VStack(spacing: 0) {
                 ForEach(Array(members.enumerated()), id: \.element.idv) { idx, m in
                     if idx > 0 { Divider().overlay(NX.border) }
@@ -195,15 +195,15 @@ struct RedDateCard: View {
 
     private var quotaRow: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Jatah / staff bulan ini").font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+            Text(T("Allowance / staff this month")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
             Stepper(value: $quota, in: 0...31) {
                 Text("\(quota) hari").font(NXFont.text(15, .bold)).foregroundStyle(NX.violet)
             }
             Button { Task { await saveQuota() } } label: {
-                Text(savingQuota ? "Menyimpan…" : "Simpan jatah").font(NXFont.text(14, .bold))
+                Text(savingQuota ? "Menyimpan…" : T("Save allowance")).font(NXFont.text(14, .bold))
             }.buttonStyle(NexusPrimaryButton()).disabled(savingQuota)
             if quota == 0 {
-                Text("Jatah masih 0 — staff belum bisa ajuin tanggal merah bulan ini sampai diisi.")
+                Text(T("Allowance is still 0 — staff can't request public holidays this month until it's set."))
                     .font(NXFont.text(11)).foregroundStyle(NX.warning)
             }
         }
@@ -212,16 +212,16 @@ struct RedDateCard: View {
     private var holidaysList: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Hari libur / tanggal merah").font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                Text(T("Holidays / public holidays")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
                 Spacer()
                 Button { withAnimation { adding.toggle() } } label: {
-                    Label(adding ? "Tutup" : "Tambah", systemImage: adding ? "xmark" : "plus")
+                    Label(adding ? "Tutup" : T("Add"), systemImage: adding ? "xmark" : "plus")
                         .font(NXFont.text(12, .bold)).foregroundStyle(NX.violet)
                 }
             }
             if adding { addForm }
             if holidays.isEmpty && !adding {
-                Text("Belum ada tanggal merah di bulan ini.").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                Text(T("No public holidays this month.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             }
             ForEach(holidays) { h in holidayRow(h) }
         }
@@ -229,12 +229,12 @@ struct RedDateCard: View {
 
     private var addForm: some View {
         VStack(alignment: .leading, spacing: 8) {
-            DatePicker("Tanggal", selection: $newDate, displayedComponents: .date)
+            DatePicker(T("Date"), selection: $newDate, displayedComponents: .date)
                 .datePickerStyle(.compact).font(NXFont.text(13))
-            TextField("Nama (mis. Hari Raya Idul Adha)", text: $newName).font(NXFont.text(14))
+            TextField(T("Name (e.g. Eid al-Adha)"), text: $newName).font(NXFont.text(14))
                 .padding(10).background(NX.muted, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             Button { Task { await addHoliday() } } label: {
-                Text(busy ? "Menyimpan…" : "Simpan tanggal merah").font(NXFont.text(13, .bold))
+                Text(busy ? "Menyimpan…" : T("Save public holiday")).font(NXFont.text(13, .bold))
             }.buttonStyle(NexusPrimaryButton()).disabled(busy || newName.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .padding(12).background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 12, style: .continuous))

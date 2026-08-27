@@ -24,17 +24,17 @@ struct TeamsView: View {
             VStack(spacing: 12) {
                 Image(systemName: "person.3").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
                 Text(error).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
-                Button("Coba lagi") { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
+                Button(T("Try again")) { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
             }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
         } else if teams.isEmpty {
             VStack(spacing: 8) {
                 Image(systemName: "person.3.fill").font(.system(size: 42)).foregroundStyle(NX.mutedFg)
-                Text("Belum ada team").font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+                Text(T("No teams yet")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView {
                 LazyVStack(spacing: 12) {
-                    Text("Anggota team otomatis dapat akses ke project yang di-link.")
+                    Text(T("Team members automatically get access to the linked projects."))
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).frame(maxWidth: .infinity, alignment: .leading)
                     ForEach(teams) { TeamCard(team: $0) }
                 }
@@ -48,7 +48,7 @@ struct TeamsView: View {
         error = nil
         do { teams = try await APIClient.shared.teams() }
         catch APIError.unauthorized { auth.logout() }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? "Gagal memuat teams." }
+        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load teams.") }
         loading = false
     }
 }

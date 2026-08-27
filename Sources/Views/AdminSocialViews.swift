@@ -98,7 +98,7 @@ struct ErrorState: View {
         VStack(spacing: 12) {
             Image(systemName: "wifi.exclamationmark").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
             Text(message).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center)
-            Button("Coba lagi", action: retry).buttonStyle(NexusPrimaryButton(fullWidth: false))
+            Button(T("Try again"), action: retry).buttonStyle(NexusPrimaryButton(fullWidth: false))
         }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
     }
 }

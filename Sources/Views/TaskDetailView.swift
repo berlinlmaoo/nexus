@@ -20,7 +20,7 @@ struct TaskDetailView: View {
     @State private var showAssignee = false
     @State private var descDraft = ""
     @State private var descOriginal = ""   // parsed once on load — avoids re-parsing block-JSON on every keystroke
-    @State private var isBod = false       // gates the "Jadiin quest" button (BoD+)
+    @State private var isBod = false       // gates the "Make it a quest" button (BoD+)
     @State private var showQuestComposer = false
 
     private let statuses = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"]
@@ -55,29 +55,29 @@ struct TaskDetailView: View {
                     .padding(16)
                 }
             } else {
-                Text(error ?? "Gagal memuat task.").font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+                Text(error ?? T("Couldn't load the task.")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
             }
         }
-        .navigationTitle("Task")
+        .navigationTitle(T("Task"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Button(role: .destructive) { confirmDelete = true } label: { Label("Hapus task", systemImage: "trash") }
+                    Button(role: .destructive) { confirmDelete = true } label: { Label(T("Delete task"), systemImage: "trash") }
                 } label: { Image(systemName: "ellipsis.circle") }
             }
         }
-        .confirmationDialog("Hapus task ini?", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("Hapus", role: .destructive) { Task { await deleteTask() } }
-            Button("Batal", role: .cancel) {}
-        } message: { Text("Task beserta subtask & komentarnya akan dihapus.") }
+        .confirmationDialog(T("Delete this task?"), isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button(T("Delete"), role: .destructive) { Task { await deleteTask() } }
+            Button(T("Cancel"), role: .cancel) {}
+        } message: { Text(T("The task, its subtasks and comments will be deleted.")) }
         .sheet(isPresented: $showQuestComposer) {
             if let task { QuestComposerSheet(taskId: task.id, taskTitle: task.title) { await load() } }
         }
         .task { await load() }
     }
 
-    /// Quest membership banner ("+N XP" per quest) + the BoD "Jadiin quest" button.
+    /// Quest membership banner ("+N XP" per quest) + the BoD "Make it a quest" button.
     @ViewBuilder private func questBanner(_ t: TaskDetail) -> some View {
         let quests = t.quests ?? []
         if !quests.isEmpty || isBod {
@@ -86,7 +86,7 @@ struct TaskDetailView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "trophy.fill").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.violet)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(q.title ?? "Quest").font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                            Text(q.title ?? T("Quest")).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
                             Text(questSubtitle(q)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                         }
                         Spacer(minLength: 4)
@@ -98,7 +98,7 @@ struct TaskDetailView: View {
                     Button { showQuestComposer = true } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "trophy").font(.system(size: 12, weight: .bold))
-                            Text(quests.isEmpty ? "Jadiin quest" : "Bikin quest lain")
+                            Text(quests.isEmpty ? T("Make it a quest") : T("Create another quest"))
                         }
                         .font(NXFont.text(13, .bold)).foregroundStyle(NX.violet)
                     }.buttonStyle(.plain)
@@ -112,7 +112,7 @@ struct TaskDetailView: View {
     }
     private func questSubtitle(_ q: TaskQuestRef) -> String {
         if let total = q.total, total > 0 { return "\(q.done ?? 0)/\(total) task selesai" }
-        return "Selesaiin task ini buat dapet XP"
+        return T("Finish this task to earn XP")
     }
 
     private func header(_ t: TaskDetail) -> some View {
@@ -120,15 +120,15 @@ struct TaskDetailView: View {
             if let parent = t.parent {
                 HStack(spacing: 6) {
                     Image(systemName: "checklist").font(.system(size: 11, weight: .bold))
-                    Text("Subtask dari").foregroundStyle(NX.accentFg.opacity(0.8))
-                    Text(parent.title ?? "task").fontWeight(.semibold).lineLimit(1)
+                    Text(T("Subtask of")).foregroundStyle(NX.accentFg.opacity(0.8))
+                    Text(parent.title ?? T("task")).fontWeight(.semibold).lineLimit(1)
                 }
                 .font(NXFont.text(12, .semibold)).foregroundStyle(NX.accentFg)
                 .padding(.horizontal, 10).padding(.vertical, 5)
                 .background(NX.accentBg, in: Capsule())
             }
             // editable title (commits on submit / when focus leaves)
-            TextField("Judul task", text: $editTitle, axis: .vertical)
+            TextField(T("Task title"), text: $editTitle, axis: .vertical)
                 .font(NXFont.display(26, .bold)).foregroundStyle(NX.foreground)
                 .onSubmit { commitTitle(t) }
 
@@ -171,8 +171,8 @@ struct TaskDetailView: View {
                 .datePickerStyle(.graphical).padding()
                 .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .topBarLeading) { Button("Hapus") { Task { await onClear(); close() } } }
-                    ToolbarItem(placement: .topBarTrailing) { Button("Simpan") { Task { await onSave(); close() } }.bold() }
+                    ToolbarItem(placement: .topBarLeading) { Button(T("Delete")) { Task { await onClear(); close() } } }
+                    ToolbarItem(placement: .topBarTrailing) { Button(T("Save")) { Task { await onSave(); close() } }.bold() }
                 }
         }.presentationDetents([.medium])
     }
@@ -197,7 +197,7 @@ struct TaskDetailView: View {
                     }
                     if let names = t.assignees?.compactMap({ $0.user?.name }), !names.isEmpty {
                         Text(names.joined(separator: ", ")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                    } else { Text("Unassigned").font(NXFont.text(13)).foregroundStyle(NX.violet) }
+                    } else { Text(T("Unassigned")).font(NXFont.text(13)).foregroundStyle(NX.violet) }
                 }
             }.buttonStyle(.plain)
             VStack(alignment: .leading, spacing: 4) {
@@ -220,14 +220,14 @@ struct TaskDetailView: View {
         let dirty = descDraft != descOriginal
         return VStack(alignment: .leading, spacing: 8) {
             Text("DESCRIPTION").font(NXFont.text(10, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
-            TextField("Tambah deskripsi…", text: $descDraft, axis: .vertical)
+            TextField(T("Add a description…"), text: $descDraft, axis: .vertical)
                 .font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(2...12)
                 .padding(10).background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             if dirty {
                 HStack {
-                    Button("Batal") { descDraft = descOriginal }.font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                    Button(T("Cancel")) { descDraft = descOriginal }.font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
                     Spacer()
-                    Button("Simpan") { Task { await update(t, ["description": descDraft]) } }
+                    Button(T("Save")) { Task { await update(t, ["description": descDraft]) } }
                         .font(NXFont.text(13, .bold)).foregroundStyle(.white)
                         .padding(.horizontal, 14).padding(.vertical, 7).background(NX.violet, in: Capsule())
                 }
@@ -245,7 +245,7 @@ struct TaskDetailView: View {
                 Text(subs.isEmpty ? "Subtasks" : "Subtasks · \(done)/\(subs.count)").font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
             }
             if subs.isEmpty {
-                Text("Belum ada subtask.").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                Text(T("No subtasks yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             } else {
                 ForEach(subs) { st in
                     HStack(spacing: 10) {
@@ -261,7 +261,7 @@ struct TaskDetailView: View {
             }
             // add subtask
             HStack(spacing: 8) {
-                TextField("+ Tambah subtask (Enter)", text: $newSubtask)
+                TextField(T("+ Add subtask (Enter)"), text: $newSubtask)
                     .font(NXFont.text(14)).onSubmit { addSubtask(t) }
                     .padding(10).background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 Button { addSubtask(t) } label: {
@@ -282,7 +282,7 @@ struct TaskDetailView: View {
                 Text("Comments · \(comments.count)").font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
             }
             if comments.isEmpty {
-                Text("Belum ada komentar.").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                Text(T("No comments yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             } else {
                 ForEach(comments) { c in
                     VStack(alignment: .leading, spacing: 3) {
@@ -300,7 +300,7 @@ struct TaskDetailView: View {
             }
             // add comment
             HStack(spacing: 8) {
-                TextField("Tulis komentar…", text: $newComment, axis: .vertical)
+                TextField(T("Write a comment…"), text: $newComment, axis: .vertical)
                     .font(NXFont.text(14)).lineLimit(1...3).onSubmit { addComment(t) }
                     .padding(10).background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 Button { addComment(t) } label: {
@@ -328,7 +328,7 @@ struct TaskDetailView: View {
             }
         }
         catch APIError.unauthorized { auth.logout() }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? "Gagal memuat." }
+        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load.") }
         loading = false
     }
     private func update(_ t: TaskDetail, _ fields: [String: Any]) async {
@@ -404,7 +404,7 @@ struct AssigneePicker: View {
                 if loading {
                     ProgressView().tint(NX.violet)
                 } else if members.isEmpty {
-                    Text("Belum ada member di project ini.").font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+                    Text(T("No members in this project yet.")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
                 } else {
                     List {
                         ForEach(members) { m in
@@ -429,10 +429,10 @@ struct AssigneePicker: View {
             .navigationTitle("Assign ke")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("Batal") { dismiss() } }
+                ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { Task { saving = true; await onSave(selected); dismiss() } } label: {
-                        if saving { ProgressView().tint(NX.violet) } else { Text("Simpan").bold() }
+                        if saving { ProgressView().tint(NX.violet) } else { Text(T("Save")).bold() }
                     }.disabled(saving)
                 }
             }
@@ -452,7 +452,7 @@ struct AssigneePicker: View {
 }
 
 /// BoD: bundle THIS task into a `specific_tasks` quest. Done when the task is DONE; XP to its
-/// assignee(s); visible to all project members. Mirrors the web "Jadiin quest" composer.
+/// assignee(s); visible to all project members. Mirrors the web "Make it a quest" composer.
 struct QuestComposerSheet: View {
     let taskId: String
     let taskTitle: String
@@ -472,8 +472,8 @@ struct QuestComposerSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    SectionLabel("Judul quest")
-                    TextField("Judul quest", text: $title, axis: .vertical)
+                    SectionLabel(T("Quest title"))
+                    TextField(T("Quest title"), text: $title, axis: .vertical)
                         .font(NXFont.text(15)).padding(12)
                         .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
@@ -486,7 +486,7 @@ struct QuestComposerSheet: View {
                     .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.border))
 
-                    Text("Quest selesai kalau task ini DONE. XP masuk ke yang ngerjain (assignee), dan quest-nya keliatan buat semua member project. Maksimal 50 XP.")
+                    Text(T("The quest completes when this task is DONE. XP goes to the assignee, and the quest is visible to every project member. Max 50 XP."))
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
 
                     if let err { Text(err).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger) }
@@ -494,7 +494,7 @@ struct QuestComposerSheet: View {
                     Button { Task { await save() } } label: {
                         HStack(spacing: 6) {
                             if saving { ProgressView().tint(.white).scaleEffect(0.8) }
-                            Text(saving ? "Bikin…" : "Bikin quest")
+                            Text(saving ? T("Creating…") : T("Create quest"))
                         }
                     }
                     .buttonStyle(NexusPrimaryButton(fullWidth: true))
@@ -503,9 +503,9 @@ struct QuestComposerSheet: View {
                 .padding(16)
             }
             .background(NX.background.ignoresSafeArea())
-            .navigationTitle("Jadiin quest")
+            .navigationTitle(T("Make it a quest"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Batal") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
         }
     }
 
@@ -518,7 +518,7 @@ struct QuestComposerSheet: View {
             await onDone()
             dismiss()
         } catch {
-            err = (error as? LocalizedError)?.errorDescription ?? "Gagal bikin quest."
+            err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't create the quest.")
             saving = false
         }
     }

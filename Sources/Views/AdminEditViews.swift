@@ -103,9 +103,9 @@ struct AdminUsersSection: View {
         }
         .task { await load() }
         .confirmationDialog("Hapus akun \"\(deleteTarget?.displayName ?? "")\" permanen?", isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }), titleVisibility: .visible) {
-            Button("Hapus permanen", role: .destructive) { if let m = deleteTarget { deleteTarget = nil; Task { await deleteUser(m) } } }
-            Button("Batal", role: .cancel) { deleteTarget = nil }
-        } message: { Text("Task/file/quest yang dia bikin dialihkan ke kamu. Gak bisa di-undo.") }
+            Button(T("Delete permanently"), role: .destructive) { if let m = deleteTarget { deleteTarget = nil; Task { await deleteUser(m) } } }
+            Button(T("Cancel"), role: .cancel) { deleteTarget = nil }
+        } message: { Text(T("Their tasks/files/quests are reassigned to you. This cannot be undone.")) }
     }
 
     private func row(_ m: WorkspaceRoster.Member) -> some View {
@@ -120,7 +120,7 @@ struct AdminUsersSection: View {
                 Menu {
                     ForEach(assignableRoles(viewerRole), id: \.self) { r in Button(orgRoleLabel(r)) { Task { await setRole(m, r, wsId) } } }
                     Divider()
-                    Button(role: .destructive) { deleteTarget = m } label: { Label("Hapus akun", systemImage: "trash") }
+                    Button(role: .destructive) { deleteTarget = m } label: { Label(T("Delete account"), systemImage: "trash") }
                 } label: { RoleChip(role: m.role ?? "STAFF") }
             } else { RoleChip(role: m.role ?? "STAFF") }
         }
@@ -150,7 +150,7 @@ struct AdminAuditSection: View {
     var body: some View {
         Group {
             if loading { ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity) }
-            else if logs.isEmpty { TabEmpty(icon: "scroll", text: "Belum ada entri audit.") }
+            else if logs.isEmpty { TabEmpty(icon: "scroll", text: T("No audit entries yet.")) }
             else {
                 ScrollView {
                     VStack(spacing: 0) {
@@ -195,7 +195,7 @@ struct AdminQuestsSection: View {
                             Label("Assign quest baru", systemImage: "plus").font(NXFont.text(13, .bold)).foregroundStyle(.white)
                                 .frame(maxWidth: .infinity).padding(.vertical, 11).background(NX.violet, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }.buttonStyle(.plain).disabled(workspaceId == nil)
-                        if quests.isEmpty { TabEmpty(icon: "trophy", text: "Belum ada quest. Bikin di atas.") }
+                        if quests.isEmpty { TabEmpty(icon: "trophy", text: T("No quests yet. Create one above.")) }
                         else { ForEach(quests) { questRow($0) } }
                     }.padding(16)
                 }
@@ -239,7 +239,7 @@ struct CreateQuestSheet: View {
     @State private var deadline = Date()
     @State private var busy = false
 
-    private let types: [(String, String)] = [("task_count", "Complete N task"), ("overdue_cleared", "Clear N overdue"), ("priority_done", "Complete N Urgent"), ("has_overdue", "Punya ≥N overdue (penalti)")]
+    private let types: [(String, String)] = [("task_count", T("Complete N tasks")), ("overdue_cleared", "Clear N overdue"), ("priority_done", "Complete N Urgent"), ("has_overdue", T("Has ≥N overdue (penalty)"))]
 
     var body: some View {
         NavigationStack {
@@ -247,7 +247,7 @@ struct CreateQuestSheet: View {
                 NX.background.ignoresSafeArea()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        f("JUDUL") { TextField("mis. Selesaikan 5 task minggu ini", text: $title).font(NXFont.text(15)).padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border)) }
+                        f(T("TITLE")) { TextField(T("e.g. Finish 5 tasks this week"), text: $title).font(NXFont.text(15)).padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border)) }
                         f("JENIS") {
                             Menu {
                                 ForEach(types, id: \.0) { t in Button(t.1) { reqType = t.0 } }
@@ -270,7 +270,7 @@ struct CreateQuestSheet: View {
                 }
             }
             .navigationTitle("Quest baru").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Batal") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
         }
     }
     private func f<C: View>(_ l: String, @ViewBuilder _ c: () -> C) -> some View {
@@ -301,7 +301,7 @@ struct AdminAnnouncementsSection: View {
                             Label("Pengumuman baru", systemImage: "megaphone.fill").font(NXFont.text(13, .bold)).foregroundStyle(.white)
                                 .frame(maxWidth: .infinity).padding(.vertical, 11).background(NX.violet, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }.buttonStyle(.plain)
-                        if rows.isEmpty { TabEmpty(icon: "megaphone", text: "Belum ada pengumuman.") }
+                        if rows.isEmpty { TabEmpty(icon: "megaphone", text: T("No announcements yet.")) }
                         else { ForEach(rows) { announcementRow($0) } }
                     }.padding(16)
                 }
@@ -346,8 +346,8 @@ struct CreateAnnouncementSheet: View {
                 NX.background.ignoresSafeArea()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        f("JUDUL") { TextField("Judul pengumuman", text: $title).font(NXFont.text(15)).padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border)) }
-                        f("ISI") { TextField("Isi pengumuman…", text: $body_, axis: .vertical).font(NXFont.text(15)).lineLimit(3...8).padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border)) }
+                        f(T("TITLE")) { TextField(T("Announcement title"), text: $title).font(NXFont.text(15)).padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border)) }
+                        f(T("BODY")) { TextField(T("Announcement body…"), text: $body_, axis: .vertical).font(NXFont.text(15)).lineLimit(3...8).padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border)) }
                         f("TONE") {
                             HStack(spacing: 8) {
                                 ForEach(tones, id: \.0) { t in
@@ -364,7 +364,7 @@ struct CreateAnnouncementSheet: View {
                 }
             }
             .navigationTitle("Pengumuman baru").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Batal") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
         }
     }
     private func f<C: View>(_ l: String, @ViewBuilder _ c: () -> C) -> some View {

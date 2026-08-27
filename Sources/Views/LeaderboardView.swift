@@ -33,7 +33,7 @@ struct LeaderboardView: View {
             VStack(spacing: 12) {
                 Image(systemName: "trophy").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
                 Text(error).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
-                Button("Coba lagi") { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
+                Button(T("Try again")) { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView {
@@ -68,7 +68,7 @@ struct LeaderboardView: View {
         error = nil
         do { rows = try await APIClient.shared.leaderboard() }
         catch APIError.unauthorized { auth.logout() }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? "Gagal memuat leaderboard." }
+        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load the leaderboard.") }
         loading = false
     }
 }

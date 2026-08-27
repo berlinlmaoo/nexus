@@ -3,7 +3,7 @@ import SwiftUI
 /// Folder aggregate view — a calendar of every task across the projects in a folder (+ its
 /// descendant folders), colour-coded per project. Faithful port of the web `/folders/$folderId`
 /// (which is calendar-only on mobile): dot-grid month + day-detail list + collapsible colour
-/// legend (also an inline recolour) + a "Pilih project" curated-subset picker.
+/// legend (also an inline recolour) + a "Pick projects" curated-subset picker.
 struct FolderAggregateView: View {
     let folder: ProjectFolder
     let allFolders: [ProjectFolder]
@@ -48,10 +48,10 @@ struct FolderAggregateView: View {
                 }
 
                 if loading {
-                    HStack(spacing: 8) { ProgressView().tint(NX.violet); Text("Memuat task…").font(NXFont.text(13)).foregroundStyle(NX.mutedFg) }
+                    HStack(spacing: 8) { ProgressView().tint(NX.violet); Text(T("Loading tasks…")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg) }
                         .frame(maxWidth: .infinity).padding(.vertical, 24)
                 } else if selectedIds.isEmpty {
-                    FolderEmpty(text: "Folder ini belum punya project. Pindahin project ke sini, atau pilih lewat 'Pilih project'.")
+                    FolderEmpty(text: T("This folder has no projects yet. Move a project here, or pick some via 'Pick projects'."))
                 } else {
                     FolderCalendar(tasks: tasks, colorHex: { colorHex($0) }, projById: projById)
                 }
@@ -242,7 +242,7 @@ private struct FolderCalendar: View {
                 Text("\(dayTasks.count) task").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             }
             if dayTasks.isEmpty {
-                FolderEmpty(text: "Gaada task jatuh tempo di tanggal ini.")
+                FolderEmpty(text: T("Nothing due on this date."))
             } else {
                 ForEach(dayTasks) { t in FolderTaskRow(task: t, color: colorHex(t.projectId), project: projById[t.projectId ?? ""]) }
             }
@@ -332,14 +332,15 @@ private struct FolderProjectPicker: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Pilih project mana yang masuk calendar folder ini.\(usingAll ? " Sekarang lagi nampilin SEMUA project di folder." : "")")
+                    Text(T("Pick which projects go into this folder's calendar.")
+                         + (usingAll ? T(" Right now it's showing EVERY project in the folder.") : ""))
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                     HStack(spacing: 8) {
-                        Button("Pilih semua") { picked = Set(projects.map(\.id)) }.font(NXFont.text(12, .semibold))
+                        Button(T("Select all")) { picked = Set(projects.map(\.id)) }.font(NXFont.text(12, .semibold))
                         Button("Kosongkan") { picked = [] }.font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
                     }
                     if projects.isEmpty {
-                        Text("Folder ini belum punya project.").font(NXFont.text(13)).foregroundStyle(NX.mutedFg).padding(.vertical, 8)
+                        Text(T("This folder has no projects yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).padding(.vertical, 8)
                     } else {
                         ForEach(projects) { p in
                             Button { toggle(p.id) } label: {
@@ -359,12 +360,12 @@ private struct FolderProjectPicker: View {
                 }.padding(16)
             }
             .background(NX.background.ignoresSafeArea())
-            .navigationTitle("Pilih project")
+            .navigationTitle(T("Pick projects"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("Batal") { dismiss() } }
+                ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { Task { await save() } } label: { if saving { ProgressView() } else { Text("Simpan").font(NXFont.text(15, .bold)) } }.disabled(saving)
+                    Button { Task { await save() } } label: { if saving { ProgressView() } else { Text(T("Save")).font(NXFont.text(15, .bold)) } }.disabled(saving)
                 }
             }
         }

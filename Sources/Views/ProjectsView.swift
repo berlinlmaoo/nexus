@@ -33,12 +33,12 @@ struct ProjectsView: View {
                 NX.background.ignoresSafeArea()
                 content
             }
-            .navigationTitle("Mission Control")
+            .navigationTitle(T("Mission Control"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button { showCreate = true } label: { Label("Mission baru", systemImage: "rectangle.stack.badge.plus") }
-                        Button { showCreateFolder = true } label: { Label("Folder baru", systemImage: "folder.badge.plus") }
+                        Button { showCreate = true } label: { Label(T("New mission"), systemImage: "rectangle.stack.badge.plus") }
+                        Button { showCreateFolder = true } label: { Label(T("New folder"), systemImage: "folder.badge.plus") }
                     } label: { Image(systemName: "plus") }
                     .disabled(workspaceId == nil)
                 }
@@ -64,7 +64,7 @@ struct ProjectsView: View {
         } else if projects.isEmpty {
             VStack(spacing: 10) {
                 Image(systemName: "rectangle.stack").font(.system(size: 44)).foregroundStyle(NX.mutedFg)
-                Text("Belum ada mission").font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground)
+                Text(T("No missions yet")).font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -99,7 +99,7 @@ struct ProjectsView: View {
         VStack(spacing: 12) {
             Image(systemName: "wifi.exclamationmark").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
             Text(msg).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center)
-            Button("Coba lagi") { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
+            Button(T("Try again")) { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
         }
         .padding(32).frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -113,7 +113,7 @@ struct ProjectsView: View {
         } catch APIError.unauthorized {
             auth.logout()
         } catch {
-            self.error = (error as? LocalizedError)?.errorDescription ?? "Terjadi kesalahan."
+            self.error = (error as? LocalizedError)?.errorDescription ?? T("Something went wrong.")
         }
         loading = false
         await loadProgress()   // secondary pass — the cards are already on screen
@@ -162,8 +162,8 @@ struct ProjectFolderLink: View {
         }
         .buttonStyle(PressableCardStyle())
         .contextMenu {
-            Menu("Pindah ke folder") {
-                if project.folderId != nil { Button("Tanpa folder") { Task { await onMove(project, nil) } } }
+            Menu(T("Move to folder")) {
+                if project.folderId != nil { Button(T("No folder")) { Task { await onMove(project, nil) } } }
                 ForEach(folders.filter { $0.id != project.folderId }) { f in
                     Button { Task { await onMove(project, f.id) } } label: { Label(f.name, systemImage: "folder") }
                 }
@@ -225,8 +225,8 @@ struct FolderNode: View {
             .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
             .contextMenu {
-                Button { onEditFolder(folder) } label: { Label("Edit folder", systemImage: "pencil") }
-                Button(role: .destructive) { Task { await onDeleteFolder(folder) } } label: { Label("Hapus folder", systemImage: "trash") }
+                Button { onEditFolder(folder) } label: { Label(T("Edit folder"), systemImage: "pencil") }
+                Button(role: .destructive) { Task { await onDeleteFolder(folder) } } label: { Label(T("Delete folder"), systemImage: "trash") }
             }
 
             if isExpanded {
@@ -239,7 +239,7 @@ struct FolderNode: View {
                     ProjectFolderLink(project: p, folders: allFolders, tally: tallies[p.id], onMove: onMove)
                 }
                 if directProjects.isEmpty && subFolders.isEmpty {
-                    Text("Folder kosong.").font(NXFont.text(12)).foregroundStyle(NX.mutedFg).padding(.leading, 8)
+                    Text(T("Empty folder.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).padding(.leading, 8)
                 }
             }
         }
@@ -277,13 +277,13 @@ struct CreateFolderSheet: View {
                 NX.background.ignoresSafeArea()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        field("NAMA FOLDER") {
+                        field(T("FOLDER NAME")) {
                             TextField("mis. Client Pertamina", text: $name)
                                 .font(NXFont.text(16)).padding(12)
                                 .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
                         }
-                        field("ICON") {
+                        field(T("ICON")) {
                             HStack(spacing: 8) {
                                 Button { showImporter = true } label: {
                                     ZStack {
@@ -305,7 +305,7 @@ struct CreateFolderSheet: View {
                                 }
                             }
                         }
-                        field("WARNA") {
+                        field(T("COLOR")) {
                             HStack(spacing: 10) {
                                 ForEach(colors, id: \.self) { c in
                                     Circle().fill(Color(hex: c)).frame(width: 30, height: 30)
@@ -316,7 +316,7 @@ struct CreateFolderSheet: View {
                         }
                         if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
                         Button { Task { await create() } } label: {
-                            HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text(editing == nil ? "Buat folder" : "Simpan") }
+                            HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text(editing == nil ? T("Create folder") : T("Save")) }
                         }
                         .buttonStyle(NexusPrimaryButton())
                         .disabled(busy || name.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -324,9 +324,9 @@ struct CreateFolderSheet: View {
                     .padding(20)
                 }
             }
-            .navigationTitle(editing == nil ? "Folder baru" : "Edit folder")
+            .navigationTitle(editing == nil ? T("New folder") : T("Edit folder"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Batal") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
             .fileImporter(isPresented: $showImporter, allowedContentTypes: [.image], allowsMultipleSelection: false) { result in
                 if case let .success(urls) = result, let url = urls.first {
                     let scoped = url.startAccessingSecurityScopedResource()
@@ -359,7 +359,7 @@ struct CreateFolderSheet: View {
             await onCreated()
             dismiss()
         } catch {
-            err = (error as? LocalizedError)?.errorDescription ?? "Gagal simpan folder."
+            err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't save folder.")
         }
     }
 }
@@ -403,13 +403,13 @@ struct CreateProjectSheet: View {
                 NX.background.ignoresSafeArea()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        field("NAMA MISSION") {
+                        field(T("MISSION NAME")) {
                             TextField("mis. PATS Multimedia", text: $name)
                                 .font(NXFont.text(16)).padding(12)
                                 .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
                         }
-                        field("ICON") {
+                        field(T("ICON")) {
                             HStack(spacing: 8) {
                                 ForEach(icons, id: \.self) { ic in
                                     Text(ic).font(.system(size: 22)).frame(width: 40, height: 40)
@@ -419,7 +419,7 @@ struct CreateProjectSheet: View {
                                 }
                             }
                         }
-                        field("WARNA") {
+                        field(T("COLOR")) {
                             HStack(spacing: 10) {
                                 ForEach(colors, id: \.self) { c in
                                     Circle().fill(Color(hex: c)).frame(width: 30, height: 30)
@@ -430,7 +430,7 @@ struct CreateProjectSheet: View {
                         }
                         if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
                         Button { Task { await create() } } label: {
-                            HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text("Launch mission") }
+                            HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text(T("Launch mission")) }
                         }
                         .buttonStyle(NexusPrimaryButton())
                         .disabled(busy || name.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -438,9 +438,9 @@ struct CreateProjectSheet: View {
                     .padding(20)
                 }
             }
-            .navigationTitle("Mission baru")
+            .navigationTitle(T("New mission"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Batal") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
         }
     }
 
@@ -458,7 +458,7 @@ struct CreateProjectSheet: View {
             await onCreated()
             dismiss()
         } catch {
-            err = (error as? LocalizedError)?.errorDescription ?? "Gagal bikin project."
+            err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't create project.")
         }
     }
 }
@@ -525,16 +525,16 @@ struct ProjectCard: View {
 
             // metrics
             HStack(spacing: 8) {
-                metric("Cards", "\(total)")
-                metric("Done", done.map { "\($0)" } ?? "—")
-                metric("Lanes", "\(project.laneCount)")
+                metric(T("Cards"), "\(total)")
+                metric(T("Done"), done.map { "\($0)" } ?? "—")
+                metric(T("Lanes"), "\(project.laneCount)")
             }
             .padding(.top, 16)
 
             // progress
             VStack(spacing: 6) {
                 HStack {
-                    Text(done == nil ? "Menghitung…" : "\(Int(progress * 100))% mission energy")
+                    Text(done == nil ? T("Calculating…") : "\(Int(progress * 100))% mission energy")
                         .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                     Spacer()
                     Text(done.map { "\(max(0, total - $0)) left" } ?? "")
@@ -565,12 +565,12 @@ struct ProjectCard: View {
                         }
                     }
                 } else {
-                    Text("Solo quest").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    Text(T("Solo quest")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer()
                 HStack(spacing: 4) {
                     Image(systemName: "clock").font(.system(size: 11))
-                    Text("No deadline").font(NXFont.text(11))
+                    Text(T("No deadline")).font(NXFont.text(11))
                 }.foregroundStyle(NX.mutedFg)
             }
             .padding(.top, 16)

@@ -35,7 +35,7 @@ struct AttendanceView: View {
 
     private var rec: AttendanceRecord? { today?.today }
     /// A PREVIOUS day's open check-in the user forgot to close. While this exists the backend blocks a
-    /// new check-in ("close it first"), so we must surface a check-out flow for it (web "Selesaikan absen kemarin").
+    /// new check-in ("close it first"), so we must surface a check-out flow for it (web "Finish yesterday's attendance").
     private var pendingRec: AttendanceRecord? { today?.pendingCheckout }
     private var forcePending: Bool { pendingRec != nil }
     private var dispRec: AttendanceRecord? { rec ?? pendingRec }   // what the hero/metrics display
@@ -54,9 +54,9 @@ struct AttendanceView: View {
                     if needsReflection { reflectionCard }
                     presenceButtons
                     if showOffsite { offsitePrompt }
-                    if forcePending { infoBanner("⚠️ Masih ada absen sebelumnya yang belum di-check-out. Pencet PRESENCE OUT dulu buat nutup — baru bisa absen lagi.", tone: .warning) }
-                    if pending { infoBanner("⏳ Checkout di luar area — nunggu approval BoD", tone: .warning) }
-                    if rec?.checkOutApproval == "REJECTED" { infoBanner("Checkout di luar area kamu ditolak BoD.", tone: .danger) }
+                    if forcePending { infoBanner(T("⚠️ You still have an earlier shift that was never checked out. Tap PRESENCE OUT to close it first — then you can clock in again."), tone: .warning) }
+                    if pending { infoBanner(T("⏳ Checkout outside the office area — waiting for BoD approval"), tone: .warning) }
+                    if rec?.checkOutApproval == "REJECTED" { infoBanner(T("Your out-of-area checkout was rejected by the BoD."), tone: .danger) }
                     if let banner { infoBanner(banner.text, tone: banner.good ? .success : .danger) }
                     metricsGrid
                     AttendanceRequestsCard(canReview: today?.canReviewAttendanceRequests ?? today?.canManageAttendance ?? false)
@@ -143,19 +143,19 @@ struct AttendanceView: View {
     private var metricsGrid: some View {
         let cols = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
         return LazyVGrid(columns: cols, spacing: 12) {
-            FunMetricCard(icon: "cup.and.saucer.fill", label: "Today's status", value: todayStatusValue,
-                          helper: "Live dari NEXUS attendance API", tint: NX.success)
-            FunMetricCard(icon: "mappin.circle.fill", label: "Office checkpoint", value: officeValue,
+            FunMetricCard(icon: "cup.and.saucer.fill", label: T("Today's status"), value: todayStatusValue,
+                          helper: T("Live from the NEXUS attendance API"), tint: NX.success)
+            FunMetricCard(icon: "mappin.circle.fill", label: T("Office checkpoint"), value: officeValue,
                           helper: "In \(dispRec?.checkInAt.flatMap(Self.hhmm) ?? "--:--") · Out \(dispRec?.checkOutAt.flatMap(Self.hhmm) ?? "--:--")", tint: NX.violet)
-            FunMetricCard(icon: "sparkles", label: "Day-off tokens", value: "\(today?.dayOffUsedThisMonth ?? 0)/\(today?.dayOffQuota ?? 4) used",
-                          helper: "Jatah day-off bulan ini", tint: NX.warning)
-            FunMetricCard(icon: "calendar", label: "Tanggal merah", value: "\(today?.redDateUsedThisMonth ?? 0)/\(today?.redDateQuota ?? 0) used",
-                          helper: "Jatah tanggal merah bulan ini", tint: Color(hex: "#fb7185"))
+            FunMetricCard(icon: "sparkles", label: T("Day-off tokens"), value: "\(today?.dayOffUsedThisMonth ?? 0)/\(today?.dayOffQuota ?? 4) used",
+                          helper: T("This month's day-off allowance"), tint: NX.warning)
+            FunMetricCard(icon: "calendar", label: T("Public holidays"), value: "\(today?.redDateUsedThisMonth ?? 0)/\(today?.redDateQuota ?? 0) used",
+                          helper: T("This month's public-holiday allowance"), tint: Color(hex: "#fb7185"))
         }
     }
 
     private var todayStatusValue: String {
-        if forcePending { return "Selesaikan absen kemarin" }
+        if forcePending { return T("Finish yesterday's attendance") }
         if let s = rec?.status, !s.isEmpty { return Self.humanize(s) }
         if let req = today?.todayRequest, let t = req.type { return "\(Self.humanize(t)) \(Self.humanize(req.status ?? ""))".trimmingCharacters(in: .whitespaces) }
         return "Ready to check in"
@@ -203,20 +203,20 @@ struct AttendanceView: View {
 
     private var offsitePrompt: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Kamu di luar area kantor").font(NXFont.text(14, .bold)).foregroundStyle(Color(hex: "#92400e"))
-            Text("Mau checkout dari sini? **Wajib isi alasan** — checkout-nya nunggu approval BoD dulu.")
+            Text(T("You're outside the office area")).font(NXFont.text(14, .bold)).foregroundStyle(Color(hex: "#92400e"))
+            Text(T("Want to check out from here? **A reason is required** — the checkout will wait for BoD approval."))
                 .font(NXFont.text(12)).foregroundStyle(Color(hex: "#b45309"))
-            TextField("Alasan (mis. shoot konten / meeting client)", text: $offsiteReason, axis: .vertical)
+            TextField(T("Reason (e.g. content shoot / client meeting)"), text: $offsiteReason, axis: .vertical)
                 .font(NXFont.text(14)).lineLimit(2, reservesSpace: true)
                 .padding(10).background(.white, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color(hex: "#fcd34d")))
             HStack(spacing: 8) {
-                Button("Batal") { showOffsite = false; offsiteReason = "" }
+                Button(T("Cancel")) { showOffsite = false; offsiteReason = "" }
                     .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
                     .frame(maxWidth: .infinity).padding(.vertical, 10)
                     .background(.white, in: RoundedRectangle(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(NX.border))
                 Button { showOffsite = false; Task { await submitOffsite() } } label: {
-                    Text(busy ? "Mengirim…" : "Checkout & minta approval").font(NXFont.text(12, .bold)).foregroundStyle(.white)
+                    Text(busy ? T("Sending…") : T("Checkout & request approval")).font(NXFont.text(12, .bold)).foregroundStyle(.white)
                         .frame(maxWidth: .infinity).padding(.vertical, 10)
                         .background(Color(hex: "#d97706"), in: RoundedRectangle(cornerRadius: 10))
                 }
@@ -233,15 +233,15 @@ struct AttendanceView: View {
     private var reflectionCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Refleksi harian").font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
+                Text(T("Daily reflection")).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
                 Spacer()
                 Text("\(reflectionCount)/\(reflectionMin)")
                     .font(NXFont.text(12, .bold)).monospacedDigit()
                     .foregroundStyle(reflectionOK ? NX.success : NX.warning)
             }
-            Text("Wajib diisi sebelum check-out. Ceritain apa yang kamu kerjain hari ini.")
+            Text(T("Required before check-out. Tell us what you worked on today."))
                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-            TextField("Hari ini aku ngerjain…", text: $reflection, axis: .vertical)
+            TextField(T("Today I worked on…"), text: $reflection, axis: .vertical)
                 .font(NXFont.text(14)).lineLimit(5...12)
                 .padding(10)
                 .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -260,7 +260,7 @@ struct AttendanceView: View {
     private var loadingRow: some View {
         HStack(spacing: 8) {
             ProgressView().tint(NX.violet)
-            Text("Memuat status absen…").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            Text(T("Loading attendance status…")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 6)
     }
@@ -272,7 +272,7 @@ struct AttendanceView: View {
             Text(msg).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
                 .frame(maxWidth: .infinity).multilineTextAlignment(.center)
             Button { Task { await load() } } label: {
-                Text("Coba lagi").font(NXFont.text(12, .bold)).foregroundStyle(.white)
+                Text(T("Try again")).font(NXFont.text(12, .bold)).foregroundStyle(.white)
                     .padding(.horizontal, 16).padding(.vertical, 8)
                     .background(NX.danger, in: Capsule())
             }
@@ -294,10 +294,10 @@ struct AttendanceView: View {
     // MARK: computed copy
 
     private var statusText: String {
-        if forcePending { return "Selesaikan absen kemarin" }
-        if checkedOut { return "Selesai hari ini 🎉" }
-        if checkedIn { return "Lagi clocked-in" }
-        return "Siap check-in"
+        if forcePending { return T("Finish yesterday's attendance") }
+        if checkedOut { return T("Done for today 🎉") }
+        if checkedIn { return T("Currently clocked-in") }
+        return T("Ready to check in")
     }
     private var officeSuffix: String { "" }
 
@@ -320,7 +320,7 @@ struct AttendanceView: View {
             switch outcome {
             case .success:
                 Haptics.success()
-                banner = Banner(text: action == .checkIn ? "Check-in berhasil ✓" : "Check-out berhasil ✓", good: true)
+                banner = Banner(text: action == .checkIn ? T("Check-in successful ✓") : T("Check-out successful ✓"), good: true)
                 if action == .checkOut { reflection = "" }
                 await load()
             case .outsideRadius:
@@ -328,7 +328,7 @@ struct AttendanceView: View {
                 offsiteReason = ""; showOffsite = true
             }
         } catch APIError.unauthorized { auth.logout() }
-        catch { Haptics.warning(); banner = Banner(text: (error as? LocalizedError)?.errorDescription ?? "Gagal.", good: false) }
+        catch { Haptics.warning(); banner = Banner(text: (error as? LocalizedError)?.errorDescription ?? T("Failed."), good: false) }
     }
 
     private func submitOffsite() async {
@@ -339,19 +339,19 @@ struct AttendanceView: View {
                                                               reflection: reflection, offsite: true,
                                                               reason: offsiteReason.trimmingCharacters(in: .whitespaces))
             if case .success = outcome {
-                banner = Banner(text: "Checkout terkirim — nunggu approval BoD ⏳", good: true)
+                banner = Banner(text: T("Checkout sent — waiting for BoD approval ⏳"), good: true)
                 reflection = ""
                 await load()
             }
         } catch APIError.unauthorized { auth.logout() }
-        catch { banner = Banner(text: (error as? LocalizedError)?.errorDescription ?? "Gagal.", good: false) }
+        catch { banner = Banner(text: (error as? LocalizedError)?.errorDescription ?? T("Failed."), good: false) }
     }
 
     private func load() async {
         error = nil
         do { today = try await APIClient.shared.attendanceToday() }
         catch APIError.unauthorized { auth.logout() }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? "Gagal memuat." }
+        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load.") }
         loading = false
     }
 
@@ -414,11 +414,11 @@ enum AttTone {
     }
     var label: String {
         switch self {
-        case .present: return "Hadir"
+        case .present: return T("Present")
         case .wfh:     return "WFH"
-        case .leave:   return "Cuti/Izin"
-        case .sick:    return "Sakit"
-        case .dayoff:  return "Day off"
+        case .leave:   return T("Leave/Permit")
+        case .sick:    return T("Sick")
+        case .dayoff:  return T("Day off")
         case .absent:  return "Absent"
         case .none:    return ""
         }
@@ -464,7 +464,7 @@ struct StreakBoardCard: View {
             var cells: [Int: AttTone] = [:]
             var rowByDay: [Int: AttendanceRow] = [:]
             for r in rs { if let d = dayOf(r.attendanceDate) { cells[d] = AttTone.of(r); rowByDay[d] = r } }
-            return Member(id: uid, name: rs.first?.user?.name ?? "Kamu", cells: cells, rowByDay: rowByDay)
+            return Member(id: uid, name: rs.first?.user?.name ?? T("You"), cells: cells, rowByDay: rowByDay)
         }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
     private func dayOf(_ iso: String?) -> Int? {
@@ -476,7 +476,7 @@ struct StreakBoardCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(canManage ? "Crew streak board" : "Riwayat absen kamu").font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+                    Text(canManage ? T("Crew streak board") : T("Your attendance history")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
                     Text(monthLabel.capitalized).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer()
@@ -489,7 +489,7 @@ struct StreakBoardCard: View {
             if loading {
                 ProgressView().tint(NX.violet).frame(maxWidth: .infinity).padding(.vertical, 20)
             } else if members.isEmpty {
-                Text("Belum ada absen tercatat bulan ini.").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                Text(T("No attendance recorded this month.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 12)
             } else {
                 grid
@@ -581,30 +581,30 @@ struct RecordActionsSheet: View {
                     }
 
                     VStack(spacing: 0) {
-                        timeRow("Check-in", row.checkInAt, "arrow.right.to.line", NX.success)
+                        timeRow(T("Check-in"), row.checkInAt, "arrow.right.to.line", NX.success)
                         Divider().overlay(NX.border)
-                        timeRow("Check-out", row.checkOutAt, "arrow.left.to.line", NX.danger)
+                        timeRow(T("Check-out"), row.checkOutAt, "arrow.left.to.line", NX.danger)
                     }
                     .padding(.horizontal, 12)
                     .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border))
 
-                    SectionLabel("Hapus data absen")
+                    SectionLabel(T("Delete attendance data"))
                     if row.checkOutAt != nil {
                         Button { Task { await del(part: "checkout") } } label: {
-                            Label("Hapus check-out (buka lagi)", systemImage: "arrow.uturn.backward")
+                            Label(T("Delete check-out (reopen)"), systemImage: "arrow.uturn.backward")
                                 .font(NXFont.text(14, .bold)).foregroundStyle(NX.danger).frame(maxWidth: .infinity).padding(.vertical, 12)
                                 .background(NX.danger.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.danger.opacity(0.3)))
                         }.buttonStyle(.plain).disabled(busy)
                     }
                     Button { confirmDelete = true } label: {
-                        Label("Hapus absen ini", systemImage: "trash.fill")
+                        Label(T("Delete this attendance record"), systemImage: "trash.fill")
                             .font(NXFont.text(14, .bold)).foregroundStyle(.white).frame(maxWidth: .infinity).padding(.vertical, 12)
                             .background(NX.danger, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }.buttonStyle(.plain).disabled(busy)
 
-                    Text("Buat ngebersihin check-in yang kepencet gak sengaja. \"Hapus absen ini\" = record-nya ilang + hari itu diamankan dari potongan absen. Tercatat di audit log.")
+                    Text(T("For cleaning up an accidental check-in. \"Delete this attendance record\" removes the record and shields that day from attendance deductions. It is written to the audit log."))
                         .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
 
                     if let err { Text(err).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger) }
@@ -613,12 +613,12 @@ struct RecordActionsSheet: View {
                 .padding(16)
             }
             .background(NX.background.ignoresSafeArea())
-            .navigationTitle("Atur absen").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Tutup") { dismiss() } } }
+            .navigationTitle(T("Manage attendance")).navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Close")) { dismiss() } } }
             .confirmationDialog("Hapus seluruh absen \(dateLabel)?", isPresented: $confirmDelete, titleVisibility: .visible) {
-                Button("Hapus", role: .destructive) { Task { await del(part: nil) } }
-                Button("Batal", role: .cancel) {}
-            } message: { Text("Data check-in & check-out hari itu kehapus permanen + hari itu diamankan dari potongan.") }
+                Button(T("Delete"), role: .destructive) { Task { await del(part: nil) } }
+                Button(T("Cancel"), role: .cancel) {}
+            } message: { Text(T("That day's check-in & check-out are deleted permanently, and the day is shielded from attendance deductions.")) }
         }
     }
 
@@ -640,7 +640,7 @@ struct RecordActionsSheet: View {
             await onDone()
             dismiss()
         } catch {
-            err = (error as? LocalizedError)?.errorDescription ?? "Gagal menghapus."
+            err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't delete.")
             busy = false
         }
     }

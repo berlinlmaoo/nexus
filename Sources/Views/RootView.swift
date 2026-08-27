@@ -8,15 +8,15 @@ struct RootView: View {
         if auth.isAuthenticated {
             TabView {
                 DashboardView()
-                    .tabItem { Label("Home", systemImage: "house.fill") }
+                    .tabItem { Label(T("Home"), systemImage: "house.fill") }
                 TasksView()
-                    .tabItem { Label("Tasks", systemImage: "checklist") }
+                    .tabItem { Label(T("Tasks"), systemImage: "checklist") }
                 InboxView()
-                    .tabItem { Label("Inbox", systemImage: "tray.fill") }
+                    .tabItem { Label(T("Inbox"), systemImage: "tray.fill") }
                 ProjectsView()
-                    .tabItem { Label("Projects", systemImage: "rectangle.stack.fill") }
+                    .tabItem { Label(T("Projects"), systemImage: "rectangle.stack.fill") }
                 MoreView()
-                    .tabItem { Label("More", systemImage: "ellipsis") }
+                    .tabItem { Label(T("More"), systemImage: "ellipsis") }
             }
             // NOTE: no .tabBarMinimizeBehavior — the bar stays full-size while scrolling (by request).
         } else {
@@ -37,37 +37,37 @@ struct MoreView: View {
                 NX.background.ignoresSafeArea()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 22) {
-                        MoreSection("Home Base") {
+                        MoreSection(T("Home Base")) {
                             LazyVGrid(columns: cols, spacing: 12) {
-                                MoreTile("Messages", "bubble.left.and.bubble.right.fill", NX.blue) { MessagesView() }
-                                MoreTile("Pengajuan Saya", "tray.full.fill", NX.warning) { SubmissionsView() }
-                                MoreTile("Team Calendar", "calendar", NX.violet) { TeamCalendarView() }
-                                MoreTile("Room Booking", "door.left.hand.open", NX.coral) { RoomBookingView() }
+                                MoreTile(T("Messages"), "bubble.left.and.bubble.right.fill", NX.blue) { MessagesView() }
+                                MoreTile(T("My Submissions"), "tray.full.fill", NX.warning) { SubmissionsView() }
+                                MoreTile(T("Team Calendar"), "calendar", NX.violet) { TeamCalendarView() }
+                                MoreTile(T("Room Booking"), "door.left.hand.open", NX.coral) { RoomBookingView() }
                             }
                         }
-                        MoreSection("Missions") {
+                        MoreSection(T("Missions")) {
                             LazyVGrid(columns: cols, spacing: 12) {
-                                MoreTile("Leaderboard", "trophy.fill", NX.warning) { LeaderboardView() }
-                                MoreTile("Reports", "chart.bar.fill", NX.success) { ReportsView() }
+                                MoreTile(T("Leaderboard"), "trophy.fill", NX.warning) { LeaderboardView() }
+                                MoreTile(T("Reports"), "chart.bar.fill", NX.success) { ReportsView() }
                             }
                         }
-                        MoreSection("Knowledge") {
+                        MoreSection(T("Knowledge")) {
                             LazyVGrid(columns: cols, spacing: 12) {
-                                MoreTile("Knowledge Library", "book.fill", NX.violet) { DocsView() }
-                                MoreTile("Forms", "doc.text.fill", NX.blue) { FormsView() }
+                                MoreTile(T("Knowledge Library"), "book.fill", NX.violet) { DocsView() }
+                                MoreTile(T("Forms"), "doc.text.fill", NX.blue) { FormsView() }
                             }
                         }
-                        MoreSection("Pulse Check") {
+                        MoreSection(T("Pulse Check")) {
                             LazyVGrid(columns: cols, spacing: 12) {
-                                MoreTile("Absensi", "clock.badge.checkmark.fill", NX.success) { AttendanceView() }
+                                MoreTile(T("Attendance"), "clock.badge.checkmark.fill", NX.success) { AttendanceView() }
                             }
                         }
-                        MoreSection("System") {
+                        MoreSection(T("System")) {
                             LazyVGrid(columns: cols, spacing: 12) {
-                                MoreTile("Ticket", "ticket.fill", NX.blue) { TicketsView() }
-                                MoreTile("Teams", "person.3.fill", NX.coral) { TeamsView() }
-                                MoreTile("Tuning Room", "gearshape.fill", NX.mutedFg) { SettingsView() }
-                                MoreTile("Control Room", "shield.fill", NX.danger) { AdminView() }
+                                MoreTile(T("Ticket"), "ticket.fill", NX.blue) { TicketsView() }
+                                MoreTile(T("Teams"), "person.3.fill", NX.coral) { TeamsView() }
+                                MoreTile(T("Tuning Room"), "gearshape.fill", NX.mutedFg) { SettingsView() }
+                                MoreTile(T("Control Room"), "shield.fill", NX.danger) { AdminView() }
                             }
                         }
 
@@ -76,7 +76,7 @@ struct MoreView: View {
                     .padding(16)
                 }
             }
-            .navigationTitle("More")
+            .navigationTitle(T("More"))
             .navigationBarTitleDisplayMode(.inline)
         }
     }
@@ -151,7 +151,7 @@ struct AccountFooter: View {
                 .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
             }
             Button { auth.logout() } label: {
-                Label("Logout", systemImage: "rectangle.portrait.and.arrow.right")
+                Label(T("Logout"), systemImage: "rectangle.portrait.and.arrow.right")
                     .font(NXFont.text(14, .semibold)).foregroundStyle(NX.danger)
                     .frame(maxWidth: .infinity).padding(.vertical, 13)
                     .background(NX.danger.opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))

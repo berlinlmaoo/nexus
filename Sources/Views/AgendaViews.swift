@@ -15,7 +15,7 @@ struct RoomBookingView: View {
     var body: some View {
         AgendaScaffold(title: "Room Booking", subtitle: "Booking ruangan — VIP, Meeting, Studio.",
                        loading: loading, error: error, isEmpty: bookings.isEmpty,
-                       emptyIcon: "calendar.badge.clock", emptyText: "Belum ada booking dalam 14 hari ke depan.",
+                       emptyIcon: "calendar.badge.clock", emptyText: T("No bookings in the next 14 days."),
                        retry: { await load() }) {
             ForEach(byDay, id: \.key) { day in
                 AgendaDay(label: AgendaRange.dayLabel(day.key)) {
@@ -34,7 +34,7 @@ struct RoomBookingView: View {
         let r = AgendaRange.nowToDays(14)
         do { bookings = try await APIClient.shared.roomBookings(start: r.start, end: r.end) }
         catch APIError.unauthorized { auth.logout() }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? "Gagal memuat booking." }
+        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load bookings.") }
         loading = false
     }
 }
@@ -56,7 +56,7 @@ struct TeamCalendarView: View {
     var body: some View {
         AgendaScaffold(title: "Team Calendar", subtitle: "Jadwal & meeting tim — live per team.",
                        loading: loading, error: error, isEmpty: events.isEmpty,
-                       emptyIcon: "calendar", emptyText: "Belum ada event dalam 14 hari ke depan.",
+                       emptyIcon: "calendar", emptyText: T("No events in the next 14 days."),
                        retry: { await load() },
                        toolbar: AnyView(teamMenu)) {
             ForEach(byDay, id: \.key) { day in
@@ -88,7 +88,7 @@ struct TeamCalendarView: View {
             teamId = teamId ?? teams.first?.id
             await loadEvents()
         } catch APIError.unauthorized { auth.logout() }
-        catch { self.error = "Gagal memuat tim."; loading = false }
+        catch { self.error = T("Couldn't load teams."); loading = false }
     }
     private func loadEvents() async {
         guard let tid = teamId else { events = []; loading = false; return }
@@ -121,7 +121,7 @@ struct AgendaScaffold<Content: View>: View {
                 VStack(spacing: 12) {
                     Image(systemName: "wifi.exclamationmark").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
                     Text(error).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
-                    Button("Coba lagi") { Task { await retry() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
+                    Button(T("Try again")) { Task { await retry() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
                 }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
             } else if isEmpty {
                 VStack(spacing: 8) {

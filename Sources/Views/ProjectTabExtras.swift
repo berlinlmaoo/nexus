@@ -55,7 +55,7 @@ struct SprintsTab: View {
                     VStack(alignment: .leading, spacing: 14) {
                         header
                         if sprints.isEmpty {
-                            TabEmpty(icon: "target", text: "Belum ada sprint. Bikin cycle buat fokusin eksekusi.")
+                            TabEmpty(icon: "target", text: T("No sprints yet. Create a cycle to focus execution."))
                         } else {
                             ForEach(sprints) { sprintCard($0) }
                         }
@@ -116,7 +116,7 @@ struct SprintsTab: View {
 
             if isOpen {
                 if s.taskRefs.isEmpty {
-                    Text("Belum ada card di sprint ini.").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                    Text(T("No cards in this sprint yet.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 } else {
                     ForEach(s.taskRefs) { t in
                         Button { onOpen(t.id) } label: {
@@ -169,23 +169,23 @@ struct CreateSprintSheet: View {
                 NX.background.ignoresSafeArea()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        field("NAMA SPRINT") {
+                        field(T("SPRINT NAME")) {
                             TextField("mis. Launch Week 01", text: $name).font(NXFont.text(16)).padding(12)
                                 .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
                         }
                         HStack(spacing: 12) {
                             field("MULAI") { DatePicker("", selection: $start, displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violet) }
-                            field("SELESAI") { DatePicker("", selection: $end, in: start..., displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violet) }
+                            field(T("END")) { DatePicker("", selection: $end, in: start..., displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violet) }
                         }
                         if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
                         Button { Task { await create() } } label: {
-                            HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text("Bikin sprint") }
+                            HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text(T("Create sprint")) }
                         }.buttonStyle(NexusPrimaryButton()).disabled(busy || name.trimmingCharacters(in: .whitespaces).isEmpty)
                     }.padding(20)
                 }
             }
             .navigationTitle("Sprint baru").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Batal") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
         }
     }
     private func field<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
@@ -198,7 +198,7 @@ struct CreateSprintSheet: View {
         do {
             try await APIClient.shared.createSprint(projectId: projectId, name: name.trimmingCharacters(in: .whitespaces), startDate: f.string(from: start), endDate: f.string(from: end))
             await onCreated(); dismiss()
-        } catch { err = (error as? LocalizedError)?.errorDescription ?? "Gagal bikin sprint." }
+        } catch { err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't create the sprint.") }
     }
 }
 
@@ -232,7 +232,7 @@ struct AutomationsTab: View {
     var body: some View {
         Group {
             if loading { ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity) }
-            else if rules.isEmpty { TabEmpty(icon: "bolt.slash", text: "Belum ada automation. Atur rule otomatis lewat web (desktop).") }
+            else if rules.isEmpty { TabEmpty(icon: "bolt.slash", text: T("No automations yet. Set up rules from the web app (desktop).")) }
             else {
                 ScrollView {
                     VStack(spacing: 12) { ForEach(rules) { card($0) } }.padding(16)
@@ -252,7 +252,7 @@ struct AutomationsTab: View {
                     .labelsHidden().tint(NX.violet)
             }
             HStack(alignment: .top, spacing: 8) {
-                badge("KALAU", a.ruleText(a.trigger), NX.blue)
+                badge(T("IF"), a.ruleText(a.trigger), NX.blue)
                 Image(systemName: "arrow.right").font(.system(size: 11, weight: .bold)).foregroundStyle(NX.mutedFg).padding(.top, 6)
                 badge("MAKA", a.ruleText(a.action), NX.violet)
             }
@@ -301,7 +301,7 @@ struct FinanceTab: View {
     var body: some View {
         Group {
             if loading { ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity) }
-            else if data == nil { TabEmpty(icon: "banknote", text: "Finance belum tersedia buat project ini.") }
+            else if data == nil { TabEmpty(icon: "banknote", text: T("Finance isn't available for this project yet.")) }
             else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
@@ -383,7 +383,7 @@ struct PnlTab: View {
     var body: some View {
         Group {
             if loading { ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity) }
-            else if data == nil { TabEmpty(icon: "dollarsign.circle", text: "P&L belum diaktifin / akses BoD diperlukan.") }
+            else if data == nil { TabEmpty(icon: "dollarsign.circle", text: T("P&L isn't enabled / BoD access required.")) }
             else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
@@ -485,7 +485,7 @@ struct SpreadsheetTab: View {
             if loading {
                 ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if rows.isEmpty {
-                TabEmpty(icon: "tablecells", text: "Belum ada task buat ditampilin di spreadsheet.")
+                TabEmpty(icon: "tablecells", text: T("No tasks to show in the spreadsheet yet."))
             } else {
                 ScrollView(.horizontal, showsIndicators: true) {
                     VStack(alignment: .leading, spacing: 0) {
@@ -509,12 +509,12 @@ struct SpreadsheetTab: View {
 
     private var headerRow: some View {
         HStack(spacing: 0) {
-            headerCell("Task", wTitle)
-            headerCell("Section", wLane)
-            headerCell("Status", wSmall)
-            headerCell("Priority", wSmall)
-            headerCell("Due", wSmall)
-            headerCell("Assignee", wLane)
+            headerCell(T("Task"), wTitle)
+            headerCell(T("Section"), wLane)
+            headerCell(T("Status"), wSmall)
+            headerCell(T("Priority"), wSmall)
+            headerCell(T("Due"), wSmall)
+            headerCell(T("Assignee"), wLane)
             ForEach(fields) { f in headerCell(f.name, wField) }
         }
         .background(NX.muted.opacity(0.5))

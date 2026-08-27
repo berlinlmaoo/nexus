@@ -6,7 +6,7 @@ import UniformTypeIdentifiers
 private func reqLabel(_ t: String?) -> String {
     switch (t ?? "").uppercased() {
     case "LEAVE": return "Cuti"; case "SICK": return "Sakit"; case "PERMIT": return "Izin"
-    case "DAY_OFF": return "Day Off"; case "RED_DATE": return "Tanggal Merah"; default: return (t ?? "—").capitalized
+    case "DAY_OFF": return "Day Off"; case "RED_DATE": return T("Public Holiday"); default: return (t ?? "—").capitalized
     }
 }
 private func reqStatusLabel(_ s: String?) -> String {
@@ -48,7 +48,7 @@ struct AttendanceRequestsCard: View {
             if loading {
                 ProgressView().tint(NX.violet).frame(maxWidth: .infinity).padding(.vertical, 8)
             } else if requests.isEmpty {
-                Text("Belum ada pengajuan.").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                Text(T("No requests yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             } else {
                 ForEach(requests) { row($0) }
             }
@@ -174,11 +174,13 @@ struct RequestComposerSheet: View {
                                 .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
                         }
                         if showAttachment {
-                            field(type == "SICK" ? "FOTO SURAT SAKIT\(attachmentRequired ? " (WAJIB)" : " (OPSIONAL)")" : "FOTO PENDUKUNG (OPSIONAL)") {
+                            field(type == "SICK"
+                                  ? T("SICK NOTE PHOTO") + (attachmentRequired ? T(" (REQUIRED)") : T(" (OPTIONAL)"))
+                                  : T("SUPPORTING PHOTO (OPTIONAL)")) {
                                 Button { showImporter = true } label: {
                                     HStack(spacing: 8) {
                                         Image(systemName: "camera").foregroundStyle(NX.mutedFg)
-                                        Text(attach?.name ?? "Pilih foto / file (maks 10MB)").font(NXFont.text(14))
+                                        Text(attach?.name ?? T("Pick a photo / file (max 10MB)")).font(NXFont.text(14))
                                             .foregroundStyle(attach == nil ? NX.mutedFg : NX.foreground).lineLimit(1)
                                         Spacer()
                                         if attach != nil { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg).onTapGesture { attach = nil } }
@@ -199,7 +201,7 @@ struct RequestComposerSheet: View {
             }
             .navigationTitle("Pengajuan baru")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Batal") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
             .fileImporter(isPresented: $showImporter, allowedContentTypes: [.image, .pdf], allowsMultipleSelection: false) { result in
                 if case let .success(urls) = result, let url = urls.first {
                     let scoped = url.startAccessingSecurityScopedResource()
@@ -229,7 +231,7 @@ struct RequestComposerSheet: View {
             await onCreated()
             dismiss()
         } catch {
-            err = (error as? LocalizedError)?.errorDescription ?? "Gagal kirim pengajuan."
+            err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't send the request.")
         }
     }
 }

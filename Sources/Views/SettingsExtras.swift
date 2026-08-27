@@ -54,7 +54,7 @@ struct WorkspaceMembersCard: View {
     private var inviteRow: some View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
-                TextField("Email member baru", text: $inviteEmail).keyboardType(.emailAddress).autocorrectionDisabled().textInputAutocapitalization(.never)
+                TextField(T("New member's email"), text: $inviteEmail).keyboardType(.emailAddress).autocorrectionDisabled().textInputAutocapitalization(.never)
                     .font(NXFont.text(14)).padding(10).background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 Menu {
                     ForEach(assignableRoles(viewerRole), id: \.self) { r in Button(orgRoleLabel(r)) { inviteRole = r } }
@@ -64,7 +64,7 @@ struct WorkspaceMembersCard: View {
                 }
             }
             Button { Task { await invite() } } label: {
-                HStack(spacing: 6) { if busy { ProgressView().scaleEffect(0.7).tint(.white) }; Text("Undang") }
+                HStack(spacing: 6) { if busy { ProgressView().scaleEffect(0.7).tint(.white) }; Text(T("Invite")) }
                     .font(NXFont.text(13, .bold)).foregroundStyle(.white)
                     .frame(maxWidth: .infinity).padding(.vertical, 9).background(NX.violet, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }.buttonStyle(.plain).disabled(busy || !inviteEmail.contains("@"))
@@ -102,7 +102,7 @@ struct WorkspaceMembersCard: View {
     private func invite() async {
         busy = true; err = nil; defer { busy = false }
         do { try await APIClient.shared.inviteWorkspaceMember(email: inviteEmail.trimmingCharacters(in: .whitespaces), role: inviteRole, workspaceId: workspaceId); inviteEmail = ""; await load() }
-        catch { err = "Gagal undang member." }
+        catch { err = T("Couldn't invite member.") }
     }
     private func setRole(_ m: WorkspaceRoster.Member, _ role: String) async {
         guard let id = m.id else { return }
@@ -111,6 +111,40 @@ struct WorkspaceMembersCard: View {
     private func remove(_ m: WorkspaceRoster.Member) async {
         guard let id = m.id else { return }
         try? await APIClient.shared.removeWorkspaceMember(memberId: id, workspaceId: workspaceId); await load()
+    }
+}
+
+// MARK: - Language
+
+/// In-app language switch. Reads/writes the shared @Observable store, so picking a language
+/// re-renders every screen immediately — no relaunch, unlike the system-locale mechanism.
+struct LanguageCard: View {
+    @State private var store = AppLanguage.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(T("LANGUAGE")).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violet)
+            Text(T("Applies immediately across the whole app."))
+                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            ForEach(AppLang.allCases) { l in
+                Button { store.lang = l } label: {
+                    HStack(spacing: 10) {
+                        Text(l.flag).font(.system(size: 20))
+                        Text(l.label).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
+                        Spacer(minLength: 0)
+                        Image(systemName: store.lang == l ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 18))
+                            .foregroundStyle(store.lang == l ? NX.violet : NX.mutedFg.opacity(0.4))
+                    }
+                    .padding(.vertical, 9).padding(.horizontal, 11)
+                    .background(store.lang == l ? NX.violet.opacity(0.10) : Color.clear,
+                                in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .nexusCard()
     }
 }
 
@@ -128,12 +162,12 @@ struct SecurityCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("SECURITY").font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violet)
-            secureField("Password sekarang", $current)
-            secureField("Password baru (min 6)", $new1)
-            secureField("Ulangi password baru", $new2)
+            secureField(T("Current password"), $current)
+            secureField(T("New password (min 6)"), $new1)
+            secureField(T("Repeat new password"), $new2)
             if let msg { Text(msg.text).font(NXFont.text(12, .semibold)).foregroundStyle(msg.ok ? NX.success : NX.danger) }
             Button { Task { await change() } } label: {
-                HStack(spacing: 6) { if busy { ProgressView().scaleEffect(0.7).tint(.white) }; Text("Ganti password") }
+                HStack(spacing: 6) { if busy { ProgressView().scaleEffect(0.7).tint(.white) }; Text(T("Change password")) }
                     .font(NXFont.text(13, .bold)).foregroundStyle(.white)
                     .frame(maxWidth: .infinity).padding(.vertical, 10).background(valid ? NX.violet : NX.mutedFg.opacity(0.4), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }.buttonStyle(.plain).disabled(busy || !valid)
@@ -147,8 +181,8 @@ struct SecurityCard: View {
     }
     private func change() async {
         busy = true; msg = nil; defer { busy = false }
-        do { try await APIClient.shared.changePassword(current: current, new: new1); msg = ("Password diganti ✓", true); current = ""; new1 = ""; new2 = "" }
-        catch { msg = ("Gagal — cek password sekarang.", false) }
+        do { try await APIClient.shared.changePassword(current: current, new: new1); msg = (T("Password changed ✓"), true); current = ""; new1 = ""; new2 = "" }
+        catch { msg = (T("Failed — check your current password."), false) }
     }
 }
 

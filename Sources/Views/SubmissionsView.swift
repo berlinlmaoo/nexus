@@ -36,10 +36,10 @@ struct SubmissionsView: View {
             if loading {
                 ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if loadError {
-                EmptyState(icon: "wifi.exclamationmark", title: "Gagal memuat", subtitle: "Coba lagi nanti.")
+                EmptyState(icon: "wifi.exclamationmark", title: T("Couldn't load"), subtitle: T("Try again later."))
             } else if subs.isEmpty {
-                EmptyState(icon: "tray", title: "Belum ada pengajuan",
-                           subtitle: "Form yang kamu ajukan bakal muncul di board ini lengkap sama statusnya.")
+                EmptyState(icon: "tray", title: T("No submissions yet"),
+                           subtitle: T("Forms you submit show up on this board together with their status."))
             } else {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 6) {

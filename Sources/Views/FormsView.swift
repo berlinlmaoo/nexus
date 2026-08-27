@@ -25,18 +25,18 @@ struct FormsView: View {
             VStack(spacing: 12) {
                 Image(systemName: "doc.text.magnifyingglass").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
                 Text(error).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
-                Button("Coba lagi") { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
+                Button(T("Try again")) { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
             }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
         } else if forms.isEmpty {
             VStack(spacing: 8) {
                 Image(systemName: "doc.text").font(.system(size: 42)).foregroundStyle(NX.mutedFg)
-                Text("Belum ada form").font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
-                Text("Intake form yang spawn task otomatis muncul di sini.").font(NXFont.text(13)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center)
+                Text(T("No forms yet")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+                Text(T("Intake forms that auto-spawn tasks appear here.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center)
             }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
         } else {
             ScrollView {
                 LazyVStack(spacing: 12) {
-                    Text("Form intake yang spawn task otomatis pas di-submit.")
+                    Text(T("An intake form that spawns a task automatically on submit."))
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).frame(maxWidth: .infinity, alignment: .leading)
                     ForEach(forms) { f in FormCard(form: f, projectName: projectNames[f.projectId ?? ""] ?? "Project") }
                 }
@@ -59,7 +59,7 @@ struct FormsView: View {
             }
             forms = all
         } catch APIError.unauthorized { auth.logout() }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? "Gagal memuat forms." }
+        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load forms.") }
         loading = false
     }
 }

@@ -61,7 +61,7 @@ struct MemberAttendanceSheet: View {
             Toggle(isOn: $useCustom) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Pakai shift khusus").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
-                    Text(useCustom ? "Beda dari shift tim/kantor" : "Ikut shift default tim/kantor").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    Text(useCustom ? T("Different from the team/office shift") : "Ikut shift default tim/kantor").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 }
             }.tint(NX.violet)
 
@@ -79,10 +79,10 @@ struct MemberAttendanceSheet: View {
 
             if let wsId = workspaceId, !wsId.isEmpty {
                 Button { Task { await saveShift(workspaceId: wsId) } } label: {
-                    Text(savingShift ? "Menyimpan…" : (shiftSaved ? "Tersimpan ✓" : "Simpan shift")).font(NXFont.text(14, .bold))
+                    Text(savingShift ? "Menyimpan…" : (shiftSaved ? "Tersimpan ✓" : T("Save shift"))).font(NXFont.text(14, .bold))
                 }.buttonStyle(NexusPrimaryButton()).disabled(savingShift)
             } else {
-                Text("Workspace belum kebaca — coba buka ulang.").font(NXFont.text(11)).foregroundStyle(NX.warning)
+                Text(T("Workspace not loaded yet — try reopening.")).font(NXFont.text(11)).foregroundStyle(NX.warning)
             }
         }
         .padding(16)
@@ -116,7 +116,7 @@ struct MemberAttendanceSheet: View {
                 }
             }.padding(.top, 6)
         } label: {
-            Text("Override per hari (opsional)").font(NXFont.text(13, .semibold)).foregroundStyle(NX.violet)
+            Text(T("Per-day override (optional)")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.violet)
         }
     }
 
@@ -127,7 +127,7 @@ struct MemberAttendanceSheet: View {
             SectionLabel("JATAH LIBUR — \(MonthKey.label(month))")
             if let d = dayoff {
                 HStack {
-                    Text("Kepakai bulan ini").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    Text(T("Used this month")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     Spacer()
                     Text("\(d.used ?? 0) / \(d.quota ?? 0) hari").font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground)
                 }
@@ -146,11 +146,11 @@ struct MemberAttendanceSheet: View {
 
     private func quotaEditor(_ d: DayoffsResponse) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Jatah / bulan").font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground)
+            Text(T("Allowance / month")).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground)
             HStack(spacing: 10) {
                 TextField("\(d.defaultQuota ?? 4)", text: $quotaText).keyboardType(.numberPad).font(NXFont.text(15, .bold))
                     .frame(width: 64).padding(8).background(NX.muted, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                Button { Task { await saveQuota(Int(quotaText)) } } label: { Text("Simpan").font(NXFont.text(13, .bold)) }
+                Button { Task { await saveQuota(Int(quotaText)) } } label: { Text(T("Save")).font(NXFont.text(13, .bold)) }
                     .buttonStyle(NexusPrimaryButton(fullWidth: false)).disabled(busyDayoff)
                 if d.quotaOverride != nil {
                     Button { Task { await saveQuota(nil) } } label: {

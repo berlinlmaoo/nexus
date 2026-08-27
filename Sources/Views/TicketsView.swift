@@ -24,7 +24,7 @@ struct Complaint: Decodable, Identifiable, Sendable {
     struct Attachment: Decodable, Sendable { let url: String? }
 
     var statusKey: String { (status ?? "OPEN").uppercased() }
-    var title: String { subject?.isEmpty == false ? subject! : "(tanpa judul)" }
+    var title: String { subject?.isEmpty == false ? subject! : T("(no subject)") }
     var tone: ChipTone {
         switch statusKey {
         case "RESOLVED": return .success
@@ -63,7 +63,7 @@ struct TicketsView: View {
         case "IN_REVIEW": return "In review"
         case "RESOLVED": return "Resolved"
         case "CLOSED": return "Closed"
-        default: return "Semua"
+        default: return T("All")
         }
     }
     private var filtered: [Complaint] {
@@ -75,7 +75,7 @@ struct TicketsView: View {
             NX.background.ignoresSafeArea()
             content
         }
-        .navigationTitle("Ticket")
+        .navigationTitle(T("Ticket"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .sheet(item: $selected) { TicketDetailSheet(ticket: $0) }
@@ -90,8 +90,8 @@ struct TicketsView: View {
             VStack(spacing: 0) {
                 filterBar
                 if filtered.isEmpty {
-                    EmptyState(icon: "ticket", title: "Nggak ada ticket di filter ini",
-                               subtitle: "Ganti filter di atas buat lihat status lain.")
+                    EmptyState(icon: "ticket", title: T("No tickets in this filter"),
+                               subtitle: T("Switch the filter above to see other statuses."))
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 10) {
@@ -164,7 +164,7 @@ struct TicketsView: View {
         error = nil
         do { items = try await APIClient.shared.complaints() }
         catch APIError.unauthorized { auth.logout() }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? "Gagal memuat ticket." }
+        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load tickets.") }
         loading = false
     }
 }
@@ -201,7 +201,7 @@ struct TicketDetailSheet: View {
                     }
                     if let b = ticket.body, !b.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
-                            SectionLabel("Isi laporan")
+                            SectionLabel(T("Report body"))
                             Text(b).font(NXFont.text(14)).foregroundStyle(NX.foreground)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -231,9 +231,9 @@ struct TicketDetailSheet: View {
                 .padding(16)
             }
             .background(NX.background.ignoresSafeArea())
-            .navigationTitle("Ticket")
+            .navigationTitle(T("Ticket"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Tutup") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Close")) { dismiss() } } }
         }
     }
 }

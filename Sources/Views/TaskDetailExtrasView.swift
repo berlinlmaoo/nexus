@@ -80,7 +80,7 @@ struct TaskCustomFieldsCard: View {
                 }
             } else if type == "PLACE" {
                 VStack(spacing: 6) {
-                    TextField("Lokasi / nama tempat", text: placeLabel(f)).font(NXFont.text(15)).padding(10)
+                    TextField(T("Place / location name"), text: placeLabel(f)).font(NXFont.text(15)).padding(10)
                         .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous)).onSubmit { Task { await commit(f) } }
                     TextField("Link Google Maps", text: placeMap(f)).font(NXFont.text(15)).keyboardType(.URL).autocorrectionDisabled().padding(10)
                         .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous)).onSubmit { Task { await commit(f) } }
@@ -156,7 +156,7 @@ struct TaskAttachmentsCard: View {
             if loading {
                 ProgressView().tint(NX.violet).frame(maxWidth: .infinity).padding(.vertical, 8)
             } else if items.isEmpty {
-                Text("Belum ada file. Tap + buat upload.").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                Text(T("No files yet. Tap + to upload.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             } else {
                 ForEach(items) { a in row(a) }
             }
@@ -168,8 +168,8 @@ struct TaskAttachmentsCard: View {
         }
         .sheet(item: $shareItem) { item in ActivityView(items: [item.url]) }
         .confirmationDialog("Hapus \"\(deleteTarget?.name ?? "")\"?", isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }), titleVisibility: .visible) {
-            Button("Hapus", role: .destructive) { if let a = deleteTarget { deleteTarget = nil; Task { await remove(a) } } }
-            Button("Batal", role: .cancel) { deleteTarget = nil }
+            Button(T("Delete"), role: .destructive) { if let a = deleteTarget { deleteTarget = nil; Task { await remove(a) } } }
+            Button(T("Cancel"), role: .cancel) { deleteTarget = nil }
         }
     }
 
@@ -189,7 +189,7 @@ struct TaskAttachmentsCard: View {
             .padding(10).background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
-        .contextMenu { Button(role: .destructive) { deleteTarget = a } label: { Label("Hapus", systemImage: "trash") } }
+        .contextMenu { Button(role: .destructive) { deleteTarget = a } label: { Label(T("Delete"), systemImage: "trash") } }
     }
     private func sub(_ a: TaskAttachment) -> String {
         var p: [String] = []
@@ -246,7 +246,7 @@ struct TaskDependenciesCard: View {
             if loading {
                 ProgressView().tint(NX.violet).frame(maxWidth: .infinity).padding(.vertical, 8)
             } else if blockedBy.isEmpty && blocking.isEmpty {
-                Text("Belum ada dependency.").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                Text(T("No dependencies yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             } else {
                 if !blockedBy.isEmpty {
                     group("BLOCKED BY", blockedBy.compactMap { d in d.dependsOnTask.map { ($0, d.id) } }, removable: true)
@@ -393,15 +393,15 @@ struct DependencyPicker: View {
                                 }
                             }.buttonStyle(.plain)
                         }
-                        if filtered.isEmpty { Text("Gak ada task lain.").font(NXFont.text(13)).foregroundStyle(NX.mutedFg) }
+                        if filtered.isEmpty { Text(T("No other tasks.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg) }
                     }
                     .scrollContentBackground(.hidden)
-                    .searchable(text: $query, prompt: "Cari task…")
+                    .searchable(text: $query, prompt: T("Search tasks…"))
                 }
             }
-            .navigationTitle("Tambah dependency")
+            .navigationTitle(T("Add dependency"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Batal") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
             .task {
                 tasks = (try? await APIClient.shared.project(projectId).taskLists?.flatMap { $0.tasks ?? [] }) ?? []
                 loading = false

@@ -20,7 +20,7 @@ struct DocsView: View {
         }
         .navigationTitle("Knowledge Library")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query, prompt: "Cari docs…")
+        .searchable(text: $query, prompt: T("Search docs…"))
         .task { await load() }
     }
 
@@ -30,8 +30,8 @@ struct DocsView: View {
         } else if let error {
             emptyState(icon: "book.closed", title: "Library terkunci", msg: error)
         } else if filtered.isEmpty {
-            emptyState(icon: "books.vertical", title: query.isEmpty ? "Shelf masih kosong" : "Gak ada yang cocok",
-                       msg: query.isEmpty ? "Belum ada docs di workspace ini." : "Coba kata kunci lain.")
+            emptyState(icon: "books.vertical", title: query.isEmpty ? T("The shelf is still empty") : T("No matches"),
+                       msg: query.isEmpty ? T("No docs in this workspace yet.") : T("Try another keyword."))
         } else {
             ScrollView {
                 LazyVStack(spacing: 12) {
@@ -106,13 +106,13 @@ struct DocReaderView: View {
                             Text(body).font(NXFont.text(15)).foregroundStyle(NX.foreground.opacity(0.92))
                                 .fixedSize(horizontal: false, vertical: true).lineSpacing(4)
                         } else {
-                            Text("Doc ini masih kosong.").font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+                            Text(T("This doc is still empty.")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
                         }
                     }
                     .padding(20)
                 }
             } else {
-                Text("Gagal memuat doc.").font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+                Text(T("Couldn't load the doc.")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
             }
         }
         .navigationTitle(title)

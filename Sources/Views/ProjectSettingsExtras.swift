@@ -16,7 +16,7 @@ struct CustomFieldEditor: View {
 
     private let types: [(String, String)] = [
         ("SELECT", "Dropdown"), ("MULTI_SELECT", "Multi-select"), ("STATUS", "Status"),
-        ("NUMBER", "Angka"), ("DATE", "Tanggal"), ("PLACE", "Tempat / Map")
+        ("NUMBER", "Angka"), ("DATE", T("Date")), ("PLACE", "Tempat / Map")
     ]
     private var isSelectType: Bool { ["SELECT", "MULTI_SELECT", "STATUS"].contains(type) }
     private var canSave: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty && (!isSelectType || !options.isEmpty) }
@@ -24,7 +24,7 @@ struct CustomFieldEditor: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                box("Nama field") {
+                box(T("Field name")) {
                     TextField("mis. Prioritas Klien", text: $name).font(NXFont.text(15))
                         .padding(10).background(NX.muted, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
@@ -49,7 +49,7 @@ struct CustomFieldEditor: View {
                     }
                 }
                 Button { Task { await save() } } label: {
-                    Text(busy ? "Menyimpan…" : "Buat field").font(NXFont.text(15, .bold))
+                    Text(busy ? "Menyimpan…" : T("Create field")).font(NXFont.text(15, .bold))
                 }.buttonStyle(NexusPrimaryButton()).disabled(!canSave || busy)
             }
             .padding(16)
@@ -71,7 +71,7 @@ struct CustomFieldEditor: View {
                     .background(NX.muted, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                 }
                 HStack {
-                    TextField("Tambah pilihan…", text: $newOption).font(NXFont.text(13))
+                    TextField(T("Add an option…"), text: $newOption).font(NXFont.text(13))
                         .onSubmit(addOption)
                     Button(action: addOption) { Image(systemName: "plus.circle.fill").foregroundStyle(NX.violet) }
                         .disabled(newOption.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -120,7 +120,7 @@ struct InviteByEmailView: View {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
                     SectionLabel("EMAIL")
-                    TextField("nama@perusahaan.com", text: $email).font(NXFont.text(15))
+                    TextField(T("name@company.com"), text: $email).font(NXFont.text(15))
                         .keyboardType(.emailAddress).autocorrectionDisabled().textInputAutocapitalization(.never)
                         .padding(10).background(NX.muted, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
@@ -132,13 +132,13 @@ struct InviteByEmailView: View {
                     Text(done).font(NXFont.text(12, .semibold)).foregroundStyle(NX.success)
                 }
                 Button { Task { await invite() } } label: {
-                    Text(busy ? "Mengirim…" : "Kirim undangan").font(NXFont.text(15, .bold))
+                    Text(busy ? "Mengirim…" : T("Send invite")).font(NXFont.text(15, .bold))
                 }.buttonStyle(NexusPrimaryButton()).disabled(busy || !email.contains("@"))
             }
             .padding(16)
         }
         .background(NX.background.ignoresSafeArea())
-        .navigationTitle("Undang member").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(T("Invite member")).navigationBarTitleDisplayMode(.inline)
     }
 
     private func invite() async {

@@ -14,7 +14,7 @@ struct TasksView: View {
                 NX.background.ignoresSafeArea()
                 content
             }
-            .navigationTitle("My Quest Log")
+            .navigationTitle(T("My Quest Log"))
             .task { await load() }
         }
     }
@@ -24,7 +24,7 @@ struct TasksView: View {
         let hot = open.filter { isDueSoon($0.dueDate) }
         let motion = open.filter { !isDueSoon($0.dueDate) }
         let done = tasks.filter { $0.isDone }
-        return [("Hot today", Array(hot.prefix(8))), ("In motion", Array(motion.prefix(12))), ("Recently slayed", Array(done.prefix(8)))]
+        return [(T("Hot today"), Array(hot.prefix(8))), (T("In motion"), Array(motion.prefix(12))), (T("Recently slayed"), Array(done.prefix(8)))]
             .filter { !$0.1.isEmpty }
     }
 
@@ -36,8 +36,8 @@ struct TasksView: View {
         } else if tasks.isEmpty {
             VStack(spacing: 8) {
                 Image(systemName: "checklist").font(.system(size: 42)).foregroundStyle(NX.mutedFg)
-                Text("Belum ada quest").font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
-                Text("Task yang di-assign ke kamu muncul di sini.").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                Text(T("No quests yet")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+                Text(T("Tasks assigned to you show up here.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView {
@@ -72,7 +72,7 @@ struct TasksView: View {
         VStack(spacing: 12) {
             Image(systemName: "wifi.exclamationmark").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
             Text(msg).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
-            Button("Coba lagi") { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
+            Button(T("Try again")) { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
         }.padding(32).frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -81,7 +81,7 @@ struct TasksView: View {
         guard let myId = auth.session?.userId else { loading = false; return }
         do { tasks = try await APIClient.shared.myTasks(assigneeId: myId) }
         catch APIError.unauthorized { auth.logout() }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? "Gagal memuat." }
+        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load.") }
         loading = false
     }
 
@@ -117,7 +117,7 @@ struct TaskRow: View {
             .buttonStyle(.plain)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(task.title ?? "Untitled").font(NXFont.text(14, .semibold))
+                Text(task.title ?? T("Untitled")).font(NXFont.text(14, .semibold))
                     .foregroundStyle(task.isDone ? NX.mutedFg : NX.foreground)
                     .strikethrough(task.isDone).lineLimit(1)
                 HStack(spacing: 10) {

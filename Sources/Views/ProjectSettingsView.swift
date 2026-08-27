@@ -65,14 +65,14 @@ struct ProjectSettingsView: View {
 
     private var identityCard: some View {
         card("Identitas") {
-            field("Nama project") { TextField("Nama", text: $name).textFieldStyle(.plain).font(NXFont.text(15)) }
+            field(T("Project name")) { TextField(T("Name"), text: $name).textFieldStyle(.plain).font(NXFont.text(15)) }
             field("Deskripsi") { TextField("Deskripsi singkat", text: $desc, axis: .vertical).lineLimit(2...4).font(NXFont.text(14)) }
             field("Ikon (emoji)") {
                 HStack {
                     if iconIsImage {
                         CachedImage(url: URL(string: icon.hasPrefix("http") ? icon : Config.baseURL.absoluteString + icon)) { $0.resizable().scaledToFill() } placeholder: { Color.clear }
                             .frame(width: 32, height: 32).clipShape(RoundedRectangle(cornerRadius: 8))
-                        Button("Pakai emoji lagi") { icon = "🚀" }.font(NXFont.text(12, .semibold)).foregroundStyle(NX.violet)
+                        Button(T("Use an emoji instead")) { icon = "🚀" }.font(NXFont.text(12, .semibold)).foregroundStyle(NX.violet)
                     } else {
                         TextField("🚀", text: $icon).font(.system(size: 24)).frame(width: 50)
                             .onChange(of: icon) { _, v in if v.count > 2 { icon = String(v.prefix(2)) } }
@@ -92,7 +92,7 @@ struct ProjectSettingsView: View {
                 }
             }
             Button { Task { await saveIdentity() } } label: {
-                Text(savingIdentity ? "Menyimpan…" : (identitySaved ? "Tersimpan ✓" : "Simpan identitas")).font(NXFont.text(14, .bold))
+                Text(savingIdentity ? "Menyimpan…" : (identitySaved ? "Tersimpan ✓" : T("Save identity"))).font(NXFont.text(14, .bold))
             }.buttonStyle(NexusPrimaryButton()).disabled(savingIdentity)
         }
     }
@@ -101,18 +101,18 @@ struct ProjectSettingsView: View {
 
     private var customizeCard: some View {
         card("Customize") {
-            flagToggle("Mode duplicate task", "Multi-select duplicate + popup due date buat task berulang.", $batchDup) {
+            flagToggle(T("Task duplicate mode"), T("Multi-select duplicate + a due-date popup for recurring tasks."), $batchDup) {
                 await patch(["enableTaskBatchDuplicate": batchDup])
             }
             if canPnl {
                 Divider().overlay(NX.border)
-                flagToggle("P&L Dashboard", "View keuangan standalone: pengeluaran harian, pipeline uang masuk.", $pnl) {
+                flagToggle("P&L Dashboard", T("Standalone finance view: daily spend, incoming-cash pipeline."), $pnl) {
                     await patch(["enablePnlDashboard": pnl])
                 }
             }
             Divider().overlay(NX.border)
-            flagToggle("Auto assign", "Otomatis assign member kepilih ke task baru di project ini.", $autoAssign) {
-                if autoAssign && autoIds.isEmpty { autoAssign = false; show("Pilih minimal satu member dulu."); return }
+            flagToggle("Auto assign", T("Auto-assign the selected members to new tasks in this project."), $autoAssign) {
+                if autoAssign && autoIds.isEmpty { autoAssign = false; show(T("Pick at least one member first.")); return }
                 await patch(["autoAssignEnabled": autoAssign, "autoAssignAssigneeIds": Array(autoIds)])
             }
             if autoAssign {
@@ -141,7 +141,7 @@ struct ProjectSettingsView: View {
     private var fieldsCard: some View {
         card("Custom Fields") {
             if fields.isEmpty {
-                Text("Belum ada custom field di project ini.").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                Text(T("No custom fields in this project yet.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             }
             ForEach(fields) { f in
                 HStack(spacing: 10) {
@@ -165,7 +165,7 @@ struct ProjectSettingsView: View {
     // MARK: members
 
     private var membersCard: some View {
-        card("Member Project") {
+        card(T("Project members")) {
             ForEach(projectMembers) { m in
                 HStack(spacing: 10) {
                     AvatarView(url: m.user?.avatar, initial: m.initial, size: 32)
@@ -182,11 +182,11 @@ struct ProjectSettingsView: View {
                         Button(r.displayName) { Task { await addMember(r) } }
                     }
                 } label: {
-                    Label("Tambah member", systemImage: "person.badge.plus").font(NXFont.text(13, .bold)).foregroundStyle(NX.violet)
+                    Label(T("Add member"), systemImage: "person.badge.plus").font(NXFont.text(13, .bold)).foregroundStyle(NX.violet)
                 }
             }
             NavigationLink { InviteByEmailView(projectId: projectId) } label: {
-                Label("Undang lewat email", systemImage: "envelope").font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                Label(T("Invite by email"), systemImage: "envelope").font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
             }
         }
     }
@@ -200,11 +200,11 @@ struct ProjectSettingsView: View {
             }.disabled(busy)
             Divider().overlay(NX.border)
             Button(role: .destructive) { confirmDelete = true } label: {
-                Label("Hapus project", systemImage: "trash").font(NXFont.text(14, .bold)).foregroundStyle(NX.danger)
+                Label(T("Delete project"), systemImage: "trash").font(NXFont.text(14, .bold)).foregroundStyle(NX.danger)
             }.disabled(busy)
-            .confirmationDialog("Hapus \"\(name)\"? Semua task, field & data project ikut kehapus. Gabisa di-undo.", isPresented: $confirmDelete, titleVisibility: .visible) {
-                Button("Hapus permanen", role: .destructive) { Task { await deleteProj() } }
-                Button("Batal", role: .cancel) {}
+            .confirmationDialog("\(T("Delete")) \"\(name)\"? \(T("Every task, field and project data goes with it. This cannot be undone."))", isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button(T("Delete permanently"), role: .destructive) { Task { await deleteProj() } }
+                Button(T("Cancel"), role: .cancel) {}
             }
         }
     }
@@ -279,7 +279,7 @@ struct ProjectSettingsView: View {
     }
     private func patch(_ fields: [String: Any]) async {
         if (try? await APIClient.shared.updateProject(projectId, fields: fields)) != nil { await onChange() }
-        else { show("Gagal nyimpen — coba lagi.") }
+        else { show(T("Couldn't save — try again.")) }
     }
     private func deleteField(_ f: CustomField) async {
         busy = true; try? await APIClient.shared.deleteCustomFieldDef(id: f.id); await reloadFields(); busy = false
@@ -302,14 +302,14 @@ struct ProjectSettingsView: View {
     private func duplicate() async {
         busy = true
         if (try? await APIClient.shared.duplicateProject(projectId: projectId)) != nil { show("Project diduplikat ✓") }
-        else { show("Gagal duplikat.") }
+        else { show(T("Couldn't duplicate.")) }
         busy = false
     }
     private func deleteProj() async {
         busy = true
         if (try? await APIClient.shared.deleteProject(projectId: projectId)) != nil {
             dismiss(); onDeleted()
-        } else { show("Gagal hapus."); busy = false }
+        } else { show(T("Couldn't delete.")); busy = false }
     }
     private func show(_ t: String) {
         toast = t

@@ -39,7 +39,7 @@ struct OfficesCard: View {
             if loading {
                 ProgressView().tint(NX.violet).frame(maxWidth: .infinity).padding(.vertical, 8)
             } else if offices.isEmpty {
-                Text("Belum ada office. Tambah titik kantor + radius geofence.").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                Text(T("No offices yet. Add an office point + geofence radius.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             } else {
                 ForEach(offices) { row($0) }
             }
@@ -104,7 +104,7 @@ struct OfficeComposerSheet: View {
                 NX.background.ignoresSafeArea()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        f("NAMA OFFICE") { field($name, "mis. PATS HQ") }
+                        f(T("OFFICE NAME")) { field($name, "mis. PATS HQ") }
                         f("ALAMAT (opsional)") { field($address, "Alamat") }
                         HStack(spacing: 12) {
                             f("LATITUDE") { field($lat, "-6.2").keyboardType(.numbersAndPunctuation) }
@@ -120,13 +120,13 @@ struct OfficeComposerSheet: View {
                         }
                         if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
                         Button { Task { await save() } } label: {
-                            HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text(editing == nil ? "Bikin office" : "Simpan") }
+                            HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text(editing == nil ? T("Create office") : T("Save")) }
                         }.buttonStyle(NexusPrimaryButton()).disabled(busy || !canSave)
                     }.padding(20)
                 }
             }
             .navigationTitle(editing == nil ? "Office baru" : "Edit office").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Batal") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
             .onAppear { loc.requestPermissionIfNeeded() }
         }
     }
@@ -156,6 +156,6 @@ struct OfficeComposerSheet: View {
             else { fields.removeValue(forKey: "address"); if !address.isEmpty { fields["address"] = address }
                    try await APIClient.shared.createOffice(fields: fields) }
             await onSaved(); dismiss()
-        } catch { err = (error as? LocalizedError)?.errorDescription ?? "Gagal simpan office." }
+        } catch { err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't save the office.") }
     }
 }

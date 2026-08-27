@@ -44,7 +44,7 @@ struct SearchView: View {
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").font(.system(size: 15)).foregroundStyle(NX.mutedFg)
-            TextField("Cari task, project, doc, member…", text: $query)
+            TextField(T("Search tasks, projects, docs, members…"), text: $query)
                 .font(NXFont.text(15)).focused($focused).autocorrectionDisabled().submitLabel(.search)
             if !query.isEmpty {
                 Button { query = ""; results = nil } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg) }.buttonStyle(.plain)
@@ -60,7 +60,7 @@ struct SearchView: View {
         if loading {
             ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if query.trimmingCharacters(in: .whitespaces).count < 2 {
-            placeholder("magnifyingglass", "Ketik minimal 2 huruf buat nyari.")
+            placeholder("magnifyingglass", T("Type at least 2 characters to search."))
         } else if let r = results, r.isEmpty {
             placeholder("text.magnifyingglass", "Gak ada hasil buat \"\(query)\".")
         } else if let r = results {
@@ -98,7 +98,7 @@ struct SearchView: View {
                 }.padding(16)
             }
         } else {
-            placeholder("magnifyingglass", "Mulai ngetik buat nyari.")
+            placeholder("magnifyingglass", T("Start typing to search."))
         }
     }
 

@@ -11,8 +11,8 @@ final class LocationManager: NSObject, CLLocationManagerDelegate {
         case denied, unavailable
         var errorDescription: String? {
             switch self {
-            case .denied: return "Izin lokasi ditolak. Aktifin di Settings › NEXUS › Location."
-            case .unavailable: return "Lokasi gak kebaca. Pastiin GPS nyala & sinyalnya cukup."
+            case .denied: return T("Location permission denied. Turn it on in Settings › NEXUS › Location.")
+            case .unavailable: return T("Couldn't read your location. Make sure GPS is on and the signal is good.")
             }
         }
     }

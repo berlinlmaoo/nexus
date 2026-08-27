@@ -9,8 +9,8 @@ enum APIError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .http(let code): return "Server error (\(code))."
-        case .unauthorized: return "Sesi habis — login lagi ya."
-        case .decoding: return "Gagal baca data dari server."
+        case .unauthorized: return T("Session expired — please log in again.")
+        case .decoding: return T("Couldn't read data from the server.")
         case .transport(let msg): return msg
         }
     }

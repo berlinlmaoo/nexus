@@ -143,7 +143,7 @@ struct ProjectDetailView: View {
                 VStack(spacing: 12) {
                     Image(systemName: "lock").font(.system(size: 38)).foregroundStyle(NX.mutedFg)
                     Text(error).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center)
-                    Button("Coba lagi") { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
+                    Button(T("Try again")) { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
                 }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
             } else if let detail {
                 switch tab {
@@ -180,7 +180,7 @@ struct ProjectDetailView: View {
             VStack(spacing: 8) {
                 Image(systemName: "square.stack.3d.up.slash").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
                 Text("No lanes yet").font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
-                Text("Project ini belum punya lane.").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                Text(T("This project has no lanes yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
@@ -196,8 +196,8 @@ struct ProjectDetailView: View {
             lanes = Self.mergeSubtasks(into: d.taskLists ?? [], all: all)
         }
         catch APIError.unauthorized { auth.logout() }
-        catch APIError.http(403) { error = "Project terkunci — kamu belum jadi member project ini." }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? "Gagal memuat project." }
+        catch APIError.http(403) { error = T("Project locked — you're not a member of this project.") }
+        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load the project.") }
         loading = false
     }
 
@@ -284,7 +284,7 @@ struct LaneColumn: View {
                     }
             }
             if (lane.tasks ?? []).isEmpty && !composing {
-                Text("Kosong").font(NXFont.text(12)).foregroundStyle(NX.mutedFg.opacity(0.6))
+                Text(T("Empty")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg.opacity(0.6))
                     .frame(maxWidth: .infinity).padding(.vertical, 18)
                     .background(NX.card.opacity(0.5), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [5])))
@@ -292,17 +292,17 @@ struct LaneColumn: View {
 
             if composing {
                 VStack(spacing: 8) {
-                    TextField("Judul task…", text: $newTitle, axis: .vertical)
+                    TextField(T("Task title…"), text: $newTitle, axis: .vertical)
                         .font(NXFont.text(14)).focused($focused).lineLimit(3)
                         .padding(10).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.violet.opacity(0.5)))
                         .onSubmit(submit)
                     HStack(spacing: 8) {
-                        Button("Batal") { composing = false; newTitle = "" }
+                        Button(T("Cancel")) { composing = false; newTitle = "" }
                             .font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
                         Spacer()
                         Button(action: submit) {
-                            HStack(spacing: 4) { if adding { ProgressView().scaleEffect(0.7) }; Text("Tambah") }
+                            HStack(spacing: 4) { if adding { ProgressView().scaleEffect(0.7) }; Text(T("Add")) }
                                 .font(NXFont.text(13, .bold)).foregroundStyle(.white)
                                 .padding(.horizontal, 14).padding(.vertical, 7)
                                 .background(NX.violet, in: Capsule())
@@ -312,7 +312,7 @@ struct LaneColumn: View {
                 }
             } else {
                 Button { composing = true; focused = true } label: {
-                    HStack(spacing: 6) { Image(systemName: "plus"); Text("Tambah task") }
+                    HStack(spacing: 6) { Image(systemName: "plus"); Text(T("Add task")) }
                         .font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
                         .frame(maxWidth: .infinity).padding(.vertical, 10)
                         .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 14, style: .continuous))

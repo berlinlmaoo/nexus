@@ -32,12 +32,12 @@ struct SettingsView: View {
 
                     // editable profile
                     VStack(alignment: .leading, spacing: 14) {
-                        field("NAMA") {
-                            TextField("Nama kamu", text: $name)
+                        field(T("NAME")) {
+                            TextField(T("Your name"), text: $name)
                                 .font(NXFont.text(16)).padding(12)
                                 .background(NX.muted, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
-                        field("EMAIL") {
+                        field(T("EMAIL")) {
                             Text(email.isEmpty ? "—" : email).font(NXFont.text(15)).foregroundStyle(NX.mutedFg)
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(12)
                                 .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -45,7 +45,7 @@ struct SettingsView: View {
                         Button { Task { await save() } } label: {
                             HStack(spacing: 8) {
                                 if saving { ProgressView().tint(.white) }
-                                Text(savedOK ? "Tersimpan ✓" : "Simpan profil")
+                                Text(savedOK ? T("Saved ✓") : T("Save profile"))
                             }
                         }
                         .buttonStyle(NexusPrimaryButton())
@@ -53,6 +53,7 @@ struct SettingsView: View {
                     }
                     .nexusCard()
 
+                    LanguageCard()
                     if let wsId = workspaceId { WorkspaceMembersCard(workspaceId: wsId) }
                     SecurityCard()
 
@@ -60,7 +61,7 @@ struct SettingsView: View {
                     VStack(spacing: 0) {
                         Button(role: .destructive) { auth.logout() } label: {
                             HStack {
-                                Label("Logout", systemImage: "rectangle.portrait.and.arrow.right")
+                                Label(T("Logout"), systemImage: "rectangle.portrait.and.arrow.right")
                                     .font(NXFont.text(15, .semibold)).foregroundStyle(NX.danger)
                                 Spacer()
                             }
@@ -76,7 +77,7 @@ struct SettingsView: View {
             }
             .opacity(loading ? 0.4 : 1)
         }
-        .navigationTitle("Tuning Room")
+        .navigationTitle(T("Tuning Room"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
     }
