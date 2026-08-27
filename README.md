@@ -1,7 +1,7 @@
 # NEXUS iOS (native SwiftUI)
 
 **Standalone repo** — terpisah dari monorepo web/backend NEXUS. Cuma ngomong ke backend yang udah
-ke-deploy (`https://nexus.patsgroup.id`) via token di Keychain. **No WebView, fully native UI.**
+ke-deploy (`https://nexus.znetworks.id`) via token di Keychain. **No WebView, fully native UI.**
 
 > Endpoint `POST /api/auth/app-login` yang dipakai app ini hidup di **repo backend NEXUS** (bukan di
 > sini) — udah ke-deploy ke prod.
@@ -19,9 +19,21 @@ ke-deploy (`https://nexus.patsgroup.id`) via token di Keychain. **No WebView, fu
 
 ### Base URL
 
-`Sources/Config.swift` → `https://nexus.patsgroup.id`. Itu domain **publik** yang nge-front backend
-app-beta (Cloudflare → nginx :3000 → /api → app-beta :3002, DB prod) dan satu-satunya yang punya
-endpoint app-login. `nexusbeta.patsgroup.id` **tidak ada di DNS publik** — jangan dipakai.
+`Sources/Config.swift` → `https://nexus.znetworks.id` (backend di Proxmox).
+
+**Wajib domain kanonik, jangan yang redirect.** `nexus.patsgroup.id` (domain lama) sekarang cuma
+302 ke znetworks — dan URLSession **nurunin POST jadi GET** waktu ngikutin 301/302. Route app-login
+cuma nerima POST, jadi hasilnya `Server error (405)` di layar login, dan semua write request lain
+(absen, bikin task, komentar, upload) bakal kena hal yang sama. Cek cepat kalau curiga:
+
+```sh
+curl -o /dev/null -w '%{http_code} %{redirect_url}\n' \
+  -X POST -H 'Content-Type: application/json' -d '{}' \
+  https://nexus.znetworks.id/api/auth/app-login
+# 401 (tanpa redirect) = sehat. 3xx = domainnya redirect, jangan dipakai di Config.
+```
+
+`nexusbeta.patsgroup.id` **tidak ada di DNS publik** — jangan dipakai.
 
 ## Sekali setup di Mac ini
 
