@@ -926,7 +926,10 @@ struct ProjectChatTab: View {
     var body: some View {
         Group {
             if loading { ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity) }
-            else if let room { ChatThreadView(conversationId: room.id, title: room.name ?? projectName) }
+            else if let room {
+                ChatThreadView(conversationId: room.id, title: room.name ?? projectName,
+                               members: room.members ?? [], projectId: projectId)
+            }
             else { TabEmpty(icon: "bubble.left.and.bubble.right", text: "Project chat room belum aktif (perlu backend Messages).") }
         }
         .task {

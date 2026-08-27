@@ -18,21 +18,9 @@ struct RootView: View {
                 MoreView()
                     .tabItem { Label("More", systemImage: "ellipsis") }
             }
-            .tabBarMinimizeOnScrollCompat()
+            // NOTE: no .tabBarMinimizeBehavior — the bar stays full-size while scrolling (by request).
         } else {
             LoginView()
-        }
-    }
-}
-
-extension View {
-    /// iOS 26: shrink the native tab bar into a compact pill while scrolling down, expand on scroll
-    /// up (Liquid Glass). No-op on earlier OSes (deployment target is iOS 17).
-    @ViewBuilder func tabBarMinimizeOnScrollCompat() -> some View {
-        if #available(iOS 26.0, *) {
-            self.tabBarMinimizeBehavior(.onScrollDown)
-        } else {
-            self
         }
     }
 }
