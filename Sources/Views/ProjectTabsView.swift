@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 // MARK: - Tab model
 
 enum ProjectTab: String, CaseIterable, Identifiable {
-    case overview = "Overview", board = "Board", list = "List", calendar = "Calendar"
+    case overview = "Overview", board = "Board", list = "List", sheet = "Spreadsheet", calendar = "Calendar"
     case timeline = "Timeline", sprints = "Sprints", automations = "Automations"
     case pages = "Pages", forms = "Forms", finance = "Finance", pnl = "P&L", files = "Files", chat = "Chat"
     var id: String { rawValue }
@@ -13,6 +13,7 @@ enum ProjectTab: String, CaseIterable, Identifiable {
         case .overview: return "square.grid.2x2.fill"
         case .board:    return "rectangle.split.3x1.fill"
         case .list:     return "list.bullet"
+        case .sheet:    return "tablecells"
         case .calendar: return "calendar"
         case .timeline: return "chart.bar.xaxis"
         case .sprints:  return "target"

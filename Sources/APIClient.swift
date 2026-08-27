@@ -351,6 +351,14 @@ struct APIClient {
 
     // MARK: - Admin (Control Room) editing
 
+    // MARK: - Ticket (web calls this "complaints" — a private line to the BoD)
+
+    /// No status query param: the web builds it inside a helper we can't see, so we take the default
+    /// set and filter client-side rather than guess a parameter name.
+    func complaints() async throws -> [Complaint] {
+        (try await run(makeRequest("/api/complaints"), decode: ComplaintsResponse.self)).complaints ?? []
+    }
+
     func auditLogs() async throws -> [AuditLog] {
         (try await run(makeRequest("/api/audit"), decode: AuditLogsResponse.self)).logs ?? []
     }

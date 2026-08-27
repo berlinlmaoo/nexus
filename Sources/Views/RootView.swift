@@ -64,6 +64,7 @@ struct MoreView: View {
                         }
                         MoreSection("System") {
                             LazyVGrid(columns: cols, spacing: 12) {
+                                MoreTile("Ticket", "ticket.fill", NX.blue) { TicketsView() }
                                 MoreTile("Teams", "person.3.fill", NX.coral) { TeamsView() }
                                 MoreTile("Tuning Room", "gearshape.fill", NX.mutedFg) { SettingsView() }
                                 MoreTile("Control Room", "shield.fill", NX.danger) { AdminView() }
