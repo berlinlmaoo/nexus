@@ -68,9 +68,39 @@ Linux/Proxmox. Yang bisa dihilangkan cuma GUI-nya.
 
 ```sh
 ./build.sh check    # cek compile doang — cepat, TANPA signing  ← dipakai sehari-hari
-./build.sh run      # build + pasang ke iPhone yang kecolok
+./build.sh run      # build + pasang + JALANIN di iPhone, log ke terminal
+./build.sh log      # nempel ke log app yang lagi jalan
+./build.sh devices  # daftar iPhone yang kebaca
+./build.sh team     # cari Team ID Apple kamu
 ./build.sh ipa      # archive + export .ipa ke build/ipa/
 ```
+
+### Sekali setup buat test di HP
+
+```sh
+./build.sh team              # lihat Team ID (10 huruf di dalam kurung)
+echo XXXXXXXXXX > .team      # simpen; .team nggak ikut git
+```
+
+**Kenapa perlu `.team`:** `project.yml` sengaja ngosongin `DEVELOPMENT_TEAM`. Kalau
+di-set lewat GUI Xcode, nilainya nyangkut di `.xcodeproj` — yang **ketimpa tiap
+`xcodegen generate`**, jadi hilang lagi tiap ganti branch. File `.team` bikin awet.
+
+Di iPhone, sekali aja: **Settings → Privacy & Security → Developer Mode → ON** (restart),
+lalu sesudah install pertama: **Settings → General → VPN & Device Management** → percayai
+sertifikatnya.
+
+### Loop harian
+
+```sh
+git pull
+./build.sh check    # gagal? tempel error-nya, beres dulu
+./build.sh run      # masuk ke HP + log jalan di terminal
+```
+
+`run` nggak cuma install — dia **jalanin** app-nya dan nyalurin stdout/stderr ke terminal,
+jadi crash dan pesan error kelihatan langsung. Ctrl-C cuma ngelepas terminal; app-nya
+tetap jalan di HP.
 
 `check` yang paling sering kepakai: dia nangkap **semua** error compile tanpa perlu
 signing, provisioning, device, atau packaging — persis yang dibutuhin buat verifikasi

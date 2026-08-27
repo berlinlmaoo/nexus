@@ -6,3 +6,6 @@ DerivedData/
 *.xcuserstate
 .DS_Store
 xcuserdata/
+
+# Team ID Apple (per-mesin, jangan di-commit)
+.team
