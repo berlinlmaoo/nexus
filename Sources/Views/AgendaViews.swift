@@ -13,7 +13,7 @@ struct RoomBookingView: View {
     }
 
     var body: some View {
-        AgendaScaffold(title: "Room Booking", subtitle: "Booking ruangan — VIP, Meeting, Studio.",
+        AgendaScaffold(title: T("Room Booking"), subtitle: T("Room bookings — VIP, Meeting, Studio."),
                        loading: loading, error: error, isEmpty: bookings.isEmpty,
                        emptyIcon: "calendar.badge.clock", emptyText: T("No bookings in the next 14 days."),
                        retry: { await load() }) {
@@ -48,52 +48,148 @@ struct TeamCalendarView: View {
     @State private var loading = true
     @State private var error: String?
 
-    private var byDay: [(key: String, items: [CalendarEvent])] {
-        let groups = Dictionary(grouping: events, by: { AgendaRange.dayKey($0.startsAt) })
-        return groups.keys.sorted().map { ($0, groups[$0]!.sorted { ($1.isAllDay ?? false ? 1 : 0, $0.startsAt) < ($0.isAllDay ?? false ? 1 : 0, $1.startsAt) }) }
+    // Month grid (the web's shape) instead of a flat 14-day list.
+    @State private var monthOffset = 0
+    @State private var selectedDay: Int?
+
+    private var cal: Calendar { ProjDate.cal }
+    private var monthDate: Date { cal.date(byAdding: .month, value: monthOffset, to: Date()) ?? Date() }
+    private var comps: DateComponents { cal.dateComponents([.year, .month], from: monthDate) }
+    private var daysInMonth: Int { cal.range(of: .day, in: .month, for: monthDate)?.count ?? 30 }
+    private var leadingBlanks: Int {
+        let first = cal.date(from: comps) ?? monthDate
+        return (cal.component(.weekday, from: first) + 5) % 7   // Monday = 0
+    }
+    private var eventsByDay: [Int: [CalendarEvent]] {
+        var map: [Int: [CalendarEvent]] = [:]
+        for e in events {
+            guard let d = ProjDate.parse(e.startsAt) else { continue }
+            let c = cal.dateComponents([.year, .month, .day], from: d)
+            if c.year == comps.year, c.month == comps.month, let day = c.day { map[day, default: []].append(e) }
+        }
+        return map
     }
 
     var body: some View {
-        AgendaScaffold(title: "Team Calendar", subtitle: "Jadwal & meeting tim — live per team.",
-                       loading: loading, error: error, isEmpty: events.isEmpty,
-                       emptyIcon: "calendar", emptyText: T("No events in the next 14 days."),
-                       retry: { await load() },
-                       toolbar: AnyView(teamMenu)) {
-            ForEach(byDay, id: \.key) { day in
-                AgendaDay(label: AgendaRange.dayLabel(day.key)) {
-                    ForEach(day.items) { e in
-                        AgendaRow(time: (e.isAllDay ?? false) ? "All day" : AgendaRange.timeLabel(e.startsAt),
+        ZStack {
+            NX.background.ignoresSafeArea()
+            if loading {
+                ProgressView().tint(NX.violet)
+            } else if let error {
+                ErrorState(message: error) { Task { await load() } }
+            } else {
+                ScrollView {
+                    VStack(spacing: 14) {
+                        header
+                        weekdayRow
+                        grid
+                        dayDetail
+                    }
+                    .padding(16)
+                }
+                .refreshable { await load() }
+            }
+        }
+        .navigationTitle(T("Team Calendar"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { teamMenu } }
+        .task { await load() }
+    }
+
+    private var header: some View {
+        HStack {
+            Button { monthOffset -= 1; selectedDay = nil; Task { await loadEvents() } } label: {
+                Image(systemName: "chevron.left").foregroundStyle(NX.foreground)
+            }
+            Spacer()
+            Text(ProjDate.fmt("MMMM yyyy").string(from: monthDate).capitalized)
+                .font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+            Spacer()
+            Button { monthOffset += 1; selectedDay = nil; Task { await loadEvents() } } label: {
+                Image(systemName: "chevron.right").foregroundStyle(NX.foreground)
+            }
+        }
+    }
+
+    private var weekdayRow: some View {
+        HStack(spacing: 4) {
+            ForEach(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], id: \.self) { d in
+                Text(T(d)).font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg).frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    private var grid: some View {
+        let cols = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
+        let map = eventsByDay
+        return LazyVGrid(columns: cols, spacing: 4) {
+            ForEach(0..<leadingBlanks, id: \.self) { _ in Color.clear.frame(height: 44) }
+            ForEach(1...daysInMonth, id: \.self) { day in
+                let has = !(map[day]?.isEmpty ?? true)
+                let on = selectedDay == day
+                Button { selectedDay = day } label: {
+                    VStack(spacing: 3) {
+                        Text("\(day)").font(NXFont.text(13, on ? .bold : .regular))
+                            .foregroundStyle(on ? Color.white : NX.foreground)
+                        Circle().fill(has ? (on ? Color.white : NX.violet) : Color.clear).frame(width: 5, height: 5)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(on ? NX.violet : (has ? NX.violet.opacity(0.08) : Color.clear),
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    @ViewBuilder private var dayDetail: some View {
+        if let sel = selectedDay {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel("\(sel) \(ProjDate.fmt("MMMM").string(from: monthDate).capitalized)")
+                let items = eventsByDay[sel] ?? []
+                if items.isEmpty {
+                    Text(T("No events on this date.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                } else {
+                    ForEach(items) { e in
+                        AgendaRow(time: (e.isAllDay ?? false) ? T("All day") : AgendaRange.timeLabel(e.startsAt),
                                   title: e.title, chip: nil, sub: e.location, tone: .info)
                     }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            Text(T("Pick a date to see its events.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
         }
-        .task { await load() }
     }
 
     @ViewBuilder private var teamMenu: some View {
         if teams.count > 1 {
             Menu {
+                Button(T("All teams")) { teamId = nil; Task { await loadEvents() } }
                 ForEach(teams) { t in Button(t.name) { teamId = t.id; Task { await loadEvents() } } }
             } label: {
-                Text(teams.first(where: { $0.id == teamId })?.name ?? "Team").font(NXFont.text(13, .semibold)).lineLimit(1)
+                Text(teams.first(where: { $0.id == teamId })?.name ?? T("All teams"))
+                    .font(NXFont.text(13, .semibold)).lineLimit(1)
             }
         }
     }
 
     private func load() async {
         error = nil
-        do {
-            teams = try await APIClient.shared.teams()
-            teamId = teamId ?? teams.first?.id
-            await loadEvents()
-        } catch APIError.unauthorized { auth.logout() }
-        catch { self.error = T("Couldn't load teams."); loading = false }
+        // Teams are only a FILTER now — a user with no team still gets the workspace calendar.
+        teams = (try? await APIClient.shared.teams()) ?? []
+        await loadEvents()
     }
     private func loadEvents() async {
-        guard let tid = teamId else { events = []; loading = false; return }
-        let r = AgendaRange.nowToDays(14)
-        events = (try? await APIClient.shared.masterCalendar(teamId: tid, start: r.start, end: r.end)) ?? []
+        let start = cal.date(from: comps) ?? monthDate
+        let end = cal.date(byAdding: .month, value: 1, to: start) ?? start
+        let f = ISO8601DateFormatter()
+        do {
+            events = try await APIClient.shared.masterCalendar(teamId: teamId,
+                                                               start: f.string(from: start),
+                                                               end: f.string(from: end))
+        } catch APIError.unauthorized { auth.logout() }
+        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load the calendar.") }
         loading = false
     }
 }

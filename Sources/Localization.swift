@@ -518,6 +518,28 @@ final class AppLanguage {
             " Sekarang lagi nampilin SEMUA project di folder.",
         "Every task, field and project data goes with it. This cannot be undone.":
             "Semua task, field & data project ikut kehapus. Gabisa di-undo.",
+
+        // ── threads (feed) ────────────────────────────────────────────────────
+        "Threads": "Utas",
+        "Thread": "Utas",
+        "What's new?": "Lagi ada apa?",
+        "Post": "Kirim",
+        "Comments": "Komentar",
+        "Reply… (@ to mention)": "Balas… (@ buat sebut orang)",
+        "Nothing on the feed yet. Be the first to post.": "Feed masih kosong. Jadi yang pertama posting.",
+        "Couldn't load the feed.": "Gagal memuat feed.",
+        "Couldn't post.": "Gagal mengirim.",
+
+        // ── team calendar ─────────────────────────────────────────────────────
+        "All teams": "Semua tim",
+        "All day": "Seharian",
+        "No events on this date.": "Nggak ada event di tanggal ini.",
+        "Pick a date to see its events.": "Pilih tanggal buat lihat event-nya.",
+        "Couldn't load the calendar.": "Gagal memuat kalender.",
+        // Passed as a variable (T(d)) so the extractor can't see these — keep them here.
+        "Mon": "Sen", "Tue": "Sel", "Wed": "Rab", "Thu": "Kam",
+        "Fri": "Jum", "Sat": "Sab", "Sun": "Min",
+        "Room bookings — VIP, Meeting, Studio.": "Booking ruangan — VIP, Meeting, Studio.",
     ]
 }
 

@@ -312,8 +312,11 @@ struct APIClient {
         let path = "/api/room-bookings?rangeStart=\(enc(start))&rangeEnd=\(enc(end))"
         return (try await run(makeRequest(path), decode: RoomBookingsResponse.self)).bookings ?? []
     }
-    func masterCalendar(teamId: String, start: String, end: String) async throws -> [CalendarEvent] {
-        let path = "/api/master-calendar?teamId=\(enc(teamId))&rangeStart=\(enc(start))&rangeEnd=\(enc(end))"
+    /// `teamId` is OPTIONAL — the endpoint answers without it. It used to be required here, so a
+    /// user who belonged to no team saw a permanently empty calendar.
+    func masterCalendar(teamId: String?, start: String, end: String) async throws -> [CalendarEvent] {
+        var path = "/api/master-calendar?rangeStart=\(enc(start))&rangeEnd=\(enc(end))"
+        if let teamId, !teamId.isEmpty { path += "&teamId=\(enc(teamId))" }
         return (try await run(makeRequest(path), decode: CalendarResponse.self)).events ?? []
     }
     func roster() async throws -> WorkspaceRoster {
@@ -350,6 +353,37 @@ struct APIClient {
     }
 
     // MARK: - Admin (Control Room) editing
+
+    // MARK: - Threads (the web's company feed — /api/feed/posts)
+
+    func feedPosts(limit: Int = 30) async throws -> [FeedPost] {
+        (try await run(makeRequest("/api/feed/posts?limit=\(limit)"), decode: FeedPostsResponse.self)).all
+    }
+    func postComments(_ postId: String) async throws -> [FeedComment] {
+        (try await run(makeRequest("/api/feed/posts/\(postId)/comments"), decode: FeedCommentsResponse.self)).all
+    }
+    @discardableResult
+    func createPost(content: String) async throws -> Bool {
+        var req = makeRequest("/api/feed/posts", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["content": content])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    @discardableResult
+    func addPostComment(postId: String, content: String) async throws -> Bool {
+        var req = makeRequest("/api/feed/posts/\(postId)/comments", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["content": content])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+    /// Toggle-like. Body-less POST, so nothing to guess about the payload.
+    @discardableResult
+    func likePost(_ postId: String) async throws -> Bool {
+        _ = try await run(makeRequest("/api/feed/posts/\(postId)/like", method: "POST"), decode: SuccessResponse.self)
+        return true
+    }
 
     // MARK: - Ticket (web calls this "complaints" — a private line to the BoD)
 
