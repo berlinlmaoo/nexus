@@ -1,0 +1,278 @@
+#!/bin/sh
+# nexusctl — control the Nexus stack from inside the Proxmox VM.
+#
+# Wraps the docker compose prod stack (app + postgres + migrate) with the
+# day-to-day operations: status, logs, health, deploy, restart, backup.
+# Reuses the repo's existing env file and compose file so it behaves the same
+# as deploy.sh / healthcheck.sh / backup_postgres.sh.
+#
+#   sh scripts/pve/nexusctl <command> [args]
+#
+# Install as a global command (see scripts/pve/bootstrap.sh):
+#   ln -sf "$PWD/scripts/pve/nexusctl" /usr/local/bin/nexusctl
+set -eu
+
+ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
+ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env.production}"
+COMPOSE_FILE="${COMPOSE_FILE:-$ROOT_DIR/docker-compose.prod.yml}"
+
+PREV_IMAGE_TAG="nexus-app:prev"
+LIVE_IMAGE_TAG="nexus-app:prod"
+
+die() { echo "!! $*" >&2; exit 1; }
+info() { echo "==> $*"; }
+
+require_env() {
+  [ -f "$ENV_FILE" ] || die "Missing env file: $ENV_FILE (copy .env.example and fill the secrets)"
+  set -a
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+  set +a
+}
+
+dc() {
+  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
+}
+
+# The prod compose binds 127.0.0.1:${APP_PORT:-3003}->3000, so default to 3003.
+app_url() {
+  echo "${APP_HEALTHCHECK_URL:-http://127.0.0.1:${APP_PORT:-3003}/api/health}"
+}
+
+wait_for_postgres() {
+  info "Waiting for PostgreSQL readiness"
+  i=0
+  until dc exec -T postgres sh -lc "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\"" >/dev/null 2>&1; do
+    i=$((i + 1))
+    [ "$i" -ge 30 ] && die "PostgreSQL did not become ready in time."
+    sleep 2
+  done
+  echo "    postgres ready"
+}
+
+wait_for_app() {
+  url="$(app_url)"
+  info "Waiting for app health: $url"
+  i=0
+  while [ "$i" -lt 40 ]; do
+    if curl --fail --silent --show-error --max-time 5 "$url" >/dev/null 2>&1; then
+      echo "    app healthy"
+      return 0
+    fi
+    i=$((i + 1))
+    sleep 2
+  done
+  echo "    app did not answer $url in time — see: nexusctl logs app" >&2
+  return 1
+}
+
+cmd_status() {
+  require_env
+  info "Compose services"
+  dc ps
+  echo
+  info "Disk usage"
+  df -h "$ROOT_DIR" | tail -n +1
+  echo
+  info "Docker disk"
+  docker system df
+  echo
+  info "App health"
+  cmd_health || true
+}
+
+cmd_health() {
+  require_env
+  url="$(app_url)"
+  if curl --fail --silent --show-error --max-time 10 "$url"; then
+    echo
+    echo "    OK — $url"
+  else
+    echo "    FAILED — $url" >&2
+    return 1
+  fi
+}
+
+cmd_logs() {
+  require_env
+  svc="${1:-}"
+  [ $# -gt 0 ] && shift
+  if [ -n "$svc" ] && [ "${svc#-}" = "$svc" ]; then
+    dc logs --tail "${LOG_TAIL:-200}" "$@" "$svc"
+  else
+    [ -n "$svc" ] && set -- "$svc" "$@"
+    dc logs --tail "${LOG_TAIL:-200}" "$@"
+  fi
+}
+
+cmd_restart() {
+  require_env
+  if [ $# -gt 0 ]; then
+    info "Restarting: $*"
+    dc restart "$@"
+  else
+    info "Restarting app"
+    dc restart app
+  fi
+  wait_for_app || true
+}
+
+cmd_up() {
+  require_env
+  info "Starting stack"
+  dc up -d postgres
+  wait_for_postgres
+  dc up -d app
+  wait_for_app
+}
+
+cmd_down() {
+  require_env
+  info "Stopping app + postgres (volumes and data are kept)"
+  dc stop app postgres
+}
+
+cmd_migrate() {
+  require_env
+  info "Running Prisma deploy flow"
+  dc up -d postgres
+  wait_for_postgres
+  dc run --rm migrate
+}
+
+cmd_deploy() {
+  require_env
+  branch="${DEPLOY_BRANCH:-$(git -C "$ROOT_DIR" rev-parse --abbrev-ref HEAD)}"
+
+  if [ -n "$(git -C "$ROOT_DIR" status --porcelain)" ]; then
+    if [ "${ALLOW_DIRTY:-0}" != "1" ]; then
+      die "Working tree is dirty. Commit/stash first, or re-run with ALLOW_DIRTY=1."
+    fi
+    echo "    warning: deploying a dirty working tree (ALLOW_DIRTY=1)" >&2
+  fi
+
+  info "[1/6] Pulling $branch"
+  git -C "$ROOT_DIR" fetch origin "$branch"
+  git -C "$ROOT_DIR" pull --ff-only origin "$branch"
+
+  info "[2/6] Tagging current image as rollback point"
+  if docker image inspect "$LIVE_IMAGE_TAG" >/dev/null 2>&1; then
+    docker tag "$LIVE_IMAGE_TAG" "$PREV_IMAGE_TAG"
+    echo "    $LIVE_IMAGE_TAG -> $PREV_IMAGE_TAG"
+  else
+    echo "    no existing $LIVE_IMAGE_TAG — first deploy, skipping"
+  fi
+
+  info "[3/6] Building app + migrate"
+  COMPOSE_BAKE=true dc build app migrate
+
+  info "[4/6] Starting PostgreSQL"
+  dc up -d postgres
+  wait_for_postgres
+
+  info "[5/6] Applying migrations"
+  dc run --rm migrate
+
+  info "[6/6] Starting app"
+  dc up -d app
+  wait_for_app
+
+  echo
+  info "Deployed $(git -C "$ROOT_DIR" rev-parse --short HEAD) on $branch"
+  echo "    rollback with: nexusctl rollback"
+}
+
+cmd_rollback() {
+  require_env
+  docker image inspect "$PREV_IMAGE_TAG" >/dev/null 2>&1 \
+    || die "No $PREV_IMAGE_TAG image found. Use the VM snapshot instead: pvectl rollback <snapshot>"
+  info "Restoring $PREV_IMAGE_TAG -> $LIVE_IMAGE_TAG"
+  docker tag "$PREV_IMAGE_TAG" "$LIVE_IMAGE_TAG"
+  dc up -d --no-build --force-recreate app
+  wait_for_app
+  echo "    note: this rolls back the app image only — the database schema is unchanged."
+}
+
+cmd_backup() {
+  info "Running backup_postgres.sh"
+  ENV_FILE="$ENV_FILE" COMPOSE_FILE="$COMPOSE_FILE" sh "$ROOT_DIR/backup_postgres.sh"
+}
+
+cmd_psql() {
+  require_env
+  dc exec -e PGPASSWORD="$POSTGRES_PASSWORD" postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" "$@"
+}
+
+cmd_shell() {
+  require_env
+  dc exec app sh
+}
+
+cmd_env_check() {
+  require_env
+  missing=0
+  for var in AUTH_SECRET POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB DATABASE_URL NEXTAUTH_URL; do
+    eval "value=\${$var:-}"
+    if [ -z "$value" ]; then
+      echo "  MISSING  $var"
+      missing=$((missing + 1))
+    else
+      echo "  ok       $var"
+    fi
+  done
+  echo
+  echo "  APP_PORT=${APP_PORT:-3003} (compose binds 127.0.0.1:\${APP_PORT:-3003}->3000)"
+  echo "  NEXUS_DATA_DIR=${NEXUS_DATA_DIR:-$ROOT_DIR/var}"
+  [ "$missing" -eq 0 ] || die "$missing required variable(s) missing in $ENV_FILE"
+}
+
+cmd_prune() {
+  info "Removing dangling images and build cache (running containers untouched)"
+  docker image prune -f
+  docker builder prune -f
+}
+
+usage() {
+  cat <<'USAGE'
+nexusctl — control the Nexus stack inside the Proxmox VM
+
+  status              compose ps + disk + docker usage + health
+  health              hit /api/health
+  logs [svc] [-f]     tail logs (default: all services, 200 lines)
+  up                  start postgres then app
+  down                stop app + postgres (data kept)
+  restart [svc...]    restart app (or the named services)
+  deploy              pull, build, migrate, restart, verify health
+  rollback            restore the previous app image (nexus-app:prev)
+  migrate             run the Prisma deploy flow only
+  backup              run backup_postgres.sh
+  psql [args]         psql shell into the postgres container
+  shell               sh shell into the app container
+  env-check           verify required variables in .env.production
+  prune               drop dangling images + build cache
+
+Env overrides: ENV_FILE, COMPOSE_FILE, DEPLOY_BRANCH, ALLOW_DIRTY=1, LOG_TAIL
+USAGE
+}
+
+command="${1:-}"
+[ $# -gt 0 ] && shift || true
+
+case "$command" in
+  status)     cmd_status "$@" ;;
+  health)     cmd_health "$@" ;;
+  logs)       cmd_logs "$@" ;;
+  up)         cmd_up "$@" ;;
+  down)       cmd_down "$@" ;;
+  restart)    cmd_restart "$@" ;;
+  deploy)     cmd_deploy "$@" ;;
+  rollback)   cmd_rollback "$@" ;;
+  migrate)    cmd_migrate "$@" ;;
+  backup)     cmd_backup "$@" ;;
+  psql)       cmd_psql "$@" ;;
+  shell)      cmd_shell "$@" ;;
+  env-check)  cmd_env_check "$@" ;;
+  prune)      cmd_prune "$@" ;;
+  ""|-h|--help|help) usage ;;
+  *) echo "Unknown command: $command" >&2; echo; usage; exit 1 ;;
+esac

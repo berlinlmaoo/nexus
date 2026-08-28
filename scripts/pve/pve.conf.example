@@ -1,0 +1,33 @@
+# pvectl configuration — copy to /etc/nexus-pve.conf on the Proxmox host.
+#
+#   cp scripts/pve/pve.conf.example /etc/nexus-pve.conf
+#   chmod 600 /etc/nexus-pve.conf
+#   $EDITOR /etc/nexus-pve.conf
+#
+# Find the VMID with: qm list   (full VMs)  /  pct list  (containers)
+
+# The guest that runs Nexus.
+NEXUS_VMID=101
+
+# qemu = full VM (qm), lxc = container (pct)
+NEXUS_VM_TYPE=qemu
+
+# Safety whitelist. pvectl refuses to start/stop/snapshot/roll back any VMID
+# not listed here. Keep it to the Nexus guest only — this is what stops a
+# mistyped VMID from taking down an unrelated VM.
+ALLOWED_VMIDS="101"
+
+# Where the nexus repo is checked out INSIDE the guest.
+NEXUS_REPO_DIR=/opt/nexus
+
+# Optional but recommended for full VMs: an SSH target for the guest.
+# Without it pvectl falls back to `qm guest exec`, which needs
+# qemu-guest-agent and buffers all output until the command finishes —
+# painful for a multi-minute deploy.
+#NEXUS_VM_SSH=root@192.168.1.50
+
+# Graceful shutdown timeout, seconds.
+#SHUTDOWN_TIMEOUT=120
+
+# qm guest exec timeout, seconds (used only when NEXUS_VM_SSH is unset).
+#GUEST_EXEC_TIMEOUT=1800

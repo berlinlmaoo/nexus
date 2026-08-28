@@ -1,0 +1,306 @@
+#!/bin/sh
+# pvectl — control the Nexus VM from the Proxmox host (pve).
+#
+# Runs on the hypervisor, where it has root. That is a large blast radius, so
+# every mutating operation is gated:
+#   * the target VMID must be listed in ALLOWED_VMIDS (config file)
+#   * destructive operations (rollback, delsnap) need a typed confirmation
+#   * DRY_RUN=1 prints commands instead of running them
+#   * there is deliberately no "destroy" / "delete VM" command
+#
+#   pvectl <command> [args]
+#
+# Config, first match wins:
+#   $PVECTL_CONF, ./scripts/pve/pve.conf, /etc/nexus-pve.conf
+set -eu
+
+SELF_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+
+load_conf() {
+  for candidate in "${PVECTL_CONF:-}" "$SELF_DIR/pve.conf" /etc/nexus-pve.conf; do
+    [ -n "$candidate" ] || continue
+    if [ -f "$candidate" ]; then
+      # shellcheck disable=SC1090
+      . "$candidate"
+      CONF_FILE="$candidate"
+      return 0
+    fi
+  done
+  echo "!! No config found. Copy scripts/pve/pve.conf.example to /etc/nexus-pve.conf and fill it in." >&2
+  exit 1
+}
+
+load_conf
+
+NEXUS_VMID="${NEXUS_VMID:-}"
+NEXUS_VM_TYPE="${NEXUS_VM_TYPE:-qemu}"
+ALLOWED_VMIDS="${ALLOWED_VMIDS:-$NEXUS_VMID}"
+NEXUS_REPO_DIR="${NEXUS_REPO_DIR:-/opt/nexus}"
+NEXUS_VM_SSH="${NEXUS_VM_SSH:-}"
+SNAPSHOT_KEEP="${SNAPSHOT_KEEP:-5}"
+
+die() { echo "!! $*" >&2; exit 1; }
+info() { echo "==> $*"; }
+
+# Shell-quote a single argument so DRY_RUN output can be copy-pasted verbatim.
+quote_arg() {
+  case "$1" in
+    ""|*[!A-Za-z0-9_./:@=-]*)
+      printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
+run() {
+  if [ "${DRY_RUN:-0}" = "1" ]; then
+    printf 'DRY_RUN:'
+    for arg in "$@"; do printf ' %s' "$(quote_arg "$arg")"; done
+    printf '\n'
+    return 0
+  fi
+  "$@"
+}
+
+[ -n "$NEXUS_VMID" ] || die "NEXUS_VMID is not set in $CONF_FILE"
+
+# Refuse to touch any guest that is not explicitly whitelisted.
+guard_vmid() {
+  vmid="$1"
+  for allowed in $ALLOWED_VMIDS; do
+    [ "$vmid" = "$allowed" ] && return 0
+  done
+  die "VMID $vmid is not in ALLOWED_VMIDS ($ALLOWED_VMIDS). Refusing."
+}
+
+confirm() {
+  prompt="$1"
+  expected="$2"
+  [ "${ASSUME_YES:-0}" = "1" ] && { echo "    (--yes) $prompt"; return 0; }
+  printf '%s\n    Type "%s" to continue: ' "$prompt" "$expected"
+  # An EOF here (piped/non-interactive stdin) must abort loudly, not silently.
+  read -r answer || { echo; die "Aborted (no input on stdin — use ASSUME_YES=1 to run non-interactively)."; }
+  [ "$answer" = "$expected" ] || die "Aborted."
+}
+
+# The guest CLI differs between full VMs (qm) and containers (pct).
+guest_cli() {
+  case "$NEXUS_VM_TYPE" in
+    qemu|vm|kvm) echo qm ;;
+    lxc|ct|container) echo pct ;;
+    *) die "Unknown NEXUS_VM_TYPE: $NEXUS_VM_TYPE (expected qemu or lxc)" ;;
+  esac
+}
+
+# Run a shell command inside the guest.
+#   lxc            -> pct exec (streams output)
+#   qemu + SSH     -> ssh (streams output; needed for long deploys)
+#   qemu, no SSH   -> qm guest exec (buffered, needs qemu-guest-agent)
+guest_run() {
+  cli="$(guest_cli)"
+  guard_vmid "$NEXUS_VMID"
+
+  if [ "$cli" = "pct" ]; then
+    run pct exec "$NEXUS_VMID" -- sh -lc "$*"
+    return $?
+  fi
+
+  if [ -n "$NEXUS_VM_SSH" ]; then
+    run ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new "$NEXUS_VM_SSH" "$*"
+    return $?
+  fi
+
+  echo "    (via qemu-guest-agent — output is buffered until the command finishes;" >&2
+  echo "     set NEXUS_VM_SSH in $CONF_FILE for streaming output)" >&2
+  if [ "${DRY_RUN:-0}" = "1" ]; then
+    echo "DRY_RUN: qm guest exec $NEXUS_VMID -- sh -lc \"$*\""
+    return 0
+  fi
+  out="$(qm guest exec "$NEXUS_VMID" --timeout "${GUEST_EXEC_TIMEOUT:-1800}" -- sh -lc "$*")" || {
+    echo "$out" >&2
+    die "guest exec failed (is qemu-guest-agent installed and running in the VM?)"
+  }
+  if command -v jq >/dev/null 2>&1; then
+    echo "$out" | jq -r '."out-data" // empty'
+    err="$(echo "$out" | jq -r '."err-data" // empty')"
+    [ -n "$err" ] && echo "$err" >&2
+    code="$(echo "$out" | jq -r '.exitcode // 0')"
+    [ "$code" = "0" ] || return "$code"
+  else
+    echo "$out"
+  fi
+}
+
+cmd_list() {
+  info "QEMU VMs"
+  qm list 2>/dev/null || echo "    (none)"
+  echo
+  info "LXC containers"
+  pct list 2>/dev/null || echo "    (none)"
+  echo
+  info "Nexus target: VMID $NEXUS_VMID ($NEXUS_VM_TYPE) — allowed: $ALLOWED_VMIDS"
+}
+
+cmd_status() {
+  cli="$(guest_cli)"
+  info "Guest $NEXUS_VMID status"
+  "$cli" status "$NEXUS_VMID"
+  echo
+  info "Guest config (summary)"
+  "$cli" config "$NEXUS_VMID" | grep -E '^(cores|memory|name|hostname|net0|scsi0|rootfs|onboot)' || true
+}
+
+cmd_resources() {
+  info "Node status"
+  pvesh get /nodes/"$(hostname)"/status --output-format yaml 2>/dev/null \
+    | grep -E '^(uptime|cpu|loadavg|memory|rootfs|wait)' -A3 || pvesh get /nodes/"$(hostname)"/status
+  echo
+  info "Storage"
+  pvesm status
+}
+
+cmd_start() {
+  cli="$(guest_cli)"; guard_vmid "$NEXUS_VMID"
+  info "Starting $NEXUS_VMID"
+  run "$cli" start "$NEXUS_VMID"
+}
+
+cmd_shutdown() {
+  cli="$(guest_cli)"; guard_vmid "$NEXUS_VMID"
+  info "Graceful shutdown of $NEXUS_VMID"
+  run "$cli" shutdown "$NEXUS_VMID" --timeout "${SHUTDOWN_TIMEOUT:-120}"
+}
+
+cmd_stop() {
+  cli="$(guest_cli)"; guard_vmid "$NEXUS_VMID"
+  confirm "Hard stop (pulls the plug) on VMID $NEXUS_VMID — unsaved data may be lost." "$NEXUS_VMID"
+  run "$cli" stop "$NEXUS_VMID"
+}
+
+cmd_reboot() {
+  cli="$(guest_cli)"; guard_vmid "$NEXUS_VMID"
+  info "Rebooting $NEXUS_VMID"
+  run "$cli" reboot "$NEXUS_VMID"
+}
+
+snapshot_name() {
+  echo "${1:-auto-$(date +%Y%m%d-%H%M%S)}"
+}
+
+cmd_snapshot() {
+  cli="$(guest_cli)"; guard_vmid "$NEXUS_VMID"
+  name="$(snapshot_name "${1:-}")"
+  desc="${2:-pvectl snapshot $(date -Iseconds)}"
+  info "Creating snapshot '$name' on $NEXUS_VMID"
+  run "$cli" snapshot "$NEXUS_VMID" "$name" --description "$desc"
+  echo "    rollback with: pvectl rollback $name"
+}
+
+cmd_snapshots() {
+  cli="$(guest_cli)"
+  info "Snapshots for $NEXUS_VMID"
+  "$cli" listsnapshot "$NEXUS_VMID"
+}
+
+cmd_rollback() {
+  cli="$(guest_cli)"; guard_vmid "$NEXUS_VMID"
+  name="${1:-}"
+  [ -n "$name" ] || die "Usage: pvectl rollback <snapshot-name>  (list them with: pvectl snapshots)"
+  echo
+  echo "  !! ROLLBACK is destructive: every change made to VMID $NEXUS_VMID after"
+  echo "     snapshot '$name' is discarded — including database writes."
+  echo "     Take a fresh backup first if the current data matters:"
+  echo "       pvectl ctl -- backup"
+  echo
+  confirm "Roll VMID $NEXUS_VMID back to '$name'?" "rollback $NEXUS_VMID"
+  run "$cli" rollback "$NEXUS_VMID" "$name"
+}
+
+cmd_delsnap() {
+  cli="$(guest_cli)"; guard_vmid "$NEXUS_VMID"
+  name="${1:-}"
+  [ -n "$name" ] || die "Usage: pvectl delsnap <snapshot-name>"
+  confirm "Delete snapshot '$name' from VMID $NEXUS_VMID?" "$name"
+  run "$cli" delsnapshot "$NEXUS_VMID" "$name"
+}
+
+cmd_exec() {
+  [ $# -gt 0 ] || die "Usage: pvectl exec -- <command>"
+  [ "$1" = "--" ] && shift
+  guest_run "$@"
+}
+
+cmd_ctl() {
+  [ "${1:-}" = "--" ] && shift
+  [ $# -gt 0 ] || die "Usage: pvectl ctl -- <nexusctl args>   e.g. pvectl ctl -- status"
+  guest_run "cd '$NEXUS_REPO_DIR' && sh scripts/pve/nexusctl $*"
+}
+
+cmd_deploy() {
+  info "[1/2] Snapshotting before deploy"
+  snap="predeploy-$(date +%Y%m%d-%H%M%S)"
+  cmd_snapshot "$snap" "pre-deploy safety snapshot"
+  echo
+  info "[2/2] Running nexusctl deploy inside the guest"
+  if cmd_ctl -- deploy; then
+    echo
+    info "Deploy OK. Snapshot kept: $snap"
+    echo "    drop it once you are happy: pvectl delsnap $snap"
+  else
+    echo
+    echo "!! Deploy failed. Roll back the whole VM with:" >&2
+    echo "     pvectl rollback $snap" >&2
+    return 1
+  fi
+}
+
+usage() {
+  cat <<'USAGE'
+pvectl — control the Nexus guest from the Proxmox host
+
+  Read-only
+    list                  list all VMs + containers, show the Nexus target
+    status                status + config summary of the Nexus guest
+    resources             node CPU/memory/storage
+    snapshots             list snapshots
+
+  Lifecycle (whitelisted VMID only)
+    start                 start the guest
+    shutdown              graceful shutdown (ACPI)
+    stop                  hard stop  [confirmation]
+    reboot                reboot the guest
+
+  Snapshots
+    snapshot [name]       create a snapshot (auto-named if omitted)
+    rollback <name>       restore a snapshot  [DESTRUCTIVE, confirmation]
+    delsnap <name>        delete a snapshot   [confirmation]
+
+  Into the guest
+    exec -- <cmd>         run a shell command inside the guest
+    ctl -- <args>         run nexusctl inside the guest (e.g. ctl -- status)
+    deploy                snapshot, then nexusctl deploy, with rollback hint
+
+Env: DRY_RUN=1 (print only), ASSUME_YES=1 (skip prompts), PVECTL_CONF=<path>
+USAGE
+}
+
+command="${1:-}"
+[ $# -gt 0 ] && shift || true
+
+case "$command" in
+  list)       cmd_list "$@" ;;
+  status)     cmd_status "$@" ;;
+  resources)  cmd_resources "$@" ;;
+  start)      cmd_start "$@" ;;
+  shutdown)   cmd_shutdown "$@" ;;
+  stop)       cmd_stop "$@" ;;
+  reboot)     cmd_reboot "$@" ;;
+  snapshot)   cmd_snapshot "$@" ;;
+  snapshots)  cmd_snapshots "$@" ;;
+  rollback)   cmd_rollback "$@" ;;
+  delsnap)    cmd_delsnap "$@" ;;
+  exec)       cmd_exec "$@" ;;
+  ctl)        cmd_ctl "$@" ;;
+  deploy)     cmd_deploy "$@" ;;
+  ""|-h|--help|help) usage ;;
+  *) echo "Unknown command: $command" >&2; echo; usage; exit 1 ;;
+esac
