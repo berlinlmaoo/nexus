@@ -542,6 +542,17 @@ final class AppLanguage {
         "Room bookings — VIP, Meeting, Studio.": "Booking ruangan — VIP, Meeting, Studio.",
         "Auto-assign to:": "Assign otomatis ke:",
 
+        // ── approval checkout luar area (antrian BoD) ─────────────────────────
+        "Offsite checkouts": "Checkout luar area",
+        "Check-outs from outside the office area, waiting on you.": "Checkout dari luar area kantor, nunggu kamu.",
+        "Nothing waiting for approval.": "Nggak ada yang nunggu approval.",
+        "You can't approve your own.": "Punya sendiri nggak bisa di-approve.",
+        "View map": "Lihat peta",
+        "Approve": "Setujui",
+        "Reject": "Tolak",
+        "Someone": "Seseorang",
+        "office": "kantor",
+
         // ── tampilan & room booking ───────────────────────────────────────────
         "APPEARANCE": "TAMPILAN",
         "Follow system": "Ikut sistem",

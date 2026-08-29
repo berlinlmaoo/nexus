@@ -78,6 +78,35 @@ struct AttendanceRequest: Decodable, Identifiable, Sendable {
     struct UserRef: Decodable, Sendable { let name: String? }
 }
 
+/// GET /api/attendance/offsite-checkouts?status=ALL — check-outs taken outside the office geofence,
+/// held for BoD approval. Shape mirrors the web review row: approval / user / attendanceDate /
+/// checkOutAt / reason / distanceMeters / officeName / lat / lng / photoUrl / approverName.
+struct OffsiteCheckout: Decodable, Identifiable, Sendable {
+    let id: String
+    let approval: String?           // PENDING | APPROVED | REJECTED
+    let attendanceDate: String?
+    let checkOutAt: String?
+    let reason: String?
+    let distanceMeters: Double?
+    let officeName: String?
+    let lat: Double?
+    let lng: Double?
+    let photoUrl: String?
+    let approverName: String?
+    let user: UserRef?
+
+    struct UserRef: Decodable, Sendable { let id: String?; let name: String? }
+
+    var isPending: Bool { (approval ?? "").uppercased() == "PENDING" }
+    /// Same link the web offers ("view map") so a reviewer can check where the person actually was.
+    var mapURL: URL? {
+        guard let lat, let lng else { return nil }
+        return URL(string: "https://www.google.com/maps?q=\(lat),\(lng)")
+    }
+}
+
+struct OffsiteCheckoutsResponse: Decodable, Sendable { let items: [OffsiteCheckout]? }
+
 /// Outcome of a check-in/out attempt.
 enum AttendanceOutcome: Sendable {
     case success

@@ -20,6 +20,12 @@ private func reqStatusTone(_ s: String?) -> ChipTone {
     case "APPROVED": return .success; case "REJECTED": return .danger; case "CANCELED", "CANCELLED": return .neutral; default: return .warning
     }
 }
+private func attDayLabel(_ iso: String?) -> String {
+    guard let iso, !iso.isEmpty else { return "" }
+    if let d = ProjDate.parse(iso) { return ProjDate.dayLabel(d) }
+    let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = ProjDate.cal.timeZone
+    return f.date(from: String(iso.prefix(10))).map { ProjDate.dayLabel($0) } ?? ""
+}
 
 // MARK: - Requests card (submit + review)
 
@@ -103,12 +109,7 @@ struct AttendanceRequestsCard: View {
         let s = day(r.startDate); let e = day(r.endDate)
         return s == e || e.isEmpty ? s : "\(s) – \(e)"
     }
-    private func day(_ iso: String?) -> String {
-        guard let iso, !iso.isEmpty else { return "" }
-        if let d = ProjDate.parse(iso) { return ProjDate.dayLabel(d) }
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = ProjDate.cal.timeZone
-        return f.date(from: String(iso.prefix(10))).map { ProjDate.dayLabel($0) } ?? ""
-    }
+    private func day(_ iso: String?) -> String { attDayLabel(iso) }
 
     private func review(_ r: AttendanceRequest, _ action: String) async {
         busy = r.id; defer { busy = nil }
@@ -116,8 +117,127 @@ struct AttendanceRequestsCard: View {
         await load()
     }
     private func load() async {
-        do { requests = try await APIClient.shared.attendanceRequests(scope: canReview ? "workspace" : "me") }
+        do {
+            let all = try await APIClient.shared.attendanceRequests(scope: canReview ? "workspace" : "me")
+            // PENDING first. The web renders this queue as two blocks (pending, then the rest); the
+            // app rendered whatever order the API returned, so a reviewer's actual work — somebody
+            // else's pending request — sat below dozens of their own cancelled rows and looked like
+            // "no one ever asks me for approval". `enumerated()` keeps it stable: Swift's sort isn't.
+            requests = all.enumerated().sorted { a, b in
+                let ap = (a.element.status ?? "").uppercased() == "PENDING"
+                let bp = (b.element.status ?? "").uppercased() == "PENDING"
+                return ap == bp ? a.offset < b.offset : ap
+            }.map { $0.element }
+        }
         catch APIError.unauthorized { auth.logout() } catch { requests = [] }
+        loading = false
+    }
+}
+
+// MARK: - Offsite check-out approvals (BoD)
+
+/// The second approval queue, which the app was missing entirely: check-outs taken outside the
+/// office geofence sit at `PENDING` until a BoD approves them. Only rendered for reviewers.
+struct OffsiteCheckoutsCard: View {
+    @Environment(AuthStore.self) private var auth
+    @State private var items: [OffsiteCheckout] = []
+    @State private var loading = true
+    @State private var busy: String?
+
+    private var pendingCount: Int { items.filter(\.isPending).count }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(T("Offsite checkouts")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+                    Text(T("Check-outs from outside the office area, waiting on you."))
+                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                }
+                Spacer()
+                if pendingCount > 0 { NexusChip(text: "\(pendingCount)", tone: .warning) }
+            }
+            if loading {
+                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
+            } else if items.isEmpty {
+                Text(T("Nothing waiting for approval.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+            } else {
+                ForEach(items) { row($0) }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
+        .task { await load() }
+    }
+
+    private func row(_ o: OffsiteCheckout) -> some View {
+        // Anti self-approve, same rule as the web: the buttons only appear on somebody else's row.
+        let mine = o.user?.id != nil && o.user?.id == auth.session?.userId
+        let working = busy == o.id
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(o.user?.name ?? T("Someone")).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                Spacer()
+                NexusChip(text: reqStatusLabel(o.approval), tone: reqStatusTone(o.approval))
+            }
+            HStack(spacing: 6) {
+                Image(systemName: "clock").font(.system(size: 10)).foregroundStyle(NX.mutedFg)
+                Text("\(attDayLabel(o.attendanceDate)) · \(AgendaRange.timeLabel(o.checkOutAt ?? ""))")
+                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            }
+            if let d = o.distanceMeters {
+                Text("±\(Int(d.rounded())) m · \(o.officeName ?? T("office"))")
+                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            }
+            if let reason = o.reason, !reason.isEmpty {
+                Text(reason).font(NXFont.text(12)).foregroundStyle(NX.foreground.opacity(0.85)).lineLimit(3)
+            }
+            if let url = o.mapURL {
+                Link(destination: url) {
+                    Label(T("View map"), systemImage: "mappin.and.ellipse")
+                        .font(NXFont.text(11, .semibold)).foregroundStyle(NX.violetText)
+                }
+            }
+            if !o.isPending, let by = o.approverName, !by.isEmpty {
+                Text("· \(by)").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            }
+            if o.isPending {
+                HStack(spacing: 8) {
+                    if working { ProgressView().scaleEffect(0.7) }
+                    else if mine {
+                        Text(T("You can't approve your own.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    } else {
+                        actionBtn(T("Approve"), .success) { await review(o, "approve") }
+                        actionBtn(T("Reject"), .danger) { await review(o, "reject") }
+                    }
+                }.padding(.top, 2)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func actionBtn(_ title: String, _ tone: ChipTone, _ action: @escaping () async -> Void) -> some View {
+        Button { Task { await action() } } label: {
+            Text(title).font(NXFont.text(12, .bold)).foregroundStyle(tone.fg)
+                .padding(.horizontal, 12).padding(.vertical, 6).background(tone.bg, in: Capsule())
+        }.buttonStyle(.plain)
+    }
+
+    private func review(_ o: OffsiteCheckout, _ action: String) async {
+        busy = o.id; defer { busy = nil }
+        try? await APIClient.shared.reviewOffsiteCheckout(id: o.id, action: action)
+        await load()
+    }
+
+    private func load() async {
+        do {
+            let all = try await APIClient.shared.offsiteCheckouts()
+            items = all.enumerated().sorted { a, b in
+                a.element.isPending == b.element.isPending ? a.offset < b.offset : a.element.isPending
+            }.map { $0.element }
+        }
+        catch APIError.unauthorized { auth.logout() } catch { items = [] }
         loading = false
     }
 }

@@ -66,7 +66,12 @@ struct AttendanceView: View {
                     if rec?.checkOutApproval == "REJECTED" { infoBanner(T("Your out-of-area checkout was rejected by the BoD."), tone: .danger) }
                     if let banner { infoBanner(banner.text, tone: banner.good ? .success : .danger) }
                     metricsGrid
-                    AttendanceRequestsCard(canReview: today?.canReviewAttendanceRequests ?? today?.canManageAttendance ?? false)
+                    // OR, not a `??` fallback: the web is `canManageAttendance || canReviewAttendanceRequests`.
+                    // With `??`, a server that sends canReviewAttendanceRequests=false stops the chain
+                    // dead and an attendance MANAGER loses the review UI they're entitled to.
+                    let canReview = (today?.canReviewAttendanceRequests ?? false) || (today?.canManageAttendance ?? false)
+                    AttendanceRequestsCard(canReview: canReview)
+                    if canReview { OffsiteCheckoutsCard() }
                     StreakBoardCard(canManage: today?.canManageAttendance ?? false)
                     if today?.canManageAttendance == true { OfficesCard() }
                 }

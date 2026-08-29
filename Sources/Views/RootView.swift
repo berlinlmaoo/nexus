@@ -6,31 +6,33 @@ struct RootView: View {
     @State private var appearance = AppAppearance.shared
 
     var body: some View {
-        content
-            // In-app light/dark override. nil = follow the iOS setting.
-            // (LoginView keeps its own forced .light — that screen's cream/white art is designed
-            // for light only, so it deliberately opts out.)
-            .preferredColorScheme(appearance.theme.colorScheme)
-    }
-
-    @ViewBuilder private var content: some View {
         if auth.isAuthenticated {
-            TabView {
-                DashboardView()
-                    .tabItem { Label(T("Home"), systemImage: "house.fill") }
-                TasksView()
-                    .tabItem { Label(T("Tasks"), systemImage: "checklist") }
-                InboxView()
-                    .tabItem { Label(T("Inbox"), systemImage: "tray.fill") }
-                ProjectsView()
-                    .tabItem { Label(T("Projects"), systemImage: "rectangle.stack.fill") }
-                MoreView()
-                    .tabItem { Label(T("More"), systemImage: "ellipsis") }
-            }
-            // NOTE: no .tabBarMinimizeBehavior — the bar stays full-size while scrolling (by request).
+            // In-app light/dark override. nil = follow the iOS setting.
+            tabs.preferredColorScheme(appearance.theme.colorScheme)
         } else {
+            // LoginView forces `.light` itself, and MUST stay outside that modifier.
+            // `preferredColorScheme` is a preference, and a preference written by an ancestor
+            // replaces whatever the subtree wrote — so wrapping the whole app in it silently
+            // cancelled LoginView's choice, nil ("Follow system") included. Login then followed
+            // iOS dark: worse than before the theme setting existed.
             LoginView()
         }
+    }
+
+    private var tabs: some View {
+        TabView {
+            DashboardView()
+                .tabItem { Label(T("Home"), systemImage: "house.fill") }
+            TasksView()
+                .tabItem { Label(T("Tasks"), systemImage: "checklist") }
+            InboxView()
+                .tabItem { Label(T("Inbox"), systemImage: "tray.fill") }
+            ProjectsView()
+                .tabItem { Label(T("Projects"), systemImage: "rectangle.stack.fill") }
+            MoreView()
+                .tabItem { Label(T("More"), systemImage: "ellipsis") }
+        }
+        // NOTE: no .tabBarMinimizeBehavior — the bar stays full-size while scrolling (by request).
     }
 }
 

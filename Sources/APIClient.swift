@@ -312,11 +312,13 @@ struct APIClient {
         let path = "/api/room-bookings?rangeStart=\(enc(start))&rangeEnd=\(enc(end))"
         return (try await run(makeRequest(path), decode: RoomBookingsResponse.self)).bookings ?? []
     }
-    /// `teamId` is OPTIONAL — the endpoint answers without it. It used to be required here, so a
-    /// user who belonged to no team saw a permanently empty calendar.
-    func masterCalendar(teamId: String?, start: String, end: String) async throws -> [CalendarEvent] {
-        var path = "/api/master-calendar?rangeStart=\(enc(start))&rangeEnd=\(enc(end))"
-        if let teamId, !teamId.isEmpty { path += "&teamId=\(enc(teamId))" }
+    /// `teamId` is REQUIRED — the route answers 400 without it. A previous version made it optional
+    /// on the assumption the endpoint would fall back to the whole workspace; it does not, so
+    /// "All teams" returned `Server error (400)` on every load. The web has always sent it:
+    /// `masterCalendar:(e,t,n)=>/api/master-calendar?teamId=${e}&rangeStart=${t}&rangeEnd=${n}`.
+    /// Callers that want every team ask for each team and merge — see TeamCalendarView.loadEvents.
+    func masterCalendar(teamId: String, start: String, end: String) async throws -> [CalendarEvent] {
+        let path = "/api/master-calendar?teamId=\(enc(teamId))&rangeStart=\(enc(start))&rangeEnd=\(enc(end))"
         return (try await run(makeRequest(path), decode: CalendarResponse.self)).events ?? []
     }
     func roster() async throws -> WorkspaceRoster {
@@ -362,13 +364,31 @@ struct APIClient {
     func postComments(_ postId: String) async throws -> [FeedComment] {
         (try await run(makeRequest("/api/feed/posts/\(postId)/comments"), decode: FeedCommentsResponse.self)).all
     }
-    /// Payload is `{text, mentions}` — confirmed from the web bundle. It was `{content:…}` at first,
-    /// which the server ignored/rejected.
+    /// POST /api/feed/posts is **multipart**, not JSON — the route reads `text`, `mentions`
+    /// (a JSON-encoded string, not a repeated field), `imageMeta` and any number of `images` parts:
+    ///
+    ///     createPost: e => { const t = new FormData
+    ///       t.set("text", e.text); t.set("mentions", JSON.stringify(e.mentions))
+    ///       e.imageMeta && t.set("imageMeta", …); e.images.forEach(n => t.append("images", n)) … }
+    ///
+    /// Two earlier attempts sent JSON — first `{content}`, then `{text, mentions}`. The second one
+    /// had the right field names, which is why it looked correct, but the body was still the wrong
+    /// format. (Comments ARE JSON: `addPostComment(e, t) => body: JSON.stringify(t)`. Same screen,
+    /// two different content types — that's what made this easy to get wrong.)
+    /// The composer is text-only for now, so no image parts are attached.
     @discardableResult
     func createPost(text: String) async throws -> Bool {
+        let boundary = "Boundary-\(UUID().uuidString)"
         var req = makeRequest("/api/feed/posts", method: "POST")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["text": text, "mentions": []])
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        var body = Data()
+        func field(_ name: String, _ value: String) {
+            body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".data(using: .utf8)!)
+        }
+        field("text", text)
+        field("mentions", "[]")   // JSON-encoded, exactly like the web's JSON.stringify([])
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        req.httpBody = body
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }
@@ -757,6 +777,27 @@ struct APIClient {
     @discardableResult
     func reviewAttendanceRequest(id: String, action: String) async throws -> Bool {
         var req = makeRequest("/api/attendance/requests/\(id)", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["action": action])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+
+    // MARK: - Offsite check-out approvals
+    //
+    // The SECOND approval queue, and the app never had it: when someone checks out beyond the
+    // office geofence the shift is held at `checkOutApproval = PENDING` until a BoD approves it.
+    // The web reviews these next to the leave/permit requests (`offsiteCheckouts("ALL")`); on the
+    // app they were invisible, so a reviewer could never see — let alone clear — the queue.
+
+    func offsiteCheckouts(status: String = "ALL") async throws -> [OffsiteCheckout] {
+        let path = "/api/attendance/offsite-checkouts?status=\(enc(status))"
+        return (try await run(makeRequest(path), decode: OffsiteCheckoutsResponse.self)).items ?? []
+    }
+
+    @discardableResult
+    func reviewOffsiteCheckout(id: String, action: String) async throws -> Bool {
+        var req = makeRequest("/api/attendance/offsite-checkouts/\(id)", method: "PATCH")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: ["action": action])
         _ = try await run(req, decode: SuccessResponse.self)

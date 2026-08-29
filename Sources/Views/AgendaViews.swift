@@ -205,18 +205,36 @@ struct TeamCalendarView: View {
 
     private func load() async {
         error = nil
-        // Teams are only a FILTER now — a user with no team still gets the workspace calendar.
         teams = (try? await APIClient.shared.teams()) ?? []
+        // One team = no menu is drawn, so nothing would ever set `teamId` and every request would
+        // go out team-less (400). Pick it here.
+        if teams.count == 1 { teamId = teams[0].id }
         await loadEvents()
     }
+
+    /// `/api/master-calendar` needs a teamId, so "All teams" is fanned out into one request per team
+    /// and merged (deduped by id — an event shared by two teams comes back twice). Sequential on
+    /// purpose: a workspace has a handful of teams, and this keeps the error handling in one place.
     private func loadEvents() async {
         let start = cal.date(from: comps) ?? monthDate
         let end = cal.date(byAdding: .month, value: 1, to: start) ?? start
         let f = ISO8601DateFormatter()
+        let ids = teamId.map { [$0] } ?? teams.map(\.id)
+
+        // No team at all → nothing to ask for. Empty calendar, not an error.
+        guard !ids.isEmpty else { events = []; error = nil; loading = false; return }
+
+        var merged: [String: CalendarEvent] = [:]
         do {
-            events = try await APIClient.shared.masterCalendar(teamId: teamId,
-                                                               start: f.string(from: start),
-                                                               end: f.string(from: end))
+            for id in ids {
+                for e in try await APIClient.shared.masterCalendar(teamId: id,
+                                                                   start: f.string(from: start),
+                                                                   end: f.string(from: end)) {
+                    merged[e.id] = e
+                }
+            }
+            events = merged.values.sorted { $0.startsAt < $1.startsAt }
+            error = nil
         } catch APIError.unauthorized { auth.logout() }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load the calendar.") }
         loading = false
