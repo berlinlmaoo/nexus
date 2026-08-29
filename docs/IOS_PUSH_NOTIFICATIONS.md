@@ -21,7 +21,7 @@ Isi `.env.production`:
 
 ```env
 APNS_TEAM_ID=5YR5T42G97
-APNS_KEY_ID=XXXXXXXXXX
+APNS_KEY_ID=9PTCKVB26P
 APNS_BUNDLE_ID=id.znetworks.nexus
 APNS_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...isi p8...\n-----END PRIVATE KEY-----"
 CRON_SECRET=nilai-random-yang-panjang
