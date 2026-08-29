@@ -9,7 +9,7 @@ import {
 } from "@/lib/attendance"
 import { isHoliday } from "@/lib/holidays"
 import { isOutageDate } from "@/lib/attendance-absence"
-import { sendWA } from "@/lib/notification-service"
+import { notifyAttendanceReminder, sendWA } from "@/lib/notification-service"
 import { publicBaseUrl } from "./public-url"
 
 // WhatsApp reminders: nudge staff 15 minutes before their shift to check IN, and 15 minutes before
@@ -32,7 +32,7 @@ const ONE_DAY_MS = 86_400_000
 export interface ReminderPreviewRow {
   userId: string
   name: string
-  phone: string // masked
+  phone: string // masked, or — when only push is available
   shiftSource: string
   shiftStart: string
   shiftEnd: string
@@ -152,7 +152,6 @@ export async function sendAttendanceReminders(now: Date = new Date(), opts?: { d
 
     for (const member of members) {
       const phone = member.user?.phoneNumber
-      if (!phone) continue // hanya yang nomornya udah ada di profil
 
       // Resolve TODAY's shift window from the real instant (overnight-aware + tz-safe).
       const shiftToday = await resolveEffectiveAttendanceShift({ userId: member.userId, workspaceId, office, date: now })
@@ -171,7 +170,7 @@ export async function sendAttendanceReminders(now: Date = new Date(), opts?: { d
         result.preview!.push({
           userId: member.userId,
           name: member.user?.name ?? "—",
-          phone: maskPhone(phone),
+          phone: phone ? maskPhone(phone) : "—",
           shiftSource: shiftToday.source,
           shiftStart: shiftToday.shiftStartTime,
           shiftEnd: shiftToday.shiftEndTime,
@@ -192,8 +191,16 @@ export async function sendAttendanceReminders(now: Date = new Date(), opts?: { d
         if (!(await coveredByLeave(member.userId, workspaceId, todayDate))) {
           const record = await dayRecord(member.userId, workspaceId, todayDate)
           if (!record?.checkInAt) {
-            await sendWA(phone, `🔔 *Reminder Absen Masuk*\nHai ${firstName(member.user?.name)}, 15 menit lagi jam masuk (${shiftToday.shiftStartTime}). Jangan lupa check-in di NEXUS ya 🙌${url ? `\n${url}` : ""}`)
-            result.checkinSent++
+            const shouldSend = await notifyAttendanceReminder({
+              userId: member.userId,
+              kind: "checkin",
+              attendanceDate: dateKey,
+              shiftTime: shiftToday.shiftStartTime,
+            })
+            if (shouldSend) {
+              if (phone) await sendWA(phone, `🔔 *Reminder Absen Masuk*\nHai ${firstName(member.user?.name)}, 15 menit lagi jam masuk (${shiftToday.shiftStartTime}). Jangan lupa check-in di NEXUS ya 🙌${url ? `\n${url}` : ""}`)
+              result.checkinSent++
+            }
           }
         }
       }
@@ -216,8 +223,17 @@ export async function sendAttendanceReminders(now: Date = new Date(), opts?: { d
         if (await coveredByLeave(member.userId, workspaceId, anchor.date)) continue
         const record = await dayRecord(member.userId, workspaceId, anchor.date)
         if (record?.checkInAt && !record?.checkOutAt) {
-          await sendWA(phone, `🔔 *Reminder Absen Pulang*\nHai ${firstName(member.user?.name)}, 15 menit lagi jam pulang (${shift.shiftEndTime}). Jangan lupa check-out di NEXUS ya ✅${url ? `\n${url}` : ""}`)
-          result.checkoutSent++
+          const anchorDateKey = formatAttendanceDateKey(anchor.instant)
+          const shouldSend = await notifyAttendanceReminder({
+            userId: member.userId,
+            kind: "checkout",
+            attendanceDate: anchorDateKey,
+            shiftTime: shift.shiftEndTime,
+          })
+          if (shouldSend) {
+            if (phone) await sendWA(phone, `🔔 *Reminder Absen Pulang*\nHai ${firstName(member.user?.name)}, 15 menit lagi jam pulang (${shift.shiftEndTime}). Jangan lupa check-out di NEXUS ya ✅${url ? `\n${url}` : ""}`)
+            result.checkoutSent++
+          }
         }
       }
     }

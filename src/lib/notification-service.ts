@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma"
+import { sendPushToUser } from "@/lib/apns"
 import { emitNotification } from "@/lib/socket-emitter"
 import { postWaBridge } from "@/lib/wa-bridge"
 import {
@@ -200,6 +201,7 @@ export async function createInAppNotification(data: {
   taskId?: string
   projectId?: string
   link?: string
+  push?: boolean
 }) {
   const notification = await prisma.notification.create({
     data: {
@@ -216,7 +218,45 @@ export async function createInAppNotification(data: {
   // Real-time: push to user's socket room
   emitNotification(data.userId, JSON.parse(JSON.stringify(notification)))
 
+  if (data.push) {
+    await sendPushToUser(data.userId, {
+      title: data.title,
+      body: data.message,
+      type: data.type,
+      taskId: data.taskId,
+      projectId: data.projectId,
+      link: data.link,
+    }).catch((error) => log.error("APNs delivery failed", { error: String(error) }))
+  }
+
   return notification
+}
+
+export async function notifyAttendanceReminder(data: {
+  userId: string
+  kind: "checkin" | "checkout"
+  attendanceDate: string
+  shiftTime: string
+}): Promise<boolean> {
+  if (await isUserDnd(data.userId)) return false
+  const type = data.kind === "checkin" ? "attendance_checkin_reminder" : "attendance_checkout_reminder"
+  const link = `/attendance?reminder=${data.kind}&date=${data.attendanceDate}`
+  const existing = await prisma.notification.findFirst({
+    where: { userId: data.userId, type, link },
+    select: { id: true },
+  })
+  if (existing) return false
+  await createInAppNotification({
+    userId: data.userId,
+    type,
+    title: data.kind === "checkin" ? "Attendance reminder" : "Check-out reminder",
+    message: data.kind === "checkin"
+      ? `Your shift starts at ${data.shiftTime}. Don't forget to check in.`
+      : `Your shift ends at ${data.shiftTime}. Don't forget to check out.`,
+    link,
+    push: true,
+  })
+  return true
 }
 
 // ── Public methods ──────────────────────────────────────────────
@@ -274,6 +314,7 @@ export async function notifyTaskAssigned(data: {
     taskId: data.taskId,
     projectId: data.projectId,
     link: `/projects/${data.projectId}/tasks/${data.taskId}`,
+    push: prefs.taskAssigned,
   })
 
   if (!prefs.taskAssigned) return
@@ -486,7 +527,9 @@ export async function notifyDueSoon(data: {
   taskId: string
   taskTitle: string
   dueDate: string
+  dueAt: string
   projectId?: string
+  stage: "2d" | "1d" | "due"
 }) {
   // Skip if user has DND active
   if (await isUserDnd(data.userId)) return
@@ -498,17 +541,22 @@ export async function notifyDueSoon(data: {
   if (!user) return
 
   const prefs = await getUserPrefs(data.userId)
+  const type = data.stage === "due" ? "task_due_now" : `task_due_${data.stage}`
+  const title = data.stage === "due"
+    ? "Task due now"
+    : data.stage === "1d" ? "Task due tomorrow" : "Task due in 2 days"
 
   await createInAppNotification({
     userId: data.userId,
-    type: "task_due_soon",
-    title: "Task Due Soon",
+    type,
+    title,
     message: `"${data.taskTitle}" is due on ${data.dueDate}`,
     taskId: data.taskId,
     projectId: data.projectId,
-    link: data.projectId
+    link: `${data.projectId
       ? `/projects/${data.projectId}/tasks/${data.taskId}`
-      : `/tasks/${data.taskId}`,
+      : `/tasks/${data.taskId}`}?reminder=${data.stage}&due=${encodeURIComponent(data.dueAt)}`,
+    push: prefs.taskDueSoon,
   })
 
   if (!prefs.taskDueSoon) return
@@ -719,13 +767,13 @@ export async function notifyCommentAdded(data: {
 // ── Due-soon checker (call from API or cron) ────────────────────
 
 export async function checkDueSoonTasks() {
-  const tomorrow = new Date()
-  tomorrow.setHours(tomorrow.getHours() + 24)
   const now = new Date()
+  const inTwoDays = new Date(now.getTime() + 48 * 60 * 60 * 1000)
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
 
   const tasks = await prisma.task.findMany({
     where: {
-      dueDate: { gte: now, lte: tomorrow },
+      dueDate: { gte: thirtyDaysAgo, lte: inTwoDays },
       status: { in: ["TODO", "IN_PROGRESS", "IN_REVIEW"] },
     },
     include: {
@@ -735,14 +783,17 @@ export async function checkDueSoonTasks() {
   })
 
   for (const task of tasks) {
+    const hoursLeft = (task.dueDate!.getTime() - now.getTime()) / 3_600_000
+    const stage: "2d" | "1d" | "due" = hoursLeft <= 0 ? "due" : hoursLeft <= 24 ? "1d" : "2d"
+    const type = stage === "due" ? "task_due_now" : `task_due_${stage}`
+    const dueAt = task.dueDate!.toISOString()
     for (const assignee of task.assignees) {
-      // Check if we already notified today
       const existing = await prisma.notification.findFirst({
         where: {
           userId: assignee.userId,
           taskId: task.id,
-          type: "task_due_soon",
-          createdAt: { gte: new Date(now.toDateString()) },
+          type,
+          link: { contains: encodeURIComponent(dueAt) },
         },
       })
       if (existing) continue
@@ -752,6 +803,8 @@ export async function checkDueSoonTasks() {
         taskId: task.id,
         taskTitle: task.title,
         projectId: task.taskList.projectId,
+        stage,
+        dueAt,
         dueDate: task.dueDate!.toLocaleDateString("en-US", {
           month: "short",
           day: "numeric",
