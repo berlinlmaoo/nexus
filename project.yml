@@ -22,24 +22,15 @@ settings:
     # ganti branch. Cari punyamu: Xcode → Settings → Accounts, atau Build Settings → DEVELOPMENT_TEAM.
     # Team ID bukan rahasia — dia ikut ke setiap app yang didistribusikan.
     DEVELOPMENT_TEAM: "5YR5T42G97"
-    GENERATE_INFOPLIST_FILE: YES
-    # Jawaban export-compliance, dijawab sekali di sini supaya App Store Connect tidak menanyakannya
-    # tiap upload (build "Missing Compliance" tidak bisa dibagikan ke tester sampai dijawab).
-    # NO itu benar untuk app ini: HTTPS/TLS standar termasuk pengecualian yang dibebaskan.
-    INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
-    # User-facing identity and permission strings embedded into Info.plist.
-    INFOPLIST_KEY_CFBundleDisplayName: "NEXUS by Z Networks"
-    INFOPLIST_KEY_NSCameraUsageDescription: "NEXUS by Z Networks uses the camera to take attendance selfies."
-    INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "NEXUS by Z Networks uses your location while the app is open to verify attendance within the office area."
-    INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "NEXUS by Z Networks accesses your photo library to attach receipts and expense photos."
-    INFOPLIST_KEY_UILaunchScreen_Generation: YES
-    INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
-    INFOPLIST_KEY_UIStatusBarStyle: UIStatusBarStyleDefault
 
 targets:
   NEXUS:
     type: application
     platform: iOS
+    # A real plist preserves spaces in the display name; the generated-plist build setting
+    # collapsed "NEXUS by Z Networks" into "NEXUSbyZNetworks" on the Home Screen.
+    info:
+      path: Sources/Info.plist
     sources:
       - path: Sources
     settings:
