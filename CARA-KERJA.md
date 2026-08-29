@@ -151,32 +151,50 @@ Ada **dua hal berbeda** yang sering dikira satu, dan status keduanya tidak sama:
 | | Cara kerja | Status |
 |---|---|---|
 | **Notifikasi lokal** — pengingat task jatuh tempo & absen | Dijadwalkan di dalam HP oleh app sendiri | **Sudah jalan.** Tidak butuh server, tidak butuh internet |
-| **Push dari server** — misalnya "ada yang mention kamu" | Server → Apple (APNs) → HP | **Belum bisa.** Lihat di bawah |
+| **Push dari server** — mention, task di-assign, deadline, reminder absen | Server → Apple (APNs) → HP | **Kodenya siap, belum dideploy.** Lihat di bawah |
 
 ## Kenapa push dari server belum bisa
 
-App sudah mendaftarkan diri ke APNs dan mengirim token perangkat ke
-`POST /api/push/devices` — **tapi rute itu tidak ada di backend**:
+Bukan karena kodenya belum ada — **kodenya sudah selesai, tapi belum dideploy**.
+
+Backend (`~/nexus`) sudah punya semuanya di branch **`feat/ios-push-notifications`**
+(commit `b5dede1` dst): rute `src/app/api/push/devices/route.ts`, pengirim `src/lib/apns.ts`,
+model `DeviceInstallation`, dan panduan lengkap di `docs/IOS_PUSH_NOTIFICATIONS.md`.
+Branch itu **belum di-merge ke main dan belum naik ke produksi**, jadi:
 
 ```sh
 curl -o /dev/null -w '%{http_code}\n' -X POST https://nexus.znetworks.id/api/push/devices
-# 404   ← rute tidak ada
+# 404   ← belum ada DI PRODUKSI
 
 curl -o /dev/null -w '%{http_code}\n' -X POST https://nexus.znetworks.id/api/attendance/check-in
 # 401   ← rute ADA, cuma butuh login
 ```
 
-404 (bukan 401) artinya backend memang belum punya rute itu. Jadi token perangkat tidak pernah
-tersimpan di mana pun, dan tidak ada yang bisa mengirim push. Ini pekerjaan di **repo backend**,
-bukan di sini.
+Kontraknya sudah dicek cocok dengan app ini: `POST {token, deviceId, bundleId, environment}`
+(token huruf kecil, `bundleId` harus persis `id.znetworks.nexus`, environment `sandbox`/`production`),
+dan `DELETE {token}` saat logout.
 
-Yang perlu dibuat di backend supaya nyambung dengan app yang sekarang:
+Sisa pekerjaannya **operasional di host produksi**, bukan ngoding — urutannya ada di
+`docs/IOS_PUSH_NOTIFICATIONS.md` repo backend:
 
-- `POST /api/push/devices` — body `{token, deviceId, bundleId, environment}`; simpan per user
-- `DELETE /api/push/devices` — body `{token}`; dipanggil saat logout
-- Pengirimnya: APNs key `.p8` (Key ID + Team ID `5YR5T42G97`), topic = `id.znetworks.nexus`,
-  host `api.sandbox.push.apple.com` untuk build development dan `api.push.apple.com` untuk
-  TestFlight/App Store
+1. merge `feat/ios-push-notifications` ke main
+2. taruh APNs key `.p8` di `/etc/nexus/secrets/` host produksi + isi `APNS_*` di `.env.production`
+3. `npx prisma db push` (tabel `DeviceInstallation`) lalu rebuild container
+4. pasang cron: `/api/attendance/reminders` tiap menit, `/api/notifications/due-check` tiap 5–15 menit
+
+## Pengingat lokal vs push: hanya satu yang boleh hidup
+
+Server mengirim **reminder yang sama persis** dengan yang dijadwalkan app sendiri — judulnya pun
+identik ("Attendance reminder"), dan tahap task due-nya sama (H-2 / H-1 / jatuh tempo). Kalau
+keduanya hidup, setiap pengingat masuk **dua kali**.
+
+Karena itu jadwal lokal diperlakukan sebagai **cadangan**, bukan kanal kedua:
+
+- selama server belum bisa menerima token → app menjadwalkan sendiri (keadaan sekarang)
+- begitu server menerima token → jadwal lokal dibatalkan, server yang mengirim
+- kalau server bermasalah lagi → cadangan lokal hidup kembali
+
+Statusnya kelihatan di **Tuning Room → PUSH NOTIFICATIONS → Pengingat**.
 
 ## Cek status push di HP
 

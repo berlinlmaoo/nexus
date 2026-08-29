@@ -9,8 +9,24 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     private let center = UNUserNotificationCenter.current()
     private let tokenKey = "nexus.apns-token"
     private let deviceIDKey = "nexus.device-id"
+    private let pushActiveKey = "nexus.push-active"
     private let taskPrefix = "nexus.task."
     private let attendancePrefix = "nexus.attendance."
+
+    /// True once our own backend has accepted this device's APNs token.
+    ///
+    /// It matters because the server sends the SAME reminders this class schedules locally —
+    /// `notification-service.ts` fires `task_due_2d` / `task_due_1d` / `task_due_now` at the same
+    /// three stages, and `notifyAttendanceReminder` uses the identical title "Attendance reminder"
+    /// 15 minutes before the shift. With both alive, every reminder lands TWICE.
+    ///
+    /// So the local schedule is a FALLBACK, not a second channel: it runs while push can't be
+    /// delivered (today the route is missing in production) and switches itself off the moment the
+    /// server starts accepting tokens. Persisted, so a cold start knows before the first request.
+    private var pushDeliveryActive: Bool {
+        get { UserDefaults.standard.bool(forKey: pushActiveKey) }
+        set { UserDefaults.standard.set(newValue, forKey: pushActiveKey) }
+    }
 
     // MARK: diagnostics
     //
@@ -30,6 +46,10 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     /// wrong APNs host is rejected with BadDeviceToken, which is the classic "it silently
     /// doesn't work" case.
     var environmentName: String { pushEnvironment }
+
+    /// Whether this device is still scheduling its own reminders because the server can't deliver
+    /// them yet. Surfaced in Tuning Room so the behaviour isn't invisible.
+    var localFallbackActive: Bool { !pushDeliveryActive }
 
     func authorizationStatus() async -> UNAuthorizationStatus {
         await center.notificationSettings().authorizationStatus
@@ -62,6 +82,9 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         UserDefaults.standard.set(token, forKey: tokenKey)
         registrationError = nil
         await registerStoredToken()
+        // The token arrives asynchronously, so on a first launch the local reminders were already
+        // queued by the time the server accepted it. Clear them here too.
+        if pushDeliveryActive { await cancelLocallyScheduledReminders() }
     }
 
     func unregister(session: Session) async {
@@ -70,10 +93,20 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func reconcileReminders(userId: String) async {
+        // Server is delivering these — drop anything we queued earlier and stay out of its way,
+        // otherwise the user gets each reminder twice (see `pushDeliveryActive`).
+        guard !pushDeliveryActive else { await cancelLocallyScheduledReminders(); return }
         async let taskResult = try? APIClient.shared.myTasks(assigneeId: userId)
         async let attendanceResult = try? APIClient.shared.attendanceToday()
         if let tasks = await taskResult { await scheduleTaskReminders(tasks) }
         if let attendance = await attendanceResult { await scheduleAttendanceReminder(attendance) }
+    }
+
+    private func cancelLocallyScheduledReminders() async {
+        let pending = await center.pendingNotificationRequests()
+        let ours = pending.map(\.identifier).filter { $0.hasPrefix(taskPrefix) || $0.hasPrefix(attendancePrefix) }
+        guard !ours.isEmpty else { return }
+        center.removePendingNotificationRequests(withIdentifiers: ours)
     }
 
     /// Result of the last attempt to hand the token to our own backend, or nil if it worked.
@@ -92,8 +125,12 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
                 environment: pushEnvironment
             )
             backendError = nil
+            pushDeliveryActive = true
         } catch {
             backendError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            // Server can't take the token → it can't send anything either, so the local fallback
+            // has to come back. This is what makes the switch self-correcting in both directions.
+            pushDeliveryActive = false
         }
     }
 

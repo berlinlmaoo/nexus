@@ -194,6 +194,7 @@ struct PushDiagnosticsCard: View {
     @State private var environment = ""
     @State private var apnsError: String?
     @State private var backendError: String?
+    @State private var localFallback = true
     @State private var copied = false
 
     var body: some View {
@@ -209,6 +210,10 @@ struct PushDiagnosticsCard: View {
             // Separate line on purpose: Apple can be perfectly happy while our own server refuses
             // to store the token, and those two failures need completely different fixes.
             line(T("NEXUS server"), backendError ?? "ok", backendError == nil ? .success : .danger)
+            // The server sends the same task/attendance reminders this app schedules on its own.
+            // Only one of the two may be live or every reminder arrives twice — this line says which.
+            line(T("Reminders"), localFallback ? T("Local (server can't deliver yet)") : T("From server"),
+                 localFallback ? .warning : .success)
 
             if let apnsError {
                 Text(apnsError).font(NXFont.text(11)).foregroundStyle(NX.danger)
@@ -277,6 +282,7 @@ struct PushDiagnosticsCard: View {
         environment = NotificationManager.shared.environmentName
         apnsError = NotificationManager.shared.registrationError
         backendError = NotificationManager.shared.backendError
+        localFallback = NotificationManager.shared.localFallbackActive
     }
 }
 
