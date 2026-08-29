@@ -18,7 +18,7 @@ struct Session: Codable, Sendable {
 /// Minimal Keychain wrapper for the single session blob. Thread-safe (Security framework).
 enum Keychain {
     private static let account = "nexus.session"
-    private static let service = "id.patsgroup.nexus"
+    private static let service = "id.znetworks.nexus"
 
     static func save(_ session: Session) {
         guard let data = try? JSONEncoder().encode(session) else { return }

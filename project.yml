@@ -2,7 +2,7 @@
 # (run from apps/nexus-ios). The .xcodeproj is NOT committed; this file is the source of truth.
 name: NEXUS
 options:
-  bundleIdPrefix: id.patsgroup
+  bundleIdPrefix: id.znetworks
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true
@@ -27,10 +27,11 @@ settings:
     # tiap upload (build "Missing Compliance" tidak bisa dibagikan ke tester sampai dijawab).
     # NO itu benar untuk app ini: HTTPS/TLS standar termasuk pengecualian yang dibebaskan.
     INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
-    # Permission strings (attendance selfie + geofence + receipt photos) — embedded into Info.plist:
-    INFOPLIST_KEY_NSCameraUsageDescription: "NEXUS butuh kamera buat selfie absensi."
-    INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "NEXUS butuh lokasi buat verifikasi absen di area kantor."
-    INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "NEXUS butuh galeri buat lampirin nota/foto pengeluaran."
+    # User-facing identity and permission strings embedded into Info.plist.
+    INFOPLIST_KEY_CFBundleDisplayName: "NEXUS by Z Networks"
+    INFOPLIST_KEY_NSCameraUsageDescription: "NEXUS by Z Networks uses the camera to take attendance selfies."
+    INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "NEXUS by Z Networks uses your location while the app is open to verify attendance within the office area."
+    INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "NEXUS by Z Networks accesses your photo library to attach receipts and expense photos."
     INFOPLIST_KEY_UILaunchScreen_Generation: YES
     INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait"
     INFOPLIST_KEY_UIStatusBarStyle: UIStatusBarStyleDefault
@@ -43,7 +44,7 @@ targets:
       - path: Sources
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: id.patsgroup.nexus
+        PRODUCT_BUNDLE_IDENTIFIER: id.znetworks.nexus
         PRODUCT_NAME: NEXUS
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor

@@ -72,7 +72,7 @@ struct SettingsView: View {
                     .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
 
-                    Text("NEXUS iOS · PATS Group").font(NXFont.text(11)).foregroundStyle(NX.mutedFg.opacity(0.7))
+                    Text("NEXUS by Z Networks").font(NXFont.text(11)).foregroundStyle(NX.mutedFg.opacity(0.7))
                 }
                 .padding(16)
             }

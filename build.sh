@@ -15,21 +15,21 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 MODE="${1:-check}"
-BUNDLE_ID="id.patsgroup.nexus"
+BUNDLE_ID="id.znetworks.nexus"
 
 command -v xcodebuild >/dev/null || { echo "❌ xcodebuild nggak ada. Ini harus dijalanin di Mac."; exit 1; }
 
 # ── Team ID ──────────────────────────────────────────────────────────────────
-# project.yml sengaja ngosongin DEVELOPMENT_TEAM. Kalau di-set lewat GUI Xcode,
-# nilainya masuk ke .xcodeproj — yang KETIMPA tiap `xcodegen generate`, jadi hilang
-# lagi tiap ganti branch. Simpen di file .team (nggak ikut git) biar awet.
+# Source of truth-nya project.yml. Environment variable atau file .team tetap boleh dipakai
+# sebagai override lokal tanpa mengubah konfigurasi repo.
 TEAM="${DEVELOPMENT_TEAM:-$(cat .team 2>/dev/null || true)}"
+TEAM="${TEAM:-$(awk '/^[[:space:]]*DEVELOPMENT_TEAM:/ {gsub(/[" ]/, "", $2); print $2; exit}' project.yml)}"
 
 need_team() {
   [ -n "$TEAM" ] && return 0
   echo "❌ Team ID belum di-set — signing bakal gagal."
-  echo "   Cari punya kamu:  ./build.sh team"
-  echo "   Simpen sekali:    echo XXXXXXXXXX > .team"
+  echo "   Cari punya kamu: ./build.sh team"
+  echo "   Lalu isi DEVELOPMENT_TEAM di project.yml."
   exit 1
 }
 

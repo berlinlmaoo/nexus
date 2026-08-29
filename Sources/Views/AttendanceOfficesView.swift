@@ -104,7 +104,7 @@ struct OfficeComposerSheet: View {
                 NX.background.ignoresSafeArea()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        f(T("OFFICE NAME")) { field($name, "mis. PATS HQ") }
+                        f(T("OFFICE NAME")) { field($name, "mis. Z Networks HQ") }
                         f("ALAMAT (opsional)") { field($address, "Alamat") }
                         HStack(spacing: 12) {
                             f("LATITUDE") { field($lat, "-6.2").keyboardType(.numbersAndPunctuation) }

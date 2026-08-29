@@ -74,7 +74,7 @@ memasang ke iPhone sendiri lewat kabel, sertifikatnya mati tiap 7 hari.
 ## Sekali saja: siapkan
 
 ### 1. Team ID masuk ke `project.yml`
-`DEVELOPMENT_TEAM` di `project.yml` masih kosong. Isi dengan Team ID (10 karakter) akun berbayar lu.
+`DEVELOPMENT_TEAM` di `project.yml` berisi Team ID (10 karakter) akun berbayar yang dipakai signing.
 
 Cara melihatnya lewat GUI: Xcode → target **NEXUS** → **Signing & Capabilities** → pilih Team →
 pindah ke tab **Build Settings** → cari `DEVELOPMENT_TEAM` → salin nilainya.
@@ -83,16 +83,16 @@ Ditaruh di `project.yml`, **bukan** di GUI, karena `.xcodeproj` ditimpa tiap `xc
 kalau di GUI, hilang lagi tiap ganti branch.
 
 ### 2. Daftarkan Bundle ID
-`id.patsgroup.nexus`. Kalau signing otomatis sudah pernah jalan, biasanya sudah otomatis terdaftar.
+`id.znetworks.nexus`. Kalau signing otomatis sudah pernah jalan, biasanya sudah otomatis terdaftar.
 Kalau belum: developer.apple.com → Certificates, Identifiers & Profiles → Identifiers → **+**.
 
 > **Bundle ID tidak bisa diganti** setelah app-nya dibuat di App Store Connect. Pastikan dulu.
 
 ### 3. Buat App record di App Store Connect
 appstoreconnect.apple.com → **Apps** → **+** → New App:
-- Platform **iOS**, Bundle ID `id.patsgroup.nexus`
-- **Name**: harus unik sedunia — "NEXUS" hampir pasti sudah dipakai orang lain. Nama ini yang
-  muncul di TestFlight, beda dari nama di home screen (itu dari `PRODUCT_NAME`).
+- Platform **iOS**, Bundle ID `id.znetworks.nexus`
+- **Name**: `NEXUS by Z Networks`. Nama ini yang muncul di TestFlight; nama di home screen berasal
+  dari `CFBundleDisplayName` dan sudah disetel sama di `project.yml`.
 - **SKU**: bebas, internal saja (mis. `nexus-ios`)
 
 Tanpa langkah ini, upload gagal dengan *"No suitable application records were found."*

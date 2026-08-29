@@ -21,10 +21,10 @@ ke-deploy (`https://nexus.znetworks.id`) via token di Keychain. **No WebView, fu
 
 `Sources/Config.swift` → `https://nexus.znetworks.id` (backend di Proxmox).
 
-**Wajib domain kanonik, jangan yang redirect.** `nexus.patsgroup.id` (domain lama) sekarang cuma
-302 ke znetworks — dan URLSession **nurunin POST jadi GET** waktu ngikutin 301/302. Route app-login
-cuma nerima POST, jadi hasilnya `Server error (405)` di layar login, dan semua write request lain
-(absen, bikin task, komentar, upload) bakal kena hal yang sama. Cek cepat kalau curiga:
+**Wajib domain kanonik, jangan host lama yang redirect.** URLSession **nurunin POST jadi GET** waktu
+ngikutin 301/302. Route app-login cuma nerima POST, jadi hasilnya `Server error (405)` di layar
+login, dan semua write request lain (absen, bikin task, komentar, upload) bakal kena hal yang sama.
+Cek cepat kalau curiga:
 
 ```sh
 curl -o /dev/null -w '%{http_code} %{redirect_url}\n' \
@@ -32,8 +32,6 @@ curl -o /dev/null -w '%{http_code} %{redirect_url}\n' \
   https://nexus.znetworks.id/api/auth/app-login
 # 401 (tanpa redirect) = sehat. 3xx = domainnya redirect, jangan dipakai di Config.
 ```
-
-`nexusbeta.patsgroup.id` **tidak ada di DNS publik** — jangan dipakai.
 
 ## Sekali setup di Mac ini
 

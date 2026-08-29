@@ -404,7 +404,7 @@ struct CreateProjectSheet: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         field(T("MISSION NAME")) {
-                            TextField("mis. PATS Multimedia", text: $name)
+                            TextField("mis. Z Networks Multimedia", text: $name)
                                 .font(NXFont.text(16)).padding(12)
                                 .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
