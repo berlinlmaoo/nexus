@@ -53,8 +53,15 @@ struct AttendanceView: View {
                     if let error { errorBanner(error) }
                     if needsReflection { reflectionCard }
                     presenceButtons
+                    // Say WHY the button is greyed out, right where the greyed-out button is.
+                    if needsReflection && !reflectionOK {
+                        Text(T("PRESENCE OUT unlocks once the daily reflection above reaches 200 characters."))
+                            .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+                    }
                     if showOffsite { offsitePrompt }
-                    if forcePending { infoBanner(T("⚠️ You still have an earlier shift that was never checked out. Tap PRESENCE OUT to close it first — then you can clock in again."), tone: .warning) }
+                    if forcePending { infoBanner(forcePendingMessage, tone: .warning) }
                     if pending { infoBanner(T("⏳ Checkout outside the office area — waiting for BoD approval"), tone: .warning) }
                     if rec?.checkOutApproval == "REJECTED" { infoBanner(T("Your out-of-area checkout was rejected by the BoD."), tone: .danger) }
                     if let banner { infoBanner(banner.text, tone: banner.good ? .success : .danger) }
@@ -228,6 +235,14 @@ struct AttendanceView: View {
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color(hex: "#fcd34d")))
     }
 
+    /// The old copy told people to "tap PRESENCE OUT" while that button was greyed out by the
+    /// reflection gate — an instruction the UI actively contradicted. Say the real next step instead.
+    private var forcePendingMessage: String {
+        reflectionOK
+            ? T("⚠️ You still have an earlier shift that was never checked out. Tap PRESENCE OUT to close it first — then you can clock in again.")
+            : T("⚠️ You still have an earlier shift that was never checked out. Fill in the daily reflection above first — PRESENCE OUT unlocks after 200 characters.")
+    }
+
     /// The daily reflection the server demands before it will accept a check-out. Without this the
     /// native app could never close a shift — the API just kept returning the 200-character error.
     private var reflectionCard: some View {
@@ -248,7 +263,7 @@ struct AttendanceView: View {
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .strokeBorder(reflectionOK ? NX.success.opacity(0.45) : NX.border))
             if !reflectionOK {
-                Text("Kurang \(reflectionMin - reflectionCount) karakter lagi buat bisa check-out.")
+                Text("\(reflectionMin - reflectionCount) \(T("more characters needed before you can check out."))")
                     .font(NXFont.text(11, .semibold)).foregroundStyle(NX.warning)
             }
         }
@@ -615,7 +630,7 @@ struct RecordActionsSheet: View {
             .background(NX.background.ignoresSafeArea())
             .navigationTitle(T("Manage attendance")).navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Close")) { dismiss() } } }
-            .confirmationDialog("Hapus seluruh absen \(dateLabel)?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            .confirmationDialog("\(T("Delete the whole attendance record for")) \(dateLabel)?", isPresented: $confirmDelete, titleVisibility: .visible) {
                 Button(T("Delete"), role: .destructive) { Task { await del(part: nil) } }
                 Button(T("Cancel"), role: .cancel) {}
             } message: { Text(T("That day's check-in & check-out are deleted permanently, and the day is shielded from attendance deductions.")) }

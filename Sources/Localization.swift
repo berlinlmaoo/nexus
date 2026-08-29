@@ -541,6 +541,27 @@ final class AppLanguage {
         "Fri": "Jum", "Sat": "Sab", "Sun": "Min",
         "Room bookings — VIP, Meeting, Studio.": "Booking ruangan — VIP, Meeting, Studio.",
         "Auto-assign to:": "Assign otomatis ke:",
+
+        // ── fragmen kalimat berinterpolasi (dirakit runtime) ──────────────────
+        "days": "hari",
+        "tasks": "task",
+        "projects": "project",
+        "members": "member",
+        "custom days": "hari custom",
+        "tasks done": "task selesai",
+        "Failed": "Gagal",
+        "Custom": "Custom",
+        "No results for": "Gak ada hasil buat",
+        "Delete the whole attendance record for": "Hapus seluruh absen",
+        "Using the workspace default": "Pakai default workspace",
+        "PUBLIC HOLIDAYS": "TANGGAL MERAH",
+        "DAY-OFF ALLOWANCE": "JATAH LIBUR",
+        "more characters needed before you can check out.":
+            "karakter lagi biar bisa check-out.",
+        "PRESENCE OUT unlocks once the daily reflection above reaches 200 characters.":
+            "PRESENCE OUT kebuka begitu refleksi harian di atas nyampe 200 karakter.",
+        "⚠️ You still have an earlier shift that was never checked out. Fill in the daily reflection above first — PRESENCE OUT unlocks after 200 characters.":
+            "⚠️ Masih ada absen sebelumnya yang belum di-check-out. Isi dulu refleksi harian di atas — PRESENCE OUT kebuka setelah 200 karakter.",
     ]
 }
 

@@ -907,7 +907,7 @@ struct APIClient {
         // Decode the server's { error, code } body for a useful message.
         let payload = try? JSONDecoder().decode(ServerError.self, from: data)
         if http.statusCode == 422, payload?.code == "OUTSIDE_RADIUS" { return .outsideRadius }
-        throw APIError.transport(payload?.error ?? "Gagal (\(http.statusCode)).")
+        throw APIError.transport(payload?.error ?? "\(T("Failed")) (\(http.statusCode)).")
     }
 }
 

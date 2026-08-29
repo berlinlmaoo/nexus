@@ -63,7 +63,7 @@ struct TeamCard: View {
                     .frame(width: 40, height: 40).background(color, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(team.name).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
-                    Text("\(team.memberCount) member\(team.memberCount == 1 ? "" : "s") · \(team.projectNames.count) project")
+                    Text("\(team.memberCount) \(T("members")) · \(team.projectNames.count) \(T("projects"))")
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer()

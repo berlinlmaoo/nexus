@@ -62,7 +62,7 @@ struct SearchView: View {
         } else if query.trimmingCharacters(in: .whitespaces).count < 2 {
             placeholder("magnifyingglass", T("Type at least 2 characters to search."))
         } else if let r = results, r.isEmpty {
-            placeholder("text.magnifyingglass", "Gak ada hasil buat \"\(query)\".")
+            placeholder("text.magnifyingglass", "\(T("No results for")) \"\(query)\".")
         } else if let r = results {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {

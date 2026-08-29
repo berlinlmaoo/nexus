@@ -111,7 +111,7 @@ struct TaskDetailView: View {
         }
     }
     private func questSubtitle(_ q: TaskQuestRef) -> String {
-        if let total = q.total, total > 0 { return "\(q.done ?? 0)/\(total) task selesai" }
+        if let total = q.total, total > 0 { return "\(q.done ?? 0)/\(total) \(T("tasks done"))" }
         return T("Finish this task to earn XP")
     }
 

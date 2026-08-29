@@ -21,8 +21,8 @@ struct ReportsView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    ForEach([7, 30, 90], id: \.self) { d in Button("\(d) hari") { days = d; Task { await load() } } }
-                } label: { Text("\(days) hari").font(NXFont.text(13, .bold)) }
+                    ForEach([7, 30, 90], id: \.self) { d in Button("\(d) \(T("days"))") { days = d; Task { await load() } } }
+                } label: { Text("\(days) \(T("days"))").font(NXFont.text(13, .bold)) }
             }
         }
         .task { await load() }

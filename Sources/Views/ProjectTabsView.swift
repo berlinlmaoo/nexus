@@ -440,7 +440,7 @@ struct CalendarTab: View {
                 if let sel = selected {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Text("Tanggal \(sel)").font(NXFont.text(12, .bold)).foregroundStyle(NX.mutedFg)
+                            Text("\(T("Date")) \(sel)").font(NXFont.text(12, .bold)).foregroundStyle(NX.mutedFg)
                             Spacer()
                             Button { onCreate(dateFor(sel)) } label: {
                                 Label(T("Add task"), systemImage: "plus").font(NXFont.text(12, .semibold)).foregroundStyle(NX.violet)
@@ -594,7 +594,7 @@ struct ProjectFilesTab: View {
             Button(T("Create")) { Task { await createFolder() } }
             Button(T("Cancel"), role: .cancel) { newFolderName = "" }
         }
-        .confirmationDialog("Hapus \"\(deleteTarget?.name ?? "")\"?", isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }), titleVisibility: .visible) {
+        .confirmationDialog("\(T("Delete")) \"\(deleteTarget?.name ?? "")\"?", isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }), titleVisibility: .visible) {
             Button(T("Delete"), role: .destructive) { if let t = deleteTarget { deleteTarget = nil; Task { await delete(t) } } }
             Button(T("Cancel"), role: .cancel) { deleteTarget = nil }
         }

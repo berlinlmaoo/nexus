@@ -167,7 +167,7 @@ struct TaskAttachmentsCard: View {
             if case let .success(urls) = result, let url = urls.first { Task { await upload(url) } }
         }
         .sheet(item: $shareItem) { item in ActivityView(items: [item.url]) }
-        .confirmationDialog("Hapus \"\(deleteTarget?.name ?? "")\"?", isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }), titleVisibility: .visible) {
+        .confirmationDialog("\(T("Delete")) \"\(deleteTarget?.name ?? "")\"?", isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }), titleVisibility: .visible) {
             Button(T("Delete"), role: .destructive) { if let a = deleteTarget { deleteTarget = nil; Task { await remove(a) } } }
             Button(T("Cancel"), role: .cancel) { deleteTarget = nil }
         }

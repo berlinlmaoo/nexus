@@ -40,7 +40,7 @@ struct FolderAggregateView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("\(selectedIds.count) project · \(tasks.count) task")
+                Text("\(selectedIds.count) \(T("projects")) · \(tasks.count) \(T("tasks"))")
                     .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
 
                 if !selectedProjects.isEmpty {
@@ -237,9 +237,9 @@ private struct FolderCalendar: View {
             .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(NX.border))
 
             HStack {
-                Text("Tanggal \(selected.map(String.init) ?? "—")").font(NXFont.display(14, .bold)).foregroundStyle(NX.foreground)
+                Text("\(T("Date")) \(selected.map(String.init) ?? "—")").font(NXFont.display(14, .bold)).foregroundStyle(NX.foreground)
                 Spacer()
-                Text("\(dayTasks.count) task").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                Text("\(dayTasks.count) \(T("tasks"))").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             }
             if dayTasks.isEmpty {
                 FolderEmpty(text: T("Nothing due on this date."))

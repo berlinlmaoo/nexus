@@ -102,7 +102,7 @@ struct AdminUsersSection: View {
             }
         }
         .task { await load() }
-        .confirmationDialog("Hapus akun \"\(deleteTarget?.displayName ?? "")\" permanen?", isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }), titleVisibility: .visible) {
+        .confirmationDialog("\(T("Delete account")) \"\(deleteTarget?.displayName ?? "")\"?", isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }), titleVisibility: .visible) {
             Button(T("Delete permanently"), role: .destructive) { if let m = deleteTarget { deleteTarget = nil; Task { await deleteUser(m) } } }
             Button(T("Cancel"), role: .cancel) { deleteTarget = nil }
         } message: { Text(T("Their tasks/files/quests are reassigned to you. This cannot be undone.")) }

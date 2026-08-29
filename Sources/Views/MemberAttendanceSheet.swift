@@ -124,12 +124,12 @@ struct MemberAttendanceSheet: View {
 
     private var dayoffCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionLabel("JATAH LIBUR — \(MonthKey.label(month))")
+            SectionLabel("\(T("DAY-OFF ALLOWANCE")) — \(MonthKey.label(month))")
             if let d = dayoff {
                 HStack {
                     Text(T("Used this month")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     Spacer()
-                    Text("\(d.used ?? 0) / \(d.quota ?? 0) hari").font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground)
+                    Text("\(d.used ?? 0) / \(d.quota ?? 0) \(T("days"))").font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground)
                 }
                 quotaEditor(d)
                 Divider().overlay(NX.border)
@@ -158,7 +158,7 @@ struct MemberAttendanceSheet: View {
                     }.disabled(busyDayoff)
                 }
             }
-            Text(d.quotaOverride != nil ? "Custom: \(d.quotaOverride!) hari (default \(d.defaultQuota ?? 4))." : "Pakai default workspace (\(d.defaultQuota ?? 4) hari).")
+            Text(d.quotaOverride != nil ? "\(T("Custom")): \(d.quotaOverride!) \(T("days")) (default \(d.defaultQuota ?? 4))." : "\(T("Using the workspace default")) (\(d.defaultQuota ?? 4) \(T("days"))).")
                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
         }
     }

@@ -378,7 +378,7 @@ struct DashboardView: View {
                     .overlay(Image(systemName: "bell.fill").font(.system(size: 18)).foregroundStyle(NX.violet))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(T("Notifications")).font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)
-                    Text(unread > 0 ? "\(unread) belum dibaca" : "Semua kebaca").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                    Text(unread > 0 ? "\(unread) \(T("unread"))" : "Semua kebaca").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer()
                 Button { toggleBell(false) } label: {

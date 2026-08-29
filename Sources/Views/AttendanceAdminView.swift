@@ -139,7 +139,7 @@ struct AttendanceAdminSection: View {
                         Text("Shift default").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                     }
                     if let bd = m.attendanceShiftByDay, !bd.isEmpty {
-                        Text("· \(bd.count) hari custom").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                        Text("· \(bd.count) \(T("custom days"))").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                     }
                 }
             }
@@ -177,7 +177,7 @@ struct RedDateCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionLabel("TANGGAL MERAH — \(MonthKey.label(month))")
+            SectionLabel("\(T("PUBLIC HOLIDAYS")) — \(MonthKey.label(month))")
 
             if loading {
                 ProgressView().tint(NX.violet).frame(maxWidth: .infinity).padding(.vertical, 12)
@@ -197,7 +197,7 @@ struct RedDateCard: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(T("Allowance / staff this month")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
             Stepper(value: $quota, in: 0...31) {
-                Text("\(quota) hari").font(NXFont.text(15, .bold)).foregroundStyle(NX.violet)
+                Text("\(quota) \(T("days"))").font(NXFont.text(15, .bold)).foregroundStyle(NX.violet)
             }
             Button { Task { await saveQuota() } } label: {
                 Text(savingQuota ? "Menyimpan…" : T("Save allowance")).font(NXFont.text(14, .bold))
