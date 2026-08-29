@@ -25,6 +25,17 @@ NEW_IMG=$(docker inspect "$IMG" --format '{{.Id}}')
 echo "running img=${OLD_IMG:0:19}  built $IMG=${NEW_IMG:0:19}"
 [ "$OLD_IMG" != "$NEW_IMG" ] || echo "note: same image id (re-running to fix env — not a new build)."
 
+# 0b) NETWORKS — read them off the live container instead of hardcoding.
+#     The name used to be baked in as `nexus_nexus_internal`, but the live stack actually sits on
+#     `nexus_internal`, and `docker compose` happily CREATES an empty `<project>_nexus_internal` the
+#     first time you run anything from the compose file. Deploying onto that empty network gives a
+#     container that can't resolve `postgres`: /api/health returns 503, the gate rolls back, and the
+#     failure looks like a bad build instead of a bad network. Capture BEFORE the rename below.
+NETS=$(docker inspect "$C" --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}')
+PRIMARY_NET=$(printf '%s\n' $NETS | head -1)
+[ -n "$PRIMARY_NET" ] || { echo "ABORT: can't read networks off $C"; exit 1; }
+echo "networks: $NETS(primary: $PRIMARY_NET)"
+
 # 1) capture env (secrets — not printed). The snapshot is whatever the RUNNING container was created
 #    with, so anything added to .env.production SINCE then is missing — that's how NEXUS_SSO_SECRET
 #    once shipped as a 503. So carry over every key .env.production has that the runtime doesn't.
@@ -62,7 +73,14 @@ while IFS= read -r line || [ -n "$line" ]; do
 done < "$PROD_ENV"
 echo "captured $(wc -l < "$ENVF" | tr -d ' ') env vars (+${carried} carried over, ${overridden} overridden from .env.production)"
 
-[ -s "$APNS_KEY_FILE" ] || { echo "ABORT: APNs key missing/empty at $APNS_KEY_FILE"; exit 1; }
+# The key is 600 root:root inside a 700 root:root directory, so a non-root user can't even stat it —
+# `-s` then fails for a file that is perfectly fine, and the old message blamed the file.
+[ -s "$APNS_KEY_FILE" ] || {
+  echo "ABORT: APNs key not readable at $APNS_KEY_FILE"
+  echo "       If the file IS there, this is permissions (700 root:root dir, 600 root:root file)."
+  echo "       Re-run as root:  sudo $0"
+  exit 1
+}
 
 # 2) rename old -> prev + stop (this is the start of the blip)
 docker rename "$C" "${C}-prev" && docker stop "${C}-prev" >/dev/null
@@ -70,7 +88,7 @@ echo "old renamed -> ${C}-prev + stopped"
 
 # 3) run new with the SAME networks/ports/mounts
 docker run -d --name "$C" --restart unless-stopped \
-  --network nexus_nexus_internal \
+  --network "$PRIMARY_NET" \
   -p 127.0.0.1:3002:3000 \
   --env-file "$ENVF" \
   -e APNS_PRIVATE_KEY_PATH=/run/secrets/apns.p8 \
@@ -84,7 +102,12 @@ docker run -d --name "$C" --restart unless-stopped \
   -v "$BASE/attendance:/app/public/uploads/attendance" \
   -v "$BASE/complaints:/app/public/uploads/complaints" \
   "$IMG" server.js >/dev/null && echo "new container started"
-docker network connect nexus-beta_nexus_beta "$C" 2>/dev/null && echo "attached nexus-beta_nexus_beta"
+
+# Re-attach every OTHER network the old container had (docker run only takes one).
+for n in $NETS; do
+  [ "$n" = "$PRIMARY_NET" ] && continue
+  docker network connect "$n" "$C" 2>/dev/null && echo "attached $n"
+done
 
 # 4) health gate (~40s)
 ok=0
