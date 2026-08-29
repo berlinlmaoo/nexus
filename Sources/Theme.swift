@@ -83,22 +83,34 @@ final class AppAppearance {
 
 /// Semantic palette — names match the web tokens.
 enum NX {
-    static let background  = Color(light: 0xf8f9fb, dark: 0x11141b)
-    static let card        = Color(light: 0xffffff, dark: 0x181c25)
-    static let foreground  = Color(light: 0x292d34, dark: 0xe6e8ec)
-    static let mutedFg     = Color(light: 0x656d76, dark: 0x9aa3af)
-    static let muted       = Color(light: 0xf1f3f6, dark: 0x222732)
-    static let border      = Color(light: 0xe6e8ec, dark: 0x2a2f3a)
-    static let onyx        = Color(light: 0x202023, dark: 0xe6e8ec)   // web --primary (high-contrast CTA/text)
-    static let violet      = Color(light: 0x7b68ee, dark: 0x8b7bf0)   // brand (--ring / --sidebar-primary)
+    // Dark values are tuned for measured contrast, not vibes:
+    //   • card vs background was 1.08:1 — cards were invisible, so every screen read as one flat
+    //     sheet. Deepening the background and lifting the card gets that to ~1.2:1, and the border
+    //     (which was 2a2f3a — indistinguishable from the card) now actually draws the edge.
+    //   • mutedFg / foreground raised so secondary text stays >7:1 on the lifted card.
+    static let background  = Color(light: 0xf8f9fb, dark: 0x0d1017)
+    static let card        = Color(light: 0xffffff, dark: 0x1c2130)
+    static let foreground  = Color(light: 0x292d34, dark: 0xe8eaef)
+    static let mutedFg     = Color(light: 0x656d76, dark: 0xa6b0bd)
+    static let muted       = Color(light: 0xf1f3f6, dark: 0x252c3d)
+    static let border      = Color(light: 0xe6e8ec, dark: 0x333b52)
+    static let onyx        = Color(light: 0x202023, dark: 0xe8eaef)   // web --primary (high-contrast CTA/text)
+
+    // The brand violet is TWO tokens because one colour cannot do both jobs: a fill needs to be
+    // dark enough for white label text, type needs to be light enough to read on a dark card.
+    // The single old token (8b7bf0) failed both — 3.39:1 under white, 5.03:1 as 12pt type.
+    /// Brand FILL: buttons, selected pills, progress bars, dots. White text on this clears AA.
+    static let violet      = Color(light: 0x7b68ee, dark: 0x6f5ae6)   // brand (--ring / --sidebar-primary)
+    /// Brand as TEXT or ICON on a surface. Use this for type — never `violet`.
+    static let violetText  = Color(light: 0x6247d6, dark: 0xb3a6ff)
     static let blue        = Color(light: 0x0091ff, dark: 0x38a3ff)
     static let success     = Color(light: 0x16a34a, dark: 0x34d399)
     static let warning     = Color(light: 0xf59e0b, dark: 0xfbbf24)
     static let danger      = Color(light: 0xef4444, dark: 0xf87171)
-    static let accentBg    = Color(light: 0xf1eefe, dark: 0x2a2546)
-    static let accentFg    = Color(light: 0x6750cf, dark: 0xb9acff)
-    static let coral       = Color(hex: "#FF7F50")   // "Secure Uplink Ready" pill
-    static let cream       = Color(light: 0xfdfcfb, dark: 0x11141b)   // login background
+    static let accentBg    = Color(light: 0xf1eefe, dark: 0x2c2551)
+    static let accentFg    = Color(light: 0x6750cf, dark: 0xbfb3ff)
+    static let coral       = Color(light: 0xff7f50, dark: 0xff9d76)   // "Secure Uplink Ready" pill
+    static let cream       = Color(light: 0xfdfcfb, dark: 0x0d1017)   // login background
     static let ink         = Color(hex: "#11141b")
     static let inkGradient = LinearGradient(colors: [Color(hex: "#11141b"), Color(hex: "#3a2f7a")],
                                             startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -145,7 +157,7 @@ extension View {
 }
 
 enum ChipTone {
-    case neutral, accent, success, warning, danger, info
+    case neutral, accent, success, warning, danger, info, coral
     var fg: Color {
         switch self {
         case .neutral: return NX.mutedFg
@@ -154,9 +166,22 @@ enum ChipTone {
         case .warning: return NX.warning
         case .danger: return NX.danger
         case .info: return NX.blue
+        case .coral: return NX.coral
         }
     }
-    var bg: Color { fg.opacity(0.14) }
+    var bg: Color { fg.opacity(0.16) }
+
+    /// Stable colour for a free-text label (room name, category…) so the same string is always the
+    /// same colour — without anyone maintaining a lookup table.
+    ///
+    /// Deliberately NOT `hashValue`: Swift seeds that per launch, so the palette would reshuffle
+    /// every cold start. This folds the scalars with a fixed multiplier — same string, same colour,
+    /// on every launch and every device.
+    static func forLabel(_ s: String) -> ChipTone {
+        let palette: [ChipTone] = [.accent, .info, .success, .coral, .warning]
+        let seed = s.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF }
+        return palette[seed % palette.count]
+    }
 }
 
 struct NexusChip: View {

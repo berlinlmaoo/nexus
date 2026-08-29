@@ -49,7 +49,7 @@ struct SprintsTab: View {
     var body: some View {
         Group {
             if loading {
-                ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity)
+                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
@@ -71,7 +71,7 @@ struct SprintsTab: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Label("Sprint Arena", systemImage: "target").font(NXFont.text(11, .bold)).foregroundStyle(NX.violet)
+                    Label("Sprint Arena", systemImage: "target").font(NXFont.text(11, .bold)).foregroundStyle(NX.violetText)
                     Text("Jalanin mission per cycle.").font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground)
                 }
                 Spacer()
@@ -174,8 +174,8 @@ struct CreateSprintSheet: View {
                                 .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
                         }
                         HStack(spacing: 12) {
-                            field("MULAI") { DatePicker("", selection: $start, displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violet) }
-                            field(T("END")) { DatePicker("", selection: $end, in: start..., displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violet) }
+                            field("MULAI") { DatePicker("", selection: $start, displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violetText) }
+                            field(T("END")) { DatePicker("", selection: $end, in: start..., displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violetText) }
                         }
                         if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
                         Button { Task { await create() } } label: {
@@ -231,7 +231,7 @@ struct AutomationsTab: View {
 
     var body: some View {
         Group {
-            if loading { ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity) }
+            if loading { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity) }
             else if rules.isEmpty { TabEmpty(icon: "bolt.slash", text: T("No automations yet. Set up rules from the web app (desktop).")) }
             else {
                 ScrollView {
@@ -249,12 +249,12 @@ struct AutomationsTab: View {
                 Text(a.name).font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
                 Spacer()
                 Toggle("", isOn: Binding(get: { a.enabled ?? false }, set: { on in Task { try? await APIClient.shared.updateAutomation(id: a.id, enabled: on); await load() } }))
-                    .labelsHidden().tint(NX.violet)
+                    .labelsHidden().tint(NX.violetText)
             }
             HStack(alignment: .top, spacing: 8) {
                 badge(T("IF"), a.ruleText(a.trigger), NX.blue)
                 Image(systemName: "arrow.right").font(.system(size: 11, weight: .bold)).foregroundStyle(NX.mutedFg).padding(.top, 6)
-                badge("MAKA", a.ruleText(a.action), NX.violet)
+                badge("MAKA", a.ruleText(a.action), NX.violetText)
             }
         }.nexusCard()
     }
@@ -300,7 +300,7 @@ struct FinanceTab: View {
 
     var body: some View {
         Group {
-            if loading { ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity) }
+            if loading { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity) }
             else if data == nil { TabEmpty(icon: "banknote", text: T("Finance isn't available for this project yet.")) }
             else {
                 ScrollView {
@@ -310,7 +310,7 @@ struct FinanceTab: View {
                         LazyVGrid(columns: cols, spacing: 10) {
                             total("Revenue", data?.totals?.revenueTotal ?? 0, NX.success)
                             total("OPEX", data?.totals?.opexTotal ?? 0, NX.danger)
-                            total("Profit", data?.totals?.profitTotal ?? 0, NX.violet)
+                            total("Profit", data?.totals?.profitTotal ?? 0, NX.violetText)
                         }
                         if !revenue.isEmpty { categoryGroup("REVENUE", revenue, NX.success) }
                         if !opex.isEmpty { categoryGroup("OPEX", opex, NX.danger) }
@@ -382,7 +382,7 @@ struct PnlTab: View {
 
     var body: some View {
         Group {
-            if loading { ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity) }
+            if loading { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity) }
             else if data == nil { TabEmpty(icon: "dollarsign.circle", text: T("P&L isn't enabled / BoD access required.")) }
             else {
                 ScrollView {
@@ -391,7 +391,7 @@ struct PnlTab: View {
                         LazyVGrid(columns: cols, spacing: 10) {
                             total("Income", data?.totals?.income ?? 0, NX.success)
                             total("Expense", data?.totals?.expense ?? 0, NX.danger)
-                            total("Profit", data?.totals?.profit ?? 0, NX.violet)
+                            total("Profit", data?.totals?.profit ?? 0, NX.violetText)
                         }
                         if let p = data?.totals?.pipelineOutstanding, p > 0 {
                             HStack {
@@ -418,7 +418,7 @@ struct PnlTab: View {
         .background(NX.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(NX.border))
     }
     private func section<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
-        VStack(alignment: .leading, spacing: 8) { Text(label).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violet); content() }.nexusCard()
+        VStack(alignment: .leading, spacing: 8) { Text(label).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violetText); content() }.nexusCard()
     }
     private func stageRow(_ s: PnlDashboard.Stage) -> some View {
         HStack(spacing: 8) {
@@ -483,7 +483,7 @@ struct SpreadsheetTab: View {
     var body: some View {
         Group {
             if loading {
-                ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity)
+                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if rows.isEmpty {
                 TabEmpty(icon: "tablecells", text: T("No tasks to show in the spreadsheet yet."))
             } else {

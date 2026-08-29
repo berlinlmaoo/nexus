@@ -118,7 +118,7 @@ struct RankRow: View {
     let row: LeaderboardRow
     var body: some View {
         HStack(spacing: 12) {
-            Text("\(rank)").font(NXFont.display(15, .black)).foregroundStyle(rank <= 3 ? NX.violet : NX.mutedFg)
+            Text("\(rank)").font(NXFont.display(15, .black)).foregroundStyle(rank <= 3 ? NX.violetText : NX.mutedFg)
                 .frame(width: 28)
             AvatarView(url: row.avatar, initial: row.initial, size: 36)
             VStack(alignment: .leading, spacing: 2) {

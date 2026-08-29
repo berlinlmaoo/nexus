@@ -36,9 +36,12 @@ struct RoomBookingView: View {
             ForEach(byDay, id: \.key) { day in
                 AgendaDay(label: AgendaRange.dayLabel(day.key)) {
                     ForEach(day.items) { b in
+                        // Colour the chip by room, not by scope. Greying out History made the whole
+                        // screen read as one flat grey sheet, and the segmented control already
+                        // says which scope you're in. Same room = same colour, every launch.
                         AgendaRow(time: "\(AgendaRange.timeLabel(b.startsAt))–\(AgendaRange.timeLabel(b.endsAt))",
                                   title: b.title, chip: b.room, sub: b.createdBy?.name,
-                                  tone: scope == .past ? .neutral : .accent)
+                                  tone: ChipTone.forLabel(b.room))
                     }
                 }
             }
@@ -100,7 +103,7 @@ struct TeamCalendarView: View {
         ZStack {
             NX.background.ignoresSafeArea()
             if loading {
-                ProgressView().tint(NX.violet)
+                ProgressView().tint(NX.violetText)
             } else if let error {
                 ErrorState(message: error) { Task { await load() } }
             } else {
@@ -238,7 +241,7 @@ struct AgendaScaffold<Content: View>: View {
         ZStack {
             NX.background.ignoresSafeArea()
             if loading {
-                ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity)
+                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error {
                 VStack(spacing: 12) {
                     Image(systemName: "wifi.exclamationmark").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
@@ -290,8 +293,10 @@ struct AgendaRow: View {
     let tone: ChipTone
     var body: some View {
         HStack(spacing: 12) {
-            Text(time).font(NXFont.text(12, .bold)).foregroundStyle(NX.violet).frame(width: 56, alignment: .leading)
-            Rectangle().fill(NX.border).frame(width: 1, height: 32)
+            // Time rail carries the row's tone so each entry is colour-coded end to end, instead of
+            // every row being the same violet on near-black.
+            Text(time).font(NXFont.text(12, .bold)).foregroundStyle(tone.fg).frame(width: 56, alignment: .leading)
+            Rectangle().fill(tone.fg.opacity(0.35)).frame(width: 1, height: 32)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(2)
                 if let sub, !sub.isEmpty { Text(sub).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }

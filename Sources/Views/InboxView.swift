@@ -36,7 +36,7 @@ struct InboxView: View {
                 VStack(spacing: 12) {
                     HStack {
                         Text("\(unread) unread signal(s) waiting for you.")
-                            .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violet)
+                            .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText)
                         Spacer()
                     }
                     .padding(14)
@@ -107,7 +107,7 @@ struct NotificationRow: View {
         HStack(alignment: .top, spacing: 12) {
             ZStack {
                 Circle().fill(NX.violet.opacity(0.12)).frame(width: 38, height: 38)
-                Text("N").font(NXFont.display(15, .black)).foregroundStyle(NX.violet)
+                Text("N").font(NXFont.display(15, .black)).foregroundStyle(NX.violetText)
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(notification.title ?? notification.typeLabel).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)

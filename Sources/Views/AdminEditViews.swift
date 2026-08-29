@@ -77,7 +77,7 @@ struct AdminUsersSection: View {
 
     var body: some View {
         Group {
-            if loading { ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity) }
+            if loading { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity) }
             else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
@@ -149,7 +149,7 @@ struct AdminAuditSection: View {
     @State private var loading = true
     var body: some View {
         Group {
-            if loading { ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity) }
+            if loading { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity) }
             else if logs.isEmpty { TabEmpty(icon: "scroll", text: T("No audit entries yet.")) }
             else {
                 ScrollView {
@@ -187,7 +187,7 @@ struct AdminQuestsSection: View {
 
     var body: some View {
         Group {
-            if loading { ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity) }
+            if loading { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity) }
             else {
                 ScrollView {
                     VStack(spacing: 12) {
@@ -261,8 +261,8 @@ struct CreateQuestSheet: View {
                             f("XP (maks 50)") { TextField("50", text: $xp).keyboardType(.numberPad).font(NXFont.text(15)).padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border)) }
                         }
                         f("DEADLINE") {
-                            Toggle(isOn: $hasDeadline.animation()) { Text("Pakai deadline").font(NXFont.text(14)).foregroundStyle(NX.foreground) }.tint(NX.violet)
-                            if hasDeadline { DatePicker("", selection: $deadline, displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violet) }
+                            Toggle(isOn: $hasDeadline.animation()) { Text("Pakai deadline").font(NXFont.text(14)).foregroundStyle(NX.foreground) }.tint(NX.violetText)
+                            if hasDeadline { DatePicker("", selection: $deadline, displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violetText) }
                         }
                         Button { Task { await create() } } label: { HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text("Assign quest") } }
                             .buttonStyle(NexusPrimaryButton()).disabled(busy || title.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -293,7 +293,7 @@ struct AdminAnnouncementsSection: View {
 
     var body: some View {
         Group {
-            if loading { ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity) }
+            if loading { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity) }
             else {
                 ScrollView {
                     VStack(spacing: 12) {
@@ -323,7 +323,7 @@ struct AdminAnnouncementsSection: View {
                 Text("dibaca \(a.seenCount ?? 0) orang").font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
                 Spacer()
                 Button { Task { try? await APIClient.shared.updateAnnouncementActive(id: a.id, active: !(a.active ?? false)); await load() } } label: {
-                    Text((a.active ?? false) ? "Nonaktifin" : "Aktifin").font(NXFont.text(12, .bold)).foregroundStyle(NX.violet)
+                    Text((a.active ?? false) ? "Nonaktifin" : "Aktifin").font(NXFont.text(12, .bold)).foregroundStyle(NX.violetText)
                 }.buttonStyle(.plain)
             }
         }.nexusCard(padding: 12)

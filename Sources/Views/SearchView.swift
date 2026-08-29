@@ -58,7 +58,7 @@ struct SearchView: View {
 
     @ViewBuilder private var content: some View {
         if loading {
-            ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity)
+            ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if query.trimmingCharacters(in: .whitespaces).count < 2 {
             placeholder("magnifyingglass", T("Type at least 2 characters to search."))
         } else if let r = results, r.isEmpty {
@@ -85,7 +85,7 @@ struct SearchView: View {
                     if let docs = r.docs, !docs.isEmpty {
                         group("DOCS") {
                             ForEach(docs) { d in
-                                NavigationLink { DocReaderView(docId: d.id, title: d.title) } label: { hit(icon: "doc.text.fill", tint: NX.violet, title: d.title, sub: nil) }.buttonStyle(.plain)
+                                NavigationLink { DocReaderView(docId: d.id, title: d.title) } label: { hit(icon: "doc.text.fill", tint: NX.violetText, title: d.title, sub: nil) }.buttonStyle(.plain)
                             }
                         }
                     }

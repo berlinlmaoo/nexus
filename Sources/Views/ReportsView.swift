@@ -30,7 +30,7 @@ struct ReportsView: View {
 
     @ViewBuilder private var content: some View {
         if loading {
-            ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity)
+            ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let error {
             VStack(spacing: 12) {
                 Image(systemName: "chart.bar.xaxis").font(.system(size: 40)).foregroundStyle(NX.mutedFg)

@@ -63,7 +63,7 @@ struct MemberAttendanceSheet: View {
                     Text("Pakai shift khusus").font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                     Text(useCustom ? T("Different from the team/office shift") : "Ikut shift default tim/kantor").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 }
-            }.tint(NX.violet)
+            }.tint(NX.violetText)
 
             if useCustom {
                 HStack(spacing: 12) {
@@ -104,7 +104,7 @@ struct MemberAttendanceSheet: View {
                 ForEach(1...7, id: \.self) { d in
                     HStack(spacing: 10) {
                         Text(weekdayNames[d - 1]).font(NXFont.text(12, .bold)).foregroundStyle(NX.foreground).frame(width: 34, alignment: .leading)
-                        Toggle("", isOn: Binding(get: { dayEnabled[d] ?? false }, set: { dayEnabled[d] = $0 })).labelsHidden().tint(NX.violet)
+                        Toggle("", isOn: Binding(get: { dayEnabled[d] ?? false }, set: { dayEnabled[d] = $0 })).labelsHidden().tint(NX.violetText)
                         if dayEnabled[d] == true {
                             DatePicker("", selection: Binding(get: { dayStart[d] ?? startTime }, set: { dayStart[d] = $0 }), displayedComponents: .hourAndMinute).labelsHidden().datePickerStyle(.compact)
                             DatePicker("", selection: Binding(get: { dayEnd[d] ?? endTime }, set: { dayEnd[d] = $0 }), displayedComponents: .hourAndMinute).labelsHidden().datePickerStyle(.compact)
@@ -116,7 +116,7 @@ struct MemberAttendanceSheet: View {
                 }
             }.padding(.top, 6)
         } label: {
-            Text(T("Per-day override (optional)")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.violet)
+            Text(T("Per-day override (optional)")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText)
         }
     }
 
@@ -136,7 +136,7 @@ struct MemberAttendanceSheet: View {
                 grantRow
                 ForEach(d.dayoffs ?? []) { dayoffRow($0) }
             } else {
-                ProgressView().tint(NX.violet).frame(maxWidth: .infinity).padding(.vertical, 10)
+                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 10)
             }
         }
         .padding(16)
@@ -154,7 +154,7 @@ struct MemberAttendanceSheet: View {
                     .buttonStyle(NexusPrimaryButton(fullWidth: false)).disabled(busyDayoff)
                 if d.quotaOverride != nil {
                     Button { Task { await saveQuota(nil) } } label: {
-                        Text("Reset (\(d.defaultQuota ?? 4))").font(NXFont.text(12, .semibold)).foregroundStyle(NX.violet)
+                        Text("Reset (\(d.defaultQuota ?? 4))").font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
                     }.disabled(busyDayoff)
                 }
             }

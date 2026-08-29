@@ -86,7 +86,7 @@ struct ConvoRow: View {
             if convo.isGroupish {
                 ZStack {
                     Circle().fill(NX.violet.opacity(0.12)).frame(width: 40, height: 40)
-                    Image(systemName: "person.2.fill").font(.system(size: 15)).foregroundStyle(NX.violet)
+                    Image(systemName: "person.2.fill").font(.system(size: 15)).foregroundStyle(NX.violetText)
                 }
             } else {
                 AvatarView(url: convo.avatarURL(meId: meId), initial: convo.initial(meId: meId), size: 40)
@@ -174,7 +174,7 @@ struct ChatThreadView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 6) {
-                        if loading { ProgressView().tint(NX.violet).padding(.top, 40) }
+                        if loading { ProgressView().tint(NX.violetText).padding(.top, 40) }
                         else if messages.isEmpty {
                             Text(T("No messages yet. Say hi 👋")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).padding(.top, 40)
                         }
@@ -232,7 +232,7 @@ struct ChatThreadView: View {
                     Button { Task { await sendLocation() } } label: { Label(T("Send location"), systemImage: "mappin.and.ellipse") }
                     Button { showTaskPicker = true } label: { Label(T("Link to a task"), systemImage: "checklist") }
                 } label: {
-                    Image(systemName: "plus").font(.system(size: 17, weight: .bold)).foregroundStyle(NX.violet)
+                    Image(systemName: "plus").font(.system(size: 17, weight: .bold)).foregroundStyle(NX.violetText)
                         .frame(width: 36, height: 36).background(NX.muted, in: Circle())
                 }
                 .disabled(sending)
@@ -240,7 +240,7 @@ struct ChatThreadView: View {
                 if !mentionable.isEmpty {
                     Button { showMentions.toggle() } label: {
                         Text("@").font(NXFont.display(17, .bold))
-                            .foregroundStyle(showMentions ? Color.white : NX.violet)
+                            .foregroundStyle(showMentions ? Color.white : NX.violetText)
                             .frame(width: 36, height: 36)
                             .background(showMentions ? NX.violet : NX.muted, in: Circle())
                     }
@@ -301,7 +301,7 @@ struct ChatThreadView: View {
             let sep = first ? "" : " "
             first = false
             if w.count > 1, w.hasPrefix("@") {
-                out = out + Text(sep) + Text(String(w)).foregroundColor(NX.violet).fontWeight(.bold)
+                out = out + Text(sep) + Text(String(w)).foregroundColor(NX.violetText).fontWeight(.bold)
             } else {
                 out = out + Text(sep + String(w))
             }
@@ -313,7 +313,7 @@ struct ChatThreadView: View {
         Link(destination: url) {
             HStack(spacing: 10) {
                 Image(systemName: "mappin.circle.fill").font(.system(size: 22))
-                    .foregroundStyle(mine ? Color.white : NX.violet)
+                    .foregroundStyle(mine ? Color.white : NX.violetText)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(T("Shared location")).font(NXFont.text(13, .bold))
                         .foregroundStyle(mine ? Color.white : NX.foreground)
@@ -330,7 +330,7 @@ struct ChatThreadView: View {
         NavigationLink { TaskDetailView(taskId: id) } label: {
             HStack(spacing: 10) {
                 Image(systemName: "checklist").font(.system(size: 18))
-                    .foregroundStyle(mine ? Color.white : NX.violet)
+                    .foregroundStyle(mine ? Color.white : NX.violetText)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(T("TASK")).font(NXFont.text(10, .bold)).tracking(0.5)
                         .foregroundStyle(mine ? Color.white.opacity(0.7) : NX.mutedFg)
@@ -416,7 +416,7 @@ struct TaskLinkPicker: View {
             ZStack {
                 NX.background.ignoresSafeArea()
                 if loading {
-                    ProgressView().tint(NX.violet)
+                    ProgressView().tint(NX.violetText)
                 } else if items.isEmpty {
                     TabEmpty(icon: "checklist", text: T("No tasks available to link from here."))
                 } else {
@@ -425,7 +425,7 @@ struct TaskLinkPicker: View {
                             ForEach(filtered) { t in
                                 Button { onPick(t); dismiss() } label: {
                                     HStack(spacing: 10) {
-                                        Image(systemName: "checklist").font(.system(size: 14)).foregroundStyle(NX.violet)
+                                        Image(systemName: "checklist").font(.system(size: 14)).foregroundStyle(NX.violetText)
                                             .frame(width: 32, height: 32)
                                             .background(NX.violet.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                                         Text(t.title).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)

@@ -26,7 +26,7 @@ struct DocsView: View {
 
     @ViewBuilder private var content: some View {
         if loading {
-            ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity)
+            ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let error {
             emptyState(icon: "book.closed", title: "Library terkunci", msg: error)
         } else if filtered.isEmpty {
@@ -94,7 +94,7 @@ struct DocReaderView: View {
     var body: some View {
         ZStack {
             NX.background.ignoresSafeArea()
-            if loading { ProgressView().tint(NX.violet) }
+            if loading { ProgressView().tint(NX.violetText) }
             else if let doc {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {

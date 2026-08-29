@@ -48,7 +48,7 @@ struct FolderAggregateView: View {
                 }
 
                 if loading {
-                    HStack(spacing: 8) { ProgressView().tint(NX.violet); Text(T("Loading tasks…")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg) }
+                    HStack(spacing: 8) { ProgressView().tint(NX.violetText); Text(T("Loading tasks…")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg) }
                         .frame(maxWidth: .infinity).padding(.vertical, 24)
                 } else if selectedIds.isEmpty {
                     FolderEmpty(text: T("This folder has no projects yet. Move a project here, or pick some via 'Pick projects'."))
@@ -346,7 +346,7 @@ private struct FolderProjectPicker: View {
                             Button { toggle(p.id) } label: {
                                 HStack(spacing: 10) {
                                     Image(systemName: picked.contains(p.id) ? "checkmark.circle.fill" : "circle")
-                                        .foregroundStyle(picked.contains(p.id) ? NX.violet : NX.mutedFg.opacity(0.5))
+                                        .foregroundStyle(picked.contains(p.id) ? NX.violetText : NX.mutedFg.opacity(0.5))
                                     if let ic = p.icon, isEmojiIcon(ic) { Text(ic) } else { Image(systemName: "folder").foregroundStyle(NX.mutedFg) }
                                     Text(p.name).font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
                                     Spacer()

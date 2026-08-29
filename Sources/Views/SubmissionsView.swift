@@ -34,7 +34,7 @@ struct SubmissionsView: View {
         ZStack {
             NX.background.ignoresSafeArea()
             if loading {
-                ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity)
+                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if loadError {
                 EmptyState(icon: "wifi.exclamationmark", title: T("Couldn't load"), subtitle: T("Try again later."))
             } else if subs.isEmpty {
@@ -92,7 +92,7 @@ struct SubmissionsView: View {
 
     private func card(_ s: MySubmission) -> some View {
         HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "doc.text.fill").font(.system(size: 13)).foregroundStyle(NX.violet)
+            Image(systemName: "doc.text.fill").font(.system(size: 13)).foregroundStyle(NX.violetText)
                 .frame(width: 28, height: 28).background(NX.violet.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(s.title).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground).lineLimit(2)

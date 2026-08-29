@@ -20,7 +20,7 @@ struct FormsView: View {
 
     @ViewBuilder private var content: some View {
         if loading {
-            ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity)
+            ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let error {
             VStack(spacing: 12) {
                 Image(systemName: "doc.text.magnifyingglass").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
@@ -70,7 +70,7 @@ struct FormCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "doc.text.fill").font(.system(size: 16)).foregroundStyle(NX.violet)
+                Image(systemName: "doc.text.fill").font(.system(size: 16)).foregroundStyle(NX.violetText)
                     .frame(width: 36, height: 36).background(NX.violet.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(form.name).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)

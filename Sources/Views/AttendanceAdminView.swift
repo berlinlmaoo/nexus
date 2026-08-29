@@ -80,7 +80,7 @@ struct AttendanceAdminSection: View {
     var body: some View {
         Group {
             if loading {
-                ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity)
+                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if !allowed {
                 EmptyState(icon: "lock.fill", title: "Khusus BoD ke atas",
                            subtitle: T("Shift, day-off and public-holiday settings can only be managed by BoD / One Above All."))
@@ -106,7 +106,7 @@ struct AttendanceAdminSection: View {
             Spacer()
             Button { month = MonthKey.shift(month, by: 1) } label: { Image(systemName: "chevron.right").font(.system(size: 14, weight: .bold)) }
         }
-        .foregroundStyle(NX.violet)
+        .foregroundStyle(NX.violetText)
         .padding(.horizontal, 14).frame(height: 44)
         .background(NX.card, in: Capsule()).overlay(Capsule().strokeBorder(NX.border))
     }
@@ -134,7 +134,7 @@ struct AttendanceAdminSection: View {
                 Text(m.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                 HStack(spacing: 6) {
                     if let s = m.shiftLabel {
-                        Label(s, systemImage: "clock.fill").font(NXFont.text(11, .semibold)).foregroundStyle(NX.violet)
+                        Label(s, systemImage: "clock.fill").font(NXFont.text(11, .semibold)).foregroundStyle(NX.violetText)
                     } else {
                         Text("Shift default").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                     }
@@ -180,7 +180,7 @@ struct RedDateCard: View {
             SectionLabel("\(T("PUBLIC HOLIDAYS")) — \(MonthKey.label(month))")
 
             if loading {
-                ProgressView().tint(NX.violet).frame(maxWidth: .infinity).padding(.vertical, 12)
+                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 12)
             } else {
                 quotaRow
                 Divider().overlay(NX.border)
@@ -197,7 +197,7 @@ struct RedDateCard: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(T("Allowance / staff this month")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
             Stepper(value: $quota, in: 0...31) {
-                Text("\(quota) \(T("days"))").font(NXFont.text(15, .bold)).foregroundStyle(NX.violet)
+                Text("\(quota) \(T("days"))").font(NXFont.text(15, .bold)).foregroundStyle(NX.violetText)
             }
             Button { Task { await saveQuota() } } label: {
                 Text(savingQuota ? "Menyimpan…" : T("Save allowance")).font(NXFont.text(14, .bold))
@@ -216,7 +216,7 @@ struct RedDateCard: View {
                 Spacer()
                 Button { withAnimation { adding.toggle() } } label: {
                     Label(adding ? "Tutup" : T("Add"), systemImage: adding ? "xmark" : "plus")
-                        .font(NXFont.text(12, .bold)).foregroundStyle(NX.violet)
+                        .font(NXFont.text(12, .bold)).foregroundStyle(NX.violetText)
                 }
             }
             if adding { addForm }

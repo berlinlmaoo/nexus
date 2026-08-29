@@ -72,7 +72,7 @@ struct ProjectSettingsView: View {
                     if iconIsImage {
                         CachedImage(url: URL(string: icon.hasPrefix("http") ? icon : Config.baseURL.absoluteString + icon)) { $0.resizable().scaledToFill() } placeholder: { Color.clear }
                             .frame(width: 32, height: 32).clipShape(RoundedRectangle(cornerRadius: 8))
-                        Button(T("Use an emoji instead")) { icon = "🚀" }.font(NXFont.text(12, .semibold)).foregroundStyle(NX.violet)
+                        Button(T("Use an emoji instead")) { icon = "🚀" }.font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
                     } else {
                         TextField("🚀", text: $icon).font(.system(size: 24)).frame(width: 50)
                             .onChange(of: icon) { _, v in if v.count > 2 { icon = String(v.prefix(2)) } }
@@ -124,7 +124,7 @@ struct ProjectSettingsView: View {
                             Task { await patch(["autoAssignEnabled": true, "autoAssignAssigneeIds": Array(autoIds)]) }
                         } label: {
                             HStack(spacing: 10) {
-                                Image(systemName: autoIds.contains(m.uid) ? "checkmark.circle.fill" : "circle").foregroundStyle(autoIds.contains(m.uid) ? NX.violet : NX.mutedFg)
+                                Image(systemName: autoIds.contains(m.uid) ? "checkmark.circle.fill" : "circle").foregroundStyle(autoIds.contains(m.uid) ? NX.violetText : NX.mutedFg)
                                 AvatarView(url: m.user?.avatar, initial: m.initial, size: 26)
                                 Text(m.displayName).font(NXFont.text(13)).foregroundStyle(NX.foreground)
                                 Spacer()
@@ -145,7 +145,7 @@ struct ProjectSettingsView: View {
             }
             ForEach(fields) { f in
                 HStack(spacing: 10) {
-                    Image(systemName: cfIcon(f.type)).font(.system(size: 13)).foregroundStyle(NX.violet)
+                    Image(systemName: cfIcon(f.type)).font(.system(size: 13)).foregroundStyle(NX.violetText)
                         .frame(width: 30, height: 30).background(NX.violet.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                     VStack(alignment: .leading, spacing: 1) {
                         Text(f.name).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
@@ -157,7 +157,7 @@ struct ProjectSettingsView: View {
                 .padding(.vertical, 3)
             }
             NavigationLink { CustomFieldEditor(projectId: projectId) { await reloadFields() } } label: {
-                Label("Field baru", systemImage: "plus").font(NXFont.text(13, .bold)).foregroundStyle(NX.violet)
+                Label("Field baru", systemImage: "plus").font(NXFont.text(13, .bold)).foregroundStyle(NX.violetText)
             }
         }
     }
@@ -182,7 +182,7 @@ struct ProjectSettingsView: View {
                         Button(r.displayName) { Task { await addMember(r) } }
                     }
                 } label: {
-                    Label(T("Add member"), systemImage: "person.badge.plus").font(NXFont.text(13, .bold)).foregroundStyle(NX.violet)
+                    Label(T("Add member"), systemImage: "person.badge.plus").font(NXFont.text(13, .bold)).foregroundStyle(NX.violetText)
                 }
             }
             NavigationLink { InviteByEmailView(projectId: projectId) } label: {
@@ -232,7 +232,7 @@ struct ProjectSettingsView: View {
                 Text(title).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                 Text(sub).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             }
-        }.tint(NX.violet)
+        }.tint(NX.violetText)
     }
     private func toastView(_ t: String) -> some View {
         Text(t).font(NXFont.text(13, .semibold)).foregroundStyle(.white)

@@ -38,9 +38,9 @@ struct WorkspaceMembersCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("MEMBERS").font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violet)
+            Text("MEMBERS").font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violetText)
             if loading {
-                ProgressView().tint(NX.violet).frame(maxWidth: .infinity).padding(.vertical, 8)
+                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
             } else {
                 if canInvite { inviteRow }
                 ForEach(members) { m in memberRow(m) }
@@ -59,7 +59,7 @@ struct WorkspaceMembersCard: View {
                 Menu {
                     ForEach(assignableRoles(viewerRole), id: \.self) { r in Button(orgRoleLabel(r)) { inviteRole = r } }
                 } label: {
-                    Text(orgRoleLabel(inviteRole)).font(NXFont.text(12, .semibold)).foregroundStyle(NX.violet)
+                    Text(orgRoleLabel(inviteRole)).font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
                         .padding(.horizontal, 10).padding(.vertical, 8).background(NX.violet.opacity(0.12), in: Capsule())
                 }
             }
@@ -123,7 +123,7 @@ struct LanguageCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(T("LANGUAGE")).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violet)
+            Text(T("LANGUAGE")).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violetText)
             Text(T("Applies immediately across the whole app."))
                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             ForEach(AppLang.allCases) { l in
@@ -134,7 +134,7 @@ struct LanguageCard: View {
                         Spacer(minLength: 0)
                         Image(systemName: store.lang == l ? "checkmark.circle.fill" : "circle")
                             .font(.system(size: 18))
-                            .foregroundStyle(store.lang == l ? NX.violet : NX.mutedFg.opacity(0.4))
+                            .foregroundStyle(store.lang == l ? NX.violetText : NX.mutedFg.opacity(0.4))
                     }
                     .padding(.vertical, 9).padding(.horizontal, 11)
                     .background(store.lang == l ? NX.violet.opacity(0.10) : Color.clear,
@@ -156,7 +156,7 @@ struct AppearanceCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(T("APPEARANCE")).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violet)
+            Text(T("APPEARANCE")).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violetText)
             HStack(spacing: 8) {
                 ForEach(AppTheme.allCases) { t in
                     let on = store.theme == t
@@ -194,7 +194,7 @@ struct SecurityCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("SECURITY").font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violet)
+            Text("SECURITY").font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violetText)
             secureField(T("Current password"), $current)
             secureField(T("New password (min 6)"), $new1)
             secureField(T("Repeat new password"), $new2)
@@ -240,6 +240,6 @@ struct AvatarView: View {
         .overlay(Circle().strokeBorder(NX.border, lineWidth: 0.5))
     }
     private var initialText: some View {
-        Text(initial).font(NXFont.text(size * 0.36, .bold)).foregroundStyle(NX.violet)
+        Text(initial).font(NXFont.text(size * 0.36, .bold)).foregroundStyle(NX.violetText)
     }
 }

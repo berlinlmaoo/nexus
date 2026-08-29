@@ -375,7 +375,7 @@ struct DashboardView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
                 Circle().fill(NX.violet.opacity(0.12)).frame(width: 44, height: 44)
-                    .overlay(Image(systemName: "bell.fill").font(.system(size: 18)).foregroundStyle(NX.violet))
+                    .overlay(Image(systemName: "bell.fill").font(.system(size: 18)).foregroundStyle(NX.violetText))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(T("Notifications")).font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)
                     Text(unread > 0 ? "\(unread) \(T("unread"))" : "Semua kebaca").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)

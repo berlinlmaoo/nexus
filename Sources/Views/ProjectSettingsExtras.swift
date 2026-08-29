@@ -45,7 +45,7 @@ struct CustomFieldEditor: View {
                     box("Format") {
                         Toggle(isOn: $numberCurrency) {
                             Text("Tampilkan sebagai Rupiah (Rp)").font(NXFont.text(13)).foregroundStyle(NX.foreground)
-                        }.tint(NX.violet)
+                        }.tint(NX.violetText)
                     }
                 }
                 Button { Task { await save() } } label: {
@@ -73,7 +73,7 @@ struct CustomFieldEditor: View {
                 HStack {
                     TextField(T("Add an option…"), text: $newOption).font(NXFont.text(13))
                         .onSubmit(addOption)
-                    Button(action: addOption) { Image(systemName: "plus.circle.fill").foregroundStyle(NX.violet) }
+                    Button(action: addOption) { Image(systemName: "plus.circle.fill").foregroundStyle(NX.violetText) }
                         .disabled(newOption.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
                 .padding(.horizontal, 10).padding(.vertical, 7)

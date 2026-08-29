@@ -248,7 +248,7 @@ struct PostThreadView: View {
 
                     SectionLabel(T("Comments"))
                     if loading {
-                        ProgressView().tint(NX.violet).frame(maxWidth: .infinity).padding(.vertical, 20)
+                        ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 20)
                     } else if comments.isEmpty {
                         Text(T("No comments yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     } else {
@@ -326,7 +326,7 @@ func mentionText(_ s: String) -> Text {
         let sep = first ? "" : " "
         first = false
         if w.count > 1, w.hasPrefix("@") {
-            out = out + Text(sep) + Text(String(w)).foregroundColor(NX.violet).fontWeight(.bold)
+            out = out + Text(sep) + Text(String(w)).foregroundColor(NX.violetText).fontWeight(.bold)
         } else {
             out = out + Text(sep + String(w))
         }

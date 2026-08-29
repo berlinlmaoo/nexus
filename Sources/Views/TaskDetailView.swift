@@ -36,7 +36,7 @@ struct TaskDetailView: View {
         ZStack {
             NX.background.ignoresSafeArea()
             if loading {
-                ProgressView().tint(NX.violet)
+                ProgressView().tint(NX.violetText)
             } else if let task {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
@@ -84,7 +84,7 @@ struct TaskDetailView: View {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(quests) { q in
                     HStack(spacing: 8) {
-                        Image(systemName: "trophy.fill").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.violet)
+                        Image(systemName: "trophy.fill").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.violetText)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(q.title ?? T("Quest")).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
                             Text(questSubtitle(q)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
@@ -100,7 +100,7 @@ struct TaskDetailView: View {
                             Image(systemName: "trophy").font(.system(size: 12, weight: .bold))
                             Text(quests.isEmpty ? T("Make it a quest") : T("Create another quest"))
                         }
-                        .font(NXFont.text(13, .bold)).foregroundStyle(NX.violet)
+                        .font(NXFont.text(13, .bold)).foregroundStyle(NX.violetText)
                     }.buttonStyle(.plain)
                 }
             }
@@ -193,11 +193,11 @@ struct TaskDetailView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 4) {
                         Text("ASSIGNED").font(NXFont.text(10, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
-                        Image(systemName: "pencil").font(.system(size: 9, weight: .bold)).foregroundStyle(NX.violet)
+                        Image(systemName: "pencil").font(.system(size: 9, weight: .bold)).foregroundStyle(NX.violetText)
                     }
                     if let names = t.assignees?.compactMap({ $0.user?.name }), !names.isEmpty {
                         Text(names.joined(separator: ", ")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                    } else { Text(T("Unassigned")).font(NXFont.text(13)).foregroundStyle(NX.violet) }
+                    } else { Text(T("Unassigned")).font(NXFont.text(13)).foregroundStyle(NX.violetText) }
                 }
             }.buttonStyle(.plain)
             VStack(alignment: .leading, spacing: 4) {
@@ -402,7 +402,7 @@ struct AssigneePicker: View {
             ZStack {
                 NX.background.ignoresSafeArea()
                 if loading {
-                    ProgressView().tint(NX.violet)
+                    ProgressView().tint(NX.violetText)
                 } else if members.isEmpty {
                     Text(T("No members in this project yet.")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
                 } else {
@@ -410,12 +410,12 @@ struct AssigneePicker: View {
                         ForEach(members) { m in
                             Button { toggle(m.uid) } label: {
                                 HStack(spacing: 12) {
-                                    Text(m.initial).font(NXFont.text(13, .black)).foregroundStyle(NX.violet)
+                                    Text(m.initial).font(NXFont.text(13, .black)).foregroundStyle(NX.violetText)
                                         .frame(width: 34, height: 34).background(NX.accentBg, in: Circle())
                                     Text(m.displayName).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground)
                                     Spacer()
                                     if selected.contains(m.uid) {
-                                        Image(systemName: "checkmark.circle.fill").foregroundStyle(NX.violet)
+                                        Image(systemName: "checkmark.circle.fill").foregroundStyle(NX.violetText)
                                     } else {
                                         Image(systemName: "circle").foregroundStyle(NX.mutedFg.opacity(0.4))
                                     }
@@ -432,7 +432,7 @@ struct AssigneePicker: View {
                 ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { Task { saving = true; await onSave(selected); dismiss() } } label: {
-                        if saving { ProgressView().tint(NX.violet) } else { Text(T("Save")).bold() }
+                        if saving { ProgressView().tint(NX.violetText) } else { Text(T("Save")).bold() }
                     }.disabled(saving)
                 }
             }

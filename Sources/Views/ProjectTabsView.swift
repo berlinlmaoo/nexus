@@ -155,7 +155,7 @@ struct OverviewTab: View {
                 }
                 // progress
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("MISSION ENERGY").font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violet)
+                    Text("MISSION ENERGY").font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violetText)
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
                             Capsule().fill(NX.muted)
@@ -165,7 +165,7 @@ struct OverviewTab: View {
                 }.nexusCard()
                 // status loot
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("STATUS LOOT").font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violet)
+                    Text("STATUS LOOT").font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violetText)
                     ForEach(order, id: \.self) { s in
                         HStack {
                             Text(humanizeEnum(s)).font(NXFont.text(14)).foregroundStyle(NX.foreground)
@@ -177,10 +177,10 @@ struct OverviewTab: View {
                 // members
                 if let members = detail.members, !members.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("CREW").font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violet)
+                        Text("CREW").font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violetText)
                         ForEach(members) { m in
                             HStack(spacing: 10) {
-                                Text(m.initial).font(NXFont.text(11, .bold)).foregroundStyle(NX.violet)
+                                Text(m.initial).font(NXFont.text(11, .bold)).foregroundStyle(NX.violetText)
                                     .frame(width: 30, height: 30).background(NX.accentBg, in: Circle())
                                 Text(m.displayName).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground)
                                 Spacer()
@@ -443,7 +443,7 @@ struct CalendarTab: View {
                             Text("\(T("Date")) \(sel)").font(NXFont.text(12, .bold)).foregroundStyle(NX.mutedFg)
                             Spacer()
                             Button { onCreate(dateFor(sel)) } label: {
-                                Label(T("Add task"), systemImage: "plus").font(NXFont.text(12, .semibold)).foregroundStyle(NX.violet)
+                                Label(T("Add task"), systemImage: "plus").font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
                             }
                         }
                         if let items = tasksByDay[sel], !items.isEmpty {
@@ -507,7 +507,7 @@ struct ProjectPagesTab: View {
     @State private var loading = true
     var body: some View {
         Group {
-            if loading { ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity) }
+            if loading { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity) }
             else if docs.isEmpty { TabEmpty(icon: "doc.text", text: T("No pages in this project yet.")) }
             else {
                 ScrollView {
@@ -537,7 +537,7 @@ struct ProjectFormsTab: View {
     @State private var loading = true
     var body: some View {
         Group {
-            if loading { ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity) }
+            if loading { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity) }
             else if forms.isEmpty { TabEmpty(icon: "list.clipboard", text: T("No forms in this project yet.")) }
             else {
                 ScrollView {
@@ -577,7 +577,7 @@ struct ProjectFilesTab: View {
     var body: some View {
         VStack(spacing: 0) {
             toolbar
-            if loading { ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity) }
+            if loading { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity) }
             else if files.isEmpty { TabEmpty(icon: "folder", text: T("This folder is empty. Upload a file or create a folder with the + button.")) }
             else {
                 ScrollView {
@@ -605,7 +605,7 @@ struct ProjectFilesTab: View {
         HStack(spacing: 10) {
             if stack.count > 1 {
                 Button { stack.removeLast(); Task { await load() } } label: {
-                    Image(systemName: "chevron.left").font(.system(size: 14, weight: .bold)).foregroundStyle(NX.violet)
+                    Image(systemName: "chevron.left").font(.system(size: 14, weight: .bold)).foregroundStyle(NX.violetText)
                 }
             }
             Text(folderName).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
@@ -615,7 +615,7 @@ struct ProjectFilesTab: View {
                 Button { showImporter = true } label: { Label(T("Upload file"), systemImage: "arrow.up.doc") }
                 Button { newFolderName = ""; showNewFolder = true } label: { Label(T("New folder"), systemImage: "folder.badge.plus") }
             } label: {
-                Image(systemName: "plus.circle.fill").font(.system(size: 22)).foregroundStyle(NX.violet)
+                Image(systemName: "plus.circle.fill").font(.system(size: 22)).foregroundStyle(NX.violetText)
             }
             .disabled(busy)
         }
@@ -626,7 +626,7 @@ struct ProjectFilesTab: View {
         let isDownloading = downloading == f.path
         let row = HStack(spacing: 12) {
             Image(systemName: f.isdir ? "folder.fill" : "doc.fill").font(.system(size: 16))
-                .foregroundStyle(f.isdir ? NX.violet : NX.mutedFg)
+                .foregroundStyle(f.isdir ? NX.violetText : NX.mutedFg)
                 .frame(width: 34, height: 34).background((f.isdir ? NX.violet : NX.mutedFg).opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(f.name).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
@@ -779,14 +779,14 @@ struct CreateTaskSheet: View {
                         }
                         field(T("DEADLINE")) {
                             Toggle(isOn: $hasDue.animation()) { Text(T("Use a deadline")).font(NXFont.text(14)).foregroundStyle(NX.foreground) }
-                                .tint(NX.violet)
+                                .tint(NX.violetText)
                             if hasDue {
-                                DatePicker("", selection: $due, displayedComponents: .date).datePickerStyle(.graphical).tint(NX.violet)
+                                DatePicker("", selection: $due, displayedComponents: .date).datePickerStyle(.graphical).tint(NX.violetText)
                             }
                         }
                         if !customFields.isEmpty {
                             VStack(alignment: .leading, spacing: 14) {
-                                Text(T("CUSTOM FIELDS")).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violet)
+                                Text(T("CUSTOM FIELDS")).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violetText)
                                 ForEach(customFields) { f in cfField(f) }
                             }
                             .padding(14)
@@ -831,7 +831,7 @@ struct CreateTaskSheet: View {
                     .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(NX.border))
             } else if type == "DATE" {
                 DatePicker("", selection: cfDate(f.id), displayedComponents: .date)
-                    .datePickerStyle(.compact).labelsHidden().tint(NX.violet).frame(maxWidth: .infinity, alignment: .leading)
+                    .datePickerStyle(.compact).labelsHidden().tint(NX.violetText).frame(maxWidth: .infinity, alignment: .leading)
             } else if (type == "SELECT" || type == "STATUS"), !choices.isEmpty {
                 Menu {
                     Button("—") { cfValues[f.id] = .text("") }
@@ -851,7 +851,7 @@ struct CreateTaskSheet: View {
                             let on = cfMultiHas(f.id, c)
                             Button { toggleMulti(f.id, c) } label: {
                                 Text(c).font(NXFont.text(12, .semibold)).padding(.horizontal, 12).padding(.vertical, 7)
-                                    .foregroundStyle(on ? NX.violet : NX.mutedFg)
+                                    .foregroundStyle(on ? NX.violetText : NX.mutedFg)
                                     .background(on ? NX.violet.opacity(0.12) : NX.card, in: Capsule())
                                     .overlay(Capsule().strokeBorder(on ? NX.violet : NX.border))
                             }.buttonStyle(.plain)
@@ -926,7 +926,7 @@ struct ProjectChatTab: View {
     @State private var loading = true
     var body: some View {
         Group {
-            if loading { ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity) }
+            if loading { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity) }
             else if let room {
                 ChatThreadView(conversationId: room.id, title: room.name ?? projectName,
                                members: room.members ?? [], projectId: projectId)

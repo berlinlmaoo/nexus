@@ -14,7 +14,7 @@ struct NexusApp: App {
         WindowGroup {
             RootView()
                 .environment(auth)
-                .tint(NX.violet)
+                .tint(NX.violetText)
         }
     }
 

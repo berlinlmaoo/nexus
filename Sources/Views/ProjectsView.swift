@@ -75,7 +75,7 @@ struct ProjectsView: View {
                         Image(systemName: "sparkles").font(.system(size: 12, weight: .bold))
                         Text("\(projects.count) missions visible").font(NXFont.text(12, .semibold))
                     }
-                    .foregroundStyle(NX.violet)
+                    .foregroundStyle(NX.violetText)
                     .padding(.horizontal, 12).padding(.vertical, 7)
                     .background(NX.violet.opacity(0.1), in: Capsule())
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -209,7 +209,7 @@ struct FolderNode: View {
                 NavigationLink {
                     FolderAggregateView(folder: folder, allFolders: allFolders, allProjects: Array(projectsByFolder.values.joined()))
                 } label: {
-                    Image(systemName: "calendar").font(.system(size: 14, weight: .semibold)).foregroundStyle(NX.violet)
+                    Image(systemName: "calendar").font(.system(size: 14, weight: .semibold)).foregroundStyle(NX.violetText)
                         .frame(width: 30, height: 30).background(NX.violet.opacity(0.12), in: Circle())
                 }
                 .buttonStyle(.plain)
@@ -291,7 +291,7 @@ struct CreateFolderSheet: View {
                                         if let photo, let ui = UIImage(data: photo.data) {
                                             Image(uiImage: ui).resizable().scaledToFill().clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                         } else {
-                                            Image(systemName: "photo.badge.plus").font(.system(size: 16)).foregroundStyle(NX.violet)
+                                            Image(systemName: "photo.badge.plus").font(.system(size: 16)).foregroundStyle(NX.violetText)
                                         }
                                     }
                                     .frame(width: 44, height: 44)

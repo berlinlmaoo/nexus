@@ -27,7 +27,7 @@ struct AdminMemberRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Text(member.initial)
-                .font(NXFont.text(13, .bold)).foregroundStyle(NX.violet)
+                .font(NXFont.text(13, .bold)).foregroundStyle(NX.violetText)
                 .frame(width: 38, height: 38)
                 .background(NX.violet.opacity(0.12), in: Circle())
                 .overlay(Circle().strokeBorder(NX.border))
@@ -59,7 +59,7 @@ struct RoleChip: View {
     private var color: Color {
         switch role {
         case "ONE_ABOVE_ALL": return NX.danger
-        case "BOD": return NX.violet
+        case "BOD": return NX.violetText
         case "MANAGER": return NX.blue
         default: return NX.mutedFg
         }

@@ -113,12 +113,12 @@ struct ProjectDetailView: View {
             Spacer(minLength: 6)
             if detail != nil {
                 Button { showSettings = true } label: {
-                    Image(systemName: "gearshape").font(.system(size: 15, weight: .semibold)).foregroundStyle(NX.violet)
+                    Image(systemName: "gearshape").font(.system(size: 15, weight: .semibold)).foregroundStyle(NX.violetText)
                         .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
                 }
             }
             Button { prefillDue = nil; showCreate = true } label: {
-                Image(systemName: "plus").font(.system(size: 17, weight: .bold)).foregroundStyle(canCreate ? NX.violet : NX.mutedFg)
+                Image(systemName: "plus").font(.system(size: 17, weight: .bold)).foregroundStyle(canCreate ? NX.violetText : NX.mutedFg)
                     .frame(width: 36, height: 36).background(NX.card, in: Circle()).overlay(Circle().strokeBorder(NX.border))
             }.disabled(!canCreate)
         }
@@ -168,7 +168,7 @@ struct ProjectDetailView: View {
             else { TabEmpty(icon: "dollarsign.circle", text: T("P&L isn't enabled / BoD access required.")) }
         default:
             if loading {
-                ProgressView().tint(NX.violet).frame(maxWidth: .infinity, maxHeight: .infinity)
+                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error {
                 VStack(spacing: 12) {
                     Image(systemName: "lock").font(.system(size: 38)).foregroundStyle(NX.mutedFg)
@@ -380,7 +380,7 @@ struct QuestXPChip: View {
     let xp: Int
     var body: some View {
         Text("+\(xp) XP")
-            .font(NXFont.text(10, .bold)).foregroundStyle(NX.violet)
+            .font(NXFont.text(10, .bold)).foregroundStyle(NX.violetText)
             .padding(.horizontal, 6).padding(.vertical, 2)
             .background(NX.violet.opacity(0.12), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
     }

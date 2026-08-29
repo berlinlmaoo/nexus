@@ -37,7 +37,7 @@ struct OfficesCard: View {
                 }.buttonStyle(.plain)
             }
             if loading {
-                ProgressView().tint(NX.violet).frame(maxWidth: .infinity).padding(.vertical, 8)
+                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
             } else if offices.isEmpty {
                 Text(T("No offices yet. Add an office point + geofence radius.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             } else {
@@ -52,14 +52,14 @@ struct OfficesCard: View {
 
     private func row(_ o: Office) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: "mappin.circle.fill").font(.system(size: 18)).foregroundStyle((o.isActive ?? true) ? NX.violet : NX.mutedFg)
+            Image(systemName: "mappin.circle.fill").font(.system(size: 18)).foregroundStyle((o.isActive ?? true) ? NX.violetText : NX.mutedFg)
             VStack(alignment: .leading, spacing: 2) {
                 Text(o.name).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                 Text("\(o.address ?? "—") · radius \(o.radiusMeters ?? 0)m").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
             }
             Spacer(minLength: 6)
             Toggle("", isOn: Binding(get: { o.isActive ?? true }, set: { on in Task { try? await APIClient.shared.updateOffice(id: o.id, fields: ["isActive": on]); await load() } }))
-                .labelsHidden().tint(NX.violet)
+                .labelsHidden().tint(NX.violetText)
             Button { editOffice = o } label: { Image(systemName: "pencil").font(.system(size: 13)).foregroundStyle(NX.mutedFg) }.buttonStyle(.plain)
         }
         .padding(.vertical, 4)
@@ -111,7 +111,7 @@ struct OfficeComposerSheet: View {
                             f("LONGITUDE") { field($lng, "106.8").keyboardType(.numbersAndPunctuation) }
                         }
                         Button { Task { await useMyLocation() } } label: {
-                            Label("Pakai lokasi sekarang", systemImage: "location.fill").font(NXFont.text(12, .semibold)).foregroundStyle(NX.violet)
+                            Label("Pakai lokasi sekarang", systemImage: "location.fill").font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
                                 .padding(.horizontal, 12).padding(.vertical, 8).background(NX.violet.opacity(0.1), in: Capsule())
                         }.buttonStyle(.plain)
                         HStack(spacing: 12) {

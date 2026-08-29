@@ -153,7 +153,7 @@ struct AttendanceView: View {
             FunMetricCard(icon: "cup.and.saucer.fill", label: T("Today's status"), value: todayStatusValue,
                           helper: T("Live from the NEXUS attendance API"), tint: NX.success)
             FunMetricCard(icon: "mappin.circle.fill", label: T("Office checkpoint"), value: officeValue,
-                          helper: "In \(dispRec?.checkInAt.flatMap(Self.hhmm) ?? "--:--") · Out \(dispRec?.checkOutAt.flatMap(Self.hhmm) ?? "--:--")", tint: NX.violet)
+                          helper: "In \(dispRec?.checkInAt.flatMap(Self.hhmm) ?? "--:--") · Out \(dispRec?.checkOutAt.flatMap(Self.hhmm) ?? "--:--")", tint: NX.violetText)
             FunMetricCard(icon: "sparkles", label: T("Day-off tokens"), value: "\(today?.dayOffUsedThisMonth ?? 0)/\(today?.dayOffQuota ?? 4) used",
                           helper: T("This month's day-off allowance"), tint: NX.warning)
             FunMetricCard(icon: "calendar", label: T("Public holidays"), value: "\(today?.redDateUsedThisMonth ?? 0)/\(today?.redDateQuota ?? 0) used",
@@ -208,20 +208,29 @@ struct AttendanceView: View {
 
     // MARK: offsite + banners
 
+    // Amber warning banner. Every colour here used to be a fixed light-mode hex, including two
+    // hardcoded white fills — in dark mode the reason you typed was white-on-white (invisible) and
+    // Cancel was grey-on-white. Adaptive pairs now, so the banner reads in both schemes.
+    private var amberSurface: Color { Color(light: 0xfffbeb, dark: 0x2b2110) }
+    private var amberBorder:  Color { Color(light: 0xfcd34d, dark: 0x6d5320) }
+    private var amberTitle:   Color { Color(light: 0x92400e, dark: 0xfbbf24) }
+    private var amberBody:    Color { Color(light: 0xb45309, dark: 0xe0b877) }
+
     private var offsitePrompt: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(T("You're outside the office area")).font(NXFont.text(14, .bold)).foregroundStyle(Color(hex: "#92400e"))
+            Text(T("You're outside the office area")).font(NXFont.text(14, .bold)).foregroundStyle(amberTitle)
             Text(T("Want to check out from here? **A reason is required** — the checkout will wait for BoD approval."))
-                .font(NXFont.text(12)).foregroundStyle(Color(hex: "#b45309"))
+                .font(NXFont.text(12)).foregroundStyle(amberBody)
             TextField(T("Reason (e.g. content shoot / client meeting)"), text: $offsiteReason, axis: .vertical)
                 .font(NXFont.text(14)).lineLimit(2, reservesSpace: true)
-                .padding(10).background(.white, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color(hex: "#fcd34d")))
+                .foregroundStyle(NX.foreground)
+                .padding(10).background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(amberBorder))
             HStack(spacing: 8) {
                 Button(T("Cancel")) { showOffsite = false; offsiteReason = "" }
                     .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
                     .frame(maxWidth: .infinity).padding(.vertical, 10)
-                    .background(.white, in: RoundedRectangle(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(NX.border))
+                    .background(NX.card, in: RoundedRectangle(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(NX.border))
                 Button { showOffsite = false; Task { await submitOffsite() } } label: {
                     Text(busy ? T("Sending…") : T("Checkout & request approval")).font(NXFont.text(12, .bold)).foregroundStyle(.white)
                         .frame(maxWidth: .infinity).padding(.vertical, 10)
@@ -231,8 +240,8 @@ struct AttendanceView: View {
             }
         }
         .padding(12)
-        .background(Color(hex: "#fffbeb"), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color(hex: "#fcd34d")))
+        .background(amberSurface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(amberBorder))
     }
 
     /// The old copy told people to "tap PRESENCE OUT" while that button was greyed out by the
@@ -274,7 +283,7 @@ struct AttendanceView: View {
     /// lands, which used to be indistinguishable from "belum absen".
     private var loadingRow: some View {
         HStack(spacing: 8) {
-            ProgressView().tint(NX.violet)
+            ProgressView().tint(NX.violetText)
             Text(T("Loading attendance status…")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 6)
@@ -502,7 +511,7 @@ struct StreakBoardCard: View {
             }
             legend
             if loading {
-                ProgressView().tint(NX.violet).frame(maxWidth: .infinity).padding(.vertical, 20)
+                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 20)
             } else if members.isEmpty {
                 Text(T("No attendance recorded this month.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 12)
@@ -623,7 +632,7 @@ struct RecordActionsSheet: View {
                         .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
 
                     if let err { Text(err).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger) }
-                    if busy { ProgressView().tint(NX.violet).frame(maxWidth: .infinity) }
+                    if busy { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity) }
                 }
                 .padding(16)
             }

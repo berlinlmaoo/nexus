@@ -46,7 +46,7 @@ struct AttendanceRequestsCard: View {
                 }.buttonStyle(.plain)
             }
             if loading {
-                ProgressView().tint(NX.violet).frame(maxWidth: .infinity).padding(.vertical, 8)
+                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
             } else if requests.isEmpty {
                 Text(T("No requests yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             } else {
@@ -164,8 +164,8 @@ struct RequestComposerSheet: View {
                             }
                         }
                         HStack(spacing: 12) {
-                            field("MULAI") { DatePicker("", selection: $start, displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violet) }
-                            field("SAMPAI") { DatePicker("", selection: $end, in: start..., displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violet) }
+                            field("MULAI") { DatePicker("", selection: $start, displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violetText) }
+                            field("SAMPAI") { DatePicker("", selection: $end, in: start..., displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violetText) }
                         }
                         field("ALASAN") {
                             TextField("Alasan / konteks…", text: $reason, axis: .vertical)

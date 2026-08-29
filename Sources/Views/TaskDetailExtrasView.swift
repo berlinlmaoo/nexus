@@ -51,7 +51,7 @@ struct TaskCustomFieldsCard: View {
                     .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .onSubmit { Task { await commit(f) } }
             } else if type == "DATE" {
-                DatePicker("", selection: dateBinding(f), displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violet)
+                DatePicker("", selection: dateBinding(f), displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violetText)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else if (type == "SELECT" || type == "STATUS"), !choices.isEmpty {
                 Menu {
@@ -71,7 +71,7 @@ struct TaskCustomFieldsCard: View {
                             let on = multiHas(f.id, c)
                             Button { toggleMulti(f.id, c); Task { await commit(f) } } label: {
                                 Text(c).font(NXFont.text(12, .semibold)).padding(.horizontal, 12).padding(.vertical, 7)
-                                    .foregroundStyle(on ? NX.violet : NX.mutedFg)
+                                    .foregroundStyle(on ? NX.violetText : NX.mutedFg)
                                     .background(on ? NX.violet.opacity(0.12) : NX.muted.opacity(0.5), in: Capsule())
                                     .overlay(Capsule().strokeBorder(on ? NX.violet : .clear))
                             }.buttonStyle(.plain)
@@ -151,10 +151,10 @@ struct TaskAttachmentsCard: View {
                 taskCardHeader(items.isEmpty ? "Attachments" : "Attachments · \(items.count)", "paperclip")
                 Spacer()
                 if busy { ProgressView().scaleEffect(0.8) }
-                Button { showImporter = true } label: { Image(systemName: "plus.circle.fill").font(.system(size: 20)).foregroundStyle(NX.violet) }.disabled(busy)
+                Button { showImporter = true } label: { Image(systemName: "plus.circle.fill").font(.system(size: 20)).foregroundStyle(NX.violetText) }.disabled(busy)
             }
             if loading {
-                ProgressView().tint(NX.violet).frame(maxWidth: .infinity).padding(.vertical, 8)
+                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
             } else if items.isEmpty {
                 Text(T("No files yet. Tap + to upload.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             } else {
@@ -240,11 +240,11 @@ struct TaskDependenciesCard: View {
                 taskCardHeader("Dependencies", "arrow.triangle.branch")
                 Spacer()
                 if projectId != nil {
-                    Button { showPicker = true } label: { Image(systemName: "plus.circle.fill").font(.system(size: 20)).foregroundStyle(NX.violet) }
+                    Button { showPicker = true } label: { Image(systemName: "plus.circle.fill").font(.system(size: 20)).foregroundStyle(NX.violetText) }
                 }
             }
             if loading {
-                ProgressView().tint(NX.violet).frame(maxWidth: .infinity).padding(.vertical, 8)
+                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
             } else if blockedBy.isEmpty && blocking.isEmpty {
                 Text(T("No dependencies yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             } else {
@@ -382,7 +382,7 @@ struct DependencyPicker: View {
         NavigationStack {
             ZStack {
                 NX.background.ignoresSafeArea()
-                if loading { ProgressView().tint(NX.violet) }
+                if loading { ProgressView().tint(NX.violetText) }
                 else {
                     List {
                         ForEach(filtered) { t in
