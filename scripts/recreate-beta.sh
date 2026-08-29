@@ -5,7 +5,10 @@
 set -uo pipefail
 C=nexus-app-beta
 IMG=nexus-app:prod
-BASE=/Users/jagainmacmini1/Documents/nexus/var/uploads
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+BASE="$ROOT/var/uploads"
+PROD_ENV="$ROOT/.env.production"
+APNS_KEY_FILE="/etc/nexus/secrets/AuthKey_9PTCKVB26P.p8"
 ENVF="$(mktemp /tmp/beta-env.XXXXXX)"
 HEALTH="http://127.0.0.1:3002/api/health"
 
@@ -56,8 +59,10 @@ while IFS= read -r line || [ -n "$line" ]; do
   else
     printf '%s\n' "$line" >> "$ENVF"; carried=$((carried+1))
   fi
-done < /Users/jagainmacmini1/Documents/nexus/.env.production
+done < "$PROD_ENV"
 echo "captured $(wc -l < "$ENVF" | tr -d ' ') env vars (+${carried} carried over, ${overridden} overridden from .env.production)"
+
+[ -s "$APNS_KEY_FILE" ] || { echo "ABORT: APNs key missing/empty at $APNS_KEY_FILE"; exit 1; }
 
 # 2) rename old -> prev + stop (this is the start of the blip)
 docker rename "$C" "${C}-prev" && docker stop "${C}-prev" >/dev/null
@@ -68,7 +73,9 @@ docker run -d --name "$C" --restart unless-stopped \
   --network nexus_nexus_internal \
   -p 127.0.0.1:3002:3000 \
   --env-file "$ENVF" \
+  -e APNS_PRIVATE_KEY_PATH=/run/secrets/apns.p8 \
   -w /app --entrypoint node \
+  -v "$APNS_KEY_FILE:/run/secrets/apns.p8:ro" \
   -v "$BASE/avatars:/app/public/uploads/avatars" \
   -v "$BASE/project-icons:/app/public/uploads/project-icons" \
   -v "$BASE/feed:/app/public/uploads/feed" \
