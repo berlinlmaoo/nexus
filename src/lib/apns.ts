@@ -1,5 +1,6 @@
 import { connect, constants as http2Constants } from "node:http2"
 import { createPrivateKey, sign } from "node:crypto"
+import { readFileSync } from "node:fs"
 import prisma from "@/lib/prisma"
 
 type PushPayload = {
@@ -20,11 +21,21 @@ function base64url(value: string | Buffer): string {
 function providerJWT(): string | null {
   const teamId = process.env.APNS_TEAM_ID
   const keyId = process.env.APNS_KEY_ID
-  const rawKey = process.env.APNS_PRIVATE_KEY
-  if (!teamId || !keyId || !rawKey) return null
+  if (!teamId || !keyId) return null
 
   const now = Math.floor(Date.now() / 1000)
   if (cachedJWT && now - cachedJWT.createdAt < 50 * 60) return cachedJWT.value
+
+  let rawKey = process.env.APNS_PRIVATE_KEY
+  if (!rawKey && process.env.APNS_PRIVATE_KEY_PATH) {
+    try {
+      rawKey = readFileSync(process.env.APNS_PRIVATE_KEY_PATH, "utf8")
+    } catch (error) {
+      console.error("[apns] unable to read private key file", { error: String(error) })
+      return null
+    }
+  }
+  if (!rawKey) return null
 
   const header = base64url(JSON.stringify({ alg: "ES256", kid: keyId }))
   const claims = base64url(JSON.stringify({ iss: teamId, iat: now }))
