@@ -10,12 +10,23 @@ options:
 
 settings:
   base:
+    # Versi yang dilihat orang di TestFlight/App Store. Naikin kalau isinya berubah berarti.
     MARKETING_VERSION: "0.1.0"
+    # WAJIB NAIK TIAP UPLOAD ke App Store Connect. Apple nolak build number yang sudah pernah
+    # dipakai untuk MARKETING_VERSION yang sama, dan errornya baru muncul setelah upload selesai.
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.0"            # Swift 5 language mode — smoother first build (no strict-concurrency friction)
     CODE_SIGN_STYLE: Automatic
-    DEVELOPMENT_TEAM: ""           # ← set your Apple ID team in Xcode → Signing & Capabilities
+    # Team ID Apple (10 karakter). Sengaja ditaruh di sini, BUKAN di GUI Xcode: .xcodeproj tidak
+    # di-commit dan ditimpa tiap `xcodegen generate`, jadi Team yang di-set lewat GUI hilang tiap
+    # ganti branch. Cari punyamu: Xcode → Settings → Accounts, atau Build Settings → DEVELOPMENT_TEAM.
+    # Team ID bukan rahasia — dia ikut ke setiap app yang didistribusikan.
+    DEVELOPMENT_TEAM: ""           # ← ISI INI sebelum upload TestFlight
     GENERATE_INFOPLIST_FILE: YES
+    # Jawaban export-compliance, dijawab sekali di sini supaya App Store Connect tidak menanyakannya
+    # tiap upload (build "Missing Compliance" tidak bisa dibagikan ke tester sampai dijawab).
+    # NO itu benar untuk app ini: HTTPS/TLS standar termasuk pengecualian yang dibebaskan.
+    INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
     # Permission strings (attendance selfie + geofence + receipt photos) — embedded into Info.plist:
     INFOPLIST_KEY_NSCameraUsageDescription: "NEXUS butuh kamera buat selfie absensi."
     INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "NEXUS butuh lokasi buat verifikasi absen di area kantor."

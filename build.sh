@@ -9,7 +9,8 @@
 #   ./build.sh log       nempel ke log app yang lagi jalan di iPhone
 #   ./build.sh devices   daftar iPhone yang kebaca
 #   ./build.sh team      cari Team ID Apple kamu
-#   ./build.sh ipa       arsip + export .ipa ke build/ipa/
+#   ./build.sh ipa       arsip + export .ipa ke build/ipa/ (buat dipasang manual)
+#   ./build.sh ipa app-store-connect   .ipa buat diupload ke TestFlight
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -146,9 +147,19 @@ log)
   ;;
 
 ipa)
+  # METHOD=development  → .ipa buat dipasang manual ke iPhone sendiri (default)
+  # METHOD=app-store-connect → .ipa buat diupload ke App Store Connect / TestFlight
+  #
+  # Jalur GUI (Product → Archive → Distribute App) lebih disarankan buat TestFlight — dia yang
+  # ngurus upload + progress + pesan error Apple. Mode ini buat kalau nggak mau buka Xcode.
+  METHOD="${2:-development}"
+  case "$METHOD" in
+    development|app-store-connect) ;;
+    *) echo "❌ method nggak dikenal: $METHOD (pakai: development | app-store-connect)"; exit 2 ;;
+  esac
   need_team
   regen
-  echo "▸ archive + export .ipa"
+  echo "▸ archive + export .ipa (method: $METHOD)"
   xcodebuild \
     -project NEXUS.xcodeproj \
     -scheme NEXUS \
@@ -162,10 +173,11 @@ ipa)
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-  <key>method</key><string>development</string>
+  <key>method</key><string>$METHOD</string>
   <key>signingStyle</key><string>automatic</string>
   <key>teamID</key><string>$TEAM</string>
   <key>stripSwiftSymbols</key><true/>
+  <key>uploadSymbols</key><true/>
 </dict></plist>
 PLIST
   xcodebuild -exportArchive \
@@ -173,10 +185,22 @@ PLIST
     -exportOptionsPlist build/ExportOptions.plist \
     -allowProvisioningUpdates \
     -exportPath build/ipa 2>&1 | "${FILTER[@]}"
-  ls build/ipa/*.ipa 2>/dev/null && echo "✅ IPA di build/ipa/" \
-    || echo "⚠️  IPA nggak kebentuk — Apple ID gratis nggak bisa export. Pakai ./build.sh run."
+  if ls build/ipa/*.ipa >/dev/null 2>&1; then
+    echo "✅ IPA di build/ipa/"
+    [ "$METHOD" = "app-store-connect" ] && cat <<'NEXT'
+
+   Upload ke TestFlight — pilih salah satu:
+     • Xcode → Window → Organizer → pilih archive → Distribute App  (paling gampang)
+     • xcrun altool --upload-app -f build/ipa/NEXUS.ipa -t ios \
+         --apiKey <KEY_ID> --apiIssuer <ISSUER_ID>     (butuh App Store Connect API key)
+
+   INGAT: CURRENT_PROJECT_VERSION di project.yml harus naik tiap upload.
+NEXT
+  else
+    echo "⚠️  IPA nggak kebentuk. Apple ID gratis nggak bisa export — butuh akun berbayar."
+  fi
   ;;
 
 *)
-  echo "pakai: ./build.sh [check|run|log|devices|team|ipa]"; exit 2 ;;
+  echo "pakai: ./build.sh [check|run|log|devices|team|ipa [development|app-store-connect]]"; exit 2 ;;
 esac
