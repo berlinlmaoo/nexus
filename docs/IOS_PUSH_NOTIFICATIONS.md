@@ -32,10 +32,23 @@ Simpan key di host dan kunci permission-nya. Compose memasangnya read-only sebag
 
 ```sh
 sudo install -d -m 700 /etc/nexus/secrets
-sudo install -o root -g root -m 600 /tmp/AuthKey_9PTCKVB26P.p8 \
+sudo install -o root -g 1001 -m 640 /tmp/AuthKey_9PTCKVB26P.p8 \
   /etc/nexus/secrets/AuthKey_9PTCKVB26P.p8
 sudo rm -f /tmp/AuthKey_9PTCKVB26P.p8
 ```
+
+> **Grup 1001, mode 640 — bukan 600 root:root.** Container jalan sebagai `nextjs` (uid 1001, lihat
+> `Dockerfile.prod`). Key ber-mode 600 root:root tetap ter-mount, tapi **tidak terbaca dari dalam
+> container**; `apns.ts` menelan kegagalan itu (`providerJWT()` mengembalikan null) sehingga setiap
+> push berhenti tanpa error yang terlihat — deploy-nya kelihatan sukses total. Direktorinya tetap
+> 700 root: dari host hanya root yang bisa masuk. Cek cepat:
+>
+> ```sh
+> sudo docker run --rm -u 1001:1001 \
+>   -v /etc/nexus/secrets/AuthKey_9PTCKVB26P.p8:/k.p8:ro alpine head -c 1 /k.p8
+> ```
+>
+> `recreate-beta.sh` sekarang menolak deploy kalau pemeriksaan ini gagal.
 
 ## 3. Database dan deploy
 
