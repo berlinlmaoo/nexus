@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { checkProjectAccess } from "@/lib/rbac"
-import { emitMessageCreated, emitNotification } from "@/lib/socket-emitter"
+import { emitMessageCreated } from "@/lib/socket-emitter"
+import { createInAppNotification } from "@/lib/notification-service"
 
 async function assertAccess(userId: string, conversationId: string) {
   const convo = await prisma.conversation.findUnique({ where: { id: conversationId }, select: { id: true, type: true, projectId: true } })
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
     const access = await assertAccess(userId, conversationId)
     if (!access.ok) return NextResponse.json({ error: "Forbidden" }, { status: access.status })
 
-    const { content } = await req.json()
+    const { content, mentionedUserIds } = await req.json()
     if (!content || !String(content).trim()) return NextResponse.json({ error: "content required" }, { status: 400 })
 
     const message = await prisma.message.create({
@@ -58,15 +59,41 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
 
     emitMessageCreated(conversationId, message as unknown as Record<string, unknown>)
 
-    // Notify other members (in-app + user room).
-    const members = await prisma.conversationMember.findMany({ where: { conversationId, userId: { not: userId } }, select: { userId: true } })
+    // Mentions are structured user IDs from the conversation roster, never inferred from display
+    // names. That makes @tags unambiguous even when two people share a name.
+    const members = await prisma.conversationMember.findMany({
+      where: { conversationId, userId: { not: userId } },
+      select: { userId: true, user: { select: { name: true } } },
+    })
+    const memberIds = new Set(members.map((member) => member.userId))
+    const mentions = new Set(
+      (Array.isArray(mentionedUserIds) ? mentionedUserIds : [])
+        .filter((id): id is string => typeof id === "string" && memberIds.has(id)),
+    )
+    // Compatibility for the web client, which still sends text only. Accept a textual tag only
+    // when its no-space display name identifies exactly one room member.
+    const textTags = new Set(Array.from(String(content).matchAll(/@([\p{L}\p{N}._-]+)/gu), (match) => match[1].toLocaleLowerCase()))
+    const membersByTag = new Map<string, string[]>()
+    for (const member of members) {
+      const tag = member.user.name.replace(/\s+/g, "").toLocaleLowerCase()
+      if (!tag) continue
+      membersByTag.set(tag, [...(membersByTag.get(tag) ?? []), member.userId])
+    }
+    for (const tag of textTags) {
+      const matches = membersByTag.get(tag) ?? []
+      if (matches.length === 1) mentions.add(matches[0])
+    }
     const preview = message.content.length > 80 ? message.content.slice(0, 78) + "…" : message.content
-    await Promise.all(members.map(async (m) => {
-      const notif = await prisma.notification.create({
-        data: { userId: m.userId, type: "MESSAGE", title: `New message from ${message.user?.name ?? "someone"}`, message: preview, link: `/messages/${conversationId}` },
-      }).catch(() => null)
-      if (notif) emitNotification(m.userId, notif as unknown as Record<string, unknown>)
-    }))
+    await Promise.allSettled(members.map((member) => createInAppNotification({
+      userId: member.userId,
+      type: mentions.has(member.userId) ? "MESSAGE_MENTION" : "MESSAGE",
+      title: mentions.has(member.userId)
+        ? `${message.user?.name ?? "Someone"} mentioned you`
+        : `New message from ${message.user?.name ?? "someone"}`,
+      message: preview,
+      link: `/messages/${conversationId}`,
+      push: mentions.has(member.userId),
+    })))
 
     return NextResponse.json({ message }, { status: 201 })
   } catch (error) {

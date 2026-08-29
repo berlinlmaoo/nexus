@@ -8,7 +8,7 @@ import { checkProjectAccess } from "@/lib/rbac"
 import { executeAutomations } from "@/lib/automation-engine"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import { emitTaskUpdated, emitTaskDeleted } from "@/lib/socket-emitter"
-import { notifyTaskCompleted } from "@/lib/notification-service"
+import { notifyTaskAssigned, notifyTaskCompleted } from "@/lib/notification-service"
 import { bumpStreak } from "@/lib/gamification"
 import { updateTaskSchema, validateBody } from "@/lib/validations"
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit"
@@ -129,7 +129,7 @@ export async function PATCH(
     const existing = await prisma.task.findUnique({
       where: { id: taskId },
       include: {
-        taskList: true,
+        taskList: { include: { project: true } },
         assignees: { select: { userId: true } },
         customFieldValues: {
           select: {
@@ -421,6 +421,17 @@ export async function PATCH(
             update: {},
           })
         }
+
+        const previousAssigneeIds = new Set(existing.assignees.map((assignee) => assignee.userId))
+        const newlyAssignedIds = assigneeIds.filter((userId: string) => !previousAssigneeIds.has(userId))
+        await Promise.allSettled(newlyAssignedIds.map((assigneeId: string) => notifyTaskAssigned({
+          assigneeId,
+          taskId,
+          taskTitle: task.title,
+          projectName: existing.taskList.project.name,
+          projectId: effectiveProjectId,
+          assignedByName: session.user.name || "Someone",
+        })))
       }
 
       const updatedTask = await prisma.task.findUnique({
