@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - models
 //
 // Shape taken from the web bundle (assets/threads-*.js): the page renders
-// .author / .content / .createdAt / .images / .likeCount / .commentCount and
+// .author / .text / .createdAt / .images / .likeCount / .commentCount and
 // pages through a `nextCursor`. Every field is optional so a rename degrades
 // instead of failing the whole decode.
 
@@ -15,12 +15,16 @@ struct FeedPostsResponse: Decodable, Sendable {
 }
 
 /// Hashable because `.navigationDestination(item:)` requires it (SwiftUI uses it as the path value).
+///
+/// NOTE: the body field is `text`, not `content`, and `images` is an array of OBJECTS
+/// ({id,url,width,height,position}) — not URL strings. Both were wrong in the first cut, and because
+/// a present-but-mistyped key makes Codable throw, the whole feed died with "Couldn't read data".
 struct FeedPost: Decodable, Identifiable, Hashable, Sendable {
     let id: String
-    let content: String?
+    let text: String?
     let createdAt: String?
     let author: Author?
-    let images: [String]?
+    let images: [FeedImage]?
     let likeCount: Int?
     let commentCount: Int?
     let likedByMe: Bool?
@@ -31,7 +35,14 @@ struct FeedPost: Decodable, Identifiable, Hashable, Sendable {
     var initial: String { String(authorName.first ?? "?").uppercased() }
     var likes: Int { likeCount ?? 0 }
     var comments: Int { commentCount ?? 0 }
-    var photos: [String] { images ?? [] }
+    var photos: [String] { (images ?? []).compactMap(\.url) }
+}
+
+struct FeedImage: Decodable, Hashable, Sendable {
+    let id: String?
+    let url: String?
+    let width: Int?
+    let height: Int?
 }
 
 struct FeedCommentsResponse: Decodable, Sendable {
@@ -42,7 +53,7 @@ struct FeedCommentsResponse: Decodable, Sendable {
 
 struct FeedComment: Decodable, Identifiable, Sendable {
     let id: String
-    let content: String?
+    let text: String?
     let createdAt: String?
     let author: FeedPost.Author?
     var authorName: String { author?.name ?? "Someone" }
@@ -133,7 +144,7 @@ struct ThreadsView: View {
                 }
                 Spacer(minLength: 0)
             }
-            if let c = p.content, !c.isEmpty {
+            if let c = p.text, !c.isEmpty {
                 mentionText(c).font(NXFont.text(14)).foregroundStyle(NX.foreground)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -188,7 +199,7 @@ struct ThreadsView: View {
         posting = true
         defer { posting = false }
         do {
-            try await APIClient.shared.createPost(content: v)
+            try await APIClient.shared.createPost(text: v)
             draft = ""
             await load()
         } catch {
@@ -227,7 +238,7 @@ struct PostThreadView: View {
                             }
                             Spacer(minLength: 0)
                         }
-                        if let c = post.content, !c.isEmpty {
+                        if let c = post.text, !c.isEmpty {
                             mentionText(c).font(NXFont.text(15)).foregroundStyle(NX.foreground)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -280,7 +291,7 @@ struct PostThreadView: View {
                         Text(ProjDate.dayLabel(d)).font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
                     }
                 }
-                mentionText(c.content ?? "").font(NXFont.text(13)).foregroundStyle(NX.foreground.opacity(0.9))
+                mentionText(c.text ?? "").font(NXFont.text(13)).foregroundStyle(NX.foreground.opacity(0.9))
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -300,7 +311,7 @@ struct PostThreadView: View {
         guard !v.isEmpty else { return }
         sending = true
         draft = ""
-        try? await APIClient.shared.addPostComment(postId: post.id, content: v)
+        try? await APIClient.shared.addPostComment(postId: post.id, text: v)
         await load()
         sending = false
     }

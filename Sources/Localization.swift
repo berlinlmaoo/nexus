@@ -542,6 +542,15 @@ final class AppLanguage {
         "Room bookings — VIP, Meeting, Studio.": "Booking ruangan — VIP, Meeting, Studio.",
         "Auto-assign to:": "Assign otomatis ke:",
 
+        // ── tampilan & room booking ───────────────────────────────────────────
+        "APPEARANCE": "TAMPILAN",
+        "Follow system": "Ikut sistem",
+        "Light": "Terang",
+        "Dark": "Gelap",
+        "Upcoming": "Mendatang",
+        "History": "Riwayat",
+        "No bookings in the last 30 days.": "Nggak ada booking dalam 30 hari terakhir.",
+
         // ── fragmen kalimat berinterpolasi (dirakit runtime) ──────────────────
         "days": "hari",
         "tasks": "task",

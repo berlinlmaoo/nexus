@@ -53,6 +53,7 @@ struct SettingsView: View {
                     }
                     .nexusCard()
 
+                    AppearanceCard()
                     LanguageCard()
                     if let wsId = workspaceId { WorkspaceMembersCard(workspaceId: wsId) }
                     SecurityCard()

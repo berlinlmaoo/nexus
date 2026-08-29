@@ -362,19 +362,21 @@ struct APIClient {
     func postComments(_ postId: String) async throws -> [FeedComment] {
         (try await run(makeRequest("/api/feed/posts/\(postId)/comments"), decode: FeedCommentsResponse.self)).all
     }
+    /// Payload is `{text, mentions}` — confirmed from the web bundle. It was `{content:…}` at first,
+    /// which the server ignored/rejected.
     @discardableResult
-    func createPost(content: String) async throws -> Bool {
+    func createPost(text: String) async throws -> Bool {
         var req = makeRequest("/api/feed/posts", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["content": content])
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["text": text, "mentions": []])
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }
     @discardableResult
-    func addPostComment(postId: String, content: String) async throws -> Bool {
+    func addPostComment(postId: String, text: String) async throws -> Bool {
         var req = makeRequest("/api/feed/posts/\(postId)/comments", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["content": content])
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["text": text, "mentions": []])
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }

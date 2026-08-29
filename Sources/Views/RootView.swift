@@ -3,8 +3,17 @@ import SwiftUI
 /// Switches between login and the authenticated app (5-tab bar mirroring the web).
 struct RootView: View {
     @Environment(AuthStore.self) private var auth
+    @State private var appearance = AppAppearance.shared
 
     var body: some View {
+        content
+            // In-app light/dark override. nil = follow the iOS setting.
+            // (LoginView keeps its own forced .light — that screen's cream/white art is designed
+            // for light only, so it deliberately opts out.)
+            .preferredColorScheme(appearance.theme.colorScheme)
+    }
+
+    @ViewBuilder private var content: some View {
         if auth.isAuthenticated {
             TabView {
                 DashboardView()
@@ -132,15 +141,16 @@ struct MoreTile<Destination: View>: View {
 /// Account card (avatar + name + email) and logout.
 struct AccountFooter: View {
     @Environment(AuthStore.self) private var auth
+    /// The Keychain `Session` only stores id/name/email — no avatar — so the footer could only ever
+    /// draw an initial. Fetch the profile for the real photo.
+    @State private var avatar: String?
+
     var body: some View {
         VStack(spacing: 12) {
             if let s = auth.session {
                 let name = s.userName.isEmpty ? s.userEmail : s.userName
                 HStack(spacing: 12) {
-                    Text(String(name.first ?? "?").uppercased())
-                        .font(NXFont.text(16, .bold)).foregroundStyle(NX.violet)
-                        .frame(width: 46, height: 46).background(NX.violet.opacity(0.12), in: Circle())
-                        .overlay(Circle().strokeBorder(NX.border))
+                    AvatarView(url: avatar, initial: String(name.first ?? "?").uppercased(), size: 46)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(name).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                         Text(s.userEmail).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
@@ -160,5 +170,6 @@ struct AccountFooter: View {
             .buttonStyle(.plain)
         }
         .padding(.top, 4)
+        .task { avatar = try? await APIClient.shared.profile().user.avatar }
     }
 }

@@ -35,6 +35,52 @@ extension Color {
     }
 }
 
+// MARK: - Appearance (in-app light/dark override)
+
+/// `.system` follows iOS Settings; the other two override it inside the app only.
+enum AppTheme: String, CaseIterable, Identifiable, Sendable {
+    case system, light, dark
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .system: return T("Follow system")
+        case .light:  return T("Light")
+        case .dark:   return T("Dark")
+        }
+    }
+    var icon: String {
+        switch self {
+        case .system: return "iphone"
+        case .light:  return "sun.max.fill"
+        case .dark:   return "moon.fill"
+        }
+    }
+    /// nil = don't override, i.e. inherit whatever iOS is set to.
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light:  return .light
+        case .dark:   return .dark
+        }
+    }
+}
+
+/// Same pattern as AppLanguage: @Observable so flipping it re-renders every screen at once,
+/// persisted so the choice survives a relaunch.
+@Observable
+final class AppAppearance {
+    static let shared = AppAppearance()
+    private static let key = "nexus.theme"
+
+    var theme: AppTheme {
+        didSet { UserDefaults.standard.set(theme.rawValue, forKey: Self.key) }
+    }
+
+    private init() {
+        theme = AppTheme(rawValue: UserDefaults.standard.string(forKey: Self.key) ?? "") ?? .system
+    }
+}
+
 /// Semantic palette — names match the web tokens.
 enum NX {
     static let background  = Color(light: 0xf8f9fb, dark: 0x11141b)

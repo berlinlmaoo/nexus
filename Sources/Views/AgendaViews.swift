@@ -1,37 +1,63 @@
 import SwiftUI
 
-/// Port of room-booking.tsx: day-grouped agenda of room bookings (next 14 days).
+/// Port of room-booking.tsx: day-grouped agenda of room bookings.
+/// Upcoming *and* past — the old version only ever queried `now … now+14d`, so there was no way to
+/// see anything that already happened.
 struct RoomBookingView: View {
     @Environment(AuthStore.self) private var auth
     @State private var bookings: [RoomBooking] = []
     @State private var loading = true
     @State private var error: String?
+    @State private var scope: Scope = .upcoming
+
+    enum Scope: String, CaseIterable, Identifiable {
+        case upcoming, past
+        var id: String { rawValue }
+        var label: String { self == .upcoming ? T("Upcoming") : T("History") }
+        var empty: String {
+            self == .upcoming ? T("No bookings in the next 14 days.")
+                              : T("No bookings in the last 30 days.")
+        }
+    }
 
     private var byDay: [(key: String, items: [RoomBooking])] {
         let groups = Dictionary(grouping: bookings, by: { AgendaRange.dayKey($0.startsAt) })
-        return groups.keys.sorted().map { ($0, groups[$0]!.sorted { $0.startsAt < $1.startsAt }) }
+        // History reads newest-first; upcoming reads soonest-first.
+        let keys = scope == .past ? groups.keys.sorted(by: >) : groups.keys.sorted()
+        return keys.map { ($0, groups[$0]!.sorted { $0.startsAt < $1.startsAt }) }
     }
 
     var body: some View {
         AgendaScaffold(title: T("Room Booking"), subtitle: T("Room bookings — VIP, Meeting, Studio."),
                        loading: loading, error: error, isEmpty: bookings.isEmpty,
-                       emptyIcon: "calendar.badge.clock", emptyText: T("No bookings in the next 14 days."),
-                       retry: { await load() }) {
+                       emptyIcon: "calendar.badge.clock", emptyText: scope.empty,
+                       retry: { await load() },
+                       toolbar: AnyView(scopePicker)) {
             ForEach(byDay, id: \.key) { day in
                 AgendaDay(label: AgendaRange.dayLabel(day.key)) {
                     ForEach(day.items) { b in
                         AgendaRow(time: "\(AgendaRange.timeLabel(b.startsAt))–\(AgendaRange.timeLabel(b.endsAt))",
-                                  title: b.title, chip: b.room, sub: b.createdBy?.name, tone: .accent)
+                                  title: b.title, chip: b.room, sub: b.createdBy?.name,
+                                  tone: scope == .past ? .neutral : .accent)
                     }
                 }
             }
         }
-        .task { await load() }
+        .task(id: scope) { await load() }
+    }
+
+    private var scopePicker: some View {
+        Picker("", selection: $scope) {
+            ForEach(Scope.allCases) { s in Text(s.label).tag(s) }
+        }
+        .pickerStyle(.segmented)
+        .frame(width: 170)
     }
 
     private func load() async {
+        loading = true
         error = nil
-        let r = AgendaRange.nowToDays(14)
+        let r = scope == .upcoming ? AgendaRange.nowToDays(14) : AgendaRange.daysAgo(30)
         do { bookings = try await APIClient.shared.roomBookings(start: r.start, end: r.end) }
         catch APIError.unauthorized { auth.logout() }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load bookings.") }

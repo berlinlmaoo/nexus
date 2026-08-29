@@ -66,6 +66,11 @@ enum AgendaRange {
         let f = ISO8601DateFormatter()
         return (f.string(from: Date()), f.string(from: Date().addingTimeInterval(Double(days) * 86400)))
     }
+    /// Backwards window, for "history" views.
+    static func daysAgo(_ days: Int) -> (start: String, end: String) {
+        let f = ISO8601DateFormatter()
+        return (f.string(from: Date().addingTimeInterval(-Double(days) * 86400)), f.string(from: Date()))
+    }
     /// "yyyy-MM-dd" day key from an ISO timestamp (Asia/Jakarta).
     static func dayKey(_ iso: String) -> String { String(iso.prefix(10)) }
     static func dayLabel(_ key: String) -> String {

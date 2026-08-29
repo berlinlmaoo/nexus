@@ -148,6 +148,39 @@ struct LanguageCard: View {
     }
 }
 
+// MARK: - Appearance
+
+/// In-app light/dark switch, independent of the iOS Settings toggle.
+struct AppearanceCard: View {
+    @State private var store = AppAppearance.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(T("APPEARANCE")).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violet)
+            HStack(spacing: 8) {
+                ForEach(AppTheme.allCases) { t in
+                    let on = store.theme == t
+                    Button { store.theme = t } label: {
+                        VStack(spacing: 6) {
+                            Image(systemName: t.icon).font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(on ? Color.white : NX.mutedFg)
+                            Text(t.label).font(NXFont.text(11, .semibold))
+                                .foregroundStyle(on ? Color.white : NX.mutedFg)
+                                .lineLimit(1).minimumScaleFactor(0.75)
+                        }
+                        .frame(maxWidth: .infinity).padding(.vertical, 12)
+                        .background(on ? NX.violet : NX.muted.opacity(0.5),
+                                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .nexusCard()
+    }
+}
+
 // MARK: - Security (change own password)
 
 struct SecurityCard: View {
