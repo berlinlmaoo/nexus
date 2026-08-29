@@ -3,7 +3,9 @@ import UIKit
 
 @main
 struct NexusApp: App {
+    @UIApplicationDelegateAdaptor(NotificationAppDelegate.self) private var appDelegate
     @State private var auth = AuthStore()
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         FontLoader.registerAll()
@@ -15,6 +17,15 @@ struct NexusApp: App {
             RootView()
                 .environment(auth)
                 .tint(NX.violetText)
+                .task(id: auth.session?.userId) {
+                    if let userId = auth.session?.userId {
+                        await NotificationManager.shared.activate(userId: userId)
+                    }
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    guard phase == .active, let userId = auth.session?.userId else { return }
+                    Task { await NotificationManager.shared.reconcileReminders(userId: userId) }
+                }
         }
     }
 

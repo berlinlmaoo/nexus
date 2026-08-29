@@ -496,10 +496,34 @@ struct APIClient {
     }
 
     @discardableResult
-    func sendMessage(_ conversationId: String, content: String) async throws -> Bool {
+    func sendMessage(_ conversationId: String, content: String, mentionedUserIds: [String] = []) async throws -> Bool {
         var req = makeRequest("/api/conversations/\(conversationId)/messages", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["content": content])
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["content": content, "mentionedUserIds": mentionedUserIds])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+
+    @discardableResult
+    func registerPushDevice(token: String, deviceId: String, environment: String) async throws -> Bool {
+        var req = makeRequest("/api/push/devices", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "token": token,
+            "deviceId": deviceId,
+            "bundleId": "id.znetworks.nexus",
+            "environment": environment,
+        ])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+
+    @discardableResult
+    func unregisterPushDevice(token: String, session: Session) async throws -> Bool {
+        var req = makeRequest("/api/push/devices", method: "DELETE", authed: false)
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(session.cookieHeader, forHTTPHeaderField: "Cookie")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["token": token])
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }

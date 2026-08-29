@@ -142,7 +142,8 @@ Sources/
   MorphFlip.swift         # FLIP morph card→modal (port framer-motion layoutId)
   CachedImage.swift       # pengganti AsyncImage yang beneran nge-cache + downsample
   CameraPicker.swift      # selfie kamera depan → JPEG
-  LocationManager.swift   # one-shot GPS fix (async/await)
+    LocationManager.swift   # one-shot GPS fix (async/await)
+    NotificationManager.swift # APNs registration + local attendance/task reminders
   FontLoader.swift        # daftarin Plus Jakarta Sans + Inter
   *Models.swift           # Codable per-domain (Board, Dashboard, Attendance,
                           #   Messages, DocsForms, ReportsTeams, GroupFour)
@@ -168,4 +169,6 @@ calendar), board/list/calendar/timeline project, task detail lengkap, absensi (k
 geofence + offsite approval + admin shift/day-off/hari libur), leaderboard, messages, docs, forms,
 reports, teams, room booking, Control Room.
 
-Belum ada: push notification, offline cache/queue.
+Push notification tersedia untuk mention chat dan task assignment setelah backend APNs dikonfigurasi.
+Reminder lokal tersedia untuk check-in 15 menit sebelum shift serta deadline task H-2/H-1/jatuh
+tempo. Belum ada: offline cache/queue.

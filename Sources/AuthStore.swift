@@ -37,6 +37,9 @@ final class AuthStore {
     }
 
     func logout() {
+        if let session {
+            Task { await NotificationManager.shared.unregister(session: session) }
+        }
         Keychain.clear()
         session = nil
     }

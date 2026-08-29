@@ -161,6 +161,7 @@ struct ChatThreadView: View {
     @State private var sending = false
     @State private var loc = LocationManager()
     @State private var showMentions = false
+    @State private var pendingMentions: [String: String] = [:]
     @State private var showTaskPicker = false
     @State private var notice: String?
 
@@ -351,6 +352,7 @@ struct ChatThreadView: View {
         let tag = "@" + m.displayName.replacingOccurrences(of: " ", with: "")
         if !input.isEmpty && !input.hasSuffix(" ") { input += " " }
         input += tag + " "
+        pendingMentions[m.uid] = tag
         showMentions = false
     }
 
@@ -363,8 +365,9 @@ struct ChatThreadView: View {
     private func send() async {
         let v = input.trimmingCharacters(in: .whitespaces)
         guard !v.isEmpty else { return }
-        sending = true; input = ""; notice = nil
-        try? await APIClient.shared.sendMessage(conversationId, content: v)
+        let mentionedUserIds = pendingMentions.compactMap { v.contains($0.value) ? $0.key : nil }
+        sending = true; input = ""; pendingMentions = [:]; notice = nil
+        try? await APIClient.shared.sendMessage(conversationId, content: v, mentionedUserIds: mentionedUserIds)
         await load()
         sending = false
     }
