@@ -27,14 +27,23 @@ targets:
   NEXUS:
     type: application
     platform: iOS
-    # A real plist preserves spaces in the display name; the generated-plist build setting
-    # collapsed "NEXUS by Z Networks" into "NEXUSbyZNetworks" on the Home Screen.
-    info:
-      path: Sources/Info.plist
     sources:
       - path: Sources
+        # Info.plist is pointed at by INFOPLIST_FILE below; it must NOT also be copied as a
+        # resource, or the build fails on a duplicate Info.plist.
+        excludes:
+          - Info.plist
     settings:
       base:
+        # USE the committed plist — do not let XcodeGen generate one.
+        #
+        # This was `info: { path: Sources/Info.plist }`, which reads like "use this file" but means
+        # "GENERATE a file here". Every `xcodegen generate` overwrote the handcrafted plist with a
+        # minimal one, silently dropping UILaunchScreen — and an iOS app with no launch screen is
+        # run in compatibility mode: letterboxed with black bars, floating tab bar over content.
+        # It also dropped CFBundleDisplayName and the camera/location/photo usage strings, which
+        # would have crashed attendance the first time it asked for the camera.
+        INFOPLIST_FILE: Sources/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: id.znetworks.nexus
         PRODUCT_NAME: NEXUS
         CODE_SIGN_ENTITLEMENTS: NEXUS.entitlements
