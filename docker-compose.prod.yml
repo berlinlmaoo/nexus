@@ -90,6 +90,7 @@ services:
       APNS_KEY_ID: ${APNS_KEY_ID:-}
       APNS_BUNDLE_ID: ${APNS_BUNDLE_ID:-id.znetworks.nexus}
       APNS_PRIVATE_KEY: ${APNS_PRIVATE_KEY:-}
+      APNS_PRIVATE_KEY_PATH: /run/secrets/apns.p8
       DB_POOL_MAX: ${DB_POOL_MAX:-20}
       DB_IDLE_TIMEOUT: ${DB_IDLE_TIMEOUT:-30000}
       DB_CONNECT_TIMEOUT: ${DB_CONNECT_TIMEOUT:-5000}
@@ -134,6 +135,7 @@ services:
       - ${NEXUS_DATA_DIR:-./var}/uploads/attendance:/app/public/uploads/attendance
       - ${NEXUS_DATA_DIR:-./var}/uploads/avatars:/app/public/uploads/avatars
       - ${NEXUS_DATA_DIR:-./var}/uploads/project-icons:/app/public/uploads/project-icons
+      - ${APNS_PRIVATE_KEY_FILE:-/etc/nexus/secrets/AuthKey_9PTCKVB26P.p8}:/run/secrets/apns.p8:ro
     networks:
       - nexus_internal
     logging:

@@ -23,11 +23,19 @@ Isi `.env.production`:
 APNS_TEAM_ID=5YR5T42G97
 APNS_KEY_ID=9PTCKVB26P
 APNS_BUNDLE_ID=id.znetworks.nexus
-APNS_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...isi p8...\n-----END PRIVATE KEY-----"
+APNS_PRIVATE_KEY_FILE=/etc/nexus/secrets/AuthKey_9PTCKVB26P.p8
 CRON_SECRET=nilai-random-yang-panjang
 ```
 
-Jangan gunakan awalan `NEXT_PUBLIC_`: private key harus hanya tersedia di server.
+Simpan key di host dan kunci permission-nya. Compose memasangnya read-only sebagai
+`/run/secrets/apns.p8`; isi key tidak pernah masuk environment container atau Git.
+
+```sh
+sudo install -d -m 700 /etc/nexus/secrets
+sudo install -o root -g root -m 600 /tmp/AuthKey_9PTCKVB26P.p8 \
+  /etc/nexus/secrets/AuthKey_9PTCKVB26P.p8
+sudo rm -f /tmp/AuthKey_9PTCKVB26P.p8
+```
 
 ## 3. Database dan deploy
 
