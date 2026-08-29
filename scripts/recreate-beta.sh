@@ -82,6 +82,20 @@ echo "captured $(wc -l < "$ENVF" | tr -d ' ') env vars (+${carried} carried over
   exit 1
 }
 
+# ...and readable BY THE CONTAINER, which is the part that actually matters. The app runs as
+# `nextjs` (uid 1001, Dockerfile.prod), so a key left at the documented 600 root:root is mounted
+# fine and still unreadable inside. apns.ts swallows that: providerJWT() returns null, every
+# sendPushToUser() returns immediately, and push dies SILENTLY — one log line, zero user-visible
+# symptoms. Deploying that state looks like a total success. Cheap check, catches it every time.
+docker run --rm -u 1001:1001 -v "$APNS_KEY_FILE:/k.p8:ro" --entrypoint sh "$IMG" \
+  -c 'head -c 1 /k.p8 >/dev/null 2>&1' || {
+  echo "ABORT: APNs key exists but uid 1001 (the app user) cannot read it."
+  echo "       Push would fail silently. Fix:"
+  echo "         sudo chown root:1001 $APNS_KEY_FILE"
+  echo "         sudo chmod 640 $APNS_KEY_FILE"
+  exit 1
+}
+
 # 2) rename old -> prev + stop (this is the start of the blip)
 docker rename "$C" "${C}-prev" && docker stop "${C}-prev" >/dev/null
 echo "old renamed -> ${C}-prev + stopped"
