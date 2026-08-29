@@ -55,6 +55,7 @@ struct SettingsView: View {
 
                     AppearanceCard()
                     LanguageCard()
+                    PushDiagnosticsCard()
                     if let wsId = workspaceId { WorkspaceMembersCard(workspaceId: wsId) }
                     SecurityCard()
 

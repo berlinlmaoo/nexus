@@ -141,3 +141,99 @@ Tester memasang aplikasi **TestFlight** dari App Store, lalu menerima undangan l
 | Asset validation failed (icon) | Ikon 1024×1024 tidak boleh punya alpha channel (punya kita sudah aman: RGB) |
 
 Tanpa GUI juga bisa: `./build.sh ipa app-store-connect` menghasilkan `.ipa` yang siap diupload.
+
+---
+
+# Notifikasi
+
+Ada **dua hal berbeda** yang sering dikira satu, dan status keduanya tidak sama:
+
+| | Cara kerja | Status |
+|---|---|---|
+| **Notifikasi lokal** — pengingat task jatuh tempo & absen | Dijadwalkan di dalam HP oleh app sendiri | **Sudah jalan.** Tidak butuh server, tidak butuh internet |
+| **Push dari server** — misalnya "ada yang mention kamu" | Server → Apple (APNs) → HP | **Belum bisa.** Lihat di bawah |
+
+## Kenapa push dari server belum bisa
+
+App sudah mendaftarkan diri ke APNs dan mengirim token perangkat ke
+`POST /api/push/devices` — **tapi rute itu tidak ada di backend**:
+
+```sh
+curl -o /dev/null -w '%{http_code}\n' -X POST https://nexus.znetworks.id/api/push/devices
+# 404   ← rute tidak ada
+
+curl -o /dev/null -w '%{http_code}\n' -X POST https://nexus.znetworks.id/api/attendance/check-in
+# 401   ← rute ADA, cuma butuh login
+```
+
+404 (bukan 401) artinya backend memang belum punya rute itu. Jadi token perangkat tidak pernah
+tersimpan di mana pun, dan tidak ada yang bisa mengirim push. Ini pekerjaan di **repo backend**,
+bukan di sini.
+
+Yang perlu dibuat di backend supaya nyambung dengan app yang sekarang:
+
+- `POST /api/push/devices` — body `{token, deviceId, bundleId, environment}`; simpan per user
+- `DELETE /api/push/devices` — body `{token}`; dipanggil saat logout
+- Pengirimnya: APNs key `.p8` (Key ID + Team ID `5YR5T42G97`), topic = `id.znetworks.nexus`,
+  host `api.sandbox.push.apple.com` untuk build development dan `api.push.apple.com` untuk
+  TestFlight/App Store
+
+## Cek status push di HP
+
+**Tuning Room → PUSH NOTIFICATIONS.** Kartu itu menjawab pertanyaan "sebenarnya macet di mana":
+
+- **Izin** — kalau *Diblokir*, semua tes akan gagal sampai diizinkan di Setelan iOS
+- **Environment APNs** — `sandbox` (build dari Xcode) atau `production` (TestFlight).
+  Kirim push ke host yang salah = ditolak `BadDeviceToken`. Ini penyebab bingung paling umum.
+- **Apple** — `ok` berarti Apple sudah memberi token. Ini membuktikan entitlement dan
+  provisioning profile sudah benar, **tanpa melibatkan server kita sama sekali**
+- **Server NEXUS** — hasil menyerahkan token ke backend kita. Selama rutenya belum ada,
+  di sini akan tertulis `Server error (404).`
+- **Token perangkat** + tombol salin — dibutuhkan untuk mengirim tes push
+
+## Tes 1 — notifikasi lokal (paling cepat, bisa sekarang)
+
+1. Buka app, izinkan notifikasi saat diminta
+2. Punya task dengan **due date hari ini atau kemarin** → pengingat "Task overdue" muncul
+   beberapa detik kemudian
+3. Pengingat absen muncul 15 menit sebelum jam shift, dan hanya kalau **belum check-in**
+
+Kalau tidak muncul: cek Izin di Tuning Room, lalu pastikan HP tidak sedang Focus/Do Not Disturb.
+
+## Tes 2 — push APNs sungguhan, tanpa backend
+
+Ini membuktikan seluruh jalur Apple → HP sudah benar, jadi kalau nanti backend selesai,
+tinggal nyambung.
+
+1. Di HP: **Tuning Room → PUSH NOTIFICATIONS → Salin token**, kirim ke diri sendiri
+   (chat/email) supaya bisa ditempel di Mac
+2. Buka **Push Notifications Console** Apple: <https://icloud.developer.apple.com/dashboard/notifications>
+   (login pakai akun Developer Program yang sama)
+3. **Send Notification** → tempel device token → pilih environment yang **sama persis** dengan
+   yang tertulis di kartu (`sandbox` untuk build Xcode, `production` untuk TestFlight)
+4. Payload:
+   ```json
+   { "aps": { "alert": { "title": "Tes", "body": "Halo dari APNs" }, "sound": "default" } }
+   ```
+5. **Send**. Notifikasi harus muncul dalam hitungan detik.
+
+> Kalau console-nya minta APNs key: developer.apple.com → Certificates, Identifiers & Profiles →
+> **Keys** → **+** → centang **Apple Push Notifications service (APNs)** → download `.p8`.
+> **File itu cuma bisa diunduh sekali** — simpan baik-baik.
+
+Kalau gagal:
+
+| Pesan | Artinya |
+|---|---|
+| `BadDeviceToken` | Environment salah (sandbox vs production), atau token dari build lain |
+| `TopicDisallowed` | Bundle ID di key/topic tidak cocok dengan `id.znetworks.nexus` |
+| Tidak ada error tapi tidak muncul | HP sedang Focus, atau izin notifikasi dimatikan |
+
+## Tes 3 — di simulator
+
+Simulator **tidak punya token APNs sungguhan**, jadi hanya berguna untuk mengetes tampilan:
+
+```sh
+echo '{"Simulator Target Bundle":"id.znetworks.nexus","aps":{"alert":{"title":"Tes","body":"Halo"}}}' > /tmp/p.json
+xcrun simctl push booted id.znetworks.nexus /tmp/p.json
+```

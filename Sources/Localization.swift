@@ -61,6 +61,13 @@ final class AppLanguage {
 
     /// English → Indonesian. Keys must match the source literal EXACTLY.
     /// Anything missing simply stays English.
+    /// WARNING: a Swift dictionary LITERAL traps at runtime on a duplicate key — "Fatal error:
+    /// Dictionary literal contains duplicate keys". Because `static let` is lazy and `translate()`
+    /// returns early while the language is English, this dictionary is only ever built the moment
+    /// somebody picks Bahasa Indonesia — so a duplicate key here is an invisible crash that waits
+    /// for the language switch. Two of them were sitting in this file. Check before adding:
+    ///
+    ///     grep -o '^ *"[^"]*":' Sources/Localization.swift | sort | uniq -d
     static let indonesian: [String: String] = [
         // ── shell / navigation ────────────────────────────────────────────────
         "Home": "Beranda",
@@ -178,7 +185,6 @@ final class AppLanguage {
             "Wajib diisi sebelum check-out. Ceritain apa yang kamu kerjain hari ini.",
         "Today I worked on…": "Hari ini aku ngerjain…",
         "Loading attendance status…": "Memuat status absen…",
-        "Couldn't load.": "Gagal memuat.",
         "Failed.": "Gagal.",
         "Check-in successful ✓": "Check-in berhasil ✓",
         "Check-out successful ✓": "Check-out berhasil ✓",
@@ -542,6 +548,24 @@ final class AppLanguage {
         "Room bookings — VIP, Meeting, Studio.": "Booking ruangan — VIP, Meeting, Studio.",
         "Auto-assign to:": "Assign otomatis ke:",
 
+        // ── diagnostik push notification (Tuning Room) ────────────────────────
+        "PUSH NOTIFICATIONS": "NOTIFIKASI PUSH",
+        "Permission": "Izin",
+        "Allowed": "Diizinkan",
+        "Quiet delivery": "Tanpa suara",
+        "Blocked in iOS Settings": "Diblokir di Setelan iOS",
+        "Not asked yet": "Belum ditanya",
+        "Unknown": "Nggak diketahui",
+        "APNs environment": "Environment APNs",
+        "Apple": "Apple",
+        "NEXUS server": "Server NEXUS",
+        "Waiting for token…": "Nunggu token…",
+        "Device token": "Token perangkat",
+        "Copy token": "Salin token",
+        "Copied ✓": "Tersalin ✓",
+        "No token yet. Allow notifications, then reopen this screen.":
+            "Belum ada token. Izinin notifikasi dulu, terus buka lagi layar ini.",
+
         // ── approval checkout luar area (antrian BoD) ─────────────────────────
         "Offsite checkouts": "Checkout luar area",
         "Check-outs from outside the office area, waiting on you.": "Checkout dari luar area kantor, nunggu kamu.",
@@ -568,7 +592,6 @@ final class AppLanguage {
         "projects": "project",
         "members": "member",
         "custom days": "hari custom",
-        "tasks done": "task selesai",
         "Failed": "Gagal",
         "Custom": "Custom",
         "No results for": "Gak ada hasil buat",

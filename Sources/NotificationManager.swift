@@ -12,6 +12,33 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     private let taskPrefix = "nexus.task."
     private let attendancePrefix = "nexus.attendance."
 
+    // MARK: diagnostics
+    //
+    // Everything below only exists so a human can answer "did push actually work?" on a real
+    // device. The APNs token used to live in UserDefaults and be shown nowhere, and a failed
+    // registration was swallowed entirely — so a silent failure and a working setup looked
+    // identical from the outside. You cannot send a test push without the token.
+
+    /// Set by the app delegate when APNs refuses to issue a token (no entitlement, no network,
+    /// no provisioning profile for push, …). `nil` means "no failure recorded".
+    private(set) var registrationError: String?
+
+    /// The hex APNs token, or nil if one was never issued.
+    var deviceToken: String? { UserDefaults.standard.string(forKey: tokenKey) }
+
+    /// "sandbox" (development build) or "production" (TestFlight/App Store). A push sent to the
+    /// wrong APNs host is rejected with BadDeviceToken, which is the classic "it silently
+    /// doesn't work" case.
+    var environmentName: String { pushEnvironment }
+
+    func authorizationStatus() async -> UNAuthorizationStatus {
+        await center.notificationSettings().authorizationStatus
+    }
+
+    func recordRegistrationFailure(_ error: Error) {
+        registrationError = error.localizedDescription
+    }
+
     func activate(userId: String) async {
         do {
             let settings = await center.notificationSettings()
@@ -33,6 +60,7 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     func receivedDeviceToken(_ data: Data) async {
         let token = data.map { String(format: "%02x", $0) }.joined()
         UserDefaults.standard.set(token, forKey: tokenKey)
+        registrationError = nil
         await registerStoredToken()
     }
 
@@ -48,15 +76,25 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         if let attendance = await attendanceResult { await scheduleAttendanceReminder(attendance) }
     }
 
+    /// Result of the last attempt to hand the token to our own backend, or nil if it worked.
+    /// This used to be `try?` with nothing kept: if the route was missing or rejected the token,
+    /// the app carried on looking perfectly healthy while push could never arrive.
+    private(set) var backendError: String?
+
     private func registerStoredToken() async {
         guard Keychain.load() != nil,
               let token = UserDefaults.standard.string(forKey: tokenKey)
         else { return }
-        try? await APIClient.shared.registerPushDevice(
-            token: token,
-            deviceId: deviceID,
-            environment: pushEnvironment
-        )
+        do {
+            try await APIClient.shared.registerPushDevice(
+                token: token,
+                deviceId: deviceID,
+                environment: pushEnvironment
+            )
+            backendError = nil
+        } catch {
+            backendError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
     }
 
     private var deviceID: String {
@@ -208,5 +246,12 @@ final class NotificationAppDelegate: NSObject, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         Task { await NotificationManager.shared.receivedDeviceToken(deviceToken) }
+    }
+
+    /// APNs refusing to issue a token was previously not handled at all — the app looked exactly
+    /// the same whether push was working or completely dead. Keep the reason so Tuning Room can
+    /// show it instead of an empty box.
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        Task { @MainActor in NotificationManager.shared.recordRegistrationFailure(error) }
     }
 }
