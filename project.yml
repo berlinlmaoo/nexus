@@ -21,7 +21,7 @@ settings:
     # di-commit dan ditimpa tiap `xcodegen generate`, jadi Team yang di-set lewat GUI hilang tiap
     # ganti branch. Cari punyamu: Xcode → Settings → Accounts, atau Build Settings → DEVELOPMENT_TEAM.
     # Team ID bukan rahasia — dia ikut ke setiap app yang didistribusikan.
-    DEVELOPMENT_TEAM: ""           # ← ISI INI sebelum upload TestFlight
+    DEVELOPMENT_TEAM: "5YR5T42G97"
     GENERATE_INFOPLIST_FILE: YES
     # Jawaban export-compliance, dijawab sekali di sini supaya App Store Connect tidak menanyakannya
     # tiap upload (build "Missing Compliance" tidak bisa dibagikan ke tester sampai dijawab).
