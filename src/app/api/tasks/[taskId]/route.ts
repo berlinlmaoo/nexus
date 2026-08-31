@@ -8,7 +8,7 @@ import { checkProjectAccess } from "@/lib/rbac"
 import { executeAutomations } from "@/lib/automation-engine"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
 import { emitTaskUpdated, emitTaskDeleted } from "@/lib/socket-emitter"
-import { notifyTaskAssigned, notifyTaskCompleted } from "@/lib/notification-service"
+import { notifyTaskAssigned, notifyTaskCompleted, notifySubmissionStatus } from "@/lib/notification-service"
 import { bumpStreak } from "@/lib/gamification"
 import { updateTaskSchema, validateBody } from "@/lib/validations"
 import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit"
@@ -270,6 +270,27 @@ export async function PATCH(
           projectId: effectiveProjectId,
         },
       })
+
+      // A form submission may be riding on this task; its owner watches this status on their
+      // "Pengajuan Saya" board and otherwise gets no word that it moved. Best-effort: a failure
+      // here must never take down the status change itself.
+      try {
+        const submission = await prisma.formSubmission.findUnique({
+          where: { taskId },
+          select: { submitterId: true, form: { select: { name: true } } },
+        })
+        if (submission?.submitterId && submission.submitterId !== session.user.id) {
+          await notifySubmissionStatus({
+            submitterId: submission.submitterId,
+            formName: submission.form?.name ?? "your submission",
+            fromStatus: existing.status,
+            toStatus: status as string,
+            updatedByName: session.user.name ?? "Someone",
+          })
+        }
+      } catch (error) {
+        console.error("submission status notification failed", error)
+      }
     }
 
     // Gamification: task completion grants NO direct XP (quest-only model — XP for task
