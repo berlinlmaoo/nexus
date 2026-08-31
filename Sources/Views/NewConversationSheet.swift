@@ -140,8 +140,11 @@ struct NewConversationSheet: View {
             )
             onCreated(convo)
             dismiss()
-        } catch {
-            error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't start that chat. Try again.")
+        } catch let failure {
+            // Bind the thrown value under another name: an unnamed `catch` introduces a constant
+            // called `error`, which shadows this view's `@State var error` and makes the assignment
+            // target the immutable one.
+            error = (failure as? LocalizedError)?.errorDescription ?? T("Couldn't start that chat. Try again.")
         }
     }
 }

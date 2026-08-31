@@ -25,7 +25,10 @@ actor ImageLoader {
     /// `CachedImage` peeks at it synchronously while building its body, which is what lets an
     /// already-loaded avatar paint on the very first frame instead of after an await.
     /// NSCache is thread-safe, so sharing it this way is sound.
-    nonisolated static let memory: NSCache<NSURL, UIImage> = {
+    // `nonisolated(unsafe)`, not plain `nonisolated`: NSCache is not marked Sendable, and plain
+    // `nonisolated` on a non-Sendable value is a warning today and an error under Swift 6. The
+    // "unsafe" here is a promise we can actually keep - NSCache is documented as thread-safe.
+    nonisolated(unsafe) static let memory: NSCache<NSURL, UIImage> = {
         let c = NSCache<NSURL, UIImage>()
         c.countLimit = 200                 // downsampled tiles; auto-evicts under memory pressure
         return c
