@@ -36,7 +36,7 @@ function getSocketTransports(): SocketTransport[] {
 
 async function ensureSocketServer() {
   if (!socketServerReadyPromise) {
-    socketServerReadyPromise = fetch("/api/socket-init")
+    socketServerReadyPromise = fetch("/api/realtime-init")
       .then((response) => {
         if (!response.ok) {
           throw new Error("Failed to initialize socket server")
