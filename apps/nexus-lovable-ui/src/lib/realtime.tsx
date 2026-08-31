@@ -3,13 +3,19 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { Socket } from "socket.io-client";
 import { getSocket } from "./socket";
 
-// Backend bus events (see src/lib/event-bus.ts in the core app) → query invalidation.
+// SOCKET event names → query invalidation.
+//
+// These are the names the server passes to io.emit (pages/api/socket.ts), NOT the bus event names
+// in src/lib/event-bus.ts. Six of the seven happen to be identical, which is why the mismatch went
+// unnoticed: the bus calls it "notification" but the socket emits "new-notification", so this
+// listener never fired once and the bell only ever moved on a refetch. Check against the emit
+// calls, not the bus constants, when adding one.
 const REALTIME_EVENTS = [
   "task-created",
   "task-updated",
   "task-deleted",
   "comment-added",
-  "notification",
+  "new-notification",
   "sprint-updated",
   "message-created",
 ] as const;
@@ -20,7 +26,7 @@ const INVALIDATION: Record<string, string[]> = {
   "task-updated": ["task", "dashboard", "project"],
   "task-deleted": ["task", "dashboard", "project"],
   "comment-added": ["task", "comment"],
-  "notification": ["notification"],
+  "new-notification": ["notification"],
   "sprint-updated": ["sprint", "project", "dashboard"],
   "message-created": ["messages", "conversation"],
 };
