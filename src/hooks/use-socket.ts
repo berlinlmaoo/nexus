@@ -15,6 +15,40 @@ interface UseSocketOptions {
 
 let socketServerReadyPromise: Promise<void> | null = null
 
+// One connection shared by every hook instance. That sharing is not a choice: socket.io-client
+// multiplexes, so io() with the same path hands back the SAME Socket object rather than opening a
+// second one. The old code treated the object as private, which broke realtime two ways, both of
+// which looked to a user like "it just stopped updating":
+//
+//   * the first consumer to unmount called disconnect() on the shared object and cut realtime for
+//     every other consumer still on screen — leaving a conversation left the notification bell
+//     deaf until a full page reload;
+//   * a consumer mounting second attached its "connect" handler to a socket that had ALREADY
+//     connected, so the event never arrived, `connected` stayed false, and it neither joined its
+//     room nor subscribed to anything.
+//
+// The refcount below fixes the first; running the connect handler eagerly when the socket is
+// already up fixes the second.
+let sharedSocket: Socket | null = null
+let sharedRefCount = 0
+
+function acquireSocket(transports: SocketTransport[], upgrade: boolean): Socket {
+  if (!sharedSocket) {
+    sharedSocket = io({ path: "/api/socket", transports, upgrade })
+  } else if (sharedSocket.disconnected) {
+    // The client library keeps its own cache, so a released socket comes back as the same dormant
+    // object rather than a fresh connection. Wake it rather than trusting io() to.
+    sharedSocket.connect()
+  }
+  sharedRefCount += 1
+  return sharedSocket
+}
+
+function releaseSocket() {
+  sharedRefCount = Math.max(0, sharedRefCount - 1)
+  if (sharedRefCount === 0) sharedSocket?.disconnect()
+}
+
 function getSocketTransports(): SocketTransport[] {
   const configuredTransports = process.env.NEXT_PUBLIC_SOCKET_TRANSPORTS?.split(",")
     .map((transport) => transport.trim())
@@ -65,6 +99,7 @@ export function useSocket({
     if (!enabled || !room || !userId) return
 
     let cancelled = false
+    let detach: (() => void) | null = null
 
     // Initialize socket connection
     const initSocket = async () => {
@@ -77,15 +112,10 @@ export function useSocket({
         const canUpgradeToWebSocket =
           transports.includes("polling") && transports.includes("websocket")
 
-        const socket = io({
-          path: "/api/socket",
-          transports,
-          upgrade: canUpgradeToWebSocket,
-        })
-
+        const socket = acquireSocket(transports, canUpgradeToWebSocket)
         socketRef.current = socket
 
-        socket.on("connect", () => {
+        const handleConnect = () => {
           setConnected(true)
           socket.emit("join-room", {
             room,
@@ -93,15 +123,24 @@ export function useSocket({
             name: userName,
             avatar: userAvatar,
           })
-        })
+        }
+        const handleDisconnect = () => setConnected(false)
+        const handleConnectError = () => setConnected(false)
 
-        socket.on("disconnect", () => {
-          setConnected(false)
-        })
+        socket.on("connect", handleConnect)
+        socket.on("disconnect", handleDisconnect)
+        socket.on("connect_error", handleConnectError)
 
-        socket.on("connect_error", () => {
-          setConnected(false)
-        })
+        // Already up, so no "connect" event is coming for this instance.
+        if (socket.connected) handleConnect()
+
+        detach = () => {
+          socket.off("connect", handleConnect)
+          socket.off("disconnect", handleDisconnect)
+          socket.off("connect_error", handleConnectError)
+          if (socket.connected) socket.emit("leave-room", room)
+          releaseSocket()
+        }
       } catch {
         setConnected(false)
       }
@@ -117,11 +156,9 @@ export function useSocket({
     return () => {
       cancelled = true
       clearInterval(heartbeat)
-      if (socketRef.current) {
-        socketRef.current.emit("leave-room", room)
-        socketRef.current.disconnect()
-        socketRef.current = null
-      }
+      detach?.()
+      detach = null
+      socketRef.current = null
       setConnected(false)
     }
   }, [room, userId, userName, userAvatar, enabled])
