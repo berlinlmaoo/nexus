@@ -105,7 +105,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
         : `New message from ${message.user?.name ?? "someone"}`,
       message: preview,
       link: `/messages/${conversationId}`,
-      push: mentions.has(member.userId),
+      // Every message pushes, not just mentions. A chat app where a plain message reaches you
+      // only after you happen to open it is not a chat app; the mention still differs in the
+      // title and type so a direct @ is distinguishable on the lock screen.
+      push: true,
     })))
 
     return NextResponse.json({ message }, { status: 201 })
