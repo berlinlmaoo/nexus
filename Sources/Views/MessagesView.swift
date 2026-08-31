@@ -220,6 +220,8 @@ struct ChatThreadView: View {
     @State private var showAddPeople = false
     @State private var showRename = false
     @State private var pickedPhoto: PhotosPickerItem?
+    @State private var showPhotoPicker = false
+    @State private var showCamera = false
     @State private var pendingAttachment: ChatUpload?
     @State private var uploadingPhoto = false
     @State private var renameDraft = ""
@@ -311,6 +313,12 @@ struct ChatThreadView: View {
             guard let item else { return }
             Task { await uploadPhoto(item) }
         }
+        .photosPicker(isPresented: $showPhotoPicker, selection: $pickedPhoto,
+                      matching: .images, photoLibrary: .shared())
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraPicker(cameraDevice: .rear) { data in Task { await uploadJPEG(data) } }
+                .ignoresSafeArea()
+        }
         .sheet(isPresented: $showAddPeople) {
             if let pid = projectId {
                 AddProjectPeopleSheet(
@@ -374,9 +382,11 @@ struct ChatThreadView: View {
                 Menu {
                     Button { Task { await sendLocation() } } label: { Label(T("Send location"), systemImage: "mappin.and.ellipse") }
                     Button { showTaskPicker = true } label: { Label(T("Link to a task"), systemImage: "checklist") }
-                    PhotosPicker(selection: $pickedPhoto, matching: .images, photoLibrary: .shared()) {
-                        Label(T("Send a photo"), systemImage: "photo")
-                    }
+                    // A PhotosPicker nested in a Menu draws its row but never opens: the menu tears
+                    // down its content as it dismisses, and the picker's presentation goes with it.
+                    // Flip a flag here and present from the composer, which outlives the menu.
+                    Button { showPhotoPicker = true } label: { Label(T("Send a photo"), systemImage: "photo") }
+                    Button { showCamera = true } label: { Label(T("Take a photo"), systemImage: "camera") }
                 } label: {
                     Image(systemName: "plus").font(.system(size: 17, weight: .bold)).foregroundStyle(NX.violetText)
                         .frame(width: 36, height: 36).background(NX.muted, in: Circle())
@@ -391,7 +401,9 @@ struct ChatThreadView: View {
                         input += "@"
                     } label: {
                         let active = mentionQuery != nil
-                        Text("@").font(NXFont.display(17, .bold))
+                        // SF Symbol rather than Text("@"): the display face centres the glyph on its
+                        // own baseline, which lands visibly high inside a 36pt circle.
+                        Image(systemName: "at").font(.system(size: 17, weight: .bold))
                             .foregroundStyle(active ? Color.white : NX.violetText)
                             .frame(width: 36, height: 36)
                             .background(active ? NX.violet : NX.muted, in: Circle())
@@ -558,9 +570,8 @@ struct ChatThreadView: View {
     /// Re-encode to JPEG and cap the long edge so a photo straight off the camera doesn't blow the
     /// 8 MB limit.
     private func uploadPhoto(_ item: PhotosPickerItem) async {
-        uploadingPhoto = true
         notice = nil
-        defer { uploadingPhoto = false; pickedPhoto = nil }
+        defer { pickedPhoto = nil }
         guard let raw = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: raw) else {
             notice = T("Couldn't read that photo.")
             return
@@ -575,6 +586,14 @@ struct ChatThreadView: View {
             notice = T("Couldn't read that photo.")
             return
         }
+        await uploadJPEG(jpeg)
+    }
+
+    /// Shared tail for both sources: the library path re-encodes above, the camera hands back
+    /// JPEG that CameraPicker has already downscaled.
+    private func uploadJPEG(_ jpeg: Data) async {
+        uploadingPhoto = true
+        defer { uploadingPhoto = false }
         do {
             pendingAttachment = try await APIClient.shared.uploadChatImage(
                 conversationId: conversationId, fileName: "photo.jpg", mime: "image/jpeg", data: jpeg)

@@ -4,6 +4,8 @@ import UIKit
 /// Native selfie capture (front camera on device; falls back to photo library on the Simulator).
 /// Returns JPEG data via `onCapture`.
 struct CameraPicker: UIViewControllerRepresentable {
+    /// Attendance wants the selfie lens; chat wants the one people point at things.
+    var cameraDevice: UIImagePickerController.CameraDevice = .front
     var onCapture: (Data) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -11,7 +13,7 @@ struct CameraPicker: UIViewControllerRepresentable {
         let picker = UIImagePickerController()
         if UIImagePickerController.isSourceTypeAvailable(.camera) {
             picker.sourceType = .camera
-            picker.cameraDevice = .front
+            picker.cameraDevice = cameraDevice
         } else {
             picker.sourceType = .photoLibrary
         }
