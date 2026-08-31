@@ -22,6 +22,13 @@ settings:
     # ganti branch. Cari punyamu: Xcode → Settings → Accounts, atau Build Settings → DEVELOPMENT_TEAM.
     # Team ID bukan rahasia — dia ikut ke setiap app yang didistribusikan.
     DEVELOPMENT_TEAM: "5YR5T42G97"
+    # 1 = iPhone saja. Tanpa ini XcodeGen membangun universal (iPhone + iPad), dan App Store
+    # menolak paketnya: sebuah app iPad WAJIB mendukung keempat orientasi demi multitasking
+    # (error 90474), sementara Info.plist di sini sengaja mengunci potret. Seluruh UI dirancang
+    # untuk layar HP, jadi mendukung lanskap iPad berarti merombak setiap layar - dan universal
+    # juga menuntut satu set screenshot iPad tersendiri kalau suatu saat maju ke App Store.
+    # App tetap bisa dipasang di iPad, berjalan dalam jendela berukuran iPhone.
+    TARGETED_DEVICE_FAMILY: "1"
 
 targets:
   NEXUS:
