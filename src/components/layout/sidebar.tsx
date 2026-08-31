@@ -38,6 +38,7 @@ import {
   FolderPlus,
   ImagePlus,
   Loader2,
+  MessageSquare,
 } from "lucide-react"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -114,6 +115,7 @@ const topNavItems = [
   { label: "My Tasks", href: "/my-tasks", icon: CheckSquare, badge: true },
   { label: "Attendance", href: "/attendance", icon: Clock },
   { label: "Inbox", href: "/inbox", icon: Inbox, badge: true },
+  { label: "Messages", href: "/messages", icon: MessageSquare },
   { label: "Team Calendar", href: "/master-calendar", icon: CalendarDays },
 ]
 
