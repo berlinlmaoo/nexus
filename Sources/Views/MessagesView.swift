@@ -40,6 +40,14 @@ struct MessagesView: View {
             NewConversationSheet { _ in Task { await load() } }
         }
         .task { await load() }
+        // Same reason as the thread, at a calmer pace: this only moves badges and previews.
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(15))
+                if Task.isCancelled { return }
+                if let fresh = try? await APIClient.shared.conversations() { convos = fresh }
+            }
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -273,6 +281,16 @@ struct ChatThreadView: View {
                 }
                 .onChange(of: messages.count) { _, _ in withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
                 .task { await load(); withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
+                // The iOS client has no socket, so an open thread refreshes itself. .task cancels
+                // this loop the moment the screen goes away - no timer to invalidate, and it can
+                // never outlive the view. The existing onChange above handles the scroll.
+                .task {
+                    while !Task.isCancelled {
+                        try? await Task.sleep(for: .seconds(5))
+                        if Task.isCancelled { return }
+                        await load()
+                    }
+                }
             }
 
             composer

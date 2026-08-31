@@ -59,7 +59,6 @@ struct SubmissionsView: View {
                         HStack(alignment: .top, spacing: 12) {
                             ForEach(columns, id: \.self) { col in column(col) }
                         }
-                        .frame(maxHeight: .infinity, alignment: .top)
                         .padding(16)
                         .scrollTargetLayout()
                     }
@@ -85,19 +84,24 @@ struct SubmissionsView: View {
             }
             .padding(.horizontal, 10).padding(.top, 10)
 
-            VStack(spacing: 8) {
-                ForEach(items) { card($0) }
-                // Push the short columns down so every column shares one baseline; without this a
-                // column with two cards floats in the middle of an empty board.
-                Spacer(minLength: 0)
-                if items.isEmpty {
-                    Text(T("Empty")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg.opacity(0.7))
-                        .frame(maxWidth: .infinity).padding(.vertical, 18)
-                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [5])))
+            // Each column scrolls on its own. Without this the tallest column set the height of
+            // the whole board, the board outgrew the screen, and the excess was split off the top
+            // and the bottom - which is why the column headings came out sliced in half and the
+            // last cards vanished under the tab bar. A horizontal board on a phone wants exactly
+            // this: swipe sideways between columns, scroll down inside one.
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 8) {
+                    ForEach(items) { card($0) }
+                    if items.isEmpty {
+                        Text(T("Empty")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg.opacity(0.7))
+                            .frame(maxWidth: .infinity).padding(.vertical, 18)
+                            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [5])))
+                    }
                 }
+                .padding(.horizontal, 8).padding(.bottom, 8)
             }
-            .padding(.horizontal, 8).padding(.bottom, 8)
         }
+        .frame(maxHeight: .infinity, alignment: .top)
         // A fixed 270 looks arbitrary: on a small phone the next column is a sliver, on a large
         // one it is half a column. Tying the width to the screen keeps the same "one column plus a
         // hint of the next" on every device, which is what makes a horizontal board readable.

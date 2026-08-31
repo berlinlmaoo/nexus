@@ -98,14 +98,21 @@ struct AttendanceView: View {
         ZStack {
             // The GPS dot sits at the map's centre, and the centre is exactly where the purple
             // card lands. Make the map taller than the visible frame and slide it down, so the dot
-            // clears the card without touching the zoom. Pure geometry: the map's centre ends up at
-            // (180 + pinDrop) from the frame's top, and a height of 360 + 2*pinDrop guarantees the
-            // map still covers the whole frame - no gap above or below.
+            // clears the card without touching the zoom.
+            //
+            // The second .frame is what keeps the trick contained. A ZStack takes the size of its
+            // largest child, so the oversized map made the whole stack 540pt tall; the outer
+            // .frame(height: 360) then CENTRED that stack and clipped 90pt off each end - taking
+            // the top of the purple card and the entire bottom row with it. Collapsing the map's
+            // layout height back to 360 right here leaves the offset as a pure paint-time shift,
+            // which is all it was ever meant to be.
             Map(position: $camera) { UserAnnotation() }
                 .mapStyle(.standard(elevation: .flat))
                 .disabled(true)
                 .frame(height: 360 + Self.pinDrop * 2)
                 .offset(y: Self.pinDrop)
+                .frame(height: 360)
+                .clipped()
 
             VStack {
                 timeCard.padding(12)
