@@ -134,6 +134,11 @@ function taskUrl(taskId: string): string {
 }
 
 export async function sendWA(phone: string, message: string) {
+  // Kill switch. Tanpa ini WA tidak bisa dimatikan lewat env: rantai webhookUrl di bawah
+  // berakhir di URL hardcoded, jadi mengosongkan WA_WEBHOOK_URL tetap menyisakan percobaan
+  // koneksi yang gagal (ECONNREFUSED) plus timeout 10 detik per penerima.
+  if (process.env.WA_DELIVERY_DISABLED === "1") return
+
   const webhookUrl =
     process.env.WA_WEBHOOK_URL ||
     process.env.HERMES_WA_BRIDGE_URL ||
@@ -690,6 +695,127 @@ export async function notifyStatusUpdate(data: {
       )
     }
   }
+}
+
+/**
+ * Tell whoever filed a form submission that its status moved.
+ *
+ * "Pengajuan Saya" is driven by the status of the TASK linked to the submission, not by a field on
+ * the submission itself - so the moment Finance drags that task to another column, the submitter's
+ * board changes underneath them with nothing to announce it. Until now the only way to find out was
+ * to open the app and look.
+ *
+ * Rides the existing `statusUpdate` preference rather than adding a column: that flag was written
+ * for `notifyStatusUpdate`, which nothing has ever called, and "a status you care about changed" is
+ * the same promise to the reader.
+ */
+export async function notifySubmissionStatus(data: {
+  submitterId: string
+  formName: string
+  fromStatus: string
+  toStatus: string
+  updatedByName: string
+}) {
+  if (await isUserDnd(data.submitterId)) return
+
+  const prefs = await getUserPrefs(data.submitterId)
+  const human = (s: string) => s.replace(/_/g, " ").toLowerCase()
+
+  // No link: there is no submissions page on the web yet, and pointing at the task would send the
+  // submitter somewhere they may not have access to.
+  await createInAppNotification({
+    userId: data.submitterId,
+    type: "submission_status",
+    title: "Submission update",
+    message: `${data.updatedByName} moved "${data.formName}" from ${human(data.fromStatus)} to ${human(data.toStatus)}`,
+    push: prefs.statusUpdate,
+  })
+}
+
+/**
+ * Your streak is about to lapse.
+ *
+ * Sent late in the day, and only to people who actually have something to lose (currentStreak > 0)
+ * and haven't done anything today. Anyone at zero gets nothing: nagging someone about a streak they
+ * are not on is how a notification channel earns itself a mute.
+ */
+export async function notifyStreakAtRisk(data: { userId: string; currentStreak: number }) {
+  if (await isUserDnd(data.userId)) return
+  const prefs = await getUserPrefs(data.userId)
+  await createInAppNotification({
+    userId: data.userId,
+    type: "streak_at_risk",
+    title: "Your streak ends at midnight",
+    message: `${data.currentStreak} day${data.currentStreak === 1 ? "" : "s"} on the line — finish something today to keep it.`,
+    link: "/my-tasks",
+    push: prefs.statusUpdate,
+  })
+}
+
+/**
+ * One day of allowance left this month.
+ *
+ * Fires once per month per kind, at the point where the next request is the last one. Earlier than
+ * that is noise; later is useless.
+ */
+export async function notifyQuotaLow(data: {
+  userId: string
+  kind: "dayoff" | "red_date"
+  remaining: number
+  quota: number
+}) {
+  if (await isUserDnd(data.userId)) return
+  const prefs = await getUserPrefs(data.userId)
+  const label = data.kind === "dayoff" ? "day-off" : "public-holiday"
+  await createInAppNotification({
+    userId: data.userId,
+    type: data.kind === "dayoff" ? "dayoff_quota_low" : "red_date_quota_low",
+    title: `${data.remaining} ${label} day left`,
+    message: `You've used ${data.quota - data.remaining} of ${data.quota} this month.`,
+    link: "/attendance",
+    push: prefs.statusUpdate,
+  })
+}
+
+/** A room booking starts shortly. Only the person who booked it is told. */
+export async function notifyBookingSoon(data: {
+  userId: string
+  bookingId: string
+  room: string
+  title: string
+  minutes: number
+}) {
+  if (await isUserDnd(data.userId)) return
+  const prefs = await getUserPrefs(data.userId)
+  await createInAppNotification({
+    userId: data.userId,
+    type: "booking_soon",
+    title: `${data.room} in ${data.minutes} min`,
+    message: data.title,
+    // Doubles as the de-dupe key: one reminder per booking, forever.
+    link: `/master-calendar?booking=${data.bookingId}`,
+    push: prefs.statusUpdate,
+  })
+}
+
+/** A quest is finished but the XP is still sitting there uncollected. */
+export async function notifyQuestClaimable(data: {
+  userId: string
+  questKey: string
+  periodKey: string
+  title: string
+}) {
+  if (await isUserDnd(data.userId)) return
+  const prefs = await getUserPrefs(data.userId)
+  await createInAppNotification({
+    userId: data.userId,
+    type: "quest_claimable",
+    title: "Quest ready to claim",
+    message: `"${data.title}" is done — collect the XP before the week resets.`,
+    // The key doubles as the de-dupe marker: one nudge per quest per period.
+    link: `/dashboard?quest=${data.questKey}:${data.periodKey}`,
+    push: prefs.statusUpdate,
+  })
 }
 
 export async function notifyTaskCompleted(data: {
