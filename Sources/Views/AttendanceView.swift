@@ -90,11 +90,22 @@ struct AttendanceView: View {
 
     // MARK: hero (map + gradient time card)
 
+    /// How far the GPS dot is pushed below the map frame's centre, in points.
+    /// Raise it if the purple card grows taller and starts covering the dot again.
+    private static let pinDrop: CGFloat = 90
+
     private var hero: some View {
         ZStack {
+            // The GPS dot sits at the map's centre, and the centre is exactly where the purple
+            // card lands. Make the map taller than the visible frame and slide it down, so the dot
+            // clears the card without touching the zoom. Pure geometry: the map's centre ends up at
+            // (180 + pinDrop) from the frame's top, and a height of 360 + 2*pinDrop guarantees the
+            // map still covers the whole frame - no gap above or below.
             Map(position: $camera) { UserAnnotation() }
                 .mapStyle(.standard(elevation: .flat))
                 .disabled(true)
+                .frame(height: 360 + Self.pinDrop * 2)
+                .offset(y: Self.pinDrop)
 
             VStack {
                 timeCard.padding(12)
@@ -156,14 +167,22 @@ struct AttendanceView: View {
         let cols = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
         return LazyVGrid(columns: cols, spacing: 12) {
             FunMetricCard(icon: "cup.and.saucer.fill", label: T("Today's status"), value: todayStatusValue,
-                          helper: T("Live from the NEXUS attendance API"), tint: NX.success)
+                          tint: NX.success)
             FunMetricCard(icon: "mappin.circle.fill", label: T("Office checkpoint"), value: officeValue,
                           helper: "In \(dispRec?.checkInAt.flatMap(Self.hhmm) ?? "--:--") · Out \(dispRec?.checkOutAt.flatMap(Self.hhmm) ?? "--:--")", tint: NX.violetText)
-            FunMetricCard(icon: "sparkles", label: T("Day-off tokens"), value: "\(today?.dayOffUsedThisMonth ?? 0)/\(today?.dayOffQuota ?? 4) used",
+            FunMetricCard(icon: "sparkles", label: T("Day-off tokens"), value: Self.quotaValue(today?.dayOffUsedThisMonth, today?.dayOffQuota),
                           helper: T("This month's day-off allowance"), tint: NX.warning)
-            FunMetricCard(icon: "calendar", label: T("Public holidays"), value: "\(today?.redDateUsedThisMonth ?? 0)/\(today?.redDateQuota ?? 0) used",
+            FunMetricCard(icon: "calendar", label: T("Public holidays"), value: Self.quotaValue(today?.redDateUsedThisMonth, today?.redDateQuota),
                           helper: T("This month's public-holiday allowance"), tint: Color(hex: "#fb7185"))
         }
+    }
+
+    /// Allowances belong to each person and come from the API. When the server doesn't send one,
+    /// show a dash rather than a default number: "0/4" for someone whose quota was never set is a
+    /// convincing-looking lie.
+    private static func quotaValue(_ used: Int?, _ quota: Int?) -> String {
+        guard let quota else { return "\u{2014}" }
+        return "\(used ?? 0)/\(quota) used"
     }
 
     private var todayStatusValue: String {
@@ -406,7 +425,7 @@ struct FunMetricCard: View {
     let icon: String
     let label: String
     let value: String
-    let helper: String
+    var helper: String = ""
     let tint: Color
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -414,7 +433,9 @@ struct FunMetricCard: View {
                 .frame(width: 36, height: 36).background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             Text(value).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground).lineLimit(1).minimumScaleFactor(0.65)
             Text(label).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground)
-            Text(helper).font(NXFont.text(10)).foregroundStyle(NX.mutedFg).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+            if !helper.isEmpty {
+                Text(helper).font(NXFont.text(10)).foregroundStyle(NX.mutedFg).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+            }
         }
         .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
         .padding(12)

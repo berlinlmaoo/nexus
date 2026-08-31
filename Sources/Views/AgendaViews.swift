@@ -50,11 +50,11 @@ struct RoomBookingView: View {
     }
 
     private var scopePicker: some View {
-        Picker("", selection: $scope) {
-            ForEach(Scope.allCases) { s in Text(s.label).tag(s) }
-        }
-        .pickerStyle(.segmented)
-        .frame(width: 170)
+        // Not .pickerStyle(.segmented): since iOS 26 the system style renders as Liquid Glass,
+        // which is translucent and reflective over a light background - the control nearly
+        // disappears and reads as foreign next to the solid cards on this screen. Ours is a solid
+        // capsule with one moving pill, painted from the app's own palette.
+        NXSegmented(selection: $scope, options: Scope.allCases, label: { $0.label }).frame(width: 190)
     }
 
     private func load() async {
@@ -323,5 +323,47 @@ struct AgendaRow: View {
             if let chip { NexusChip(text: chip, tone: tone) }
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
+    }
+}
+
+
+/// The app's own segmented control.
+///
+/// Replaces `.pickerStyle(.segmented)`, which since iOS 26 renders as Liquid Glass: translucent,
+/// reflecting whatever is behind it, and effectively unreadable on a light screen. This one is
+/// solid, uses the NX colour tokens, and moves its pill with matchedGeometryEffect.
+struct NXSegmented<T: Hashable>: View {
+    @Binding var selection: T
+    let options: [T]
+    let label: (T) -> String
+    @Namespace private var ns
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(options, id: \.self) { option in
+                let active = option == selection
+                Text(label(option))
+                    .font(NXFont.text(13, .semibold))
+                    .foregroundStyle(active ? NX.foreground : NX.mutedFg)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 7)
+                    .background {
+                        if active {
+                            Capsule(style: .continuous)
+                                .fill(NX.card)
+                                .overlay(Capsule(style: .continuous).strokeBorder(NX.border))
+                                .matchedGeometryEffect(id: "nx.segment", in: ns)
+                        }
+                    }
+                    .contentShape(Capsule(style: .continuous))
+                    .onTapGesture {
+                        guard !active else { return }
+                        withAnimation(.snappy(duration: 0.22)) { selection = option }
+                    }
+            }
+        }
+        .padding(4)
+        .background(NX.muted, in: Capsule(style: .continuous))
+        .overlay(Capsule(style: .continuous).strokeBorder(NX.border.opacity(0.6)))
     }
 }

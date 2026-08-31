@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: models
 
@@ -28,7 +29,9 @@ struct SubmissionsView: View {
     @State private var loading = true
     @State private var loadError = false
 
-    private var columns: [String] { ["Baru masuk"] + statusColumns }
+    // The first column is ours; the rest are status names straight from the server (and follow
+    // the server's language, not the app's).
+    private var columns: [String] { [T("New")] + statusColumns }
 
     var body: some View {
         ZStack {
@@ -44,21 +47,28 @@ struct SubmissionsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 6) {
                         Image(systemName: "lock.fill").font(.system(size: 10))
-                        Text("Read-only — status diatur tim Finance").font(NXFont.text(11, .semibold))
+                        Text(T("Read-only — status is set by the Finance team")).font(NXFont.text(11, .semibold))
                     }
                     .foregroundStyle(NX.mutedFg).padding(.horizontal, 12).padding(.vertical, 6)
                     .background(NX.muted.opacity(0.5), in: Capsule()).padding(.horizontal, 16).padding(.top, 12)
 
+                    // Without snapping the horizontal scroll stops anywhere, so the next column is
+                    // always sliced in half at the screen edge - that is what made this board look
+                    // messy. viewAligned parks each column at a clean position.
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(alignment: .top, spacing: 12) {
                             ForEach(columns, id: \.self) { col in column(col) }
-                        }.padding(16)
+                        }
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .padding(16)
+                        .scrollTargetLayout()
                     }
+                    .scrollTargetBehavior(.viewAligned)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
         }
-        .navigationTitle("Pengajuan Saya")
+        .navigationTitle(T("My Submissions"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
     }
@@ -77,15 +87,21 @@ struct SubmissionsView: View {
 
             VStack(spacing: 8) {
                 ForEach(items) { card($0) }
+                // Push the short columns down so every column shares one baseline; without this a
+                // column with two cards floats in the middle of an empty board.
+                Spacer(minLength: 0)
                 if items.isEmpty {
-                    Text("kosong").font(NXFont.text(11)).foregroundStyle(NX.mutedFg.opacity(0.7))
+                    Text(T("Empty")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg.opacity(0.7))
                         .frame(maxWidth: .infinity).padding(.vertical, 18)
                         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [5])))
                 }
             }
             .padding(.horizontal, 8).padding(.bottom, 8)
         }
-        .frame(width: 270, alignment: .leading)
+        // A fixed 270 looks arbitrary: on a small phone the next column is a sliver, on a large
+        // one it is half a column. Tying the width to the screen keeps the same "one column plus a
+        // hint of the next" on every device, which is what makes a horizontal board readable.
+        .frame(width: min(320, UIScreen.main.bounds.width * 0.82), alignment: .leading)
         .background(tone.opacity(0.08), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(tone.opacity(0.3)))
     }
@@ -98,7 +114,7 @@ struct SubmissionsView: View {
                 Text(s.title).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground).lineLimit(2)
                 Text([s.formName, s.projectName].compactMap { $0 }.joined(separator: " · "))
                     .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
-                Text("diajukan \(dateText(s.createdAt))").font(NXFont.text(10)).foregroundStyle(NX.mutedFg.opacity(0.8))
+                Text("\(T("Submitted")) \(dateText(s.createdAt))").font(NXFont.text(10)).foregroundStyle(NX.mutedFg.opacity(0.8))
             }
             Spacer(minLength: 0)
         }

@@ -21,7 +21,11 @@ import ImageIO
 actor ImageLoader {
     static let shared = ImageLoader()
 
-    private let cache: NSCache<NSURL, UIImage> = {
+    /// Decoded tiles, readable from any thread. It lives outside the actor's isolation on purpose:
+    /// `CachedImage` peeks at it synchronously while building its body, which is what lets an
+    /// already-loaded avatar paint on the very first frame instead of after an await.
+    /// NSCache is thread-safe, so sharing it this way is sound.
+    nonisolated static let memory: NSCache<NSURL, UIImage> = {
         let c = NSCache<NSURL, UIImage>()
         c.countLimit = 200                 // downsampled tiles; auto-evicts under memory pressure
         return c
@@ -36,7 +40,7 @@ actor ImageLoader {
     }()
 
     func image(for url: URL) async -> UIImage? {
-        if let hit = cache.object(forKey: url as NSURL) { return hit }
+        if let hit = Self.memory.object(forKey: url as NSURL) { return hit }
         if let task = inFlight[url] { return await task.value }   // dedupe concurrent requests
 
         let task = Task<UIImage?, Never> {
@@ -53,7 +57,7 @@ actor ImageLoader {
         inFlight[url] = task
         let img = await task.value
         inFlight[url] = nil
-        if let img { cache.setObject(img, forKey: url as NSURL) }
+        if let img { Self.memory.setObject(img, forKey: url as NSURL) }
         return img
     }
 
@@ -85,6 +89,11 @@ struct CachedImage<Content: View, Placeholder: View>: View {
          @ViewBuilder content: @escaping (Image) -> Content,
          @ViewBuilder placeholder: @escaping () -> Placeholder) {
         self.url = url; self.content = content; self.placeholder = placeholder
+        // Warm hit: seed the state synchronously so the first frame already carries the picture.
+        // Without this every avatar draws its placeholder once and swaps a frame later - on a
+        // screen full of them (Leaderboard) that reads as a flash of grey on every open, even
+        // though nothing was downloaded.
+        _ui = State(initialValue: url.flatMap { ImageLoader.memory.object(forKey: $0 as NSURL) })
     }
 
     var body: some View {
