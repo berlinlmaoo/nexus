@@ -87,7 +87,7 @@ echo "captured $(wc -l < "$ENVF" | tr -d ' ') env vars (+${carried} carried over
 # fine and still unreadable inside. apns.ts swallows that: providerJWT() returns null, every
 # sendPushToUser() returns immediately, and push dies SILENTLY — one log line, zero user-visible
 # symptoms. Deploying that state looks like a total success. Cheap check, catches it every time.
-docker run --rm -u 1001:1001 -v "$APNS_KEY_FILE:/k.p8:ro" --entrypoint sh "$IMG" \
+docker run --rm -v "$APNS_KEY_FILE:/k.p8:ro" --entrypoint sh "$IMG" \
   -c 'head -c 1 /k.p8 >/dev/null 2>&1' || {
   echo "ABORT: APNs key exists but uid 1001 (the app user) cannot read it."
   echo "       Push would fail silently. Fix:"
