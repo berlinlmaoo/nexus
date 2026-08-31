@@ -344,6 +344,9 @@ export type NexusMessage = {
   content: string;
   createdAt?: string | null;
   user?: NexusUser | null;
+  /** Set when the message carries a picture. Always a /api/files/chat/ path the server issued. */
+  attachmentUrl?: string | null;
+  attachmentType?: string | null;
 };
 
 export type NexusConversation = {
@@ -1389,7 +1392,31 @@ export const nexusApi = {
   conversations: () => apiFetch<{ conversations: NexusConversation[] }>("/api/conversations"),
   conversation: (id: string) => apiFetch<{ conversation: NexusConversation }>(`/api/conversations/${id}`),
   conversationMessages: (id: string, before?: string) => apiFetch<{ messages: NexusMessage[]; hasMore?: boolean }>(`/api/conversations/${id}/messages${before ? `?before=${encodeURIComponent(before)}` : ""}`),
-  sendMessage: (id: string, content: string) => apiFetch<{ message: NexusMessage }>(`/api/conversations/${id}/messages`, { method: "POST", body: JSON.stringify({ content }) }),
+  sendMessage: (
+    id: string,
+    content: string,
+    extra?: { mentionedUserIds?: string[]; attachmentUrl?: string; attachmentType?: string },
+  ) =>
+    apiFetch<{ message: NexusMessage }>(`/api/conversations/${id}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ content, ...extra }),
+    }),
+  /**
+   * One image per message, 8MB cap, images only. Membership is checked server-side before a byte is
+   * written, and the returned path is the ONLY form sendMessage will accept as an attachment.
+   */
+  uploadChatImage: (conversationId: string, file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("conversationId", conversationId);
+    return apiFetch<{ url: string; type: string }>("/api/upload/chat", { method: "POST", body: fd });
+  },
+  /** GROUP rooms only: a DM is named after the other person and a project room after its project. */
+  renameConversation: (id: string, name: string) =>
+    apiFetch<{ conversation: NexusConversation }>(`/api/conversations/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name }),
+    }),
   createConversation: (payload: { type: "DM" | "GROUP"; userIds: string[]; name?: string }) => apiFetch<{ conversation: NexusConversation }>("/api/conversations", { method: "POST", body: JSON.stringify(payload) }),
   markConversationRead: (id: string) => apiFetch<{ success?: boolean }>(`/api/conversations/${id}/read`, { method: "POST" }),
 
