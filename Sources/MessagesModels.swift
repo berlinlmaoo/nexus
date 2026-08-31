@@ -39,8 +39,13 @@ struct ChatMessage: Decodable, Identifiable, Sendable {
     let content: String
     let createdAt: String?
     let user: UserRef?
+    /// Set when the message carries a picture. Server-relative, e.g. "/api/files/chat/<uuid>.jpg".
+    let attachmentUrl: String?
+    let attachmentType: String?
     struct UserRef: Decodable, Sendable { let id: String?; let name: String?; let avatar: String? }
 }
 
+struct ChatUpload: Decodable, Sendable { let url: String; let type: String? }
 struct ConversationsResponse: Decodable, Sendable { let conversations: [Conversation]? }
+struct ConversationResponse: Decodable, Sendable { let conversation: Conversation }
 struct MessagesResponse: Decodable, Sendable { let messages: [ChatMessage]? }

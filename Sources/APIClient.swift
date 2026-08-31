@@ -153,6 +153,50 @@ struct APIClient {
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }
+    /// Profile photo. The server takes a multipart field named "file" (PNG/JPG/WEBP, 5 MB cap)
+    /// and answers `{ user, url }`; `user.avatar` already carries a `?t=` cache-buster, so the
+    /// new picture shows up immediately instead of being served from a stale cache.
+    func uploadAvatar(fileName: String, mime: String, data: Data) async throws -> String? {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var req = makeRequest("/api/upload/avatar", method: "POST")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        var body = Data()
+        func add(_ s: String) { body.append(s.data(using: .utf8)!) }
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\nContent-Type: \(mime)\r\n\r\n")
+        body.append(data)
+        add("\r\n--\(boundary)--\r\n")
+        req.httpBody = body
+        return try await run(req, decode: ProfileResponse.self).user.avatar
+    }
+
+    /// Drop the profile photo and fall back to the initial.
+    @discardableResult
+    func deleteAvatar() async throws -> Bool {
+        _ = try await run(makeRequest("/api/upload/avatar", method: "DELETE"), decode: SuccessResponse.self)
+        return true
+    }
+
+    /// Start a DM or a group. The server de-dupes DMs: asking for a 1:1 that already exists
+    /// returns the existing conversation instead of a second one, so callers can treat this as
+    /// "open a chat with these people" rather than strictly "create".
+    func createConversation(type: String, userIds: [String], name: String?) async throws -> Conversation {
+        var req = makeRequest("/api/conversations", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var payload: [String: Any] = ["type": type, "userIds": userIds]
+        if let name, !name.isEmpty { payload["name"] = name }
+        req.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        return try await run(req, decode: ConversationResponse.self).conversation
+    }
+
+    /// Rename a group chat. The server refuses DMs (titled after the other person) and PROJECT
+    /// rooms (named after the project), so only pass a GROUP here.
+    func renameConversation(_ conversationId: String, name: String) async throws -> Conversation {
+        var req = makeRequest("/api/conversations/\(conversationId)", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["name": name])
+        return try await run(req, decode: ConversationResponse.self).conversation
+    }
+
     /// Move a project into a folder (or to root with nil).
     @discardableResult
     func setProjectFolder(projectId: String, folderId: String?) async throws -> Bool {
@@ -496,12 +540,32 @@ struct APIClient {
     }
 
     @discardableResult
-    func sendMessage(_ conversationId: String, content: String, mentionedUserIds: [String] = []) async throws -> Bool {
+    func sendMessage(_ conversationId: String, content: String, mentionedUserIds: [String] = [],
+                     attachmentUrl: String? = nil, attachmentType: String? = nil) async throws -> Bool {
         var req = makeRequest("/api/conversations/\(conversationId)/messages", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["content": content, "mentionedUserIds": mentionedUserIds])
+        var payload: [String: Any] = ["content": content, "mentionedUserIds": mentionedUserIds]
+        if let attachmentUrl { payload["attachmentUrl"] = attachmentUrl }
+        if let attachmentType { payload["attachmentType"] = attachmentType }
+        req.httpBody = try JSONSerialization.data(withJSONObject: payload)
         _ = try await run(req, decode: SuccessResponse.self)
         return true
+    }
+
+    /// Upload one chat picture and get back the path to attach to a message. The server checks that
+    /// you belong to the conversation before writing anything.
+    func uploadChatImage(conversationId: String, fileName: String, mime: String, data: Data) async throws -> ChatUpload {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var req = makeRequest("/api/upload/chat", method: "POST")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        var body = Data()
+        func add(_ s: String) { body.append(s.data(using: .utf8)!) }
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"conversationId\"\r\n\r\n\(conversationId)\r\n")
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\nContent-Type: \(mime)\r\n\r\n")
+        body.append(data)
+        add("\r\n--\(boundary)--\r\n")
+        req.httpBody = body
+        return try await run(req, decode: ChatUpload.self)
     }
 
     @discardableResult

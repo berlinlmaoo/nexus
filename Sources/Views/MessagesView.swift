@@ -1,4 +1,6 @@
 import SwiftUI
+import PhotosUI
+import UIKit
 import CoreLocation   // "kirim lokasi" reads CLLocationCoordinate2D members off LocationManager
 
 /// Port of messages.tsx: conversation list grouped Direct/Groups/Projects → tap → chat thread.
@@ -7,6 +9,10 @@ struct MessagesView: View {
     @State private var convos: [Conversation] = []
     @State private var loading = true
     @State private var error: String?
+    @State private var showNewChat = false
+    /// projectId -> project icon. A PROJECT room has no picture of its own on the server, so it
+    /// borrows the project's; without this every project chat falls back to the same grey glyph.
+    @State private var projectIcons: [String: String] = [:]
 
     private var meId: String? { auth.session?.userId }
     private var groups: [(label: String, items: [Conversation])] {
@@ -22,6 +28,17 @@ struct MessagesView: View {
         }
         .navigationTitle(T("Messages"))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showNewChat = true } label: {
+                    Image(systemName: "square.and.pencil").font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(NX.violetText)
+                }
+            }
+        }
+        .sheet(isPresented: $showNewChat) {
+            NewConversationSheet { _ in Task { await load() } }
+        }
         .task { await load() }
     }
 
@@ -38,6 +55,9 @@ struct MessagesView: View {
             VStack(spacing: 8) {
                 Image(systemName: "bubble.left.and.bubble.right").font(.system(size: 42)).foregroundStyle(NX.mutedFg)
                 Text(T("No chats yet")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+                Button(T("Start a chat")) { showNewChat = true }
+                    .buttonStyle(NexusPrimaryButton(fullWidth: false))
+                    .padding(.top, 4)
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView {
@@ -50,8 +70,12 @@ struct MessagesView: View {
                                     if idx > 0 { Divider().overlay(NX.border) }
                                     NavigationLink {
                                         ChatThreadView(conversationId: c.id, title: c.title(meId: meId),
-                                                       members: c.members ?? [], projectId: c.projectId)
-                                    } label: { ConvoRow(convo: c, meId: meId) }
+                                                       members: c.members ?? [], projectId: c.projectId,
+                                                       type: c.type)
+                                    } label: {
+                                        ConvoRow(convo: c, meId: meId,
+                                                 projectIcon: c.projectId.flatMap { projectIcons[$0] })
+                                    }
                                     .buttonStyle(.plain)
                                 }
                             }
@@ -71,6 +95,15 @@ struct MessagesView: View {
 
     private func load() async {
         error = nil
+        // Fired alongside the conversations so the rows don't visibly pop from glyph to photo.
+        Task {
+            if let projects = try? await APIClient.shared.projects() {
+                projectIcons = Dictionary(uniqueKeysWithValues: projects.compactMap { p in
+                    guard let icon = p.icon, !icon.isEmpty else { return nil }
+                    return (p.id, icon)
+                })
+            }
+        }
         do { convos = try await APIClient.shared.conversations() }
         catch APIError.unauthorized { auth.logout() }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load chats.") }
@@ -81,12 +114,32 @@ struct MessagesView: View {
 struct ConvoRow: View {
     let convo: Conversation
     let meId: String?
+    var projectIcon: String?
+
+    /// A project's `icon` is a path most of the time, but it can also hold an emoji. Only treat it
+    /// as a picture when it actually looks like one, otherwise CachedImage silently shows nothing.
+    private var projectIconURL: URL? {
+        guard let icon = projectIcon, icon.hasPrefix("/") || icon.hasPrefix("http") else { return nil }
+        return URL(string: icon.hasPrefix("http") ? icon : Config.baseURL.absoluteString + icon)
+    }
+
+    private var groupGlyph: some View {
+        ZStack {
+            Circle().fill(NX.violet.opacity(0.12)).frame(width: 40, height: 40)
+            Image(systemName: "person.2.fill").font(.system(size: 15)).foregroundStyle(NX.violetText)
+        }
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             if convo.isGroupish {
-                ZStack {
-                    Circle().fill(NX.violet.opacity(0.12)).frame(width: 40, height: 40)
-                    Image(systemName: "person.2.fill").font(.system(size: 15)).foregroundStyle(NX.violetText)
+                if let url = projectIconURL {
+                    CachedImage(url: url) { $0.resizable().scaledToFill() } placeholder: { groupGlyph }
+                        .frame(width: 40, height: 40)
+                        .clipShape(Circle())
+                        .overlay(Circle().strokeBorder(NX.border, lineWidth: 0.5))
+                } else {
+                    groupGlyph
                 }
             } else {
                 AvatarView(url: convo.avatarURL(meId: meId), initial: convo.initial(meId: meId), size: 40)
@@ -154,20 +207,52 @@ struct ChatThreadView: View {
     var members: [Conversation.Member] = []
     /// Set for PROJECT rooms — scopes the "link ke task" picker to that project's tasks.
     var projectId: String? = nil
+    /// DM | GROUP | PROJECT. Only a GROUP can be renamed; the server rejects the other two.
+    var type: String? = nil
     @Environment(AuthStore.self) private var auth
     @State private var messages: [ChatMessage] = []
     @State private var input = ""
     @State private var loading = true
     @State private var sending = false
     @State private var loc = LocationManager()
-    @State private var showMentions = false
     @State private var pendingMentions: [String: String] = [:]
     @State private var showTaskPicker = false
+    @State private var showAddPeople = false
+    @State private var showRename = false
+    @State private var pickedPhoto: PhotosPickerItem?
+    @State private var pendingAttachment: ChatUpload?
+    @State private var uploadingPhoto = false
+    @State private var renameDraft = ""
+    @State private var shownTitle: String? = nil
     @State private var notice: String?
 
     private var meId: String? { auth.session?.userId }
     private var mentionable: [Conversation.Member] {
         members.filter { !$0.uid.isEmpty && $0.uid != meId }
+    }
+
+    /// The mention token currently being typed, or nil when we aren't in one.
+    ///
+    /// SwiftUI's TextField doesn't expose the caret, so we read the tail of the draft instead: an
+    /// "@" that still opens the last word and hasn't been closed by a space. That is enough for the
+    /// way people actually type a mention - straight through, at the end of what they're writing.
+    /// The "@" must also start a word, otherwise every email address would open the picker.
+    private var mentionQuery: String? {
+        guard let at = input.lastIndex(of: "@") else { return nil }
+        if at > input.startIndex {
+            let before = input[input.index(before: at)]
+            guard before == " " || before == "\n" else { return nil }
+        }
+        let tail = input[input.index(after: at)...]
+        guard !tail.contains(" "), !tail.contains("\n") else { return nil }
+        return String(tail)
+    }
+
+    /// Roster filtered by what has been typed after the "@". Empty query = show everyone.
+    private var mentionMatches: [Conversation.Member] {
+        guard let q = mentionQuery else { return [] }
+        guard !q.isEmpty else { return mentionable }
+        return mentionable.filter { $0.displayName.localizedCaseInsensitiveContains(q) }
     }
 
     var body: some View {
@@ -191,7 +276,50 @@ struct ChatThreadView: View {
             composer
         }
         .background(NX.background.ignoresSafeArea())
-        .navigationTitle(title)
+        .navigationTitle(shownTitle ?? title)
+        .toolbar {
+            // Only project rooms: their membership is derived from the project, so there is a
+            // sane thing to do here. A plain GROUP has no add-member endpoint at all.
+            if projectId != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showAddPeople = true } label: {
+                        Image(systemName: "person.badge.plus").font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(NX.violetText)
+                    }
+                }
+            }
+            // Only a GROUP carries a name of its own: a DM is titled after the other person and a
+            // PROJECT room follows the project, and the server rejects renaming either.
+            if type == "GROUP" {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        renameDraft = shownTitle ?? title
+                        showRename = true
+                    } label: {
+                        Image(systemName: "pencil").font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(NX.violetText)
+                    }
+                }
+            }
+        }
+        .alert(T("Rename group"), isPresented: $showRename) {
+            TextField(T("Group name"), text: $renameDraft)
+            Button(T("Cancel"), role: .cancel) { }
+            Button(T("Save")) { Task { await rename() } }
+        }
+        .onChange(of: pickedPhoto) { _, item in
+            guard let item else { return }
+            Task { await uploadPhoto(item) }
+        }
+        .sheet(isPresented: $showAddPeople) {
+            if let pid = projectId {
+                AddProjectPeopleSheet(
+                    projectId: pid,
+                    existingUserIds: Set(members.compactMap { $0.userId ?? $0.user?.id }),
+                    onAdded: { notice = T("Added. They'll show up here once they open the app.") }
+                )
+            }
+        }
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { loc.requestPermissionIfNeeded() }
         .sheet(isPresented: $showTaskPicker) {
@@ -208,10 +336,10 @@ struct ChatThreadView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14).padding(.top, 8)
             }
-            if showMentions && !mentionable.isEmpty {
+            if !mentionMatches.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(mentionable, id: \.uid) { m in
+                        ForEach(mentionMatches, id: \.uid) { m in
                             Button { mention(m) } label: {
                                 HStack(spacing: 6) {
                                     AvatarView(url: m.user?.avatar, initial: m.initial, size: 22)
@@ -228,10 +356,27 @@ struct ChatThreadView: View {
                 }
                 .padding(.top, 8)
             }
+            if let pending = pendingAttachment {
+                HStack(spacing: 8) {
+                    CachedImage(url: URL(string: Config.baseURL.absoluteString + pending.url)) {
+                        $0.resizable().scaledToFill()
+                    } placeholder: { NX.muted }
+                        .frame(width: 54, height: 54)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    Button { pendingAttachment = nil } label: {
+                        Image(systemName: "xmark.circle.fill").font(.system(size: 18)).foregroundStyle(NX.mutedFg)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 12).padding(.top, 8)
+            }
             HStack(alignment: .bottom, spacing: 8) {
                 Menu {
                     Button { Task { await sendLocation() } } label: { Label(T("Send location"), systemImage: "mappin.and.ellipse") }
                     Button { showTaskPicker = true } label: { Label(T("Link to a task"), systemImage: "checklist") }
+                    PhotosPicker(selection: $pickedPhoto, matching: .images, photoLibrary: .shared()) {
+                        Label(T("Send a photo"), systemImage: "photo")
+                    }
                 } label: {
                     Image(systemName: "plus").font(.system(size: 17, weight: .bold)).foregroundStyle(NX.violetText)
                         .frame(width: 36, height: 36).background(NX.muted, in: Circle())
@@ -239,11 +384,17 @@ struct ChatThreadView: View {
                 .disabled(sending)
 
                 if !mentionable.isEmpty {
-                    Button { showMentions.toggle() } label: {
+                    // Kept for discoverability only: it types the "@" for you, then the inline
+                    // path above takes over exactly as if you had typed it yourself.
+                    Button {
+                        if !input.isEmpty && !input.hasSuffix(" ") { input += " " }
+                        input += "@"
+                    } label: {
+                        let active = mentionQuery != nil
                         Text("@").font(NXFont.display(17, .bold))
-                            .foregroundStyle(showMentions ? Color.white : NX.violetText)
+                            .foregroundStyle(active ? Color.white : NX.violetText)
                             .frame(width: 36, height: 36)
-                            .background(showMentions ? NX.violet : NX.muted, in: Circle())
+                            .background(active ? NX.violet : NX.muted, in: Circle())
                     }
                     .buttonStyle(.plain)
                 }
@@ -276,6 +427,17 @@ struct ChatThreadView: View {
             }
             VStack(alignment: .leading, spacing: 4) {
                 if !mine, let n = m.user?.name { Text(n).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg) }
+                if let path = m.attachmentUrl, !path.isEmpty,
+                   let url = URL(string: path.hasPrefix("http") ? path : Config.baseURL.absoluteString + path) {
+                    CachedImage(url: url) { $0.resizable().scaledToFit() } placeholder: {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NX.muted)
+                            .frame(height: 140)
+                    }
+                    .frame(maxWidth: 240)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                // A picture can travel without a caption; don't draw an empty text line under it.
+                if !m.content.isEmpty {
                 switch ChatPayload.parse(m.content) {
                 case .location(let lat, let lng, let url):
                     locationCard(lat: lat, lng: lng, url: url, mine: mine)
@@ -284,6 +446,7 @@ struct ChatThreadView: View {
                 case .plain:
                     styledText(m.content).font(NXFont.text(15))
                         .foregroundStyle(mine ? Color.white : NX.foreground)
+                }
                 }
             }
             .padding(.horizontal, 13).padding(.vertical, 9)
@@ -350,10 +513,26 @@ struct ChatThreadView: View {
     /// Inserts "@Nama" (spaces stripped so it stays one highlightable token).
     private func mention(_ m: Conversation.Member) {
         let tag = "@" + m.displayName.replacingOccurrences(of: " ", with: "")
-        if !input.isEmpty && !input.hasSuffix(" ") { input += " " }
-        input += tag + " "
+        // Replace the half-typed "@ali" rather than appending, otherwise picking from the list
+        // while mid-token leaves "@ali @Alifawan" behind.
+        if mentionQuery != nil, let at = input.lastIndex(of: "@") {
+            input.replaceSubrange(at..., with: tag + " ")
+        } else {
+            if !input.isEmpty && !input.hasSuffix(" ") { input += " " }
+            input += tag + " "
+        }
         pendingMentions[m.uid] = tag
-        showMentions = false
+    }
+
+    private func rename() async {
+        let name = renameDraft.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        do {
+            let updated = try await APIClient.shared.renameConversation(conversationId, name: name)
+            shownTitle = updated.name ?? name
+        } catch {
+            notice = (error as? LocalizedError)?.errorDescription ?? T("Couldn't rename that group.")
+        }
     }
 
     private func load() async {
@@ -364,12 +543,44 @@ struct ChatThreadView: View {
     }
     private func send() async {
         let v = input.trimmingCharacters(in: .whitespaces)
-        guard !v.isEmpty else { return }
+        // A picture on its own is a message; text is only required when nothing is attached.
+        guard !v.isEmpty || pendingAttachment != nil else { return }
         let mentionedUserIds = pendingMentions.compactMap { v.contains($0.value) ? $0.key : nil }
-        sending = true; input = ""; pendingMentions = [:]; notice = nil
-        try? await APIClient.shared.sendMessage(conversationId, content: v, mentionedUserIds: mentionedUserIds)
+        let attachment = pendingAttachment
+        sending = true; input = ""; pendingMentions = [:]; pendingAttachment = nil; notice = nil
+        try? await APIClient.shared.sendMessage(conversationId, content: v, mentionedUserIds: mentionedUserIds,
+                                                attachmentUrl: attachment?.url, attachmentType: attachment?.type)
         await load()
         sending = false
+    }
+
+    /// The library hands back whatever the camera produced - often HEIC, which the server rejects.
+    /// Re-encode to JPEG and cap the long edge so a photo straight off the camera doesn't blow the
+    /// 8 MB limit.
+    private func uploadPhoto(_ item: PhotosPickerItem) async {
+        uploadingPhoto = true
+        notice = nil
+        defer { uploadingPhoto = false; pickedPhoto = nil }
+        guard let raw = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: raw) else {
+            notice = T("Couldn't read that photo.")
+            return
+        }
+        let maxEdge: CGFloat = 1600
+        let scale = min(1, maxEdge / max(image.size.width, image.size.height))
+        let target = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let resized = UIGraphicsImageRenderer(size: target).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: target))
+        }
+        guard let jpeg = resized.jpegData(compressionQuality: 0.85) else {
+            notice = T("Couldn't read that photo.")
+            return
+        }
+        do {
+            pendingAttachment = try await APIClient.shared.uploadChatImage(
+                conversationId: conversationId, fileName: "photo.jpg", mime: "image/jpeg", data: jpeg)
+        } catch {
+            notice = (error as? LocalizedError)?.errorDescription ?? T("Upload failed. Try again.")
+        }
     }
     private func sendLocation() async {
         sending = true; notice = nil
