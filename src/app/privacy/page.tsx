@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 // Ganti di satu tempat ini kalau alamatnya lain. Harus kotak surat yang benar-benar dibaca —
 // reviewer Apple kadang mengetesnya.
-const CONTACT_EMAIL = "privacy@znetworks.id"
+const CONTACT_EMAIL = "account@znetworks.id"
 const LAST_UPDATED = "31 Agustus 2026"
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
