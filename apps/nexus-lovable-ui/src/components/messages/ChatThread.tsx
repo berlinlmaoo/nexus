@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Send } from "lucide-react";
+import { ImagePlus, Loader2, Send, X } from "lucide-react";
 import { fmtTime, nexusApi, type NexusMessage, type NexusUser } from "@/lib/nexus-api";
 import { useRealtimeRoom } from "@/lib/realtime";
 import { cn } from "@/lib/utils";
@@ -29,10 +29,19 @@ function dayLabel(value?: string | null) {
   return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
-export function ChatThread({ conversationId, meId }: { conversationId: string; meId?: string }) {
+/** The token being typed right after an "@", or null when the caret isn't in one. */
+const MENTION_TAIL = /(^|\s)@([\p{L}\p{N}._-]*)$/u;
+
+export function ChatThread({ conversationId, meId, members = [] }: { conversationId: string; meId?: string; members?: NexusUser[] }) {
   const qc = useQueryClient();
   const [input, setInput] = useState("");
+  const [pending, setPending] = useState<{ url: string; type: string } | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  // Tag (name without spaces, lowercased) → user id, remembered as you pick from the list. Sending
+  // structured ids keeps two people with the same display name from being confused for each other.
+  const [tagged, setTagged] = useState<Record<string, string>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useRealtimeRoom(`conversation:${conversationId}`);
 
@@ -46,12 +55,55 @@ export function ChatThread({ conversationId, meId }: { conversationId: string; m
   // mark read on open + when new messages arrive
   useEffect(() => { nexusApi.markConversationRead(conversationId).then(() => qc.invalidateQueries({ queryKey: ["conversations"] })).catch(() => {}); }, [conversationId, messages.length, qc]);
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [messages]);
+  // Switching rooms must not carry a half-written message or an unsent picture across.
+  useEffect(() => { setInput(""); setPending(null); setTagged({}); setUploadError(null); }, [conversationId]);
+
+  const mentionQuery = useMemo(() => {
+    const m = MENTION_TAIL.exec(input);
+    return m ? m[2] : null;
+  }, [input]);
+
+  const mentionMatches = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    return members.filter((u) => u.id !== meId && (u.name ?? u.email ?? "").toLowerCase().includes(q)).slice(0, 6);
+  }, [mentionQuery, members, meId]);
+
+  const pickMention = (u: NexusUser) => {
+    const tag = (u.name ?? u.email ?? "").replace(/\s+/g, "");
+    if (!tag) return;
+    setInput((cur) => cur.replace(MENTION_TAIL, (_full, lead: string) => `${lead}@${tag} `));
+    setTagged((cur) => ({ ...cur, [tag.toLowerCase()]: u.id }));
+  };
+
+  const upload = useMutation({
+    mutationFn: (file: File) => nexusApi.uploadChatImage(conversationId, file),
+    onSuccess: (res) => { setPending({ url: res.url, type: res.type }); setUploadError(null); },
+    onError: () => setUploadError("Couldn't upload that picture."),
+  });
 
   const send = useMutation({
-    mutationFn: (content: string) => nexusApi.sendMessage(conversationId, content),
-    onSuccess: () => { setInput(""); qc.invalidateQueries({ queryKey: ["messages", conversationId] }); qc.invalidateQueries({ queryKey: ["conversations"] }); },
+    mutationFn: (content: string) => {
+      // Only tags still present in the final text count — deleting a mention should un-notify.
+      const mentionedUserIds = Object.entries(tagged)
+        .filter(([tag]) => content.toLowerCase().includes(`@${tag}`))
+        .map(([, id]) => id);
+      return nexusApi.sendMessage(conversationId, content, {
+        ...(mentionedUserIds.length ? { mentionedUserIds } : {}),
+        ...(pending ? { attachmentUrl: pending.url, attachmentType: pending.type } : {}),
+      });
+    },
+    onSuccess: () => {
+      setInput(""); setPending(null); setTagged({});
+      qc.invalidateQueries({ queryKey: ["messages", conversationId] });
+      qc.invalidateQueries({ queryKey: ["conversations"] });
+    },
   });
-  const submit = () => { const t = input.trim(); if (t && !send.isPending) send.mutate(t); };
+
+  const busy = send.isPending || upload.isPending;
+  // A picture on its own is a message, so an empty box is only a problem when nothing is attached.
+  const canSend = (input.trim().length > 0 || !!pending) && !busy;
+  const submit = () => { if (canSend) send.mutate(input.trim()); };
 
   let lastDay = "";
 
@@ -72,7 +124,12 @@ export function ChatThread({ conversationId, meId }: { conversationId: string; m
                 {!mine && <MiniAvatar user={m.user} size={26} />}
                 <div className={cn("max-w-[78%] rounded-2xl px-3.5 py-2 text-sm", mine ? "bg-primary text-primary-foreground" : "bg-muted")}>
                   {!mine && <div className="mb-0.5 text-[11px] font-semibold text-muted-foreground">{m.user?.name}</div>}
-                  <span className="whitespace-pre-wrap leading-relaxed">{m.content}</span>
+                  {m.attachmentUrl && (
+                    <a href={m.attachmentUrl} target="_blank" rel="noreferrer" className="mb-1 block">
+                      <img src={m.attachmentUrl} alt="" loading="lazy" className="max-h-72 w-auto max-w-full rounded-xl object-cover" />
+                    </a>
+                  )}
+                  {m.content && <span className="whitespace-pre-wrap leading-relaxed">{m.content}</span>}
                   <span className={cn("mt-0.5 block text-[10px]", mine ? "text-primary-foreground/70" : "text-muted-foreground")}>{fmtTime(m.createdAt)}</span>
                 </div>
               </div>
@@ -80,17 +137,64 @@ export function ChatThread({ conversationId, meId }: { conversationId: string; m
           );
         })}
       </div>
-      <div className="border-t border-border p-3">
+
+      <div className="relative border-t border-border p-3">
+        {mentionMatches.length > 0 && (
+          <div className="absolute bottom-full left-3 right-3 mb-1 max-h-56 overflow-y-auto rounded-xl border border-border bg-card p-1 shadow-pop">
+            {mentionMatches.map((u) => (
+              <button key={u.id} onMouseDown={(e) => { e.preventDefault(); pickMention(u); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent">
+                <span className="grid h-6 w-6 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{initialsOf(u.name)}</span>
+                <span className="flex-1 truncate">{u.name ?? u.email}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {pending && (
+          <div className="mb-2 flex items-center gap-2">
+            <img src={pending.url} alt="" className="h-14 w-14 rounded-lg object-cover ring-1 ring-border" />
+            <button onClick={() => setPending(null)} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent" title="Remove picture"><X className="h-4 w-4" /></button>
+          </div>
+        )}
+        {uploadError && <p className="mb-2 text-xs font-semibold text-destructive">{uploadError}</p>}
+
         <div className="flex items-end gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              // Reset first: picking the same file twice in a row fires no change event otherwise.
+              e.target.value = "";
+              if (f) upload.mutate(f);
+            }}
+          />
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={busy}
+            title="Send a picture"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border text-muted-foreground transition-all hover:bg-accent active:scale-[0.95] disabled:opacity-50"
+          >
+            {upload.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+          </button>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                // Enter picks the highlighted name while the mention list is open, and only sends
+                // once it's closed - otherwise typing "@ann<Enter>" fires off a half-typed tag.
+                if (mentionMatches.length > 0) { e.preventDefault(); pickMention(mentionMatches[0]); return; }
+                e.preventDefault(); submit();
+              }
+            }}
             rows={1}
-            placeholder="Type a message…"
+            placeholder="Type a message…  (@ to tag someone)"
             className="max-h-32 flex-1 resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary"
           />
-          <button onClick={submit} disabled={!input.trim() || send.isPending} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.95] disabled:opacity-50">
+          <button onClick={submit} disabled={!canSend} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.95] disabled:opacity-50">
             {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </button>
         </div>
