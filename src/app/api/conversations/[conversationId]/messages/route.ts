@@ -48,11 +48,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
     const access = await assertAccess(userId, conversationId)
     if (!access.ok) return NextResponse.json({ error: "Forbidden" }, { status: access.status })
 
-    const { content, mentionedUserIds } = await req.json()
-    if (!content || !String(content).trim()) return NextResponse.json({ error: "content required" }, { status: 400 })
+    const { content, mentionedUserIds, attachmentUrl, attachmentType } = await req.json()
+    const text = typeof content === "string" ? content.trim() : ""
+    // Only accept an attachment path this server itself handed out. Taking an arbitrary URL here
+    // would turn every message into an open redirect and let anyone point the chat at a remote host.
+    const attachment = typeof attachmentUrl === "string" && attachmentUrl.startsWith("/api/files/chat/")
+      ? attachmentUrl
+      : null
+    // A picture on its own is a message; text is only required when there is nothing else.
+    if (!text && !attachment) return NextResponse.json({ error: "content required" }, { status: 400 })
 
     const message = await prisma.message.create({
-      data: { conversationId, userId, content: String(content).trim() },
+      data: {
+        conversationId,
+        userId,
+        content: text,
+        attachmentUrl: attachment,
+        attachmentType: attachment && typeof attachmentType === "string" ? attachmentType.slice(0, 64) : null,
+      },
       include: { user: { select: { id: true, name: true, avatar: true } } },
     })
     await prisma.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } })

@@ -1897,6 +1897,11 @@ model Message {
   content        String
   createdAt      DateTime @default(now())
 
+  /// Chat attachments. Nullable so every existing row stays valid: a message is still allowed to be
+  /// text only, which is what all 500k+ of them are today.
+  attachmentUrl  String?
+  attachmentType String?
+
   @@index([conversationId, createdAt])
 }
 
