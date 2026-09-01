@@ -193,7 +193,21 @@ struct SidebarRoot: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $columns) {
             List(selection: $selection) {
-                ForEach(Array(NXScreen.groups.enumerated()), id: \.offset) { _, group in
+                ForEach(Array(NXScreen.groups.enumerated()), id: \.offset) { index, group in
+                    // Project shortcuts sit directly under the four top-level destinations, not at
+                    // the bottom of the list. They are the rows reached most often, and a shortcut
+                    // you have to scroll past everything else to reach is not a shortcut.
+                    if index == 1 {
+                        if !shortcuts.pinned.isEmpty {
+                            Section { projectRows(shortcuts.pinned) } header: { SectionLabel(T("Pinned")) }
+                        }
+                        // Anything already pinned is skipped: a project in both lists reads as a
+                        // duplicate rather than as two kinds of shortcut.
+                        let recents = shortcuts.recent.filter { !shortcuts.isPinned($0.id) }
+                        if !recents.isEmpty {
+                            Section { projectRows(recents) } header: { SectionLabel(T("Recent")) }
+                        }
+                    }
                     Section {
                         ForEach(group.screens) { screen in
                             Label {
@@ -210,16 +224,6 @@ struct SidebarRoot: View {
                     }
                 }
 
-                if !shortcuts.pinned.isEmpty {
-                    Section { projectRows(shortcuts.pinned) } header: { SectionLabel(T("Pinned")) }
-                }
-                // Anything already pinned is skipped: a project sitting in both lists reads as a
-                // duplicate rather than as two kinds of shortcut.
-                let recents = shortcuts.recent.filter { !shortcuts.isPinned($0.id) }
-                if !recents.isEmpty {
-                    Section { projectRows(recents) } header: { SectionLabel(T("Recent")) }
-                }
-
                 Section {
                     AccountFooter()
                         .listRowBackground(Color.clear)
@@ -227,7 +231,9 @@ struct SidebarRoot: View {
                 }
             }
             .listStyle(.sidebar)
-            .navigationTitle("NEXUS")
+            // No title: the sidebar is the app's own furniture, and a word repeating the app name
+            // above its own menu is a row of pixels that tells the reader nothing.
+            .navigationTitle("")
         } detail: {
             let needsOwnButton = detailHidesNavigationBar
             detail(for: selection ?? .screen(.dashboard))
@@ -300,11 +306,24 @@ struct SidebarRoot: View {
 
     @ViewBuilder private func projectRows(_ refs: [ProjectRef]) -> some View {
         ForEach(refs) { ref in
-            Label {
+            HStack(spacing: 10) {
+                projectIcon(ref)
                 Text(ref.name).font(NXFont.text(15, .medium)).lineLimit(1)
-            } icon: {
-                Image(systemName: shortcuts.isPinned(ref.id) ? "pin.fill" : "rectangle.stack")
-                    .foregroundStyle(NX.violetText)
+                Spacer(minLength: 6)
+                // A visible button, not only a long press: a gesture nobody is told about is a
+                // feature nobody finds. .borderless keeps the tap on the button instead of letting
+                // the row swallow it and change the selection.
+                Button {
+                    shortcuts.togglePin(ref)
+                } label: {
+                    Image(systemName: shortcuts.isPinned(ref.id) ? "pin.fill" : "pin")
+                        .font(.system(size: 13))
+                        .foregroundStyle(shortcuts.isPinned(ref.id) ? NX.violetText : NX.mutedFg)
+                        .frame(width: 26, height: 26)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(shortcuts.isPinned(ref.id) ? T("Unpin") : T("Pin"))
             }
             .tag(NXSelection.project(ref))
             .contextMenu {
@@ -321,5 +340,26 @@ struct SidebarRoot: View {
                 }
             }
         }
+    }
+
+    /// The project's own picture where it has one, its emoji where it has that, and only then a
+    /// generic glyph — a sidebar of identical symbols is a sidebar you have to read word by word.
+    @ViewBuilder private func projectIcon(_ ref: ProjectRef) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 7, style: .continuous).fill(NX.muted)
+            if ref.isUploadedIcon {
+                CachedImage(url: URL(string: Config.baseURL.absoluteString + (ref.icon ?? ""))) { img in
+                    img.resizable().scaledToFill()
+                } placeholder: {
+                    Image(systemName: "rectangle.stack").font(.system(size: 12)).foregroundStyle(NX.violetText)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            } else if let emoji = ref.emoji {
+                Text(emoji).font(.system(size: 14))
+            } else {
+                Image(systemName: "rectangle.stack").font(.system(size: 12)).foregroundStyle(NX.violetText)
+            }
+        }
+        .frame(width: 26, height: 26)
     }
 }

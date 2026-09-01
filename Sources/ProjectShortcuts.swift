@@ -5,6 +5,15 @@ import Observation
 struct ProjectRef: Codable, Hashable, Identifiable {
     let id: String
     var name: String
+    /// Same shape as Project.icon: a path beginning with "/" for an uploaded picture, otherwise an
+    /// emoji. Optional because the first visit records the row before the board has loaded.
+    var icon: String?
+
+    var isUploadedIcon: Bool { (icon ?? "").hasPrefix("/") }
+    var emoji: String? {
+        guard let icon, !icon.isEmpty, !isUploadedIcon, isEmojiIcon(icon) else { return nil }
+        return icon
+    }
 }
 
 /// Pinned and recently-opened projects, kept on the device.
@@ -45,14 +54,21 @@ final class ProjectShortcuts {
 
     /// Call on every open. Moves an existing entry to the front instead of duplicating it, and
     /// refreshes the stored name so a renamed project doesn't keep its old label in the sidebar.
+    ///
+    /// A board is opened before it is loaded, so the first call of a visit carries no icon. Keeping
+    /// the one already stored means the row doesn't flash back to a placeholder every time.
     func visit(_ ref: ProjectRef) {
+        var ref = ref
+        if ref.icon == nil {
+            ref.icon = (recent + pinned).first { $0.id == ref.id }?.icon
+        }
         recent.removeAll { $0.id == ref.id }
         recent.insert(ref, at: 0)
         if recent.count > Self.recentLimit { recent.removeLast(recent.count - Self.recentLimit) }
         Self.save(recent, Self.recentKey)
 
-        if let i = pinned.firstIndex(where: { $0.id == ref.id }), pinned[i].name != ref.name {
-            pinned[i].name = ref.name
+        if let i = pinned.firstIndex(where: { $0.id == ref.id }), pinned[i] != ref {
+            pinned[i] = ref
             Self.save(pinned, Self.pinnedKey)
         }
     }

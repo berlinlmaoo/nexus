@@ -68,7 +68,11 @@ struct ProjectDetailView: View {
         .task { await load() }
         // Recorded here rather than at each tap site, so a project counts as visited whichever
         // route led in: the projects list, a sidebar shortcut, or a link out of a task.
-        .task { ProjectShortcuts.shared.visit(ProjectRef(id: projectId, name: projectName)) }
+        .task { ProjectShortcuts.shared.visit(ProjectRef(id: projectId, name: projectName, icon: nil)) }
+        // The icon only exists after the board loads, so record it again when it arrives.
+        .onChange(of: detail?.icon) { _, icon in
+            ProjectShortcuts.shared.visit(ProjectRef(id: projectId, name: projectName, icon: icon))
+        }
         .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }
     }
 
