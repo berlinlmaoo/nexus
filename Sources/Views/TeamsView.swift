@@ -33,10 +33,13 @@ struct TeamsView: View {
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView {
-                LazyVStack(spacing: 12) {
+                // Same as Forms: the note is about the screen, not about the first team.
+                VStack(spacing: 12) {
                     Text(T("Team members automatically get access to the linked projects."))
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).frame(maxWidth: .infinity, alignment: .leading)
-                    ForEach(teams) { TeamCard(team: $0) }
+                    NXCardGrid(spacing: 12) {
+                        ForEach(teams) { TeamCard(team: $0) }
+                    }
                 }
                 .padding(16)
             }

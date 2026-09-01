@@ -94,7 +94,7 @@ struct TicketsView: View {
                                subtitle: T("Switch the filter above to see other statuses."))
                 } else {
                     ScrollView {
-                        LazyVStack(spacing: 10) {
+                        NXCardGrid(spacing: 10) {
                             ForEach(filtered) { t in
                                 Button { selected = t } label: { row(t) }.buttonStyle(.plain)
                             }

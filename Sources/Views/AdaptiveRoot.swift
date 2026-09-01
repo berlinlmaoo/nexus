@@ -167,6 +167,30 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
     ] }
 }
 
+/// A list of cards that becomes two columns once there is width for them.
+///
+/// A card holding a title and a date is the same card at 440pt as at 900pt — the extra width goes
+/// into the gap after the text, not into anything readable. Two columns spend it on a second card
+/// instead, and halve the scrolling.
+///
+/// Drop-in for a LazyVStack: on a phone it IS one, because the size class never reports regular
+/// there and a single flexible column lays out exactly the same way.
+struct NXCardGrid<Content: View>: View {
+    @Environment(\.horizontalSizeClass) private var hSize
+    var spacing: CGFloat = 12
+    @ViewBuilder let content: () -> Content
+
+    private var columns: [GridItem] {
+        hSize == .regular
+            ? [GridItem(.flexible(), spacing: spacing), GridItem(.flexible(), spacing: spacing)]
+            : [GridItem(.flexible())]
+    }
+
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: spacing, content: content)
+    }
+}
+
 /// What the sidebar has selected. A fixed screen, or one particular project board — the shortcuts
 /// section needs to point at something the eighteen-case enum has no room for.
 enum NXSelection: Hashable {

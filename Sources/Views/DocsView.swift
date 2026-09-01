@@ -34,7 +34,7 @@ struct DocsView: View {
                        msg: query.isEmpty ? T("No docs in this workspace yet.") : T("Try another keyword."))
         } else {
             ScrollView {
-                LazyVStack(spacing: 12) {
+                NXCardGrid(spacing: 12) {
                     ForEach(filtered) { d in
                         NavigationLink { DocReaderView(docId: d.id, title: d.title) } label: { DocCard(doc: d) }
                             .buttonStyle(.plain)

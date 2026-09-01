@@ -35,10 +35,14 @@ struct FormsView: View {
             }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
         } else {
             ScrollView {
-                LazyVStack(spacing: 12) {
+                // The explanation stays outside the grid: it describes the whole screen, and as a
+                // grid cell it would sit in the left column pretending to be the first card.
+                VStack(spacing: 12) {
                     Text(T("An intake form that spawns a task automatically on submit."))
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).frame(maxWidth: .infinity, alignment: .leading)
-                    ForEach(forms) { f in FormCard(form: f, projectName: projectNames[f.projectId ?? ""] ?? "Project") }
+                    NXCardGrid(spacing: 12) {
+                        ForEach(forms) { f in FormCard(form: f, projectName: projectNames[f.projectId ?? ""] ?? "Project") }
+                    }
                 }
                 .padding(16)
             }
