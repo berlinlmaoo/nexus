@@ -28,6 +28,10 @@ struct DashboardView: View {
     /// than by the screen. Uncapped it spanned a full iPad in landscape - a quests panel with one
     /// line in it stretched a metre wide. Never binds on a phone, which is narrower than this.
     private static let morphMaxWidth: CGFloat = 560
+    /// The notification panel is a list, not a summary tile. Sized to the same 560pt as the stat
+    /// cards it came out the same shape as them, which read as one component doing two jobs — and
+    /// a list of five notifications squeezed into a tile is the wrong shape for reading anyway.
+    private static let bellMaxWidth: CGFloat = 640
     @State private var morphShowModal = true   // open: modal solid (FLIP scale). close: fades out as the card fades in.
 
     private var name: String { profile?.name ?? auth.session?.userName ?? T("Commander") }
@@ -409,12 +413,12 @@ struct DashboardView: View {
                                 .padding(10).background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             }
                         }
-                    }.frame(maxHeight: 300)
+                    }.frame(maxHeight: 460)
                 }
             }
             .opacity(morphReady ? 1 : 0)   // detail fades in just after the card lands (web: delay 0.15)
         }
-        .padding(18).frame(maxWidth: Self.morphMaxWidth)
+        .padding(18).frame(maxWidth: Self.bellMaxWidth)
         .background {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(NX.card)
