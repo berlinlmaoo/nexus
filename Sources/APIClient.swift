@@ -197,6 +197,16 @@ struct APIClient {
         return try await run(req, decode: ConversationResponse.self).conversation
     }
 
+    /// Add people to a GROUP chat. The server refuses DMs (two people by definition) and PROJECT
+    /// rooms (membership derives from the project), and silently skips anyone outside your
+    /// workspace or already in the room.
+    func addConversationMembers(_ conversationId: String, userIds: [String]) async throws -> Conversation {
+        var req = makeRequest("/api/conversations/\(conversationId)/members", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["userIds": userIds])
+        return try await run(req, decode: ConversationResponse.self).conversation
+    }
+
     /// Move a project into a folder (or to root with nil).
     @discardableResult
     func setProjectFolder(projectId: String, folderId: String?) async throws -> Bool {

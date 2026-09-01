@@ -98,6 +98,8 @@ final class AppLanguage {
         "Group name": "Nama grup",
         "Couldn't rename that group.": "Nama grup itu tidak bisa diganti.",
         "Add people": "Tambah orang",
+        "Added to the group.": "Ditambahkan ke grup.",
+        "Every workspace member is already in this chat.": "Semua anggota workspace sudah ada di obrolan ini.",
         "Everyone's already here": "Semua orang sudah di sini",
         "Every workspace member is already in this project.": "Semua anggota workspace sudah ada di project ini.",
         "Anyone you add joins the project itself, not just this chat.": "Orang yang lo tambahkan ikut masuk ke project-nya, bukan cuma ke chat ini.",

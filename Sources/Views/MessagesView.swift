@@ -367,9 +367,8 @@ struct ChatThreadView: View {
                 .foregroundStyle(NX.foreground)
                 .lineLimit(1)
             Spacer(minLength: 8)
-            // Same two conditions as the toolbar above, for the same reasons: only a project room
-            // has an add-member endpoint, and only a GROUP owns a name the server will change.
-            if projectId != nil {
+            // Same conditions as the toolbar above: a DM can neither grow nor be renamed.
+            if projectId != nil || type == "GROUP" {
                 Button { showAddPeople = true } label: {
                     Image(systemName: "person.badge.plus")
                         .font(.system(size: 16, weight: .semibold))
@@ -458,9 +457,10 @@ struct ChatThreadView: View {
         .navigationTitle(usesInlineHeader ? "" : (shownTitle ?? title))
         .toolbar(usesInlineHeader ? .hidden : .visible, for: .navigationBar)
         .toolbar {
-            // Only project rooms: their membership is derived from the project, so there is a
-            // sane thing to do here. A plain GROUP has no add-member endpoint at all.
-            if projectId != nil {
+            // Project rooms add through the project; a plain GROUP owns its own member list and
+            // has had an endpoint of its own since /api/conversations/[id]/members. A DM stays
+            // closed: two people is what a DM means.
+            if projectId != nil || type == "GROUP" {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showAddPeople = true } label: {
                         Image(systemName: "person.badge.plus").font(.system(size: 15, weight: .semibold))
@@ -500,9 +500,17 @@ struct ChatThreadView: View {
         .sheet(isPresented: $showAddPeople) {
             if let pid = projectId {
                 AddProjectPeopleSheet(
-                    projectId: pid,
+                    target: .project(pid),
                     existingUserIds: Set(members.compactMap { $0.userId ?? $0.user?.id }),
                     onAdded: { notice = T("Added. They'll show up here once they open the app.") }
+                )
+            } else if type == "GROUP" {
+                AddProjectPeopleSheet(
+                    target: .group(conversationId: conversationId),
+                    existingUserIds: Set(members.compactMap { $0.userId ?? $0.user?.id }),
+                    // A group owns its member list outright, so the change is immediate — no
+                    // waiting for the other person to open the app, unlike a project room.
+                    onAdded: { notice = T("Added to the group.") }
                 )
             }
         }

@@ -1,5 +1,14 @@
 import SwiftUI
 
+/// Where the people being picked are going.
+enum AddPeopleTarget {
+    /// A project room. Its membership is derived from the project, so the honest operation is
+    /// "add them to the project" — their seat in the room follows.
+    case project(String)
+    /// A plain group chat, which owns its own member list.
+    case group(conversationId: String)
+}
+
 /// Add people to a PROJECT chat room.
 ///
 /// There is no "add member to conversation" endpoint, and it turns out none is needed: the server
@@ -12,7 +21,7 @@ import SwiftUI
 /// One consequence worth knowing: their membership materialises when *they* next open the app, so
 /// the roster on this side won't change the instant you tap Add.
 struct AddProjectPeopleSheet: View {
-    let projectId: String
+    let target: AddPeopleTarget
     /// Already in the room — hidden from the list so you can't add the same person twice.
     let existingUserIds: Set<String>
     let onAdded: () -> Void
@@ -48,7 +57,8 @@ struct AddProjectPeopleSheet: View {
                     ProgressView().tint(NX.violetText)
                 } else if candidates.isEmpty {
                     EmptyState(icon: "person.badge.plus", title: T("Everyone's already here"),
-                               subtitle: T("Every workspace member is already in this project."))
+                               subtitle: isGroup ? T("Every workspace member is already in this chat.")
+                                                 : T("Every workspace member is already in this project."))
                 } else {
                     pickerList
                 }
@@ -68,15 +78,20 @@ struct AddProjectPeopleSheet: View {
     private var pickerList: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "info.circle.fill").font(.system(size: 12)).foregroundStyle(NX.violetText)
-                    Text(T("Anyone you add joins the project itself, not just this chat."))
-                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                        .fixedSize(horizontal: false, vertical: true)
+                // Only the project case needs a warning. Quietly handing someone a whole project
+                // when they thought they were joining a chat is the surprise worth naming; joining
+                // a group chat is exactly what it looks like.
+                if !isGroup {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "info.circle.fill").font(.system(size: 12)).foregroundStyle(NX.violetText)
+                        Text(T("Anyone you add joins the project itself, not just this chat."))
+                            .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(NX.accentBg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(NX.accentBg, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 TextField(T("Search people"), text: $search)
                     .font(NXFont.text(15)).padding(12)
@@ -126,6 +141,11 @@ struct AddProjectPeopleSheet: View {
         .buttonStyle(.plain)
     }
 
+    private var isGroup: Bool {
+        if case .group = target { return true }
+        return false
+    }
+
     private func load() async {
         if let r = try? await APIClient.shared.roster() { roster = r.members ?? [] }
         loading = false
@@ -135,17 +155,33 @@ struct AddProjectPeopleSheet: View {
         busy = true
         error = nil
         defer { busy = false }
-        var failed: [String] = []
-        for uid in picked {
-            do { try await APIClient.shared.addProjectMember(projectId: projectId, userId: uid) }
-            catch { failed.append(uid) }
-        }
-        if failed.isEmpty {
-            onAdded()
-            dismiss()
-        } else {
-            // Partial success is real: some may already be members, or the caller may lack rights.
-            error = T("Couldn't add everyone. Some people were left out.")
+        switch target {
+        case .project(let projectId):
+            // One call per person: the project endpoint takes a single userId, and a partial
+            // success here is real — some may already be members, or the caller may lack rights.
+            var failed: [String] = []
+            for uid in picked {
+                do { try await APIClient.shared.addProjectMember(projectId: projectId, userId: uid) }
+                catch { failed.append(uid) }
+            }
+            if failed.isEmpty {
+                onAdded()
+                dismiss()
+            } else {
+                error = T("Couldn't add everyone. Some people were left out.")
+            }
+
+        case .group(let conversationId):
+            // One call for everyone: the conversation endpoint takes the whole list, so either the
+            // room changes or it doesn't — there is no half-added state to explain.
+            do {
+                _ = try await APIClient.shared.addConversationMembers(conversationId, userIds: Array(picked))
+                onAdded()
+                dismiss()
+            } catch {
+                self.error = (error as? LocalizedError)?.errorDescription
+                    ?? T("Couldn't add everyone. Some people were left out.")
+            }
         }
     }
 }
