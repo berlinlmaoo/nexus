@@ -133,7 +133,8 @@ struct MessagesView: View {
     @ViewBuilder private var threadPane: some View {
         if let c = selected {
             ChatThreadView(conversationId: c.id, title: c.title(meId: meId),
-                           members: c.members ?? [], projectId: c.projectId, type: c.type)
+                           members: c.members ?? [], projectId: c.projectId, type: c.type,
+                           usesInlineHeader: true)
                 // Keyed by id: without it, switching conversations reuses the same view and the
                 // previous chat's messages sit under the new one's title until the fetch lands.
                 .id(c.id)
@@ -325,6 +326,14 @@ struct ChatThreadView: View {
     var projectId: String? = nil
     /// DM | GROUP | PROJECT. Only a GROUP can be renamed; the server rejects the other two.
     var type: String? = nil
+    /// True when the thread is one column of a two-pane layout.
+    ///
+    /// A navigation bar belongs to a whole screen, not to a column of one: in the split layout it
+    /// stretched across both panes, so the conversation's name sat centred above the chat list next
+    /// to it. Drawing the header inside the column puts the title over the thread it names. The
+    /// NavigationStack stays — the thread still pushes into a task and into project settings — only
+    /// its bar is hidden.
+    var usesInlineHeader: Bool = false
     @Environment(AuthStore.self) private var auth
     @State private var messages: [ChatMessage] = []
     @State private var input = ""
@@ -347,6 +356,44 @@ struct ChatThreadView: View {
     private var meId: String? { auth.session?.userId }
     private var mentionable: [Conversation.Member] {
         members.filter { !$0.uid.isEmpty && $0.uid != meId }
+    }
+
+    /// Stands in for the navigation bar in the split layout: the same title and the same two
+    /// actions, drawn inside the column so they sit over the conversation they belong to.
+    private var inlineHeader: some View {
+        HStack(spacing: 12) {
+            Text(shownTitle ?? title)
+                .font(NXFont.display(17, .bold))
+                .foregroundStyle(NX.foreground)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            // Same two conditions as the toolbar above, for the same reasons: only a project room
+            // has an add-member endpoint, and only a GROUP owns a name the server will change.
+            if projectId != nil {
+                Button { showAddPeople = true } label: {
+                    Image(systemName: "person.badge.plus")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(NX.violetText)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(T("Add people"))
+            }
+            if type == "GROUP" {
+                Button {
+                    renameDraft = shownTitle ?? title
+                    showRename = true
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(NX.violetText)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(T("Rename group"))
+            }
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 52)
+        .background(NX.background)
     }
 
     /// The mention token currently being typed, or nil when we aren't in one.
@@ -375,6 +422,10 @@ struct ChatThreadView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if usesInlineHeader {
+                inlineHeader
+                Divider().overlay(NX.border)
+            }
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 6) {
@@ -404,7 +455,8 @@ struct ChatThreadView: View {
             composer
         }
         .background(NX.background.ignoresSafeArea())
-        .navigationTitle(shownTitle ?? title)
+        .navigationTitle(usesInlineHeader ? "" : (shownTitle ?? title))
+        .toolbar(usesInlineHeader ? .hidden : .visible, for: .navigationBar)
         .toolbar {
             // Only project rooms: their membership is derived from the project, so there is a
             // sane thing to do here. A plain GROUP has no add-member endpoint at all.
