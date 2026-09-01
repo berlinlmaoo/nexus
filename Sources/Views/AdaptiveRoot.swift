@@ -281,27 +281,30 @@ struct SidebarRoot: View {
                 // clear of those same window controls, which land on the detail column once the
                 // sidebar is no longer underneath them.
                 .safeAreaInset(edge: .leading, spacing: 0) {
-                    if columns == .detailOnly {
-                        VStack {
-                            Spacer(minLength: 0)
-                            Button {
-                                withAnimation(.snappy) { columns = .all }
-                            } label: {
-                                Image(systemName: "sidebar.leading")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(NX.foreground)
-                                    .frame(width: 38, height: 38)
-                                    .background(.regularMaterial, in: Circle())
-                                    .overlay(Circle().strokeBorder(NX.border))
-                                    .nexusShadowSoft()
+                    // Always present, and it swings both ways. Removing Apple's toolbar toggle took
+                    // the only control that could CLOSE the sidebar with it — a handle that appears
+                    // once the sidebar is gone can bring it back but can never send it away.
+                    VStack {
+                        Spacer(minLength: 0)
+                        Button {
+                            withAnimation(.snappy) {
+                                columns = columns == .detailOnly ? .all : .detailOnly
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(T("Show sidebar"))
-                            Spacer(minLength: 0)
+                        } label: {
+                            Image(systemName: "sidebar.leading")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(columns == .detailOnly ? NX.foreground : NX.violetText)
+                                .frame(width: 38, height: 38)
+                                .background(.regularMaterial, in: Circle())
+                                .overlay(Circle().strokeBorder(NX.border))
+                                .nexusShadowSoft()
                         }
-                        .padding(.leading, 10)
-                        .padding(.trailing, 4)
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(columns == .detailOnly ? T("Show sidebar") : T("Hide sidebar"))
+                        Spacer(minLength: 0)
                     }
+                    .padding(.leading, 10)
+                    .padding(.trailing, 4)
                 }
                 .safeAreaInset(edge: .top, spacing: 0) {
                     if columns == .detailOnly && needsOwnButton {

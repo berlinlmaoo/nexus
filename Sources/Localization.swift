@@ -86,6 +86,7 @@ final class AppLanguage {
         "My Submissions": "Pengajuan Saya",
         "Send a photo": "Kirim foto",
         "Show sidebar": "Tampilkan bilah sisi",
+        "Hide sidebar": "Sembunyikan bilah sisi",
         "Pinned": "Disematkan",
         "Recent": "Baru dibuka",
         "Pin": "Sematkan",
