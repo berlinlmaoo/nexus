@@ -85,10 +85,11 @@ function Messages() {
                 {active.type === "GROUP" && (
                   <button onClick={() => setRenaming(true)} title="Rename group" className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent"><Pencil className="h-4 w-4" /></button>
                 )}
-                {/* Only project rooms can take new people: their membership is derived from the
-                    project, so adding someone here really means adding them to the project. A plain
-                    group has no such source of truth and no endpoint to add to it yet. */}
-                {active.type === "PROJECT" && active.projectId && (
+                {/* Both kinds of room can take people, by different routes. A project room's
+                    membership is derived from the project, so adding here really means adding to
+                    the project; a plain group owns its own list and has had an endpoint of its own
+                    since /api/conversations/[id]/members. A DM stays closed. */}
+                {(active.type === "GROUP" || (active.type === "PROJECT" && active.projectId)) && (
                   <button onClick={() => setAdding(true)} title="Add people" className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent"><UserPlus className="h-4 w-4" /></button>
                 )}
               </div>
@@ -101,7 +102,11 @@ function Messages() {
       </div>
       {composer && <NewChat onClose={() => setComposer(false)} onCreated={(id) => { setActiveId(id); setComposer(false); }} meId={meId} />}
       {renaming && active && <RenameGroup conversation={active} onClose={() => setRenaming(false)} />}
-      {adding && active?.projectId && <AddPeople projectId={active.projectId} onClose={() => setAdding(false)} />}
+      {adding && active && (
+        active.projectId
+          ? <AddPeople target={{ kind: "project", projectId: active.projectId }} onClose={() => setAdding(false)} />
+          : <AddPeople target={{ kind: "group", conversationId: active.id }} onClose={() => setAdding(false)} />
+      )}
     </div>
   );
 }
@@ -137,29 +142,50 @@ function RenameGroup({ conversation, onClose }: { conversation: NexusConversatio
   );
 }
 
-function AddPeople({ projectId, onClose }: { projectId: string; onClose: () => void }) {
+type AddPeopleTarget =
+  | { kind: "project"; projectId: string }
+  | { kind: "group"; conversationId: string };
+
+function AddPeople({ target, onClose }: { target: AddPeopleTarget; onClose: () => void }) {
   const qc = useQueryClient();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const isProject = target.kind === "project";
   const roster = useQuery({ queryKey: ["members"], queryFn: () => nexusApi.members(), staleTime: 300_000 });
-  const current = useQuery({ queryKey: ["project-members", projectId], queryFn: () => nexusApi.projectMembers(projectId) });
+  // A project room asks the project who belongs; a group carries its own roster. The two endpoints
+  // answer in different shapes, so the query itself flattens them to the only thing this component
+  // needs — a set of user ids. Returning the raw responses left queryFn with a union type that
+  // TanStack Query could not infer.
+  const current = useQuery({
+    queryKey: target.kind === "project"
+      ? ["project-members", target.projectId]
+      : ["conversation", target.conversationId],
+    queryFn: async (): Promise<string[]> => {
+      if (target.kind === "project") {
+        const data = await nexusApi.projectMembers(target.projectId);
+        const rows = Array.isArray(data) ? data : data.members ?? [];
+        return rows.map((m) => m.userId ?? m.user?.id).filter(Boolean) as string[];
+      }
+      const data = await nexusApi.conversation(target.conversationId);
+      return (data.conversation.members ?? []).map((m) => m.userId ?? m.user?.id).filter(Boolean) as string[];
+    },
+  });
 
   const all = (Array.isArray(roster.data) ? roster.data : roster.data?.members ?? []) as NexusUser[];
-  const inProject = new Set(
-    ((Array.isArray(current.data) ? current.data : current.data?.members ?? []) as Array<{ userId?: string; user?: NexusUser }>)
-      .map((m) => m.userId ?? m.user?.id)
-      .filter(Boolean) as string[],
-  );
-  const candidates = all.filter((u) => !inProject.has(u.id));
+  const already = new Set(current.data ?? []);
+  const candidates = all.filter((u) => !already.has(u.id));
 
   const add = async (u: NexusUser) => {
     setBusyId(u.id); setFailed(false);
     try {
-      await nexusApi.addProjectMember(projectId, u.id);
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ["project-members", projectId] }),
-        qc.invalidateQueries({ queryKey: ["conversations"] }),
-      ]);
+      if (target.kind === "project") {
+        await nexusApi.addProjectMember(target.projectId, u.id);
+        await qc.invalidateQueries({ queryKey: ["project-members", target.projectId] });
+      } else {
+        await nexusApi.addConversationMembers(target.conversationId, [u.id]);
+        await qc.invalidateQueries({ queryKey: ["conversation", target.conversationId] });
+      }
+      await qc.invalidateQueries({ queryKey: ["conversations"] });
     } catch {
       setFailed(true);
     } finally {
@@ -168,10 +194,16 @@ function AddPeople({ projectId, onClose }: { projectId: string; onClose: () => v
   };
 
   return (
-    <Shell title="Add people" hint="They join the project too — a project room's membership follows the project." onClose={onClose}>
+    <Shell
+      title="Add people"
+      hint={isProject
+        ? "They join the project too — a project room's membership follows the project."
+        : "They join this chat straight away."}
+      onClose={onClose}
+    >
       <div className="mt-3 max-h-64 space-y-1 overflow-y-auto rounded-xl border border-border p-1">
         {(roster.isLoading || current.isLoading) && <div className="px-3 py-2 text-xs text-muted-foreground">Loading…</div>}
-        {!roster.isLoading && !current.isLoading && candidates.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">Everyone is already in this project.</div>}
+        {!roster.isLoading && !current.isLoading && candidates.length === 0 && <div className="px-3 py-2 text-xs text-muted-foreground">{isProject ? "Everyone is already in this project." : "Everyone is already in this chat."}</div>}
         {candidates.map((u) => (
           <button key={u.id} disabled={busyId !== null} onClick={() => add(u)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent disabled:opacity-50">
             <span className="grid h-7 w-7 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{initialsOf(u.name)}</span>

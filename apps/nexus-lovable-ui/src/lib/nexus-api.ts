@@ -1411,6 +1411,16 @@ export const nexusApi = {
     fd.append("conversationId", conversationId);
     return apiFetch<{ url: string; type: string }>("/api/upload/chat", { method: "POST", body: fd });
   },
+  /**
+   * Add people to a GROUP chat. The server refuses DMs (two people is what a DM means) and project
+   * rooms (their membership is derived from the project), and silently skips anyone outside your
+   * workspace or already in the room.
+   */
+  addConversationMembers: (id: string, userIds: string[]) =>
+    apiFetch<{ conversation: NexusConversation; added?: number }>(`/api/conversations/${id}/members`, {
+      method: "POST",
+      body: JSON.stringify({ userIds }),
+    }),
   /** GROUP rooms only: a DM is named after the other person and a project room after its project. */
   renameConversation: (id: string, name: string) =>
     apiFetch<{ conversation: NexusConversation }>(`/api/conversations/${id}`, {
