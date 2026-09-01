@@ -203,129 +203,131 @@ struct TabRoot: View {
 }
 
 /// iPad / Mac shape — every destination visible at once, detail on the right.
-///
-/// Built by hand out of an HStack rather than with NavigationSplitView. The split view animates a
-/// column into place generously and takes it away almost instantly, and it does not honour a
-/// caller's animation for the closing direction — the sidebar opened with a glide and shut with a
-/// blink, and no amount of tuning the curve changed that, because the curve was never being used.
-/// An HStack with an animated width is plain arithmetic: the same spring runs in both directions.
 struct SidebarRoot: View {
     @State private var selection: NXSelection? = .screen(.dashboard)
-    @State private var showSidebar = true
+    @State private var columns: NavigationSplitViewVisibility = .all
     @State private var shortcuts = ProjectShortcuts.shared
 
-    private static let sidebarWidth: CGFloat = 300
-    private static let slide = Animation.spring(response: 0.38, dampingFraction: 0.86)
-
     var body: some View {
-        HStack(spacing: 0) {
-            sidebar
-                .frame(width: showSidebar ? Self.sidebarWidth : 0)
-                .opacity(showSidebar ? 1 : 0)
-                // Without this the rows keep drawing past the shrinking frame and spill across the
-                // detail column for the length of the animation.
-                .clipped()
-
-            if showSidebar {
-                Divider().overlay(NX.border)
-            }
-
-            detailColumn
-        }
-        .animation(Self.slide, value: showSidebar)
-    }
-
-    // MARK: sidebar
-
-    private var sidebar: some View {
-        List(selection: $selection) {
-            ForEach(Array(NXScreen.groups.enumerated()), id: \.offset) { index, group in
-                // Project shortcuts sit directly under the four top-level destinations, not at the
-                // bottom of the list. They are the rows reached most often, and a shortcut you have
-                // to scroll past everything else to reach is not a shortcut.
-                if index == 1 {
-                    if !shortcuts.pinned.isEmpty {
-                        Section { projectRows(shortcuts.pinned) } header: { SectionLabel(T("Pinned")) }
-                    }
-                    // Anything already pinned is skipped: a project in both lists reads as a
-                    // duplicate rather than as two kinds of shortcut.
-                    let recents = shortcuts.recent.filter { !shortcuts.isPinned($0.id) }
-                    if !recents.isEmpty {
-                        Section { projectRows(recents) } header: { SectionLabel(T("Recent")) }
-                    }
-                }
-                Section {
-                    ForEach(group.screens) { screen in
-                        Label {
-                            Text(screen.title).font(NXFont.text(15, .semibold))
-                        } icon: {
-                            Image(systemName: screen.icon).foregroundStyle(screen.tint)
+        NavigationSplitView(columnVisibility: $columns) {
+            List(selection: $selection) {
+                ForEach(Array(NXScreen.groups.enumerated()), id: \.offset) { index, group in
+                    // Project shortcuts sit directly under the four top-level destinations, not at
+                    // the bottom of the list. They are the rows reached most often, and a shortcut
+                    // you have to scroll past everything else to reach is not a shortcut.
+                    if index == 1 {
+                        if !shortcuts.pinned.isEmpty {
+                            Section { projectRows(shortcuts.pinned) } header: { SectionLabel(T("Pinned")) }
                         }
-                        .tag(NXSelection.screen(screen))
+                        // Anything already pinned is skipped: a project in both lists reads as a
+                        // duplicate rather than as two kinds of shortcut.
+                        let recents = shortcuts.recent.filter { !shortcuts.isPinned($0.id) }
+                        if !recents.isEmpty {
+                            Section { projectRows(recents) } header: { SectionLabel(T("Recent")) }
+                        }
                     }
-                } header: {
-                    if let title = group.title {
-                        SectionLabel(title)
+                    Section {
+                        ForEach(group.screens) { screen in
+                            Label {
+                                Text(screen.title).font(NXFont.text(15, .semibold))
+                            } icon: {
+                                Image(systemName: screen.icon).foregroundStyle(screen.tint)
+                            }
+                            .tag(NXSelection.screen(screen))
+                        }
+                    } header: {
+                        if let title = group.title {
+                            SectionLabel(title)
+                        }
                     }
                 }
+
+                Section {
+                    AccountFooter()
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
+                }
             }
-
-            Section {
-                AccountFooter()
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
-            }
-        }
-        .listStyle(.sidebar)
-        .scrollIndicators(.hidden)
-    }
-
-    // MARK: detail
-
-    private var detailColumn: some View {
-        let needsOwnButton = detailHidesNavigationBar
-        return detail(for: selection ?? .screen(.dashboard))
-            // The bar sat against the right edge of the reading column rather than the window,
-            // which read as a stray line down the middle of the screen. Content is scrolled by
-            // hand here, not dragged by the bar.
+            .listStyle(.sidebar)
             .scrollIndicators(.hidden)
-            // The handle lives at the left edge, vertically centred, and swings both ways. It
-            // cannot sit in the top-left corner: iPadOS draws its own window controls there and
-            // they do not move for anyone.
-            .safeAreaInset(edge: .leading, spacing: 0) {
-                VStack {
-                    Spacer(minLength: 0)
-                    Button {
-                        showSidebar.toggle()
-                    } label: {
-                        Image(systemName: "sidebar.leading")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(showSidebar ? NX.violetText : NX.foreground)
-                            .frame(width: 38, height: 38)
-                            .background(.regularMaterial, in: Circle())
-                            .overlay(Circle().strokeBorder(NX.border))
-                            .nexusShadowSoft()
+            // Apple's own toggle lives in the DETAIL column's navigation bar, so it appeared on the
+            // seventeen screens that have one and vanished on the two that don't — the control moved
+            // depending on where you happened to be. Remove it and carry one handle everywhere.
+            .toolbar(removing: .sidebarToggle)
+            // No title: the sidebar is the app's own furniture, and a word repeating the app name
+            // above its own menu is a row of pixels that tells the reader nothing.
+            .navigationTitle("")
+        } detail: {
+            let needsOwnButton = detailHidesNavigationBar
+            detail(for: selection ?? .screen(.dashboard))
+                // The bar sat against the right edge of the reading column rather than the window,
+                // which read as a stray line down the middle of the screen. Content is scrolled by
+                // hand here, not dragged by the bar.
+                .scrollIndicators(.hidden)
+                // NavigationSplitView parks its own show/hide button in the DETAIL column's
+                // navigation bar. Dashboard and the project board both hide that bar to draw their
+                // own headers, so there it has nowhere to live: collapse the sidebar once and it
+                // can never be brought back.
+                //
+                // Two insets, both only while the sidebar is away, because they answer two
+                // different problems.
+                //
+                // The LEADING strip carries the button: left edge, vertically centred, like a
+                // handle you pull the sidebar out by. It cannot sit in the top-left corner —
+                // iPadOS draws its own window controls there and they do not move for anyone —
+                // and safeAreaInset reserves the strip rather than floating over content, so
+                // nothing is ever covered.
+                //
+                // The TOP band is empty on purpose. It exists only to push the screen's own header
+                // clear of those same window controls, which land on the detail column once the
+                // sidebar is no longer underneath them.
+                .safeAreaInset(edge: .leading, spacing: 0) {
+                    // Always present, and it swings both ways. Removing Apple's toolbar toggle took
+                    // the only control that could CLOSE the sidebar with it — a handle that appears
+                    // once the sidebar is gone can bring it back but can never send it away.
+                    VStack {
+                        Spacer(minLength: 0)
+                        Button {
+                            // A spring rather than .snappy, and named here rather than left to the
+                            // system: .snappy is short by design, and NavigationSplitView reveals a
+                            // column more generously than it takes one away — closing looked
+                            // instant next to opening. The same curve in both directions is the
+                            // point; the duration is only long enough to be seen.
+                            withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+                                columns = columns == .detailOnly ? .all : .detailOnly
+                            }
+                        } label: {
+                            Image(systemName: "sidebar.leading")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(columns == .detailOnly ? NX.foreground : NX.violetText)
+                                .frame(width: 38, height: 38)
+                                .background(.regularMaterial, in: Circle())
+                                .overlay(Circle().strokeBorder(NX.border))
+                                .nexusShadowSoft()
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(columns == .detailOnly ? T("Show sidebar") : T("Hide sidebar"))
+                        Spacer(minLength: 0)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(showSidebar ? T("Hide sidebar") : T("Show sidebar"))
-                    Spacer(minLength: 0)
+                    .padding(.leading, 10)
+                    .padding(.trailing, 4)
                 }
-                .padding(.leading, 10)
-                .padding(.trailing, 4)
-            }
-            // Reserved on every screen that hides its navigation bar, whatever the sidebar is
-            // doing. An inset that comes and goes mid-animation is not driven by the same
-            // transaction as the slide, so the content used to snap while the sidebar moved.
-            .safeAreaInset(edge: .top, spacing: 0) {
-                if needsOwnButton {
-                    Color.clear.frame(height: 44)
+                // Reserved on every screen that hides its navigation bar, whatever the sidebar is
+                // doing. It used to appear and disappear with the sidebar, and a safe-area inset
+                // that comes and goes mid-animation is not animated by the same transaction as the
+                // columns are — the content snapped while the sidebar slid, which is why the
+                // collapse looked instant one time and animated the next.
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if needsOwnButton {
+                        Color.clear.frame(height: 44)
+                    }
                 }
-            }
-            .frame(maxWidth: .infinity)
+        }
     }
 
-    /// Whether the detail column draws without a navigation bar, and therefore has nowhere for a
-    /// system sidebar button to live. Project boards hide their bar too.
+    /// Whether the detail column draws without a navigation bar, and therefore has nowhere for the
+    /// system's sidebar button to live. Project boards hide their bar too, so a shortcut opened
+    /// from the sidebar would otherwise strand the user exactly like Dashboard did.
     private var detailHidesNavigationBar: Bool {
         switch selection {
         case .screen(let s):  return s.hidesNavigationBar
