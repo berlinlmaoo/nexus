@@ -261,7 +261,7 @@ struct SidebarRoot: View {
                             Button {
                                 withAnimation(.snappy) { columns = .all }
                             } label: {
-                                Image(systemName: sidebar.leading)
+                                Image(systemName: "sidebar.leading")
                                     .font(.system(size: 15, weight: .semibold))
                                     .foregroundStyle(NX.foreground)
                                     .frame(width: 38, height: 38)
@@ -270,7 +270,7 @@ struct SidebarRoot: View {
                                     .nexusShadowSoft()
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(T(Show sidebar))
+                            .accessibilityLabel(T("Show sidebar"))
                             Spacer(minLength: 0)
                         }
                         .padding(.leading, 10)
