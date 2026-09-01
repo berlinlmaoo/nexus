@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Mac Catalyst entitlements, kept separate from the iOS ones on purpose.
+	     The com.apple.security.* keys below are macOS sandbox entitlements. On an iOS build they
+	     are not merely useless: an unrecognised entitlement makes provisioning fail outright, so
+	     the two platforms cannot share one file. project.yml points the macosx SDK at this one. -->
+
+	<key>aps-environment</key>
+	<string>development</string>
+
+	<!-- Required for the Mac App Store. Everything below re-opens exactly what the sandbox closes
+	     and nothing more; each line is a capability the app already uses on iOS. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+
+	<!-- Outbound only. The app talks to nexus.znetworks.id and to Apple's push service; it never
+	     listens for connections, so no server entitlement. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+
+	<!-- Attendance verifies you are inside a registered office area. Without this the sandbox
+	     denies CoreLocation and check-in fails with no visible reason. -->
+	<key>com.apple.security.personal-information.location</key>
+	<true/>
+
+	<!-- Photos chosen for a chat message or an avatar. PhotosPicker runs out of process, but the
+	     file it hands back still has to be readable. -->
+	<key>com.apple.security.files.user-selected.read-only</key>
+	<true/>
+</dict>
+</plist>

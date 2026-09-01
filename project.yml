@@ -47,6 +47,19 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: id.znetworks.nexus
         PRODUCT_NAME: NEXUS
         CODE_SIGN_ENTITLEMENTS: NEXUS.entitlements
+        # Mac Catalyst: the same code, built as a Mac app.
+        #
+        # The Mac needs its own entitlements file and cannot share the iOS one. The Mac App Store
+        # requires the app sandbox, and the com.apple.security.* keys that open it back up again
+        # are macOS-only - an iOS build carrying an unrecognised entitlement fails provisioning
+        # rather than ignoring it. The bracketed key below is a conditional build setting: it
+        # applies only when the SDK is macOS, and the plain key above still covers iOS and iPadOS.
+        SUPPORTS_MACCATALYST: YES
+        CODE_SIGN_ENTITLEMENTS[sdk=macosx*]: NEXUS-Catalyst.entitlements
+        # Keep one bundle identifier across all three platforms. Left to itself Xcode invents a
+        # "maccatalyst." prefixed one, which would be a different app to App Store Connect, to the
+        # push service, and to every device already carrying a token.
+        DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         # 1,2 = iPhone + iPad. This MUST live on the target, not on the project above: XcodeGen's
