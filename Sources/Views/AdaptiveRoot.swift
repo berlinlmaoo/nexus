@@ -88,6 +88,15 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
+    /// True for screens that draw their own header instead of a navigation bar. They are the only
+    /// ones that need a hand-made sidebar button, because the system's lives in a bar they hide.
+    var hidesNavigationBar: Bool {
+        switch self {
+        case .dashboard: return true
+        default: return false
+        }
+    }
+
     /// The four phone tab roots each build their own NavigationStack. The launcher screens were
     /// written to be pushed INTO MoreView's stack, so they have none of their own — the sidebar
     /// has to supply one or their toolbars and titles simply never appear.
@@ -203,37 +212,42 @@ struct SidebarRoot: View {
             .navigationTitle("NEXUS")
         } detail: {
             let screen = selection ?? .dashboard
-            ZStack(alignment: .topLeading) {
-                if screen.ownsNavigationStack {
-                    screen.view
-                } else {
-                    NavigationStack { screen.view }
-                }
-
+            detail(for: screen)
                 // NavigationSplitView parks its own show/hide button in the DETAIL column's
-                // navigation bar. DashboardView sets .navigationBarHidden(true), so on that screen
-                // there is no bar to park it in: collapse the sidebar once and it can never be
-                // brought back. Rather than force a navigation bar onto screens designed without
-                // one, carry our own button and show it only while the sidebar is away.
-                if columns == .detailOnly {
-                    Button {
-                        withAnimation(.snappy) { columns = .all }
-                    } label: {
-                        Image(systemName: "sidebar.leading")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(NX.foreground)
-                            .frame(width: 38, height: 38)
-                            .background(.regularMaterial, in: Circle())
-                            .overlay(Circle().strokeBorder(NX.border))
-                            .nexusShadowSoft()
+                // navigation bar. Dashboard hides that bar to draw its own header, so there it has
+                // nowhere to live: collapse the sidebar once and it can never be brought back.
+                //
+                // safeAreaInset rather than an overlay, because an overlay sat on top of the
+                // greeting. This reserves the strip instead, so nothing is ever covered — and it
+                // costs nothing on the seventeen screens that keep their navigation bar, where the
+                // system button already works and a second one would just be clutter.
+                .safeAreaInset(edge: .top, alignment: .leading, spacing: 0) {
+                    if columns == .detailOnly && screen.hidesNavigationBar {
+                        Button {
+                            withAnimation(.snappy) { columns = .all }
+                        } label: {
+                            Image(systemName: "sidebar.leading")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(NX.foreground)
+                                .frame(width: 38, height: 38)
+                                .background(.regularMaterial, in: Circle())
+                                .overlay(Circle().strokeBorder(NX.border))
+                                .nexusShadowSoft()
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.leading, 16)
+                        .padding(.vertical, 8)
+                        .accessibilityLabel(T("Show sidebar"))
                     }
-                    .buttonStyle(.plain)
-                    .padding(.leading, 14)
-                    .padding(.top, 10)
-                    .transition(.opacity)
-                    .accessibilityLabel(T("Show sidebar"))
                 }
-            }
+        }
+    }
+
+    @ViewBuilder private func detail(for screen: NXScreen) -> some View {
+        if screen.ownsNavigationStack {
+            screen.view
+        } else {
+            NavigationStack { screen.view }
         }
     }
 }
