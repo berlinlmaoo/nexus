@@ -238,25 +238,30 @@ struct SidebarRoot: View {
             let needsOwnButton = detailHidesNavigationBar
             detail(for: selection ?? .screen(.dashboard))
                 // NavigationSplitView parks its own show/hide button in the DETAIL column's
-                // navigation bar. Dashboard hides that bar to draw its own header, so there it has
-                // nowhere to live: collapse the sidebar once and it can never be brought back.
+                // navigation bar. Dashboard and the project board both hide that bar to draw their
+                // own headers, so there it has nowhere to live: collapse the sidebar once and it
+                // can never be brought back.
                 //
-                // safeAreaInset rather than an overlay, because an overlay sat on top of the
-                // greeting. This reserves the strip instead, so nothing is ever covered — and it
-                // costs nothing on the seventeen screens that keep their navigation bar, where the
-                // system button already works and a second one would just be clutter.
+                // Two insets, both only while the sidebar is away, because they answer two
+                // different problems.
                 //
-                // The button sits at the TRAILING end of that strip. iPadOS draws its own window
-                // controls (close / minimise / full screen) over the leading corner, and they do
-                // not move for anyone; a button placed there lands underneath them.
-                .safeAreaInset(edge: .top, spacing: 0) {
+                // The LEADING strip carries the button: left edge, vertically centred, like a
+                // handle you pull the sidebar out by. It cannot sit in the top-left corner —
+                // iPadOS draws its own window controls there and they do not move for anyone —
+                // and safeAreaInset reserves the strip rather than floating over content, so
+                // nothing is ever covered.
+                //
+                // The TOP band is empty on purpose. It exists only to push the screen's own header
+                // clear of those same window controls, which land on the detail column once the
+                // sidebar is no longer underneath them.
+                .safeAreaInset(edge: .leading, spacing: 0) {
                     if columns == .detailOnly && needsOwnButton {
-                        HStack {
+                        VStack {
                             Spacer(minLength: 0)
                             Button {
                                 withAnimation(.snappy) { columns = .all }
                             } label: {
-                                Image(systemName: "sidebar.leading")
+                                Image(systemName: sidebar.leading)
                                     .font(.system(size: 15, weight: .semibold))
                                     .foregroundStyle(NX.foreground)
                                     .frame(width: 38, height: 38)
@@ -265,13 +270,16 @@ struct SidebarRoot: View {
                                     .nexusShadowSoft()
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(T("Show sidebar"))
+                            .accessibilityLabel(T(Show sidebar))
+                            Spacer(minLength: 0)
                         }
-                        // The band clears iPadOS window controls; the button sits at the far end
-                        // because those controls own the leading corner and will not move.
-                        .frame(height: 44)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 6)
+                        .padding(.leading, 10)
+                        .padding(.trailing, 4)
+                    }
+                }
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if columns == .detailOnly && needsOwnButton {
+                        Color.clear.frame(height: 44)
                     }
                 }
         }
