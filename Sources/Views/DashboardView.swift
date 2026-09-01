@@ -24,6 +24,10 @@ struct DashboardView: View {
     @State private var morphSourceRect: CGRect = .zero
     @State private var morphExpanded = false
     @State private var morphTarget: CGRect = .zero
+    /// A morph modal holds one column of content, so its width is set by reading comfort rather
+    /// than by the screen. Uncapped it spanned a full iPad in landscape - a quests panel with one
+    /// line in it stretched a metre wide. Never binds on a phone, which is narrower than this.
+    private static let morphMaxWidth: CGFloat = 560
     @State private var morphShowModal = true   // open: modal solid (FLIP scale). close: fades out as the card fades in.
 
     private var name: String { profile?.name ?? auth.session?.userName ?? T("Commander") }
@@ -251,7 +255,7 @@ struct DashboardView: View {
                 .opacity(morphReady ? 1 : 0)
         }
         .padding(18)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: Self.morphMaxWidth)
         .background {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(LinearGradient(colors: [Color(hex: d.from), Color(hex: d.to)], startPoint: .topLeading, endPoint: .bottomTrailing))
@@ -339,7 +343,7 @@ struct DashboardView: View {
             }
             .opacity(morphReady ? 1 : 0)
         }
-        .padding(18).frame(maxWidth: .infinity)
+        .padding(18).frame(maxWidth: Self.morphMaxWidth)
         .background {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(NX.card)
@@ -410,7 +414,7 @@ struct DashboardView: View {
             }
             .opacity(morphReady ? 1 : 0)   // detail fades in just after the card lands (web: delay 0.15)
         }
-        .padding(18).frame(maxWidth: .infinity)
+        .padding(18).frame(maxWidth: Self.morphMaxWidth)
         .background {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(NX.card)
