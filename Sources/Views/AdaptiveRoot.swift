@@ -99,7 +99,10 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
     /// ground the wider it is.
     var contentMaxWidth: CGFloat? {
         switch self {
-        case .attendance, .projects, .submissions, .teamCalendar, .roomBooking, .reports:
+        // Messages is two panes side by side once there is room, and a two-column layout wants the
+        // width the same way a board does — capped, it sat squeezed in the middle of the screen
+        // with empty margins either side.
+        case .attendance, .projects, .submissions, .teamCalendar, .roomBooking, .reports, .messages:
             return nil
         default:
             return 900
