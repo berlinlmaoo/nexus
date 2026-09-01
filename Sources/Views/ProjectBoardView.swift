@@ -298,6 +298,20 @@ struct LaneColumn: View {
     @State private var adding = false
     /// True while a card is hovering over this column, so the target is obvious before you let go.
     @State private var dropTargeted = false
+
+    /// Unfinished work first, finished work after it.
+    ///
+    /// The server orders a lane by `position` — the manual order cards were put in — which is the
+    /// right answer for a pure kanban board, where the column IS the status and nothing inside it
+    /// is ever "done". NEXUS lets a task be ticked off without leaving its column, so that
+    /// assumption leaks: a finished card sits wherever it happened to be, between two live ones.
+    ///
+    /// The split is stable, so `position` still decides the order inside each half — dragging a
+    /// card to a lane still lands it where the server put it, relative to its peers.
+    private var orderedTasks: [BoardTask] {
+        let tasks = lane.tasks ?? []
+        return tasks.filter { !$0.isDone } + tasks.filter { $0.isDone }
+    }
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -315,7 +329,7 @@ struct LaneColumn: View {
 
             ScrollView(.vertical, showsIndicators: false) {
               LazyVStack(alignment: .leading, spacing: 10) {
-            ForEach(lane.tasks ?? []) { task in
+            ForEach(orderedTasks) { task in
                 Button { onOpen(task.id) } label: { BoardCard(task: task) }.buttonStyle(.plain)
                     // The task id is the whole payload. Dragging the card itself would mean making
                     // Task Transferable and shipping a copy of the model between columns, when all
