@@ -224,8 +224,12 @@ struct DashboardView: View {
     @ViewBuilder private var statModal: some View {
         if let a = activeStat, a < statData.count {
             ZStack {
-                Color.black.opacity(0.5).ignoresSafeArea()
-                    .transition(.opacity)
+                // No scrim. Dimming the whole screen to open a card that is itself a panel of the
+                // same screen reads as a modal interruption, which this is not — it is one card
+                // growing. Still a full-size layer so a tap outside closes it; clear needs an
+                // explicit contentShape or it lets touches straight through.
+                Color.clear.ignoresSafeArea()
+                    .contentShape(Rectangle())
                     .onTapGesture { toggleStat(nil) }
                 statModalCard(a)
                     .padding(.horizontal, 18)
@@ -301,7 +305,11 @@ struct DashboardView: View {
     @ViewBuilder private var levelModal: some View {
         if activeLevel {
             ZStack {
-                Color.black.opacity(0.5).ignoresSafeArea().transition(.opacity).onTapGesture { toggleLevel(false) }
+                // No scrim. Dimming the whole screen to open a card that is itself a panel of the
+                // same screen reads as a modal interruption, which this is not — it is one card
+                // growing. Still a full-size layer so a tap outside closes it; clear needs an
+                // explicit contentShape or it lets touches straight through.
+                Color.clear.ignoresSafeArea().contentShape(Rectangle()).onTapGesture { toggleLevel(false) }
                 levelModalCard.padding(.horizontal, 18)
             }
             .zIndex(20)
@@ -372,7 +380,11 @@ struct DashboardView: View {
     @ViewBuilder private var bellModal: some View {
         if activeBell {
             ZStack {
-                Color.black.opacity(0.5).ignoresSafeArea().transition(.opacity).onTapGesture { toggleBell(false) }
+                // No scrim. Dimming the whole screen to open a card that is itself a panel of the
+                // same screen reads as a modal interruption, which this is not — it is one card
+                // growing. Still a full-size layer so a tap outside closes it; clear needs an
+                // explicit contentShape or it lets touches straight through.
+                Color.clear.ignoresSafeArea().contentShape(Rectangle()).onTapGesture { toggleBell(false) }
                 bellModalCard.padding(.horizontal, 18)
             }
             .zIndex(20)
