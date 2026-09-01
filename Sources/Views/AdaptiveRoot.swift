@@ -249,6 +249,7 @@ struct SidebarRoot: View {
                 }
             }
             .listStyle(.sidebar)
+            .scrollIndicators(.hidden)
             // Apple's own toggle lives in the DETAIL column's navigation bar, so it appeared on the
             // seventeen screens that have one and vanished on the two that don't — the control moved
             // depending on where you happened to be. Remove it and carry one handle everywhere.
@@ -306,8 +307,13 @@ struct SidebarRoot: View {
                     .padding(.leading, 10)
                     .padding(.trailing, 4)
                 }
+                // Reserved on every screen that hides its navigation bar, whatever the sidebar is
+                // doing. It used to appear and disappear with the sidebar, and a safe-area inset
+                // that comes and goes mid-animation is not animated by the same transaction as the
+                // columns are — the content snapped while the sidebar slid, which is why the
+                // collapse looked instant one time and animated the next.
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    if columns == .detailOnly && needsOwnButton {
+                    if needsOwnButton {
                         Color.clear.frame(height: 44)
                     }
                 }
