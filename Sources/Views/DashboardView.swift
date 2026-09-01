@@ -24,6 +24,7 @@ struct DashboardView: View {
     @State private var morphSourceRect: CGRect = .zero
     @State private var morphExpanded = false
     @State private var morphTarget: CGRect = .zero
+    @State private var shortcuts = ProjectShortcuts.shared
     /// A morph modal holds one column of content, so its width is set by reading comfort rather
     /// than by the screen. Uncapped it spanned a full iPad in landscape - a quests panel with one
     /// line in it stretched a metre wide. Never binds on a phone, which is narrower than this.
@@ -83,6 +84,7 @@ struct DashboardView: View {
                     questsCard
                     xpRulesCard
                     quickActions
+                    projectShortcuts
                     dailyCalendarCard
                     profileCard
                     Color.clear.frame(height: 8)
@@ -482,13 +484,79 @@ struct DashboardView: View {
         .nexusCard(padding: 14)
     }
 
-    // MARK: quick actions (Chat · Absensi)
+    // MARK: quick actions
+
+    /// Three across rather than two, because six tiles stacked two-wide push the agenda a whole
+    /// screen further down — and the point of a shortcut is to be reachable without scrolling.
+    private let quickColumns = [GridItem(.flexible(), spacing: 12),
+                                GridItem(.flexible(), spacing: 12),
+                                GridItem(.flexible(), spacing: 12)]
 
     private var quickActions: some View {
-        HStack(spacing: 12) {
+        LazyVGrid(columns: quickColumns, spacing: 12) {
             quickTile(T("Chat"), "bubble.left.and.bubble.right.fill", NX.blue) { MessagesView() }
             quickTile(T("Attendance"), "clock.badge.checkmark.fill", NX.success) { AttendanceView() }
+            quickTile(T("Leaderboard"), "trophy.fill", NX.warning) { LeaderboardView() }
+            quickTile(T("Room Booking"), "door.left.hand.open", NX.coral) { RoomBookingView() }
+            quickTile(T("Threads"), "text.bubble.fill", NX.violetText) { ThreadsView() }
+            quickTile(T("Team Calendar"), "calendar", NX.violetText) { TeamCalendarView() }
         }
+    }
+
+    // MARK: pinned + recently opened projects
+    //
+    // The same shortcuts the iPad sidebar carries, on the screen a phone actually starts from. They
+    // are stored on the device by ProjectShortcuts and recorded by ProjectDetailView itself, so a
+    // project counts as visited whichever route led in — and opening one here feeds the sidebar on
+    // the iPad in exactly the same way.
+
+    @ViewBuilder private var projectShortcuts: some View {
+        let pinned = shortcuts.pinned
+        // Anything pinned is skipped below: a project in both lists reads as a duplicate rather
+        // than as two kinds of shortcut.
+        let recents = shortcuts.recent.filter { !shortcuts.isPinned($0.id) }
+        if !pinned.isEmpty || !recents.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionLabel(T("Projects")).padding(.leading, 4)
+                VStack(spacing: 0) {
+                    ForEach(Array((pinned + recents).enumerated()), id: \.element.id) { idx, ref in
+                        if idx > 0 { Divider().overlay(NX.border) }
+                        projectShortcutRow(ref)
+                    }
+                }
+                .nexusCard(padding: 0, radius: 18)
+            }
+        }
+    }
+
+    private func projectShortcutRow(_ ref: ProjectRef) -> some View {
+        HStack(spacing: 10) {
+            NavigationLink {
+                ProjectDetailView(projectId: ref.id, projectName: ref.name)
+            } label: {
+                HStack(spacing: 10) {
+                    ProjectRefIcon(ref: ref, size: 32)
+                    Text(ref.name).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            // Its own button, outside the link: tapping a pin should pin, not open the project.
+            Button {
+                shortcuts.togglePin(ref)
+            } label: {
+                Image(systemName: shortcuts.isPinned(ref.id) ? "pin.fill" : "pin")
+                    .font(.system(size: 13))
+                    .foregroundStyle(shortcuts.isPinned(ref.id) ? NX.violetText : NX.mutedFg)
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(shortcuts.isPinned(ref.id) ? T("Unpin") : T("Pin"))
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
     }
 
     private func quickTile<D: View>(_ title: String, _ icon: String, _ tint: Color,
@@ -498,10 +566,15 @@ struct DashboardView: View {
                 Image(systemName: icon).font(.system(size: 20, weight: .semibold)).foregroundStyle(tint)
                     .frame(width: 44, height: 44)
                     .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                Text(title).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                // Two lines and a fixed height: "Room Booking" and "Team Calendar" wrap at this
+                // width, and a row of tiles where one is taller than its neighbours reads as a
+                // mistake rather than as a longer word.
+                Text(title).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                    .lineLimit(2).multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(maxWidth: .infinity)
-            .nexusCard(padding: 14, radius: 18)
+            .frame(maxWidth: .infinity, minHeight: 96)
+            .nexusCard(padding: 12, radius: 18)
         }
         .buttonStyle(PressableCardStyle())
     }

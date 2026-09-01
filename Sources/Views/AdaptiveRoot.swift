@@ -445,24 +445,36 @@ struct SidebarRoot: View {
         }
     }
 
-    /// The project's own picture where it has one, its emoji where it has that, and only then a
-    /// generic glyph — a sidebar of identical symbols is a sidebar you have to read word by word.
     @ViewBuilder private func projectIcon(_ ref: ProjectRef) -> some View {
+        ProjectRefIcon(ref: ref)
+    }
+}
+
+/// The project's own picture where it has one, its emoji where it has that, and only then a generic
+/// glyph — a list of identical symbols is a list you have to read word by word.
+///
+/// Shared rather than private to the sidebar: the phone's Dashboard shows the same shortcuts, and
+/// two drawings of the same thing drift apart the first time one of them is touched.
+struct ProjectRefIcon: View {
+    let ref: ProjectRef
+    var size: CGFloat = 26
+
+    var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 7, style: .continuous).fill(NX.muted)
+            RoundedRectangle(cornerRadius: size * 0.27, style: .continuous).fill(NX.muted)
             if ref.isUploadedIcon {
                 CachedImage(url: URL(string: Config.baseURL.absoluteString + (ref.icon ?? ""))) { img in
                     img.resizable().scaledToFill()
                 } placeholder: {
-                    Image(systemName: "rectangle.stack").font(.system(size: 12)).foregroundStyle(NX.violetText)
+                    Image(systemName: "rectangle.stack").font(.system(size: size * 0.46)).foregroundStyle(NX.violetText)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: size * 0.27, style: .continuous))
             } else if let emoji = ref.emoji {
-                Text(emoji).font(.system(size: 14))
+                Text(emoji).font(.system(size: size * 0.54))
             } else {
-                Image(systemName: "rectangle.stack").font(.system(size: 12)).foregroundStyle(NX.violetText)
+                Image(systemName: "rectangle.stack").font(.system(size: size * 0.46)).foregroundStyle(NX.violetText)
             }
         }
-        .frame(width: 26, height: 26)
+        .frame(width: size, height: size)
     }
 }
