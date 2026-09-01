@@ -85,6 +85,7 @@ final class AppLanguage {
         "Messages": "Pesan",
         "My Submissions": "Pengajuan Saya",
         "Send a photo": "Kirim foto",
+        "Show sidebar": "Tampilkan bilah sisi",
         "Take a photo": "Ambil foto",
         "Rename group": "Ganti nama grup",
         "Group name": "Nama grup",

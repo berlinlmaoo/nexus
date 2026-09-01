@@ -21,7 +21,11 @@ struct LoginView: View {
             Circle().fill(Color(hex: "#a78bfa").opacity(0.16)).frame(width: 240, height: 300).blur(radius: 90)
                 .offset(x: 120, y: -120)
 
+            // A sign-in form has one column of content, so its width is set by reading comfort,
+            // not by the screen. Left uncapped it stretched the full 13 inches in landscape and
+            // the fields became a metre wide.
             card
+                .frame(maxWidth: 460)
                 .padding(.horizontal, 22)
         }
         .preferredColorScheme(.light)   // login is light-only on web

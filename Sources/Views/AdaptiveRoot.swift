@@ -171,9 +171,10 @@ struct TabRoot: View {
 /// iPad / Mac shape — every destination visible at once, detail on the right.
 struct SidebarRoot: View {
     @State private var selection: NXScreen? = .dashboard
+    @State private var columns: NavigationSplitViewVisibility = .all
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columns) {
             List(selection: $selection) {
                 ForEach(Array(NXScreen.groups.enumerated()), id: \.offset) { _, group in
                     Section {
@@ -202,10 +203,36 @@ struct SidebarRoot: View {
             .navigationTitle("NEXUS")
         } detail: {
             let screen = selection ?? .dashboard
-            if screen.ownsNavigationStack {
-                screen.view
-            } else {
-                NavigationStack { screen.view }
+            ZStack(alignment: .topLeading) {
+                if screen.ownsNavigationStack {
+                    screen.view
+                } else {
+                    NavigationStack { screen.view }
+                }
+
+                // NavigationSplitView parks its own show/hide button in the DETAIL column's
+                // navigation bar. DashboardView sets .navigationBarHidden(true), so on that screen
+                // there is no bar to park it in: collapse the sidebar once and it can never be
+                // brought back. Rather than force a navigation bar onto screens designed without
+                // one, carry our own button and show it only while the sidebar is away.
+                if columns == .detailOnly {
+                    Button {
+                        withAnimation(.snappy) { columns = .all }
+                    } label: {
+                        Image(systemName: "sidebar.leading")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(NX.foreground)
+                            .frame(width: 38, height: 38)
+                            .background(.regularMaterial, in: Circle())
+                            .overlay(Circle().strokeBorder(NX.border))
+                            .nexusShadowSoft()
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading, 14)
+                    .padding(.top, 10)
+                    .transition(.opacity)
+                    .accessibilityLabel(T("Show sidebar"))
+                }
             }
         }
     }
