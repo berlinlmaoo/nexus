@@ -82,22 +82,52 @@ struct MessagesView: View {
         }
     }
 
-    /// Two panes, each in its own NavigationStack.
+    /// Two panes. Only the right one gets a NavigationStack.
     ///
-    /// Their own, because both the list and the thread set a navigation title and toolbar items:
-    /// sharing one stack would put two screens' worth of chrome in a single bar and let the last
-    /// one drawn win. Separate stacks give each pane the header that belongs to it, which is also
-    /// what the eye expects from two columns.
+    /// Giving each pane its own stack was the obvious move and it did not work: the two bars merged
+    /// into one strip across the whole window, with the list's compose button and the thread's edit
+    /// button sitting side by side above both columns — one bar claiming to belong to two screens.
+    ///
+    /// So the left column stops asking for a navigation bar and draws its own header instead. It
+    /// never needed one: nothing is pushed from the list in this layout, picking a row only moves
+    /// the selection. The right column keeps a real stack, because the thread does push — into a
+    /// task, into project settings.
     private var splitLayout: some View {
         HStack(spacing: 0) {
-            NavigationStack { listPane }
-                .frame(width: 340)
+            VStack(spacing: 0) {
+                splitListHeader
+                Divider().overlay(NX.border)
+                ZStack {
+                    NX.background.ignoresSafeArea()
+                    content
+                }
+            }
+            .frame(width: 340)
 
             Divider().overlay(NX.border)
 
             NavigationStack { threadPane }
                 .frame(maxWidth: .infinity)
         }
+    }
+
+    /// Stands in for the list column's navigation bar: same title, same compose button, drawn by us.
+    private var splitListHeader: some View {
+        HStack {
+            Text(T("Messages"))
+                .font(NXFont.display(17, .bold))
+                .foregroundStyle(NX.foreground)
+            Spacer()
+            Button { showNewChat = true } label: {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(NX.violetText)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 52)
+        .background(NX.background)
     }
 
     @ViewBuilder private var threadPane: some View {
