@@ -221,23 +221,33 @@ struct SidebarRoot: View {
                 // greeting. This reserves the strip instead, so nothing is ever covered — and it
                 // costs nothing on the seventeen screens that keep their navigation bar, where the
                 // system button already works and a second one would just be clutter.
-                .safeAreaInset(edge: .top, alignment: .leading, spacing: 0) {
+                //
+                // The button sits at the TRAILING end of that strip. iPadOS draws its own window
+                // controls (close / minimise / full screen) over the leading corner, and they do
+                // not move for anyone; a button placed there lands underneath them.
+                .safeAreaInset(edge: .top, spacing: 0) {
                     if columns == .detailOnly && screen.hidesNavigationBar {
-                        Button {
-                            withAnimation(.snappy) { columns = .all }
-                        } label: {
-                            Image(systemName: "sidebar.leading")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(NX.foreground)
-                                .frame(width: 38, height: 38)
-                                .background(.regularMaterial, in: Circle())
-                                .overlay(Circle().strokeBorder(NX.border))
-                                .nexusShadowSoft()
+                        HStack {
+                            Spacer(minLength: 0)
+                            Button {
+                                withAnimation(.snappy) { columns = .all }
+                            } label: {
+                                Image(systemName: "sidebar.leading")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(NX.foreground)
+                                    .frame(width: 38, height: 38)
+                                    .background(.regularMaterial, in: Circle())
+                                    .overlay(Circle().strokeBorder(NX.border))
+                                    .nexusShadowSoft()
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(T("Show sidebar"))
                         }
-                        .buttonStyle(.plain)
-                        .padding(.leading, 16)
-                        .padding(.vertical, 8)
-                        .accessibilityLabel(T("Show sidebar"))
+                        // The band clears iPadOS window controls; the button sits at the far end
+                        // because those controls own the leading corner and will not move.
+                        .frame(height: 44)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 6)
                     }
                 }
         }
