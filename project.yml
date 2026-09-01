@@ -49,7 +49,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: NEXUS.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        # 1 = iPhone saja. This MUST live on the target, not on the project above: XcodeGen's
+        # 1,2 = iPhone + iPad. This MUST live on the target, not on the project above: XcodeGen's
         # built-in setting presets write TARGETED_DEVICE_FAMILY = "1,2" onto every iOS application
         # target, and a target setting always beats a project one - so a project-level value here
         # is silently overridden and the app ships universal anyway.
@@ -59,7 +59,7 @@ targets:
         # to portrait. Every screen is designed for a phone, so supporting iPad landscape means
         # rebuilding all of them - and universal also demands its own set of iPad screenshots if
         # this ever goes to the App Store. The app still installs on iPad, in an iPhone-sized window.
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
 
 # Default scheme runs RELEASE so a plain ⌘R is the optimized, smooth-on-device build
 # (Debug SwiftUI is dramatically slower on device — the usual cause of on-device lag).

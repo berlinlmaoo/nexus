@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Switches between login and the authenticated app (5-tab bar mirroring the web).
+/// Switches between login and the authenticated app. The authenticated shape itself lives in
+/// AdaptiveRoot, which picks a tab bar or a sidebar from the horizontal size class.
 struct RootView: View {
     @Environment(AuthStore.self) private var auth
     @State private var appearance = AppAppearance.shared
@@ -8,7 +9,7 @@ struct RootView: View {
     var body: some View {
         if auth.isAuthenticated {
             // In-app light/dark override. nil = follow the iOS setting.
-            tabs.preferredColorScheme(appearance.theme.colorScheme)
+            AdaptiveRoot().preferredColorScheme(appearance.theme.colorScheme)
         } else {
             // LoginView forces `.light` itself, and MUST stay outside that modifier.
             // `preferredColorScheme` is a preference, and a preference written by an ancestor
@@ -19,21 +20,6 @@ struct RootView: View {
         }
     }
 
-    private var tabs: some View {
-        TabView {
-            DashboardView()
-                .tabItem { Label(T("Home"), systemImage: "house.fill") }
-            TasksView()
-                .tabItem { Label(T("Tasks"), systemImage: "checklist") }
-            InboxView()
-                .tabItem { Label(T("Inbox"), systemImage: "tray.fill") }
-            ProjectsView()
-                .tabItem { Label(T("Projects"), systemImage: "rectangle.stack.fill") }
-            MoreView()
-                .tabItem { Label(T("More"), systemImage: "ellipsis") }
-        }
-        // NOTE: no .tabBarMinimizeBehavior — the bar stays full-size while scrolling (by request).
-    }
 }
 
 /// "More" — app-launcher grid mirroring the web sidebar groups (Home Base / Missions /

@@ -34,5 +34,16 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<!-- iPad has to offer all four or App Store validation rejects the bundle outright
+	     (error 90474): an iPad-capable app must support multitasking, and multitasking means
+	     the user can put the app in any orientation. The phone key above stays portrait-only,
+	     which is still allowed and is what every screen was designed for. -->
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
 </dict>
 </plist>
