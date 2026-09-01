@@ -13,6 +13,20 @@ struct MessagesView: View {
     /// projectId -> project icon. A PROJECT room has no picture of its own on the server, so it
     /// borrows the project's; without this every project chat falls back to the same grey glyph.
     @State private var projectIcons: [String: String] = [:]
+    @Environment(\.horizontalSizeClass) private var hSize
+    /// True when nothing outside is providing a NavigationStack — the sidebar shows this screen
+    /// directly, while MoreView pushes it into a stack that already exists. Without the
+    /// distinction, a narrow iPad window (regular root, compact detail) leaves the list with no
+    /// navigation bar and rows that push into nothing.
+    var providesOwnStack: Bool = false
+    /// Which conversation the right-hand pane is showing. Only meaningful in the split layout —
+    /// on a phone the thread is pushed, and the stack itself remembers where you are.
+    @State private var selected: Conversation?
+
+    /// A chat list and the chat itself are the pair every messaging app puts side by side once
+    /// there is room, because the whole job is moving between conversations. Pushing a thread and
+    /// popping back on a 13-inch screen is the phone's compromise, not a design.
+    private var isSplit: Bool { hSize == .regular }
 
     private var meId: String? { auth.session?.userId }
     private var groups: [(label: String, items: [Conversation])] {
@@ -22,6 +36,36 @@ struct MessagesView: View {
     }
 
     var body: some View {
+        Group {
+            if isSplit {
+                splitLayout
+            } else if providesOwnStack {
+                NavigationStack { listPane }
+            } else {
+                listPane
+            }
+        }
+        .sheet(isPresented: $showNewChat) {
+            NewConversationSheet { _ in Task { await load() } }
+        }
+        .task {
+            await load()
+            // An empty right-hand pane on first open is a screen asking to be clicked before it
+            // shows anything. The phone has no equivalent: there, nothing is open yet by design.
+            if isSplit, selected == nil { selected = convos.first }
+        }
+        // Same reason as the thread, at a calmer pace: this only moves badges and previews.
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(15))
+                if Task.isCancelled { return }
+                if let fresh = try? await APIClient.shared.conversations() { convos = fresh }
+            }
+        }
+    }
+
+    /// The list on its own — the whole screen on a phone, the left column on an iPad.
+    private var listPane: some View {
         ZStack {
             NX.background.ignoresSafeArea()
             content
@@ -36,16 +80,41 @@ struct MessagesView: View {
                 }
             }
         }
-        .sheet(isPresented: $showNewChat) {
-            NewConversationSheet { _ in Task { await load() } }
+    }
+
+    /// Two panes, each in its own NavigationStack.
+    ///
+    /// Their own, because both the list and the thread set a navigation title and toolbar items:
+    /// sharing one stack would put two screens' worth of chrome in a single bar and let the last
+    /// one drawn win. Separate stacks give each pane the header that belongs to it, which is also
+    /// what the eye expects from two columns.
+    private var splitLayout: some View {
+        HStack(spacing: 0) {
+            NavigationStack { listPane }
+                .frame(width: 340)
+
+            Divider().overlay(NX.border)
+
+            NavigationStack { threadPane }
+                .frame(maxWidth: .infinity)
         }
-        .task { await load() }
-        // Same reason as the thread, at a calmer pace: this only moves badges and previews.
-        .task {
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(15))
-                if Task.isCancelled { return }
-                if let fresh = try? await APIClient.shared.conversations() { convos = fresh }
+    }
+
+    @ViewBuilder private var threadPane: some View {
+        if let c = selected {
+            ChatThreadView(conversationId: c.id, title: c.title(meId: meId),
+                           members: c.members ?? [], projectId: c.projectId, type: c.type)
+                // Keyed by id: without it, switching conversations reuses the same view and the
+                // previous chat's messages sit under the new one's title until the fetch lands.
+                .id(c.id)
+        } else {
+            ZStack {
+                NX.background.ignoresSafeArea()
+                VStack(spacing: 10) {
+                    Image(systemName: "bubble.left.and.bubble.right")
+                        .font(.system(size: 44)).foregroundStyle(NX.mutedFg)
+                    Text(T("Pick a conversation")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+                }
             }
         }
     }
@@ -76,15 +145,24 @@ struct MessagesView: View {
                             VStack(spacing: 0) {
                                 ForEach(Array(group.items.enumerated()), id: \.element.id) { idx, c in
                                     if idx > 0 { Divider().overlay(NX.border) }
-                                    NavigationLink {
-                                        ChatThreadView(conversationId: c.id, title: c.title(meId: meId),
-                                                       members: c.members ?? [], projectId: c.projectId,
-                                                       type: c.type)
-                                    } label: {
-                                        ConvoRow(convo: c, meId: meId,
-                                                 projectIcon: c.projectId.flatMap { projectIcons[$0] })
+                                    if isSplit {
+                                        Button { selected = c } label: {
+                                            ConvoRow(convo: c, meId: meId,
+                                                     projectIcon: c.projectId.flatMap { projectIcons[$0] })
+                                        }
+                                        .buttonStyle(.plain)
+                                        .background(selected?.id == c.id ? NX.violet.opacity(0.10) : .clear)
+                                    } else {
+                                        NavigationLink {
+                                            ChatThreadView(conversationId: c.id, title: c.title(meId: meId),
+                                                           members: c.members ?? [], projectId: c.projectId,
+                                                           type: c.type)
+                                        } label: {
+                                            ConvoRow(convo: c, meId: meId,
+                                                     projectIcon: c.projectId.flatMap { projectIcons[$0] })
+                                        }
+                                        .buttonStyle(.plain)
                                     }
-                                    .buttonStyle(.plain)
                                 }
                             }
                             .background {

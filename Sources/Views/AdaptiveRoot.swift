@@ -120,7 +120,8 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
     /// has to supply one or their toolbars and titles simply never appear.
     var ownsNavigationStack: Bool {
         switch self {
-        case .dashboard, .tasks, .inbox, .projects: return true
+        // Messages builds its own stacks in the split layout — one per pane.
+        case .dashboard, .tasks, .inbox, .projects, .messages: return true
         default: return false
         }
     }
@@ -131,7 +132,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .tasks:        TasksView()
         case .inbox:        InboxView()
         case .projects:     ProjectsView()
-        case .messages:     MessagesView()
+        case .messages:     MessagesView(providesOwnStack: true)
         case .threads:      ThreadsView()
         case .submissions:  SubmissionsView()
         case .teamCalendar: TeamCalendarView()
