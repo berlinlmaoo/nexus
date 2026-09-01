@@ -288,7 +288,12 @@ struct SidebarRoot: View {
                     VStack {
                         Spacer(minLength: 0)
                         Button {
-                            withAnimation(.snappy) {
+                            // A spring rather than .snappy, and named here rather than left to the
+                            // system: .snappy is short by design, and NavigationSplitView reveals a
+                            // column more generously than it takes one away — closing looked
+                            // instant next to opening. The same curve in both directions is the
+                            // point; the duration is only long enough to be seen.
+                            withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
                                 columns = columns == .detailOnly ? .all : .detailOnly
                             }
                         } label: {
