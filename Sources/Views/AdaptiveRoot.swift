@@ -249,12 +249,20 @@ struct SidebarRoot: View {
                 }
             }
             .listStyle(.sidebar)
+            // Apple's own toggle lives in the DETAIL column's navigation bar, so it appeared on the
+            // seventeen screens that have one and vanished on the two that don't — the control moved
+            // depending on where you happened to be. Remove it and carry one handle everywhere.
+            .toolbar(removing: .sidebarToggle)
             // No title: the sidebar is the app's own furniture, and a word repeating the app name
             // above its own menu is a row of pixels that tells the reader nothing.
             .navigationTitle("")
         } detail: {
             let needsOwnButton = detailHidesNavigationBar
             detail(for: selection ?? .screen(.dashboard))
+                // The bar sat against the right edge of the reading column rather than the window,
+                // which read as a stray line down the middle of the screen. Content is scrolled by
+                // hand here, not dragged by the bar.
+                .scrollIndicators(.hidden)
                 // NavigationSplitView parks its own show/hide button in the DETAIL column's
                 // navigation bar. Dashboard and the project board both hide that bar to draw their
                 // own headers, so there it has nowhere to live: collapse the sidebar once and it
@@ -273,7 +281,7 @@ struct SidebarRoot: View {
                 // clear of those same window controls, which land on the detail column once the
                 // sidebar is no longer underneath them.
                 .safeAreaInset(edge: .leading, spacing: 0) {
-                    if columns == .detailOnly && needsOwnButton {
+                    if columns == .detailOnly {
                         VStack {
                             Spacer(minLength: 0)
                             Button {
