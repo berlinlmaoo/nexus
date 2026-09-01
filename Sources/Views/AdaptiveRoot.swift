@@ -88,6 +88,24 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
+    /// How wide this screen's content is allowed to get, or nil to let it fill.
+    ///
+    /// A column of text or cards has a width past which it stops being readable — the eye loses the
+    /// start of the next line. On a 13-inch iPad every screen was running the full width, so a task
+    /// title sat alone on a line a foot long.
+    ///
+    /// nil is not "forgot to set it": the map, the kanban boards and the calendar earn their width.
+    /// A board with horizontal columns is *less* usable squeezed into a column, and a map shows more
+    /// ground the wider it is.
+    var contentMaxWidth: CGFloat? {
+        switch self {
+        case .attendance, .projects, .submissions, .teamCalendar, .roomBooking, .reports:
+            return nil
+        default:
+            return 900
+        }
+    }
+
     /// True for screens that draw their own header instead of a navigation bar. They are the only
     /// ones that need a hand-made sidebar button, because the system's lives in a bar they hide.
     var hidesNavigationBar: Bool {
@@ -299,16 +317,36 @@ struct SidebarRoot: View {
     @ViewBuilder private func detail(for selection: NXSelection) -> some View {
         switch selection {
         case .screen(let screen):
-            if screen.ownsNavigationStack {
-                screen.view
-            } else {
-                NavigationStack { screen.view }
+            readable(screen.contentMaxWidth) {
+                if screen.ownsNavigationStack {
+                    screen.view
+                } else {
+                    NavigationStack { screen.view }
+                }
             }
         case .project(let ref):
+            // A project board is columns side by side, so it takes whatever width it is given.
             // Keyed by id so switching between two shortcuts rebuilds the board instead of
             // leaving the first project's rows on screen under the second one's title.
             NavigationStack { ProjectDetailView(projectId: ref.id, projectName: ref.name) }
                 .id(ref.id)
+        }
+    }
+
+    /// Centres a screen inside a reading-width column, on a background that still runs edge to edge.
+    ///
+    /// The background is painted here rather than left to the screen, because each screen paints its
+    /// own inside its own bounds — capped to 900pt, that would have left bare gutters either side
+    /// in the system's colour instead of the app's.
+    @ViewBuilder private func readable<Content: View>(_ maxWidth: CGFloat?,
+                                                     @ViewBuilder content: () -> Content) -> some View {
+        if let maxWidth {
+            ZStack {
+                NX.background.ignoresSafeArea()
+                content().frame(maxWidth: maxWidth)
+            }
+        } else {
+            content()
         }
     }
 
