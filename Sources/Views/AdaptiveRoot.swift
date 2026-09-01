@@ -145,6 +145,13 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
     ] }
 }
 
+/// What the sidebar has selected. A fixed screen, or one particular project board — the shortcuts
+/// section needs to point at something the eighteen-case enum has no room for.
+enum NXSelection: Hashable {
+    case screen(NXScreen)
+    case project(ProjectRef)
+}
+
 /// Picks the shape. Regular width means iPad (any orientation) and, later, a Mac window.
 struct AdaptiveRoot: View {
     @Environment(\.horizontalSizeClass) private var hSize
@@ -179,8 +186,9 @@ struct TabRoot: View {
 
 /// iPad / Mac shape — every destination visible at once, detail on the right.
 struct SidebarRoot: View {
-    @State private var selection: NXScreen? = .dashboard
+    @State private var selection: NXSelection? = .screen(.dashboard)
     @State private var columns: NavigationSplitViewVisibility = .all
+    @State private var shortcuts = ProjectShortcuts.shared
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columns) {
@@ -193,13 +201,23 @@ struct SidebarRoot: View {
                             } icon: {
                                 Image(systemName: screen.icon).foregroundStyle(screen.tint)
                             }
-                            .tag(screen)
+                            .tag(NXSelection.screen(screen))
                         }
                     } header: {
                         if let title = group.title {
                             SectionLabel(title)
                         }
                     }
+                }
+
+                if !shortcuts.pinned.isEmpty {
+                    Section { projectRows(shortcuts.pinned) } header: { SectionLabel(T("Pinned")) }
+                }
+                // Anything already pinned is skipped: a project sitting in both lists reads as a
+                // duplicate rather than as two kinds of shortcut.
+                let recents = shortcuts.recent.filter { !shortcuts.isPinned($0.id) }
+                if !recents.isEmpty {
+                    Section { projectRows(recents) } header: { SectionLabel(T("Recent")) }
                 }
 
                 Section {
@@ -211,8 +229,8 @@ struct SidebarRoot: View {
             .listStyle(.sidebar)
             .navigationTitle("NEXUS")
         } detail: {
-            let screen = selection ?? .dashboard
-            detail(for: screen)
+            let needsOwnButton = detailHidesNavigationBar
+            detail(for: selection ?? .screen(.dashboard))
                 // NavigationSplitView parks its own show/hide button in the DETAIL column's
                 // navigation bar. Dashboard hides that bar to draw its own header, so there it has
                 // nowhere to live: collapse the sidebar once and it can never be brought back.
@@ -226,7 +244,7 @@ struct SidebarRoot: View {
                 // controls (close / minimise / full screen) over the leading corner, and they do
                 // not move for anyone; a button placed there lands underneath them.
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    if columns == .detailOnly && screen.hidesNavigationBar {
+                    if columns == .detailOnly && needsOwnButton {
                         HStack {
                             Spacer(minLength: 0)
                             Button {
@@ -253,11 +271,55 @@ struct SidebarRoot: View {
         }
     }
 
-    @ViewBuilder private func detail(for screen: NXScreen) -> some View {
-        if screen.ownsNavigationStack {
-            screen.view
-        } else {
-            NavigationStack { screen.view }
+    /// Whether the detail column draws without a navigation bar, and therefore has nowhere for the
+    /// system's sidebar button to live. Project boards hide their bar too, so a shortcut opened
+    /// from the sidebar would otherwise strand the user exactly like Dashboard did.
+    private var detailHidesNavigationBar: Bool {
+        switch selection {
+        case .screen(let s):  return s.hidesNavigationBar
+        case .project:        return true
+        case nil:             return NXScreen.dashboard.hidesNavigationBar
+        }
+    }
+
+    @ViewBuilder private func detail(for selection: NXSelection) -> some View {
+        switch selection {
+        case .screen(let screen):
+            if screen.ownsNavigationStack {
+                screen.view
+            } else {
+                NavigationStack { screen.view }
+            }
+        case .project(let ref):
+            // Keyed by id so switching between two shortcuts rebuilds the board instead of
+            // leaving the first project's rows on screen under the second one's title.
+            NavigationStack { ProjectDetailView(projectId: ref.id, projectName: ref.name) }
+                .id(ref.id)
+        }
+    }
+
+    @ViewBuilder private func projectRows(_ refs: [ProjectRef]) -> some View {
+        ForEach(refs) { ref in
+            Label {
+                Text(ref.name).font(NXFont.text(15, .medium)).lineLimit(1)
+            } icon: {
+                Image(systemName: shortcuts.isPinned(ref.id) ? "pin.fill" : "rectangle.stack")
+                    .foregroundStyle(NX.violetText)
+            }
+            .tag(NXSelection.project(ref))
+            .contextMenu {
+                Button {
+                    shortcuts.togglePin(ref)
+                } label: {
+                    Label(shortcuts.isPinned(ref.id) ? T("Unpin") : T("Pin"),
+                          systemImage: shortcuts.isPinned(ref.id) ? "pin.slash" : "pin")
+                }
+                Button(role: .destructive) {
+                    shortcuts.forget(ref.id)
+                } label: {
+                    Label(T("Remove from sidebar"), systemImage: "xmark")
+                }
+            }
         }
     }
 }
