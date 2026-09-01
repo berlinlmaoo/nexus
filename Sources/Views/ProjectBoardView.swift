@@ -296,6 +296,8 @@ struct LaneColumn: View {
     @State private var composing = false
     @State private var newTitle = ""
     @State private var adding = false
+    /// True while a card is hovering over this column, so the target is obvious before you let go.
+    @State private var dropTargeted = false
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -315,6 +317,12 @@ struct LaneColumn: View {
               LazyVStack(alignment: .leading, spacing: 10) {
             ForEach(lane.tasks ?? []) { task in
                 Button { onOpen(task.id) } label: { BoardCard(task: task) }.buttonStyle(.plain)
+                    // The task id is the whole payload. Dragging the card itself would mean making
+                    // Task Transferable and shipping a copy of the model between columns, when all
+                    // the drop needs to know is which task moved — the board already holds the rest.
+                    .draggable(task.id) {
+                        BoardCard(task: task).frame(width: 260).opacity(0.9)
+                    }
                     .contextMenu {
                         let others = allLanes.filter { $0.id != lane.id }
                         if !others.isEmpty {
@@ -367,8 +375,23 @@ struct LaneColumn: View {
         .frame(width: 290)
         .frame(maxHeight: .infinity, alignment: .top)   // lane fills the board height so its scroll is bounded
         .padding(12)
-        .background(NX.card.opacity(0.6), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(NX.border))
+        .background(NX.card.opacity(dropTargeted ? 0.9 : 0.6), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .strokeBorder(dropTargeted ? NX.violet : NX.border, lineWidth: dropTargeted ? 2 : 1)
+        )
+        // The whole column is the target, not just the gap under the last card: aiming at a
+        // list's empty tail is a game, and the answer to "which column" is the column.
+        .dropDestination(for: String.self) { ids, _ in
+            guard let taskId = ids.first else { return false }
+            // A card dropped back where it started would still cost a round trip to the server and
+            // a board reload, for a move that did not happen.
+            guard !(lane.tasks ?? []).contains(where: { $0.id == taskId }) else { return false }
+            Task { await onMove(taskId, lane.id) }
+            return true
+        } isTargeted: { targeted in
+            withAnimation(.easeOut(duration: 0.12)) { dropTargeted = targeted }
+        }
     }
 
     private func submit() {
