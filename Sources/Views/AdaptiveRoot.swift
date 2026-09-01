@@ -334,6 +334,13 @@ struct SidebarRoot: View {
                                 .nexusShadowSoft()
                         }
                         .buttonStyle(.plain)
+                        // A trackpad pointer that doesn't change shape over a control leaves you
+                        // guessing whether it is one. .lift also makes the circle read as a button
+                        // rather than a decoration parked at the edge.
+                        .hoverEffect(.lift)
+                        // ⌘S because the sidebar is the thing being shown or hidden, and nothing
+                        // else in the app claims it. Works whether or not the button is on screen.
+                        .keyboardShortcut("s", modifiers: .command)
                         .accessibilityLabel(columns == .detailOnly ? T("Show sidebar") : T("Hide sidebar"))
                         Spacer(minLength: 0)
                     }

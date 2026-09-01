@@ -38,6 +38,7 @@ struct DocsView: View {
                     ForEach(filtered) { d in
                         NavigationLink { DocReaderView(docId: d.id, title: d.title) } label: { DocCard(doc: d) }
                             .buttonStyle(.plain)
+                            .hoverEffect(.highlight)
                     }
                 }
                 .padding(16)

@@ -78,6 +78,9 @@ struct MessagesView: View {
                     Image(systemName: "square.and.pencil").font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(NX.violetText)
                 }
+                // The split layout draws its own compose button; these two never coexist, so the
+                // shortcut is never registered twice.
+                .keyboardShortcut("n", modifiers: .command)
             }
         }
     }
@@ -124,6 +127,8 @@ struct MessagesView: View {
                     .foregroundStyle(NX.violetText)
             }
             .buttonStyle(.plain)
+            .hoverEffect(.lift)
+            .keyboardShortcut("n", modifiers: .command)
         }
         .padding(.horizontal, 16)
         .frame(height: 52)
@@ -182,6 +187,7 @@ struct MessagesView: View {
                                                      projectIcon: c.projectId.flatMap { projectIcons[$0] })
                                         }
                                         .buttonStyle(.plain)
+                                        .hoverEffect(.highlight)
                                         .background(selected?.id == c.id ? NX.violet.opacity(0.10) : .clear)
                                     } else {
                                         NavigationLink {
@@ -193,6 +199,7 @@ struct MessagesView: View {
                                                      projectIcon: c.projectId.flatMap { projectIcons[$0] })
                                         }
                                         .buttonStyle(.plain)
+                                        .hoverEffect(.highlight)
                                     }
                                 }
                             }

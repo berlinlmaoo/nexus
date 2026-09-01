@@ -331,6 +331,7 @@ struct LaneColumn: View {
               LazyVStack(alignment: .leading, spacing: 10) {
             ForEach(orderedTasks) { task in
                 Button { onOpen(task.id) } label: { BoardCard(task: task) }.buttonStyle(.plain)
+                    .hoverEffect(.lift)
                     // The task id is the whole payload. Dragging the card itself would mean making
                     // Task Transferable and shipping a copy of the model between columns, when all
                     // the drop needs to know is which task moved — the board already holds the rest.

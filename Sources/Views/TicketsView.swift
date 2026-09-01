@@ -97,6 +97,7 @@ struct TicketsView: View {
                         NXCardGrid(spacing: 10) {
                             ForEach(filtered) { t in
                                 Button { selected = t } label: { row(t) }.buttonStyle(.plain)
+                                    .hoverEffect(.highlight)
                             }
                         }
                         .padding(16)
