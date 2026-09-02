@@ -20,6 +20,11 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- Required by the Mac App Store and ignored everywhere else (error 90242 on a Mac archive
+	     without it). Must match the Primary Category chosen for the macOS platform in App Store
+	     Connect, so if that changes to Productivity this changes with it. -->
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.business</string>
 	<key>NSCameraUsageDescription</key>
 	<string>NEXUS by Z Networks uses the camera to take attendance selfies.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
