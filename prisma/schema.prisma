@@ -12,6 +12,9 @@ model User {
   name           String
   email          String            @unique
   password       String?
+  /// Passkeys registered from this person's devices. Additive: password sign-in stays, because a
+  /// lost device must not become a lost account.
+  passkeys       Passkey[]
   avatar         String?
   phoneNumber    String?
   whatsappId       String?         @unique // verified WhatsApp identity (LID/JID) for the Gideon WA bot
@@ -1921,6 +1924,46 @@ model ConversationMember {
 
   @@unique([conversationId, userId])
   @@index([userId])
+}
+
+/// A passkey the person registered from one of their devices.
+///
+/// One person may hold several — phone, laptop, a hardware key — and losing one must never lock
+/// them out, which is exactly why password sign-in stays alongside this rather than being replaced.
+model Passkey {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Base64URL credential id as the authenticator reported it.
+  credentialId String    @unique
+  /// COSE public key. Bytes, not a string: re-encoding it is a good way to break verification.
+  publicKey    Bytes
+  /// Replay guard. Some authenticators always report 0, which is allowed; what matters is that a
+  /// non-zero counter must never go backwards.
+  counter      BigInt    @default(0)
+  transports   String?
+  /// What the person will recognise it as in a list, e.g. "iPhone".
+  label        String?
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
+
+  @@index([userId])
+}
+
+/// A challenge handed out for one registration or sign-in attempt.
+///
+/// Kept server-side and single-use on purpose: a challenge the client is trusted to hand back
+/// unchanged is not a challenge. Rows are short-lived and swept on use.
+model PasskeyChallenge {
+  id        String   @id @default(cuid())
+  challenge String   @unique
+  /// Null for sign-in, where the person has not said who they are yet.
+  userId    String?
+  purpose   String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
 }
 
 model Message {
