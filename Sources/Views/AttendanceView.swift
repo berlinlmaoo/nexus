@@ -18,6 +18,7 @@ struct AttendanceView: View {
 
     @State private var pendingSelfie: Data?
     @State private var pendingCoords: (lat: Double, lng: Double)?
+    private var queue: AttendanceQueue { AttendanceQueue.shared }
     @State private var showOffsite = false
     @State private var offsiteReason = ""
     @State private var reflection = ""
@@ -65,6 +66,14 @@ struct AttendanceView: View {
                     if pending { infoBanner(T("⏳ Checkout outside the office area — waiting for BoD approval"), tone: .warning) }
                     if rec?.checkOutApproval == "REJECTED" { infoBanner(T("Your out-of-area checkout was rejected by the BoD."), tone: .danger) }
                     if let banner { infoBanner(banner.text, tone: banner.good ? .success : .danger) }
+                    // A queued tap must never be invisible: someone who thinks they clocked in and
+                    // did not would only find out at payroll.
+                    if queue.count > 0 {
+                        infoBanner(queue.count == 1
+                                   ? T("1 attendance saved offline — not sent yet.")
+                                   : "\(queue.count) " + T("attendance records saved offline — not sent yet."),
+                                   tone: .warning)
+                    }
                     metricsGrid
                     // OR, not a `??` fallback: the web is `canManageAttendance || canReviewAttendanceRequests`.
                     // With `??`, a server that sends canReviewAttendanceRequests=false stops the chain
@@ -80,7 +89,12 @@ struct AttendanceView: View {
         }
         .navigationTitle(T("Attendance"))
         .navigationBarTitleDisplayMode(.inline)
-        .task { await load() }
+        .task {
+            // Drain before loading: a queued tap that lands now should be reflected in the numbers
+            // this screen is about to fetch, not a refresh later.
+            await AttendanceQueue.shared.flush()
+            await load()
+        }
         .onAppear { loc.requestPermissionIfNeeded() }
         .refreshable { await load() }
         .sheet(isPresented: $showCamera) {
@@ -405,6 +419,23 @@ struct AttendanceView: View {
                 offsiteReason = ""; showOffsite = true
             }
         } catch APIError.unauthorized { auth.logout() }
+        catch APIError.offline {
+            // The server was unreachable, so nothing was recorded there. Keep the tap instead of
+            // losing it: attendance is the one thing that cannot be re-created honestly later.
+            // Only this error queues — anything the server actually answered must not be replayed.
+            guard let fix = pendingCoords else {
+                Haptics.warning()
+                banner = Banner(text: T("No connection, and no location fix to save with."), good: false)
+                return
+            }
+            AttendanceQueue.shared.enqueue(
+                kind: action == .checkIn ? .checkIn : .checkOut,
+                lat: fix.lat, lng: fix.lng, selfie: selfie,
+                reflection: action == .checkOut ? reflection : nil)
+            Haptics.success()
+            banner = Banner(text: T("Saved offline — will be sent when the server is back."), good: true)
+            if action == .checkOut { reflection = "" }
+        }
         catch { Haptics.warning(); banner = Banner(text: (error as? LocalizedError)?.errorDescription ?? T("Failed."), good: false) }
     }
 

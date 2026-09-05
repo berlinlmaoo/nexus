@@ -5,12 +5,17 @@ enum APIError: LocalizedError {
     case unauthorized
     case decoding
     case transport(String)
+    /// The request never reached the server — no HTTP response at all. Deliberately separate from
+    /// `.transport`, which also carries the server's own refusals: only this case may be queued and
+    /// replayed later, because replaying something the server already refused would be wrong.
+    case offline
 
     var errorDescription: String? {
         switch self {
         case .http(let code): return "Server error (\(code))."
         case .unauthorized: return T("Session expired — please log in again.")
         case .decoding: return T("Couldn't read data from the server.")
+        case .offline: return T("No connection to the server.")
         case .transport(let msg): return msg
         }
     }
@@ -996,16 +1001,28 @@ struct APIClient {
         return true
     }
 
-    func checkIn(lat: Double, lng: Double, selfie: Data, notes: String? = nil) async throws -> AttendanceOutcome {
+    func checkIn(lat: Double, lng: Double, selfie: Data, notes: String? = nil,
+                 clientId: String? = nil, deviceAt: Date? = nil, uptimeSec: Int? = nil) async throws -> AttendanceOutcome {
         var fields = ["lat": String(lat), "lng": String(lng)]
         if let notes, !notes.isEmpty { fields["notes"] = notes }
+        Self.applyOfflineFields(&fields, clientId: clientId, deviceAt: deviceAt, uptimeSec: uptimeSec)
         return try await attendanceUpload("/api/attendance/check-in", fields: fields, selfie: selfie)
+    }
+
+    /// Only a replayed tap carries these. A live one omits them entirely, so the server records it
+    /// exactly as it always did — server clock, not flagged.
+    private static func applyOfflineFields(_ fields: inout [String: String],
+                                           clientId: String?, deviceAt: Date?, uptimeSec: Int?) {
+        if let clientId { fields["clientId"] = clientId }
+        if let deviceAt { fields["deviceAt"] = ISO8601DateFormatter().string(from: deviceAt) }
+        if let uptimeSec { fields["uptimeSec"] = String(uptimeSec) }
     }
 
     /// `reflection` is REQUIRED by the server on check-out (min 200 chars) — same field the web
     /// sends. Without it the API rejects with "Refleksi harian wajib diisi minimal 200 karakter".
     func checkOut(lat: Double, lng: Double, selfie: Data, reflection: String,
-                  offsite: Bool = false, reason: String? = nil) async throws -> AttendanceOutcome {
+                  offsite: Bool = false, reason: String? = nil,
+                  clientId: String? = nil, deviceAt: Date? = nil, uptimeSec: Int? = nil) async throws -> AttendanceOutcome {
         var fields = ["lat": String(lat), "lng": String(lng)]
         let trimmedReflection = reflection.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedReflection.isEmpty { fields["reflection"] = trimmedReflection }
@@ -1013,6 +1030,7 @@ struct APIClient {
             fields["offsite"] = "1"
             if let reason, !reason.isEmpty { fields["reason"] = reason }
         }
+        Self.applyOfflineFields(&fields, clientId: clientId, deviceAt: deviceAt, uptimeSec: uptimeSec)
         return try await attendanceUpload("/api/attendance/check-out", fields: fields, selfie: selfie)
     }
 
@@ -1041,9 +1059,11 @@ struct APIClient {
         do {
             (data, response) = try await URLSession.shared.data(for: req)
         } catch {
-            throw APIError.transport(error.localizedDescription)
+            // Nothing came back at all, so the tap is queueable. Anything below this line is the
+            // server having an opinion, which must never be replayed.
+            throw APIError.offline
         }
-        guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
+        guard let http = response as? HTTPURLResponse else { throw APIError.offline }
         if (200..<300).contains(http.statusCode) { return .success }
         if http.statusCode == 401 { throw APIError.unauthorized }
 
