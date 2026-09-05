@@ -267,6 +267,88 @@ export async function notifyAttendanceReminder(data: {
 // ── Public methods ──────────────────────────────────────────────
 
 /** Ping every BoD / Super Admin in the workspace that a staff member checked out OFFSITE (pending approval). */
+const ATTENDANCE_TYPE_LABEL: Record<string, string> = {
+  LEAVE: "Cuti",
+  SICK: "Sakit",
+  PERMIT: "Izin",
+  DAY_OFF: "Day Off",
+  RED_DATE: "Public Holiday",
+}
+
+/**
+ * Someone filed a leave/permit/sick/day-off request. Until now the only alert was a WhatsApp
+ * message via wa-bot, so with the bridge down approvers were told nothing at all and requests
+ * sat in the queue unseen.
+ *
+ * Who gets told mirrors who may actually approve: BoD and One-Above-All see every staff member,
+ * while a MANAGER who LEADS a team only approves their own team, so they are only told about
+ * their own members.
+ */
+export async function notifyAttendanceRequestPending(requestId: string) {
+  const req = await prisma.attendanceRequest.findUnique({
+    where: { id: requestId },
+    select: {
+      type: true,
+      status: true,
+      reason: true,
+      startDate: true,
+      endDate: true,
+      workspaceId: true,
+      userId: true,
+      user: { select: { name: true, email: true } },
+    },
+  })
+  if (!req || req.status !== "PENDING") return
+
+  const fullApprovers = await prisma.workspaceMember.findMany({
+    where: {
+      workspaceId: req.workspaceId,
+      role: { in: ["BOD", "ONE_ABOVE_ALL"] },
+      userId: { not: req.userId },
+    },
+    select: { userId: true },
+  })
+
+  const requesterTeams = await prisma.teamMember.findMany({
+    where: { userId: req.userId, team: { workspaceId: req.workspaceId } },
+    select: { teamId: true },
+  })
+  const leads = requesterTeams.length
+    ? await prisma.teamMember.findMany({
+        where: {
+          teamId: { in: requesterTeams.map((t) => t.teamId) },
+          role: "LEAD",
+          userId: { not: req.userId },
+        },
+        select: { userId: true },
+      })
+    : []
+
+  const targets = Array.from(new Set([...fullApprovers, ...leads].map((m) => m.userId)))
+  if (!targets.length) return
+
+  const typeLabel = ATTENDANCE_TYPE_LABEL[req.type] ?? req.type
+  const who = req.user?.name || req.user?.email || "Seseorang"
+  const fmt = (d: Date) => d.toLocaleDateString("id-ID", { day: "numeric", month: "short", timeZone: "Asia/Jakarta" })
+  const start = fmt(req.startDate)
+  const end = fmt(req.endDate)
+  const when = start === end ? start : `${start} – ${end}`
+  const reasonSuffix = req.reason ? ` — “${req.reason}”` : ""
+
+  await Promise.all(
+    targets.map((userId) =>
+      createInAppNotification({
+        userId,
+        type: "attendance_request_pending",
+        title: `${typeLabel} perlu approval`,
+        message: `${who} mengajukan ${typeLabel.toLowerCase()} ${when}${reasonSuffix}. Cek & approve di Attendance.`,
+        link: "/attendance",
+        push: true,
+      }).catch(() => null),
+    ),
+  )
+}
+
 export async function notifyOffsiteCheckoutPending(data: {
   workspaceId: string
   staffUserId: string
