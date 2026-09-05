@@ -44,6 +44,22 @@ export async function POST(request: NextRequest) {
     const lat = Number(formData.get("lat"))
     const lng = Number(formData.get("lng"))
     const notes = (formData.get("notes") as string | null)?.trim() || undefined
+    // Offline capture — see the check-in route for why these three travel with a queued tap.
+    const clientId = (formData.get("clientId") as string | null)?.trim() || null
+    const deviceAtRaw = (formData.get("deviceAt") as string | null)?.trim() || null
+    const uptimeSecRaw = Number(formData.get("uptimeSec"))
+    const deviceUptimeSec = Number.isFinite(uptimeSecRaw) && uptimeSecRaw > 0 ? Math.floor(uptimeSecRaw) : null
+
+    if (clientId) {
+      const already = await prisma.attendanceRecord.findUnique({
+        where: { checkOutClientId: clientId },
+        // serializeAttendanceRecord needs both relations; without them this is a type error.
+        include: { officeLocation: true, user: true },
+      })
+      if (already) {
+        return NextResponse.json({ record: serializeAttendanceRecord(already), duplicate: true })
+      }
+    }
     // Offsite checkout: staff outside the geofence opting to check out anyway (meeting/shoot), with a
     // mandatory reason. Recorded as PENDING until a BoD approves it.
     const offsiteRequested = formData.get("offsite") === "1" || formData.get("offsite") === "true"
@@ -184,7 +200,20 @@ export async function POST(request: NextRequest) {
         : `Checkout: ${notes}`
       : existingRecord.notes
 
-    const checkOutAt = new Date()
+    // Same rule as check-in: a replayed tap is recorded when the person tapped, not when the
+    // queue drained, or leaving at 18:00 during an outage would be stored as leaving at 21:00.
+    // The device's claim is clamped to the last week and never to the future, and the record is
+    // flagged either way so a reviewer can see the time was not server-verified.
+    const OFFLINE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+    const serverNow = new Date()
+    const claimed = deviceAtRaw ? new Date(deviceAtRaw) : null
+    const claimedUsable =
+      claimed !== null &&
+      !Number.isNaN(claimed.getTime()) &&
+      claimed <= serverNow &&
+      serverNow.getTime() - claimed.getTime() <= OFFLINE_MAX_AGE_MS
+    const checkOutAt = claimedUsable ? (claimed as Date) : serverNow
+    const checkOutOffline = deviceAtRaw !== null
     const effectiveShift = await resolveEffectiveAttendanceShift({
       userId: session.user.id,
       workspaceId: context.workspace.id,
@@ -217,6 +246,9 @@ export async function POST(request: NextRequest) {
         earlyLeaveMinutes: derived.earlyLeaveMinutes,
         workedMinutes: derived.workedMinutes,
         attendanceFlexi: derived.attendanceFlexi,
+        checkOutOffline,
+        checkOutDeviceUptimeSec: checkOutOffline ? deviceUptimeSec : null,
+        checkOutClientId: clientId,
         checkOutLat: validation.data.lat,
         checkOutLng: validation.data.lng,
         checkOutAddress: reverseGeocode.displayName,

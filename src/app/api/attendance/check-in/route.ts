@@ -84,6 +84,28 @@ export async function POST(request: NextRequest) {
     const lat = Number(formData.get("lat"))
     const lng = Number(formData.get("lng"))
     const notes = (formData.get("notes") as string | null)?.trim() || undefined
+    // Offline capture. The app queues a tap when the server is unreachable and replays it later,
+    // so these three travel with it: a client-generated id to make the replay idempotent, the
+    // device's own clock at the moment of the tap, and the device uptime as a cross-check.
+    const clientId = (formData.get("clientId") as string | null)?.trim() || null
+    const deviceAtRaw = (formData.get("deviceAt") as string | null)?.trim() || null
+    const uptimeSecRaw = Number(formData.get("uptimeSec"))
+    const deviceUptimeSec = Number.isFinite(uptimeSecRaw) && uptimeSecRaw > 0 ? Math.floor(uptimeSecRaw) : null
+
+    // A tap that WAS stored but whose reply never reached the phone gets replayed when the queue
+    // drains. Hand back the record that already exists instead of refusing it or checking the
+    // same person in twice — the phone cannot tell the difference between "lost on the way out"
+    // and "lost on the way back".
+    if (clientId) {
+      const already = await prisma.attendanceRecord.findUnique({
+        where: { checkInClientId: clientId },
+        // serializeAttendanceRecord needs both relations; without them this is a type error.
+        include: { officeLocation: true, user: true },
+      })
+      if (already) {
+        return NextResponse.json({ record: serializeAttendanceRecord(already), duplicate: true })
+      }
+    }
 
     const validation = attendanceActionSchema.safeParse({ lat, lng, notes })
     if (!validation.success) {
@@ -176,7 +198,24 @@ export async function POST(request: NextRequest) {
     const photoUrl = `/api/files/attendance/${safeName}`
     const reverseGeocode = await reverseGeocodeCoordinates(validation.data.lat, validation.data.lng)
 
-    const checkInAt = new Date()
+    // A replayed tap is recorded at the moment the person actually tapped, not when the queue
+    // finally drained — otherwise a 09:00 check-in that syncs at 11:00 is stored as two hours
+    // late, which punishes someone for the server being down.
+    //
+    // That time comes from the device, so it is not trusted blindly: it may not be in the future
+    // and may not be older than a week. Outside that window the server's own clock is used
+    // instead. Either way the record is flagged as offline, because a device clock can be moved
+    // and whoever reviews attendance has to be able to see that.
+    const OFFLINE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+    const serverNow = new Date()
+    const claimed = deviceAtRaw ? new Date(deviceAtRaw) : null
+    const claimedUsable =
+      claimed !== null &&
+      !Number.isNaN(claimed.getTime()) &&
+      claimed <= serverNow &&
+      serverNow.getTime() - claimed.getTime() <= OFFLINE_MAX_AGE_MS
+    const checkInAt = claimedUsable ? (claimed as Date) : serverNow
+    const checkInOffline = deviceAtRaw !== null
     const effectiveShift = await resolveEffectiveAttendanceShift({
       userId: session.user.id,
       workspaceId: context.workspace.id,
@@ -212,6 +251,9 @@ export async function POST(request: NextRequest) {
         earlyLeaveMinutes: derived.earlyLeaveMinutes,
         workedMinutes: derived.workedMinutes,
         attendanceFlexi: derived.attendanceFlexi,
+        checkInOffline,
+        checkInDeviceUptimeSec: checkInOffline ? deviceUptimeSec : null,
+        checkInClientId: clientId,
         checkInLat: validation.data.lat,
         checkInLng: validation.data.lng,
         checkInAddress: reverseGeocode.displayName,
