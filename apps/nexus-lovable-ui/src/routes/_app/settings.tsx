@@ -5,6 +5,7 @@ import { fmtDate, nexusApi, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canE
 import { Settings as SettingsIcon, User, Bell, Lock, Palette, Webhook, Zap, CreditCard, Loader2, Trash2, ImagePlus, Users, UserPlus, ShieldCheck, KeyRound, Copy, Check, X, Plug, Sparkles, AlertTriangle, Globe, Terminal, Monitor, MessageCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { passkeysSupported, registerPasskey } from "@/lib/passkey";
 
 export const Route = createFileRoute("/_app/settings")({ component: Settings });
 
@@ -384,6 +385,37 @@ function PasswordSection() {
   );
 }
 
+function PasskeysSection() {
+  // WebAuthn is a browser API, so this can only be answered after mount — never during SSR.
+  const [supported, setSupported] = useState(false);
+  const [label, setLabel] = useState("");
+  useEffect(() => { setSupported(passkeysSupported()); }, []);
+  // Resolves to false when the system prompt was dismissed: nothing was added, nothing went wrong.
+  const add = useMutation({ mutationFn: () => registerPasskey(label), onSuccess: (created) => { if (created) setLabel(""); } });
+  return (
+    <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-4">
+      <div>
+        <h2 className="font-semibold">Passkeys</h2>
+        <p className="text-xs text-muted-foreground">Sign in with Face ID, Touch ID, Windows Hello, or your phone &mdash; no password to type. The key stays on your device; NEXUS only keeps the public half.</p>
+      </div>
+      {!supported ? (
+        <p className="text-sm text-muted-foreground">This browser doesn&apos;t support passkeys. Try a recent Chrome, Safari, or Edge.</p>
+      ) : (
+        <>
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+            <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Device name (e.g. MacBook Pro)" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+            <button disabled={add.isPending} onClick={() => add.mutate()} className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">
+              {add.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />} Add passkey
+            </button>
+          </div>
+          {add.isSuccess && add.data && <p className="text-xs font-semibold text-success">Passkey added. Use it to sign in next time.</p>}
+          {add.isError && <p className="text-xs font-semibold text-destructive">{(add.error as Error)?.message ?? "Couldn't add that passkey."}</p>}
+        </>
+      )}
+    </div>
+  );
+}
+
 function NotificationsSection() {
   const qc = useQueryClient();
   const prefs = useQuery({ queryKey: ["nexus", "notif-prefs"], queryFn: nexusApi.notificationPreferences, retry: false });
@@ -731,6 +763,7 @@ function SecuritySection() {
   return (
     <div className="space-y-6">
       <PasswordSection />
+      <PasskeysSection />
       <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-3">
         <h2 className="font-semibold">Active sessions</h2>
         {sessions.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
