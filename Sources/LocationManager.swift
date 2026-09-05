@@ -4,7 +4,29 @@ import CoreLocation
 /// permission, grab a best-accuracy fix, surface a clear error on denial/timeout.
 final class LocationManager: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
-    private var continuation: CheckedContinuation<CLLocationCoordinate2D, Error>?
+    private var continuation: CheckedContinuation<Fix, Error>?
+
+    /// Everything CoreLocation hands over, not just the pair of numbers.
+    ///
+    /// A spoofed position is trivial to produce and impossible to rule out from coordinates alone,
+    /// so the point is not to block it here — the app cannot — but to carry the evidence to the
+    /// server, where it can be flagged and reviewed. `latitude`/`longitude` keep their old names so
+    /// every existing call site reads the same.
+    struct Fix: Sendable {
+        let latitude: Double
+        let longitude: Double
+        /// Metres. Real GPS varies; several spoofers report a suspiciously perfect constant.
+        let accuracyM: Double
+        /// Many spoofers never supply one, which is itself worth recording.
+        let altitudeM: Double?
+        let speedMps: Double?
+        let capturedAt: Date
+        /// iOS 15+, Apple's own answer to "did this come from a simulator". Not every spoofing
+        /// method trips it, but when it does the answer is unambiguous.
+        let simulated: Bool
+        /// Position came from an external accessory rather than the device's own receiver.
+        let fromAccessory: Bool
+    }
     private var awaitingAuth = false
 
     enum LocationError: LocalizedError {
@@ -30,7 +52,7 @@ final class LocationManager: NSObject, CLLocationManagerDelegate {
         }
     }
 
-    func currentFix() async throws -> CLLocationCoordinate2D {
+    func currentFix() async throws -> Fix {
         switch manager.authorizationStatus {
         case .denied, .restricted:
             throw LocationError.denied
@@ -65,7 +87,18 @@ final class LocationManager: NSObject, CLLocationManagerDelegate {
 
     func locationManager(_ m: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let loc = locations.last else { return }
-        continuation?.resume(returning: loc.coordinate)
+        let source = loc.sourceInformation
+        continuation?.resume(returning: Fix(
+            latitude: loc.coordinate.latitude,
+            longitude: loc.coordinate.longitude,
+            accuracyM: loc.horizontalAccuracy,
+            // CoreLocation uses negative values to mean "not available" rather than nil.
+            altitudeM: loc.verticalAccuracy > 0 ? loc.altitude : nil,
+            speedMps: loc.speed >= 0 ? loc.speed : nil,
+            capturedAt: loc.timestamp,
+            simulated: source?.isSimulatedBySoftware ?? false,
+            fromAccessory: source?.isProducedByAccessory ?? false
+        ))
         continuation = nil
     }
 

@@ -1012,15 +1012,28 @@ struct APIClient {
     }
 
     func checkIn(lat: Double, lng: Double, selfie: Data, notes: String? = nil,
+                 fix: LocationManager.Fix? = nil,
                  clientId: String? = nil, deviceAt: Date? = nil, uptimeSec: Int? = nil) async throws -> AttendanceOutcome {
         var fields = ["lat": String(lat), "lng": String(lng)]
         if let notes, !notes.isEmpty { fields["notes"] = notes }
+        Self.applyFixFields(&fields, fix)
         Self.applyOfflineFields(&fields, clientId: clientId, deviceAt: deviceAt, uptimeSec: uptimeSec)
         return try await attendanceUpload("/api/attendance/check-in", fields: fields, selfie: selfie)
     }
 
     /// Only a replayed tap carries these. A live one omits them entirely, so the server records it
     /// exactly as it always did — server clock, not flagged.
+    /// The rest of what CoreLocation reported. Coordinates alone can never show whether a position
+    /// was real, so the supporting signals travel with them and the server decides what looks wrong.
+    private static func applyFixFields(_ fields: inout [String: String], _ fix: LocationManager.Fix?) {
+        guard let fix else { return }
+        fields["accuracyM"] = String(fix.accuracyM)
+        if let alt = fix.altitudeM { fields["altitudeM"] = String(alt) }
+        if let sp = fix.speedMps { fields["speedMps"] = String(sp) }
+        fields["simulated"] = fix.simulated ? "1" : "0"
+        fields["fromAccessory"] = fix.fromAccessory ? "1" : "0"
+    }
+
     private static func applyOfflineFields(_ fields: inout [String: String],
                                            clientId: String?, deviceAt: Date?, uptimeSec: Int?) {
         if let clientId { fields["clientId"] = clientId }
@@ -1032,6 +1045,7 @@ struct APIClient {
     /// sends. Without it the API rejects with "Refleksi harian wajib diisi minimal 200 karakter".
     func checkOut(lat: Double, lng: Double, selfie: Data, reflection: String,
                   offsite: Bool = false, reason: String? = nil,
+                  fix: LocationManager.Fix? = nil,
                   clientId: String? = nil, deviceAt: Date? = nil, uptimeSec: Int? = nil) async throws -> AttendanceOutcome {
         var fields = ["lat": String(lat), "lng": String(lng)]
         let trimmedReflection = reflection.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1040,6 +1054,7 @@ struct APIClient {
             fields["offsite"] = "1"
             if let reason, !reason.isEmpty { fields["reason"] = reason }
         }
+        Self.applyFixFields(&fields, fix)
         Self.applyOfflineFields(&fields, clientId: clientId, deviceAt: deviceAt, uptimeSec: uptimeSec)
         return try await attendanceUpload("/api/attendance/check-out", fields: fields, selfie: selfie)
     }

@@ -18,6 +18,10 @@ struct AttendanceView: View {
 
     @State private var pendingSelfie: Data?
     @State private var pendingCoords: (lat: Double, lng: Double)?
+    /// Kept whole so the offsite retry and the offline queue carry the same integrity signals as
+    /// the first attempt — an offline tap is the easiest place to fake a position, so it is the
+    /// last place that should travel without evidence.
+    @State private var pendingFix: LocationManager.Fix?
     private var queue: AttendanceQueue { AttendanceQueue.shared }
     @State private var showOffsite = false
     @State private var offsiteReason = ""
@@ -402,10 +406,11 @@ struct AttendanceView: View {
         do {
             let fix = try await loc.currentFix()
             pendingCoords = (fix.latitude, fix.longitude)
+            pendingFix = fix
             let outcome: AttendanceOutcome = try await {
                 switch action {
-                case .checkIn: return try await APIClient.shared.checkIn(lat: fix.latitude, lng: fix.longitude, selfie: selfie)
-                case .checkOut: return try await APIClient.shared.checkOut(lat: fix.latitude, lng: fix.longitude, selfie: selfie, reflection: reflection)
+                case .checkIn: return try await APIClient.shared.checkIn(lat: fix.latitude, lng: fix.longitude, selfie: selfie, fix: fix)
+                case .checkOut: return try await APIClient.shared.checkOut(lat: fix.latitude, lng: fix.longitude, selfie: selfie, reflection: reflection, fix: fix)
                 }
             }()
             switch outcome {
@@ -431,7 +436,8 @@ struct AttendanceView: View {
             AttendanceQueue.shared.enqueue(
                 kind: action == .checkIn ? .checkIn : .checkOut,
                 lat: fix.lat, lng: fix.lng, selfie: selfie,
-                reflection: action == .checkOut ? reflection : nil)
+                reflection: action == .checkOut ? reflection : nil,
+                fix: pendingFix)
             Haptics.success()
             banner = Banner(text: T("Saved offline — will be sent when the server is back."), good: true)
             if action == .checkOut { reflection = "" }
@@ -445,7 +451,8 @@ struct AttendanceView: View {
         do {
             let outcome = try await APIClient.shared.checkOut(lat: coords.lat, lng: coords.lng, selfie: selfie,
                                                               reflection: reflection, offsite: true,
-                                                              reason: offsiteReason.trimmingCharacters(in: .whitespaces))
+                                                              reason: offsiteReason.trimmingCharacters(in: .whitespaces),
+                                                              fix: pendingFix)
             if case .success = outcome {
                 banner = Banner(text: T("Checkout sent — waiting for BoD approval ⏳"), good: true)
                 reflection = ""

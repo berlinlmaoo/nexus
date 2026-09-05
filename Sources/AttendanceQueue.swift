@@ -23,6 +23,13 @@ struct PendingAttendance: Codable, Identifiable, Sendable {
     let uptimeSec: Int
     let lat: Double
     let lng: Double
+    /// The rest of what CoreLocation reported. Offline is the easiest moment to fake a position,
+    /// so it is the last moment that should reach the server without its supporting signals.
+    let accuracyM: Double?
+    let altitudeM: Double?
+    let speedMps: Double?
+    let simulated: Bool?
+    let fromAccessory: Bool?
     let notes: String?
     let reflection: String?
     let offsite: Bool
@@ -63,7 +70,8 @@ final class AttendanceQueue {
     /// Called when a live attempt failed because the server could not be reached at all.
     func enqueue(kind: PendingAttendance.Kind, lat: Double, lng: Double, selfie: Data,
                  notes: String? = nil, reflection: String? = nil,
-                 offsite: Bool = false, reason: String? = nil) {
+                 offsite: Bool = false, reason: String? = nil,
+                 fix: LocationManager.Fix? = nil) {
         let id = UUID().uuidString
         let entry = PendingAttendance(
             id: id,
@@ -71,6 +79,8 @@ final class AttendanceQueue {
             deviceAt: Date(),
             uptimeSec: Int(ProcessInfo.processInfo.systemUptime),
             lat: lat, lng: lng,
+            accuracyM: fix?.accuracyM, altitudeM: fix?.altitudeM, speedMps: fix?.speedMps,
+            simulated: fix?.simulated, fromAccessory: fix?.fromAccessory,
             notes: notes, reflection: reflection,
             offsite: offsite, reason: reason,
             attempts: 0
@@ -96,17 +106,29 @@ final class AttendanceQueue {
                 remove(entry.id)
                 continue
             }
+            // Rebuilt from what was stored so the replay carries exactly the evidence the live
+            // attempt would have carried.
+            let fix = entry.accuracyM.map {
+                LocationManager.Fix(
+                    latitude: entry.lat, longitude: entry.lng,
+                    accuracyM: $0, altitudeM: entry.altitudeM, speedMps: entry.speedMps,
+                    capturedAt: entry.deviceAt,
+                    simulated: entry.simulated ?? false,
+                    fromAccessory: entry.fromAccessory ?? false)
+            }
             do {
                 switch entry.kind {
                 case .checkIn:
                     _ = try await APIClient.shared.checkIn(
                         lat: entry.lat, lng: entry.lng, selfie: selfie, notes: entry.notes,
+                        fix: fix,
                         clientId: entry.id, deviceAt: entry.deviceAt, uptimeSec: entry.uptimeSec)
                 case .checkOut:
                     _ = try await APIClient.shared.checkOut(
                         lat: entry.lat, lng: entry.lng, selfie: selfie,
                         reflection: entry.reflection ?? "",
                         offsite: entry.offsite, reason: entry.reason,
+                        fix: fix,
                         clientId: entry.id, deviceAt: entry.deviceAt, uptimeSec: entry.uptimeSec)
                 }
                 remove(entry.id)
