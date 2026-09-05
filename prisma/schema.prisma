@@ -180,6 +180,11 @@ model PeriodReward {
 
 model Workspace {
   id          String            @id @default(cuid())
+
+  /// The code someone types when signing up to join this workspace instead of starting their own.
+  /// Deliberately not derived from the name or the slug: a guessable code is an open door, and
+  /// this one is the only thing standing between a stranger and an existing company's data.
+  joinCode  String?  @unique
   name        String
   slug        String            @unique
   description String?

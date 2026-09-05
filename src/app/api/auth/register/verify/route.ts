@@ -13,8 +13,7 @@ import {
   hashOtpCode,
   isOtpExpired,
 } from "@/lib/auth-otp"
-import { ensureUserInPrimaryWorkspaceTeam } from "@/lib/primary-team"
-import { syncTeamMemberAccess } from "@/lib/team-sync"
+import { randomUUID } from "crypto"
 
 export async function POST(request: NextRequest) {
   try {
@@ -101,7 +100,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { user, primaryTeamId } = await prisma.$transaction(async (tx) => {
+    // Where this person lands. Every signup used to be dropped straight into the primary
+    // workspace, so anyone who found the sign-up page ended up inside the company's data with no
+    // invitation of any kind. Now they either present a code for a workspace that already exists,
+    // or they get one of their own and touch nobody else's.
+    const rawCode = typeof body?.workspaceCode === "string" ? body.workspaceCode : ""
+    // People retype these off a screen, so spacing, dashes and case are theirs to get wrong.
+    const joinCode = rawCode.replace(/[\s-]/g, "").toUpperCase()
+    const joinTarget = joinCode
+      ? await prisma.workspace.findUnique({ where: { joinCode }, select: { id: true, name: true } })
+      : null
+    if (joinCode && !joinTarget) {
+      return NextResponse.json({ error: "That workspace code is not valid." }, { status: 400 })
+    }
+
+    const { user } = await prisma.$transaction(async (tx) => {
       const createdUser = await tx.user.create({
         data: {
           name: pendingVerification.name!,
@@ -123,11 +136,33 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      const { team } = await ensureUserInPrimaryWorkspaceTeam(tx, createdUser.id)
-      return { user: createdUser, primaryTeamId: team.id }
+      if (joinTarget) {
+        // Joining by code makes you staff. Nothing here may hand out authority: a code is proof
+        // that someone told you where to go, not proof of who you are.
+        await tx.workspaceMember.create({
+          data: { userId: createdUser.id, workspaceId: joinTarget.id, role: "STAFF" },
+        })
+      } else {
+        // No code: their own workspace, which they own. Slug has to be unique, and two people
+        // called Budi signing up on the same day is not an error worth failing a signup over.
+        const base =
+          createdUser.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "workspace"
+        const suffix = Math.random().toString(36).slice(2, 8)
+        const created = await tx.workspace.create({
+          data: {
+            name: `${createdUser.name}'s workspace`,
+            slug: `${base}-${suffix}`,
+            description: null,
+            joinCode: randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase(),
+          },
+          select: { id: true },
+        })
+        await tx.workspaceMember.create({
+          data: { userId: createdUser.id, workspaceId: created.id, role: "ONE_ABOVE_ALL" },
+        })
+      }
+      return { user: createdUser }
     })
-
-    await syncTeamMemberAccess(primaryTeamId, user.id)
 
     await logAudit({
       action: "create",
