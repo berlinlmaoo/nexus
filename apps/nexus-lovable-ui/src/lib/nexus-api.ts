@@ -337,6 +337,17 @@ export type OfficePayload = {
   isActive?: boolean;
 };
 
+/**
+ * The trimmed shape the server sends for a quoted message: enough to draw a preview and no more,
+ * so a reply never carries the body of a message the reader can't already see.
+ */
+export type NexusReplyPreview = {
+  id: string;
+  content: string;
+  attachmentType?: string | null;
+  user?: NexusUser | null;
+};
+
 export type NexusMessage = {
   id: string;
   conversationId?: string;
@@ -347,6 +358,8 @@ export type NexusMessage = {
   /** Set when the message carries a picture. Always a /api/files/chat/ path the server issued. */
   attachmentUrl?: string | null;
   attachmentType?: string | null;
+  /** Set when this message replies to another one in the same conversation; null otherwise. */
+  replyTo?: NexusReplyPreview | null;
 };
 
 export type NexusConversation = {
@@ -1395,7 +1408,7 @@ export const nexusApi = {
   sendMessage: (
     id: string,
     content: string,
-    extra?: { mentionedUserIds?: string[]; attachmentUrl?: string; attachmentType?: string },
+    extra?: { mentionedUserIds?: string[]; attachmentUrl?: string; attachmentType?: string; replyToId?: string },
   ) =>
     apiFetch<{ message: NexusMessage }>(`/api/conversations/${id}/messages`, {
       method: "POST",
