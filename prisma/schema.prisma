@@ -1010,6 +1010,17 @@ model AttendanceRecord {
   // Flexi Time — whether this record was computed under flexi rules (check-in window 12:00–15:00,
   // expected end = check-in + 9h). Stored so re-derivation/audit doesn't fall back to fixed-shift math.
   attendanceFlexi       Boolean          @default(false)
+  // Location integrity. A spoofed position cannot be ruled out from coordinates alone, so the
+  // rest of what CoreLocation reported is kept for review: `simulated` is iOS telling us outright
+  // that the fix came from a simulator, and accuracy/altitude are the fields several spoofers get
+  // visibly wrong (a constant perfect accuracy, or no altitude at all).
+  checkInAccuracyM      Float?
+  checkInAltitudeM      Float?
+  checkInSimulated      Boolean          @default(false)
+  checkOutAccuracyM     Float?
+  checkOutAltitudeM     Float?
+  checkOutSimulated     Boolean          @default(false)
+
   // Offline capture — the app queued this tap while the server was unreachable and replayed it
   // later. The timestamp then comes from the DEVICE, not the server, so it is not verified. That
   // has to be visible to anyone reviewing attendance rather than silently accepted as equal.
