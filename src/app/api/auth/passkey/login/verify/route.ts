@@ -7,12 +7,7 @@ import { EXPECTED_ORIGINS, RP_ID, takeChallenge } from "@/lib/passkey"
 
 const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
 
-function shouldUseSecureAuthCookies() {
-  return (process.env.NEXTAUTH_URL ?? process.env.AUTH_URL ?? "").startsWith("https://")
-}
-function getSessionCookieName() {
-  return `${shouldUseSecureAuthCookies() ? "__Secure-" : ""}authjs.session-token`
-}
+import { getSessionCookieName, shouldUseSecureAuthCookies } from "@/lib/session-cookie"
 
 /**
  * Step 2: verify the signature and issue exactly the session `app-login` issues, so every existing
