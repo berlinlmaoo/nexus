@@ -691,6 +691,18 @@ final class AppLanguage {
         "Sign in with Face ID or Touch ID instead of typing your password. Your password keeps working.":
             "Masuk pakai Face ID atau Touch ID, nggak usah ngetik password. Password kamu tetap jalan.",
         "Add a passkey": "Tambah passkey",
+        "Unnamed passkey": "Passkey tanpa nama",
+        "Added": "Ditambahkan",
+        "Last used": "Terakhir dipakai",
+        "Never used": "Belum pernah dipakai",
+        "No passkeys yet — add one and this device can sign you in with Face ID.":
+            "Belum ada passkey — tambah satu biar HP ini bisa masukin kamu pakai Face ID.",
+        "Couldn't load your passkeys.": "Gagal memuat daftar passkey kamu.",
+        "Revoke": "Cabut",
+        "That passkey stops working everywhere it was saved. This cannot be undone.":
+            "Passkey itu bakal berhenti jalan di semua tempat dia kesimpan. Nggak bisa dibatalin.",
+        "Passkey revoked ✓": "Passkey dicabut ✓",
+        "Couldn't revoke the passkey. Try again.": "Gagal nyabut passkey. Coba lagi.",
         "Passkey added ✓": "Passkey ditambahkan ✓",
         "Couldn't add the passkey. Try again.": "Gagal nambah passkey. Coba lagi.",
     ]

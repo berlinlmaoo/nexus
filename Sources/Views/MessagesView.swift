@@ -502,8 +502,16 @@ struct ChatThreadView: View {
         .photosPicker(isPresented: $showPhotoPicker, selection: $pickedPhoto,
                       matching: .images, photoLibrary: .shared())
         .fullScreenCover(isPresented: $showCamera) {
-            CameraPicker(cameraDevice: .rear) { data in Task { await uploadJPEG(data) } }
-                .ignoresSafeArea()
+            // Close it from here rather than leaving it to the picker. CameraPicker dismisses via
+            // @Environment(\.dismiss) read inside a UIViewControllerRepresentable, which its
+            // coordinator then calls on a captured copy of the struct — that works under .sheet,
+            // where attendance uses it, and does not under .fullScreenCover. The camera stayed up,
+            // so the photo looked like it never arrived even though the upload had started.
+            CameraPicker(cameraDevice: .rear) { data in
+                showCamera = false
+                Task { await uploadJPEG(data) }
+            }
+            .ignoresSafeArea()
         }
         .sheet(isPresented: $showAddPeople) {
             if let pid = projectId {

@@ -89,6 +89,26 @@ struct PasskeyAssertionOptions: Decodable, Sendable {
     let challenge: String
 }
 
+/// One row of GET /api/auth/passkey — a credential already enrolled on this account.
+///
+/// Everything but `id` is optional on purpose. `label` and `lastUsedAt` are genuinely nullable in
+/// the API, and `createdAt` is modelled the same way so one odd row can never fail the decode of
+/// the whole list and leave the card looking empty.
+struct PasskeyInfo: Decodable, Sendable, Identifiable {
+    let id: String
+    /// Whatever the enrolling device called itself. Null for passkeys made before labels existed.
+    let label: String?
+    /// ISO-8601.
+    let createdAt: String?
+    /// ISO-8601, or null when this passkey has never signed anyone in.
+    let lastUsedAt: String?
+}
+
+/// GET /api/auth/passkey wraps the array in an object rather than answering a bare array.
+struct PasskeyListResponse: Decodable, Sendable {
+    let passkeys: [PasskeyInfo]
+}
+
 // MARK: - Delegate → async/await bridge
 
 /// Runs exactly one ASAuthorizationController round-trip as an awaitable call.

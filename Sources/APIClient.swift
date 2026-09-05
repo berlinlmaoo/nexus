@@ -128,6 +128,21 @@ struct APIClient {
         return try await run(req, decode: LoginResponse.self)
     }
 
+    /// The passkeys already enrolled on this account, in the order the server lists them.
+    func passkeyList() async throws -> [PasskeyInfo] {
+        try await run(makeRequest("/api/auth/passkey"), decode: PasskeyListResponse.self).passkeys
+    }
+
+    /// Revoke ONE passkey. The route only ever touches the caller's own credentials, so a 404 here
+    /// means "already gone", not "not allowed" — the caller treats it as success and refreshes.
+    /// The id goes in raw, like every other id in this file: `makeRequest` builds the URL with
+    /// `appendingPathComponent`, which percent-encodes once and would double-encode a pre-escaped id.
+    @discardableResult
+    func passkeyRevoke(id: String) async throws -> Bool {
+        _ = try await run(makeRequest("/api/auth/passkey/\(id)", method: "DELETE"), decode: SuccessResponse.self)
+        return true
+    }
+
     func projects() async throws -> [Project] {
         try await run(makeRequest("/api/projects"), decode: [Project].self, cache: "projects")
     }

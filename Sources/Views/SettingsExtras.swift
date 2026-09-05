@@ -234,34 +234,148 @@ struct SecurityCard: View {
 struct PasskeyCard: View {
     @State private var busy = false
     @State private var msg: (text: String, ok: Bool)?
+    @State private var passkeys: [PasskeyInfo] = []
+    @State private var loading = true
+    @State private var loadFailed = false
+    /// The row whose revoke button was tapped — this is what presents the confirmation. Revoking
+    /// destroys the credential server-side, so it must never happen on a single tap.
+    @State private var revokeTarget: PasskeyInfo?
+    /// id of the passkey being revoked right now, so only that row shows a spinner.
+    @State private var revoking: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(T("PASSKEYS")).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violetText)
             Text(T("Sign in with Face ID or Touch ID instead of typing your password. Your password keeps working."))
                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            enrolled
             if let msg {
                 Text(msg.text).font(NXFont.text(12, .semibold)).foregroundStyle(msg.ok ? NX.success : NX.danger)
             }
-            Button { Task { await add() } } label: {
-                HStack(spacing: 6) {
-                    if busy {
-                        ProgressView().scaleEffect(0.7).tint(.white)
-                    } else {
-                        Image(systemName: "person.badge.key.fill").font(.system(size: 13, weight: .bold))
-                    }
-                    Text(T("Add a passkey"))
-                }
-                .font(NXFont.text(13, .bold)).foregroundStyle(.white)
-                .frame(maxWidth: .infinity).padding(.vertical, 10)
-                .background(busy ? NX.mutedFg.opacity(0.4) : NX.violet,
-                            in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .disabled(busy)
+            addButton
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .nexusCard()
+        .task { await load() }
+        .confirmationDialog(revokeTitle,
+                            isPresented: Binding(get: { revokeTarget != nil }, set: { if !$0 { revokeTarget = nil } }),
+                            titleVisibility: .visible) {
+            Button(T("Revoke"), role: .destructive) {
+                if let p = revokeTarget { revokeTarget = nil; Task { await revoke(p) } }
+            }
+            Button(T("Cancel"), role: .cancel) { revokeTarget = nil }
+        } message: {
+            Text(T("That passkey stops working everywhere it was saved. This cannot be undone."))
+        }
+    }
+
+    /// Built outside the `.confirmationDialog(…)` call so the label lookup never has to happen
+    /// inside a string interpolation.
+    private var revokeTitle: String {
+        guard let p = revokeTarget else { return "" }
+        return "\(T("Revoke")) \"\(displayLabel(p))\"?"
+    }
+
+    /// The enrolled list, its own property because the card's VStack is already close to
+    /// ViewBuilder's ten-child ceiling.
+    @ViewBuilder
+    private var enrolled: some View {
+        if loading {
+            ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
+        } else if loadFailed {
+            Text(T("Couldn't load your passkeys."))
+                .font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
+        } else if passkeys.isEmpty {
+            Text(T("No passkeys yet — add one and this device can sign you in with Face ID."))
+                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 10).padding(.horizontal, 11)
+                .background(NX.muted.opacity(0.3), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        } else {
+            VStack(spacing: 6) { ForEach(passkeys) { p in row(p) } }
+        }
+    }
+
+    private func row(_ p: PasskeyInfo) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "key.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(NX.violetText)
+                .frame(width: 32, height: 32)
+                .background(NX.violet.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(displayLabel(p)).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                Text(detail(p)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(2)
+            }
+            Spacer(minLength: 6)
+            Button { revokeTarget = p } label: {
+                Group {
+                    if revoking == p.id {
+                        ProgressView().scaleEffect(0.6).tint(NX.danger)
+                    } else {
+                        Image(systemName: "trash").font(.system(size: 13, weight: .semibold)).foregroundStyle(NX.danger)
+                    }
+                }
+                .frame(width: 30, height: 30)
+                .background(NX.danger.opacity(0.10), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(busy || revoking != nil)
+        }
+        .padding(.vertical, 6).padding(.horizontal, 8)
+        .background(NX.muted.opacity(0.3), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private var addButton: some View {
+        Button { Task { await add() } } label: {
+            HStack(spacing: 6) {
+                if busy {
+                    ProgressView().scaleEffect(0.7).tint(.white)
+                } else {
+                    Image(systemName: "person.badge.key.fill").font(.system(size: 13, weight: .bold))
+                }
+                Text(T("Add a passkey"))
+            }
+            .font(NXFont.text(13, .bold)).foregroundStyle(.white)
+            .frame(maxWidth: .infinity).padding(.vertical, 10)
+            .background(busy ? NX.mutedFg.opacity(0.4) : NX.violet,
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(busy)
+    }
+
+    /// A passkey enrolled from a browser can arrive with no label at all.
+    private func displayLabel(_ p: PasskeyInfo) -> String {
+        let name = (p.label ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? T("Unnamed passkey") : name
+    }
+
+    /// "Added 3 Sep 2026 · Last used 5 Sep 2026, 09:12" — the ISO strings never reach the screen.
+    private func detail(_ p: PasskeyInfo) -> String {
+        var parts: [String] = []
+        if let added = ProjDate.parse(p.createdAt) {
+            parts.append("\(T("Added")) \(ProjDate.fmt("d MMM yyyy").string(from: added))")
+        }
+        if let used = ProjDate.parse(p.lastUsedAt) {
+            parts.append("\(T("Last used")) \(ProjDate.fmt("d MMM yyyy, HH:mm").string(from: used))")
+        } else {
+            parts.append(T("Never used"))
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    /// `spinner: false` for the refresh after adding or revoking: the list is already on screen and
+    /// swapping it for a ProgressView reads as a glitch.
+    @MainActor
+    private func load(spinner: Bool = true) async {
+        if spinner { loading = true }
+        defer { loading = false }
+        do {
+            passkeys = try await APIClient.shared.passkeyList()
+            loadFailed = false
+        } catch {
+            // Keep whatever is already listed; only an empty card gets the error in its place.
+            loadFailed = passkeys.isEmpty
+        }
     }
 
     /// @MainActor because PasskeyManager presents system UI, and because `busy`/`msg` are @State.
@@ -273,11 +387,28 @@ struct PasskeyCard: View {
             // a generic model name ("iPhone") rather than the user-set device name, which is fine.
             try await PasskeyManager.register(label: UIDevice.current.name)
             msg = (T("Passkey added ✓"), true)
+            await load(spinner: false)
         } catch PasskeyError.canceled {
             // Closing Face ID is a decision, not a failure. Say nothing at all.
         } catch {
             msg = ((error as? LocalizedError)?.errorDescription ?? T("Couldn't add the passkey. Try again."), false)
         }
+    }
+
+    @MainActor
+    private func revoke(_ p: PasskeyInfo) async {
+        revoking = p.id; msg = nil
+        defer { revoking = nil }
+        do {
+            try await APIClient.shared.passkeyRevoke(id: p.id)
+            msg = (T("Passkey revoked ✓"), true)
+        } catch APIError.http(let code) where code == 404 {
+            // Already gone on the server, so the list was merely stale: the reload below IS the fix,
+            // and calling that a failure would be a lie.
+        } catch {
+            msg = (T("Couldn't revoke the passkey. Try again."), false)
+        }
+        await load(spinner: false)
     }
 }
 

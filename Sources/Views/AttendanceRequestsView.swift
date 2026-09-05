@@ -363,8 +363,13 @@ struct RequestComposerSheet: View {
                 }
             }
             .fullScreenCover(isPresented: $showCamera) {
-                CameraPicker(cameraDevice: .rear) { data in attach = ("sick-note.jpg", data) }
-                    .ignoresSafeArea()
+                // Same reason as the chat composer: under .fullScreenCover the picker cannot
+                // reliably dismiss itself, so whoever presented it closes it.
+                CameraPicker(cameraDevice: .rear) { data in
+                    showCamera = false
+                    attach = ("sick-note.jpg", data)
+                }
+                .ignoresSafeArea()
             }
         }
     }
