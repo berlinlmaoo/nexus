@@ -10,6 +10,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { MobileTabBar } from "@/components/MobileTabBar";
 import { AttendanceReminderModal } from "@/components/attendance/AttendanceReminderModal";
 import { AnnouncementModal } from "@/components/AnnouncementModal";
+import { AppStoreModal } from "@/components/AppStoreModal";
 import { XpPenaltyModal } from "@/components/XpPenaltyModal";
 import { PhoneNumberPrompt } from "@/components/PhoneNumberPrompt";
 import { RealtimeProvider } from "@/lib/realtime";
@@ -111,6 +112,7 @@ function AppLayout() {
         <GideonLauncher />
         <AttendanceReminderModal />
         <AnnouncementModal />
+        <AppStoreModal />
         <XpPenaltyModal />
         <PhoneNumberPrompt />
       </SidebarProvider>
