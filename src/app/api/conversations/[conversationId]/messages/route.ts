@@ -28,7 +28,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ conv
     const limit = Math.min(parseInt(req.nextUrl.searchParams.get("limit") || "50", 10), 100)
     const rows = await prisma.message.findMany({
       where: { conversationId, ...(before ? { createdAt: { lt: new Date(before) } } : {}) },
-      include: { user: { select: { id: true, name: true, avatar: true } } },
+      include: {
+        user: { select: { id: true, name: true, avatar: true } },
+        // Just enough of the quoted message to render a preview; the client never needs its body.
+        replyTo: {
+          select: {
+            id: true,
+            content: true,
+            attachmentType: true,
+            user: { select: { id: true, name: true } },
+          },
+        },
+      },
       orderBy: { createdAt: "desc" },
       take: limit,
     })
@@ -48,7 +59,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
     const access = await assertAccess(userId, conversationId)
     if (!access.ok) return NextResponse.json({ error: "Forbidden" }, { status: access.status })
 
-    const { content, mentionedUserIds, attachmentUrl, attachmentType } = await req.json()
+    const { content, mentionedUserIds, attachmentUrl, attachmentType, replyToId } = await req.json()
     const text = typeof content === "string" ? content.trim() : ""
     // Only accept an attachment path this server itself handed out. Taking an arbitrary URL here
     // would turn every message into an open redirect and let anyone point the chat at a remote host.
@@ -58,6 +69,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
     // A picture on its own is a message; text is only required when there is nothing else.
     if (!text && !attachment) return NextResponse.json({ error: "content required" }, { status: 400 })
 
+    // A reply may only quote a message from this same conversation. Without the check, a crafted
+    // replyToId would pull a preview out of a chat the reader has no access to.
+    let quotedId: string | null = null
+    if (typeof replyToId === "string" && replyToId) {
+      const quoted = await prisma.message.findFirst({
+        where: { id: replyToId, conversationId },
+        select: { id: true },
+      })
+      if (!quoted) return NextResponse.json({ error: "replyToId is not in this conversation" }, { status: 400 })
+      quotedId = quoted.id
+    }
+
     const message = await prisma.message.create({
       data: {
         conversationId,
@@ -65,8 +88,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
         content: text,
         attachmentUrl: attachment,
         attachmentType: attachment && typeof attachmentType === "string" ? attachmentType.slice(0, 64) : null,
+        replyToId: quotedId,
       },
-      include: { user: { select: { id: true, name: true, avatar: true } } },
+      include: {
+        user: { select: { id: true, name: true, avatar: true } },
+        replyTo: {
+          select: {
+            id: true,
+            content: true,
+            attachmentType: true,
+            user: { select: { id: true, name: true } },
+          },
+        },
+      },
     })
     await prisma.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } })
 
