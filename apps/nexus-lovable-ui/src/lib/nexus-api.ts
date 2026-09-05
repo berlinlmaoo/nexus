@@ -942,6 +942,14 @@ export type NexusSession = {
   expiresAt?: string | null;
 };
 
+/** A WebAuthn credential registered to this account. `label` is whatever the user typed when enrolling. */
+export type NexusPasskey = {
+  id: string;
+  label?: string | null;
+  createdAt: string;
+  lastUsedAt?: string | null;
+};
+
 export type NexusApiToken = {
   id: string;
   name: string;
@@ -1786,6 +1794,10 @@ export const nexusApi = {
   deleteWebhook: (id: string) => apiFetch<{ success?: boolean }>(`/api/webhooks/${id}`, { method: "DELETE" }),
   userSessions: () => apiFetch<{ sessions: NexusSession[] }>("/api/user/sessions"),
   revokeSession: (id: string) => apiFetch<{ success?: boolean }>(`/api/user/sessions/${id}`, { method: "DELETE" }),
+
+  // --- Passkeys (WebAuthn credentials on this account) ---
+  passkeys: () => apiFetch<{ passkeys: NexusPasskey[] }>("/api/auth/passkey"),
+  deletePasskey: (id: string) => apiFetch<{ ok?: boolean }>(`/api/auth/passkey/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   // --- MCP / API tokens (connect Claude to NEXUS, task-scoped) ---
   mcpTokens: () => apiFetch<{ tokens: NexusApiToken[] }>("/api/mcp/tokens"),

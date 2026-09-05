@@ -386,12 +386,17 @@ function PasswordSection() {
 }
 
 function PasskeysSection() {
+  const qc = useQueryClient();
   // WebAuthn is a browser API, so this can only be answered after mount — never during SSR.
   const [supported, setSupported] = useState(false);
   const [label, setLabel] = useState("");
   useEffect(() => { setSupported(passkeysSupported()); }, []);
+  const list = useQuery({ queryKey: ["nexus", "passkeys"], queryFn: nexusApi.passkeys, retry: false });
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["nexus", "passkeys"] });
   // Resolves to false when the system prompt was dismissed: nothing was added, nothing went wrong.
-  const add = useMutation({ mutationFn: () => registerPasskey(label), onSuccess: (created) => { if (created) setLabel(""); } });
+  const add = useMutation({ mutationFn: () => registerPasskey(label), onSuccess: (created) => { if (created) { setLabel(""); invalidate(); } } });
+  const revoke = useMutation({ mutationFn: (id: string) => nexusApi.deletePasskey(id), onSuccess: invalidate });
+  const rows = list.data?.passkeys ?? [];
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-soft space-y-4">
       <div>
@@ -399,7 +404,7 @@ function PasskeysSection() {
         <p className="text-xs text-muted-foreground">Sign in with Face ID, Touch ID, Windows Hello, or your phone &mdash; no password to type. The key stays on your device; NEXUS only keeps the public half.</p>
       </div>
       {!supported ? (
-        <p className="text-sm text-muted-foreground">This browser doesn&apos;t support passkeys. Try a recent Chrome, Safari, or Edge.</p>
+        <p className="text-sm text-muted-foreground">This browser doesn&apos;t support passkeys. Try a recent Chrome, Safari, or Edge — you can still remove the ones below.</p>
       ) : (
         <>
           <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
@@ -412,6 +417,30 @@ function PasskeysSection() {
           {add.isError && <p className="text-xs font-semibold text-destructive">{(add.error as Error)?.message ?? "Couldn't add that passkey."}</p>}
         </>
       )}
+
+      <div className="space-y-2 border-t border-border pt-4">
+        <h3 className="text-sm font-semibold">Your passkeys {rows.length > 0 && <span className="text-xs font-normal text-muted-foreground">({rows.length})</span>}</h3>
+        {list.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+        {list.isError && <p className="text-sm text-muted-foreground">{(list.error as Error)?.message ?? "Couldn't load your passkeys."}</p>}
+        {!list.isLoading && !list.isError && rows.length === 0 && <p className="text-sm text-muted-foreground">No passkeys yet. Add one above and you can skip the password next time.</p>}
+        {rows.map((k) => {
+          const name = k.label?.trim() || "Unnamed device";
+          const pending = revoke.isPending && revoke.variables === k.id;
+          return (
+            <div key={k.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium">{name}</div>
+                <div className="mt-0.5 text-xs text-muted-foreground">added {fmtDate(k.createdAt)} · {k.lastUsedAt ? `last used ${fmtDate(k.lastUsedAt)}` : "Never used"}</div>
+              </div>
+              {/* Revoking is permanent — that device has to enrol all over again — so confirm first. */}
+              <button disabled={pending} onClick={() => { if (confirm(`Remove "${name}"? This can't be undone — that device will have to enrol a new passkey.`)) revoke.mutate(k.id); }} className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold transition hover:bg-destructive/10 hover:text-destructive active:scale-[0.97] disabled:opacity-50">
+                {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Remove
+              </button>
+            </div>
+          );
+        })}
+        {revoke.isError && <p className="text-xs font-semibold text-destructive">{(revoke.error as Error)?.message ?? "Couldn't remove that passkey."}</p>}
+      </div>
     </div>
   );
 }
