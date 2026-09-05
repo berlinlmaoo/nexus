@@ -11,6 +11,7 @@ import {
   formatAttendanceDateKey,
   getAttendanceDate,
   getAttendanceWorkspaceContext,
+  assessLocationIntegrity,
   getMemberNoGeofence,
   resolveNearestOffice,
   resolveEffectiveAttendanceShift,
@@ -239,6 +240,15 @@ export async function POST(request: NextRequest) {
       treatAsNonWorkday: holidayToday, // tanggal merah → no late penalty
     })
 
+    const integrity = await assessLocationIntegrity({
+      userId: session.user.id,
+      workspaceId: context.workspace.id,
+      lat: validation.data.lat,
+      lng: validation.data.lng,
+      at: checkInAt,
+      simulated,
+    })
+
     const record = await prisma.attendanceRecord.create({
       data: {
         userId: session.user.id,
@@ -261,6 +271,9 @@ export async function POST(request: NextRequest) {
         checkInAccuracyM: accuracyM,
         checkInAltitudeM: altitudeM,
         checkInSimulated: simulated,
+        checkInSuspect: integrity.suspect,
+        checkInSuspectReason: integrity.reason,
+        checkInImpliedKmh: integrity.impliedKmh,
         checkInDeviceUptimeSec: checkInOffline ? deviceUptimeSec : null,
         checkInClientId: clientId,
         checkInLat: validation.data.lat,

@@ -380,6 +380,105 @@ export async function getPrimaryAttendanceTeam(userId: string, workspaceId: stri
   })
 }
 
+/** Metres between two coordinates. Haversine — good to a few metres at these distances. */
+function distanceMeters(aLat: number, aLng: number, bLat: number, bLng: number) {
+  const R = 6_371_000
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const dLat = toRad(bLat - aLat)
+  const dLng = toRad(bLng - aLng)
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(h))
+}
+
+/** Faster than this between two attendance points is not travel, it is a fabricated position. */
+const IMPOSSIBLE_KMH = 900
+/** Possible by plane or train, but not by anyone who is meant to be at the office. */
+const IMPROBABLE_KMH = 200
+
+export type LocationIntegrity = {
+  suspect: boolean
+  reason: string | null
+  impliedKmh: number | null
+}
+
+/**
+ * Judge a reported position against this person's own recent history.
+ *
+ * The device-side signals (`simulated`, accuracy, altitude) can be defeated by anyone willing to
+ * jailbreak, because they are only as honest as the device reporting them. These checks are not:
+ * they compare the claim against physics and against the person's own past, both of which live on
+ * the server. Someone can fake a position, but they cannot fake having been 200km away 30 minutes
+ * ago and back again.
+ *
+ * Nothing here blocks a check-in. Attendance that silently refuses to record is worse than
+ * attendance that records with a question mark on it — the point is that a human can see it.
+ */
+export async function assessLocationIntegrity(input: {
+  userId: string
+  workspaceId: string
+  lat: number
+  lng: number
+  at: Date
+  simulated: boolean
+}): Promise<LocationIntegrity> {
+  const reasons: Array<string> = []
+  if (input.simulated) reasons.push("device reported a simulated location")
+
+  // The most recent point this person was recorded at, from either end of a day.
+  const previous = await prisma.attendanceRecord.findFirst({
+    where: {
+      userId: input.userId,
+      workspaceId: input.workspaceId,
+      OR: [{ checkInLat: { not: null } }, { checkOutLat: { not: null } }],
+    },
+    orderBy: { attendanceDate: "desc" },
+    select: {
+      checkInAt: true, checkInLat: true, checkInLng: true,
+      checkOutAt: true, checkOutLat: true, checkOutLng: true,
+    },
+  })
+
+  let impliedKmh: number | null = null
+  if (previous) {
+    // Prefer the later of the two points on that record.
+    const candidates: Array<{ at: Date; lat: number; lng: number }> = []
+    if (previous.checkOutAt && previous.checkOutLat != null && previous.checkOutLng != null) {
+      candidates.push({ at: previous.checkOutAt, lat: previous.checkOutLat, lng: previous.checkOutLng })
+    }
+    if (previous.checkInAt && previous.checkInLat != null && previous.checkInLng != null) {
+      candidates.push({ at: previous.checkInAt, lat: previous.checkInLat, lng: previous.checkInLng })
+    }
+    const last = candidates.sort((a, b) => b.at.getTime() - a.at.getTime())[0]
+
+    if (last) {
+      const seconds = (input.at.getTime() - last.at.getTime()) / 1000
+      // Under a minute apart the implied speed explodes on ordinary GPS jitter, so it says nothing.
+      if (seconds >= 60) {
+        const metres = distanceMeters(last.lat, last.lng, input.lat, input.lng)
+        impliedKmh = Math.round((metres / seconds) * 3.6)
+        if (impliedKmh > IMPOSSIBLE_KMH) {
+          reasons.push(`implied travel of ${impliedKmh} km/h since the previous check`)
+        } else if (impliedKmh > IMPROBABLE_KMH) {
+          reasons.push(`unusually fast travel, ${impliedKmh} km/h since the previous check`)
+        }
+      }
+
+      // A real receiver never returns the identical coordinate twice; a pinned fake one always does.
+      if (last.lat === input.lat && last.lng === input.lng) {
+        reasons.push("coordinates identical to the previous check, to the last digit")
+      }
+    }
+  }
+
+  return {
+    suspect: reasons.length > 0,
+    reason: reasons.length ? reasons.join("; ") : null,
+    impliedKmh,
+  }
+}
+
 /** Whether this member is geofence-exempt (Custom/Mobile attendance — check in/out anywhere). */
 export async function getMemberNoGeofence(userId: string, workspaceId: string): Promise<boolean> {
   const m = await prisma.workspaceMember.findUnique({
