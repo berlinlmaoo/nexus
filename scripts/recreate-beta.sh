@@ -101,6 +101,11 @@ docker rename "$C" "${C}-prev" && docker stop "${C}-prev" >/dev/null
 echo "old renamed -> ${C}-prev + stopped"
 
 # 3) run new with the SAME networks/ports/mounts
+# Every upload directory the app writes to needs a -v below. `chat` was missing, so chat photos
+# lived only in the container's writable layer and every deploy destroyed the lot — silently,
+# because the message row kept its attachmentUrl and only the file behind it was gone.
+# Keep comments out of the argument list: a backslash-continued line swallows a following `#`,
+# which then eats the rest of the command. That passes `bash -n` and drops mounts without a word.
 docker run -d --name "$C" --restart unless-stopped \
   --network "$PRIMARY_NET" \
   -p 127.0.0.1:3002:3000 \
@@ -115,6 +120,7 @@ docker run -d --name "$C" --restart unless-stopped \
   -v "$BASE/attachments:/app/public/uploads/attachments" \
   -v "$BASE/attendance:/app/public/uploads/attendance" \
   -v "$BASE/complaints:/app/public/uploads/complaints" \
+  -v "$BASE/chat:/app/public/uploads/chat" \
   "$IMG" server.js >/dev/null && echo "new container started"
 
 # Re-attach every OTHER network the old container had (docker run only takes one).
