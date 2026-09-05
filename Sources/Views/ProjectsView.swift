@@ -12,6 +12,14 @@ struct ProjectsView: View {
     @State private var showCreateFolder = false
     @State private var editFolder: ProjectFolder?
     @State private var collapsed: Set<String> = []
+    /// Folders start closed. With everything open, a workspace this size opens as a wall of rows
+    /// and the folder structure stops being useful. Only applied once, so a pull-to-refresh does
+    /// not re-close what the person just opened.
+    @State private var didCollapseInitially = false
+    @State private var query = ""
+    @State private var hits: SearchResults?
+    @State private var searching = false
+    @State private var openTaskId: String?
     /// projectId → done/total task counts, filled in after the list renders (see `loadProgress`).
     @State private var tallies: [String: ProjectTally] = [:]
 
@@ -33,6 +41,7 @@ struct ProjectsView: View {
                 NX.background.ignoresSafeArea()
                 content
             }
+            .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }
             .navigationTitle(T("Mission Control"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -70,6 +79,10 @@ struct ProjectsView: View {
         } else {
             ScrollView {
                 LazyVStack(spacing: 16) {
+                    searchField
+                    if !query.trimmingCharacters(in: .whitespaces).isEmpty {
+                        searchResults
+                    } else {
                     // hero strip (web: "missions visible")
                     HStack(spacing: 6) {
                         Image(systemName: "sparkles").font(.system(size: 12, weight: .bold))
@@ -88,10 +101,14 @@ struct ProjectsView: View {
                     ForEach(ungrouped) { p in
                         ProjectFolderLink(project: p, folders: folders, tally: tallies[p.id], onMove: move)
                     }
+                    }
                 }
                 .padding(16)
             }
             .refreshable { await load() }
+            // Keyed on the query: typing cancels the previous run, so only the last word searched
+            // actually hits the network.
+            .task(id: query) { await runSearch(query) }
         }
     }
 
@@ -115,8 +132,90 @@ struct ProjectsView: View {
         } catch {
             self.error = (error as? LocalizedError)?.errorDescription ?? T("Something went wrong.")
         }
+        if !didCollapseInitially {
+            collapsed = Set(folders.map(\.id))
+            didCollapseInitially = true
+        }
         loading = false
         await loadProgress()   // secondary pass — the cards are already on screen
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").font(.system(size: 15)).foregroundStyle(NX.mutedFg)
+            TextField(T("Search missions and tasks…"), text: $query)
+                .font(NXFont.text(15)).autocorrectionDisabled().submitLabel(.search)
+            if searching { ProgressView().scaleEffect(0.7) }
+            if !query.isEmpty {
+                Button { query = ""; hits = nil } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg)
+                }.buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(NX.border))
+    }
+
+    /// Missions are matched on the device — the list is already loaded, so filtering it is instant
+    /// and works with no signal. Tasks are not loaded here, so those come from the same
+    /// /api/search the global search screen uses rather than a second implementation.
+    private var matchedProjects: [Project] {
+        let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !needle.isEmpty else { return [] }
+        return projects.filter { $0.name.lowercased().contains(needle) }
+    }
+
+    @ViewBuilder private var searchResults: some View {
+        let ps = matchedProjects
+        let ts = hits?.tasks ?? []
+        if ps.isEmpty && ts.isEmpty && !searching {
+            VStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").font(.system(size: 32)).foregroundStyle(NX.mutedFg)
+                Text(T("Nothing matches that.")).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
+            }
+            .frame(maxWidth: .infinity).padding(.vertical, 40)
+        } else {
+            if !ps.isEmpty {
+                sectionLabel(T("MISSIONS"))
+                ForEach(ps) { p in
+                    ProjectFolderLink(project: p, folders: folders, tally: tallies[p.id], onMove: move)
+                }
+            }
+            if !ts.isEmpty {
+                sectionLabel(T("TASKS"))
+                ForEach(ts) { task in
+                    Button { openTaskId = task.id } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "checklist").font(.system(size: 14)).foregroundStyle(NX.success)
+                            Text(task.title).font(NXFont.text(14)).foregroundStyle(NX.foreground)
+                                .lineLimit(2).multilineTextAlignment(.leading)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(NX.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(NX.border))
+                    }.buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func sectionLabel(_ s: String) -> some View {
+        Text(s).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Debounced so a four-letter word is one request, not four.
+    private func runSearch(_ raw: String) async {
+        let q = raw.trimmingCharacters(in: .whitespaces)
+        guard q.count >= 2 else { hits = nil; return }
+        try? await Task.sleep(for: .milliseconds(300))
+        if Task.isCancelled { return }
+        searching = true
+        defer { searching = false }
+        hits = try? await APIClient.shared.search(q)
     }
 
     /// `/api/projects` carries per-lane task TOTALS but no completed count, so the card's progress
