@@ -48,7 +48,7 @@ struct AttendanceRequestsCard: View {
                 }
                 Spacer()
                 Button { showComposer = true } label: {
-                    Label("New", systemImage: "plus").font(NXFont.text(12, .bold)).foregroundStyle(.white)
+                    Label(T("New"), systemImage: "plus").font(NXFont.text(12, .bold)).foregroundStyle(.white)
                         .padding(.horizontal, 12).padding(.vertical, 8).background(NX.violet, in: Capsule())
                 }.buttonStyle(.plain)
             }
@@ -61,7 +61,10 @@ struct AttendanceRequestsCard: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
-        .task { await load() }
+        // Keyed on canReview: it starts false while /attendance/today is still in flight, and a
+        // plain .task fetched scope=me once and never ran again — so a reviewer kept looking at
+        // their own history while the crew's pending requests sat on the server unseen.
+        .task(id: canReview) { await load() }
         .sheet(isPresented: $showComposer) { RequestComposerSheet(canGrant: canReview) { await load() } }
     }
 
@@ -86,10 +89,10 @@ struct AttendanceRequestsCard: View {
                 HStack(spacing: 8) {
                     if working { ProgressView().scaleEffect(0.7) }
                     else if canReview {
-                        actionBtn("Approve", .success) { await review(r, "approve") }
-                        actionBtn("Reject", .danger) { await review(r, "reject") }
+                        actionBtn(T("Approve"), .success) { await review(r, "approve") }
+                        actionBtn(T("Reject"), .danger) { await review(r, "reject") }
                     } else {
-                        actionBtn("Batalin", .neutral) { await review(r, "cancel") }
+                        actionBtn(T("Cancel it"), .neutral) { await review(r, "cancel") }
                     }
                 }.padding(.top, 2)
             }
