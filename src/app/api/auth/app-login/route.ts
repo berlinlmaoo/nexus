@@ -20,17 +20,7 @@ const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
  * (The `__Secure-` cookie-name prefix is a browser-only restriction; a native client may set that
  * cookie header directly. The token is AUTH_SECRET-signed, so it can't be forged.)
  */
-function shouldUseSecureAuthCookies() {
-  return (
-    process.env.NODE_ENV === "production" ||
-    (process.env.NEXTAUTH_URL?.startsWith("https://") ?? false) ||
-    (process.env.AUTH_URL?.startsWith("https://") ?? false)
-  )
-}
-
-function getSessionCookieName() {
-  return `${shouldUseSecureAuthCookies() ? "__Secure-" : ""}authjs.session-token`
-}
+import { getSessionCookieName } from "@/lib/session-cookie"
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null)
