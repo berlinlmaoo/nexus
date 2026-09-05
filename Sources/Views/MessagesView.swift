@@ -228,9 +228,19 @@ struct MessagesView: View {
                 })
             }
         }
+        // Chat is what people reach for first when something is wrong, so it must not be the one
+        // screen that is empty while the server is down.
+        if convos.isEmpty, let hit = ResponseCache.decoded("conversations", as: ConversationsResponse.self) {
+            convos = hit.value.conversations ?? []
+            loading = false
+        }
         do { convos = try await APIClient.shared.conversations() }
         catch APIError.unauthorized { auth.logout() }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load chats.") }
+        catch {
+            if convos.isEmpty {
+                self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load chats.")
+            }
+        }
         loading = false
     }
 }
@@ -807,8 +817,14 @@ struct ChatThreadView: View {
     }
 
     private func load() async {
+        if messages.isEmpty,
+           let hit = ResponseCache.decoded("messages-\(conversationId)", as: MessagesResponse.self) {
+            messages = hit.value.messages ?? []
+            loading = false
+        }
         do { messages = try await APIClient.shared.conversationMessages(conversationId) }
         catch APIError.unauthorized { auth.logout() }
+        // A failed refresh leaves whatever was already read on screen rather than blanking it.
         catch {}
         loading = false
     }

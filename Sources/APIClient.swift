@@ -619,11 +619,14 @@ struct APIClient {
     }
 
     func conversations() async throws -> [Conversation] {
-        (try await run(makeRequest("/api/conversations"), decode: ConversationsResponse.self)).conversations ?? []
+        (try await run(makeRequest("/api/conversations"), decode: ConversationsResponse.self,
+                       cache: "conversations")).conversations ?? []
     }
 
     func conversationMessages(_ id: String) async throws -> [ChatMessage] {
-        (try await run(makeRequest("/api/conversations/\(id)/messages"), decode: MessagesResponse.self)).messages ?? []
+        // Per conversation: reading one thread must never surface another's messages.
+        (try await run(makeRequest("/api/conversations/\(id)/messages"), decode: MessagesResponse.self,
+                       cache: "messages-\(id)")).messages ?? []
     }
 
     @discardableResult
