@@ -397,7 +397,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (isPrimaryWorkspace(team.workspace) && isPrimaryTeamName(team.name)) {
-        return NextResponse.json({ error: 'Members of PATS Group cannot be removed from the required primary team' }, { status: 400 })
+        return NextResponse.json({ error: 'Members of Z Networks cannot be removed from the required primary team' }, { status: 400 })
       }
 
       // Revoke team-propagated project access before removing member
@@ -421,7 +421,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (isPrimaryWorkspace(team.workspace) && isPrimaryTeamName(team.name)) {
-        return NextResponse.json({ error: 'The required PATS Group team cannot be deleted' }, { status: 400 })
+        return NextResponse.json({ error: 'The required Z Networks team cannot be deleted' }, { status: 400 })
       }
 
       const existingTeam = await prisma.team.findUnique({

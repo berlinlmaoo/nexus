@@ -78,7 +78,7 @@ export async function PATCH(
     }
 
     if (isPrimaryWorkspace(target.workspace)) {
-      return NextResponse.json({ error: "PATS Group workspace role is managed automatically" }, { status: 400 })
+      return NextResponse.json({ error: "Z Networks workspace role is managed automatically" }, { status: 400 })
     }
 
     if (target.role === "BOD" && role !== "BOD" && await isLastWorkspaceOwner(target.workspaceId, target.id)) {
@@ -145,7 +145,7 @@ export async function DELETE(
     }
 
     if (isPrimaryWorkspace(target.workspace)) {
-      return NextResponse.json({ error: "PATS Group membership is required for all users" }, { status: 400 })
+      return NextResponse.json({ error: "Z Networks membership is required for all users" }, { status: 400 })
     }
 
     if (await isLastWorkspaceOwner(target.workspaceId, target.id)) {
