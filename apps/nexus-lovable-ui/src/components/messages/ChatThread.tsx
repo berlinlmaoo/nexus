@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ImagePlus, Loader2, Send, X } from "lucide-react";
+import { ImagePlus, Loader2, Reply, Send, X } from "lucide-react";
 import { fmtTime, nexusApi, type NexusMessage, type NexusUser } from "@/lib/nexus-api";
 import { useRealtimeRoom } from "@/lib/realtime";
 import { cn } from "@/lib/utils";
@@ -29,6 +29,16 @@ function dayLabel(value?: string | null) {
   return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
+/** How much of a quoted message a preview shows before it trails off. */
+const QUOTE_LIMIT = 80;
+
+/** The one line that stands in for a quoted message: its text, cut short, or a marker for a bare picture. */
+function quoteSnippet(content?: string | null, attachmentType?: string | null) {
+  const text = (content ?? "").trim();
+  if (!text) return attachmentType ? "📎 Attachment" : "";
+  return text.length > QUOTE_LIMIT ? `${text.slice(0, QUOTE_LIMIT)}…` : text;
+}
+
 /** The token being typed right after an "@", or null when the caret isn't in one. */
 const MENTION_TAIL = /(^|\s)@([\p{L}\p{N}._-]*)$/u;
 
@@ -40,8 +50,13 @@ export function ChatThread({ conversationId, meId, members = [] }: { conversatio
   // Tag (name without spaces, lowercased) → user id, remembered as you pick from the list. Sending
   // structured ids keeps two people with the same display name from being confused for each other.
   const [tagged, setTagged] = useState<Record<string, string>>({});
+  // The message the composer is currently answering, held whole so the quote bar can show its author.
+  const [replyTo, setReplyTo] = useState<NexusMessage | null>(null);
+  const [flashId, setFlashId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const bubbleRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useRealtimeRoom(`conversation:${conversationId}`);
 
@@ -56,7 +71,24 @@ export function ChatThread({ conversationId, meId, members = [] }: { conversatio
   useEffect(() => { nexusApi.markConversationRead(conversationId).then(() => qc.invalidateQueries({ queryKey: ["conversations"] })).catch(() => {}); }, [conversationId, messages.length, qc]);
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [messages]);
   // Switching rooms must not carry a half-written message or an unsent picture across.
-  useEffect(() => { setInput(""); setPending(null); setTagged({}); setUploadError(null); }, [conversationId]);
+  useEffect(() => { setInput(""); setPending(null); setTagged({}); setUploadError(null); setReplyTo(null); }, [conversationId]);
+  // The highlight on a jumped-to message is a nudge, not a state worth keeping.
+  useEffect(() => {
+    if (!flashId) return;
+    const t = setTimeout(() => setFlashId(null), 1200);
+    return () => clearTimeout(t);
+  }, [flashId]);
+
+  const startReply = (m: NexusMessage) => { setReplyTo(m); inputRef.current?.focus(); };
+
+  // Clicking a quote walks back to the message it came from, but only while that message is one of
+  // the ones on screen — older pages aren't fetched on demand, so a miss does nothing rather than jump wrong.
+  const jumpTo = (id: string) => {
+    const el = bubbleRefs.current[id];
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    setFlashId(id);
+  };
 
   const mentionQuery = useMemo(() => {
     const m = MENTION_TAIL.exec(input);
@@ -91,10 +123,11 @@ export function ChatThread({ conversationId, meId, members = [] }: { conversatio
       return nexusApi.sendMessage(conversationId, content, {
         ...(mentionedUserIds.length ? { mentionedUserIds } : {}),
         ...(pending ? { attachmentUrl: pending.url, attachmentType: pending.type } : {}),
+        ...(replyTo ? { replyToId: replyTo.id } : {}),
       });
     },
     onSuccess: () => {
-      setInput(""); setPending(null); setTagged({});
+      setInput(""); setPending(null); setTagged({}); setReplyTo(null);
       qc.invalidateQueries({ queryKey: ["messages", conversationId] });
       qc.invalidateQueries({ queryKey: ["conversations"] });
     },
@@ -117,13 +150,30 @@ export function ChatThread({ conversationId, meId, members = [] }: { conversatio
           const day = dayLabel(m.createdAt);
           const showDay = day && day !== lastDay;
           lastDay = day;
+          const quoted = m.replyTo;
           return (
             <div key={m.id}>
               {showDay && <div className="my-3 text-center text-[11px] font-semibold text-muted-foreground">{day}</div>}
-              <div className={cn("flex items-end gap-2", mine ? "justify-end" : "justify-start")}>
+              <div className={cn("group flex items-end gap-2", mine ? "justify-end" : "justify-start")}>
                 {!mine && <MiniAvatar user={m.user} size={26} />}
-                <div className={cn("max-w-[78%] rounded-2xl px-3.5 py-2 text-sm", mine ? "bg-primary text-primary-foreground" : "bg-muted")}>
+                <div
+                  ref={(el) => { bubbleRefs.current[m.id] = el; }}
+                  className={cn("max-w-[78%] rounded-2xl px-3.5 py-2 text-sm transition-shadow", mine ? "bg-primary text-primary-foreground" : "bg-muted", flashId === m.id && "ring-2 ring-primary")}
+                >
                   {!mine && <div className="mb-0.5 text-[11px] font-semibold text-muted-foreground">{m.user?.name}</div>}
+                  {quoted && (
+                    <button
+                      onClick={() => jumpTo(quoted.id)}
+                      title="Jump to that message"
+                      className={cn(
+                        "mb-1 block w-full rounded-lg border-l-2 px-2 py-1 text-left text-[11px] leading-snug transition-colors",
+                        mine ? "border-primary-foreground/50 bg-primary-foreground/10 hover:bg-primary-foreground/20" : "border-primary/60 bg-background/60 hover:bg-background",
+                      )}
+                    >
+                      <span className={cn("block font-semibold", mine ? "text-primary-foreground/90" : "text-foreground")}>{quoted.user?.name ?? "Someone"}</span>
+                      <span className={cn("block truncate", mine ? "text-primary-foreground/70" : "text-muted-foreground")}>{quoteSnippet(quoted.content, quoted.attachmentType)}</span>
+                    </button>
+                  )}
                   {m.attachmentUrl && (
                     <a href={m.attachmentUrl} target="_blank" rel="noreferrer" className="mb-1 block">
                       <img src={m.attachmentUrl} alt="" loading="lazy" className="max-h-72 w-auto max-w-full rounded-xl object-cover" />
@@ -132,6 +182,13 @@ export function ChatThread({ conversationId, meId, members = [] }: { conversatio
                   {m.content && <span className="whitespace-pre-wrap leading-relaxed">{m.content}</span>}
                   <span className={cn("mt-0.5 block text-[10px]", mine ? "text-primary-foreground/70" : "text-muted-foreground")}>{fmtTime(m.createdAt)}</span>
                 </div>
+                <button
+                  onClick={() => startReply(m)}
+                  title="Reply"
+                  className="mb-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground opacity-0 transition-all hover:bg-accent focus:opacity-100 group-hover:opacity-100"
+                >
+                  <Reply className="h-3.5 w-3.5" />
+                </button>
               </div>
             </div>
           );
@@ -147,6 +204,16 @@ export function ChatThread({ conversationId, meId, members = [] }: { conversatio
                 <span className="flex-1 truncate">{u.name ?? u.email}</span>
               </button>
             ))}
+          </div>
+        )}
+
+        {replyTo && (
+          <div className="mb-2 flex items-center gap-2 rounded-xl border-l-2 border-primary bg-muted/60 px-3 py-1.5">
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] font-semibold text-primary">Replying to {replyTo.user?.name ?? "someone"}</div>
+              <div className="truncate text-xs text-muted-foreground">{quoteSnippet(replyTo.content, replyTo.attachmentType)}</div>
+            </div>
+            <button onClick={() => setReplyTo(null)} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent" title="Cancel reply"><X className="h-4 w-4" /></button>
           </div>
         )}
 
@@ -180,6 +247,7 @@ export function ChatThread({ conversationId, meId, members = [] }: { conversatio
             {upload.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
           </button>
           <textarea
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
