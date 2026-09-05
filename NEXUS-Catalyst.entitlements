@@ -10,6 +10,15 @@
 	<key>aps-environment</key>
 	<string>development</string>
 
+	<!-- Passkeys, same as the iOS file. Associated domains is NOT a macOS-sandbox key, so it is
+	     valid on both platforms — but entitlements do not merge across the two files, so the
+	     Catalyst build only gets it if it is written here as well. See NEXUS.entitlements for the
+	     server-side half of the handshake. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>webcredentials:nexus.znetworks.id</string>
+	</array>
+
 	<!-- Required for the Mac App Store. Everything below re-opens exactly what the sandbox closes
 	     and nothing more; each line is a capability the app already uses on iOS. -->
 	<key>com.apple.security.app-sandbox</key>

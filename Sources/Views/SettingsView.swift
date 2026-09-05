@@ -88,6 +88,7 @@ struct SettingsView: View {
                     LanguageCard()
                     if let wsId = workspaceId { WorkspaceMembersCard(workspaceId: wsId) }
                     SecurityCard()
+                    PasskeyCard()
 
                     // account
                     VStack(spacing: 0) {

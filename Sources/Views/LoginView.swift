@@ -94,9 +94,41 @@ struct LoginView: View {
                     .shadow(color: NX.onyx.opacity(0.25), radius: 18, y: 10)
                 }
                 .buttonStyle(.plain)
-                .disabled(auth.isLoggingIn)
-                .opacity(auth.isLoggingIn ? 0.7 : 1)
+                .disabled(auth.isBusy)
+                .opacity(auth.isBusy ? 0.7 : 1)
                 .padding(.top, 26)
+
+                // Passkey is an ADDITION, so nothing above this line moves: the two fields and the
+                // onyx CTA stay exactly where they were and keep working on their own.
+                HStack(spacing: 10) {
+                    Rectangle().fill(NX.onyx.opacity(0.12)).frame(height: 1)
+                    Text(T("or")).font(NXFont.text(11, .bold)).tracking(1).foregroundStyle(NX.mutedFg)
+                    Rectangle().fill(NX.onyx.opacity(0.12)).frame(height: 1)
+                }
+                .padding(.top, 20)
+
+                // Outlined rather than filled: the password CTA above stays the primary action.
+                Button(action: attemptPasskey) {
+                    HStack(spacing: 8) {
+                        if auth.isPasskeyLoggingIn {
+                            ProgressView().tint(NX.onyx)
+                        } else {
+                            Image(systemName: "person.badge.key.fill").font(.system(size: 15, weight: .bold))
+                        }
+                        Text(T("Sign in with passkey"))
+                    }
+                    .font(NXFont.display(15, .bold))
+                    .foregroundStyle(NX.onyx)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 15)
+                    .background(Color.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(NX.onyx.opacity(0.18), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .disabled(auth.isBusy)
+                .opacity(auth.isBusy ? 0.7 : 1)
+                .padding(.top, 14)
 
                 // There is no self-serve reset or signup on mobile — access is granted by a workspace
                 // admin (Tuning Room → Members). The old "FORGOT?" / "Request access" looked like
@@ -167,5 +199,13 @@ struct LoginView: View {
             return
         }
         Task { await auth.login(email: e, password: password) }
+    }
+
+    /// No email needed: the server's assertion options carry no allowCredentials, so iOS offers
+    /// whichever NEXUS passkey it can find. A dismissed Face ID sheet is swallowed in AuthStore.
+    private func attemptPasskey() {
+        focus = nil
+        auth.loginError = nil
+        Task { await auth.loginWithPasskey() }
     }
 }

@@ -227,6 +227,60 @@ struct SecurityCard: View {
     }
 }
 
+// MARK: - Passkeys
+
+/// Enrol this device's Face ID / Touch ID as a passkey. Strictly additive: the password form in
+/// SecurityCard above keeps working, and nothing here can take it away.
+struct PasskeyCard: View {
+    @State private var busy = false
+    @State private var msg: (text: String, ok: Bool)?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(T("PASSKEYS")).font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violetText)
+            Text(T("Sign in with Face ID or Touch ID instead of typing your password. Your password keeps working."))
+                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            if let msg {
+                Text(msg.text).font(NXFont.text(12, .semibold)).foregroundStyle(msg.ok ? NX.success : NX.danger)
+            }
+            Button { Task { await add() } } label: {
+                HStack(spacing: 6) {
+                    if busy {
+                        ProgressView().scaleEffect(0.7).tint(.white)
+                    } else {
+                        Image(systemName: "person.badge.key.fill").font(.system(size: 13, weight: .bold))
+                    }
+                    Text(T("Add a passkey"))
+                }
+                .font(NXFont.text(13, .bold)).foregroundStyle(.white)
+                .frame(maxWidth: .infinity).padding(.vertical, 10)
+                .background(busy ? NX.mutedFg.opacity(0.4) : NX.violet,
+                            in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(busy)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .nexusCard()
+    }
+
+    /// @MainActor because PasskeyManager presents system UI, and because `busy`/`msg` are @State.
+    @MainActor
+    private func add() async {
+        busy = true; msg = nil; defer { busy = false }
+        do {
+            // What the person will see next to this device in the web app's passkey list. iOS gives
+            // a generic model name ("iPhone") rather than the user-set device name, which is fine.
+            try await PasskeyManager.register(label: UIDevice.current.name)
+            msg = (T("Passkey added ✓"), true)
+        } catch PasskeyError.canceled {
+            // Closing Face ID is a decision, not a failure. Say nothing at all.
+        } catch {
+            msg = ((error as? LocalizedError)?.errorDescription ?? T("Couldn't add the passkey. Try again."), false)
+        }
+    }
+}
+
 /// Avatar image (AsyncImage) with an initial fallback.
 struct AvatarView: View {
     let url: String?

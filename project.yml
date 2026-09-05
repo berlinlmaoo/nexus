@@ -46,6 +46,10 @@ targets:
         INFOPLIST_FILE: Sources/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: id.znetworks.nexus
         PRODUCT_NAME: NEXUS
+        # Associated Domains (passkeys) live in BOTH entitlement files: this one for iOS/iPadOS,
+        # and NEXUS-Catalyst.entitlements below for Mac. Entitlements do NOT merge across the two,
+        # so `webcredentials:nexus.znetworks.id` has to be written in each of them - otherwise
+        # passkeys work on one platform and fail on the other with a generic "not handled" error.
         CODE_SIGN_ENTITLEMENTS: NEXUS.entitlements
         # Mac Catalyst: the same code, built as a Mac app.
         #

@@ -81,6 +81,53 @@ struct APIClient {
         return try await run(req, decode: LoginResponse.self)
     }
 
+    // MARK: - Passkeys (WebAuthn)
+    //
+    // Transport only — the ceremony itself lives in Passkeys.swift. `credential` is passed as a
+    // ready-made [String: Any] because it is WebAuthn's own JSON shape (the exact object a browser's
+    // navigator.credentials.* produces), so the server verifies web and native with one code path;
+    // modelling it as Encodable structs here would only invent a second shape to keep in sync.
+
+    /// Options for enrolling a NEW passkey on this device. Needs the current session.
+    func passkeyRegisterOptions() async throws -> PasskeyRegistrationOptions {
+        var req = makeRequest("/api/auth/passkey/register/options", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // An empty object, not an empty body: a Next.js route that calls request.json() throws on
+        // a zero-length body and answers 500 rather than the options.
+        req.httpBody = Data("{}".utf8)
+        return try await run(req, decode: PasskeyRegistrationOptions.self)
+    }
+
+    /// Hand the signed attestation back. `challenge` must be the verbatim string from
+    /// `passkeyRegisterOptions()` — the server looks its stored challenge up by that exact value.
+    @discardableResult
+    func passkeyRegisterVerify(credential: [String: Any], challenge: String, label: String?) async throws -> Bool {
+        var req = makeRequest("/api/auth/passkey/register/verify", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body: [String: Any] = ["credential": credential, "challenge": challenge]
+        if let label, !label.isEmpty { body["label"] = label }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+
+    /// Options for signing in. Deliberately unauthenticated — this runs on the login screen.
+    func passkeyLoginOptions() async throws -> PasskeyAssertionOptions {
+        var req = makeRequest("/api/auth/passkey/login/options", method: "POST", authed: false)
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = Data("{}".utf8)
+        return try await run(req, decode: PasskeyAssertionOptions.self)
+    }
+
+    /// Answers the SAME payload as `login(email:password:)`, which is the whole point: the caller
+    /// stores the session through the one existing path instead of inventing a second one.
+    func passkeyLoginVerify(credential: [String: Any], challenge: String) async throws -> LoginResponse {
+        var req = makeRequest("/api/auth/passkey/login/verify", method: "POST", authed: false)
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["credential": credential, "challenge": challenge])
+        return try await run(req, decode: LoginResponse.self)
+    }
+
     func projects() async throws -> [Project] {
         try await run(makeRequest("/api/projects"), decode: [Project].self, cache: "projects")
     }

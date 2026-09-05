@@ -678,6 +678,21 @@ final class AppLanguage {
             "PRESENCE OUT kebuka begitu refleksi harian di atas nyampe 200 karakter.",
         "⚠️ You still have an earlier shift that was never checked out. Fill in the daily reflection above first — PRESENCE OUT unlocks after 200 characters.":
             "⚠️ Masih ada absen sebelumnya yang belum di-check-out. Isi dulu refleksi harian di atas — PRESENCE OUT kebuka setelah 200 karakter.",
+        // ── passkey ───────────────────────────────────────────────────────────
+        "or": "atau",
+        "Sign in with passkey": "Masuk pakai passkey",
+        "Passkey sign-in failed. Use your password instead.":
+            "Gagal masuk pakai passkey. Pakai password aja dulu.",
+        "Passkey sign-in cancelled.": "Masuk pakai passkey dibatalin.",
+        "No passkey was returned. Try again.": "Passkey-nya nggak kebaca. Coba lagi.",
+        "The server sent passkey options this app couldn't read.":
+            "Server ngirim opsi passkey yang nggak kebaca sama app ini.",
+        "PASSKEYS": "PASSKEY",
+        "Sign in with Face ID or Touch ID instead of typing your password. Your password keeps working.":
+            "Masuk pakai Face ID atau Touch ID, nggak usah ngetik password. Password kamu tetap jalan.",
+        "Add a passkey": "Tambah passkey",
+        "Passkey added ✓": "Passkey ditambahkan ✓",
+        "Couldn't add the passkey. Try again.": "Gagal nambah passkey. Coba lagi.",
     ]
 }
 
