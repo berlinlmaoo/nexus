@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit   // UIDevice, to label a passkey with the device it was made on
 
 struct DashboardView: View {
     @Environment(AuthStore.self) private var auth
@@ -19,6 +20,12 @@ struct DashboardView: View {
     @State private var activeLevel = false
     @State private var activeBell = false
     @State private var morphReady = false   // detail body fades in AFTER the card morphs (web: delay ~0.15)
+    /// Passkey nudge. Only shown to someone who has none, and only until they dismiss it once —
+    /// a prompt that keeps coming back after being answered stops being a prompt and becomes noise.
+    @State private var showPasskeyNudge = false
+    @State private var passkeyBusy = false
+    @State private var passkeyNote: String?
+    @AppStorage("passkeyNudgeDismissed") private var passkeyNudgeDismissed = false
     // FLIP morph (ports framer-motion shared layoutId): published source rects + the live transform state.
     @State private var morphFrames: [String: CGRect] = [:]
     @State private var morphSourceRect: CGRect = .zero
@@ -83,6 +90,7 @@ struct DashboardView: View {
                     statCards
                     questsCard
                     xpRulesCard
+                    if showPasskeyNudge { passkeyNudge }
                     quickActions
                     projectShortcuts
                     dailyCalendarCard
@@ -103,7 +111,10 @@ struct DashboardView: View {
                 withAnimation(morphSpring) { morphExpanded = true }                          // FLIP: card rect → full
                 withAnimation(.easeOut(duration: 0.2).delay(0.12)) { morphReady = true }       // detail fades in after
             }
-            .task { if !loaded { await load() } }
+            .task {
+                if !loaded { await load() }
+                await refreshPasskeyNudge()
+            }
             .refreshable { await load() }
         }
     }
@@ -482,6 +493,65 @@ struct DashboardView: View {
             Image(systemName: "chevron.down").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.mutedFg)
         }
         .nexusCard(padding: 14)
+    }
+
+    // MARK: passkey nudge
+
+    private var passkeyNudge: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "person.badge.key.fill")
+                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(NX.violetText)
+                Text(T("Sign in with Face ID")).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
+                Spacer(minLength: 0)
+                Button { dismissPasskeyNudge() } label: {
+                    Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundStyle(NX.mutedFg)
+                }.buttonStyle(.plain)
+            }
+            Text(T("Add a passkey and you can skip typing your password. It stays on this device, and your password keeps working."))
+                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+            if let passkeyNote {
+                Text(passkeyNote).font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+            }
+            Button { Task { await addPasskey() } } label: {
+                HStack(spacing: 8) {
+                    if passkeyBusy { ProgressView().tint(.white).scaleEffect(0.8) }
+                    Text(T("Add a passkey")).font(NXFont.text(13, .bold)).foregroundStyle(.white)
+                }
+                .frame(maxWidth: .infinity).padding(.vertical, 10)
+                .background(NX.violet, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain).disabled(passkeyBusy)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .nexusCard(padding: 14)
+    }
+
+    private func dismissPasskeyNudge() {
+        passkeyNudgeDismissed = true
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { showPasskeyNudge = false }
+    }
+
+    /// Asked once per launch, and only when nothing has been dismissed: a network round trip on a
+    /// screen this hot is only worth it while the answer can still change what is drawn.
+    private func refreshPasskeyNudge() async {
+        guard !passkeyNudgeDismissed, !showPasskeyNudge else { return }
+        guard let list = try? await APIClient.shared.passkeyList() else { return }
+        if list.isEmpty { withAnimation { showPasskeyNudge = true } }
+    }
+
+    private func addPasskey() async {
+        passkeyBusy = true
+        defer { passkeyBusy = false }
+        do {
+            try await PasskeyManager.register(label: UIDevice.current.name)
+            passkeyNote = nil
+            dismissPasskeyNudge()
+        } catch PasskeyError.canceled {
+            // Closing Face ID is a normal thing to do; the card simply stays.
+        } catch {
+            passkeyNote = (error as? LocalizedError)?.errorDescription ?? T("Couldn't add that passkey.")
+        }
     }
 
     // MARK: quick actions
