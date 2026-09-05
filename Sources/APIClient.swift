@@ -551,12 +551,14 @@ struct APIClient {
 
     @discardableResult
     func sendMessage(_ conversationId: String, content: String, mentionedUserIds: [String] = [],
-                     attachmentUrl: String? = nil, attachmentType: String? = nil) async throws -> Bool {
+                     attachmentUrl: String? = nil, attachmentType: String? = nil,
+                     replyToId: String? = nil) async throws -> Bool {
         var req = makeRequest("/api/conversations/\(conversationId)/messages", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         var payload: [String: Any] = ["content": content, "mentionedUserIds": mentionedUserIds]
         if let attachmentUrl { payload["attachmentUrl"] = attachmentUrl }
         if let attachmentType { payload["attachmentType"] = attachmentType }
+        if let replyToId { payload["replyToId"] = replyToId }
         req.httpBody = try JSONSerialization.data(withJSONObject: payload)
         _ = try await run(req, decode: SuccessResponse.self)
         return true

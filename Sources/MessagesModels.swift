@@ -42,7 +42,17 @@ struct ChatMessage: Decodable, Identifiable, Sendable {
     /// Set when the message carries a picture. Server-relative, e.g. "/api/files/chat/<uuid>.jpg".
     let attachmentUrl: String?
     let attachmentType: String?
+    /// The message this one answers. Optional because every message sent before replies existed
+    /// has none, and the server sends null rather than omitting the key.
+    let replyTo: Quoted?
     struct UserRef: Decodable, Sendable { let id: String?; let name: String?; let avatar: String? }
+    /// Only what a quote needs to draw itself — never the full replied-to message.
+    struct Quoted: Decodable, Sendable {
+        let id: String
+        let content: String?
+        let attachmentType: String?
+        let user: UserRef?
+    }
 }
 
 struct ChatUpload: Decodable, Sendable { let url: String; let type: String? }

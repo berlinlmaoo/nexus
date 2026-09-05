@@ -355,6 +355,7 @@ struct ChatThreadView: View {
     @State private var showPhotoPicker = false
     @State private var showCamera = false
     @State private var pendingAttachment: ChatUpload?
+    @State private var replyingTo: ChatMessage?
     @State private var uploadingPhoto = false
     @State private var renameDraft = ""
     @State private var shownTitle: String? = nil
@@ -557,6 +558,23 @@ struct ChatThreadView: View {
                 }
                 .padding(.top, 8)
             }
+            if let target = replyingTo {
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 1.5, style: .continuous).fill(NX.violet).frame(width: 2.5, height: 30)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(T("Replying to") + " " + (target.user?.name ?? T("Message")))
+                            .font(NXFont.text(11, .bold)).foregroundStyle(NX.violetText)
+                        Text(Self.quotePreview(.init(id: target.id, content: target.content,
+                                                     attachmentType: target.attachmentType, user: target.user)))
+                            .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    }
+                    Spacer()
+                    Button { replyingTo = nil } label: {
+                        Image(systemName: "xmark.circle.fill").font(.system(size: 18)).foregroundStyle(NX.mutedFg)
+                    }
+                }
+                .padding(.horizontal, 12).padding(.top, 8)
+            }
             if let pending = pendingAttachment {
                 HStack(spacing: 8) {
                     CachedImage(url: URL(string: Config.baseURL.absoluteString + pending.url)) {
@@ -624,40 +642,75 @@ struct ChatThreadView: View {
 
     @ViewBuilder private func bubble(_ m: ChatMessage) -> some View {
         let mine = m.userId != nil && m.userId == meId
-        HStack(alignment: .bottom, spacing: 8) {
-            if mine {
-                Spacer(minLength: 50)
-            } else {
-                AvatarView(url: m.user?.avatar, initial: String((m.user?.name ?? "?").first ?? "?").uppercased(), size: 28)
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                if !mine, let n = m.user?.name { Text(n).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg) }
-                if let path = m.attachmentUrl, !path.isEmpty,
-                   let url = URL(string: path.hasPrefix("http") ? path : Config.baseURL.absoluteString + path) {
-                    CachedImage(url: url) { $0.resizable().scaledToFit() } placeholder: {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NX.muted)
-                            .frame(height: 140)
+        SwipeToReply(onReply: { replyingTo = m }) {
+            HStack(alignment: .bottom, spacing: 8) {
+                if mine {
+                    Spacer(minLength: 50)
+                } else {
+                    AvatarView(url: m.user?.avatar, initial: String((m.user?.name ?? "?").first ?? "?").uppercased(), size: 28)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    if !mine, let n = m.user?.name { Text(n).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg) }
+                    if let quoted = m.replyTo { quoteBlock(quoted, mine: mine) }
+                    if let path = m.attachmentUrl, !path.isEmpty,
+                       let url = URL(string: path.hasPrefix("http") ? path : Config.baseURL.absoluteString + path) {
+                        CachedImage(url: url) { $0.resizable().scaledToFit() } placeholder: {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NX.muted)
+                                .frame(height: 140)
+                        }
+                        .frame(maxWidth: 240)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
-                    .frame(maxWidth: 240)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    // A picture can travel without a caption; don't draw an empty text line under it.
+                    if !m.content.isEmpty {
+                    switch ChatPayload.parse(m.content) {
+                    case .location(let lat, let lng, let url):
+                        locationCard(lat: lat, lng: lng, url: url, mine: mine)
+                    case .task(let id, let title):
+                        taskCard(id: id, title: title, mine: mine)
+                    case .plain:
+                        styledText(m.content).font(NXFont.text(15))
+                            .foregroundStyle(mine ? Color.white : NX.foreground)
+                    }
+                    }
                 }
-                // A picture can travel without a caption; don't draw an empty text line under it.
-                if !m.content.isEmpty {
-                switch ChatPayload.parse(m.content) {
-                case .location(let lat, let lng, let url):
-                    locationCard(lat: lat, lng: lng, url: url, mine: mine)
-                case .task(let id, let title):
-                    taskCard(id: id, title: title, mine: mine)
-                case .plain:
-                    styledText(m.content).font(NXFont.text(15))
-                        .foregroundStyle(mine ? Color.white : NX.foreground)
-                }
-                }
+                .padding(.horizontal, 13).padding(.vertical, 9)
+                .background(mine ? NX.onyx : NX.muted, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                if !mine { Spacer(minLength: 50) }
             }
-            .padding(.horizontal, 13).padding(.vertical, 9)
-            .background(mine ? NX.onyx : NX.muted, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            if !mine { Spacer(minLength: 50) }
         }
+        .contextMenu {
+            Button { replyingTo = m } label: { Label(T("Reply"), systemImage: "arrowshape.turn.up.left") }
+        }
+    }
+
+    /// The quote drawn inside a reply. Colours follow the bubble it sits in, so it stays legible
+    /// on the dark "mine" bubble as well as the light one.
+    @ViewBuilder private func quoteBlock(_ q: ChatMessage.Quoted, mine: Bool) -> some View {
+        HStack(spacing: 6) {
+            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                .fill(mine ? Color.white.opacity(0.55) : NX.violet)
+                .frame(width: 2.5)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(q.user?.name ?? T("Message"))
+                    .font(NXFont.text(10, .bold))
+                    .foregroundStyle(mine ? Color.white.opacity(0.85) : NX.violetText)
+                Text(Self.quotePreview(q))
+                    .font(NXFont.text(11))
+                    .foregroundStyle(mine ? Color.white.opacity(0.7) : NX.mutedFg)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 0)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.bottom, 1)
+    }
+
+    /// A picture with no caption still has to say something, otherwise the quote renders blank.
+    static func quotePreview(_ q: ChatMessage.Quoted) -> String {
+        let body = (q.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if body.isEmpty { return q.attachmentType != nil ? T("📎 Attachment") : "…" }
+        return body.count > 80 ? String(body.prefix(78)) + "…" : body
     }
 
     /// Highlights @mention tokens. Concatenating `Text` (not a wrapping view) keeps it one
@@ -752,9 +805,12 @@ struct ChatThreadView: View {
         guard !v.isEmpty || pendingAttachment != nil else { return }
         let mentionedUserIds = pendingMentions.compactMap { v.contains($0.value) ? $0.key : nil }
         let attachment = pendingAttachment
+        let replyId = replyingTo?.id
         sending = true; input = ""; pendingMentions = [:]; pendingAttachment = nil; notice = nil
+        replyingTo = nil
         try? await APIClient.shared.sendMessage(conversationId, content: v, mentionedUserIds: mentionedUserIds,
-                                                attachmentUrl: attachment?.url, attachmentType: attachment?.type)
+                                                attachmentUrl: attachment?.url, attachmentType: attachment?.type,
+                                                replyToId: replyId)
         await load()
         sending = false
     }
@@ -885,5 +941,44 @@ struct TaskLinkPicker: View {
             items = mine.map { ChatTaskRef(id: $0.id, title: $0.title ?? "Untitled") }
         }
         loading = false
+    }
+}
+
+/// Drag a bubble to the right to answer it.
+///
+/// The gesture is attached with `.gesture`, not `.highPriorityGesture`, so the enclosing ScrollView
+/// keeps ownership of vertical pans — a reply gesture that eats scrolling is worse than no gesture.
+/// It also refuses any drag that is more vertical than horizontal, which is what stops a slightly
+/// slanted scroll from nudging bubbles sideways. Long-press still offers Reply for anyone who
+/// never discovers the swipe.
+private struct SwipeToReply<Content: View>: View {
+    let onReply: () -> Void
+    @ViewBuilder var content: () -> Content
+
+    @State private var offset: CGFloat = 0
+    private let trigger: CGFloat = 48
+
+    var body: some View {
+        content()
+            .offset(x: offset)
+            .overlay(alignment: .leading) {
+                Image(systemName: "arrowshape.turn.up.left.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(NX.mutedFg)
+                    .opacity(Double(min(offset, trigger) / trigger))
+                    .offset(x: -26)
+            }
+            .gesture(
+                DragGesture(minimumDistance: 20)
+                    .onChanged { value in
+                        guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                        offset = max(0, min(value.translation.width, 68))
+                    }
+                    .onEnded { _ in
+                        let fired = offset >= trigger
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) { offset = 0 }
+                        if fired { onReply() }
+                    }
+            )
     }
 }
