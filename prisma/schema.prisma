@@ -1020,6 +1020,15 @@ model AttendanceRecord {
   checkOutAccuracyM     Float?
   checkOutAltitudeM     Float?
   checkOutSimulated     Boolean          @default(false)
+  // Server-side verdict. Unlike the device signals above, these cannot be defeated by lying: they
+  // compare the claim against physics and against this person's own history. Never blocks a
+  // check-in — attendance that silently refuses to record is worse than one carrying a question.
+  checkInSuspect        Boolean          @default(false)
+  checkInSuspectReason  String?
+  checkInImpliedKmh     Float?
+  checkOutSuspect       Boolean          @default(false)
+  checkOutSuspectReason String?
+  checkOutImpliedKmh    Float?
 
   // Offline capture — the app queued this tap while the server was unreachable and replayed it
   // later. The timestamp then comes from the DEVICE, not the server, so it is not verified. That
