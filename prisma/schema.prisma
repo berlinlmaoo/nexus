@@ -1902,7 +1902,15 @@ model Message {
   attachmentUrl  String?
   attachmentType String?
 
+  /// The message this one replies to. Self-relation, nullable because every existing row predates
+  /// replies. SetNull rather than Cascade on purpose: deleting a quoted message must not delete the
+  /// answers to it — the reply simply loses its quote.
+  replyToId      String?
+  replyTo        Message?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies        Message[] @relation("MessageReplies")
+
   @@index([conversationId, createdAt])
+  @@index([replyToId])
 }
 
 // ── P&L Dashboard (standalone per-project finance: transaction-level expenses + income pipeline) ──
