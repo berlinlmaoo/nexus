@@ -41,6 +41,8 @@ final class AuthStore {
             Task { await NotificationManager.shared.unregister(session: session) }
         }
         Keychain.clear()
+        // A cached roster or task list must not outlive the session that fetched it.
+        ResponseCache.clearAll()
         session = nil
     }
 }

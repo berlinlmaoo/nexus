@@ -6,6 +6,9 @@ struct LeaderboardView: View {
     @State private var rows: [LeaderboardRow] = []
     @State private var loading = true
     @State private var error: String?
+    /// When what is on screen was fetched. Non-nil only while showing a cached copy that has not
+    /// been refreshed yet — data that looks live but is a day old is worse than a spinner.
+    @State private var showingCacheFrom: Date?
 
     /// BoD+ (atBottom) sink below staff; then by XP desc, then name.
     private var ranked: [LeaderboardRow] {
@@ -21,9 +24,27 @@ struct LeaderboardView: View {
             NX.background.ignoresSafeArea()
             content
         }
+        .safeAreaInset(edge: .top) {
+            if let at = showingCacheFrom {
+                Text(T("Showing saved data") + " · " + Self.ago(at))
+                    .font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(NX.muted, in: Capsule())
+                    .padding(.top, 4)
+            }
+        }
         .navigationTitle("Leaderboard")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await load() }
+        .task {
+            // Draw the last known board first so the screen opens with content instead of a
+            // skeleton, then refresh underneath.
+            if rows.isEmpty, let hit = ResponseCache.decoded("leaderboard", as: LeaderboardResponse.self) {
+                rows = hit.value.rows ?? []
+                showingCacheFrom = hit.savedAt
+                loading = false
+            }
+            await load()
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -64,11 +85,26 @@ struct LeaderboardView: View {
         }
     }
 
+    private static func ago(_ date: Date) -> String {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .short
+        return f.localizedString(for: date, relativeTo: .now)
+    }
+
     private func load() async {
         error = nil
-        do { rows = try await APIClient.shared.leaderboard() }
+        do {
+            rows = try await APIClient.shared.leaderboard()
+            showingCacheFrom = nil
+        }
         catch APIError.unauthorized { auth.logout() }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load the leaderboard.") }
+        catch {
+            // With something already on screen from cache, an error is a stale badge, not an error
+            // page: replacing a readable board with a failure message helps nobody.
+            if rows.isEmpty {
+                self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load the leaderboard.")
+            }
+        }
         loading = false
     }
 }

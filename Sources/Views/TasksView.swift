@@ -15,7 +15,14 @@ struct TasksView: View {
                 content
             }
             .navigationTitle(T("My Quest Log"))
-            .task { await load() }
+            .task {
+                if tasks.isEmpty, let myId = auth.session?.userId,
+                   let hit = ResponseCache.decoded("tasks-\(myId)", as: [MyTask].self) {
+                    tasks = hit.value
+                    loading = false
+                }
+                await load()
+            }
         }
     }
 
@@ -81,7 +88,9 @@ struct TasksView: View {
         guard let myId = auth.session?.userId else { loading = false; return }
         do { tasks = try await APIClient.shared.myTasks(assigneeId: myId) }
         catch APIError.unauthorized { auth.logout() }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load.") }
+        catch {
+            if tasks.isEmpty { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load.") }
+        }
         loading = false
     }
 

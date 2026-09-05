@@ -48,7 +48,10 @@ struct APIClient {
         return req
     }
 
-    private func run<T: Decodable>(_ req: URLRequest, decode: T.Type) async throws -> T {
+    /// `cache` opts an endpoint into keeping its last good response on disk. Only pass it for
+    /// GETs whose data is fine to show a few seconds stale — never for attendance state, which has
+    /// to be exact, and never for anything already delivered live over the socket.
+    private func run<T: Decodable>(_ req: URLRequest, decode: T.Type, cache key: String? = nil) async throws -> T {
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await URLSession.shared.data(for: req)
@@ -59,7 +62,11 @@ struct APIClient {
         if http.statusCode == 401 { throw APIError.unauthorized }
         guard (200..<300).contains(http.statusCode) else { throw APIError.http(http.statusCode) }
         do {
-            return try JSONDecoder().decode(T.self, from: data)
+            let value = try JSONDecoder().decode(T.self, from: data)
+            // Only store what decoded cleanly: a cache that can hand back something unreadable is
+            // worse than an empty one.
+            if let key { ResponseCache.save(key, data) }
+            return value
         } catch {
             throw APIError.decoding
         }
@@ -75,7 +82,7 @@ struct APIClient {
     }
 
     func projects() async throws -> [Project] {
-        try await run(makeRequest("/api/projects"), decode: [Project].self)
+        try await run(makeRequest("/api/projects"), decode: [Project].self, cache: "projects")
     }
 
     func project(_ id: String) async throws -> ProjectDetail {
@@ -289,7 +296,9 @@ struct APIClient {
     }
 
     func myTasks(assigneeId: String) async throws -> [MyTask] {
-        try await run(makeRequest("/api/tasks?assigneeId=\(assigneeId)"), decode: [MyTask].self)
+        // Keyed per assignee: two people on one device must never see each other's list.
+        try await run(makeRequest("/api/tasks?assigneeId=\(assigneeId)"), decode: [MyTask].self,
+                      cache: "tasks-\(assigneeId)")
     }
 
     func unreadCount() async throws -> Int {
@@ -297,7 +306,8 @@ struct APIClient {
     }
 
     func leaderboard() async throws -> [LeaderboardRow] {
-        (try await run(makeRequest("/api/gamification/leaderboard"), decode: LeaderboardResponse.self)).rows ?? []
+        (try await run(makeRequest("/api/gamification/leaderboard"), decode: LeaderboardResponse.self,
+                       cache: "leaderboard")).rows ?? []
     }
 
     func docs() async throws -> [Doc] {

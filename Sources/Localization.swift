@@ -237,6 +237,7 @@ final class AppLanguage {
         "Done for today 🎉": "Selesai hari ini 🎉",
         "Currently clocked-in": "Lagi clocked-in",
         "Ready to check in": "Siap check-in",
+        "Showing saved data": "Menampilkan data tersimpan",
         "Search missions and tasks…": "Cari mission dan task…",
         "Nothing matches that.": "Nggak ada yang cocok.",
         "MISSIONS": "MISSION",

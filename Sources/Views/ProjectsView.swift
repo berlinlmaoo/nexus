@@ -61,7 +61,15 @@ struct ProjectsView: View {
             .sheet(item: $editFolder) { f in
                 CreateFolderSheet(workspaceId: workspaceId ?? "", editing: f) { await load() }
             }
-            .task { await load() }
+            .task {
+                // Missions barely change between visits, so draw the last known list immediately
+                // instead of a skeleton, then refresh underneath.
+                if projects.isEmpty, let hit = ResponseCache.decoded("projects", as: [Project].self) {
+                    projects = hit.value
+                    loading = false
+                }
+                await load()
+            }
         }
     }
 
@@ -130,7 +138,11 @@ struct ProjectsView: View {
         } catch APIError.unauthorized {
             auth.logout()
         } catch {
-            self.error = (error as? LocalizedError)?.errorDescription ?? T("Something went wrong.")
+            // Something readable already on screen beats an error page; only report when there is
+            // genuinely nothing to show.
+            if projects.isEmpty {
+                self.error = (error as? LocalizedError)?.errorDescription ?? T("Something went wrong.")
+            }
         }
         if !didCollapseInitially {
             collapsed = Set(folders.map(\.id))
