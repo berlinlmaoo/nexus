@@ -630,7 +630,9 @@ struct ChatThreadView: View {
                 Button { Task { await send() } } label: {
                     Image(systemName: sending ? "ellipsis" : "paperplane.fill").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
                         .frame(width: 40, height: 40).background(NX.onyx, in: Circle())
-                }.disabled(input.trimmingCharacters(in: .whitespaces).isEmpty || sending)
+                // A picture on its own is a message. send() always allowed that; the button did
+                // not, so a photo-only reply looked broken until you typed something.
+                }.disabled((input.trimmingCharacters(in: .whitespaces).isEmpty && pendingAttachment == nil) || sending)
             }
             .padding(12)
         }
@@ -676,11 +678,14 @@ struct ChatThreadView: View {
                 }
                 .padding(.horizontal, 13).padding(.vertical, 9)
                 .background(mine ? NX.onyx : NX.muted, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                // On the bubble, not on the row: a context menu lifts whatever it is attached to,
+                // and the row is full width with Spacers on both sides — so the preview came out as
+                // a wide grey slab with the bubble floating inside it.
+                .contextMenu {
+                    Button { replyingTo = m } label: { Label(T("Reply"), systemImage: "arrowshape.turn.up.left") }
+                }
                 if !mine { Spacer(minLength: 50) }
             }
-        }
-        .contextMenu {
-            Button { replyingTo = m } label: { Label(T("Reply"), systemImage: "arrowshape.turn.up.left") }
         }
     }
 
