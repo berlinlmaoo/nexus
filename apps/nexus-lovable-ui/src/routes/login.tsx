@@ -1,10 +1,11 @@
 import { createFileRoute, useNavigate, useSearch, Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, KeyRound, Loader2 } from "lucide-react";
 import nexusLogo from "@/assets/nexus-logo.png";
 import { celebrate } from "@/components/Celebration";
 import { ApiError, nexusApi } from "@/lib/nexus-api";
+import { passkeysSupported, signInWithPasskey } from "@/lib/passkey";
 
 export const Route = createFileRoute("/login")({ component: LoginPage });
 
@@ -20,6 +21,9 @@ function LoginPage() {
   const search = useSearch({ strict: false }) as { callbackUrl?: string; error?: string };
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
+  // Resolved after mount: the render that runs on the server has no `window` to ask.
+  const [passkeyReady, setPasskeyReady] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(search.error ? "Access denied. Double-check your email/password." : null);
@@ -29,6 +33,41 @@ function LoginPage() {
     const t = setTimeout(() => setShowForm(true), 900);
     return () => clearTimeout(t);
   }, []);
+
+  useEffect(() => {
+    setPasskeyReady(passkeysSupported());
+  }, []);
+
+  // Shared landing for both sign-in paths. Drop every cached query before leaving /login: the
+  // QueryClient outlives this route, so the 401 that bounced the user here is still cached, and
+  // navigating back in would hand `_app` that stale error and it would redirect straight to /login
+  // again — an unbreakable loop that only a full page reload could clear. Clearing the cache makes
+  // the next screen refetch clean.
+  const enterMissionControl = (target: string) => {
+    queryClient.clear();
+    celebrate("Welcome back, Commander! 🚀");
+    setTimeout(() => navigate({ to: target }), 250);
+  };
+
+  const onPasskey = async () => {
+    setError(null);
+    setPasskeyLoading(true);
+    try {
+      const result = await signInWithPasskey();
+      // Dismissed the system prompt — that's a choice, not a failure. Leave the form as it was.
+      if (!result.ok) return;
+      // The server already set the session cookie; there's no token for us to keep.
+      enterMissionControl(callbackUrl);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setError("This device's passkey isn't registered. Sign in with your password, then add it in Settings.");
+      } else {
+        setError("Passkey uplink failed. Use your email/password instead.");
+      }
+    } finally {
+      setPasskeyLoading(false);
+    }
+  };
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,15 +83,8 @@ function LoginPage() {
     try {
       const result = await nexusApi.login(emailValue, password, callbackUrl);
       if (!result.ok) throw new Error(result.error || "Login failed");
-      // Drop every cached query before leaving /login. The QueryClient outlives this route, so the
-      // 401 that bounced the user here is still cached: navigating back in would hand `_app` that
-      // stale error and it would redirect straight to /login again — an unbreakable loop that only
-      // a full page reload could clear. Clearing the cache makes the next screen refetch clean.
-      queryClient.clear();
-      celebrate("Welcome back, Commander! 🚀");
       setPassword("");
-      const target = getSafeCallbackUrl(result.redirectTo || callbackUrl);
-      setTimeout(() => navigate({ to: target }), 250);
+      enterMissionControl(getSafeCallbackUrl(result.redirectTo || callbackUrl));
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setError("That access code doesn't match. Give your email/password another look.");
@@ -158,7 +190,7 @@ function LoginPage() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || passkeyLoading}
             className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-4 rounded-2xl shadow-xl shadow-primary/25 transition-all active:scale-[0.98] flex items-center justify-center gap-2 group disabled:opacity-70 disabled:cursor-not-allowed"
           >
             {loading ? (
@@ -174,6 +206,35 @@ function LoginPage() {
             )}
           </button>
         </form>
+
+        {passkeyReady && (
+          <>
+            <div className="my-6 flex items-center gap-3">
+              <div className="h-px flex-1 bg-foreground/10" />
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">or</span>
+              <div className="h-px flex-1 bg-foreground/10" />
+            </div>
+
+            <button
+              type="button"
+              onClick={onPasskey}
+              disabled={loading || passkeyLoading}
+              className="w-full bg-white/60 hover:bg-white/80 border border-white/80 text-foreground font-bold py-4 rounded-2xl shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              {passkeyLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Waiting for your device...</span>
+                </>
+              ) : (
+                <>
+                  <KeyRound className="w-4 h-4" />
+                  <span>Sign in with passkey</span>
+                </>
+              )}
+            </button>
+          </>
+        )}
 
         <div className="mt-10 text-center">
           <p className="text-sm text-muted-foreground">New operative? <a href="/register" className="text-primary font-bold hover:underline underline-offset-4 decoration-2 decoration-primary/30 transition-all ml-1">Request access</a></p>
