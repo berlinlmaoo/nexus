@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -5,14 +6,14 @@ import UniformTypeIdentifiers
 
 private func reqLabel(_ t: String?) -> String {
     switch (t ?? "").uppercased() {
-    case "LEAVE": return "Cuti"; case "SICK": return "Sakit"; case "PERMIT": return "Izin"
+    case "LEAVE": return T("Leave"); case "SICK": return T("Sick"); case "PERMIT": return T("Permit")
     case "DAY_OFF": return "Day Off"; case "RED_DATE": return T("Public Holiday"); default: return (t ?? "—").capitalized
     }
 }
 private func reqStatusLabel(_ s: String?) -> String {
     switch (s ?? "").uppercased() {
-    case "APPROVED": return "Disetujui"; case "REJECTED": return "Ditolak"; case "CANCELED", "CANCELLED": return "Dibatalkan"
-    default: return "Pending"
+    case "APPROVED": return T("Approved"); case "REJECTED": return T("Rejected"); case "CANCELED", "CANCELLED": return T("Canceled")
+    default: return T("Pending")
     }
 }
 private func reqStatusTone(_ s: String?) -> ChipTone {
@@ -41,8 +42,8 @@ struct AttendanceRequestsCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Pengajuan").font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
-                    Text(canReview ? "Review request crew + ajuin punyamu." : "Ajuin cuti / izin / sakit / day-off.")
+                    Text(T("Submissions")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+                    Text(canReview ? T("Review the crew's requests and file your own.") : T("File leave, permit, sick or day-off."))
                         .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer()
@@ -254,6 +255,9 @@ struct RequestComposerSheet: View {
     @State private var reason = ""
     @State private var attach: (name: String, data: Data)?
     @State private var showImporter = false
+    @State private var showPhotoPicker = false
+    @State private var showCamera = false
+    @State private var pickedPhoto: PhotosPickerItem?
     @State private var busy = false
     @State private var err: String?
 
@@ -284,11 +288,11 @@ struct RequestComposerSheet: View {
                             }
                         }
                         HStack(spacing: 12) {
-                            field("MULAI") { DatePicker("", selection: $start, displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violetText) }
-                            field("SAMPAI") { DatePicker("", selection: $end, in: start..., displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violetText) }
+                            field(T("START")) { DatePicker("", selection: $start, displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violetText) }
+                            field(T("UNTIL")) { DatePicker("", selection: $end, in: start..., displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violetText) }
                         }
-                        field("ALASAN") {
-                            TextField("Alasan / konteks…", text: $reason, axis: .vertical)
+                        field(T("REASON")) {
+                            TextField(T("Reason / context…"), text: $reason, axis: .vertical)
                                 .font(NXFont.text(15)).lineLimit(3...6).padding(12)
                                 .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
@@ -297,13 +301,23 @@ struct RequestComposerSheet: View {
                             field(type == "SICK"
                                   ? T("SICK NOTE PHOTO") + (attachmentRequired ? T(" (REQUIRED)") : T(" (OPTIONAL)"))
                                   : T("SUPPORTING PHOTO (OPTIONAL)")) {
-                                Button { showImporter = true } label: {
+                                // The file picker alone meant a sick note had to already exist as
+                                // a file. Same three sources as the chat composer.
+                                Menu {
+                                    Button { showCamera = true } label: { Label(T("Take a photo"), systemImage: "camera") }
+                                    Button { showPhotoPicker = true } label: { Label(T("Choose from library"), systemImage: "photo") }
+                                    Button { showImporter = true } label: { Label(T("Choose a file"), systemImage: "folder") }
+                                    if attach != nil {
+                                        Divider()
+                                        Button(role: .destructive) { attach = nil } label: { Label(T("Remove"), systemImage: "trash") }
+                                    }
+                                } label: {
                                     HStack(spacing: 8) {
                                         Image(systemName: "camera").foregroundStyle(NX.mutedFg)
                                         Text(attach?.name ?? T("Pick a photo / file (max 10MB)")).font(NXFont.text(14))
                                             .foregroundStyle(attach == nil ? NX.mutedFg : NX.foreground).lineLimit(1)
                                         Spacer()
-                                        if attach != nil { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg).onTapGesture { attach = nil } }
+                                        if attach != nil { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg) }
                                     }
                                     .padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                                     .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(attach == nil ? NX.border : NX.violet.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [5])))
@@ -312,14 +326,14 @@ struct RequestComposerSheet: View {
                         }
                         if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
                         Button { Task { await submit() } } label: {
-                            HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text("Submit request") }
+                            HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text(T("Submit request")) }
                         }
                         .buttonStyle(NexusPrimaryButton()).disabled(busy || !canSubmit)
                     }
                     .padding(20)
                 }
             }
-            .navigationTitle("Pengajuan baru")
+            .navigationTitle(T("New request"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
             .fileImporter(isPresented: $showImporter, allowedContentTypes: [.image, .pdf], allowsMultipleSelection: false) { result in
@@ -328,8 +342,26 @@ struct RequestComposerSheet: View {
                     defer { if scoped { url.stopAccessingSecurityScopedResource() } }
                     if let data = try? Data(contentsOf: url), data.count <= 10 * 1024 * 1024 {
                         attach = (url.lastPathComponent, data)
-                    } else { err = "File maks 10MB." }
+                    } else { err = T("File is over the 10MB limit.") }
                 }
+            }
+            // A PhotosPicker nested in a Menu draws its row but never opens, so the menu only
+            // flips these flags and the sheets live out here.
+            .photosPicker(isPresented: $showPhotoPicker, selection: $pickedPhoto,
+                          matching: .images, photoLibrary: .shared())
+            .onChange(of: pickedPhoto) { _, item in
+                guard let item else { return }
+                Task {
+                    if let data = try? await item.loadTransferable(type: Data.self) {
+                        if data.count <= 10 * 1024 * 1024 { attach = ("sick-note.jpg", data) }
+                        else { err = T("File is over the 10MB limit.") }
+                    }
+                    pickedPhoto = nil
+                }
+            }
+            .fullScreenCover(isPresented: $showCamera) {
+                CameraPicker(cameraDevice: .rear) { data in attach = ("sick-note.jpg", data) }
+                    .ignoresSafeArea()
             }
         }
     }

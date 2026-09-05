@@ -78,7 +78,7 @@ struct AttendanceView: View {
                 .padding(16)
             }
         }
-        .navigationTitle("Absensi")
+        .navigationTitle(T("Attendance"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .onAppear { loc.requestPermissionIfNeeded() }
