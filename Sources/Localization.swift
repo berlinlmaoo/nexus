@@ -237,6 +237,8 @@ final class AppLanguage {
         "Done for today 🎉": "Selesai hari ini 🎉",
         "Currently clocked-in": "Lagi clocked-in",
         "Ready to check in": "Siap check-in",
+        "My Work Schedule": "Jadwal Kerja Saya",
+        "📍 Location-free — clock in from anywhere": "📍 Bebas lokasi — absen dari mana aja",
         "Today's status": "Status hari ini",
         "Office checkpoint": "Checkpoint kantor",
         "Day-off tokens": "Jatah day-off",

@@ -14,11 +14,17 @@ struct AttendanceToday: Decodable, Sendable {
     let pendingCheckout: AttendanceRecord?
     let todayRequest: TodayRequest?
     let myShift: Shift?
+    /// Custom/Mobile attendance: this member may clock in or out anywhere, so the office
+    /// geofence is not enforced for them. Sent by GET /api/attendance/today.
+    let noGeofence: Bool?
 
     struct Shift: Decodable, Sendable {
         let startTime: String
         let endTime: String
         let source: String
+        /// Flexi Time: the times above are a check-in WINDOW, not a fixed shift, and the
+        /// clock-out is derived as check-in + 9h. Optional so older responses still decode.
+        let flexi: Bool?
     }
     struct TodayRequest: Decodable, Sendable { let type: String?; let status: String? }
 }

@@ -117,11 +117,21 @@ struct AttendanceView: View {
             VStack {
                 timeCard.padding(12)
                 Spacer()
-                HStack {
-                    Text("\(statusText)\(officeSuffix)")
-                        .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
-                        .padding(.horizontal, 12).padding(.vertical, 7)
-                        .background(.ultraThinMaterial, in: Capsule())
+                HStack(alignment: .bottom) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("\(statusText)\(officeSuffix)")
+                            .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                            .padding(.horizontal, 12).padding(.vertical, 7)
+                            .background(.ultraThinMaterial, in: Capsule())
+                        // Without this the exemption is invisible: the member only discovers it
+                        // by not being rejected. The web hero shows the same pill.
+                        if today?.noGeofence == true {
+                            Text(T("📍 Location-free — clock in from anywhere"))
+                                .font(NXFont.text(12, .bold)).foregroundStyle(.white)
+                                .padding(.horizontal, 12).padding(.vertical, 7)
+                                .background(Self.locationFree, in: Capsule())
+                        }
+                    }
                     Spacer()
                     Button { camera = .userLocation(fallback: .automatic) } label: {
                         Image(systemName: "location.fill").font(.system(size: 16)).foregroundStyle(NX.foreground)
@@ -148,7 +158,7 @@ struct AttendanceView: View {
                 Text(Self.clock.string(from: ctx.date))
                     .font(NXFont.display(46, .bold)).monospacedDigit().foregroundStyle(.white)
             }
-            Text("My Work Schedule \(today?.myShift.map { "\($0.startTime) – \($0.endTime)" } ?? "—")")
+            Text(shiftLabel)
                 .font(NXFont.text(12, .semibold)).foregroundStyle(.white)
                 .padding(.horizontal, 12).padding(.vertical, 5)
                 .background(.white.opacity(0.18), in: Capsule())
@@ -347,6 +357,18 @@ struct AttendanceView: View {
     }
 
     // MARK: computed copy
+
+    /// sky-500, the same tone the web hero uses for the location-free pill.
+    private static let locationFree = Color(red: 0.055, green: 0.647, blue: 0.914)
+
+    /// A flexi member sees the check-in WINDOW and the +9h rule rather than a fixed schedule,
+    /// because their clock-out is derived from when they actually clocked in. Same wording as
+    /// the web hero, so the two clients read identically.
+    private var shiftLabel: String {
+        guard let shift = today?.myShift else { return T("My Work Schedule") + " —" }
+        if shift.flexi == true { return "Flexi \(shift.startTime)–\(shift.endTime) · +9h" }
+        return T("My Work Schedule") + " \(shift.startTime) – \(shift.endTime)"
+    }
 
     private var statusText: String {
         if forcePending { return T("Finish yesterday's attendance") }
