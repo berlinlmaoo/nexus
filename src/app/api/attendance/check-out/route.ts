@@ -48,6 +48,12 @@ export async function POST(request: NextRequest) {
     const clientId = (formData.get("clientId") as string | null)?.trim() || null
     const deviceAtRaw = (formData.get("deviceAt") as string | null)?.trim() || null
     const uptimeSecRaw = Number(formData.get("uptimeSec"))
+    // Location integrity signals. Absent from older app builds, so every one is optional.
+    const accuracyRaw = Number(formData.get("accuracyM"))
+    const altitudeRaw = Number(formData.get("altitudeM"))
+    const accuracyM = Number.isFinite(accuracyRaw) ? accuracyRaw : null
+    const altitudeM = Number.isFinite(altitudeRaw) ? altitudeRaw : null
+    const simulated = String(formData.get("simulated") ?? "") === "1"
     const deviceUptimeSec = Number.isFinite(uptimeSecRaw) && uptimeSecRaw > 0 ? Math.floor(uptimeSecRaw) : null
 
     if (clientId) {
@@ -247,6 +253,9 @@ export async function POST(request: NextRequest) {
         workedMinutes: derived.workedMinutes,
         attendanceFlexi: derived.attendanceFlexi,
         checkOutOffline,
+        checkOutAccuracyM: accuracyM,
+        checkOutAltitudeM: altitudeM,
+        checkOutSimulated: simulated,
         checkOutDeviceUptimeSec: checkOutOffline ? deviceUptimeSec : null,
         checkOutClientId: clientId,
         checkOutLat: validation.data.lat,
