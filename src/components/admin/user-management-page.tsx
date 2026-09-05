@@ -631,7 +631,7 @@ export function UserManagementPage({ currentUserName }: UserManagementPageProps)
 
                             {isPrimaryMembership && (
                               <p className="text-xs leading-relaxed text-on-surface-variant/45">
-                                PATS Group adalah workspace utama yang wajib untuk semua user, jadi role dan membership-nya tidak diubah dari panel ini.
+                                Z Networks adalah workspace utama yang wajib untuk semua user, jadi role dan membership-nya tidak diubah dari panel ini.
                               </p>
                             )}
 

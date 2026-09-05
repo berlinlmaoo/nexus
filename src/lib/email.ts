@@ -61,7 +61,7 @@ function wrapHtml(title: string, body: string): string {
       ${body}
     </div>
     <div style="padding:16px 32px;border-top:1px solid #e4e4e7;text-align:center;">
-      <p style="margin:0;font-size:12px;color:#a1a1aa;">NEXUS &mdash; Project & Task System by PATS Group</p>
+      <p style="margin:0;font-size:12px;color:#a1a1aa;">NEXUS &mdash; Project & Task System by Z Networks</p>
     </div>
   </div>
 </body>

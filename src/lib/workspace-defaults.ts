@@ -8,8 +8,8 @@ function slugify(value: string) {
 
 export function getPrimaryWorkspaceDefaults() {
   return {
-    name: "PATS Group",
-    slug: slugify("PATS Group"),
+    name: "Z Networks",
+    slug: slugify("Z Networks"),
     description: "Primary workspace for all Nexus users",
   }
 }

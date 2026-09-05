@@ -861,7 +861,7 @@ export default function TeamsPage() {
                       {team.canManage && (
                         <p className="text-xs text-on-surface-variant/45">
                           {team.isPrimaryTeam
-                            ? 'Semua user wajib menjadi member team inti PATS Group.'
+                            ? 'Semua user wajib menjadi member team inti Z Networks.'
                             : availableMembers.length > 0
                             ? `${availableMembers.length} user siap ditambahkan ke team ini.`
                             : 'Belum ada user lain yang bisa ditambahkan ke team ini.'}
