@@ -1010,6 +1010,21 @@ model AttendanceRecord {
   // Flexi Time — whether this record was computed under flexi rules (check-in window 12:00–15:00,
   // expected end = check-in + 9h). Stored so re-derivation/audit doesn't fall back to fixed-shift math.
   attendanceFlexi       Boolean          @default(false)
+  // Offline capture — the app queued this tap while the server was unreachable and replayed it
+  // later. The timestamp then comes from the DEVICE, not the server, so it is not verified. That
+  // has to be visible to anyone reviewing attendance rather than silently accepted as equal.
+  checkInOffline        Boolean          @default(false)
+  checkOutOffline       Boolean          @default(false)
+  // How long the device had been running when the person tapped. A wall clock is trivial to move;
+  // an uptime that stays consistent across a whole replayed queue is much harder to fake, so the
+  // pair is what makes an audit possible at all.
+  checkInDeviceUptimeSec  Int?
+  checkOutDeviceUptimeSec Int?
+  // One id per queued tap, generated on the device. Replaying a queue whose acknowledgement was
+  // lost must not check the same person in twice.
+  checkInClientId       String?          @unique
+  checkOutClientId      String?          @unique
+
   notes                 String?
   status                AttendanceStatus @default(CHECKED_IN)
   correctedAt           DateTime?
