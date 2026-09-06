@@ -38,7 +38,16 @@ struct TeamsView: View {
                     Text(T("Team members automatically get access to the linked projects."))
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).frame(maxWidth: .infinity, alignment: .leading)
                     NXCardGrid(spacing: 12) {
-                        ForEach(teams) { TeamCard(team: $0) }
+                        // The cards used to be inert — tapping one did nothing, so members and
+                        // project access could only be changed from the web.
+                        ForEach(teams) { team in
+                            NavigationLink {
+                                TeamDetailView(team: team) { Task { await load() } }
+                            } label: {
+                                TeamCard(team: team)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                 }
                 .padding(16)

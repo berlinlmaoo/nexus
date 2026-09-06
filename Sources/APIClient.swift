@@ -436,6 +436,46 @@ struct APIClient {
     func reports(days: Int) async throws -> Reports {
         try await run(makeRequest("/api/reports?days=\(days)"), decode: Reports.self)
     }
+    /// Every team mutation is the same POST with a different `action`. Written as one funnel so a
+    /// new action is a line rather than another near-copy of the request plumbing.
+    ///
+    /// The server re-checks permission on every one of these. Hiding a button is a courtesy to the
+    /// person looking at it, never the thing that stops the action.
+    @discardableResult
+    private func teamAction(_ payload: [String: Any]) async throws -> Bool {
+        var req = makeRequest("/api/teams", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+
+    @discardableResult
+    func teamAddMember(teamId: String, userId: String) async throws -> Bool {
+        try await teamAction(["action": "add-member", "teamId": teamId, "userId": userId])
+    }
+
+    @discardableResult
+    func teamRemoveMember(teamId: String, userId: String) async throws -> Bool {
+        try await teamAction(["action": "remove-member", "teamId": teamId, "userId": userId])
+    }
+
+    @discardableResult
+    func teamSetMemberRole(teamId: String, userId: String, lead: Bool) async throws -> Bool {
+        try await teamAction(["action": "set-member-role", "teamId": teamId, "userId": userId,
+                              "role": lead ? "LEAD" : "MEMBER"])
+    }
+
+    @discardableResult
+    func teamLinkProject(teamId: String, projectId: String) async throws -> Bool {
+        try await teamAction(["action": "link-project", "teamId": teamId, "projectId": projectId])
+    }
+
+    @discardableResult
+    func teamUnlinkProject(teamId: String, projectId: String) async throws -> Bool {
+        try await teamAction(["action": "unlink-project", "teamId": teamId, "projectId": projectId])
+    }
+
     func teams() async throws -> [Team] {
         try await run(makeRequest("/api/teams"), decode: [Team].self)
     }
