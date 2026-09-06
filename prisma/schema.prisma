@@ -64,6 +64,9 @@ model User {
   attendanceCorrections AttendanceRecord[] @relation("AttendanceRecordCorrectedBy")
   attendanceRequests AttendanceRequest[] @relation("AttendanceRequestUser")
   reviewedAttendanceRequests AttendanceRequest[] @relation("AttendanceRequestReviewedBy")
+  attendanceCorrectionsOnMe    AttendanceCorrection[] @relation("AttendanceCorrectionUser")
+  attendanceCorrectionsProposed AttendanceCorrection[] @relation("AttendanceCorrectionProposedBy")
+  attendanceCorrectionsDecided AttendanceCorrection[] @relation("AttendanceCorrectionDecidedBy")
   userXp               UserXp?
   xpTransactions       XpTransaction[]
   userStreak           UserStreak?
@@ -212,6 +215,7 @@ model Workspace {
   holidays             Holiday[]
   redDateQuotas        RedDateQuota[]
   complaints           Complaint[]
+  attendanceCorrections AttendanceCorrection[]
 }
 
 // Monthly "tanggal merah" quota (jatah), set by BoD per month, same for every staff. Staff
@@ -2438,6 +2442,9 @@ model Complaint {
   // desync the moment one write goes wrong). The legacy single `evidenceUrl` above is still written
   // with the FIRST photo so older complaints and any leftover reader keep working.
   attachments   ComplaintAttachment[]
+  // Proposed attendance fixes carried by this ticket. Only ATTENDANCE tickets ever have any;
+  // approving one is the only path from a ticket to a written AttendanceRecord.
+  corrections   AttendanceCorrection[]
 
   @@index([reporterId, createdAt])
   @@index([status, lastMessageAt])
@@ -2480,6 +2487,59 @@ model ComplaintEvent {
   createdAt   DateTime  @default(now())
 
   @@index([complaintId, createdAt])
+}
+
+enum AttendanceCorrectionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// A PROPOSED attendance fix hanging off an ATTENDANCE ticket. Exists so the fix a BoD used to make by
+// hand in another screen becomes something the ticket itself carries and a BoD approves with one tap.
+//
+// GIDEON writes rows here and NOTHING else — it may never touch AttendanceRecord. The proposal is
+// inert until POST /api/complaints/[id]/correction approves it; that endpoint is the single place a
+// ticket can turn into an attendance write.
+model AttendanceCorrection {
+  id                 String                     @id @default(cuid())
+  complaintId        String
+  complaint          Complaint                  @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  workspaceId        String
+  workspace          Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  // Whose attendance. Always the ticket's reporter — never taken from tool input, or a staffer could
+  // ask GIDEON to file a "correction" against a colleague.
+  userId             String
+  user               User                       @relation("AttendanceCorrectionUser", fields: [userId], references: [id], onDelete: Cascade)
+  // 00:00 UTC of the day, matching how AttendanceRecord.attendanceDate is stored.
+  attendanceDate     DateTime
+  proposedCheckInAt  DateTime?
+  proposedCheckOutAt DateTime?
+  reason             String
+  // GIDEON's identity, not the human who asked. Same split as documents: permission comes from the
+  // actor, authorship says who actually wrote it.
+  proposedById       String
+  proposedBy         User                       @relation("AttendanceCorrectionProposedBy", fields: [proposedById], references: [id], onDelete: Cascade)
+  status             AttendanceCorrectionStatus @default(PENDING)
+  decidedById        String?
+  decidedBy          User?                      @relation("AttendanceCorrectionDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt          DateTime?
+  decisionNote       String?
+  // What the record held when the proposal was made. Approval refuses if the live record has drifted
+  // from this, so an approved correction is always exactly reversible back to these three values.
+  beforeRecordId     String?
+  beforeCheckInAt    DateTime?
+  beforeCheckOutAt   DateTime?
+  beforeStatus       AttendanceStatus?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+
+  @@index([complaintId, createdAt])
+  @@index([workspaceId, status, attendanceDate])
+  @@index([userId, attendanceDate])
+  // DB-ONLY: a partial unique index "AttendanceCorrection_one_pending_per_complaint" on (complaintId)
+  // WHERE status = 'PENDING' also exists. Prisma cannot express a partial unique, so it is applied in
+  // SQL and noted here; the propose path checks for a live proposal before inserting anyway.
 }
 
 // Gideon chat history. One append-only row per turn, per user, written server-side after each

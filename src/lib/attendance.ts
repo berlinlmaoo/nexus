@@ -666,6 +666,26 @@ export function attendancePeriodKey(dateKey: string = formatAttendanceDateKey(),
   return `${y}-${String(m).padStart(2, "0")}`
 }
 
+/**
+ * "YYYY-MM-DD" + "HH:mm" as read on an office wall clock → the UTC instant it means.
+ *
+ * Exists because the attendance-correction flow gets its times from a chat ("dia masuk jam 9"), and a
+ * naive `new Date("2026-09-01T09:00")` lands 7 hours off in Asia/Jakarta. Returns null on garbage
+ * input so callers can reject rather than silently correct attendance to a wrong hour.
+ */
+export function attendanceWallClockToUtc(dateKey: string, hhmm: string, timeZone = ATTENDANCE_TIMEZONE) {
+  const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey.trim())
+  const time = /^(\d{1,2}):(\d{2})$/.exec(hhmm.trim())
+  if (!day || !time) return null
+  const hour = Number(time[1])
+  const minute = Number(time[2])
+  if (hour > 23 || minute > 59) return null
+  return zonedDateTimeToUtc(
+    { year: Number(day[1]), month: Number(day[2]), day: Number(day[3]), hour, minute },
+    timeZone
+  )
+}
+
 export function parseDateOnlyToUtc(value: string) {
   return new Date(`${value}T00:00:00.000Z`)
 }
