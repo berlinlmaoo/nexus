@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { markdownToTipTap, extractTextFromTipTap } from '@/lib/tiptap-utils'
+import { getGideonUserId } from '@/lib/gideon-identity'
 import { authenticateGideonService } from '@/lib/gideon-service-auth'
 import { checkProjectAccess } from '@/lib/rbac'
 import { notifyCommentAdded, notifyTaskAssigned, notifyTaskCompleted } from '@/lib/notification-service'
@@ -380,7 +381,9 @@ async function createDocument(actor: User, input: Record<string, unknown>) {
       content: content as never,
       contentText: extractTextFromTipTap(content),
       projectId,
-      authorId: actor.id,
+      // GIDEON wrote it; the person who asked owns it. Both are true, and neither has to be guessed
+      // from the text later.
+      authorId: await getGideonUserId(),
       ownerId: actor.id,
       parentId: typeof input.parentId === 'string' && input.parentId ? input.parentId : null,
     },
@@ -644,7 +647,7 @@ async function createTask(actor: User, input: Record<string, unknown>) {
         priority,
         dueDate: dueDate === undefined ? null : dueDate,
         taskListId: taskList.id,
-        creatorId: actor.id,
+        creatorId: await getGideonUserId(),
         ...(assigneeIds.length > 0 ? { assignees: { create: assigneeIds.map((userId) => ({ userId })) } } : {}),
       },
       include: taskInclude,
@@ -766,8 +769,12 @@ async function addTaskComment(actor: User, input: Record<string, unknown>) {
   const task = await getAccessibleTask(actor, taskId)
   await assertCanWrite(actor, task.taskList.projectId)
 
+  // Signed by GIDEON, and naming the person who asked. In a shared thread a comment under a
+  // colleague's name that they never wrote is a lie nobody can spot afterwards — and one with no
+  // name attached is an instruction from nowhere.
+  const signed = `${content}\n\n— GIDEON, atas permintaan ${actor.name}`
   const comment = await prisma.comment.create({
-    data: { taskId, userId: actor.id, content },
+    data: { taskId, userId: await getGideonUserId(), content: signed },
     select: { id: true, content: true, createdAt: true, user: { select: { id: true, name: true, email: true } } },
   })
 
