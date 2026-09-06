@@ -609,6 +609,44 @@ export async function notifyViolationAnnouncement(data: { reportedName: string; 
   )
 }
 
+/// An announcement, delivered.
+///
+/// Until now posting one only wrote a row: the pop-up was picked up the next time somebody happened
+/// to open NEXUS. For "wear a mask on the way in today" that is not a delay, it is a miss — the
+/// person who most needed it reads it after they have already arrived.
+export async function notifyAnnouncement(announcementId: string) {
+  const announcement = await prisma.announcement.findUnique({
+    where: { id: announcementId },
+    select: { id: true, title: true, body: true, active: true, targetUserIds: true, createdById: true },
+  })
+  if (!announcement || !announcement.active) return
+
+  // Audience mirrors /api/announcements/active exactly — an empty target list means everyone. The
+  // two must agree: a push nobody can then open, or a pop-up nobody was told about, is worse than
+  // either alone.
+  const audience = announcement.targetUserIds.length
+    ? announcement.targetUserIds
+    : (await prisma.workspaceMember.findMany({ select: { userId: true }, distinct: ["userId"] })).map((m) => m.userId)
+
+  // The author already knows what they just wrote.
+  const recipients = [...new Set(audience)].filter((userId) => userId !== announcement.createdById)
+
+  const body = announcement.body.trim()
+  const message = body.length > 160 ? `${body.slice(0, 157)}…` : body
+
+  await Promise.allSettled(
+    recipients.map((userId) =>
+      createInAppNotification({
+        userId,
+        type: "announcement",
+        title: `📣 ${announcement.title}`,
+        message,
+        push: true,
+      }),
+    ),
+  )
+}
+
 export async function notifyDueSoon(data: {
   userId: string
   taskId: string

@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { notifyAnnouncement } from "@/lib/notification-service"
 
 // BoD and above (+ system admin) can post/manage announcements.
 async function isBoD(userId: string): Promise<boolean> {
@@ -56,6 +57,15 @@ export async function POST(req: NextRequest) {
     const announcement = await prisma.announcement.create({
       data: { title: String(title).trim(), body: String(body).trim(), tone: t, active: true, createdById: session.user.id, targetUserIds: targets },
     })
+    // Awaited, not fired and forgotten: delivery IS the feature here, and a broadcast that quietly
+    // failed would leave the person who posted it believing everybody had been told. Wrapped so a
+    // push outage cannot undo an announcement that is already saved.
+    try {
+      await notifyAnnouncement(announcement.id)
+    } catch (error) {
+      console.error("announcement notify failed:", error)
+    }
+
     return NextResponse.json({ announcement }, { status: 201 })
   } catch (error) {
     console.error("announcement create error:", error)
