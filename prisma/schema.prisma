@@ -805,6 +805,13 @@ model DeviceInstallation {
   deviceId    String
   bundleId    String
   environment String
+  // Reported by the app at registration, so Control Room can see who is on which build. Nullable
+  // because every device registered before this existed has no answer, and inventing one would be
+  // worse than an honest blank.
+  appVersion  String?
+  buildNumber String?
+  osVersion   String?
+  deviceModel String?
   lastSeenAt  DateTime @default(now())
   disabledAt  DateTime?
   createdAt   DateTime @default(now())

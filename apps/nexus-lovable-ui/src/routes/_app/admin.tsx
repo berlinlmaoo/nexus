@@ -19,7 +19,7 @@ function initialsOf(name?: string | null) {
 
 function Admin() {
   const qc = useQueryClient();
-  const [view, setView] = useState<"users" | "audit" | "quests" | "announcements" | "gideon">("users");
+  const [view, setView] = useState<"users" | "audit" | "quests" | "announcements" | "gideon" | "app">("users");
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState<"ALL" | "ONE_ABOVE_ALL" | "BOD" | "MANAGER" | "STAFF">("ALL");
   const [dayoffUser, setDayoffUser] = useState<{ id: string; name: string } | null>(null);
@@ -81,12 +81,14 @@ function Admin() {
           <button onClick={() => setView("quests")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "quests" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Trophy className="h-3.5 w-3.5" /> Quests</button>
           {canAnnounce && <button onClick={() => setView("announcements")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "announcements" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Megaphone className="h-3.5 w-3.5" /> Announcements</button>}
           {canAnnounce && <button onClick={() => setView("gideon")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "gideon" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><GideonMark className="h-3.5 w-3.5" /> GIDEON</button>}
+          {canAnnounce && <button onClick={() => setView("app")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "app" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Smartphone className="h-3.5 w-3.5" /> Aplikasi</button>}
         </div>
 
         {view === "audit" && <AuditLog />}
         {view === "quests" && <AdminQuests />}
         {view === "announcements" && canAnnounce && <AnnouncementsAdmin />}
         {view === "gideon" && canAnnounce && <GideonUsage />}
+        {view === "app" && canAnnounce && <AppInstalls />}
 
         {view === "users" && users.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Shield className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">Admin access required</div><p className="mt-2 text-sm text-muted-foreground">You need the system-admin role to view user management.</p></div>}
 
@@ -861,6 +863,84 @@ function GideonUsage() {
                   <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{u.toolCalls}</td>
                   <td className="px-4 py-3 text-muted-foreground">{when(u.firstUsed)}</td>
                   <td className="px-4 py-3 text-muted-foreground">{when(u.lastUsed)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Who has the app, and which build they are on.
+ *
+ * One row per person, showing their most recently seen device: the question is which build somebody
+ * is running, not how many phones they own. "Belum dilaporkan" is honest — the version columns are
+ * newer than most installs, and a guess would be worse than a blank.
+ */
+function AppInstalls() {
+  const q = useQuery({ queryKey: ["nexus", "app-installs"], queryFn: nexusApi.appInstalls, retry: false });
+  const installs = q.data?.installs ?? [];
+  const totals = q.data?.totals;
+
+  const when = (iso: string) => new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+
+  if (q.isLoading) return <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">Memuat…</div>;
+  if (q.isError) return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">Nggak bisa memuat daftar aplikasi.</div>;
+
+  return (
+    <div className="space-y-4">
+      {totals && (
+        <div className="grid grid-cols-2 gap-3">
+          <Stat label="Pakai app" value={totals.people} />
+          <Stat label="Perangkat" value={totals.devices} />
+        </div>
+      )}
+
+      {totals && totals.versions.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {totals.versions.map((v) => (
+            <span key={v.version} className="rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold">
+              {v.version === "unknown" ? "Belum dilaporkan" : v.version} · {v.count}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {installs.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft">
+          <Smartphone className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
+          <div className="text-lg font-bold">Belum ada yang pasang app</div>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-soft">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="px-4 py-3 font-semibold">Orang</th>
+                <th className="px-4 py-3 font-semibold">Versi</th>
+                <th className="px-4 py-3 font-semibold">Perangkat</th>
+                <th className="px-4 py-3 font-semibold">Terakhir</th>
+              </tr>
+            </thead>
+            <tbody>
+              {installs.map((i) => (
+                <tr key={i.id} className="border-b border-border/60 last:border-0">
+                  <td className="px-4 py-3">
+                    <div className="font-semibold">{i.user.name}</div>
+                    {i.user.email && <div className="text-xs text-muted-foreground">{i.user.email}</div>}
+                  </td>
+                  <td className="px-4 py-3">
+                    {i.appVersion ? (
+                      <span className="font-semibold tabular-nums">{i.appVersion}{i.buildNumber ? ` (${i.buildNumber})` : ""}</span>
+                    ) : (
+                      <span className="text-muted-foreground">Belum dilaporkan</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground">{i.osVersion ?? i.deviceModel ?? "—"}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{when(i.lastSeenAt)}</td>
                 </tr>
               ))}
             </tbody>
