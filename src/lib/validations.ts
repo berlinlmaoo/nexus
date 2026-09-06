@@ -1,5 +1,17 @@
 import { z } from "zod"
 
+/// An id as this database actually stores them.
+///
+/// NOT a cuid check. Ten projects and fourteen task lists carry 32-character hex ids from an
+/// earlier import, and z.string().cuid() rejected every one of them — so creating a task inside any
+/// of those projects failed with a bare 400, on the web as well as the app, while the same action
+/// in a neighbouring project worked. The format was never what protected these routes:
+/// checkProjectAccess is, and it runs whatever the id looks like.
+///
+/// Defined at the top because these schemas are built when the module loads. Declared below its
+/// first use it would be in the temporal dead zone, and the whole file would throw on import.
+const idString = z.string().min(1).max(64).regex(/^[A-Za-z0-9_-]+$/, "Invalid id")
+
 // ── Auth ────────────────────────────────────────────────────────
 
 export const registerSchema = z.object({
@@ -76,8 +88,8 @@ export const attendanceActionSchema = z.object({
 
 export const attendanceHistoryQuerySchema = z.object({
   scope: z.enum(["me", "workspace"]).optional(),
-  officeLocationId: z.string().cuid().optional(),
-  userId: z.string().cuid().optional(),
+  officeLocationId: idString.optional(),
+  userId: idString.optional(),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
   month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
@@ -97,7 +109,7 @@ export const reverseGeocodeQuerySchema = z.object({
 })
 
 export const attendanceCorrectionSchema = z.object({
-  officeLocationId: z.string().cuid().optional(),
+  officeLocationId: idString.optional(),
   checkInAt: z.string().datetime().nullable().optional(),
   checkOutAt: z.string().datetime().nullable().optional(),
   notes: z.string().max(500).nullable().optional(),
@@ -119,8 +131,8 @@ export const attendanceRequestPatchSchema = z.object({
 export const attendanceRequestQuerySchema = z.object({
   scope: z.enum(["me", "approvals", "workspace"]).optional(),
   month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
-  userId: z.string().cuid().optional(),
-  teamId: z.string().cuid().optional(),
+  userId: idString.optional(),
+  teamId: idString.optional(),
   type: z.enum(["LEAVE", "SICK", "PERMIT", "DAY_OFF", "RED_DATE"]).optional(),
   status: z.enum(["PENDING", "APPROVED", "REJECTED", "CANCELED"]).optional(),
 })
@@ -130,15 +142,15 @@ export const attendanceRequestQuerySchema = z.object({
 export const createTaskSchema = z.object({
   title: z.string().min(1, "Title is required").max(500),
   description: z.string().max(10000).nullable().optional(),
-  projectId: z.string().cuid("Invalid project ID"),
-  taskListId: z.string().cuid("Invalid task list ID"),
+  projectId: idString,
+  taskListId: idString,
   status: z.enum(["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"]).optional(),
   priority: z.enum(["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"]).optional(),
   dueDate: z.string().nullable().optional(),
   startDate: z.string().nullable().optional(),
   tags: z.array(z.string().max(50)).max(20).optional(),
-  assigneeIds: z.array(z.string().cuid()).max(50).optional(),
-  parentId: z.string().cuid().nullable().optional(),
+  assigneeIds: z.array(idString).max(50).optional(),
+  parentId: idString.nullable().optional(),
   estimatedHours: z.number().min(0).max(9999).nullable().optional(),
   taskType: z.enum(["TASK", "MILESTONE", "APPROVAL"]).optional(),
   isRecurring: z.boolean().optional(),
@@ -159,10 +171,10 @@ export const updateTaskSchema = z.object({
   dueDate: z.string().nullable().optional(),
   startDate: z.string().nullable().optional(),
   tags: z.array(z.string().max(50)).max(20).optional(),
-  projectContextId: z.string().cuid().optional(),
-  taskListId: z.string().cuid().optional(),
+  projectContextId: idString.optional(),
+  taskListId: idString.optional(),
   position: z.number().int().min(0).optional(),
-  assigneeIds: z.array(z.string().cuid()).max(50).optional(),
+  assigneeIds: z.array(idString).max(50).optional(),
   estimatedHours: z.number().min(0).max(9999).nullable().optional(),
   actualHours: z.number().min(0).max(9999).nullable().optional(),
   taskType: z.enum(["TASK", "MILESTONE", "APPROVAL"]).optional(),
@@ -180,7 +192,7 @@ export const updateTaskSchema = z.object({
 
 export const createCommentSchema = z.object({
   content: z.string().min(1, "Comment cannot be empty").max(10000),
-  parentId: z.string().cuid().nullable().optional(),
+  parentId: idString.nullable().optional(),
 })
 
 // ── Projects ────────────────────────────────────────────────────
@@ -190,7 +202,7 @@ export const createProjectSchema = z.object({
   description: z.string().max(2000).nullable().optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Invalid hex color").optional(),
   icon: z.string().max(50).optional(),
-  workspaceId: z.string().cuid("Invalid workspace ID"),
+  workspaceId: idString,
 })
 
 export const updateProjectSchema = z.object({
@@ -202,7 +214,7 @@ export const updateProjectSchema = z.object({
   folderId: z.string().min(1).nullable().optional(),
   enableTaskBatchDuplicate: z.boolean().optional(),
   autoAssignEnabled: z.boolean().optional(),
-  autoAssignAssigneeIds: z.array(z.string().cuid()).max(50).optional(),
+  autoAssignAssigneeIds: z.array(idString).max(50).optional(),
   requireAttachmentForDone: z.boolean().optional(),
 })
 
@@ -211,7 +223,7 @@ export const updateProjectSchema = z.object({
 export const createWebhookSchema = z.object({
   url: z.string().url("Invalid webhook URL"),
   events: z.array(z.string().max(50)).min(1, "At least one event is required").max(20),
-  projectId: z.string().cuid().nullable().optional(),
+  projectId: idString.nullable().optional(),
 })
 
 // ── Goals ───────────────────────────────────────────────────────
@@ -221,32 +233,32 @@ export const createGoalSchema = z.object({
   description: z.string().max(5000).nullable().optional(),
   status: z.enum(["ON_TRACK", "AT_RISK", "BEHIND", "COMPLETED"]).optional(),
   dueDate: z.string().datetime().nullable().optional(),
-  workspaceId: z.string().cuid("Invalid workspace ID"),
-  parentId: z.string().cuid().nullable().optional(),
+  workspaceId: idString,
+  parentId: idString.nullable().optional(),
 })
 
 // ── Master Calendar ────────────────────────────────────────────
 
 export const createMasterCalendarEventSchema = z.object({
-  teamId: z.string().cuid("Invalid team ID"),
+  teamId: idString,
   title: z.string().min(1, "Title is required").max(300),
   date: z.string().min(1, "Date is required"),
   isAllDay: z.boolean().optional(),
   startTime: z.string().nullable().optional(),
   endTime: z.string().nullable().optional(),
-  attendeeIds: z.array(z.string().cuid()).max(50).optional(),
+  attendeeIds: z.array(idString).max(50).optional(),
   location: z.string().max(300).nullable().optional(),
   description: z.string().max(5000).nullable().optional(),
 })
 
 export const updateMasterCalendarEventSchema = z.object({
-  teamId: z.string().cuid("Invalid team ID").optional(),
+  teamId: idString.optional(),
   title: z.string().min(1, "Title is required").max(300).optional(),
   date: z.string().min(1, "Date is required").optional(),
   isAllDay: z.boolean().optional(),
   startTime: z.string().nullable().optional(),
   endTime: z.string().nullable().optional(),
-  attendeeIds: z.array(z.string().cuid()).max(50).optional(),
+  attendeeIds: z.array(idString).max(50).optional(),
   location: z.string().max(300).nullable().optional(),
   description: z.string().max(5000).nullable().optional(),
   status: z.enum(["ACTIVE", "CANCELLED"]).optional(),
@@ -295,6 +307,7 @@ export const createAutomationSchema = z.object({
 // ── Utility ─────────────────────────────────────────────────────
 
 import { NextResponse } from "next/server"
+
 
 /**
  * Validates request body against a zod schema.
