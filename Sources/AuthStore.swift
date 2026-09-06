@@ -73,6 +73,9 @@ final class AuthStore {
         Keychain.clear()
         // A cached roster or task list must not outlive the session that fetched it.
         ResponseCache.clearAll()
+        // Nor may a Live Activity: it would keep counting one person's hours on the Lock Screen of
+        // a phone that has already been handed to somebody else.
+        LiveActivityController.stop()
         session = nil
     }
 }

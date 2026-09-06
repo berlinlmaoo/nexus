@@ -11,10 +11,10 @@ options:
 settings:
   base:
     # Versi yang dilihat orang di TestFlight/App Store. Naikin kalau isinya berubah berarti.
-    MARKETING_VERSION: "0.1.2"
+    MARKETING_VERSION: "0.1.3"
     # WAJIB NAIK TIAP UPLOAD ke App Store Connect. Apple nolak build number yang sudah pernah
     # dipakai untuk MARKETING_VERSION yang sama, dan errornya baru muncul setelah upload selesai.
-    CURRENT_PROJECT_VERSION: "4"
+    CURRENT_PROJECT_VERSION: "5"
     SWIFT_VERSION: "5.0"            # Swift 5 language mode — smoother first build (no strict-concurrency friction)
     CODE_SIGN_STYLE: Automatic
     # Team ID Apple (10 karakter). Sengaja ditaruh di sini, BUKAN di GUI Xcode: .xcodeproj tidak
@@ -33,6 +33,12 @@ targets:
         # resource, or the build fails on a duplicate Info.plist.
         excludes:
           - Info.plist
+    dependencies:
+      # Embeds the widget extension into the app. platformFilter keeps it OUT of the Mac Catalyst
+      # build: ActivityKit does not exist on macOS, so a Mac archive that tries to embed this fails
+      # while complaining about something else entirely.
+      - target: NEXUSWidgets
+        platformFilter: iOS
     settings:
       base:
         # USE the committed plist — do not let XcodeGen generate one.
@@ -76,6 +82,26 @@ targets:
         # to portrait. Every screen is designed for a phone, so supporting iPad landscape means
         # rebuilding all of them - and universal also demands its own set of iPad screenshots if
         # this ever goes to the App Store. The app still installs on iPad, in an iPhone-sized window.
+        TARGETED_DEVICE_FAMILY: "1,2"
+
+  # Live Activities (Dynamic Island + Lock Screen). iOS only, by construction.
+  NEXUSWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Widgets
+        excludes:
+          - Info.plist
+      # Compiled into BOTH targets on purpose: ActivityKit hands ContentState across the process
+      # boundary, so the app and the extension have to agree on the declaration exactly.
+      - path: Sources/Shared
+    settings:
+      base:
+        INFOPLIST_FILE: Widgets/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: id.znetworks.nexus.widgets
+        PRODUCT_NAME: NEXUSWidgets
+        # An extension is delivered inside the app, never installed on its own.
+        SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "1,2"
 
 # Default scheme runs RELEASE so a plain ⌘R is the optimized, smooth-on-device build
