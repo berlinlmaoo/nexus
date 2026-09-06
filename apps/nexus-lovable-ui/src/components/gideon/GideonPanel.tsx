@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { BarChart2, Image as ImageIcon, Loader2, MoreHorizontal, Send, Trash2, Wrench, X } from "lucide-react";
+import { BarChart2, FileText, Loader2, MoreHorizontal, Send, Trash2, Wrench, X } from "lucide-react";
 import { GideonMark } from "./GideonMark";
 import { clearGideonHistory, loadGideonHistory, streamGideon, type GideonMessage } from "@/lib/gideon";
 import { cn } from "@/lib/utils";
@@ -147,10 +147,14 @@ export function GideonPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
+// "Generate image" is gone until something implements it. GIDEON reaches ChatGPT through an OAuth
+// session meant for conversation and tools, not image generation, so the button only ever produced a
+// prompt nothing could answer. A control that does nothing teaches people the assistant is unreliable
+// — and they stop trusting the buttons that DO work.
 const ICON_ACTIONS = [
-  { Icon: ImageIcon, title: "Generate image", prompt: "Generate an image of " },
   { Icon: BarChart2, title: "Analyze data", prompt: "Analyze this data: " },
   { Icon: MoreHorizontal, title: "Explore more", prompt: "Explore more about " },
+  { Icon: FileText, title: "Write a document", prompt: "Write a document about " },
 ];
 
-const SUGGESTIONS = ["Generate Image", "Analyze Data", "Explore More"];
+const SUGGESTIONS = ["Analyze Data", "Write a Document", "Explore More"];
