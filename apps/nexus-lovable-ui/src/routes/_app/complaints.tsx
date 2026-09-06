@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Ticket, Plus, X, Loader2, Send, CheckCircle2, MessageSquare, Camera, Inbox as InboxIcon } from "lucide-react";
+import { Ticket, Plus, X, Loader2, Send, CheckCircle2, MessageSquare, Camera, Inbox as InboxIcon, AlertTriangle, ArrowRight, Ban, CalendarClock, Check } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Avatar } from "@/components/Avatar";
 import { cn } from "@/lib/utils";
-import { nexusApi, type Complaint } from "@/lib/nexus-api";
+import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, type AttendanceCorrection, type Complaint } from "@/lib/nexus-api";
 
 export const Route = createFileRoute("/_app/complaints")({ component: ComplaintsPage });
 
@@ -30,6 +30,11 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   CLOSED: { label: "Closed", cls: "bg-slate-100 text-slate-500 ring-slate-200" },
 };
 const fmtWhen = (iso: string) => new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const CORRECTION_STATUS: Record<string, { label: string; cls: string }> = {
+  PENDING: { label: "Awaiting decision", cls: "bg-amber-100 text-amber-700 ring-amber-200" },
+  APPROVED: { label: "Approved", cls: "bg-emerald-100 text-emerald-700 ring-emerald-200" },
+  REJECTED: { label: "Rejected", cls: "bg-rose-100 text-rose-700 ring-rose-200" },
+};
 // Keep in sync with EVIDENCE_MAX_COUNT in src/app/api/complaints/route.ts — the server rejects past this.
 const MAX_PHOTOS = 5;
 const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
@@ -246,7 +251,30 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
   const detailQ = useQuery({ queryKey: ["complaint", id], queryFn: () => nexusApi.complaint(id) });
   const c = detailQ.data;
 
+  // The detail payload already carries the proposals, so the card renders with no extra round trip.
+  // What it can't tell us is whether THIS viewer may decide one — `canManage` there means "can move the
+  // ticket status", a weaker thing than the attendance-write permission the decision route enforces. So
+  // ask the correction endpoint for `canDecide`, and only when a proposal actually exists: an ordinary
+  // ticket shouldn't pay for a second request to be told about buttons it will never show.
+  const corrections = c?.corrections ?? [];
+  const correctionQ = useQuery({
+    queryKey: ["complaint-corrections", id],
+    queryFn: () => nexusApi.complaintCorrections(id),
+    enabled: corrections.length > 0,
+    staleTime: 60_000,
+  });
+
   const refresh = () => { qc.invalidateQueries({ queryKey: ["complaint", id] }); onChanged(); };
+  // A decision moves more than this ticket: an APPROVE rewrites that day's AttendanceRecord, so every
+  // screen reading attendance is stale the moment it lands. Missing these left the approver looking at
+  // the old times on the attendance board and re-proposing a correction that had already been applied.
+  const refreshAfterDecision = () => {
+    refresh();
+    qc.invalidateQueries({ queryKey: ["complaint-corrections", id] });
+    qc.invalidateQueries({ queryKey: ["attendance-today"] });
+    qc.invalidateQueries({ queryKey: ["attendance-history"] });
+    qc.invalidateQueries({ queryKey: ["attendance-deductions"] });
+  };
   const send = useMutation({ mutationFn: () => nexusApi.replyComplaint(id, reply.trim()), onSuccess: () => { setReply(""); refresh(); } });
   const setStatus = useMutation({ mutationFn: (status: string) => nexusApi.setComplaintStatus(id, status), onSuccess: refresh });
   const busy = send.isPending || setStatus.isPending;
@@ -313,6 +341,11 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
             </div>
           </div>
         ))}
+        {/* Proposals sit AFTER the messages on purpose: the thread auto-scrolls to the bottom, so a
+            pending decision is on screen the moment the ticket opens instead of scrolled out of sight. */}
+        {corrections.map((cor) => (
+          <AttendanceCorrectionCard key={cor.id} complaintId={id} correction={cor} canDecide={correctionQ.data?.canDecide ?? false} onDecided={refreshAfterDecision} />
+        ))}
         {c && c.status !== "OPEN" && c.resolvedAt && (c.status === "RESOLVED" || c.status === "CLOSED") && (
           <div className="py-1 text-center text-[11px] font-semibold text-muted-foreground">— {c.status === "RESOLVED" ? "Marked resolved" : "Closed"} {c.resolvedBy ? `by ${c.resolvedBy.name}` : ""} —</div>
         )}
@@ -354,6 +387,147 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
       )}
       {zoom && <PhotoZoom url={zoom} onClose={() => setZoom(null)} />}
     </Backdrop>
+  );
+}
+
+
+/**
+ * One proposed attendance correction on a ticket.
+ *
+ * The whole job of this card is to make the CHANGE legible: what the record says against what is being
+ * proposed, side by side, so nobody has to hold two timestamps in their head to see the difference.
+ * A null proposed time means "leave that half alone" (the server merges it with the record on approval),
+ * which is why the unchanged side reads "unchanged" rather than a dash — a dash would look like the
+ * approval is about to wipe a real check-out.
+ */
+function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecided }: { complaintId: string; correction: AttendanceCorrection; canDecide: boolean; onDecided: () => void }) {
+  const [note, setNote] = useState("");
+  const pending = correction.status === "PENDING";
+  const approved = correction.status === "APPROVED";
+  const st = CORRECTION_STATUS[correction.status] ?? CORRECTION_STATUS.PENDING;
+
+  const decide = useMutation({
+    mutationFn: (decision: "APPROVE" | "REJECT") =>
+      nexusApi.decideComplaintCorrection(complaintId, { decision, correctionId: correction.id, note: note.trim() || undefined }),
+    onSuccess: () => { setNote(""); onDecided(); },
+    // 409 = the world moved under this proposal (the day was edited, or somebody already decided it).
+    // Refetch immediately: the explanation below tells the approver why nothing happened, and the
+    // refetch makes the card itself true again instead of still offering a decision that can't be made.
+    onError: (e) => { if (e instanceof ApiError && e.status === 409) onDecided(); },
+  });
+  const err = decide.error as Error | undefined;
+  const stale = err instanceof ApiError && err.status === 409;
+
+  const rows = [
+    { label: "Check-in", before: correction.before.checkInAt, after: correction.proposedCheckInAt },
+    { label: "Check-out", before: correction.before.checkOutAt, after: correction.proposedCheckOutAt },
+  ];
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-3.5 shadow-soft">
+      <div className="flex items-center gap-1.5">
+        <CalendarClock className="h-3.5 w-3.5 text-primary" />
+        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Attendance correction</span>
+        <span className={cn("ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold ring-1", st.cls)}>{st.label}</span>
+      </div>
+
+      <div className="mt-2 flex items-center gap-2">
+        <Avatar userId={correction.user.id} name={correction.user.name} avatar={correction.user.avatar ?? null} size={26} />
+        <div className="min-w-0">
+          <div className="truncate text-sm font-bold">{correction.user.name} · {fmtDate(correction.date)}</div>
+          <div className="truncate text-[11px] text-muted-foreground">Proposed by {correction.proposedBy.name} · {fmtWhen(correction.createdAt)}</div>
+        </div>
+      </div>
+
+      {/* Before / after. Struck-through on the left only where the right actually replaces it. */}
+      <div className="mt-2.5 rounded-xl border border-border bg-muted/30 p-2.5">
+        <div className="grid grid-cols-[4.5rem_1fr_1rem_1fr] items-center gap-x-2 gap-y-1.5">
+          <span />
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">On record</span>
+          <span />
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Proposed</span>
+          {rows.map((r) => {
+            const changed = !!r.after;
+            return (
+              <Fragment key={r.label}>
+                <span className="text-[11px] font-semibold text-muted-foreground">{r.label}</span>
+                <span className={cn("text-sm tabular-nums", changed ? "text-muted-foreground line-through" : "font-semibold")}>{r.before ? fmtTime(r.before) : "—"}</span>
+                <ArrowRight className={cn("h-3.5 w-3.5", changed ? "text-primary" : "text-transparent")} />
+                <span className={cn("text-sm", changed ? "font-black tabular-nums text-emerald-600" : "italic text-muted-foreground/70")}>{changed ? fmtTime(r.after) : "unchanged"}</span>
+              </Fragment>
+            );
+          })}
+        </div>
+        {correction.before.status && (
+          <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+            That day is recorded as <b>{statusLabel(correction.before.status)}</b>. Late / early-leave minutes are recalculated from the new times on approval.
+          </p>
+        )}
+      </div>
+
+      <div className="mt-2.5">
+        <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Reason</div>
+        <p className="mt-0.5 whitespace-pre-wrap break-words text-sm">{correction.reason}</p>
+      </div>
+
+      {!pending && (
+        <div className={cn("mt-2.5 rounded-xl border px-3 py-2 text-xs leading-snug", approved ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-border bg-muted/40 text-muted-foreground")}>
+          <p className="font-bold">
+            {approved ? "Approved" : "Rejected"}{correction.decidedBy ? ` by ${correction.decidedBy.name}` : ""}{correction.decidedAt ? ` · ${fmtWhen(correction.decidedAt)}` : ""}
+          </p>
+          {approved && <p className="mt-0.5">The attendance record for {fmtDate(correction.date)} was rewritten to the proposed times.</p>}
+          {correction.decisionNote && <p className="mt-1 whitespace-pre-wrap break-words italic">“{correction.decisionNote}”</p>}
+        </div>
+      )}
+
+      {pending && !canDecide && (
+        <p className="mt-2.5 text-[11px] font-semibold text-muted-foreground">Waiting for the BoD to approve or reject this. Nothing has changed on your attendance yet.</p>
+      )}
+
+      {pending && canDecide && (
+        <div className="mt-2.5 space-y-2">
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+            maxLength={1000}
+            placeholder="Note for the reporter (optional) — it goes into the thread with your decision."
+            className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+          />
+          <div className="flex gap-2">
+            <button onClick={() => decide.mutate("APPROVE")} disabled={decide.isPending}
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-bold text-white transition active:scale-[0.98] disabled:opacity-40">
+              {decide.isPending && decide.variables === "APPROVE" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Approve
+            </button>
+            <button onClick={() => decide.mutate("REJECT")} disabled={decide.isPending}
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border px-3 py-2 text-sm font-bold text-muted-foreground transition hover:bg-accent active:scale-[0.98] disabled:opacity-40">
+              {decide.isPending && decide.variables === "REJECT" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />} Reject
+            </button>
+          </div>
+          <p className="text-[11px] leading-snug text-muted-foreground">Approving writes the attendance record for {fmtDate(correction.date)}. “On record” is the snapshot taken when this proposal was written.</p>
+        </div>
+      )}
+
+      {/* Rendered outside the pending branch: a 409 refetches this card, and if it turns out somebody
+          else already decided it, the approver still needs to read why their tap did nothing. */}
+      {err && (
+        <div className={cn("mt-2 rounded-xl border px-3 py-2 text-xs leading-snug", stale ? "border-amber-300 bg-amber-50 text-amber-900" : "border-rose-200 bg-rose-50 text-rose-700")}>
+          {stale ? (
+            <>
+              <p className="flex items-center gap-1.5 font-bold"><AlertTriangle className="h-3.5 w-3.5 shrink-0" /> Out of date — nothing was changed.</p>
+              <p className="mt-1 font-semibold">{err.message}</p>
+              <p className="mt-1">
+                That day&rsquo;s attendance no longer matches what this proposal was written against — someone edited it in the meantime,
+                or the proposal was already decided. Approving now would have overwritten that edit, so the server refused.
+                Re-check {fmtDate(correction.date)} on the attendance board; if the record has moved on, reject this one and ask for a fresh proposal from the current data.
+              </p>
+            </>
+          ) : (
+            <p className="font-semibold">{err.message || "Couldn't save that decision. Check your connection and try again."}</p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
