@@ -108,14 +108,19 @@ function runCodex(query) {
 // Gideon chatbox → run the full Hermes agent one-shot (gpt-5.5 + live NEXUS tools). Slower (~30s).
 // actorEmail (the logged-in NEXUS user) is injected as NEXUS_GIDEON_ACTOR_EMAIL on THIS spawn only, so
 // the NEXUS plugin sends it as x-gideon-actor and the tools act as that user (role-scoped).
-function runHermes(prompt, actorEmail, tier) {
+function runHermes(prompt, actorEmail, tier, imagePath) {
   return new Promise((resolve) => {
     const env = { ...process.env }
     if (actorEmail) env.NEXUS_GIDEON_ACTOR_EMAIL = actorEmail
     // An unknown tier falls back rather than failing: a client sending a name this shim has not
     // learned yet should get an answer from the default, not an error.
     const model = TIERS[tier] || TIERS[DEFAULT_TIER]
-    const child = spawn(HERMES, ["-z", prompt, "-m", model, "--provider", PROVIDER], { cwd: WORKDIR, env })
+    // Hermes has no attachment flag. Its vision toolset reads from disk, so an image reaches the
+    // model as a path named in the prompt — verified: it read every field off a screenshot.
+    const full = imagePath
+      ? `Ada gambar terlampir di ${imagePath}. Lihat gambar itu lebih dulu, lalu jawab.\n\n${prompt}`
+      : prompt
+    const child = spawn(HERMES, ["-z", full, "-m", model, "--provider", PROVIDER], { cwd: WORKDIR, env })
     let out = "", err = ""
     try { child.stdin.end() } catch {}
     child.stdout.on("data", (d) => { out += d.toString() })
@@ -139,7 +144,9 @@ const server = http.createServer((req, res) => {
   const isInterpret = req.url.startsWith("/interpret")
   if (!isChat && !isInterpret) { res.writeHead(404); return res.end("not found") }
   let body = ""
-  req.on("data", (c) => { body += c; if (body.length > 8000) req.destroy() })
+  // 8 KB was right for a prompt and wrong the moment an image had to travel with it. NEXUS
+  // downscales before sending, so this is a ceiling for the pathological case, not the normal one.
+  req.on("data", (c) => { body += c; if (body.length > 12_000_000) req.destroy() })
   req.on("end", async () => {
     let payload = {}
     try { payload = JSON.parse(body || "{}") } catch {}
@@ -158,9 +165,30 @@ const server = http.createServer((req, res) => {
     const actorEmail = (payload.actorEmail || "").toString().slice(0, 200)
     const tier = (payload.model || "").toString().toLowerCase().slice(0, 20)
     const chosen = TIERS[tier] ? tier : DEFAULT_TIER
+
+    // The image lands in the workdir under a random name and is removed whatever happens. Left
+    // behind, one person's photo would sit on disk where the next person's agent can read it.
+    let imagePath = null
+    if (typeof payload.imageBase64 === "string" && payload.imageBase64.length > 32) {
+      try {
+        const ext = payload.imageType === "png" ? "png" : "jpg"
+        imagePath = path.join(WORKDIR, `gideon-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`)
+        fs.mkdirSync(WORKDIR, { recursive: true })
+        fs.writeFileSync(imagePath, Buffer.from(payload.imageBase64, "base64"), { mode: 0o600 })
+      } catch (e) {
+        console.error("[hermes-chat] gagal menulis gambar:", e.message)
+        imagePath = null
+      }
+    }
+
     const started = Date.now()
-    const reply = await runHermes(prompt, actorEmail, chosen)
-    console.log(`[hermes-chat] ${chosen} in=${prompt.length}c -> out=${reply.length}c (${Date.now() - started}ms)`)
+    let reply
+    try {
+      reply = await runHermes(prompt, actorEmail, chosen, imagePath)
+    } finally {
+      if (imagePath) { try { fs.unlinkSync(imagePath) } catch {} }
+    }
+    console.log(`[hermes-chat] ${chosen}${imagePath ? " +gambar" : ""} in=${prompt.length}c -> out=${reply.length}c (${Date.now() - started}ms)`)
     res.writeHead(200, { "Content-Type": "application/json" })
     return res.end(JSON.stringify({ reply }))
   })

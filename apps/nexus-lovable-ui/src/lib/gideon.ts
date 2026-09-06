@@ -22,13 +22,17 @@ export type GideonEvent =
 export async function streamGideon(
   messages: GideonMessage[],
   onEvent: (event: GideonEvent) => void,
-  opts: { model?: string; signal?: AbortSignal } = {},
+  opts: { model?: string; signal?: AbortSignal; image?: string | null } = {},
 ): Promise<void> {
   const res = await fetch("/api/gideon", {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-    body: JSON.stringify({ messages, model: opts.model ?? GIDEON_DEFAULT_TIER }),
+    body: JSON.stringify({
+      messages,
+      model: opts.model ?? GIDEON_DEFAULT_TIER,
+      ...(opts.image ? { image: opts.image } : {}),
+    }),
     signal: opts.signal,
   });
 

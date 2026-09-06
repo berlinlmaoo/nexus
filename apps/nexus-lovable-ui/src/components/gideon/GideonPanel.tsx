@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { BarChart2, FileText, Loader2, MoreHorizontal, Send, Trash2, Wrench, X } from "lucide-react";
+import { BarChart2, FileText, ImagePlus, Loader2, MoreHorizontal, Send, Trash2, Wrench, X } from "lucide-react";
 import { GideonMark } from "./GideonMark";
 import { clearGideonHistory, loadGideonHistory, streamGideon, GIDEON_TIERS, GIDEON_DEFAULT_TIER, type GideonMessage, type GideonTier } from "@/lib/gideon";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,8 @@ export function GideonPanel({ onClose }: { onClose: () => void }) {
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  /** A data URL, held only until the next message is sent. */
+  const [image, setImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   // Remembered per browser: somebody who picks Terra for quick questions should not have to pick it
   // again every time the panel opens.
@@ -70,7 +72,10 @@ export function GideonPanel({ onClose }: { onClose: () => void }) {
         acc += (acc ? "\n\n" : "") + `⚠️ ${ev.content ?? "Something went wrong."}`;
         setTurns((cur) => { const next = [...cur]; const last = next[next.length - 1]; if (last?.role === "assistant") next[next.length - 1] = { ...last, content: acc }; return next; });
       }
-    }, { signal: controller.signal, model: tier }).catch(() => {});
+    }, { signal: controller.signal, model: tier, image }).catch(() => {});
+    // Cleared whatever happened: an image silently riding along on the NEXT question would be
+    // baffling, and re-attaching is one click.
+    setImage(null);
 
     setTurns((cur) => { const next = [...cur]; const last = next[next.length - 1]; if (last?.role === "assistant") next[next.length - 1] = { ...last, streaming: false }; return next; });
     setBusy(false);
@@ -144,8 +149,31 @@ export function GideonPanel({ onClose }: { onClose: () => void }) {
               placeholder="Message Gideon…✨"
               className="h-14 w-full resize-none bg-transparent p-3 text-sm font-medium outline-none placeholder:text-muted-foreground"
             />
+            {image && (
+              <div className="flex items-center gap-2 border-t border-border/60 px-3 py-2">
+                <img src={image} alt="" className="h-10 w-10 rounded-lg object-cover" />
+                <span className="flex-1 truncate text-xs text-muted-foreground">Gambar terlampir</span>
+                <button type="button" onClick={() => setImage(null)} aria-label="Buang gambar" className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
+              </div>
+            )}
             <div className="flex items-end justify-between p-3">
               <div className="flex gap-3">
+                <label title="Lampirkan gambar" className="flex cursor-pointer items-center text-muted-foreground transition-colors hover:text-foreground">
+                  <ImagePlus className="h-4 w-4" />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () => setImage(typeof reader.result === "string" ? reader.result : null);
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                </label>
                 {ICON_ACTIONS.map(({ Icon, title, prompt }) => (
                   <button key={title} type="button" title={title} aria-label={title} onClick={() => setInput((cur) => (cur ? cur : prompt))} className="flex cursor-pointer border-none bg-transparent text-foreground/25 transition-all duration-300 hover:-translate-y-1 hover:text-foreground focus-visible:text-foreground focus-visible:outline-none"><Icon size={20} /></button>
                 ))}
