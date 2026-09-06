@@ -213,18 +213,28 @@ struct AdaptiveRoot: View {
 
 /// Phone shape — unchanged from before, kept verbatim so the iPad work can't regress it.
 struct TabRoot: View {
+    @Environment(AppRouter.self) private var router
+
     var body: some View {
-        TabView {
+        @Bindable var router = router
+        // Tagged and bound so something outside the app can move the tab bar. Without the tags the
+        // selection binding matches nothing and every tab silently stops responding to taps.
+        TabView(selection: $router.tab) {
             DashboardView()
                 .tabItem { Label(T("Home"), systemImage: "house.fill") }
+                .tag(PhoneTab.dashboard)
             TasksView()
                 .tabItem { Label(T("Tasks"), systemImage: "checklist") }
+                .tag(PhoneTab.tasks)
             InboxView()
                 .tabItem { Label(T("Inbox"), systemImage: "tray.fill") }
+                .tag(PhoneTab.inbox)
             ProjectsView()
                 .tabItem { Label(T("Projects"), systemImage: "rectangle.stack.fill") }
+                .tag(PhoneTab.projects)
             MoreView()
                 .tabItem { Label(T("More"), systemImage: "ellipsis") }
+                .tag(PhoneTab.more)
         }
         // NOTE: no .tabBarMinimizeBehavior — the bar stays full-size while scrolling (by request).
     }
@@ -232,6 +242,7 @@ struct TabRoot: View {
 
 /// iPad / Mac shape — every destination visible at once, detail on the right.
 struct SidebarRoot: View {
+    @Environment(AppRouter.self) private var router
     @State private var selection: NXSelection? = .screen(.dashboard)
     @State private var columns: NavigationSplitViewVisibility = .all
     @State private var shortcuts = ProjectShortcuts.shared
@@ -357,6 +368,14 @@ struct SidebarRoot: View {
                         Color.clear.frame(height: 44)
                     }
                 }
+        }
+        // An outside instruction arrives as a request, not as state, and is cleared the moment it
+        // is answered. Held as state it would keep dragging the sidebar back to attendance every
+        // time this view redrew, and no amount of tapping elsewhere would stick.
+        .onChange(of: router.sidebarRequest) { _, requested in
+            guard let requested else { return }
+            selection = .screen(requested)
+            router.sidebarRequest = nil
         }
     }
 

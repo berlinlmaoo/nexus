@@ -8,6 +8,9 @@ import SwiftUI
 private let nxViolet = Color(red: 0x7B / 255, green: 0x68 / 255, blue: 0xEE / 255)
 private let nxAmber = Color(red: 0xFB / 255, green: 0xBF / 255, blue: 0x24 / 255)
 
+/// Where every tap on this activity lands. A literal, so the force-unwrap cannot fail at runtime.
+private let nxAttendanceURL = URL(string: "nexus://attendance")!
+
 /// The work session on the Lock Screen and in the Dynamic Island.
 struct WorkSessionLiveActivity: Widget {
     var body: some WidgetConfiguration {
@@ -15,6 +18,7 @@ struct WorkSessionLiveActivity: Widget {
             LockScreenView(state: context.state)
                 .activityBackgroundTint(Color.black.opacity(0.5))
                 .activitySystemActionForegroundColor(.white)
+                .widgetURL(nxAttendanceURL)
         } dynamicIsland: { context in
             let state = context.state
             return DynamicIsland {
@@ -33,10 +37,28 @@ struct WorkSessionLiveActivity: Widget {
                         .foregroundStyle(tint(state))
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    Text(caption(state))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                    HStack(spacing: 10) {
+                        Text(caption(state))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                        Spacer(minLength: 0)
+                        // Hidden while anything is still queued: offering to close a day whose
+                        // start has not reached the server yet only invites a second failure.
+                        if !state.isPending {
+                            // Opens the attendance screen and stops there. Check-out needs a selfie
+                            // and the reflection, so a button that appeared to finish the job from
+                            // here would be the loosest path in the app.
+                            Link(destination: nxAttendanceURL) {
+                                Text("Check out")
+                                    .font(.caption.weight(.semibold))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(Capsule().fill(nxViolet.opacity(0.25)))
+                            }
+                            .foregroundStyle(nxViolet)
+                        }
+                    }
                 }
             } compactLeading: {
                 Image(systemName: symbol(state)).foregroundStyle(tint(state))

@@ -34,6 +34,7 @@ struct AttendanceWidget: Widget {
         StaticConfiguration(kind: "NEXUSAttendance", provider: AttendanceProvider()) { entry in
             AttendanceWidgetView(snapshot: entry.snapshot)
                 .containerBackground(.fill.tertiary, for: .widget)
+                .widgetURL(URL(string: "nexus://attendance"))
         }
         .configurationDisplayName("Attendance")
         .description("Where you stand today.")

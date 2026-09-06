@@ -52,5 +52,16 @@
 	</array>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>id.znetworks.nexus</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>nexus</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

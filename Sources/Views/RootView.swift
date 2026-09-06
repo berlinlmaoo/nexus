@@ -26,9 +26,11 @@ struct RootView: View {
 /// Knowledge / Pulse Check / System) + account footer.
 struct MoreView: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(AppRouter.self) private var router
     private let cols = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
     var body: some View {
+        @Bindable var router = router
         NavigationStack {
             ZStack {
                 NX.background.ignoresSafeArea()
@@ -76,6 +78,12 @@ struct MoreView: View {
             }
             .navigationTitle(T("More"))
             .navigationBarTitleDisplayMode(.inline)
+            // Attendance is a launcher tile, not a tab, so reaching it from outside the app means
+            // pushing it here. Bound rather than fired-and-forgotten, so swiping back clears the
+            // flag and a second Siri request works exactly like the first.
+            .navigationDestination(isPresented: $router.attendancePushed) {
+                AttendanceView()
+            }
         }
     }
 }
