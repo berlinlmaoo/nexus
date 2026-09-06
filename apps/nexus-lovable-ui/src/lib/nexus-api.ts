@@ -1984,6 +1984,11 @@ export const nexusApi = {
     totals: { people: number; asked: number; toolCalls: number };
   }>("/api/gideon/usage"),
 
+  appInstalls: () => apiFetch<{
+    installs: { id: string; appVersion: string | null; buildNumber: string | null; osVersion: string | null; deviceModel: string | null; environment: string; lastSeenAt: string; user: { id: string; name: string; email: string | null; avatar: string | null } }[];
+    totals: { people: number; devices: number; versions: { version: string; count: number }[] };
+  }>("/api/admin/app-installs"),
+
   // --- Teams + Master Calendar ---
   teams: () => apiFetch<NexusTeam[]>("/api/teams"),
   createTeam: (name: string, color?: string) => apiFetch<NexusTeam>("/api/teams", { method: "POST", body: JSON.stringify(color ? { name, color } : { name }) }),

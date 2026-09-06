@@ -15,6 +15,14 @@ export async function POST(req: NextRequest) {
   const deviceId = typeof body?.deviceId === "string" ? body.deviceId.trim() : ""
   const bundleId = typeof body?.bundleId === "string" ? body.bundleId : ""
   const environment = body?.environment === "sandbox" ? "sandbox" : body?.environment === "production" ? "production" : ""
+
+  // Optional and bounded. An old build sends none of it and still registers — refusing would take
+  // push away from exactly the people this list is meant to find.
+  const short = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 40) : null)
+  const appVersion = short(body?.appVersion)
+  const buildNumber = short(body?.buildNumber)
+  const osVersion = short(body?.osVersion)
+  const deviceModel = short(body?.deviceModel)
   if (!/^[a-f0-9]{32,200}$/.test(token) || !deviceId || bundleId !== BUNDLE_ID || !environment) {
     return NextResponse.json({ error: "Invalid device registration" }, { status: 400 })
   }
@@ -25,7 +33,7 @@ export async function POST(req: NextRequest) {
     })
     await tx.deviceInstallation.upsert({
       where: { token },
-      create: { token, deviceId, bundleId, environment, userId: session.user.id! },
+      create: { token, deviceId, bundleId, environment, userId: session.user.id!, appVersion, buildNumber, osVersion, deviceModel },
       update: {
         deviceId,
         bundleId,
@@ -33,6 +41,12 @@ export async function POST(req: NextRequest) {
         userId: session.user.id!,
         lastSeenAt: new Date(),
         disabledAt: null,
+        // Only overwritten when the app actually said something. An older build that reports nothing
+        // must not erase what a newer one already recorded for the same device.
+        ...(appVersion ? { appVersion } : {}),
+        ...(buildNumber ? { buildNumber } : {}),
+        ...(osVersion ? { osVersion } : {}),
+        ...(deviceModel ? { deviceModel } : {}),
       },
     })
   })
