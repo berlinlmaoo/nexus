@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { markdownToTipTap, extractTextFromTipTap } from '@/lib/tiptap-utils'
 import { authenticateGideonService } from '@/lib/gideon-service-auth'
 import { checkProjectAccess } from '@/lib/rbac'
 import { notifyCommentAdded, notifyTaskAssigned, notifyTaskCompleted } from '@/lib/notification-service'
@@ -19,6 +20,7 @@ type GideonAction =
   | 'update_task'
   | 'add_task_comment'
   | 'list_custom_fields'
+  | 'create_document'
 
 type ToolBody = {
   action?: GideonAction | string
@@ -342,6 +344,52 @@ async function getProjectSummary(actor: User, input: Record<string, unknown>) {
     progressPercent: totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0,
     byStatus,
     byPriority,
+  }
+}
+
+/**
+ * Writes a document into the Knowledge Library.
+ *
+ * The one thing GIDEON could not do: it can read the whole workspace and reason about it, then had
+ * nowhere to put the result. Everything else about this is deliberately ordinary — same project
+ * access gate as creating a task, authored by the person who asked, so it appears in the library
+ * under their name and not under a service account nobody recognises.
+ */
+async function createDocument(actor: User, input: Record<string, unknown>) {
+  const projectId = String(input.projectId ?? '').trim()
+  const title = String(input.title ?? '').trim()
+  const markdown = String(input.markdown ?? input.content ?? '')
+
+  if (!projectId) throw new Error('projectId is required')
+  if (!title) throw new Error('title is required')
+  if (!markdown.trim()) throw new Error('markdown is required — a document with no body is not worth creating')
+
+  const project = await getAccessibleProject(actor, projectId)
+  await assertCanWrite(actor, projectId)
+
+  // Stored as ProseMirror nodes, which is what the library renders. A plain string saves without
+  // complaint and then shows up blank.
+  const content = markdownToTipTap(markdown)
+
+  const doc = await prisma.doc.create({
+    data: {
+      title,
+      content: content as never,
+      contentText: extractTextFromTipTap(content),
+      projectId,
+      authorId: actor.id,
+      ownerId: actor.id,
+      parentId: typeof input.parentId === 'string' && input.parentId ? input.parentId : null,
+    },
+    select: { id: true, title: true, createdAt: true },
+  })
+
+  return {
+    id: doc.id,
+    title: doc.title,
+    project: project.name,
+    url: `/docs/${doc.id}`,
+    createdAt: doc.createdAt,
   }
 }
 
@@ -772,6 +820,8 @@ export async function POST(req: Request) {
         return ok(await updateTask(auth.actor, input))
       case 'add_task_comment':
         return ok(await addTaskComment(auth.actor, input))
+      case 'create_document':
+        return ok(await createDocument(auth.actor, input))
       default:
         return error(`Unknown GIDEON tool action: ${body.action}`)
     }
