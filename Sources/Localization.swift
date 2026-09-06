@@ -469,6 +469,7 @@ final class AppLanguage {
         "No custom fields in this project yet.": "Belum ada custom field di project ini.",
         "Project members": "Member Project",
         "Add member": "Tambah member",
+        "Image attached": "Gambar terlampir",
         "People": "Pemakai",
         "Questions": "Pertanyaan",
         "Tools used": "Tool dipakai",

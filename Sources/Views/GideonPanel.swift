@@ -1,4 +1,6 @@
 import SwiftUI
+import PhotosUI
+import UIKit
 
 /// The floating GIDEON button, and the chat it opens.
 ///
@@ -46,6 +48,10 @@ struct GideonPanel: View {
     @State private var sending = false
     @State private var error: String?
     @State private var loaded = false
+    /// JPEG bytes, held only until the next message is sent.
+    @State private var attachment: Data?
+    @State private var pickedPhoto: PhotosPickerItem?
+    @State private var showCamera = false
     /// Remembered on the device: somebody who picks Terra for quick questions should not have to
     /// pick it again every time the panel opens.
     @AppStorage("gideon.tier") private var tierRaw = GideonTier.fallback.rawValue
@@ -58,6 +64,7 @@ struct GideonPanel: View {
                 NX.background.ignoresSafeArea()
                 VStack(spacing: 0) {
                     transcript
+                    attachmentStrip
                     composer
                 }
             }
@@ -92,6 +99,23 @@ struct GideonPanel: View {
                     }
                     .disabled(sending || turns.isEmpty)
                 }
+            }
+        }
+        .fullScreenCover(isPresented: $showCamera) {
+            // Rear lens: this one is pointed at whiteboards and documents, not at faces.
+            CameraPicker(cameraDevice: .rear) { data in
+                attachment = Self.shrink(data)
+                showCamera = false
+            }
+            .ignoresSafeArea()
+        }
+        .onChange(of: pickedPhoto) { _, item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self) {
+                    attachment = Self.shrink(data)
+                }
+                pickedPhoto = nil
             }
         }
         .task {
@@ -185,8 +209,37 @@ struct GideonPanel: View {
 
     // MARK: - composer
 
+    @ViewBuilder
+    private var attachmentStrip: some View {
+        if let attachment, let image = UIImage(data: attachment) {
+            HStack(spacing: 10) {
+                Image(uiImage: image)
+                    .resizable().scaledToFill()
+                    .frame(width: 38, height: 38)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                Text(T("Image attached")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                Spacer()
+                Button { self.attachment = nil } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 6)
+        }
+    }
+
     private var composer: some View {
         HStack(spacing: 10) {
+            PhotosPicker(selection: $pickedPhoto, matching: .images) {
+                Image(systemName: "photo").font(.system(size: 17)).foregroundStyle(NX.mutedFg)
+            }
+            .disabled(sending)
+            Button { showCamera = true } label: {
+                Image(systemName: "camera").font(.system(size: 17)).foregroundStyle(NX.mutedFg)
+            }
+            .buttonStyle(.plain)
+            .disabled(sending)
             TextField(T("Ask anything about NEXUS…"), text: $draft, axis: .vertical)
                 .font(NXFont.text(14))
                 .lineLimit(1...5)
@@ -234,7 +287,11 @@ struct GideonPanel: View {
         turns.append(answer)
 
         do {
-            for try await chunk in GideonClient.stream(messages: history(), model: tier.rawValue) {
+            let image = attachment
+            // Cleared before the request, not after: an image silently riding along on the NEXT
+            // question would be baffling, and re-attaching is one tap.
+            attachment = nil
+            for try await chunk in GideonClient.stream(messages: history(), model: tier.rawValue, image: image) {
                 guard let index = turns.firstIndex(where: { $0.id == answer.id }) else { continue }
                 turns[index].content += chunk
             }
@@ -264,5 +321,27 @@ struct GideonPanel: View {
         } catch {
             self.error = (error as? LocalizedError)?.errorDescription ?? T("Failed.")
         }
+    }
+}
+
+extension GideonPanel {
+    /// Shrinks a photo before it leaves the phone.
+    ///
+    /// The server downscales again on arrival, so this is about the upload, not the model: a full
+    /// camera frame is several megabytes over mobile data for no gain — vision stops improving well
+    /// before 1568px.
+    static func shrink(_ data: Data, maxSide: CGFloat = 1568, quality: CGFloat = 0.8) -> Data {
+        guard let image = UIImage(data: data) else { return data }
+        let side = max(image.size.width, image.size.height)
+        guard side > maxSide else { return image.jpegData(compressionQuality: quality) ?? data }
+
+        let scale = maxSide / side
+        let target = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let resized = UIGraphicsImageRenderer(size: target, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: target))
+        }
+        return resized.jpegData(compressionQuality: quality) ?? data
     }
 }

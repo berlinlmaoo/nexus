@@ -99,7 +99,7 @@ enum GideonClient {
     ///
     /// Today the backend answers in a single frame. Appending rather than replacing means nothing
     /// here changes when that stops being true.
-    static func stream(messages: [GideonTurn], model: String) -> AsyncThrowingStream<String, Error> {
+    static func stream(messages: [GideonTurn], model: String, image: Data? = nil) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
@@ -110,10 +110,15 @@ enum GideonClient {
                     // A tool call on the far side can take well over half a minute; the default 60s
                     // would cut the answer off mid-thought and report it as a network failure.
                     request.timeoutInterval = 180
-                    request.httpBody = try JSONSerialization.data(withJSONObject: [
+                    var payload: [String: Any] = [
                         "messages": messages.map { ["role": $0.role.rawValue, "content": $0.content] },
                         "model": model,
-                    ])
+                    ]
+                    // Base64 rather than multipart: the route already speaks JSON, and the server
+                    // downscales again on arrival, so a slightly large upload costs seconds, not
+                    // correctness.
+                    if let image { payload["image"] = image.base64EncodedString() }
+                    request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
                     let (bytes, response) = try await URLSession.shared.bytes(for: request)
                     try check(response)
