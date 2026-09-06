@@ -741,6 +741,20 @@ final class AppLanguage {
         "Couldn't revoke the passkey. Try again.": "Gagal nyabut passkey. Coba lagi.",
         "Passkey added ✓": "Passkey ditambahkan ✓",
         "Couldn't add the passkey. Try again.": "Gagal nambah passkey. Coba lagi.",
+        // ── ticket composer ─────────────────────────────────────────────────
+        "New ticket": "Tiket baru",
+        "CATEGORY": "KATEGORI",
+        "SUBJECT": "JUDUL",
+        "WHAT HAPPENED": "CERITAKAN KEJADIANNYA",
+        "EVIDENCE PHOTOS (REQUIRED)": "FOTO BUKTI (WAJIB)",
+        "Short title for the issue": "Judul singkat masalahnya",
+        "Tell the BoD what happened…": "Ceritain ke BoD apa yang terjadi…",
+        "At least one photo is required.": "Minimal satu foto bukti.",
+        "File ticket": "Kirim tiket",
+        "Couldn't file the ticket.": "Gagal ngirim tiket.",
+        "EXP / Gamification": "EXP / Gamifikasi",
+        "Leave / Day-off": "Cuti / Day-Off",
+        "Other": "Lainnya",
     ]
 }
 

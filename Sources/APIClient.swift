@@ -587,6 +587,45 @@ struct APIClient {
         (try await run(makeRequest("/api/complaints"), decode: ComplaintsResponse.self)).complaints ?? []
     }
 
+    /// Filing a ticket is multipart/form-data, not JSON: `category`, `subject`, `body`, and one or
+    /// more photos that ALL share the part name `evidence` — the route collects them with
+    /// form.getAll("evidence"), so an indexed name like `evidence[0]` would arrive as zero files and
+    /// be refused as if nothing had been attached.
+    ///
+    /// Not routed through `run`: the interesting answers here are 422s the server already phrased
+    /// for a human ("Foto bukti wajib dilampirin." with no photo, the subject/body length rules),
+    /// and `run` would flatten every one of them into a bare "Server error (422)".
+    @discardableResult
+    func createComplaint(category: String, subject: String, body message: String,
+                         evidence: [Data]) async throws -> Bool {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var req = makeRequest("/api/complaints", method: "POST")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        var files: [(name: String, filename: String, data: Data)] = []
+        for (index, photo) in evidence.enumerated() {
+            files.append((name: "evidence", filename: "evidence-\(index + 1).jpg", data: photo))
+        }
+        req.httpBody = Self.multipartBody(
+            boundary: boundary,
+            fields: ["category": category, "subject": subject, "body": message],
+            files: files)
+
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await URLSession.shared.data(for: req)
+        } catch {
+            throw APIError.transport(error.localizedDescription)
+        }
+        guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        guard (200..<300).contains(http.statusCode) else {
+            let payload = try? JSONDecoder().decode(ServerError.self, from: data)
+            throw APIError.transport(payload?.error ?? T("Couldn't file the ticket."))
+        }
+        return true
+    }
+
     func auditLogs() async throws -> [AuditLog] {
         (try await run(makeRequest("/api/audit"), decode: AuditLogsResponse.self)).logs ?? []
     }
@@ -1194,13 +1233,12 @@ struct APIClient {
         return try await attendanceUpload("/api/attendance/check-out", fields: fields, selfie: selfie)
     }
 
-    /// Shared multipart upload for check-in/out. Maps the server's OUTSIDE_RADIUS 422 into a typed
-    /// outcome so the UI can ask for an offsite reason; surfaces any other error message verbatim.
-    private func attendanceUpload(_ path: String, fields: [String: String], selfie: Data) async throws -> AttendanceOutcome {
-        let boundary = "Boundary-\(UUID().uuidString)"
-        var req = makeRequest(path, method: "POST")
-        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-
+    /// The only multipart body builder in this client. Attendance selfies and ticket evidence differ
+    /// solely in how many files ride along, and a second hand-rolled boundary writer would be a
+    /// second chance to drop a CRLF — which the server reports as an unreadable 500, not as
+    /// "your body was malformed". Every file we upload is JPEG, hence the fixed part Content-Type.
+    private static func multipartBody(boundary: String, fields: [String: String],
+                                      files: [(name: String, filename: String, data: Data)]) -> Data {
         var body = Data()
         func appendStr(_ s: String) { body.append(s.data(using: .utf8)!) }
         for (key, value) in fields {
@@ -1208,12 +1246,26 @@ struct APIClient {
             appendStr("Content-Disposition: form-data; name=\"\(key)\"\r\n\r\n")
             appendStr("\(value)\r\n")
         }
-        appendStr("--\(boundary)\r\n")
-        appendStr("Content-Disposition: form-data; name=\"selfie\"; filename=\"selfie.jpg\"\r\n")
-        appendStr("Content-Type: image/jpeg\r\n\r\n")
-        body.append(selfie)
-        appendStr("\r\n--\(boundary)--\r\n")
-        req.httpBody = body
+        for file in files {
+            appendStr("--\(boundary)\r\n")
+            appendStr("Content-Disposition: form-data; name=\"\(file.name)\"; filename=\"\(file.filename)\"\r\n")
+            appendStr("Content-Type: image/jpeg\r\n\r\n")
+            body.append(file.data)
+            appendStr("\r\n")
+        }
+        appendStr("--\(boundary)--\r\n")
+        return body
+    }
+
+    /// Shared multipart upload for check-in/out. Maps the server's OUTSIDE_RADIUS 422 into a typed
+    /// outcome so the UI can ask for an offsite reason; surfaces any other error message verbatim.
+    private func attendanceUpload(_ path: String, fields: [String: String], selfie: Data) async throws -> AttendanceOutcome {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var req = makeRequest(path, method: "POST")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        req.httpBody = Self.multipartBody(boundary: boundary, fields: fields,
+                                          files: [(name: "selfie", filename: "selfie.jpg", data: selfie)])
 
         let (data, response): (Data, URLResponse)
         do {
