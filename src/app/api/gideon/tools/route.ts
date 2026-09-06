@@ -8,6 +8,12 @@ import { authenticateGideonService } from '@/lib/gideon-service-auth'
 import { checkProjectAccess } from '@/lib/rbac'
 import { notifyCommentAdded, notifyTaskAssigned, notifyTaskCompleted } from '@/lib/notification-service'
 import { normalizeCustomFieldNumberInput, normalizeCustomFieldOptions, normalizeCustomFieldType, serializeCustomFieldValue } from '@/lib/custom-fields'
+import { parseDateOnlyToUtc } from '@/lib/attendance'
+import {
+  ATTENDANCE_CORRECTION_INCLUDE, CORRECTION_REASON_MAX, CORRECTION_REASON_MIN, DATE_KEY_RE,
+  describeCorrection, parseProposedTime, serializeAttendanceCorrection, validateCorrectionTimes,
+} from '@/lib/attendance-correction'
+import { BODY_MAX, isBodPlus } from '@/lib/complaints'
 import { resolveAutoAssignAssigneeIds } from '@/lib/project-auto-assign'
 import type { Prisma, ProjectStatus, TaskPriority, TaskStatus, User } from '@/generated/prisma/client'
 
@@ -22,6 +28,7 @@ type GideonAction =
   | 'add_task_comment'
   | 'list_custom_fields'
   | 'create_document'
+  | 'propose_attendance_correction'
 
 type ToolBody = {
   action?: GideonAction | string
@@ -399,6 +406,152 @@ async function createDocument(actor: User, input: Record<string, unknown>) {
     // NEXTAUTH_URL is the container's own 127.0.0.1 address, so it cannot answer this.
     url: `${PUBLIC_BASE}/docs/${doc.id}`,
     createdAt: doc.createdAt,
+  }
+}
+
+/**
+ * propose_attendance_correction — the ONLY thing GIDEON may do about attendance.
+ *
+ * Staff file an ATTENDANCE ticket with a photo; a BoD used to read it and go fix the record by hand in
+ * another screen. This lets GIDEON draft that fix ONTO the ticket, and stops there: it writes an
+ * AttendanceCorrection row and a message in the thread, never an AttendanceRecord. The record only
+ * moves when a human taps approve at POST /api/complaints/[id]/correction. There is deliberately no
+ * tool action anywhere in this file that writes attendance — an assistant that can quietly rewrite who
+ * was late is worth more to an attacker than every other action here combined.
+ *
+ * Input: { complaintId, date: "YYYY-MM-DD", checkInAt?, checkOutAt?, reason }
+ * checkInAt/checkOutAt take "HH:mm" (office-local) or a full ISO-8601 timestamp; at least one is required.
+ */
+async function proposeAttendanceCorrection(actor: User, input: Record<string, unknown>) {
+  const complaintId = asString(input.complaintId)
+  const dateKey = asString(input.date) ?? asString(input.attendanceDate)
+  const reason = asString(input.reason)
+
+  if (!complaintId) throw new Error('complaintId is required')
+  if (!dateKey || !DATE_KEY_RE.test(dateKey)) throw new Error('date is required as "YYYY-MM-DD"')
+  if (!reason || reason.length < CORRECTION_REASON_MIN) {
+    throw new Error(`reason is required (min ${CORRECTION_REASON_MIN} chars) — the BoD approves on this sentence alone`)
+  }
+
+  // Same visibility rule as GET /api/complaints/[id]: the reporter, or a BoD, inside their own
+  // workspace. System ADMIN gets no carve-out here on purpose — complaints are private by design and
+  // the web never granted admins a way in either.
+  const membership = await prisma.workspaceMember.findFirst({
+    where: { userId: actor.id },
+    select: { workspaceId: true, role: true },
+  })
+  if (!membership) throw new Error('You are not a member of any workspace')
+  const actorIsBod = isBodPlus(membership.role)
+
+  const complaint = await prisma.complaint.findUnique({
+    where: { id: complaintId },
+    select: { id: true, workspaceId: true, reporterId: true, category: true, status: true },
+  })
+  if (!complaint || complaint.workspaceId !== membership.workspaceId) throw new Error('Complaint not found or not accessible')
+  if (!actorIsBod && complaint.reporterId !== actor.id) throw new Error('Complaint not found or not accessible')
+  if (complaint.category !== 'ATTENDANCE') {
+    throw new Error(`Ticket ${complaintId} is category ${complaint.category}; an attendance correction only attaches to an ATTENDANCE ticket.`)
+  }
+  if (complaint.status === 'CLOSED') throw new Error('Tiket ini udah ditutup, gak bisa diusulin koreksi lagi.')
+
+  const proposedCheckInAt = parseProposedTime(input.checkInAt, dateKey, 'checkInAt') ?? null
+  const proposedCheckOutAt = parseProposedTime(input.checkOutAt, dateKey, 'checkOutAt') ?? null
+  if (!proposedCheckInAt && !proposedCheckOutAt) {
+    throw new Error('Nothing proposed — give checkInAt, checkOutAt, or both.')
+  }
+
+  // The target is the ticket's reporter, never an input field. Otherwise any staffer could ask GIDEON
+  // to file a correction against a colleague's attendance from their own ticket.
+  const attendanceDate = parseDateOnlyToUtc(dateKey)
+  const record = await prisma.attendanceRecord.findUnique({
+    where: {
+      userId_workspaceId_attendanceDate: {
+        userId: complaint.reporterId,
+        workspaceId: complaint.workspaceId,
+        attendanceDate,
+      },
+    },
+    select: { id: true, checkInAt: true, checkOutAt: true, status: true },
+  })
+  // No record = nothing to correct. Say so instead of proposing something that can never be approved,
+  // and do NOT offer to create one: a missing day goes through AttendanceRequest (permit/leave), which
+  // is what cancels the day's penalties and waives the absence cron. Inventing a bare record here
+  // would erase an alpha with none of that bookkeeping.
+  if (!record) {
+    throw new Error(
+      `Gak ada record absen tanggal ${dateKey} buat pelapor tiket ini, jadi gak ada yang bisa dikoreksi. ` +
+        'Kalau emang gak ada absen sama sekali hari itu, jalurnya pengajuan izin/cuti (attendance request), bukan koreksi.'
+    )
+  }
+
+  const timeError = validateCorrectionTimes(
+    dateKey,
+    proposedCheckInAt ?? record.checkInAt,
+    proposedCheckOutAt ?? record.checkOutAt
+  )
+  if (timeError) throw new Error(timeError)
+
+  // One live proposal per ticket (the DB carries a partial unique index saying the same). Two PENDING
+  // rows means the BoD approves whichever the UI happened to show and the other stays live forever.
+  const existingPending = await prisma.attendanceCorrection.findFirst({
+    where: { complaintId, status: 'PENDING' },
+    select: { id: true },
+  })
+  if (existingPending) {
+    throw new Error(`Tiket ini udah punya usulan koreksi yang nunggu approval BoD (${existingPending.id}).`)
+  }
+
+  const summary = describeCorrection({
+    dateKey,
+    beforeCheckInAt: record.checkInAt,
+    beforeCheckOutAt: record.checkOutAt,
+    proposedCheckInAt,
+    proposedCheckOutAt,
+  })
+  // GIDEON wrote it, so GIDEON signs it. The actor's permissions got us here; the authorship says who
+  // actually typed it, which is the whole point of the separate identity.
+  const gideonId = await getGideonUserId()
+
+  const created = await prisma.$transaction(async (tx) => {
+    const correction = await tx.attendanceCorrection.create({
+      data: {
+        complaintId,
+        workspaceId: complaint.workspaceId,
+        userId: complaint.reporterId,
+        attendanceDate,
+        proposedCheckInAt,
+        proposedCheckOutAt,
+        reason: reason.slice(0, CORRECTION_REASON_MAX),
+        proposedById: gideonId,
+        status: 'PENDING',
+        beforeRecordId: record.id,
+        beforeCheckInAt: record.checkInAt,
+        beforeCheckOutAt: record.checkOutAt,
+        beforeStatus: record.status,
+      },
+      include: ATTENDANCE_CORRECTION_INCLUDE,
+    })
+    // Put it in the thread too. A proposal only the API can see is a proposal nobody approves.
+    await tx.complaintMessage.create({
+      data: {
+        complaintId,
+        authorId: gideonId,
+        fromReviewer: actorIsBod,
+        body: `Usulan koreksi absen — ${summary}. Alasan: ${reason}\n\nAbsennya BELUM berubah; nunggu approve BoD.`.slice(0, BODY_MAX),
+      },
+    })
+    await tx.complaint.update({ where: { id: complaintId }, data: { lastMessageAt: new Date() } })
+    await tx.complaintEvent.create({
+      data: { complaintId, action: 'correction_proposed', actorId: gideonId },
+    })
+    return correction
+  })
+
+  return {
+    ...serializeAttendanceCorrection(created),
+    // Spelled out because GIDEON relays this to a person, and "done" would be a lie.
+    applied: false,
+    note: 'Recorded as a PROPOSAL on the ticket. Attendance is unchanged until a BoD approves it.',
   }
 }
 
@@ -835,6 +988,8 @@ export async function POST(req: Request) {
         return ok(await addTaskComment(auth.actor, input))
       case 'create_document':
         return ok(await createDocument(auth.actor, input))
+      case 'propose_attendance_correction':
+        return ok(await proposeAttendanceCorrection(auth.actor, input))
       default:
         return error(`Unknown GIDEON tool action: ${body.action}`)
     }

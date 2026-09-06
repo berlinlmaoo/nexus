@@ -1,0 +1,272 @@
+export const dynamic = "force-dynamic"
+
+import { NextRequest, NextResponse } from "next/server"
+import { auth } from "@/lib/auth"
+import prisma from "@/lib/prisma"
+import { logAudit } from "@/lib/audit"
+import { notifyComplaintReply } from "@/lib/notification-service"
+import {
+  buildAttendanceDerivedFields,
+  formatAttendanceDateKey,
+  getAttendanceWorkspaceContext,
+  resolveEffectiveAttendanceShift,
+  serializeAttendanceRecord,
+} from "@/lib/attendance"
+import { isHoliday } from "@/lib/holidays"
+import { BODY_MAX, isBodPlus } from "@/lib/complaints"
+import {
+  ATTENDANCE_CORRECTION_INCLUDE, CORRECTION_NOTE_MAX, describeCorrection,
+  serializeAttendanceCorrection, validateCorrectionTimes, type CorrectionDecision,
+} from "@/lib/attendance-correction"
+
+// Attendance correction proposed on a ticket, decided by a BoD.
+//
+// THIS FILE IS THE ONLY PLACE A TICKET CAN WRITE AN AttendanceRecord. GIDEON's tool
+// (propose_attendance_correction) writes the proposal and nothing else; approval here is the human tap
+// that makes it real. Keep it that way — if a second write path shows up, the guarantee is gone.
+
+const eq = (a: Date | null, b: Date | null) => (a ? a.getTime() : null) === (b ? b.getTime() : null)
+
+// GET /api/complaints/[id]/correction — proposals on this ticket. Reporter or BoD, like the thread itself.
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const me = session.user.id
+    const membership = await prisma.workspaceMember.findFirst({ where: { userId: me }, select: { workspaceId: true, role: true } })
+    if (!membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    const viewerIsBod = isBodPlus(membership.role)
+    const { id } = await params
+
+    const complaint = await prisma.complaint.findUnique({ where: { id }, select: { id: true, workspaceId: true, reporterId: true } })
+    if (!complaint || complaint.workspaceId !== membership.workspaceId) return NextResponse.json({ error: "Not found" }, { status: 404 })
+    if (!viewerIsBod && complaint.reporterId !== me) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
+    const corrections = await prisma.attendanceCorrection.findMany({
+      where: { complaintId: id },
+      include: ATTENDANCE_CORRECTION_INCLUDE,
+      orderBy: { createdAt: "desc" },
+    })
+    // canDecide is the viewer's, not the row's — a reporter sees their own proposal but no buttons.
+    const canDecide = (await getAttendanceWorkspaceContext(me)).canManageAttendance
+    return NextResponse.json({ corrections: corrections.map(serializeAttendanceCorrection), canDecide })
+  } catch (error) {
+    console.error("Error listing attendance corrections:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
+
+// POST /api/complaints/[id]/correction — { decision: "APPROVE" | "REJECT", correctionId?, note? }.
+// BoD / One-Above-All / system admin only. APPROVE writes the AttendanceRecord; REJECT touches nothing
+// but the proposal row.
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const me = session.user.id
+
+    // Same gate as every other attendance write in the app (BoD / One-Above-All / system ADMIN). A team
+    // lead's team-scoped powers deliberately do NOT reach here: this rewrites the attendance history a
+    // payroll run reads.
+    const context = await getAttendanceWorkspaceContext(me)
+    if (!context.workspace || !context.canManageAttendance) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    const { id } = await params
+
+    const payload = await request.json().catch(() => ({}))
+    const decision = String(payload?.decision ?? "").toUpperCase() as CorrectionDecision
+    if (decision !== "APPROVE" && decision !== "REJECT") {
+      return NextResponse.json({ error: 'decision harus "APPROVE" atau "REJECT".' }, { status: 422 })
+    }
+    const note = String(payload?.note ?? "").trim().slice(0, CORRECTION_NOTE_MAX) || null
+    const correctionId = String(payload?.correctionId ?? "").trim() || null
+
+    const complaint = await prisma.complaint.findUnique({
+      where: { id },
+      select: { id: true, workspaceId: true, reporterId: true, status: true },
+    })
+    if (!complaint || complaint.workspaceId !== context.workspace.id) return NextResponse.json({ error: "Not found" }, { status: 404 })
+
+    // Without an explicit id, decide the ticket's single live proposal — one tap, which is the point.
+    const correction = await prisma.attendanceCorrection.findFirst({
+      where: { complaintId: id, ...(correctionId ? { id: correctionId } : { status: "PENDING" }) },
+      orderBy: { createdAt: "desc" },
+    })
+    if (!correction) return NextResponse.json({ error: "Gak ada usulan koreksi di tiket ini." }, { status: 404 })
+    if (correction.status !== "PENDING") {
+      return NextResponse.json({ error: `Usulan ini udah ${correction.status === "APPROVED" ? "di-approve" : "ditolak"} sebelumnya.` }, { status: 409 })
+    }
+
+    const dateKey = formatAttendanceDateKey(correction.attendanceDate)
+    const decidedAt = new Date()
+
+    // ---- REJECT: nothing but the proposal row moves. -------------------------------------------
+    if (decision === "REJECT") {
+      const updated = await prisma.$transaction(async (tx) => {
+        const row = await tx.attendanceCorrection.update({
+          where: { id: correction.id },
+          data: { status: "REJECTED", decidedById: me, decidedAt, decisionNote: note },
+          include: ATTENDANCE_CORRECTION_INCLUDE,
+        })
+        await tx.complaintMessage.create({
+          data: {
+            complaintId: id,
+            authorId: me,
+            fromReviewer: true,
+            body: `Usulan koreksi absen ${dateKey} DITOLAK.${note ? ` Catatan: ${note}` : ""}`.slice(0, BODY_MAX),
+          },
+        })
+        await tx.complaint.update({ where: { id }, data: { lastMessageAt: decidedAt } })
+        await tx.complaintEvent.create({ data: { complaintId: id, action: "correction_rejected", actorId: me } })
+        return row
+      })
+
+      logAudit({ action: "update", entityType: "attendance_correction", entityId: correction.id, userId: me, request, metadata: { decision: "REJECT", date: dateKey, note } })
+      void notifyComplaintReply({ complaintId: id, workspaceId: complaint.workspaceId, reporterId: complaint.reporterId, fromReviewer: true, replierId: me }).catch(() => {})
+      return NextResponse.json({ correction: serializeAttendanceCorrection(updated), record: null })
+    }
+
+    // ---- APPROVE: the one attendance write in this flow. ----------------------------------------
+    const record = await prisma.attendanceRecord.findUnique({
+      where: {
+        userId_workspaceId_attendanceDate: {
+          userId: correction.userId,
+          workspaceId: correction.workspaceId,
+          attendanceDate: correction.attendanceDate,
+        },
+      },
+      include: { officeLocation: true },
+    })
+    // The record existed when this was proposed (the tool refuses otherwise), so if it is gone now a
+    // BoD deleted the day in between. Say that out loud rather than re-creating it: a record conjured
+    // here would have no office, no geo, no penalty bookkeeping — an absence quietly erased.
+    if (!record) {
+      return NextResponse.json(
+        { error: `Record absen ${dateKey} udah gak ada (kehapus setelah usulan ini dibikin), jadi gak ada yang bisa dikoreksi. Tolak usulan ini dan pakai jalur pengajuan izin/cuti kalau harinya emang kosong.` },
+        { status: 409 }
+      )
+    }
+
+    // Optimistic lock against the snapshot. If someone corrected the same day by hand in the meantime,
+    // approving would silently overwrite their edit AND leave a "before" snapshot that no longer
+    // matches reality — the one thing that makes an approval reversible.
+    if (!eq(record.checkInAt, correction.beforeCheckInAt) || !eq(record.checkOutAt, correction.beforeCheckOutAt)) {
+      return NextResponse.json(
+        { error: `Absen ${dateKey} udah berubah sejak usulan ini dibikin. Tolak usulan ini terus minta dibikinin usulan baru dari data terkini.` },
+        { status: 409 }
+      )
+    }
+
+    const nextCheckInAt = correction.proposedCheckInAt ?? record.checkInAt
+    const nextCheckOutAt = correction.proposedCheckOutAt ?? record.checkOutAt
+    if (!nextCheckInAt) return NextResponse.json({ error: "Check-in wajib ada di record absen." }, { status: 422 })
+    const timeError = validateCorrectionTimes(dateKey, nextCheckInAt, nextCheckOutAt)
+    if (timeError) return NextResponse.json({ error: timeError }, { status: 422 })
+
+    // Re-derive late/early/worked from the record's own day, exactly like the manual correction at
+    // PATCH /api/attendance/records/[recordId]. Writing the times alone leaves lateMinutes lying.
+    const effectiveShift = await resolveEffectiveAttendanceShift({
+      userId: record.userId,
+      workspaceId: record.workspaceId,
+      office: record.officeLocation,
+      date: record.attendanceDate,
+    })
+    const derived = buildAttendanceDerivedFields({
+      attendanceDate: record.attendanceDate,
+      checkInAt: nextCheckInAt,
+      checkOutAt: nextCheckOutAt,
+      office: record.officeLocation,
+      effectiveShift,
+      treatAsNonWorkday: await isHoliday(record.workspaceId, record.attendanceDate),
+    })
+
+    const summary = describeCorrection({
+      dateKey,
+      beforeCheckInAt: record.checkInAt,
+      beforeCheckOutAt: record.checkOutAt,
+      proposedCheckInAt: correction.proposedCheckInAt,
+      proposedCheckOutAt: correction.proposedCheckOutAt,
+    })
+    // A BoD picking up an OPEN ticket flips it to IN_REVIEW, same rule as replying in the thread.
+    const bumpToReview = complaint.status === "OPEN"
+
+    const { correction: updatedCorrection, record: updatedRecord } = await prisma.$transaction(async (tx) => {
+      const written = await tx.attendanceRecord.update({
+        where: { id: record.id },
+        data: {
+          checkInAt: nextCheckInAt,
+          checkOutAt: nextCheckOutAt,
+          status: derived.status,
+          attendanceFlexi: derived.attendanceFlexi,
+          effectiveShiftSource: derived.effectiveShiftSource,
+          effectiveTeamId: derived.effectiveTeamId,
+          effectiveTeamName: derived.effectiveTeamName,
+          effectiveShiftStartTime: derived.effectiveShiftStartTime,
+          effectiveShiftEndTime: derived.effectiveShiftEndTime,
+          checkInStatus: derived.checkInStatus,
+          checkOutStatus: derived.checkOutStatus,
+          lateMinutes: derived.lateMinutes,
+          earlyLeaveMinutes: derived.earlyLeaveMinutes,
+          workedMinutes: derived.workedMinutes,
+          correctedAt: decidedAt,
+          // The approver owns the change, not GIDEON and not the reporter. Whoever tapped is who
+          // answers for it later.
+          correctedById: me,
+          correctionReason: `Tiket ${id}: ${correction.reason}`.slice(0, 1000),
+        },
+        include: {
+          officeLocation: true,
+          user: { select: { id: true, name: true, email: true, avatar: true } },
+          correctedBy: { select: { id: true, name: true, email: true } },
+        },
+      })
+      const row = await tx.attendanceCorrection.update({
+        where: { id: correction.id },
+        data: { status: "APPROVED", decidedById: me, decidedAt, decisionNote: note },
+        include: ATTENDANCE_CORRECTION_INCLUDE,
+      })
+      await tx.complaintMessage.create({
+        data: {
+          complaintId: id,
+          authorId: me,
+          fromReviewer: true,
+          body: `Koreksi absen di-APPROVE — ${summary}.${note ? ` Catatan: ${note}` : ""}`.slice(0, BODY_MAX),
+        },
+      })
+      await tx.complaint.update({
+        where: { id },
+        data: { lastMessageAt: decidedAt, ...(bumpToReview ? { status: "IN_REVIEW" } : {}) },
+      })
+      await tx.complaintEvent.create({ data: { complaintId: id, action: "correction_approved", actorId: me } })
+      if (bumpToReview) {
+        await tx.complaintEvent.create({ data: { complaintId: id, action: "status", fromStatus: "OPEN", toStatus: "IN_REVIEW", actorId: me } })
+      }
+      return { correction: row, record: written }
+    })
+
+    logAudit({
+      action: "update",
+      entityType: "attendance_record",
+      entityId: updatedRecord.id,
+      entityName: `${updatedRecord.user.name} — koreksi absen via tiket`,
+      userId: me,
+      request,
+      metadata: {
+        complaintId: id,
+        correctionId: correction.id,
+        date: dateKey,
+        summary,
+        before: { checkInAt: correction.beforeCheckInAt, checkOutAt: correction.beforeCheckOutAt, status: correction.beforeStatus },
+        reason: correction.reason,
+      },
+    })
+    void notifyComplaintReply({ complaintId: id, workspaceId: complaint.workspaceId, reporterId: complaint.reporterId, fromReviewer: true, replierId: me }).catch(() => {})
+
+    return NextResponse.json({
+      correction: serializeAttendanceCorrection(updatedCorrection),
+      record: serializeAttendanceRecord(updatedRecord),
+    })
+  } catch (error) {
+    console.error("Error deciding attendance correction:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}

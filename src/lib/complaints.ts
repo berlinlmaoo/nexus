@@ -2,6 +2,9 @@
 // Private, categorized chat between a staff member and the BoD. Confidential (BoD-only review) with an
 // optional ANONYMOUS mode (reporter hidden even from BoD). Distinct from PeerReport (public + punitive).
 export { getUserOrgRole, isBodPlus } from "@/lib/feed" // reuse the org-role gate helpers
+import {
+  ATTENDANCE_CORRECTION_INCLUDE, serializeAttendanceCorrection, type AttendanceCorrectionRow,
+} from "@/lib/attendance-correction"
 
 // Active categories users can file under. (PAYROLL/OPERATIONAL/HR/LEADERSHIP retired 2026-06-22 — kept in
 // the Prisma enum + label map below so any legacy record still renders, just no longer selectable/acceptable.)
@@ -44,6 +47,9 @@ export const COMPLAINT_DETAIL_INCLUDE = {
   reporter: { select: { id: true, name: true, avatar: true } },
   attachments: ATTACHMENTS_INCLUDE,
   resolvedBy: { select: { id: true, name: true } },
+  // Proposed attendance fixes ride along with the thread, so the ticket detail screen has
+  // everything it needs to show the "approve" card without a second round-trip.
+  corrections: { include: ATTENDANCE_CORRECTION_INCLUDE, orderBy: { createdAt: "desc" as const } },
   messages: {
     orderBy: { createdAt: "asc" as const },
     include: { author: { select: { id: true, name: true, avatar: true } } },
@@ -77,6 +83,7 @@ type MessageRow = {
 type ComplaintDetailRow = ComplaintRow & {
   resolvedBy: { id: string; name: string } | null
   messages: MessageRow[]
+  corrections?: AttendanceCorrectionRow[]
 }
 
 /**
@@ -121,5 +128,10 @@ export function serializeComplaintDetail(c: ComplaintDetailRow, viewerId: string
     author: m.author,
     mine: m.authorId === viewerId,
   }))
-  return { ...base, resolvedBy: c.resolvedBy ?? null, messages }
+  return {
+    ...base,
+    resolvedBy: c.resolvedBy ?? null,
+    messages,
+    corrections: (c.corrections ?? []).map(serializeAttendanceCorrection),
+  }
 }
