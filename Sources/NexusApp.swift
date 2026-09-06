@@ -13,6 +13,9 @@ struct NexusApp: App {
     init() {
         FontLoader.registerAll()
         Self.configureAppearance()
+        // Activating publishes whatever is already in the Keychain, so a watch paired after signing
+        // in catches up without waiting for the next login.
+        PhoneSessionBridge.shared.activate()
     }
 
     var body: some Scene {

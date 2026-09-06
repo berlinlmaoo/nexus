@@ -63,6 +63,8 @@ final class AuthStore {
             userEmail: res.user.email ?? fallbackEmail
         )
         Keychain.save(s)
+        // The watch cannot sign in on its own, so it learns about this one here.
+        PhoneSessionBridge.shared.publish(s)
         session = s
     }
 
@@ -76,6 +78,7 @@ final class AuthStore {
         // Nor may a Live Activity: it would keep counting one person's hours on the Lock Screen of
         // a phone that has already been handed to somebody else.
         AttendancePresence.stop()
+        PhoneSessionBridge.shared.publish(nil)
         session = nil
     }
 }

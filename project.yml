@@ -39,6 +39,15 @@ targets:
       # while complaining about something else entirely.
       - target: NEXUSWidgets
         platformFilter: iOS
+      # The watch app rides inside the iOS app. platformFilter keeps it out of the Mac build, where
+      # there is nothing to pair with and the copy phase would fail.
+      - target: NEXUSWatch
+        platformFilter: iOS
+        embed: true
+        codeSign: true
+        copy:
+          destination: productsDirectory
+          subpath: "$(CONTENTS_FOLDER_PATH)/Watch"
     settings:
       base:
         # USE the committed plist — do not let XcodeGen generate one.
@@ -104,6 +113,31 @@ targets:
         # An extension is delivered inside the app, never installed on its own.
         SKIP_INSTALL: YES
         TARGETED_DEVICE_FAMILY: "1,2"
+
+  # Apple Watch. Shows where today stands and answers approvals. It can never take attendance:
+  # check-in needs a selfie and check-out needs the reflection as well, and a wrist-sized shortcut
+  # past either would instantly become the easiest way to be marked present from somewhere else.
+  NEXUSWatch:
+    type: application
+    platform: watchOS
+    deploymentTarget: "10.0"
+    sources:
+      - path: Watch
+        excludes:
+          - Info.plist
+      # Reused verbatim rather than copied. All three are Foundation-only and self-contained, so the
+      # watch decodes the same shapes with the same code — a duplicated model is a model that drifts.
+      - path: Sources/Config.swift
+      - path: Sources/Keychain.swift
+      - path: Sources/AttendanceModels.swift
+    settings:
+      base:
+        INFOPLIST_FILE: Watch/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: id.znetworks.nexus.watchkitapp
+        PRODUCT_NAME: NEXUS
+        # 4 = Apple Watch.
+        TARGETED_DEVICE_FAMILY: "4"
+        SKIP_INSTALL: YES
 
 # Default scheme runs RELEASE so a plain ⌘R is the optimized, smooth-on-device build
 # (Debug SwiftUI is dramatically slower on device — the usual cause of on-device lag).
