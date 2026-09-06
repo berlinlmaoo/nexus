@@ -619,6 +619,17 @@ struct APIClient {
         _ = try await run(makeRequest("/api/gamification/quests/admin?id=\(enc(id))", method: "DELETE"), decode: SuccessResponse.self)
         return true
     }
+    /// Active announcements this user has not dismissed yet — drives the pop-up.
+    func activeAnnouncements() async throws -> [AdminAnnouncement] {
+        (try await run(makeRequest("/api/announcements/active"), decode: AnnouncementsResponse.self)).announcements ?? []
+    }
+
+    @discardableResult
+    func markAnnouncementSeen(_ id: String) async throws -> Bool {
+        _ = try await run(makeRequest("/api/announcements/\(id)/seen", method: "POST"), decode: SuccessResponse.self)
+        return true
+    }
+
     func announcements() async throws -> [AdminAnnouncement] {
         (try await run(makeRequest("/api/announcements"), decode: AnnouncementsResponse.self)).announcements ?? []
     }

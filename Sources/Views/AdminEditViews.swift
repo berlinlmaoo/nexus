@@ -28,6 +28,8 @@ struct AdminAnnouncement: Decodable, Identifiable, Sendable {
     let body: String?
     let tone: String?
     let active: Bool?
+    /// Sent by /api/announcements/active. The admin list omits it, hence optional on both.
+    let imageUrl: String?
     let seenCount: Int?
     let createdAt: String?
 }

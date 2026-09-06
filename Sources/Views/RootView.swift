@@ -9,7 +9,11 @@ struct RootView: View {
     var body: some View {
         if auth.isAuthenticated {
             // In-app light/dark override. nil = follow the iOS setting.
-            AdaptiveRoot().preferredColorScheme(appearance.theme.colorScheme)
+            AdaptiveRoot()
+                .preferredColorScheme(appearance.theme.colorScheme)
+                // Above the whole app rather than inside a tab: an announcement is not a screen you
+                // navigate to, and it must reach somebody wherever they happen to be standing.
+                .overlay { AnnouncementModal() }
         } else {
             // LoginView forces `.light` itself, and MUST stay outside that modifier.
             // `preferredColorScheme` is a preference, and a preference written by an ancestor

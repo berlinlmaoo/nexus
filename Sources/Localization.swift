@@ -469,6 +469,8 @@ final class AppLanguage {
         "No custom fields in this project yet.": "Belum ada custom field di project ini.",
         "Project members": "Member Project",
         "Add member": "Tambah member",
+        "Got it": "Oke, paham",
+        "Next": "Berikutnya",
         "Link project": "Hubungkan proyek",
         "Members": "Member",
         "Lead": "Lead",
