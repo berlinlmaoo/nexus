@@ -355,6 +355,9 @@ async function getProjectSummary(actor: User, input: Record<string, unknown>) {
  * access gate as creating a task, authored by the person who asked, so it appears in the library
  * under their name and not under a service account nobody recognises.
  */
+/** Where a person can actually open what GIDEON wrote. */
+const PUBLIC_BASE = (process.env.NEXUS_PUBLIC_URL || 'https://nexus.znetworks.id').replace(/\/+$/, '')
+
 async function createDocument(actor: User, input: Record<string, unknown>) {
   const projectId = String(input.projectId ?? '').trim()
   const title = String(input.title ?? '').trim()
@@ -388,7 +391,10 @@ async function createDocument(actor: User, input: Record<string, unknown>) {
     id: doc.id,
     title: doc.title,
     project: project.name,
-    url: `/docs/${doc.id}`,
+    // Absolute, because GIDEON hands this straight to a person. Given a relative path it invented a
+    // host and produced a link to an old domain — authoritative-looking and going nowhere.
+    // NEXTAUTH_URL is the container's own 127.0.0.1 address, so it cannot answer this.
+    url: `${PUBLIC_BASE}/docs/${doc.id}`,
     createdAt: doc.createdAt,
   }
 }
