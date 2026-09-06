@@ -1,0 +1,24 @@
+name: nexus
+version: 0.1.0
+description: "NEXUS project/task management tools for GIDEON/PATS. Calls NEXUS service API with a dedicated bearer token."
+author: PATS Group
+kind: standalone
+requires_env:
+  - NEXUS_BASE_URL
+  - NEXUS_SERVICE_TOKEN
+provides_tools:
+  # Read
+  - nexus_list_projects
+  - nexus_list_members
+  - nexus_list_tasks
+  - nexus_search_tasks
+  - nexus_get_project_summary
+  - nexus_list_custom_fields
+  # Write, scoped to the acting user by x-gideon-actor
+  - nexus_create_task
+  - nexus_update_task
+  - nexus_add_task_comment
+  - nexus_create_document
+  # Deliberately absent, and must stay absent: anything touching attendance, shifts or day-off
+  # quota. Every other tool is safe because it acts AS the user and is refused wherever they would
+  # be — but a person MAY check themselves in, so acting as them is no guard there at all.
