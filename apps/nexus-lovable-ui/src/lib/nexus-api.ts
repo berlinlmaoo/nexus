@@ -1979,6 +1979,11 @@ export const nexusApi = {
   pnlExportUrl: (projectId: string, year: number) => `/api/pnl/export?projectId=${encodeURIComponent(projectId)}&year=${year}`,
   submitForm: (formId: string, data: Record<string, unknown>) => apiFetch<{ submission?: unknown }>(`/api/forms/${formId}/submit`, { method: "POST", body: JSON.stringify({ data }) }),
 
+  gideonUsage: () => apiFetch<{
+    users: { id: string; name: string; email: string | null; avatar: string | null; asked: number; answered: number; toolCalls: number; firstUsed: string | null; lastUsed: string | null }[];
+    totals: { people: number; asked: number; toolCalls: number };
+  }>("/api/gideon/usage"),
+
   // --- Teams + Master Calendar ---
   teams: () => apiFetch<NexusTeam[]>("/api/teams"),
   createTeam: (name: string, color?: string) => apiFetch<NexusTeam>("/api/teams", { method: "POST", body: JSON.stringify(color ? { name, color } : { name }) }),

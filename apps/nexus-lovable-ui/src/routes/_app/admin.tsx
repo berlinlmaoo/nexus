@@ -4,6 +4,7 @@ import { Avatar } from "@/components/Avatar";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, CalendarX2, ChevronDown, Loader2, Megaphone, Plus, ScrollText, Search, Shield, Trash2, Trophy, Users as UsersIcon, X, Zap, Smartphone } from "lucide-react";
 import { type NexusAdminAnnouncement } from "@/lib/nexus-api";
+import { GideonMark } from "@/components/gideon/GideonMark";
 import { PageHeader } from "@/components/PageHeader";
 import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusAdminUser } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
@@ -18,7 +19,7 @@ function initialsOf(name?: string | null) {
 
 function Admin() {
   const qc = useQueryClient();
-  const [view, setView] = useState<"users" | "audit" | "quests" | "announcements">("users");
+  const [view, setView] = useState<"users" | "audit" | "quests" | "announcements" | "gideon">("users");
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState<"ALL" | "ONE_ABOVE_ALL" | "BOD" | "MANAGER" | "STAFF">("ALL");
   const [dayoffUser, setDayoffUser] = useState<{ id: string; name: string } | null>(null);
@@ -79,11 +80,13 @@ function Admin() {
           <button onClick={() => setView("audit")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "audit" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><ScrollText className="h-3.5 w-3.5" /> Audit log</button>
           <button onClick={() => setView("quests")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "quests" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Trophy className="h-3.5 w-3.5" /> Quests</button>
           {canAnnounce && <button onClick={() => setView("announcements")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "announcements" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Megaphone className="h-3.5 w-3.5" /> Announcements</button>}
+          {canAnnounce && <button onClick={() => setView("gideon")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "gideon" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><GideonMark className="h-3.5 w-3.5" /> GIDEON</button>}
         </div>
 
         {view === "audit" && <AuditLog />}
         {view === "quests" && <AdminQuests />}
         {view === "announcements" && canAnnounce && <AnnouncementsAdmin />}
+        {view === "gideon" && canAnnounce && <GideonUsage />}
 
         {view === "users" && users.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Shield className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">Admin access required</div><p className="mt-2 text-sm text-muted-foreground">You need the system-admin role to view user management.</p></div>}
 
@@ -797,6 +800,72 @@ function AnnouncementsAdmin() {
             {!list.isLoading && rows.length === 0 && <div className="rounded-2xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground shadow-sm">No announcements yet.</div>}
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Who uses GIDEON, and how much.
+ *
+ * Counts and dates only. What somebody asked an assistant is between them and it — a screen that
+ * showed the questions would change how people use it, and the ones who most need the help would
+ * stop asking.
+ */
+function GideonUsage() {
+  const q = useQuery({ queryKey: ["nexus", "gideon-usage"], queryFn: nexusApi.gideonUsage, retry: false });
+  const users = q.data?.users ?? [];
+  const totals = q.data?.totals;
+
+  const when = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "—";
+
+  if (q.isLoading) return <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">Memuat…</div>;
+  if (q.isError) return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">Nggak bisa memuat pemakaian GIDEON.</div>;
+
+  return (
+    <div className="space-y-4">
+      {totals && (
+        <div className="grid grid-cols-3 gap-3">
+          <Stat label="Pemakai" value={totals.people} />
+          <Stat label="Pertanyaan" value={totals.asked} />
+          <Stat label="Tool dipakai" value={totals.toolCalls} />
+        </div>
+      )}
+
+      {users.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft">
+          <GideonMark className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
+          <div className="text-lg font-bold">Belum ada yang pakai GIDEON</div>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-soft">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="px-4 py-3 font-semibold">Orang</th>
+                <th className="px-4 py-3 text-right font-semibold">Tanya</th>
+                <th className="px-4 py-3 text-right font-semibold">Tool</th>
+                <th className="px-4 py-3 font-semibold">Pertama</th>
+                <th className="px-4 py-3 font-semibold">Terakhir</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.id} className="border-b border-border/60 last:border-0">
+                  <td className="px-4 py-3">
+                    <div className="font-semibold">{u.name}</div>
+                    {u.email && <div className="text-xs text-muted-foreground">{u.email}</div>}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold tabular-nums">{u.asked}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{u.toolCalls}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{when(u.firstUsed)}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{when(u.lastUsed)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
