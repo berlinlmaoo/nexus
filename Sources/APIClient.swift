@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 enum APIError: LocalizedError {
     case http(Int)
@@ -619,6 +620,11 @@ struct APIClient {
         _ = try await run(makeRequest("/api/gamification/quests/admin?id=\(enc(id))", method: "DELETE"), decode: SuccessResponse.self)
         return true
     }
+    /// Who has the app and on which build. BoD and above.
+    func appInstalls() async throws -> AppInstalls {
+        try await run(makeRequest("/api/admin/app-installs"), decode: AppInstalls.self)
+    }
+
     /// Who uses GIDEON, and how much. BoD and above; the server refuses everyone else.
     func gideonUsage() async throws -> GideonUsage {
         try await run(makeRequest("/api/gideon/usage"), decode: GideonUsage.self)
@@ -720,11 +726,19 @@ struct APIClient {
     func registerPushDevice(token: String, deviceId: String, environment: String) async throws -> Bool {
         var req = makeRequest("/api/push/devices", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Sent so Control Room can see who is on which build. Read from the bundle rather than a
+        // constant: a constant is one more thing to remember to bump, and the version it reports
+        // would eventually be a lie.
+        let info = Bundle.main.infoDictionary
         req.httpBody = try JSONSerialization.data(withJSONObject: [
             "token": token,
             "deviceId": deviceId,
             "bundleId": "id.znetworks.nexus",
             "environment": environment,
+            "appVersion": info?["CFBundleShortVersionString"] as? String ?? "",
+            "buildNumber": info?["CFBundleVersion"] as? String ?? "",
+            "osVersion": "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion)",
+            "deviceModel": UIDevice.current.model,
         ])
         _ = try await run(req, decode: SuccessResponse.self)
         return true

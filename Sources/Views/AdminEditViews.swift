@@ -21,6 +21,31 @@ struct AdminQuest: Decodable, Identifiable, Sendable {
     let xpReward: Int?
     let deadline: String?
 }
+/// GET /api/admin/app-installs — one row per person, their most recently seen device.
+struct AppInstalls: Decodable, Sendable {
+    let installs: [Row]?
+    let totals: Totals?
+
+    struct Row: Decodable, Sendable {
+        let id: String
+        let appVersion: String?
+        let buildNumber: String?
+        let osVersion: String?
+        let lastSeenAt: String?
+        let user: Person?
+        struct Person: Decodable, Sendable { let name: String?; let email: String? }
+
+        var versionLabel: String {
+            guard let appVersion else { return "—" }
+            return buildNumber.map { "\(appVersion) (\($0))" } ?? appVersion
+        }
+    }
+    struct Totals: Decodable, Sendable {
+        let people: Int?
+        let devices: Int?
+    }
+}
+
 /// GET /api/gideon/usage — counts and dates only, never anybody's questions.
 struct GideonUsage: Decodable, Sendable {
     let users: [Row]?
@@ -72,6 +97,7 @@ struct AdminView: View {
         if viewer.canAnnounce {
             t.append(("Pengumuman", "announcements"))
             t.append(("GIDEON", "gideon"))
+            t.append(("App", "app"))
         }
         return t
     }
@@ -92,6 +118,7 @@ struct AdminView: View {
                 case "quests": AdminQuestsSection(workspaceId: workspaceId)
                 case "announcements": AdminAnnouncementsSection()
                 case "gideon": AdminGideonUsageSection()
+                case "app": AdminAppInstallsSection()
                 default: AdminUsersSection(workspaceId: workspaceId)
                 }
             }
@@ -507,6 +534,90 @@ struct AdminGideonUsageSection: View {
     private func load() async {
         error = nil
         do { data = try await APIClient.shared.gideonUsage() }
+        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load.") }
+        loading = false
+    }
+}
+
+// MARK: - who has the app
+
+/// Who has the app, and which build they are on.
+///
+/// One row per person, their most recently seen device. "Belum dilaporkan" is honest: the version
+/// columns are newer than most installs, so anyone who has not opened a build that reports them has
+/// no answer, and a guess would be worse than a blank.
+struct AdminAppInstallsSection: View {
+    @State private var data: AppInstalls?
+    @State private var loading = true
+    @State private var error: String?
+
+    private var rows: [AppInstalls.Row] { data?.installs ?? [] }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                if loading && data == nil {
+                    ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.top, 40)
+                } else if let error {
+                    Text(error).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                } else {
+                    if let t = data?.totals {
+                        HStack(spacing: 10) {
+                            stat(T("Using the app"), t.people ?? 0)
+                            stat(T("Devices"), t.devices ?? 0)
+                        }
+                    }
+                    if rows.isEmpty {
+                        TabEmpty(icon: "iphone", text: T("Nobody has installed the app yet."))
+                    } else {
+                        VStack(spacing: 0) {
+                            ForEach(rows, id: \.id) { row in
+                                personRow(row)
+                                if row.id != rows.last?.id { Divider().overlay(NX.border) }
+                            }
+                        }
+                        .nexusCard(padding: 0)
+                    }
+                }
+            }
+            .padding(16)
+        }
+        .task { await load() }
+        .refreshable { await load() }
+    }
+
+    private func stat(_ label: String, _ value: Int) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("\(value)").font(NXFont.display(20, .black)).foregroundStyle(NX.foreground)
+            Text(label).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(NX.border))
+    }
+
+    private func personRow(_ row: AppInstalls.Row) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(row.user?.name ?? row.user?.email ?? "—")
+                    .font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
+                Text(row.osVersion ?? "—").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            if row.appVersion == nil {
+                Text(T("Not reported")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            } else {
+                NexusChip(text: row.versionLabel, tone: .accent)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+    }
+
+    private func load() async {
+        error = nil
+        do { data = try await APIClient.shared.appInstalls() }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load.") }
         loading = false
     }
