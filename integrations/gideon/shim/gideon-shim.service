@@ -1,0 +1,21 @@
+[Unit]
+Description=Gideon oracle-shim (jembatan HTTP NEXUS ke agen Hermes)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=debian
+WorkingDirectory=/home/debian/gideon
+Environment=HOME=/home/debian
+Environment=PATH=/home/debian/.local/bin:/home/debian/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+Environment=HERMES_BIN=/home/debian/.local/bin/hermes
+Environment=CODEX_BIN=/home/debian/.npm-global/bin/codex
+Environment=ORACLE_LLM_HOST=192.168.223.116
+EnvironmentFile=/home/debian/gideon/shim.env
+ExecStart=/usr/bin/node /home/debian/gideon/codex-oracle-shim.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
