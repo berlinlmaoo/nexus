@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
+import { GIDEON_EMAIL } from '@/lib/gideon-identity'
 import bcrypt from 'bcryptjs'
 import { logAudit } from '@/lib/audit'
 import { isSystemAdminUser, WORKSPACE_HIERARCHY } from '@/lib/rbac'
@@ -125,6 +126,10 @@ export async function GET(req: NextRequest) {
     if (includeRegistered && canSeeRegistered) {
       const availableUsers = await prisma.user.findMany({
         where: {
+          // GIDEON exists to sign what it writes, not to be invited anywhere. Without this it shows
+          // up as an invitable person, because this is the one query that reads User directly rather
+          // than through a membership table.
+          email: { not: GIDEON_EMAIL },
           NOT: {
             workspaceMembers: {
               some: { workspaceId: member.workspaceId },
