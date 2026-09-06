@@ -46,6 +46,11 @@ struct GideonPanel: View {
     @State private var sending = false
     @State private var error: String?
     @State private var loaded = false
+    /// Remembered on the device: somebody who picks Terra for quick questions should not have to
+    /// pick it again every time the panel opens.
+    @AppStorage("gideon.tier") private var tierRaw = GideonTier.fallback.rawValue
+
+    private var tier: GideonTier { GideonTier(rawValue: tierRaw) ?? .fallback }
 
     var body: some View {
         NavigationStack {
@@ -56,11 +61,26 @@ struct GideonPanel: View {
                     composer
                 }
             }
-            .navigationTitle("GIDEON")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(T("Close")) { dismiss() }
+                }
+                ToolbarItem(placement: .principal) {
+                    Menu {
+                        Picker(T("Model"), selection: $tierRaw) {
+                            ForEach(GideonTier.allCases) { option in
+                                Text(option.label).tag(option.rawValue)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text("GIDEON \(tier.label)").font(NXFont.display(15, .bold))
+                            Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold))
+                        }
+                        .foregroundStyle(NX.foreground)
+                    }
+                    .disabled(sending)
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
@@ -126,6 +146,9 @@ struct GideonPanel: View {
             Text(T("Projects, tasks, who is busy, what is overdue."))
                 .font(NXFont.text(13))
                 .foregroundStyle(NX.mutedFg)
+            Text(tier.blurb)
+                .font(NXFont.text(11))
+                .foregroundStyle(NX.mutedFg.opacity(0.8))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, 40)
@@ -211,9 +234,7 @@ struct GideonPanel: View {
         turns.append(answer)
 
         do {
-            // "sonnet" is what the web sends today. The server ignores it — the three tiers are not
-            // wired yet — so no picker is shown here rather than offering a choice that does nothing.
-            for try await chunk in GideonClient.stream(messages: history(), model: "sonnet") {
+            for try await chunk in GideonClient.stream(messages: history(), model: tier.rawValue) {
                 guard let index = turns.firstIndex(where: { $0.id == answer.id }) else { continue }
                 turns[index].content += chunk
             }

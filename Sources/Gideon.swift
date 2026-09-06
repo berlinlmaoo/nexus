@@ -35,6 +35,33 @@ private struct GideonEvent: Decodable {
     let content: String?
 }
 
+/// The three GIDEON tiers.
+///
+/// Which model each one runs is decided on the server, and deliberately not named here: retuning a
+/// tier must not require shipping a new build through review.
+enum GideonTier: String, CaseIterable, Identifiable, Sendable {
+    case astra, luna, terra
+
+    var id: String { rawValue }
+    static let fallback: GideonTier = .luna
+
+    var label: String {
+        switch self {
+        case .astra: return "Astra"
+        case .luna: return "Luna"
+        case .terra: return "Terra"
+        }
+    }
+
+    var blurb: String {
+        switch self {
+        case .astra: return T("Deepest. For analysis and decisions.")
+        case .luna: return T("Everyday.")
+        case .terra: return T("Light. Short questions.")
+        }
+    }
+}
+
 /// Talks to GIDEON.
 ///
 /// Kept out of APIClient on purpose: every other call there decodes one JSON body and returns, while
