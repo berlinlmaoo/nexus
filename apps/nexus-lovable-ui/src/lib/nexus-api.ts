@@ -1114,28 +1114,6 @@ export type NexusStatusUpdate = {
   author?: NexusUser | null;
 };
 
-export type OracleNode = {
-  id: string;
-  kind: "task" | "project" | "person";
-  title: string;
-  subtitle?: string;
-  status: "completed" | "in-progress" | "pending";
-  energy: number;
-  date?: string;
-  detail?: string;
-  href?: string;
-  meta?: Record<string, string | number | null>;
-};
-export type OracleResult = {
-  intent: string;
-  answer: string;
-  subject: string;
-  nodes: OracleNode[];
-  truncated?: number;
-  needsLlm?: boolean;
-  usedLlm?: boolean;
-};
-
 export type BufferChannel = { id: string; name: string; service: string; avatar?: string | null };
 export type BufferDraft = {
   id: string;
@@ -1773,7 +1751,6 @@ export const nexusApi = {
   auditLogs: (query = "") => apiFetch<{ logs: NexusAuditLog[]; total: number }>(`/api/audit${query ? `?${query}` : ""}`),
   updateUserRole: (userId: string, role: string) => apiFetch<{ user?: NexusAdminUser }>(`/api/admin/users/${userId}`, { method: "PATCH", body: JSON.stringify({ role }) }),
   deleteUser: (userId: string) => apiFetch<{ ok: boolean; deletedUser: { id: string; name: string; email: string }; reassigned: Record<string, number>; purged: Record<string, number> }>(`/api/admin/users/${userId}`, { method: "DELETE" }),
-  oracleAsk: (query: string) => apiFetch<OracleResult>("/api/oracle", { method: "POST", body: JSON.stringify({ query }) }),
   bufferDrafts: () => apiFetch<BufferDraftsResponse>("/api/buffer/drafts"),
   bufferApprove: (postId: string, mode: "queue" | "schedule" | "now", dueAt?: string) => apiFetch<{ ok: boolean }>("/api/buffer/approve", { method: "POST", body: JSON.stringify({ postId, mode, dueAt }) }),
   bufferReject: (postId: string) => apiFetch<{ ok: boolean }>("/api/buffer/reject", { method: "POST", body: JSON.stringify({ postId }) }),

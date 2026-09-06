@@ -26,7 +26,6 @@ import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppRoomBookingRouteImport } from './routes/_app/room-booking'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
 import { Route as AppPeerReportsRouteImport } from './routes/_app/peer-reports'
-import { Route as AppOracleRouteImport } from './routes/_app/oracle'
 import { Route as AppMyTasksRouteImport } from './routes/_app/my-tasks'
 import { Route as AppMessagesRouteImport } from './routes/_app/messages'
 import { Route as AppMasterCalendarRouteImport } from './routes/_app/master-calendar'
@@ -128,11 +127,6 @@ const AppPeerReportsRoute = AppPeerReportsRouteImport.update({
   path: '/peer-reports',
   getParentRoute: () => AppRoute,
 } as any)
-const AppOracleRoute = AppOracleRouteImport.update({
-  id: '/oracle',
-  path: '/oracle',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppMyTasksRoute = AppMyTasksRouteImport.update({
   id: '/my-tasks',
   path: '/my-tasks',
@@ -231,7 +225,6 @@ export interface FileRoutesByFullPath {
   '/master-calendar': typeof AppMasterCalendarRoute
   '/messages': typeof AppMessagesRoute
   '/my-tasks': typeof AppMyTasksRoute
-  '/oracle': typeof AppOracleRoute
   '/peer-reports': typeof AppPeerReportsRoute
   '/reports': typeof AppReportsRoute
   '/room-booking': typeof AppRoomBookingRoute
@@ -265,7 +258,6 @@ export interface FileRoutesByTo {
   '/master-calendar': typeof AppMasterCalendarRoute
   '/messages': typeof AppMessagesRoute
   '/my-tasks': typeof AppMyTasksRoute
-  '/oracle': typeof AppOracleRoute
   '/peer-reports': typeof AppPeerReportsRoute
   '/reports': typeof AppReportsRoute
   '/room-booking': typeof AppRoomBookingRoute
@@ -302,7 +294,6 @@ export interface FileRoutesById {
   '/_app/master-calendar': typeof AppMasterCalendarRoute
   '/_app/messages': typeof AppMessagesRoute
   '/_app/my-tasks': typeof AppMyTasksRoute
-  '/_app/oracle': typeof AppOracleRoute
   '/_app/peer-reports': typeof AppPeerReportsRoute
   '/_app/reports': typeof AppReportsRoute
   '/_app/room-booking': typeof AppRoomBookingRoute
@@ -340,7 +331,6 @@ export interface FileRouteTypes {
     | '/master-calendar'
     | '/messages'
     | '/my-tasks'
-    | '/oracle'
     | '/peer-reports'
     | '/reports'
     | '/room-booking'
@@ -374,7 +364,6 @@ export interface FileRouteTypes {
     | '/master-calendar'
     | '/messages'
     | '/my-tasks'
-    | '/oracle'
     | '/peer-reports'
     | '/reports'
     | '/room-booking'
@@ -410,7 +399,6 @@ export interface FileRouteTypes {
     | '/_app/master-calendar'
     | '/_app/messages'
     | '/_app/my-tasks'
-    | '/_app/oracle'
     | '/_app/peer-reports'
     | '/_app/reports'
     | '/_app/room-booking'
@@ -562,13 +550,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPeerReportsRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/oracle': {
-      id: '/_app/oracle'
-      path: '/oracle'
-      fullPath: '/oracle'
-      preLoaderRoute: typeof AppOracleRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/my-tasks': {
       id: '/_app/my-tasks'
       path: '/my-tasks'
@@ -707,7 +688,6 @@ interface AppRouteChildren {
   AppMasterCalendarRoute: typeof AppMasterCalendarRoute
   AppMessagesRoute: typeof AppMessagesRoute
   AppMyTasksRoute: typeof AppMyTasksRoute
-  AppOracleRoute: typeof AppOracleRoute
   AppPeerReportsRoute: typeof AppPeerReportsRoute
   AppReportsRoute: typeof AppReportsRoute
   AppRoomBookingRoute: typeof AppRoomBookingRoute
@@ -735,7 +715,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppMasterCalendarRoute: AppMasterCalendarRoute,
   AppMessagesRoute: AppMessagesRoute,
   AppMyTasksRoute: AppMyTasksRoute,
-  AppOracleRoute: AppOracleRoute,
   AppPeerReportsRoute: AppPeerReportsRoute,
   AppReportsRoute: AppReportsRoute,
   AppRoomBookingRoute: AppRoomBookingRoute,
