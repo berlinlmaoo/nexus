@@ -243,6 +243,7 @@ struct TabRoot: View {
 /// iPad / Mac shape — every destination visible at once, detail on the right.
 struct SidebarRoot: View {
     @Environment(AppRouter.self) private var router
+    @State private var viewer = Viewer.shared
     @State private var selection: NXSelection? = .screen(.dashboard)
     @State private var columns: NavigationSplitViewVisibility = .all
     @State private var shortcuts = ProjectShortcuts.shared
@@ -266,7 +267,10 @@ struct SidebarRoot: View {
                         }
                     }
                     Section {
-                        ForEach(group.screens) { screen in
+                        // Control Room is drawn only for MANAGER and above, matching the web and the
+                        // phone launcher. The routes behind it refuse everyone else regardless; this
+                        // just stops offering a door that opens onto a wall of 403s.
+                        ForEach(group.screens.filter { $0 != .admin || viewer.canAdminister }) { screen in
                             Label {
                                 Text(screen.title).font(NXFont.text(15, .semibold))
                             } icon: {
@@ -372,6 +376,7 @@ struct SidebarRoot: View {
         // An outside instruction arrives as a request, not as state, and is cleared the moment it
         // is answered. Held as state it would keep dragging the sidebar back to attendance every
         // time this view redrew, and no amount of tapping elsewhere would stick.
+        .task { await viewer.loadIfNeeded() }
         .onChange(of: router.sidebarRequest) { _, requested in
             guard let requested else { return }
             selection = .screen(requested)

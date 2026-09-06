@@ -77,6 +77,7 @@ final class AuthStore {
         ResponseCache.clearAll()
         // Nor may a Live Activity: it would keep counting one person's hours on the Lock Screen of
         // a phone that has already been handed to somebody else.
+        Viewer.shared.reset()
         AttendancePresence.stop()
         PhoneSessionBridge.shared.publish(nil)
         session = nil

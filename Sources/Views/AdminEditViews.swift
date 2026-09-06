@@ -39,26 +39,42 @@ struct AdminAnnouncement: Decodable, Identifiable, Sendable {
 struct AdminView: View {
     @State private var section = 0
     @State private var workspaceId: String?
-    private let titles = ["Users", "Absensi", "Audit", "Quests", "Pengumuman"]
+    @State private var viewer = Viewer.shared
+
+    /// Built rather than fixed, because the announcements tab is BoD-only. Hiding it by index would
+    /// silently renumber every tab after it; there is nothing after it today, and that is exactly
+    /// the kind of assumption that breaks the day somebody appends one.
+    private var tabs: [(title: String, id: String)] {
+        var t: [(String, String)] = [("Users", "users"), ("Absensi", "attendance"),
+                                     ("Audit", "audit"), ("Quests", "quests")]
+        if viewer.canAnnounce { t.append(("Pengumuman", "announcements")) }
+        return t
+    }
 
     var body: some View {
         ZStack {
             NX.background.ignoresSafeArea()
             VStack(spacing: 0) {
-                Picker("", selection: $section) { ForEach(titles.indices, id: \.self) { Text(titles[$0]).tag($0) } }
-                    .pickerStyle(.segmented).padding(12)
+                Picker("", selection: $section) {
+                    ForEach(tabs.indices, id: \.self) { Text(tabs[$0].title).tag($0) }
+                }
+                .pickerStyle(.segmented).padding(12)
                 Divider().overlay(NX.border)
-                switch section {
-                case 1: AttendanceAdminSection(workspaceId: workspaceId)
-                case 2: AdminAuditSection()
-                case 3: AdminQuestsSection(workspaceId: workspaceId)
-                case 4: AdminAnnouncementsSection()
+                // Switched on the tab's id, not its index, so a hidden tab cannot shift the others.
+                switch tabs.indices.contains(section) ? tabs[section].id : "users" {
+                case "attendance": AttendanceAdminSection(workspaceId: workspaceId)
+                case "audit": AdminAuditSection()
+                case "quests": AdminQuestsSection(workspaceId: workspaceId)
+                case "announcements": AdminAnnouncementsSection()
                 default: AdminUsersSection(workspaceId: workspaceId)
                 }
             }
         }
         .navigationTitle("Control Room").navigationBarTitleDisplayMode(.inline)
-        .task { workspaceId = (try? await APIClient.shared.workspaceInfo())?.workspaceId }
+        .task {
+            await viewer.loadIfNeeded()
+            workspaceId = (try? await APIClient.shared.workspaceInfo())?.workspaceId
+        }
     }
 }
 

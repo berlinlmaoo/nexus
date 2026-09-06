@@ -34,6 +34,7 @@ struct RootView: View {
 struct MoreView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(AppRouter.self) private var router
+    @State private var viewer = Viewer.shared
     private let cols = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
     var body: some View {
@@ -74,7 +75,9 @@ struct MoreView: View {
                                 MoreTile(T("Ticket"), "ticket.fill", NX.blue) { TicketsView() }
                                 MoreTile(T("Teams"), "person.3.fill", NX.coral) { TeamsView() }
                                 MoreTile(T("Tuning Room"), "gearshape.fill", NX.mutedFg) { SettingsView() }
-                                MoreTile(T("Control Room"), "shield.fill", NX.danger) { AdminView() }
+                                if viewer.canAdminister {
+                                    MoreTile(T("Control Room"), "shield.fill", NX.danger) { AdminView() }
+                                }
                             }
                         }
 
@@ -83,6 +86,7 @@ struct MoreView: View {
                     .padding(16)
                 }
             }
+            .task { await viewer.loadIfNeeded() }
             .navigationTitle(T("More"))
             .navigationBarTitleDisplayMode(.inline)
             // Attendance is a launcher tile, not a tab, so reaching it from outside the app means
