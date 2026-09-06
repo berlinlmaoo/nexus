@@ -11,6 +11,9 @@ struct RootView: View {
             // In-app light/dark override. nil = follow the iOS setting.
             AdaptiveRoot()
                 .preferredColorScheme(appearance.theme.colorScheme)
+                // GIDEON first, announcements second: the overlay added last draws on top, and an
+                // announcement must never end up behind a floating button.
+                .overlay(alignment: .bottomLeading) { GideonLauncher() }
                 // Above the whole app rather than inside a tab: an announcement is not a screen you
                 // navigate to, and it must reach somebody wherever they happen to be standing.
                 .overlay { AnnouncementModal() }
