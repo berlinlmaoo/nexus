@@ -2,9 +2,10 @@ import { Outlet, createFileRoute, useLocation, useNavigate } from "@tanstack/rea
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { SearchModal } from "@/components/SearchModal";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { isAuthError, nexusApi } from "@/lib/nexus-api";
 import { GideonPanel } from "@/components/gideon/GideonPanel";
+import { GideonMark } from "@/components/gideon/GideonMark";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { MobileTabBar } from "@/components/MobileTabBar";
@@ -128,9 +129,9 @@ function GideonLauncher() {
         <button
           onClick={() => setOpen(true)}
           aria-label="Open Gideon AI"
-          className="fixed bottom-32 right-4 z-50 grid h-12 w-12 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-pop transition-all hover:scale-105 active:scale-95 md:bottom-6 md:right-6"
+          className="fixed bottom-32 right-4 z-50 grid h-12 w-12 place-items-center rounded-2xl border border-border bg-card text-foreground shadow-pop transition-all hover:scale-105 active:scale-95 md:bottom-6 md:right-6"
         >
-          <Sparkles className="h-5 w-5" />
+          <GideonMark className="h-5 w-5" />
         </button>
       )}
       {open && (

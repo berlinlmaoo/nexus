@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { BarChart2, Image as ImageIcon, Loader2, MoreHorizontal, Send, Sparkles, Trash2, Wrench, X } from "lucide-react";
+import { BarChart2, Image as ImageIcon, Loader2, MoreHorizontal, Send, Trash2, Wrench, X } from "lucide-react";
+import { GideonMark } from "./GideonMark";
 import { clearGideonHistory, loadGideonHistory, streamGideon, type GideonMessage } from "@/lib/gideon";
 import { cn } from "@/lib/utils";
 
@@ -68,7 +69,7 @@ export function GideonPanel({ onClose }: { onClose: () => void }) {
   return (
     <div className="flex h-full w-full max-w-md flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-pop">
       <div className="flex items-center gap-2 border-b border-border bg-card/95 px-4 py-3 backdrop-blur">
-        <span className="grid h-8 w-8 place-items-center rounded-xl bg-primary/10 text-primary"><Sparkles className="h-4 w-4" /></span>
+        <span className="grid h-8 w-8 place-items-center rounded-xl bg-muted text-foreground"><GideonMark className="h-4 w-4" /></span>
         <div className="min-w-0 flex-1"><div className="text-sm font-bold">Gideon</div><div className="text-[11px] text-muted-foreground">AI assistant · acts on your workspace</div></div>
         {turns.length > 0 && (
           <button onClick={clearHistory} title="Hapus history chat" aria-label="Hapus history chat" className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><Trash2 className="h-4 w-4" /></button>
@@ -83,7 +84,7 @@ export function GideonPanel({ onClose }: { onClose: () => void }) {
         {!loading && turns.length === 0 && (
           <div className="grid h-full place-items-center text-center">
             <div>
-              <Sparkles className="mx-auto mb-3 h-8 w-8 text-primary/60" />
+              <GideonMark className="mx-auto mb-3 h-8 w-8 text-foreground/70" />
               <p className="text-sm font-semibold">Ask Gideon anything</p>
               <p className="mt-1 text-xs text-muted-foreground">“Create a task to ship the landing page”, “What’s overdue?”, “Summarize project Atlas”.</p>
             </div>
