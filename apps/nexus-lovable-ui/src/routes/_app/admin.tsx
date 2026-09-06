@@ -38,6 +38,9 @@ function Admin() {
   const canManageShift = viewerRole === "BOD" || viewerRole === "ONE_ABOVE_ALL";
   // Permanent account deletion = BoD / One Above All only (backend also enforces). Plain Managers can't.
   const canDeleteUsers = viewerRole === "BOD" || viewerRole === "ONE_ABOVE_ALL";
+  // The same rule the server enforces in isBoD(). A MANAGER shown the compose form only ever gets a
+  // 403 back, which reads as a broken page rather than a permission they do not have.
+  const canAnnounce = viewerRole === "BOD" || viewerRole === "ONE_ABOVE_ALL";
   const updateOrg = useMutation({
     mutationFn: ({ memberId, role }: { memberId: string; role: string }) => nexusApi.updateWorkspaceMember({ memberId, role: role as OrgRole, workspaceId: wsId }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["nexus", "workspace-members"] }),
@@ -75,12 +78,12 @@ function Admin() {
           <button onClick={() => setView("users")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "users" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><UsersIcon className="h-3.5 w-3.5" /> Users</button>
           <button onClick={() => setView("audit")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "audit" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><ScrollText className="h-3.5 w-3.5" /> Audit log</button>
           <button onClick={() => setView("quests")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "quests" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Trophy className="h-3.5 w-3.5" /> Quests</button>
-          <button onClick={() => setView("announcements")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "announcements" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Megaphone className="h-3.5 w-3.5" /> Announcements</button>
+          {canAnnounce && <button onClick={() => setView("announcements")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "announcements" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Megaphone className="h-3.5 w-3.5" /> Announcements</button>}
         </div>
 
         {view === "audit" && <AuditLog />}
         {view === "quests" && <AdminQuests />}
-        {view === "announcements" && <AnnouncementsAdmin />}
+        {view === "announcements" && canAnnounce && <AnnouncementsAdmin />}
 
         {view === "users" && users.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Shield className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">Admin access required</div><p className="mt-2 text-sm text-muted-foreground">You need the system-admin role to view user management.</p></div>}
 
