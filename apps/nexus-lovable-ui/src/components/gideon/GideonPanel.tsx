@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BarChart2, FileText, Loader2, MoreHorizontal, Send, Trash2, Wrench, X } from "lucide-react";
 import { GideonMark } from "./GideonMark";
-import { clearGideonHistory, loadGideonHistory, streamGideon, type GideonMessage } from "@/lib/gideon";
+import { clearGideonHistory, loadGideonHistory, streamGideon, GIDEON_TIERS, GIDEON_DEFAULT_TIER, type GideonMessage, type GideonTier } from "@/lib/gideon";
 import { cn } from "@/lib/utils";
 
 type ChatTurn = GideonMessage & { tools?: string[]; streaming?: boolean };
@@ -11,6 +11,16 @@ export function GideonPanel({ onClose }: { onClose: () => void }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  // Remembered per browser: somebody who picks Terra for quick questions should not have to pick it
+  // again every time the panel opens.
+  const [tier, setTier] = useState<GideonTier>(() => {
+    try {
+      const saved = localStorage.getItem("gideon-tier");
+      return (GIDEON_TIERS.some((t) => t.id === saved) ? saved : GIDEON_DEFAULT_TIER) as GideonTier;
+    } catch {
+      return GIDEON_DEFAULT_TIER;
+    }
+  });
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -60,7 +70,7 @@ export function GideonPanel({ onClose }: { onClose: () => void }) {
         acc += (acc ? "\n\n" : "") + `⚠️ ${ev.content ?? "Something went wrong."}`;
         setTurns((cur) => { const next = [...cur]; const last = next[next.length - 1]; if (last?.role === "assistant") next[next.length - 1] = { ...last, content: acc }; return next; });
       }
-    }, { signal: controller.signal }).catch(() => {});
+    }, { signal: controller.signal, model: tier }).catch(() => {});
 
     setTurns((cur) => { const next = [...cur]; const last = next[next.length - 1]; if (last?.role === "assistant") next[next.length - 1] = { ...last, streaming: false }; return next; });
     setBusy(false);
@@ -71,6 +81,21 @@ export function GideonPanel({ onClose }: { onClose: () => void }) {
       <div className="flex items-center gap-2 border-b border-border bg-card/95 px-4 py-3 backdrop-blur">
         <span className="grid h-8 w-8 place-items-center rounded-xl bg-muted text-foreground"><GideonMark className="h-4 w-4" /></span>
         <div className="min-w-0 flex-1"><div className="text-sm font-bold">Gideon</div><div className="text-[11px] text-muted-foreground">AI assistant · acts on your workspace</div></div>
+        <select
+          value={tier}
+          onChange={(e) => {
+            const next = e.target.value as GideonTier;
+            setTier(next);
+            try { localStorage.setItem("gideon-tier", next); } catch { /* private mode */ }
+          }}
+          title={GIDEON_TIERS.find((t) => t.id === tier)?.blurb}
+          aria-label="Pilih tingkatan GIDEON"
+          className="rounded-lg border border-border bg-background px-2 py-1 text-[11px] font-semibold text-muted-foreground outline-none focus:border-primary"
+        >
+          {GIDEON_TIERS.map((t) => (
+            <option key={t.id} value={t.id}>{t.name}</option>
+          ))}
+        </select>
         {turns.length > 0 && (
           <button onClick={clearHistory} title="Hapus history chat" aria-label="Hapus history chat" className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><Trash2 className="h-4 w-4" /></button>
         )}
