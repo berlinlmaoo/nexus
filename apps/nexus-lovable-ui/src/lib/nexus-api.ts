@@ -134,9 +134,38 @@ export type ComplaintMessage = {
   author: ComplaintPerson | null;
   mine: boolean;
 };
+// --- Attendance correction proposed on a ticket ---
+// A proposal only; nothing about attendance moves until a BoD decides it at
+// POST /api/complaints/[id]/correction — that route is the only writer of the AttendanceRecord.
+export type AttendanceCorrectionStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type AttendanceCorrection = {
+  id: string;
+  complaintId: string;
+  status: AttendanceCorrectionStatus;
+  /** Attendance date key "YYYY-MM-DD" (Asia/Jakarta), not a timestamp — never re-zone it. */
+  date: string;
+  user: ComplaintPerson;               // whose attendance this would rewrite
+  /** null = "leave the recorded time alone", NOT "clear it". Approval merges nulls with the record. */
+  proposedCheckInAt: string | null;
+  proposedCheckOutAt: string | null;
+  reason: string;
+  proposedBy: ComplaintPerson;         // GIDEON, usually
+  /** What the record held when the proposal was written — the snapshot the server optimistic-locks on. */
+  before: { recordId: string | null; checkInAt: string | null; checkOutAt: string | null; status: string | null };
+  decidedBy: ComplaintPerson | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  createdAt: string;
+  canApprove: boolean;                 // row-level: still PENDING. NOT the viewer's permission.
+};
+/** `canDecide` is the VIEWER's capability, so a reporter gets the card without the buttons. */
+export type AttendanceCorrectionList = { corrections: AttendanceCorrection[]; canDecide: boolean };
+export type AttendanceCorrectionDecision = { correction: AttendanceCorrection; record: unknown | null };
+
 export type ComplaintDetail = Complaint & {
   resolvedBy: { id: string; name: string } | null;
   messages: ComplaintMessage[];
+  corrections: AttendanceCorrection[];
 };
 export type ComplaintList = { complaints: Complaint[]; counts: Record<string, number>; viewerIsBod: boolean };
 
@@ -1545,6 +1574,11 @@ export const nexusApi = {
   },
   replyComplaint: (id: string, body: string) => apiFetch<ComplaintDetail>(`/api/complaints/${id}/messages`, { method: "POST", body: JSON.stringify({ body }) }),
   setComplaintStatus: (id: string, status: string) => apiFetch<ComplaintDetail>(`/api/complaints/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
+  // The ticket detail already carries `corrections`; this endpoint exists for `canDecide`, which the
+  // detail payload has no field for (its `canManage` is about ticket status, not attendance writes).
+  complaintCorrections: (id: string) => apiFetch<AttendanceCorrectionList>(`/api/complaints/${id}/correction`),
+  decideComplaintCorrection: (id: string, payload: { decision: "APPROVE" | "REJECT"; correctionId?: string; note?: string }) =>
+    apiFetch<AttendanceCorrectionDecision>(`/api/complaints/${id}/correction`, { method: "POST", body: JSON.stringify(payload) }),
 
   // --- Workspace members (org roles: BoD / Manager / Staff) ---
   workspaceMembers: (workspaceId?: string, includeRegistered = false) => {
