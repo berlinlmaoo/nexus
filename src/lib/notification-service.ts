@@ -628,8 +628,11 @@ export async function notifyAnnouncement(announcementId: string) {
     ? announcement.targetUserIds
     : (await prisma.workspaceMember.findMany({ select: { userId: true }, distinct: ["userId"] })).map((m) => m.userId)
 
-  // The author already knows what they just wrote.
-  const recipients = [...new Set(audience)].filter((userId) => userId !== announcement.createdById)
+  // The author is included. Excluding them read well — "they already know what they wrote" — and
+  // was wrong in practice: the person who posts a company-wide notice is usually the one checking it
+  // went out, and silence is indistinguishable from a broken feature. They also belong to the
+  // company the notice is about.
+  const recipients = [...new Set(audience)]
 
   const body = announcement.body.trim()
   const message = body.length > 160 ? `${body.slice(0, 157)}…` : body
