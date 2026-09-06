@@ -278,7 +278,15 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
 
-  const { messages } = (await req.json()) as { messages: { role: string; content: string }[] }
+  const { messages, model } = (await req.json()) as {
+    messages: { role: string; content: string }[]
+    model?: string
+  }
+
+  // The three GIDEON tiers. Which model each one is stays in the shim — this only has to refuse a
+  // name it does not recognise, so a client cannot smuggle an arbitrary model id through.
+  const TIERS = ['astra', 'luna', 'terra']
+  const tier = TIERS.includes((model || '').toLowerCase()) ? (model as string).toLowerCase() : 'luna'
   const userId = session.user.id
 
   const encoder = new TextEncoder()
@@ -303,7 +311,7 @@ export async function POST(req: NextRequest) {
         headers: { 'Content-Type': 'application/json', 'x-oracle-secret': process.env.ORACLE_LLM_SECRET || '' },
         // actorEmail → the shim sets it as NEXUS_GIDEON_ACTOR_EMAIL on the hermes spawn, so Gideon's
         // NEXUS tools act AS this logged-in user (role-scoped), not the fixed service identity.
-        body: JSON.stringify({ prompt, user: session.user?.name || '', actorEmail: session.user?.email || session.user?.id || '' }),
+        body: JSON.stringify({ prompt, model: tier, user: session.user?.name || '', actorEmail: session.user?.email || session.user?.id || '' }),
         signal: AbortSignal.timeout(150000), // Hermes agent + tool call can take ~30s+
       })
       if (!res.ok) { await sendEvent({ type: 'error', content: `Gideon error (${res.status}).` }); return }

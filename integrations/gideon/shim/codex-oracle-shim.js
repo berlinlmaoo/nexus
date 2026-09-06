@@ -22,6 +22,22 @@ const PORT = parseInt(process.env.ORACLE_LLM_PORT || "8765", 10)
 const SECRET = process.env.ORACLE_LLM_SECRET || ""
 const CODEX = process.env.CODEX_BIN || "/Users/jagainmacmini1/.local/bin/codex"
 const HERMES = process.env.HERMES_BIN || "/Users/jagainmacmini1/.local/bin/hermes"
+
+// The three GIDEON tiers, and the only place that knows which model each one is. NEXUS sends a tier
+// name; nothing upstream of here needs to learn a model id, so retuning a tier is a change to this
+// table alone.
+//
+// --provider is NOT optional. Hermes resolves a model to a provider through its catalogue, and the
+// catalogue does not list gpt-6-astra under openai-codex — so without naming the provider Hermes
+// refuses in two seconds with "No LLM provider configured", which reads like the model is gone.
+// Verified against v0.21.0; updating Hermes did not change it.
+const PROVIDER = "openai-codex"
+const TIERS = {
+  astra: "gpt-6-astra",   // newest generation. Fastest AND deepest in every measurement so far.
+  luna: "gpt-5.6-luna",   // the default
+  terra: "gpt-5.6-terra", // lighter
+}
+const DEFAULT_TIER = "luna"
 // Neutral, empty workdir so Codex has nothing to act on even if it tried.
 const WORKDIR = path.join(os.homedir(), ".hermes", "oracle-workdir")
 try { fs.mkdirSync(WORKDIR, { recursive: true }) } catch {}
@@ -92,11 +108,14 @@ function runCodex(query) {
 // Gideon chatbox → run the full Hermes agent one-shot (gpt-5.5 + live NEXUS tools). Slower (~30s).
 // actorEmail (the logged-in NEXUS user) is injected as NEXUS_GIDEON_ACTOR_EMAIL on THIS spawn only, so
 // the NEXUS plugin sends it as x-gideon-actor and the tools act as that user (role-scoped).
-function runHermes(prompt, actorEmail) {
+function runHermes(prompt, actorEmail, tier) {
   return new Promise((resolve) => {
     const env = { ...process.env }
     if (actorEmail) env.NEXUS_GIDEON_ACTOR_EMAIL = actorEmail
-    const child = spawn(HERMES, ["-z", prompt], { cwd: WORKDIR, env })
+    // An unknown tier falls back rather than failing: a client sending a name this shim has not
+    // learned yet should get an answer from the default, not an error.
+    const model = TIERS[tier] || TIERS[DEFAULT_TIER]
+    const child = spawn(HERMES, ["-z", prompt, "-m", model, "--provider", PROVIDER], { cwd: WORKDIR, env })
     let out = "", err = ""
     try { child.stdin.end() } catch {}
     child.stdout.on("data", (d) => { out += d.toString() })
@@ -137,9 +156,11 @@ const server = http.createServer((req, res) => {
     const prompt = (payload.prompt || "").toString().slice(0, 6000)
     if (!prompt.trim()) { res.writeHead(400); return res.end(JSON.stringify({ error: "empty" })) }
     const actorEmail = (payload.actorEmail || "").toString().slice(0, 200)
+    const tier = (payload.model || "").toString().toLowerCase().slice(0, 20)
+    const chosen = TIERS[tier] ? tier : DEFAULT_TIER
     const started = Date.now()
-    const reply = await runHermes(prompt, actorEmail)
-    console.log(`[hermes-chat] in=${prompt.length}c -> out=${reply.length}c (${Date.now() - started}ms)`)
+    const reply = await runHermes(prompt, actorEmail, chosen)
+    console.log(`[hermes-chat] ${chosen} in=${prompt.length}c -> out=${reply.length}c (${Date.now() - started}ms)`)
     res.writeHead(200, { "Content-Type": "application/json" })
     return res.end(JSON.stringify({ reply }))
   })

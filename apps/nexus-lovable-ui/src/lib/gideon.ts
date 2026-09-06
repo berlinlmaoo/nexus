@@ -1,6 +1,16 @@
 // Streaming client for the Gideon AI assistant (POST /api/gideon, SSE response).
 // Backend emits `data: {json}\n\n` lines with {type:'text'|'tool_result'|'done'|'error', content}.
 
+/** The three GIDEON tiers. Which model each one runs is decided on the server side. */
+export const GIDEON_TIERS = [
+  { id: "astra", name: "Astra", blurb: "Paling dalam. Untuk analisis dan keputusan." },
+  { id: "luna", name: "Luna", blurb: "Sehari-hari." },
+  { id: "terra", name: "Terra", blurb: "Ringan. Pertanyaan pendek." },
+] as const;
+
+export type GideonTier = (typeof GIDEON_TIERS)[number]["id"];
+export const GIDEON_DEFAULT_TIER: GideonTier = "luna";
+
 export type GideonMessage = { role: "user" | "assistant"; content: string };
 export type GideonTurn = GideonMessage & { tools?: string[] };
 export type GideonEvent =
@@ -18,7 +28,7 @@ export async function streamGideon(
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-    body: JSON.stringify({ messages, model: opts.model ?? "sonnet" }),
+    body: JSON.stringify({ messages, model: opts.model ?? GIDEON_DEFAULT_TIER }),
     signal: opts.signal,
   });
 
