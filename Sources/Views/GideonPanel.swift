@@ -13,16 +13,19 @@ struct GideonLauncher: View {
         Button {
             open = true
         } label: {
-            Image(systemName: "sparkles")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(.white)
+            // The GIDEON mark on the app's own card surface — the same material as every other
+            // raised thing in NEXUS. A tinted gradient blob would announce itself louder than
+            // anything it sits on top of, and look like every other assistant button ever drawn.
+            Image("GideonLogo")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 26, height: 26)
+                .foregroundStyle(NX.foreground)
                 .frame(width: 52, height: 52)
-                .background(
-                    LinearGradient(colors: [NX.violet, Color(hex: "#b3a6ff")],
-                                   startPoint: .topLeading, endPoint: .bottomTrailing),
-                    in: Circle()
-                )
-                .shadow(color: NX.violet.opacity(0.45), radius: 14, y: 6)
+                .background(NX.card, in: Circle())
+                .overlay(Circle().strokeBorder(NX.border))
+                .shadow(color: .black.opacity(0.22), radius: 12, y: 5)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("GIDEON")
@@ -111,9 +114,12 @@ struct GideonPanel: View {
 
     private var empty: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 26))
-                .foregroundStyle(NX.violetText)
+            Image("GideonLogo")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 28, height: 28)
+                .foregroundStyle(NX.foreground)
             Text(T("Ask GIDEON about NEXUS"))
                 .font(NXFont.display(16, .bold))
                 .foregroundStyle(NX.foreground)
