@@ -21,6 +21,28 @@ struct AdminQuest: Decodable, Identifiable, Sendable {
     let xpReward: Int?
     let deadline: String?
 }
+/// GET /api/gideon/usage — counts and dates only, never anybody's questions.
+struct GideonUsage: Decodable, Sendable {
+    let users: [Row]?
+    let totals: Totals?
+
+    struct Row: Decodable, Sendable {
+        let id: String
+        let name: String?
+        let email: String?
+        let asked: Int?
+        let answered: Int?
+        let toolCalls: Int?
+        let firstUsed: String?
+        let lastUsed: String?
+    }
+    struct Totals: Decodable, Sendable {
+        let people: Int?
+        let asked: Int?
+        let toolCalls: Int?
+    }
+}
+
 struct AnnouncementsResponse: Decodable, Sendable { let announcements: [AdminAnnouncement]? }
 struct AdminAnnouncement: Decodable, Identifiable, Sendable {
     let id: String
@@ -47,7 +69,10 @@ struct AdminView: View {
     private var tabs: [(title: String, id: String)] {
         var t: [(String, String)] = [("Users", "users"), ("Absensi", "attendance"),
                                      ("Audit", "audit"), ("Quests", "quests")]
-        if viewer.canAnnounce { t.append(("Pengumuman", "announcements")) }
+        if viewer.canAnnounce {
+            t.append(("Pengumuman", "announcements"))
+            t.append(("GIDEON", "gideon"))
+        }
         return t
     }
 
@@ -66,6 +91,7 @@ struct AdminView: View {
                 case "audit": AdminAuditSection()
                 case "quests": AdminQuestsSection(workspaceId: workspaceId)
                 case "announcements": AdminAnnouncementsSection()
+                case "gideon": AdminGideonUsageSection()
                 default: AdminUsersSection(workspaceId: workspaceId)
                 }
             }
@@ -392,5 +418,96 @@ struct CreateAnnouncementSheet: View {
         busy = true; defer { busy = false }
         try? await APIClient.shared.createAnnouncement(title: title.trimmingCharacters(in: .whitespaces), body: body_.trimmingCharacters(in: .whitespaces), tone: tone)
         await onCreated(); dismiss()
+    }
+}
+
+// MARK: - GIDEON usage
+
+/// Who uses GIDEON, and how much.
+///
+/// Counts and dates only. What somebody asked an assistant is between them and it — a screen showing
+/// the questions would change how people use it, and the ones who most need the help would stop
+/// asking.
+struct AdminGideonUsageSection: View {
+    @State private var data: GideonUsage?
+    @State private var loading = true
+    @State private var error: String?
+
+    private var rows: [GideonUsage.Row] { data?.users ?? [] }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                if loading && data == nil {
+                    ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.top, 40)
+                } else if let error {
+                    Text(error).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                } else {
+                    if let t = data?.totals {
+                        HStack(spacing: 10) {
+                            stat(T("People"), t.people ?? 0)
+                            stat(T("Questions"), t.asked ?? 0)
+                            stat(T("Tools used"), t.toolCalls ?? 0)
+                        }
+                    }
+                    if rows.isEmpty {
+                        TabEmpty(icon: "sparkles", text: T("Nobody has used GIDEON yet."))
+                    } else {
+                        VStack(spacing: 0) {
+                            ForEach(rows, id: \.id) { row in
+                                personRow(row)
+                                if row.id != rows.last?.id { Divider().overlay(NX.border) }
+                            }
+                        }
+                        .nexusCard(padding: 0)
+                    }
+                }
+            }
+            .padding(16)
+        }
+        .task { await load() }
+        .refreshable { await load() }
+    }
+
+    private func stat(_ label: String, _ value: Int) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("\(value)").font(NXFont.display(20, .black)).foregroundStyle(NX.foreground)
+            Text(label).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(NX.border))
+    }
+
+    private func personRow(_ row: GideonUsage.Row) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(row.name ?? row.email ?? "—").font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
+                Text(shortDate(row.lastUsed).map { T("Last used") + " " + $0 } ?? T("Never"))
+                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            }
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 1) {
+                Text("\(row.asked ?? 0)").font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
+                Text(T("questions")).font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+    }
+
+    private func shortDate(_ iso: String?) -> String? {
+        guard let iso else { return nil }
+        let p = ISO8601DateFormatter(); p.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let d = p.date(from: iso) ?? { let q = ISO8601DateFormatter(); q.formatOptions = [.withInternetDateTime]; return q.date(from: iso) }() else { return nil }
+        return d.formatted(date: .abbreviated, time: .omitted)
+    }
+
+    private func load() async {
+        error = nil
+        do { data = try await APIClient.shared.gideonUsage() }
+        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load.") }
+        loading = false
     }
 }

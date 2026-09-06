@@ -619,6 +619,11 @@ struct APIClient {
         _ = try await run(makeRequest("/api/gamification/quests/admin?id=\(enc(id))", method: "DELETE"), decode: SuccessResponse.self)
         return true
     }
+    /// Who uses GIDEON, and how much. BoD and above; the server refuses everyone else.
+    func gideonUsage() async throws -> GideonUsage {
+        try await run(makeRequest("/api/gideon/usage"), decode: GideonUsage.self)
+    }
+
     /// Active announcements this user has not dismissed yet — drives the pop-up.
     func activeAnnouncements() async throws -> [AdminAnnouncement] {
         (try await run(makeRequest("/api/announcements/active"), decode: AnnouncementsResponse.self)).announcements ?? []
