@@ -1,11 +1,11 @@
 import WidgetKit
 import SwiftUI
 
-/// Everything this extension provides. Home Screen and Lock Screen widgets land here too when they
-/// arrive; for now the work session is the only member.
+/// Everything this extension provides.
 @main
 struct NEXUSWidgetsBundle: WidgetBundle {
     var body: some Widget {
         WorkSessionLiveActivity()
+        AttendanceWidget()
     }
 }

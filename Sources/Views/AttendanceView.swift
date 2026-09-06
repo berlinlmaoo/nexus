@@ -471,7 +471,7 @@ struct AttendanceView: View {
         // Drives the Dynamic Island from what the app actually believes, rather than from the tap.
         // A check-in made on the web, or one that arrived by replaying the queue, has to move the
         // Island too — and neither of those passes through the buttons on this screen.
-        LiveActivityController.refresh(today: today, userName: auth.session?.userName)
+        AttendancePresence.refresh(today: today, userName: auth.session?.userName)
     }
 
     // MARK: formatters

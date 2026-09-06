@@ -1,0 +1,87 @@
+import Foundation
+import WidgetKit
+
+/// The single funnel between "what the app knows about attendance" and everything outside the app
+/// that shows it: the Dynamic Island, the Lock Screen, and the Home Screen widgets.
+///
+/// One funnel rather than three call sites per surface. Adding a surface later means adding a line
+/// here, not hunting for every place attendance can change — which is how one of them ends up stale
+/// and nobody notices for a week.
+@MainActor
+enum AttendancePresence {
+
+    /// The last attendance payload seen. Kept so the offline queue — which knows nothing about
+    /// shifts or offices — can trigger a refresh without fetching anything.
+    private static var lastToday: AttendanceToday?
+    private static var userName = ""
+
+    /// Call whenever attendance truth might have moved: after a load, after a check-in or
+    /// check-out, and after the queue drains. Cheap and idempotent.
+    static func refresh(today: AttendanceToday? = nil, userName name: String? = nil) {
+        if let today { lastToday = today }
+        if let name, !name.isEmpty { userName = name }
+
+        let record = lastToday?.today
+        let queue = AttendanceQueue.shared.pending
+        let queuedCheckIn = queue.first { $0.kind == .checkIn }
+
+        let checkInAt = parseISO(record?.checkInAt)
+        let checkOutAt = parseISO(record?.checkOutAt)
+        let start = checkInAt ?? queuedCheckIn?.deviceAt
+
+        let snapshot = AttendanceSnapshot(
+            dateKey: AttendanceSnapshot.currentDateKey(),
+            checkInAt: checkInAt,
+            checkOutAt: checkOutAt,
+            officeName: record?.officeLocation?.name,
+            expectedOutAt: expectedOut(from: start, shift: lastToday?.myShift),
+            pendingCount: queue.count,
+            queuedSince: queuedCheckIn?.deviceAt,
+            updatedAt: Date()
+        )
+
+        snapshot.save()
+        WidgetCenter.shared.reloadAllTimelines()
+        LiveActivityController.apply(snapshot, userName: userName)
+    }
+
+    /// Logging out has to erase every trace outside the app. A widget left showing one person's
+    /// hours, or a Live Activity still counting them, survives on a phone handed to somebody else.
+    static func stop() {
+        lastToday = nil
+        userName = ""
+        AttendanceSnapshot.clear()
+        WidgetCenter.shared.reloadAllTimelines()
+        LiveActivityController.stop()
+    }
+
+    // MARK: - helpers
+
+    /// The API sends fractional seconds on some routes and not on others; both have to parse or the
+    /// clock silently disappears.
+    private static func parseISO(_ iso: String?) -> Date? {
+        guard let iso else { return nil }
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = withFraction.date(from: iso) { return d }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return plain.date(from: iso)
+    }
+
+    /// When this shift is expected to end. Flexi has no fixed end — it is check-in plus nine hours,
+    /// the same rule the attendance screen states.
+    private static func expectedOut(from start: Date?, shift: AttendanceToday.Shift?) -> Date? {
+        guard let start, let shift else { return nil }
+        if shift.flexi == true { return start.addingTimeInterval(9 * 3600) }
+
+        let parts = shift.endTime.split(separator: ":").compactMap { Int($0) }
+        guard parts.count >= 2 else { return nil }
+        var comps = Calendar.current.dateComponents([.year, .month, .day], from: start)
+        comps.hour = parts[0]
+        comps.minute = parts[1]
+        guard let end = Calendar.current.date(from: comps) else { return nil }
+        // A shift whose end time falls earlier in the day than the check-in finishes tomorrow.
+        return end > start ? end : end.addingTimeInterval(24 * 3600)
+    }
+}

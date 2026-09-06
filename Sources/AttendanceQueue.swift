@@ -172,7 +172,7 @@ final class AttendanceQueue {
         try? data.write(to: indexURL, options: .atomic)
         // Every mutation of the queue funnels through here, so this is the single place that can
         // keep the Island honest about what has and has not reached the server.
-        LiveActivityController.refresh()
+        AttendancePresence.refresh()
     }
 
     private func load() {

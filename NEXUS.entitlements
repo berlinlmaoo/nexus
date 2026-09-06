@@ -11,6 +11,15 @@
 	     server: https://nexus.znetworks.id/.well-known/apple-app-site-association must list
 	     "5YR5T42G97.id.znetworks.nexus" under "webcredentials" (it does). BOTH entitlement files
 	     need this key — the Catalyst build reads NEXUS-Catalyst.entitlements, not this one. -->
+	<!-- Shared container the widget extension reads. Written by the app, never by the widget.
+	     Absent from NEXUS-Catalyst.entitlements on purpose: no widget is embedded in the Mac build,
+	     and macOS wants the team-prefixed form of the group, which would be one more thing to keep
+	     in step for no benefit. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.id.znetworks.nexus</string>
+	</array>
+
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>webcredentials:nexus.znetworks.id</string>
