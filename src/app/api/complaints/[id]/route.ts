@@ -48,6 +48,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const body = await request.json().catch(() => ({}))
     const status = String(body?.status ?? "") as ComplaintStatusKey
     if (!COMPLAINT_STATUSES.includes(status)) return NextResponse.json({ error: "Status gak valid." }, { status: 422 })
+    // AWAITING_DECISION is written by the system (GIDEON answering, a proposal landing) and left by a
+    // human acting. Nothing offers it as a button, and a director setting it by hand would be saying
+    // "somebody else decide this" about a ticket they already have open.
+    if (status === "AWAITING_DECISION") {
+      return NextResponse.json({ error: "Status ini diatur otomatis, gak bisa disetel manual." }, { status: 422 })
+    }
 
     const existing = await prisma.complaint.findUnique({ where: { id }, select: { id: true, workspaceId: true, status: true, reporterId: true } })
     if (!existing || existing.workspaceId !== membership.workspaceId) return NextResponse.json({ error: "Not found" }, { status: 404 })

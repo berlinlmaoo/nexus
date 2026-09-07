@@ -28,14 +28,28 @@ const catOf = (k: string) => CATEGORIES.find((c) => c.key === k);
 // "In review" (Sources/Views/TicketsView.swift, ticketStatusLabel); this screen used to say "New"
 // and "In progress" for those same two values, so one ticket read as two different states
 // depending on which client you opened. Both clients now say what the enum says. Nothing here is
-// derived: the chip is `status` straight off /api/complaints, and it moves only when a BoD moves
-// it. GIDEON answering a ticket does NOT move it, by design — see src/lib/gideon-ticket.ts.
+// derived: the chip is `status` straight off /api/complaints.
+//
+// AWAITING_DECISION ("Menunggu keputusan") is the one status a human does not set: GIDEON answering,
+// or a correction proposal landing, lifts a ticket out of OPEN into it. It is deliberately NOT
+// IN_REVIEW — that one means a director picked the ticket up ("Take it on"), and an automatic hop
+// there would quietly empty the inbox into a tab implying somebody was already handling it. So it
+// gets its own colour, and the Inbox tab below asks for it alongside OPEN.
 const STATUS: Record<string, { label: string; cls: string }> = {
   OPEN: { label: "Open", cls: "bg-amber-100 text-amber-700 ring-amber-200" },
+  AWAITING_DECISION: { label: "Awaiting decision", cls: "bg-violet-100 text-violet-700 ring-violet-200" },
   IN_REVIEW: { label: "In review", cls: "bg-sky-100 text-sky-700 ring-sky-200" },
   RESOLVED: { label: "Resolved", cls: "bg-emerald-100 text-emerald-700 ring-emerald-200" },
   CLOSED: { label: "Closed", cls: "bg-slate-100 text-slate-500 ring-slate-200" },
 };
+// A status this build has never heard of gets a neutral chip and its own name Title-Cased, rather
+// than an undefined lookup that takes the whole list down with it. The server enum grows; a deployed
+// bundle does not.
+const statusOf = (key: string) => STATUS[key] ?? { label: statusLabel(key), cls: "bg-slate-100 text-slate-500 ring-slate-200" };
+// The BoD inbox = every ticket nobody has claimed. Mirror of COMPLAINT_INBOX_STATUSES in
+// src/lib/complaints.ts. Asked for by name rather than leaning on the server widening a bare "OPEN"
+// (that widening exists for older clients): a ticket GIDEON answered is still unclaimed work.
+const INBOX_STATUS = "OPEN,AWAITING_DECISION";
 const fmtWhen = (iso: string) => new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const CORRECTION_STATUS: Record<string, { label: string; cls: string }> = {
   PENDING: { label: "Awaiting decision", cls: "bg-amber-100 text-amber-700 ring-amber-200" },
@@ -60,9 +74,18 @@ function ComplaintsPage() {
   const viewerIsBod = ["ONE_ABOVE_ALL", "BOD"].includes(roleQ.data?.role ?? "");
 
   // BoD filter by status; staff just see their own thread list.
-  const status = !viewerIsBod ? "ALL" : tab === "open" ? "OPEN" : tab === "review" ? "IN_REVIEW" : "ALL";
+  const status = !viewerIsBod ? "ALL" : tab === "open" ? INBOX_STATUS : tab === "review" ? "IN_REVIEW" : "ALL";
   const listQ = useQuery({ queryKey: ["complaints", viewerIsBod ? status : "MINE"], queryFn: () => nexusApi.complaints(status) });
-  const complaints = listQ.data?.complaints ?? [];
+  // Tickets with a decision waiting float to the top; everything else keeps the server's own
+  // lastMessageAt-desc order (Array#sort is stable, so the two orders compose). Tickets GIDEON merely
+  // ANSWERED are deliberately not floated — a queue sorted "assistant first" buries the genuinely
+  // new, unread tickets under a pile of replies. Those get the chip and the marker instead.
+  const complaints = useMemo(
+    () => [...(listQ.data?.complaints ?? [])].sort((a, b) => Number(b.pendingCorrection) - Number(a.pendingCorrection)),
+    [listQ.data],
+  );
+  // counts.OPEN is what ?status=OPEN returns, i.e. the whole inbox (OPEN + AWAITING_DECISION) — the
+  // server widens it so this badge can never disagree with the list under it.
   const counts = listQ.data?.counts ?? {};
 
   const invalidate = () => { qc.invalidateQueries({ queryKey: ["complaints"] }); };
@@ -113,7 +136,7 @@ function ComplaintsPage() {
 }
 
 function ComplaintCard({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: boolean; onOpen: () => void }) {
-  const st = STATUS[c.status];
+  const st = statusOf(c.status);
   const cat = catOf(c.category);
   const who = viewerIsBod ? (c.reporter?.name ?? "—") : "You";
   return (
@@ -124,6 +147,24 @@ function ComplaintCard({ c, viewerIsBod, onOpen }: { c: Complaint; viewerIsBod: 
         <span className="ml-auto text-[11px] text-muted-foreground">{fmtWhen(c.lastMessageAt)}</span>
       </div>
       <div className="mt-1.5 line-clamp-1 text-sm font-bold">{c.subject}</div>
+      {/* The two things the row could never say before: GIDEON has been in here, and there is a
+          decision sitting unmade. Both come straight off /api/complaints (see the list markers in
+          src/lib/complaints.ts) and both are independent of the chip above — a ticket a director has
+          already taken on still shows the proposal waiting inside it. */}
+      {(c.pendingCorrection || c.gideonReplied) && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          {c.pendingCorrection && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-bold text-violet-700 ring-1 ring-violet-200">
+              <CalendarClock className="h-3 w-3" /> Decision waiting
+            </span>
+          )}
+          {c.gideonReplied && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
+              <GideonMark className="h-3 w-3" /> GIDEON replied
+            </span>
+          )}
+        </div>
+      )}
       <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
         <MessageSquare className="h-3 w-3" /> {c.messageCount} message{c.messageCount === 1 ? "" : "s"} · {viewerIsBod ? `from ${who}` : "your complaint"}
       </div>
@@ -292,7 +333,7 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [c?.messages?.length]);
 
   const cat = c ? catOf(c.category) : null;
-  const st = c ? STATUS[c.status] : null;
+  const st = c ? statusOf(c.status) : null;
 
   return (
     <Backdrop onClose={onClose}>

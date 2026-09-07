@@ -324,6 +324,20 @@ export async function proposeAttendanceCorrection(
     await tx.complaintEvent.create({
       data: { complaintId, action: 'correction_proposed', actorId: authorId },
     })
+    // A live proposal IS a decision waiting on a BoD, whoever wrote it, so an untouched ticket says
+    // so on the list instead of looking like one nobody has read. Only ever out of OPEN: a ticket a
+    // director already took on stays IN_REVIEW, and the list marker carries the proposal there.
+    // The status is guarded in the WHERE, not by the read further up — minutes can pass between
+    // GIDEON reading the ticket and filing this.
+    const bumped = await tx.complaint.updateMany({
+      where: { id: complaintId, status: 'OPEN' },
+      data: { status: 'AWAITING_DECISION' },
+    })
+    if (bumped.count > 0) {
+      await tx.complaintEvent.create({
+        data: { complaintId, action: 'status', fromStatus: 'OPEN', toStatus: 'AWAITING_DECISION', actorId: authorId },
+      })
+    }
     return correction
   })
 
