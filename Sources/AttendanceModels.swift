@@ -81,7 +81,26 @@ struct AttendanceRequest: Decodable, Identifiable, Sendable {
     let startDate: String?
     let endDate: String?
     let user: UserRef?
+    /// The sick note / permit evidence, already carried by this very endpoint
+    /// (`serializeAttendanceRequest` in src/lib/attendance.ts). The app uploaded these and then
+    /// never showed one back, which left a reviewer approving a sick day they could not look at.
+    let supportingDocumentUrl: String?
+    let supportingDocumentName: String?
     struct UserRef: Decodable, Sendable { let name: String? }
+
+    /// Absolute URL for the attachment. The server hands out an app-relative path, and the route
+    /// behind it (`/api/files/...`) refuses anyone without the session cookie — so it can only be
+    /// fetched through the app's own image loader, never handed to Safari.
+    var attachmentURL: URL? {
+        guard let path = supportingDocumentUrl, !path.isEmpty else { return nil }
+        return URL(string: path.hasPrefix("http") ? path : Config.baseURL.absoluteString + path)
+    }
+
+    /// The composer accepts images and PDFs, so anything that is not plainly a PDF is drawn as a
+    /// picture. There is no PDF reader in this app, and pretending there is opens a blank page.
+    var attachmentIsPDF: Bool {
+        (supportingDocumentName ?? supportingDocumentUrl ?? "").lowercased().hasSuffix(".pdf")
+    }
 }
 
 /// GET /api/attendance/offsite-checkouts?status=ALL — check-outs taken outside the office geofence,

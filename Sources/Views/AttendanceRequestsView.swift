@@ -37,6 +37,7 @@ struct AttendanceRequestsCard: View {
     @State private var loading = true
     @State private var showComposer = false
     @State private var busy: String?
+    @State private var viewingPhoto: PhotoRef?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -66,6 +67,7 @@ struct AttendanceRequestsCard: View {
         // their own history while the crew's pending requests sat on the server unseen.
         .task(id: canReview) { await load() }
         .sheet(isPresented: $showComposer) { RequestComposerSheet(canGrant: canReview) { await load() } }
+        .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
     }
 
     private func row(_ r: AttendanceRequest) -> some View {
@@ -85,6 +87,7 @@ struct AttendanceRequestsCard: View {
             if let reason = r.reason, !reason.isEmpty {
                 Text(reason).font(NXFont.text(12)).foregroundStyle(NX.foreground.opacity(0.85)).lineLimit(2)
             }
+            if let url = r.attachmentURL { attachment(r, url) }
             if pending {
                 HStack(spacing: 8) {
                     if working { ProgressView().scaleEffect(0.7) }
@@ -107,6 +110,34 @@ struct AttendanceRequestsCard: View {
             Text(title).font(NXFont.text(12, .bold)).foregroundStyle(tone.fg)
                 .padding(.horizontal, 12).padding(.vertical, 6).background(tone.bg, in: Capsule())
         }.buttonStyle(.plain)
+    }
+
+    /// The evidence behind the request. The web offers it as a link; a link is no use here, because
+    /// the file route needs the session cookie and Safari does not have it — and a sick note is a
+    /// photograph anyway, so it belongs on the card rather than one navigation away.
+    @ViewBuilder private func attachment(_ r: AttendanceRequest, _ url: URL) -> some View {
+        let label = r.supportingDocumentName ?? T("View attachment")
+        if r.attachmentIsPDF {
+            HStack(spacing: 6) {
+                Image(systemName: "doc.fill").font(.system(size: 11)).foregroundStyle(NX.mutedFg)
+                Text(label).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                Text(T("PDF · open it on the web")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            }
+        } else {
+            Button { viewingPhoto = PhotoRef(url: url, name: r.supportingDocumentName) } label: {
+                HStack(spacing: 8) {
+                    CachedImage(url: url) { $0.resizable().scaledToFill() } placeholder: { NX.muted }
+                        .frame(width: 54, height: 54)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(label).font(NXFont.text(11, .semibold)).foregroundStyle(NX.violetText).lineLimit(1)
+                        Text(T("Tap to enlarge")).font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     private func dateRange(_ r: AttendanceRequest) -> String {
