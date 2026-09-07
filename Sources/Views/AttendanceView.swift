@@ -568,7 +568,10 @@ enum AttTone {
 struct StreakBoardCard: View {
     let canManage: Bool
     @Environment(AuthStore.self) private var auth
-    @State private var rows: [AttendanceRow] = []
+    /// Built once per load, not per read. It used to be a computed property — a `Dictionary(grouping:)`
+    /// plus a `localizedCaseInsensitiveCompare` sort (ICU collation, the slowest comparator Foundation
+    /// has) — and `body` reads it three times: the empty check, the name column and the cell grid.
+    @State private var members: [Member] = []
     @State private var loading = true
     @State private var selectedRow: AttendanceRow?   // BoD taps a cell → record actions (delete / clear check-out)
     @State private var monthOffset = 0               // 0 = this month; ◀ ▶ to reach past months
@@ -577,23 +580,26 @@ struct StreakBoardCard: View {
     private let gap: CGFloat = 3
     private let nameW: CGFloat = 76
 
-    private var cal: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(identifier: "Asia/Jakarta")!; return c }
-    private var monthDate: Date { cal.date(byAdding: .month, value: monthOffset, to: Date()) ?? Date() }
-    private var monthKey: String { let f = DateFormatter(); f.dateFormat = "yyyy-MM"; f.timeZone = cal.timeZone; return f.string(from: monthDate) }
-    private var monthLabel: String { let f = DateFormatter(); f.dateFormat = "MMMM yyyy"; f.locale = Locale(identifier: "id_ID"); f.timeZone = cal.timeZone; return f.string(from: monthDate) }
-    private var daysInMonth: Int { cal.range(of: .day, in: .month, for: monthDate)?.count ?? 30 }
+    // ProjDate's shared Calendar and DateFormatter cache instead of fresh ones. These are read from
+    // `body`, and constructing a DateFormatter there is about the most expensive thing you can do:
+    // the month header alone built two of them every pass. Same calendar (gregorian), same zone
+    // (Asia/Jakarta) and the same patterns, so both strings come out byte-identical.
+    private var monthDate: Date { ProjDate.cal.date(byAdding: .month, value: monthOffset, to: Date()) ?? Date() }
+    private var monthKey: String { ProjDate.fmt("yyyy-MM").string(from: monthDate) }
+    private var monthLabel: String { ProjDate.fmt("MMMM yyyy").string(from: monthDate) }
+    private var daysInMonth: Int { ProjDate.cal.range(of: .day, in: .month, for: monthDate)?.count ?? 30 }
 
     private struct Member: Identifiable { let id: String; let name: String; let cells: [Int: AttTone]; let rowByDay: [Int: AttendanceRow] }
-    private var members: [Member] {
+    private static func buildMembers(_ rows: [AttendanceRow]) -> [Member] {
         let groups = Dictionary(grouping: rows) { $0.user?.id ?? "me" }
         return groups.map { uid, rs -> Member in
             var cells: [Int: AttTone] = [:]
             var rowByDay: [Int: AttendanceRow] = [:]
-            for r in rs { if let d = dayOf(r.attendanceDate) { cells[d] = AttTone.of(r); rowByDay[d] = r } }
+            for r in rs { if let d = Self.dayOf(r.attendanceDate) { cells[d] = AttTone.of(r); rowByDay[d] = r } }
             return Member(id: uid, name: rs.first?.user?.name ?? T("You"), cells: cells, rowByDay: rowByDay)
         }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
-    private func dayOf(_ iso: String?) -> Int? {
+    private static func dayOf(_ iso: String?) -> Int? {
         guard let iso, iso.count >= 10 else { return nil }
         return Int(iso.dropFirst(8).prefix(2))   // "yyyy-MM-DD" → DD
     }
@@ -648,15 +654,21 @@ struct StreakBoardCard: View {
                         .lineLimit(1).frame(width: nameW, height: cell, alignment: .leading)
                 }
             }
+            // Lazy along the axis that actually scrolls. A month for a full crew is ~31 days × 25
+            // people ≈ 775 cells, and as plain HStacks every one of them was built and kept alive
+            // even though a dozen columns fit on screen. Each row carries an explicit height — the
+            // same height its children already had — because a lazy stack, unlike a plain one, will
+            // stretch to fill its container across its axis, and that would blow the row spacing out.
             ScrollView(.horizontal, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: gap) {
-                    HStack(spacing: gap) {
+                    LazyHStack(spacing: gap) {
                         ForEach(1...daysInMonth, id: \.self) { d in
                             Text("\(d)").font(.system(size: 8)).foregroundStyle(NX.mutedFg).frame(width: cell, height: 14)
                         }
                     }
+                    .frame(height: 14)
                     ForEach(members) { m in
-                        HStack(spacing: gap) {
+                        LazyHStack(spacing: gap) {
                             ForEach(1...daysInMonth, id: \.self) { d in
                                 let fill = RoundedRectangle(cornerRadius: 5, style: .continuous).fill((m.cells[d] ?? .none).color).frame(width: cell, height: cell)
                                 if canManage, let row = m.rowByDay[d], row.id != nil {
@@ -666,6 +678,7 @@ struct StreakBoardCard: View {
                                 }
                             }
                         }
+                        .frame(height: cell)
                     }
                 }
             }
@@ -674,9 +687,12 @@ struct StreakBoardCard: View {
 
     private func load() async {
         loading = true
-        do { rows = try await APIClient.shared.attendanceHistory(scope: canManage ? "workspace" : "me", month: monthKey) }
-        catch APIError.unauthorized { auth.logout() }
-        catch { rows = [] }
+        do {
+            let fetched = try await APIClient.shared.attendanceHistory(scope: canManage ? "workspace" : "me", month: monthKey)
+            members = Self.buildMembers(fetched)
+        }
+        catch APIError.unauthorized { auth.logout() }   // leaves the board as it was, same as before
+        catch { members = [] }
         loading = false
     }
 }

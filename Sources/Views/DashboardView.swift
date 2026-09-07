@@ -24,6 +24,8 @@ struct DashboardView: View {
     // stat-card morph (web StatCardButton/StatCardModal — shared-id hero)
     @State private var projectsList: [Project] = []
     @State private var tasksList: [MyTask] = []
+    /// `tasksList` re-bucketed by due day for the agenda card. Written wherever `tasksList` is.
+    @State private var tasksByDay: [Date: [MyTask]] = [:]
     @State private var notifs: [NexusNotification] = []
     @State private var activeStat: Int?
     @State private var activeLevel = false
@@ -35,8 +37,10 @@ struct DashboardView: View {
     @State private var passkeyBusy = false
     @State private var passkeyNote: String?
     @AppStorage("passkeyNudgeDismissed") private var passkeyNudgeDismissed = false
-    // FLIP morph (ports framer-motion shared layoutId): published source rects + the live transform state.
-    @State private var morphFrames: [String: CGRect] = [:]
+    // FLIP morph (ports framer-motion shared layoutId): measured source rects + the live transform state.
+    /// A box, not `@State`: the source rects change on every scroll frame and are only read on a tap.
+    /// See MorphFrameStore — as state this single line re-rendered the whole home screen at 120Hz.
+    @State private var morphFrames = MorphFrameStore()
     @State private var morphSourceRect: CGRect = .zero
     @State private var morphExpanded = false
     @State private var morphTarget: CGRect = .zero
@@ -80,14 +84,14 @@ struct DashboardView: View {
         withAnimation(.easeInOut(duration: 0.22).delay(0.24)) { morphShowModal = false }
     }
     private func toggleStat(_ i: Int?) {
-        if let i { openMorph(morphFrames["stat-\(i)"] ?? .zero); activeStat = i } else { closeMorph { activeStat = nil } }
+        if let i { openMorph(morphFrames["stat-\(i)"]); activeStat = i } else { closeMorph { activeStat = nil } }
     }
     private func toggleLevel(_ on: Bool) {
-        if on { openMorph(morphFrames["level"] ?? .zero); activeLevel = true } else { closeMorph { activeLevel = false } }
+        if on { openMorph(morphFrames["level"]); activeLevel = true } else { closeMorph { activeLevel = false } }
     }
     /// `then` runs once the panel has finished shrinking away.
     private func toggleBell(_ on: Bool, then: (() -> Void)? = nil) {
-        if on { openMorph(morphFrames["bell"] ?? .zero); activeBell = true }
+        if on { openMorph(morphFrames["bell"]); activeBell = true }
         else { closeMorph { activeBell = false; then?() } }
     }
 
@@ -151,7 +155,6 @@ struct DashboardView: View {
                 }
             }
             .coordinateSpace(.named(morphSpace))
-            .onPreferenceChange(MorphFrameKey.self) { morphFrames = $0 }
             .onChange(of: morphTarget) { _, t in
                 guard t.width > 1, activeStat != nil || activeLevel || activeBell, !morphExpanded else { return }
                 withAnimation(morphSpring) { morphExpanded = true }                          // FLIP: card rect → full
@@ -223,7 +226,7 @@ struct DashboardView: View {
             .nexusCard(padding: 12, radius: 18)
         }
         .buttonStyle(PressableCardStyle())
-        .morphSource("level", in: morphSpace)
+        .morphSource("level", in: morphSpace, store: morphFrames)
         .opacity(activeLevel && morphShowModal ? 0 : 1)
     }
 
@@ -258,7 +261,7 @@ struct DashboardView: View {
                 }
             }
             .buttonStyle(.plain)
-            .morphSource("bell", in: morphSpace)
+            .morphSource("bell", in: morphSpace, store: morphFrames)
             .opacity(activeBell && morphShowModal ? 0 : 1)
         }
     }
@@ -270,7 +273,7 @@ struct DashboardView: View {
             ForEach(Array(statData.enumerated()), id: \.offset) { i, d in
                 Button { toggleStat(i) } label: {
                     StatCardView(value: d.value, total: d.total, label: d.label, icon: d.icon, from: d.from, to: d.to, glow: d.glow)
-                        .morphSource("stat-\(i)", in: morphSpace)
+                        .morphSource("stat-\(i)", in: morphSpace, store: morphFrames)
                 }
                 .buttonStyle(PressableCardStyle())
                 .opacity(activeStat == i && morphShowModal ? 0 : 1)
@@ -713,11 +716,20 @@ struct DashboardView: View {
         let start = ProjDate.cal.startOfDay(for: Date())
         return (0..<14).compactMap { ProjDate.cal.date(byAdding: .day, value: $0, to: start) }
     }
-    private func tasksDue(on day: Date) -> [MyTask] {
-        tasksList.filter {
-            guard let d = ProjDate.parse($0.dueDate) else { return false }
-            return ProjDate.cal.isDate(d, inSameDayAs: day)
+    /// Due dates parsed ONCE per load instead of once per lookup. `tasksDue(on:)` is asked fifteen
+    /// times a body pass — the picked day plus each of the fourteen chips — and it used to ISO-parse
+    /// every assigned task on every one of them, so 50 tasks meant 750 date parses just to draw the
+    /// card. Keyed by start-of-day in the same Jakarta calendar the old `isSameDayAs` compared in.
+    private static func bucketByDay(_ tasks: [MyTask]) -> [Date: [MyTask]] {
+        var out: [Date: [MyTask]] = [:]
+        for t in tasks {
+            guard let d = ProjDate.parse(t.dueDate) else { continue }
+            out[ProjDate.cal.startOfDay(for: d), default: []].append(t)
         }
+        return out
+    }
+    private func tasksDue(on day: Date) -> [MyTask] {
+        tasksByDay[ProjDate.cal.startOfDay(for: day)] ?? []
     }
 
     private var dailyCalendarCard: some View {
@@ -831,6 +843,7 @@ struct DashboardView: View {
 
         if let myId = prof?.user.id, let tasks = try? await APIClient.shared.myTasks(assigneeId: myId) {
             tasksList = tasks
+            tasksByDay = Self.bucketByDay(tasks)
             mission = (tasks.filter(\.isDone).count, tasks.count)
         }
         loaded = true
