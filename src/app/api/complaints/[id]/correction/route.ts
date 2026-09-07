@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
+import { cancelAttendancePenaltiesForDate, grantAttendanceWaiver } from "@/lib/attendance-absence"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
@@ -243,6 +244,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return { correction: row, record: written }
     })
 
+    // The XP the day cost has to come back, or the correction is only half done: the record now says
+    // "hadir tepat waktu" while the ledger still shows the late/alpha deduction that record no longer
+    // justifies. Only when the corrected day is genuinely clean — a correction that leaves somebody
+    // late must not refund a late penalty they still earned.
+    let penaltiesReversed = false
+    if (updatedRecord.checkInAt && (updatedRecord.lateMinutes ?? 0) === 0) {
+      try {
+        penaltiesReversed = await cancelAttendancePenaltiesForDate(
+          updatedRecord.userId, complaint.workspaceId, updatedRecord.attendanceDate, dateKey,
+        )
+        // The refund alone does not hold. The nightly job re-derives penalties across a rolling
+        // window and would simply re-cut the same XP tomorrow; the waiver is the marker that stops
+        // it. Without this the member sees their points return and quietly vanish overnight.
+        await grantAttendanceWaiver(updatedRecord.userId, dateKey)
+      } catch (error) {
+        // The attendance record is already correct and committed. A failed refund is worth shouting
+        // about, but not worth telling the approver their approval failed when it did not.
+        console.error("attendance correction: XP reversal failed", { correctionId: correction.id, error })
+      }
+    }
+
     logAudit({
       action: "update",
       entityType: "attendance_record",
@@ -257,6 +279,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         summary,
         before: { checkInAt: correction.beforeCheckInAt, checkOutAt: correction.beforeCheckOutAt, status: correction.beforeStatus },
         reason: correction.reason,
+        penaltiesReversed,
       },
     })
     void notifyComplaintReply({ complaintId: id, workspaceId: complaint.workspaceId, reporterId: complaint.reporterId, fromReviewer: true, replierId: me }).catch(() => {})
