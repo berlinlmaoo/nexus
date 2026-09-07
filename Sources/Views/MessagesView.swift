@@ -371,6 +371,7 @@ struct ChatThreadView: View {
     @State private var renameDraft = ""
     @State private var shownTitle: String? = nil
     @State private var notice: String?
+    @State private var viewingPhoto: PhotoRef?
 
     private var meId: String? { auth.session?.userId }
     private var mentionable: [Conversation.Member] {
@@ -468,6 +469,9 @@ struct ChatThreadView: View {
                         await load()
                     }
                 }
+                // On the scroll view rather than on the VStack below, which already carries the
+                // camera's cover: two of these on one view and only the last one ever presents.
+                .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
             }
 
             composer
@@ -684,6 +688,13 @@ struct ChatThreadView: View {
                         }
                         .frame(maxWidth: 240)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        // A tap gesture rather than a Button, because of what is already wrapped
+                        // around this bubble. SwipeToReply's drag waits for 20pt of travel, and a
+                        // button takes the touch down and holds it — every swipe that happened to
+                        // start on the picture would die there. A TapGesture gives the touch back
+                        // the moment the finger moves, so the swipe still fires, and it is not the
+                        // long-press the context menu below listens for either.
+                        .onTapGesture { viewingPhoto = PhotoRef(url: url, name: nil) }
                     }
                     // A picture can travel without a caption; don't draw an empty text line under it.
                     if !m.content.isEmpty {

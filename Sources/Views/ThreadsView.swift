@@ -72,6 +72,7 @@ struct ThreadsView: View {
     @State private var posting = false
     @State private var liked: Set<String> = []      // optimistic, so a tap reacts instantly
     @State private var openPost: FeedPost?
+    @State private var viewingPhoto: PhotoRef?
 
     var body: some View {
         ZStack {
@@ -82,6 +83,7 @@ struct ThreadsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .navigationDestination(item: $openPost) { p in PostThreadView(post: p) }
+        .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
     }
 
     @ViewBuilder private var content: some View {
@@ -152,11 +154,21 @@ struct ThreadsView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(p.photos, id: \.self) { u in
-                            CachedImage(url: URL(string: u.hasPrefix("http") ? u : Config.baseURL.absoluteString + u)) {
-                                $0.resizable().scaledToFill()
-                            } placeholder: { NX.muted }
-                            .frame(width: 160, height: 160)
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            let url = URL(string: u.hasPrefix("http") ? u : Config.baseURL.absoluteString + u)
+                            // A Button and not a tap gesture on the tile: the whole card is one tap
+                            // target now, and a button sits deeper in the hierarchy — the same
+                            // reason the like and comment buttons below still take their own taps
+                            // instead of opening the thread. Same viewer as ticket evidence and
+                            // attendance documents, so a photograph enlarges the same way wherever
+                            // it is drawn.
+                            Button { if let url { viewingPhoto = PhotoRef(url: url, name: nil) } } label: {
+                                CachedImage(url: url) {
+                                    $0.resizable().scaledToFill()
+                                } placeholder: { NX.muted }
+                                .frame(width: 160, height: 160)
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }

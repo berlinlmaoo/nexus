@@ -28,6 +28,8 @@ struct MemberProfileView: View {
     let target: ProfileTarget
 
     @Environment(AuthStore.self) private var auth
+    /// The signed-in person's own role — read, never written, and only to decide what is drawn.
+    @State private var viewer = Viewer.shared
 
     /// Workspace facts: org role, email, join date. Nil for a peer who shares a workspace with the
     /// viewer but not the one `/api/workspaces/members` answers for — the header still draws.
@@ -54,6 +56,9 @@ struct MemberProfileView: View {
     @State private var openThread: ChatDestination?
 
     private var isMe: Bool { target.userId == auth.session?.userId }
+    /// Who may read the ledger under the score. `Viewer.isBoD` rather than a role string compared
+    /// here, so this screen and the announcement composer can never disagree about what a BoD is.
+    private var canSeeActivity: Bool { isMe || viewer.isBoD }
     private var displayName: String {
         target.name ?? serverName ?? member?.displayName ?? "—"
     }
@@ -103,7 +108,18 @@ struct MemberProfileView: View {
                         standingCard
                         teamsCard
                         projectsCard
-                        activityCard
+                        // A score is a number about somebody. The ledger under it is "late on the
+                        // 4th, absent on the 11th, no check-out on the 12th" — a disciplinary
+                        // record with dates on it, which is not a colleague's to read.
+                        //
+                        // The rows still ARRIVE for everyone, and deliberately so: the xp-log
+                        // route is peer-scoped by design and answers any colleague in full. That
+                        // same response is the only thing proving this person is a peer at all —
+                        // its 403 is what sets `notAPeer` — and it carries the name and avatar the
+                        // header falls back to, so not asking for it would cost this screen more
+                        // than the drawing it saves. The line is drawn here instead: a
+                        // presentation decision, and no kind of security.
+                        if canSeeActivity { activityCard }
                     }
                 }
                 .padding(16)
@@ -286,6 +302,12 @@ struct MemberProfileView: View {
         async let boardRes = try? APIClient.shared.leaderboard()
         async let teamsRes = try? APIClient.shared.teams()
         async let projectsRes = try? APIClient.shared.projects()
+
+        // Whether the ledger is drawn is a role question, and the role may still be unknown here:
+        // Viewer fills itself from the More tab and the sidebar, while this screen opens from
+        // Search, a team, a project board or the leaderboard. Started after the five calls above so
+        // it overlaps them, and it is a no-op every time but the first.
+        await viewer.loadIfNeeded()
 
         let roster = await rosterRes
         let board = await boardRes

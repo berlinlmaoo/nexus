@@ -23,12 +23,16 @@ final class Viewer {
         ["ONE_ABOVE_ALL", "BOD", "MANAGER"].contains(role ?? "")
     }
 
+    /// The server's own isBoD(), mirrored. Written out once here rather than compared against a
+    /// role string at each call site, so the two lists can never drift apart.
+    var isBoD: Bool {
+        ["ONE_ABOVE_ALL", "BOD"].contains(role ?? "")
+    }
+
     /// Posting an announcement. Stricter than Control Room itself, and deliberately the same rule
     /// the server enforces in isBoD() — a MANAGER shown the compose form would only ever get a 403
     /// back, which reads as a broken app rather than a permission they do not have.
-    var canAnnounce: Bool {
-        ["ONE_ABOVE_ALL", "BOD"].contains(role ?? "")
-    }
+    var canAnnounce: Bool { isBoD }
 
     func loadIfNeeded() async {
         guard role == nil, !loading else { return }
