@@ -458,14 +458,14 @@ export async function notifyAttendanceRequestReviewed(input: {
     }
   }
 
-  // 2) the other approvers — handled, don't double-act
-  await fanOutHandledToApprovers({
-    workspaceId: req.workspaceId, reviewerId: input.reviewerId, requesterId: req.userId, waEnabled: waOn,
-    type: "attendance_request_handled",
-    title: "Permintaan absen sudah diproses",
-    inApp: `${label} ${req.user.name ?? "staff"} (${range}) di-${verb} sama ${who}.${noteSuffix}`,
-    wa: `ℹ️ *${label}* ${req.user.name ?? "staff"} (${range}) udah di-*${verb}* sama ${who}.${note ? `\nAlasan: "${note}"` : ""}`,
-  })
+  // 2) The other approvers used to be told "handled, don't double-act". They are not any more.
+  //
+  // It was the single largest source of notifications in the product — 4,243 of them, 3,699 never
+  // read, 87%. And what it announced was that something no longer needed doing, which the approval
+  // queue already says better: a decided request leaves the queue. Nobody was being saved from a
+  // double approval by a message they did not open.
+  //
+  // The requester is still told, above, by attendance_request_reviewed — that one they act on.
 }
 
 const OVERRIDE_STATUS_LABEL: Record<string, string> = { PRESENT: "Hadir", LEAVE: "Cuti", SICK: "Sakit", DAY_OFF: "Day off" }
