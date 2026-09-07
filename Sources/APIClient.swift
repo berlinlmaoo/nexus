@@ -28,7 +28,12 @@ enum APIError: LocalizedError {
 struct APIClient {
     static let shared = APIClient()
 
-    private func makeRequest(_ path: String, method: String = "GET", authed: Bool = true) -> URLRequest {
+    /// Not private, unlike the rest of the plumbing below it, and not by accident: FormFillAPI.swift
+    /// is an extension of this type in another file, and Swift's `private` does not reach across
+    /// one. Giving forms their own copy of this is what left a submit — the one request in this app
+    /// that routinely carries 20 MB — going out through Cloudflare and back while everything else
+    /// took the shortcut.
+    func makeRequest(_ path: String, method: String = "GET", authed: Bool = true) -> URLRequest {
         // Which host this leaves from is decided per request rather than once at launch: the office
         // LAN when the phone is provably on it, the public host everywhere else. Asking here costs
         // nothing — `currentBase()` never blocks and never touches the network on this thread; see
@@ -69,12 +74,17 @@ struct APIClient {
     /// for a route the app chose on their behalf, and must not be left holding a stuck tap either.
     /// Anything the SERVER said — 401, 422, 500 — is not a route failure at all, and travels back to
     /// the caller untouched exactly as it did before.
-    private func perform(_ req: URLRequest) async throws -> (Data, URLResponse) {
+    ///
+    /// `session` is a parameter for one caller. `ImageLoader` owns a URLSession with a 256 MB
+    /// URLCache, and making it borrow `URLSession.shared` in order to reach these rules would throw
+    /// that cache away; passing its session in keeps the rules here instead of in a second copy that
+    /// would be free to drift.
+    func perform(_ req: URLRequest, on session: URLSession = .shared) async throws -> (Data, URLResponse) {
         guard req.url?.host == Config.lanBaseURL.host else {
-            return try await URLSession.shared.data(for: req)
+            return try await session.data(for: req)
         }
         do {
-            return try await URLSession.shared.data(for: req)
+            return try await session.data(for: req)
         } catch {
             // Cancellation is the caller changing its mind, not the LAN disappearing. Replaying it
             // would resurrect work that was deliberately abandoned — and, on an upload, send it twice.
@@ -83,7 +93,7 @@ struct APIClient {
             // request after it must already be going out over the internet.
             LANRoute.shared.noteUnreachable()
             guard Self.isReplayable(req, after: error) else { throw error }
-            return try await URLSession.shared.data(for: Self.overInternet(req))
+            return try await session.data(for: Self.overInternet(req))
         }
     }
 
@@ -115,13 +125,39 @@ struct APIClient {
         var out = req
         // Back to URLRequest's own default: the short leash above exists only for the private address.
         out.timeoutInterval = 60
-        guard let url = req.url,
-              var comps = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return out }
-        comps.scheme = Config.baseURL.scheme
-        comps.host = Config.baseURL.host
-        comps.port = Config.baseURL.port
-        if let rebuilt = comps.url { out.url = rebuilt }
+        if let url = req.url { out.url = reaimed(url, at: Config.baseURL) }
         return out
+    }
+
+    /// One URL pointed at a different host, with path, query and fragment left exactly as they
+    /// arrived. Rebuilt through URLComponents rather than by pasting strings, so a query the server
+    /// already escaped survives being moved.
+    private static func reaimed(_ url: URL, at base: URL) -> URL {
+        guard var comps = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        comps.scheme = base.scheme
+        comps.host = base.host
+        comps.port = base.port
+        return comps.url ?? url
+    }
+
+    /// A request for a caller that already holds a whole URL rather than a path.
+    ///
+    /// `ImageLoader` is that caller: image URLs arrive from the server already absolute, and it
+    /// builds its own requests so it can keep its own URLCache. Taking one apart into a path only to
+    /// hand it back to `makeRequest` would re-encode a query the server chose — and an avatar's
+    /// `?t=` stamp is the only thing that says which upload it is.
+    ///
+    /// A URL on any other host comes back untouched and un-routed. Somebody else's picture must not
+    /// be asked of the office server: it would answer 404, and the asking alone says where the app
+    /// is standing.
+    static func routedRequest(for url: URL) -> URLRequest {
+        guard Config.isNexusHost(url) else { return URLRequest(url: url) }
+        let base = LANRoute.shared.currentBase()
+        var req = URLRequest(url: reaimed(url, at: base))
+        // The same short leash `makeRequest` applies, for the same reason: the private address stops
+        // existing the moment somebody walks out, and a picture must not hang for a minute over it.
+        if base.host == Config.lanBaseURL.host { req.timeoutInterval = Config.lanRequestTimeout }
+        return req
     }
 
     /// `cache` opts an endpoint into keeping its last good response on disk. Only pass it for

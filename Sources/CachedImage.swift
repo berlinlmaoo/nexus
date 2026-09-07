@@ -24,12 +24,14 @@ import ImageIO
 // launch needed a round trip for.
 //
 // Decoding happens off the main thread AND off the loader's actor, so neither the first paint of a
-// row nor a decode of a neighbouring row blocks the scroll. The NEXUS session cookie is attached
-// for same-host URLs so private `/api/files` icons load just like the rest of the API.
+// row nor a decode of a neighbouring row blocks the scroll. The NEXUS session cookie is attached for
+// URLs on either of the app's own hosts — the public one and the office LAN — so private
+// `/api/files` icons load just like the rest of the API, whichever route they took.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Downsampled pictures kept on disk between launches, keyed by the same (url, maxPixel) identity
-/// as the memory cache.
+/// Downsampled pictures kept on disk between launches, under the same (key, maxPixel) identity as
+/// the memory cache — a key that deliberately does not name a host, so a face cached at an office
+/// desk is still found from the sofa that evening. See `ImageLoader.canonicalKey`.
 ///
 /// It lives inside `Caches/responses/` DELIBERATELY, as a subdirectory of `ResponseCache`'s own
 /// folder rather than beside it. Logout calls `ResponseCache.clearAll()`, which removes that whole
@@ -100,6 +102,11 @@ actor ImageDiskCache {
     /// startup sweep can pick out tile-sized entries by name and never open a page-sized one: a
     /// full-screen photo is not on any list, and decoding one at launch would spend the whole
     /// budget on a picture nobody is looking at.
+    ///
+    /// An entry written before the key dropped its host hashes to a different name than the one
+    /// `load` now computes, so it is simply never opened again — a clean miss and an ordinary
+    /// fetch, never a wrong picture. The sweep below still rescues those into memory, and `trim`
+    /// reclaims the files in its own time.
     nonisolated private static func fileURL(_ key: URL, _ maxPixel: CGFloat) -> URL {
         dir.appendingPathComponent(fingerprint(key.absoluteString) + "-\(Int(maxPixel)).nxi")
     }
@@ -244,7 +251,12 @@ actor ImageDiskCache {
             budget -= row.size
             guard let data = try? Data(contentsOf: row.url),
                   let entry = parse(data),
-                  let key = URL(string: entry.key) else { continue }
+                  let stored = URL(string: entry.key) else { continue }
+            // Through the same canonicalisation the live path uses, so an entry written back when
+            // the key still carried a host lands under the key that will actually be looked up. The
+            // sweep is the only thing that can rescue those files: their FILENAME no longer matches
+            // what `load` computes, so nothing else will ever open them again.
+            let key = ImageLoader.canonicalKey(stored)
             // Something already loaded this one the ordinary way; that decode is at least as fresh
             // as ours and replacing it would only churn the cache.
             if ImageLoader.memory.object(forKey: key as NSURL) != nil { continue }
@@ -337,13 +349,50 @@ actor ImageLoader {
     /// fills a phone, and reading it is the entire reason anybody opens it.
     static let pagePixel: CGFloat = 1600
 
-    /// A cached picture is (URL, size). The same URL can legitimately be wanted as a 300px tile in
-    /// a row AND as a full-screen page one tap later; keyed on the URL alone, whichever was decoded
-    /// first would be handed to both.
+    /// A cached picture is (which picture, what size). The same picture can legitimately be wanted
+    /// as a 300px tile in a row AND as a full-screen page one tap later; keyed on its identity
+    /// alone, whichever was decoded first would be handed to both.
     nonisolated static func cacheKey(_ url: URL, _ maxPixel: CGFloat) -> URL {
-        guard maxPixel != tilePixel else { return url }
-        return URL(string: url.absoluteString + "#px\(Int(maxPixel))") ?? url
+        let base = canonicalKey(url)
+        guard maxPixel != tilePixel else { return base }
+        return URL(string: base.absoluteString + "#px\(Int(maxPixel))") ?? base
     }
+
+    /// The picture, with the route it happened to arrive by stripped off.
+    ///
+    /// `lan.nexus…/api/files/x.png` and `nexus…/api/files/x.png` are one picture reached two ways,
+    /// so the host cannot be part of what identifies it. With it in the key, every walk between the
+    /// office and anywhere else would miss on a whole screen at once and then write a SECOND copy of
+    /// every face into a cache that is bounded by bytes — paying twice to be slower.
+    ///
+    /// What is left is path AND query, and the query has to stay: an avatar's file name is only the
+    /// user's id, and the `?t=` stamp the upload route appends is the single thing that tells a new
+    /// picture from the one it replaced. Dropping it would pin somebody to a face they changed.
+    ///
+    /// A URL on any other host keeps its host, where the host genuinely is part of which picture
+    /// this is. The two kinds cannot collide: what comes back from here has no scheme, so it can
+    /// never be mistaken for an absolute URL.
+    ///
+    /// A prefix match and a slice, not a parse into components and back. This runs inside
+    /// `CachedImage.init` — on the main thread, once per row, on every rebuild — so it stays as
+    /// close to free as the memory-cache peek it feeds. It also cannot re-encode anything: what
+    /// comes out is a substring of a string the URL already produced.
+    fileprivate nonisolated static func canonicalKey(_ url: URL) -> URL {
+        let whole = url.absoluteString
+        for prefix in ownPrefixes where whole.hasPrefix(prefix) {
+            let rest = whole.dropFirst(prefix.count)
+            // The prefix ends at the host, so `https://nexus.znetworks.id.example.com/x` starts
+            // with it too. Only a path boundary makes this ours. An empty remainder — a nil project
+            // icon concatenated onto the base URL, which several screens really do build — fails
+            // the same test, and it is not an identity for anything anyway.
+            guard rest.hasPrefix("/") else { continue }
+            return URL(string: String(rest)) ?? url
+        }
+        return url
+    }
+
+    /// The two absolute prefixes one NEXUS picture can arrive under, resolved once at startup.
+    private static let ownPrefixes = [Config.baseURL.absoluteString, Config.lanBaseURL.absoluteString]
 
     func image(for url: URL, maxPixel: CGFloat = ImageLoader.tilePixel) async -> UIImage? {
         let key = Self.cacheKey(url, maxPixel)
@@ -377,13 +426,23 @@ actor ImageLoader {
         // the upload time, so one URL is one picture, permanently.
         if let cached = ImageDiskCache.load(key: key, maxPixel: maxPixel) { return cached }
 
-        // The REQUEST always uses the real URL — the size lives in the cache key and nowhere
-        // else, so a fragment never reaches the server.
-        var req = URLRequest(url: url)
-        if url.host == Config.baseURL.host, let s = Keychain.load() {
+        // The REQUEST always uses the real URL — neither the size nor the route lives in it, so
+        // no fragment ever reaches the server and the cache key never depends on which host did.
+        var req = APIClient.routedRequest(for: url)
+        if Config.isNexusHost(url), let s = Keychain.load() {
             req.setValue(s.cookieHeader, forHTTPHeaderField: "Cookie")
         }
-        guard let (data, resp) = try? await ImageLoader.session.data(for: req) else { return nil }
+        // Through `perform`, so a picture takes the office LAN and, when the LAN stops answering,
+        // falls back to the internet instead of failing. That fallback had to be decided rather than
+        // inherited, and it is safe here for a reason that does not generalise: the rule that makes
+        // an automatic replay dangerous is about writes, and this is a GET — fetching a picture
+        // twice costs one round trip and changes nothing anywhere. Not retrying costs a screen of
+        // grey squares the moment somebody walks out of the building, held there until the row is
+        // recycled, because nothing here remembers or re-drives a failure. A refusal the server
+        // actually SENT — 401, 404 — is a response and not a thrown error, so it never reaches the
+        // replay at all and cannot loop. Its own session, not the shared one, so the image URLCache
+        // this loader exists for is still the thing answering.
+        guard let (data, resp) = try? await APIClient.shared.perform(req, on: ImageLoader.session) else { return nil }
         if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) { return nil }
         // Almost every consumer is a small tile (avatar/icon). Decode AND downsample in one
         // ImageIO pass so we never hold a 1280px bitmap to draw into a 56px frame.

@@ -10,10 +10,10 @@ import Foundation
 /// exception — but prod https needs none.
 enum Config {
     /// The app's identity, and a constant on purpose. Beyond being a place to send requests it is
-    /// also what the passkey relying party must match, what `ImageLoader` compares a URL's host
-    /// against before attaching the session cookie, and what every image cache key is built from.
-    /// A value that moved with the network would quietly change all three. The office shortcut below
-    /// is therefore chosen per REQUEST by `LANRoute`, and never by editing this.
+    /// also what the passkey relying party must match, and the host every image URL in the app is
+    /// built from. A value that moved with the network would quietly change both. The office
+    /// shortcut below is therefore chosen per REQUEST by `LANRoute`, and never by editing this — so
+    /// a URL held anywhere in the app names a picture, never the route it happened to take.
     static let baseURL = URL(string: "https://nexus.znetworks.id")!
 
     /// The same server reached from inside the office instead of out through Cloudflare and back:
@@ -28,6 +28,19 @@ enum Config {
     /// nothing is exactly the hang this shortcut must never introduce. This is an inactivity timer,
     /// not a total one, so a large upload that keeps flowing is never cut off by it.
     static let lanRequestTimeout: TimeInterval = 10
+
+    /// The two names for the same server — and the test for whether a URL may carry the session.
+    ///
+    /// Both are checked rather than only `baseURL` because a picture fetched over the office
+    /// shortcut arrives on `lanBaseURL`, and a cookie test that knew one host would strip the
+    /// session from exactly the requests this shortcut added: a silent 401 and a grey square where
+    /// a face was. The other half matters more. A URL on any OTHER host must never be handed this
+    /// session, which is why this is an allow-list of exactly two names and not a suffix match: a
+    /// host that merely ENDS with the right letters belongs to whoever registered it.
+    static func isNexusHost(_ url: URL) -> Bool {
+        guard let host = url.host?.lowercased() else { return false }
+        return host == baseURL.host || host == lanBaseURL.host
+    }
 
     static let appName = "NEXUS by Z Networks"
 }

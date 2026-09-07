@@ -21,13 +21,15 @@ enum FormAccessError: LocalizedError {
     }
 }
 
-/// The public-form endpoints. They live outside APIClient.swift on purpose — its request
-/// builder and its `run` are file-private, so this pair carries its own, and the file can be
-/// added or reverted without touching the client everything else in the app goes through.
+/// The public-form endpoints. They live outside APIClient.swift so the file can be added or
+/// reverted without touching the client everything else in the app goes through.
 ///
-/// The cost of that is real and worth stating: these calls do NOT inherit anything the shared
-/// request builder gains later. If it grows a per-request choice of host, or a retry, this file has
-/// to opt in by hand — silence here would look like the feature simply not applying to forms.
+/// They used to carry a private copy of the request builder and of the send, because both were
+/// file-private in APIClient.swift while it was being edited. The cost showed up exactly where it
+/// was predicted to: a submit, the one request in this app that routinely carries 20 MB, was the
+/// only request that never took the office LAN. Both helpers are now internal, so a form inherits
+/// the route selection AND the replay rules that have to come with it — a route without them would
+/// turn a LAN that dies mid-upload into an outright failure, which is worse than the long way round.
 extension APIClient {
 
     /// The form to fill in. `GET /api/forms/{id}/public` first — it takes an id OR a slug, applies
@@ -50,8 +52,12 @@ extension APIClient {
         }
     }
 
+    /// The id goes into the path raw, like every other id in the client: `makeRequest`
+    /// percent-encodes it once, which is right both for the cuids the Forms grid actually passes
+    /// and for a slug with a space in it. Only an id somebody had escaped by hand would come out
+    /// double-encoded, and nothing in this app produces one.
     private func fetchForm(at path: String) async throws -> PublicForm {
-        let (data, http) = try await Self.formSend(Self.formRequest(path, method: "GET"))
+        let (data, http) = try await send(makeRequest(path))
 
         if http.statusCode == 401 { throw APIError.unauthorized }
         guard (200..<300).contains(http.statusCode) else {
@@ -74,12 +80,12 @@ extension APIClient {
     @discardableResult
     func submitForm(_ formId: String, data: [String: Any], files: [FormUpload]) async throws -> Bool {
         let boundary = "Boundary-\(UUID().uuidString)"
-        var req = Self.formRequest("/api/forms/\(formId)/submit", method: "POST")
+        var req = makeRequest("/api/forms/\(formId)/submit", method: "POST")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         let json = try JSONSerialization.data(withJSONObject: data)
         req.httpBody = Self.formMultipartBody(boundary: boundary, json: json, files: files)
 
-        let (body, http) = try await Self.formSend(req)
+        let (body, http) = try await send(req)
         if (200..<300).contains(http.statusCode) { return true }
 
         let payload = try? JSONDecoder().decode(FormServerError.self, from: body)
@@ -96,26 +102,21 @@ extension APIClient {
 
     // MARK: - plumbing
 
-    private static func formRequest(_ path: String, method: String) -> URLRequest {
-        // The path setter takes an UNencoded path and escapes it on the way out, so a slug with a
-        // space in it survives. Appending path components to the URL directly does not: it
-        // percent-encodes the "?" of a query and, worse, double-encodes an already-escaped id.
-        var comps = URLComponents(url: Config.baseURL, resolvingAgainstBaseURL: false)
-        comps?.path = path
-        var req = URLRequest(url: comps?.url ?? Config.baseURL.appendingPathComponent(path))
-        req.httpMethod = method
-        req.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let session = Keychain.load() {
-            req.setValue(session.cookieHeader, forHTTPHeaderField: "Cookie")
-        }
-        return req
-    }
-
-    private static func formSend(_ req: URLRequest) async throws -> (Data, HTTPURLResponse) {
+    /// `perform`, not a bare `URLSession.data`: a form leaves by whichever host the rest of the app
+    /// is using AND inherits the rule about when a request that failed there may be sent again.
+    ///
+    /// That rule is why the builder is not simply pointed at the LAN and left there. A submit is a
+    /// POST, and the route behind it creates a task, a submission row and its attachments, then
+    /// fires the project's automations and its webhooks — so it may only be replayed when the error
+    /// proves the body never left the phone. A submit that timed out may already be all of those
+    /// things, and a second copy of somebody's request is worse than one refusal they can answer.
+    ///
+    /// The error mapping is what it always was, so every `catch` at the call sites still matches.
+    private func send(_ req: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await URLSession.shared.data(for: req)
+            (data, response) = try await perform(req)
         } catch {
             throw APIError.transport(error.localizedDescription)
         }
