@@ -2409,10 +2409,15 @@ enum ComplaintCategory {
 }
 
 enum ComplaintStatus {
-  OPEN       // baru masuk, belum ditangani
-  IN_REVIEW  // lagi ditangani BoD
-  RESOLVED   // selesai / ada solusi
-  CLOSED     // ditutup tanpa tindak lanjut
+  OPEN              // baru masuk, belum ada yang nyentuh
+  // "Menunggu keputusan" — GIDEON udah menjawab, dan/atau ada usulan koreksi yang nunggu di-approve.
+  // BUKAN "lagi ditangani": belum ada direktur yang pegang tiket ini. Dia tetap bagian dari antrean
+  // kerja BoD, jadi filter inbox (?status=OPEN) sengaja ikut mengembalikan status ini — lihat
+  // COMPLAINT_INBOX_STATUSES di src/lib/complaints.ts. Cuma sistem yang menaruh tiket ke sini.
+  AWAITING_DECISION
+  IN_REVIEW         // lagi ditangani BoD (ada manusia yang ambil — tombolnya "Take it on")
+  RESOLVED          // selesai / ada solusi
+  CLOSED            // ditutup tanpa tindak lanjut
 }
 
 model Complaint {

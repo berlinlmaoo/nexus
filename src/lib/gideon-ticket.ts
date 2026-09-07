@@ -275,16 +275,34 @@ export async function reviewSupportTicket(complaintId: string): Promise<void> {
 
     // Posted under GIDEON's own name, on the reviewer side of the thread — it is answering the
     // reporter, not speaking as them.
+    const gideonId = await getGideonUserId()
     await prisma.$transaction(async (tx) => {
       await tx.complaintMessage.create({
         data: {
           complaintId,
-          authorId: await getGideonUserId(),
+          authorId: gideonId,
           fromReviewer: true,
           body: reply.slice(0, BODY_MAX),
         },
       })
       await tx.complaint.update({ where: { id: complaintId }, data: { lastMessageAt: new Date() } })
+      // Say on the ticket that it has been answered, WITHOUT pretending a director picked it up.
+      // AWAITING_DECISION keeps the ticket in the BoD inbox (COMPLAINT_INBOX_STATUSES) and only adds
+      // "there is something here to decide". IN_REVIEW would take it out of the queue and claim a
+      // human is on it — that is the one transition this module must never make.
+      //
+      // Guarded in the WHERE rather than by a status read before the model was called: this lands up
+      // to 280 seconds after the ticket was looked at, and a director may have taken it on in the
+      // meantime. If so it stays theirs, and GIDEON just adds a message.
+      const bumped = await tx.complaint.updateMany({
+        where: { id: complaintId, status: "OPEN" },
+        data: { status: "AWAITING_DECISION" },
+      })
+      if (bumped.count > 0) {
+        await tx.complaintEvent.create({
+          data: { complaintId, action: "status", fromStatus: "OPEN", toStatus: "AWAITING_DECISION", actorId: gideonId },
+        })
+      }
     })
   } catch (error) {
     console.error("gideon-ticket: review failed", { complaintId, error })

@@ -6,11 +6,12 @@ import prisma from "@/lib/prisma"
 import { notifyComplaintReply } from "@/lib/notification-service"
 import { isGideonTicketCategory, reviewSupportTicket } from "@/lib/gideon-ticket"
 import {
-  isBodPlus, BODY_MIN, BODY_MAX, COMPLAINT_DETAIL_INCLUDE, serializeComplaintDetail,
+  isBodPlus, BODY_MIN, BODY_MAX, COMPLAINT_DETAIL_INCLUDE, isUnclaimedComplaintStatus,
+  serializeComplaintDetail,
 } from "@/lib/complaints"
 
 // POST /api/complaints/[id]/messages — { body }. The reporter or any BoD may reply (unless CLOSED).
-// A BoD reply on an OPEN complaint moves it to IN_REVIEW.
+// A BoD reply on a complaint nobody has claimed (OPEN or AWAITING_DECISION) moves it to IN_REVIEW.
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
@@ -30,12 +31,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!viewerIsBod && complaint.reporterId !== me) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     if (complaint.status === "CLOSED") return NextResponse.json({ error: "Keluhan ini sudah ditutup." }, { status: 409 })
 
-    // A BoD picking up an OPEN complaint flips it to IN_REVIEW; otherwise status is untouched.
-    const bumpToReview = viewerIsBod && complaint.status === "OPEN"
+    // A BoD picking up an unclaimed complaint flips it to IN_REVIEW; otherwise status is untouched.
+    // AWAITING_DECISION counts as unclaimed: a director typing in the thread IS the human taking it
+    // on, and leaving it there would keep advertising a decision that has now been made.
+    const bumpToReview = viewerIsBod && isUnclaimedComplaintStatus(complaint.status)
     await prisma.$transaction(async (tx) => {
       await tx.complaintMessage.create({ data: { complaintId: id, authorId: me, fromReviewer: viewerIsBod, body: text.slice(0, BODY_MAX) } })
       await tx.complaint.update({ where: { id }, data: { lastMessageAt: new Date(), ...(bumpToReview ? { status: "IN_REVIEW" } : {}) } })
-      if (bumpToReview) await tx.complaintEvent.create({ data: { complaintId: id, action: "status", fromStatus: "OPEN", toStatus: "IN_REVIEW", actorId: me } })
+      if (bumpToReview) await tx.complaintEvent.create({ data: { complaintId: id, action: "status", fromStatus: complaint.status, toStatus: "IN_REVIEW", actorId: me } })
     })
 
     // Notify the other side: a BoD reply pings the reporter; a reporter reply pings the BoD.

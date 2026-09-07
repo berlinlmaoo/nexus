@@ -11,7 +11,8 @@ import { isGideonTicketCategory, reviewSupportTicket } from "@/lib/gideon-ticket
 import { notifyComplaintFiled } from "@/lib/notification-service"
 import {
   getUserOrgRole, isBodPlus, COMPLAINT_CATEGORIES, SUBJECT_MIN, SUBJECT_MAX, BODY_MIN, BODY_MAX,
-  COMPLAINT_LIST_INCLUDE, serializeComplaint, complaintCategoryLabel, type ComplaintCategoryKey,
+  COMPLAINT_LIST_INCLUDE, COMPLAINT_INBOX_STATUSES, COMPLAINT_STATUSES, serializeComplaint,
+  complaintCategoryLabel, type ComplaintCategoryKey, type ComplaintStatusKey,
 } from "@/lib/complaints"
 
 const EVIDENCE_MAX = 8 * 1024 * 1024 // 8MB per photo
@@ -28,11 +29,27 @@ export async function GET(request: NextRequest) {
     if (!membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     const viewerIsBod = isBodPlus(membership.role)
 
-    const status = request.nextUrl.searchParams.get("status")
+    // ?status= takes one status, a comma-separated set, or ALL/absent for everything.
+    //
+    // A bare "OPEN" widens to the whole inbox set (OPEN + AWAITING_DECISION), and that is the point
+    // rather than a shortcut. "OPEN" has always meant "nobody has taken this on", and GIDEON
+    // answering a ticket does not change that — it annotates the ticket, it does not claim it. Every
+    // client that already exists, the iOS build in somebody's pocket included, asks for OPEN and
+    // would otherwise watch its inbox drain the day this status starts being written. Anyone who
+    // wants only the answered ones asks for AWAITING_DECISION by name.
+    const statusParam = request.nextUrl.searchParams.get("status")
+    const requested = (statusParam ?? "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean)
+    const filtering = requested.length > 0 && !requested.includes("ALL")
+    const wanted = requested
+      .flatMap((s) => (s === "OPEN" ? [...COMPLAINT_INBOX_STATUSES] : [s]))
+      .filter((s, i, a) => COMPLAINT_STATUSES.includes(s as ComplaintStatusKey) && a.indexOf(s) === i)
+
     // Workspace-scoped (defense in depth). BoD see all; others only their own.
     const scope: Record<string, unknown> = { workspaceId: membership.workspaceId, ...(viewerIsBod ? {} : { reporterId: me }) }
     const where: Record<string, unknown> = { ...scope }
-    if (status && status !== "ALL") where.status = status
+    // `in: []` when a caller asks for a status that does not exist: zero tickets are in it, which is
+    // a truer answer than the whole list, and better than the 500 an unknown enum value used to give.
+    if (filtering) where.status = { in: wanted }
 
     const [complaints, grouped] = await Promise.all([
       prisma.complaint.findMany({ where, include: COMPLAINT_LIST_INCLUDE, orderBy: { lastMessageAt: "desc" }, take: 200 }),
@@ -40,6 +57,12 @@ export async function GET(request: NextRequest) {
     ])
     const counts: Record<string, number> = {}
     for (const g of grouped) counts[g.status] = g._count._all
+    // counts[k] means "how many rows ?status=k returns", not "how many rows literally hold k". The
+    // two differ only for OPEN, which the inbox filter widens above — and a tab badge that disagreed
+    // with the list under it is a worse bug than a documented count. The literal number for the
+    // widened half is still here under its own key, so a client can show both.
+    const inbox = COMPLAINT_INBOX_STATUSES.reduce((n, s) => n + (counts[s] ?? 0), 0)
+    if (inbox > 0) counts.OPEN = inbox
 
     return NextResponse.json({ complaints: complaints.map((c) => serializeComplaint(c, me, viewerIsBod)), counts, viewerIsBod })
   } catch (error) {

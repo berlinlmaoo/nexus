@@ -14,7 +14,7 @@ import {
   serializeAttendanceRecord,
 } from "@/lib/attendance"
 import { isHoliday } from "@/lib/holidays"
-import { BODY_MAX, isBodPlus } from "@/lib/complaints"
+import { BODY_MAX, isBodPlus, isUnclaimedComplaintStatus } from "@/lib/complaints"
 import {
   ATTENDANCE_CORRECTION_INCLUDE, CORRECTION_NOTE_MAX, describeCorrection,
   proposeAttendanceCorrection, serializeAttendanceCorrection, validateCorrectionTimes,
@@ -144,6 +144,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const dateKey = formatAttendanceDateKey(correction.attendanceDate)
     const decidedAt = new Date()
+    // A BoD deciding a proposal has taken the ticket on, so an unclaimed one flips to IN_REVIEW —
+    // same rule as replying in the thread, and it applies to a REJECT just as much as an APPROVE.
+    // AWAITING_DECISION especially: the decision this route is about to make is the exact thing the
+    // ticket was waiting for, and a rejected proposal that left the ticket sitting in "menunggu
+    // keputusan" would be a status advertising work that no longer exists.
+    const bumpToReview = isUnclaimedComplaintStatus(complaint.status)
 
     // ---- REJECT: nothing but the proposal row moves. -------------------------------------------
     if (decision === "REJECT") {
@@ -161,8 +167,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             body: `Usulan koreksi absen ${dateKey} DITOLAK.${note ? ` Catatan: ${note}` : ""}`.slice(0, BODY_MAX),
           },
         })
-        await tx.complaint.update({ where: { id }, data: { lastMessageAt: decidedAt } })
+        await tx.complaint.update({ where: { id }, data: { lastMessageAt: decidedAt, ...(bumpToReview ? { status: "IN_REVIEW" as const } : {}) } })
         await tx.complaintEvent.create({ data: { complaintId: id, action: "correction_rejected", actorId: me } })
+        if (bumpToReview) {
+          await tx.complaintEvent.create({ data: { complaintId: id, action: "status", fromStatus: complaint.status, toStatus: "IN_REVIEW", actorId: me } })
+        }
         return row
       })
 
@@ -268,8 +277,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       proposedCheckInAt: correction.proposedCheckInAt,
       proposedCheckOutAt: correction.proposedCheckOutAt,
     })
-    // A BoD picking up an OPEN ticket flips it to IN_REVIEW, same rule as replying in the thread.
-    const bumpToReview = complaint.status === "OPEN"
 
     const { correction: updatedCorrection, record: updatedRecord } = await prisma.$transaction(async (tx) => {
       // Same shape, two verbs. An update carries the corrected times onto a day that exists; a create
@@ -331,7 +338,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       })
       await tx.complaintEvent.create({ data: { complaintId: id, action: "correction_approved", actorId: me } })
       if (bumpToReview) {
-        await tx.complaintEvent.create({ data: { complaintId: id, action: "status", fromStatus: "OPEN", toStatus: "IN_REVIEW", actorId: me } })
+        await tx.complaintEvent.create({ data: { complaintId: id, action: "status", fromStatus: complaint.status, toStatus: "IN_REVIEW", actorId: me } })
       }
       return { correction: row, record: written }
     })

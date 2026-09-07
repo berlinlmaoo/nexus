@@ -107,7 +107,11 @@ export type NexusSheet = {
 };
 
 // --- Complaint & Escalation channel ---
-export type ComplaintStatusKey = "OPEN" | "IN_REVIEW" | "RESOLVED" | "CLOSED";
+// AWAITING_DECISION ("Menunggu keputusan") = GIDEON has answered, and/or an attendance correction is
+// sitting on the ticket undecided. It is NOT IN_REVIEW: nobody has taken the ticket on yet, so it is
+// still in the BoD work queue and the inbox filter asks for it by name (see complaints.tsx). A
+// status no query includes is a ticket nobody sees.
+export type ComplaintStatusKey = "OPEN" | "AWAITING_DECISION" | "IN_REVIEW" | "RESOLVED" | "CLOSED";
 export type ComplaintPerson = { id: string; name: string; avatar: string | null };
 export type ComplaintAttachment = { id: string; url: string; mimeType: string; size: number };
 export type Complaint = {
@@ -122,6 +126,12 @@ export type Complaint = {
   createdAt: string;
   reporter: ComplaintPerson | null;   // null only for a non-reporter non-BoD viewer (who can't open it)
   messageCount: number;
+  /** GIDEON has written in this thread. Deliberately independent of `status`: a ticket a director
+   *  already took on (IN_REVIEW) still needs to show it. Derived server-side in the list query. */
+  gideonReplied: boolean;
+  /** An attendance correction on this ticket is still PENDING — a tap is waiting on a BoD. At most
+   *  one is ever live per ticket, which is why this is a boolean and not a count. */
+  pendingCorrection: boolean;
   isMine: boolean;
   canReply: boolean;
   canManage: boolean;                  // BoD: can change status
