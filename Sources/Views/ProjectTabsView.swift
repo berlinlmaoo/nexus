@@ -547,7 +547,13 @@ struct ProjectFormsTab: View {
             else if forms.isEmpty { TabEmpty(icon: "list.clipboard", text: T("No forms in this project yet.")) }
             else {
                 ScrollView {
-                    LazyVStack(spacing: 12) { ForEach(forms) { FormCard(form: $0, projectName: projectName) } }.padding(16)
+                    LazyVStack(spacing: 12) {
+                        ForEach(forms) { f in
+                            NavigationLink { FormFillView(formId: f.id, title: f.name) } label: {
+                                FormCard(form: f, projectName: projectName)
+                            }.buttonStyle(.plain)
+                        }
+                    }.padding(16)
                 }
             }
         }

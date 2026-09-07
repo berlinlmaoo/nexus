@@ -41,7 +41,13 @@ struct FormsView: View {
                     Text(T("An intake form that spawns a task automatically on submit."))
                         .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).frame(maxWidth: .infinity, alignment: .leading)
                     NXCardGrid(spacing: 12) {
-                        ForEach(forms) { f in FormCard(form: f, projectName: projectNames[f.projectId ?? ""] ?? "Project") }
+                        ForEach(forms) { f in
+                            NavigationLink { FormFillView(formId: f.id, title: f.name) } label: {
+                                FormCard(form: f, projectName: projectNames[f.projectId ?? ""] ?? "Project")
+                            }
+                            .buttonStyle(.plain)
+                            .hoverEffect(.highlight)
+                        }
                     }
                 }
                 .padding(16)

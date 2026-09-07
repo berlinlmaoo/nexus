@@ -90,7 +90,13 @@ struct SearchView: View {
                         }
                     }
                     if let forms = r.forms, !forms.isEmpty {
-                        group("FORMS") { ForEach(forms) { f in hit(icon: "list.clipboard.fill", tint: NX.blue, title: f.name, sub: nil) } }
+                        group("FORMS") {
+                            ForEach(forms) { f in
+                                NavigationLink { FormFillView(formId: f.id, title: f.name) } label: {
+                                    hit(icon: "list.clipboard.fill", tint: NX.blue, title: f.name, sub: nil)
+                                }.buttonStyle(.plain)
+                            }
+                        }
                     }
                     if let members = r.members, !members.isEmpty {
                         group("MEMBERS") { ForEach(members) { m in hit(icon: "person.fill", tint: NX.coral, title: m.name ?? m.email ?? "—", sub: m.email) } }
