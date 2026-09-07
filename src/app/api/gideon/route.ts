@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
 
   // The three GIDEON tiers. Which model each one is stays in the shim — this only has to refuse a
   // name it does not recognise, so a client cannot smuggle an arbitrary model id through.
-  const TIERS = ['astra', 'luna', 'terra']
+  const TIERS = ['astra', 'luna', 'terra', 'experimental']
   const tier = TIERS.includes((model || '').toLowerCase()) ? (model as string).toLowerCase() : 'luna'
   const userId = session.user.id
 

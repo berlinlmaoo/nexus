@@ -6,6 +6,10 @@ export const GIDEON_TIERS = [
   { id: "astra", name: "Astra", blurb: "Paling dalam. Untuk analisis dan keputusan." },
   { id: "luna", name: "Luna", blurb: "Sehari-hari." },
   { id: "terra", name: "Terra", blurb: "Ringan. Pertanyaan pendek." },
+  // Runs on the RTX 5070 in the office, not on anybody's API. Measurably weaker than the hosted
+  // tiers — it got a task count wrong that Luna got right — so the label says experimental and
+  // means it.
+  { id: "experimental", name: "Experimental", blurb: "Model lokal di kantor. Lambat dan bisa keliru." },
 ] as const;
 
 export type GideonTier = (typeof GIDEON_TIERS)[number]["id"];
