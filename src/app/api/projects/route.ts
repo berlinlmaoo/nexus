@@ -6,7 +6,6 @@ import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { isSystemAdminUser } from "@/lib/rbac"
 import { ensureProjectSheet } from "@/lib/project-sheets"
-import { ensureProjectFolder } from "@/lib/nas-project"
 
 const projectListSelect = {
   id: true,
@@ -307,11 +306,14 @@ export async function POST(request: NextRequest) {
 
     logAudit({ action: "create", entityType: "project", entityId: project.id, entityName: name, userId, request })
 
-    // Best-effort: pre-create the project's NAS storage folder so it exists immediately.
-    // Never blocks project creation — lazy creation in the files route still covers any failure.
-    ensureProjectFolder(project.id).catch((err) => {
-      console.error("Failed to pre-create NAS folder for project", project.id, err)
-    })
+    // The NAS folder pre-create used to live here. It is gone: the Files tab it existed for was
+    // removed, the Synology at 192.168.223.92 is unreachable from every machine here, and the call
+    // was fire-and-forget — so all it did was write one failure into the log every time anybody
+    // created a project. A line that only ever reports the same known-dead dependency trains people
+    // to skim the log, which is worse than having no line.
+    //
+    // Nothing waits on a project folder now. If Z Vault brings project storage back in 0.1.4, it
+    // wants its own pre-create against whatever storage it actually uses, not this one revived.
 
     // Same best-effort deal for the default spreadsheet. The sheets GET seeds lazily anyway (that's
     // what covers projects created before this feature), so a failure here costs nothing.
