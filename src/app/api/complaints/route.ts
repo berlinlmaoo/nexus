@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { resolveMime } from "@/lib/mime"
+import { reviewAttendanceTicket } from "@/lib/gideon-ticket"
 import { notifyComplaintFiled } from "@/lib/notification-service"
 import {
   getUserOrgRole, isBodPlus, COMPLAINT_CATEGORIES, SUBJECT_MIN, SUBJECT_MAX, BODY_MIN, BODY_MAX,
@@ -118,6 +119,14 @@ export async function POST(request: NextRequest) {
 
     logAudit({ action: "create", entityType: "complaint", entityId: created.id, userId: me, request, metadata: { category } })
     void notifyComplaintFiled({ workspaceId: membership.workspaceId, complaintId: created.id, categoryLabel: complaintCategoryLabel(category) }).catch(() => {})
+
+    // An attendance ticket gets a first pass from GIDEON: it reads the photo, checks the day against
+    // the record, and either proposes a correction or says why it cannot. Fire-and-forget on purpose
+    // — filing the ticket already succeeded, and it must not wait on, or fail because of, an
+    // assistant taking half a minute to look at a picture.
+    if (category === "ATTENDANCE") {
+      void reviewAttendanceTicket(created.id).catch(() => {})
+    }
 
     return NextResponse.json(serializeComplaint(created, me, isBodPlus(membership.role)), { status: 201 })
   } catch (error) {
