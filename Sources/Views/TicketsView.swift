@@ -21,28 +21,160 @@ struct Complaint: Decodable, Identifiable, Sendable {
     let createdAt: String?
     let reporter: Reporter?
     let attachments: [Attachment]?
+    /// The server already says whose ticket this is; the app needs it to decide who may file
+    /// an attendance correction against it.
+    let isMine: Bool?
 
     struct Reporter: Decodable, Sendable { let name: String?; let avatar: String? }
     struct Attachment: Decodable, Sendable { let url: String? }
 
     var statusKey: String { (status ?? "OPEN").uppercased() }
     var title: String { subject?.isEmpty == false ? subject! : T("(no subject)") }
-    var tone: ChipTone {
-        switch statusKey {
-        case "RESOLVED": return .success
-        case "IN_REVIEW": return .warning
-        case "CLOSED": return .neutral
-        default: return .danger
-        }
+    var tone: ChipTone { ticketStatusTone(statusKey) }
+    var statusLabel: String { ticketStatusLabel(statusKey) }
+}
+
+// Free functions rather than members of `Complaint`, because the detail sheet has to draw the same
+// chip from the LIVE detail payload: a BoD's reply moves an OPEN ticket to IN_REVIEW, so the status
+// on the list row it was opened from is stale the moment anybody answers.
+func ticketStatusLabel(_ key: String) -> String {
+    switch key {
+    case "IN_REVIEW": return "In review"
+    case "RESOLVED": return "Resolved"
+    case "CLOSED": return "Closed"
+    default: return "Open"
+    }
+}
+func ticketStatusTone(_ key: String) -> ChipTone {
+    switch key {
+    case "RESOLVED": return .success
+    case "IN_REVIEW": return .warning
+    case "CLOSED": return .neutral
+    default: return .danger
+    }
+}
+
+/// One turn in a ticket's thread.
+///
+/// `fromGideon` and `fromReviewer` are read in THAT order, and the order is the whole point: GIDEON
+/// posts on the reviewer side of the thread — `fromReviewer` is true on its messages too — so a
+/// label that checks the reviewer flag first tells the reporter a BoD read their ticket when the
+/// only thing that answered was the assistant.
+struct ComplaintMessage: Decodable, Identifiable, Sendable {
+    let id: String
+    let body: String?
+    let createdAt: String?
+    /// Written by the viewer.
+    let mine: Bool?
+    let fromReviewer: Bool?
+    let fromGideon: Bool?
+    let author: Author?
+
+    struct Author: Decodable, Sendable { let id: String?; let name: String?; let avatar: String? }
+
+    var isMine: Bool { mine == true }
+    var isGideon: Bool { fromGideon == true }
+    var text: String { body ?? "" }
+    /// Only ever drawn on somebody else's bubble — one's own message needs no name on it.
+    var authorLabel: String {
+        if isGideon { return "GIDEON" }
+        if fromReviewer == true { return "BoD" }
+        let name = author?.name ?? ""
+        return name.isEmpty ? T("Someone") : name
+    }
+    /// Same shape as the correction card's decided line, so two timestamps sitting one above the
+    /// other in the same sheet read identically.
+    var timeLabel: String {
+        guard let createdAt, let d = ProjDate.parse(createdAt) else { return "" }
+        return "\(ProjDate.dayLabel(d)) · \(AgendaRange.timeLabel(createdAt))"
+    }
+}
+
+/// The ticket as the detail route serves it: the row the list already showed, plus the message
+/// thread and the permissions the list cannot answer. Optional throughout for the same reason
+/// `Complaint` is — a field rename should degrade, not fail to decode.
+struct ComplaintDetail: Decodable, Sendable {
+    let id: String?
+    let status: String?
+    /// Oldest first: the route orders them that way, so nothing here re-sorts and risks disagreeing
+    /// with the web about what was said when.
+    let messages: [ComplaintMessage]?
+    let resolvedAt: String?
+    let resolvedBy: Complaint.Reporter?
+    /// May the viewer move the ticket's STATUS — roughly "is a BoD". NOT the attendance-write
+    /// permission, which is `canDecide` on the correction payload; the two answer different
+    /// questions and the sheet must not read one for the other.
+    let canManage: Bool?
+    /// The server's own answer to "may this person reply", which already folds in the closed case.
+    let canReply: Bool?
+}
+
+/// A proposed rewrite of ONE day's attendance record, hanging off a ticket. Filed by GIDEON or by
+/// the reporter — and filing one changes nothing at all: the record is rewritten only when a BoD
+/// approves it. That separation is the whole point of the flow, so every label driven from here
+/// keeps "proposed" and "recorded" apart.
+struct AttendanceCorrection: Decodable, Identifiable, Sendable {
+    let id: String
+    let status: String?
+    /// "YYYY-MM-DD" in Asia/Jakarta — a DAY KEY, not a timestamp. Parsed and formatted in the same
+    /// zone (`AgendaRange.dayLabel`) so it can never slide onto the neighbouring day.
+    let date: String?
+    /// Whose attendance this would rewrite — not necessarily whoever proposed it.
+    let user: Person?
+    /// ISO timestamps. `nil` means "leave the recorded time alone", NOT "clear it".
+    let proposedCheckInAt: String?
+    let proposedCheckOutAt: String?
+    let reason: String?
+    let proposedBy: Person?
+    let before: Snapshot?
+    let decidedBy: Person?
+    let decidedAt: String?
+    let decisionNote: String?
+    let createdAt: String?
+    /// Row-level: is this row still PENDING. NOT the viewer's permission — that is `canDecide` on
+    /// the response, and confusing the two is how an approve button appears for someone who has no
+    /// business seeing one.
+    let canApprove: Bool?
+
+    struct Person: Decodable, Sendable { let id: String?; let name: String?; let avatar: String? }
+    /// The attendance record as it stood the moment the proposal was written.
+    struct Snapshot: Decodable, Sendable {
+        let recordId: String?
+        let checkInAt: String?
+        let checkOutAt: String?
+        let status: String?
+    }
+
+    var statusKey: String { (status ?? "PENDING").uppercased() }
+    var isPending: Bool { statusKey == "PENDING" }
+    /// Every field of the snapshot empty means that day had NO attendance record at all. There is
+    /// nothing to compare against, so the card says so instead of drawing a before/after against
+    /// four blanks — which reads as "the times were wiped".
+    var hadNoRecord: Bool {
+        guard let before else { return true }
+        return [before.recordId, before.checkInAt, before.checkOutAt, before.status]
+            .allSatisfy { ($0 ?? "").isEmpty }
     }
     var statusLabel: String {
         switch statusKey {
-        case "IN_REVIEW": return "In review"
-        case "RESOLVED": return "Resolved"
-        case "CLOSED": return "Closed"
-        default: return "Open"
+        case "APPROVED": return T("Approved")
+        case "REJECTED": return T("Rejected")
+        default: return T("Pending")
         }
     }
+    var tone: ChipTone {
+        switch statusKey {
+        case "APPROVED": return .success
+        case "REJECTED": return .danger
+        default: return .warning
+        }
+    }
+}
+
+struct AttendanceCorrectionsResponse: Decodable, Sendable {
+    let corrections: [AttendanceCorrection]?
+    /// The VIEWER's permission — may this person approve — not a property of any row.
+    let canDecide: Bool?
 }
 
 // MARK: - list
@@ -87,7 +219,7 @@ struct TicketsView: View {
             }
         }
         .task { await load() }
-        .sheet(item: $selected) { TicketDetailSheet(ticket: $0) }
+        .sheet(item: $selected) { t in TicketDetailSheet(ticket: t) { await load() } }
         // Reloads rather than splicing the new ticket in: the server decides the status, the
         // reporter shown (anonymous tickets hide it) and the ordering, so a locally-invented row
         // would differ from the one everybody else sees.
@@ -187,67 +319,719 @@ struct TicketsView: View {
 
 struct TicketDetailSheet: View {
     let ticket: Complaint
+    /// Reloads the list behind this sheet — a reply or a correction decision can move the ticket
+    /// itself, and a reply also changes the message count the row shows.
+    let onChanged: () async -> Void
+    @Environment(AuthStore.self) private var auth
     @Environment(\.dismiss) private var dismiss
+
+    /// The route's own rules (BODY_MIN / BODY_MAX in src/lib/complaints.ts). Mirrored so the send
+    /// button stays down instead of spending a round trip to be told the reply was too short — and
+    /// so nothing over the ceiling goes out: past it the server TRUNCATES rather than refusing, and
+    /// silently posting half a reply is worse than a button that is visibly not ready.
+    private static let replyMin = 10
+    private static let replyMax = 4000
+
+    @State private var detail: ComplaintDetail?
+    @State private var loadingThread = true
+    @State private var threadError: String?
+    @State private var draft = ""
+    @State private var sending = false
+    @State private var sendError: String?
+    /// Bumped after a reply lands, to make the correction card refetch. A reply from anyone but a
+    /// BoD wakes GIDEON on an attendance ticket, and what comes back can be a proposal rather than
+    /// only a message.
+    @State private var correctionsToken = 0
+    @State private var viewingPhoto: PhotoRef?
+
+    /// The live status where there is one. The list row behind this sheet was correct when it was
+    /// fetched and not one moment longer.
+    private var statusKey: String { (detail?.status ?? ticket.status ?? "OPEN").uppercased() }
+    private var messages: [ComplaintMessage] { detail?.messages ?? [] }
+    private var trimmedDraft: String { draft.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var canSend: Bool { !sending && (Self.replyMin...Self.replyMax).contains(trimmedDraft.count) }
+    /// The server already decided this and its answer covers cases this app cannot see. The fallback
+    /// only runs if the field is missing, and re-derives the same rule: the reporter or a BoD, on a
+    /// ticket that is not closed.
+    private var canReply: Bool {
+        if let flag = detail?.canReply { return flag }
+        return statusKey != "CLOSED" && (ticket.isMine == true || detail?.canManage == true)
+    }
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(alignment: .top, spacing: 8) {
-                        Text(ticket.title).font(NXFont.display(20, .bold)).foregroundStyle(NX.foreground)
-                        Spacer(minLength: 4)
-                        NexusChip(text: ticket.statusLabel, tone: ticket.tone)
-                    }
-                    HStack(spacing: 8) {
-                        if let c = ticket.category, !c.isEmpty {
-                            NexusChip(text: humanizeEnum(c), tone: .accent, systemImage: "tag.fill")
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack(alignment: .top, spacing: 8) {
+                            Text(ticket.title).font(NXFont.display(20, .bold)).foregroundStyle(NX.foreground)
+                            Spacer(minLength: 4)
+                            NexusChip(text: ticketStatusLabel(statusKey), tone: ticketStatusTone(statusKey))
                         }
-                        if let d = ProjDate.parse(ticket.createdAt) {
-                            Text(ProjDate.longLabel(d)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-                        }
-                    }
-                    if let n = ticket.reporter?.name, !n.isEmpty {
                         HStack(spacing: 8) {
-                            AvatarView(url: ticket.reporter?.avatar,
-                                       initial: String(n.first ?? "?").uppercased(), size: 30)
-                            Text(n).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                            if let c = ticket.category, !c.isEmpty {
+                                NexusChip(text: humanizeEnum(c), tone: .accent, systemImage: "tag.fill")
+                            }
+                            if let d = ProjDate.parse(ticket.createdAt) {
+                                Text(ProjDate.longLabel(d)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                            }
                         }
-                    }
-                    if let b = ticket.body, !b.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            SectionLabel(T("Report body"))
-                            Text(b).font(NXFont.text(14)).foregroundStyle(NX.foreground)
-                                .fixedSize(horizontal: false, vertical: true)
+                        if let n = ticket.reporter?.name, !n.isEmpty {
+                            HStack(spacing: 8) {
+                                AvatarView(url: ticket.reporter?.avatar,
+                                           initial: String(n.first ?? "?").uppercased(), size: 30)
+                                Text(n).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                            }
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .nexusCard()
-                    }
-                    let photos = (ticket.attachments ?? []).compactMap { $0.url }
-                    if !photos.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            SectionLabel("Foto bukti · \(photos.count)")
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 8) {
-                                    ForEach(photos, id: \.self) { p in
-                                        CachedImage(url: URL(string: p.hasPrefix("http") ? p : Config.baseURL.absoluteString + p)) {
-                                            $0.resizable().scaledToFill()
-                                        } placeholder: {
-                                            NX.muted
+                        if let b = ticket.body, !b.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                SectionLabel(T("Report body"))
+                                Text(b).font(NXFont.text(14)).foregroundStyle(NX.foreground)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .nexusCard()
+                        }
+                        let photos = (ticket.attachments ?? []).compactMap { $0.url }
+                        if !photos.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                SectionLabel("Foto bukti · \(photos.count)")
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 8) {
+                                        ForEach(photos, id: \.self) { p in
+                                            let url = URL(string: p.hasPrefix("http") ? p : Config.baseURL.absoluteString + p)
+                                            // A 130pt tile is not evidence anybody can read. Same
+                                            // viewer the attendance requests use, so a photograph
+                                            // opens the same way wherever it is filed.
+                                            Button { if let url { viewingPhoto = PhotoRef(url: url, name: nil) } } label: {
+                                                CachedImage(url: url) {
+                                                    $0.resizable().scaledToFill()
+                                                } placeholder: {
+                                                    NX.muted
+                                                }
+                                                .frame(width: 130, height: 130)
+                                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                            }
+                                            .buttonStyle(.plain)
                                         }
-                                        .frame(width: 130, height: 130)
-                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                                     }
                                 }
                             }
                         }
+                        // The thread first, the proposal card last — the same order the web uses, and
+                        // for the same reason: a pending correction is a decision somebody has to
+                        // make, so it belongs where the sheet ends rather than above a conversation
+                        // that grows until it pushes the decision off the screen.
+                        thread
+                        AttendanceCorrectionCard(ticket: ticket, reloadToken: correctionsToken,
+                                                 onDecided: onChanged)
+                    }
+                    .padding(16)
+                }
+                // Manual, on purpose: GIDEON's reply can arrive minutes after the send-time refresh
+                // gave up, and nothing pushes it to the phone.
+                .refreshable { await refreshEverything() }
+                // Only once the thread has landed: the composer's own permission comes off that
+                // payload, and a box that appears and then disappears is worse than a short wait.
+                if detail != nil {
+                    if canReply {
+                        composer
+                    } else if statusKey == "CLOSED" {
+                        Text(T("This ticket is closed. No more replies."))
+                            .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 16).padding(.vertical, 14)
+                            .overlay(Rectangle().fill(NX.border).frame(height: 1), alignment: .top)
                     }
                 }
-                .padding(16)
             }
             .background(NX.background.ignoresSafeArea())
             .navigationTitle(T("Ticket"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Close")) { dismiss() } } }
+        }
+        .task { await loadThread() }
+        .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
+    }
+
+    // MARK: thread
+
+    @ViewBuilder private var thread: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel(T("Conversation"))
+            if loadingThread {
+                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
+            } else if let threadError {
+                Text(threadError).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if messages.isEmpty {
+                Text(T("No replies yet. Answers land right here."))
+                    .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ForEach(messages) { bubble($0) }
+            }
+            closingNote
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func bubble(_ m: ComplaintMessage) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            if m.isMine { Spacer(minLength: 44) } else { shoulder(m) }
+            VStack(alignment: .leading, spacing: 4) {
+                if !m.isMine {
+                    Text(m.authorLabel).font(NXFont.text(11, .bold))
+                        .foregroundStyle(m.isGideon ? NX.violetText : NX.mutedFg).lineLimit(1)
+                }
+                Text(m.text).font(NXFont.text(14))
+                    .foregroundStyle(m.isMine ? Color.white : NX.foreground)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                // Skipped rather than drawn blank: an unparseable timestamp would otherwise leave an
+                // empty line inside the bubble that looks like a stripped-out attachment.
+                if !m.timeLabel.isEmpty {
+                    Text(m.timeLabel).font(NXFont.text(10))
+                        .foregroundStyle(m.isMine ? Color.white.opacity(0.7) : NX.mutedFg)
+                }
+            }
+            .padding(.horizontal, 13).padding(.vertical, 9)
+            .background(m.isMine ? NX.violet : NX.card,
+                        in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(m.isMine ? Color.clear : NX.border))
+            if !m.isMine { Spacer(minLength: 44) }
+        }
+    }
+
+    /// The face beside somebody else's bubble. GIDEON gets its own mark rather than an initial: it
+    /// has no avatar on the server, and a circled "G" among the photographs would read as one more
+    /// colleague.
+    @ViewBuilder private func shoulder(_ m: ComplaintMessage) -> some View {
+        if m.isGideon {
+            Image("GideonLogo")
+                .renderingMode(.template).resizable().scaledToFit()
+                .frame(width: 15, height: 15).foregroundStyle(NX.foreground)
+                .frame(width: 28, height: 28)
+                .background(NX.card, in: Circle())
+                .overlay(Circle().strokeBorder(NX.border))
+        } else {
+            AvatarView(url: m.author?.avatar,
+                       initial: String((m.author?.name ?? "?").first ?? "?").uppercased(), size: 28)
+        }
+    }
+
+    /// Closes the thread off the way the web does, so a resolved ticket does not simply stop with
+    /// no sign that anything was concluded.
+    @ViewBuilder private var closingNote: some View {
+        if statusKey == "RESOLVED" || statusKey == "CLOSED", let at = detail?.resolvedAt, !at.isEmpty {
+            let verb = statusKey == "RESOLVED" ? T("Marked resolved") : T("Ticket closed")
+            let who = detail?.resolvedBy?.name ?? ""
+            Text(who.isEmpty ? verb : "\(verb) · \(who)")
+                .font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, 2)
+        }
+    }
+
+    // MARK: composer
+
+    private var composer: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let sendError {
+                Text(sendError).font(NXFont.text(11, .semibold)).foregroundStyle(NX.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(alignment: .bottom, spacing: 10) {
+                TextField(T("Write a reply…"), text: $draft, axis: .vertical)
+                    .font(NXFont.text(14)).lineLimit(1...5)
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .background(NX.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(NX.border))
+                    .disabled(sending)
+                Button { Task { await send() } } label: {
+                    Image(systemName: sending ? "ellipsis" : "arrow.up")
+                        .font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
+                        .frame(width: 38, height: 38)
+                        .background(canSend ? NX.violet : NX.muted, in: Circle())
+                }
+                .buttonStyle(.plain).disabled(!canSend)
+            }
+            // Nothing is drawn while the reply is within the rules, so the ordinary case stays quiet
+            // instead of counting at people while they type.
+            if !trimmedDraft.isEmpty && trimmedDraft.count < Self.replyMin {
+                Text("\(trimmedDraft.count)/\(Self.replyMin)")
+                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            } else if trimmedDraft.count > Self.replyMax {
+                Text("\(trimmedDraft.count)/\(Self.replyMax)")
+                    .font(NXFont.text(11)).foregroundStyle(NX.danger)
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .background(NX.background)
+        .overlay(Rectangle().fill(NX.border).frame(height: 1), alignment: .top)
+    }
+
+    // MARK: work
+
+    private func send() async {
+        let text = trimmedDraft
+        guard (Self.replyMin...Self.replyMax).contains(text.count), !sending else { return }
+        sendError = nil
+        sending = true
+        var posted = false
+        do {
+            // The POST answers with the whole ticket again, so the thread redraws from the server's
+            // own copy instead of a locally-invented row — the reply can also move the status, which
+            // a spliced-in message would not show.
+            let fresh = try await APIClient.shared.replyToComplaint(ticket.id, body: text)
+            apply(fresh)
+            draft = ""
+            posted = true
+        } catch APIError.unauthorized {
+            auth.logout()
+        } catch {
+            sendError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't send the reply.")
+        }
+        // Dropped BEFORE the second look below: the reply itself is already through, and a send
+        // button still spinning for another few seconds reads as "it didn't go".
+        sending = false
+        guard posted else { return }
+        await onChanged()
+        // A reply from anyone but a BoD wakes GIDEON on attendance / EXP / day-off tickets, and its
+        // answer — plus any correction it proposes off the back of it — lands a moment after the
+        // response above was written. Without this the reporter sees their own message sitting alone
+        // and concludes nobody came. Best-effort: if GIDEON is slower than this, pull-to-refresh is
+        // the way to see it, and pretending otherwise would mean holding the composer hostage.
+        try? await Task.sleep(for: .seconds(4))
+        await refreshEverything()
+    }
+
+    private func refreshEverything() async {
+        await loadThread(spinner: false)
+        correctionsToken += 1
+    }
+
+    private func loadThread(spinner: Bool = true) async {
+        if spinner { loadingThread = true }
+        do {
+            let fresh = try await APIClient.shared.complaintDetail(ticket.id)
+            apply(fresh)
+        } catch APIError.unauthorized {
+            auth.logout()
+        } catch {
+            // A failed REFRESH must not paint an error over a thread that is already on screen: the
+            // messages sitting there are still exactly what was said.
+            if detail == nil {
+                threadError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load the conversation.")
+            }
+        }
+        loadingThread = false
+    }
+
+    private func apply(_ fresh: ComplaintDetail) {
+        detail = fresh
+        threadError = nil
+    }
+}
+
+// MARK: - attendance correction
+
+/// The app's half of the web's attendance-correction flow.
+///
+/// A correction is a PROPOSAL: it rewrites nothing on its own. The AttendanceRecord moves only when
+/// a BoD approves it, which is the whole safety design — so nothing here calls a pending row a
+/// change, and the approve button is drawn only from `canDecide` (the viewer's permission), never
+/// from the row's own `canApprove`.
+struct AttendanceCorrectionCard: View {
+    let ticket: Complaint
+    /// Bumped by the sheet whenever the thread moves. A reply from anyone but a BoD wakes GIDEON,
+    /// which can answer with a PROPOSAL rather than only a message — and that proposal arrives on
+    /// this route, not in the reply's own response.
+    var reloadToken: Int = 0
+    /// Reloads the list behind the sheet: a decision can move the ticket's own status too.
+    let onDecided: () async -> Void
+
+    @Environment(AuthStore.self) private var auth
+    @State private var corrections: [AttendanceCorrection] = []
+    @State private var canDecide = false
+    @State private var loading = true
+    @State private var busy: String?
+    /// Per-row, keyed by correction id: a note typed against one proposal must not follow the
+    /// reviewer onto the next.
+    @State private var notes: [String: String] = [:]
+    @State private var err: String?
+    @State private var showComposer = false
+
+    private var isAttendanceTicket: Bool { (ticket.category ?? "").uppercased() == "ATTENDANCE" }
+    private var hasPending: Bool { corrections.contains { $0.isPending } }
+    /// One open proposal at a time, and never on a ticket that is already closed — a proposal filed
+    /// against one has nobody left to decide it. A BoD may file their own; the server allows it and
+    /// it is how a proposal gets written for somebody who cannot describe the times themselves.
+    private var canPropose: Bool {
+        isAttendanceTicket && !hasPending && ticket.statusKey != "CLOSED"
+            && (canDecide || ticket.isMine == true)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if loading {
+                // Only where a card is actually expected: a spinner that resolves to nothing on an
+                // EXP ticket is worse than never having drawn one.
+                if isAttendanceTicket {
+                    ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
+                }
+            } else if !corrections.isEmpty || canPropose {
+                card
+            }
+        }
+        .task(id: reloadToken) { await load() }
+        .sheet(isPresented: $showComposer) {
+            CorrectionComposerSheet(ticket: ticket) { await load() }
+        }
+    }
+
+    private var card: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(T("Attendance correction")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+                Text(T("A proposal only — the attendance record moves when a BoD approves it, not before."))
+                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if corrections.isEmpty {
+                Text(T("No correction has been proposed for this ticket yet."))
+                    .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+            } else {
+                ForEach(corrections) { row($0) }
+            }
+            if let err {
+                Text(err).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if canPropose {
+                Button { showComposer = true } label: {
+                    Label(T("Propose an attendance correction"), systemImage: "calendar.badge.clock")
+                        .font(NXFont.text(13, .semibold)).foregroundStyle(NX.violetText)
+                        .frame(maxWidth: .infinity).padding(.vertical, 11)
+                        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12)
+                            .strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [5])))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .nexusCard()
+    }
+
+    private func row(_ c: AttendanceCorrection) -> some View {
+        let working = busy == c.id
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
+                Text(c.date.map { AgendaRange.dayLabel($0) } ?? "—")
+                    .font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground).lineLimit(2)
+                Spacer(minLength: 4)
+                NexusChip(text: c.statusLabel, tone: c.tone)
+            }
+            if let by = c.proposedBy?.name, !by.isEmpty {
+                HStack(spacing: 6) {
+                    AvatarView(url: c.proposedBy?.avatar, initial: String(by.first ?? "?").uppercased(), size: 20)
+                    Text("\(T("Proposed by")) \(by)").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                }
+            }
+            // Only when they differ: on a ticket somebody filed about their own day, repeating the
+            // same name twice says nothing.
+            if let who = c.user?.name, !who.isEmpty, who != c.proposedBy?.name {
+                Text("\(T("Attendance of")) \(who)").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            }
+            comparison(c)
+            if let reason = c.reason, !reason.isEmpty {
+                Text(reason).font(NXFont.text(12)).foregroundStyle(NX.foreground.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if c.isPending {
+                if canDecide {
+                    decideControls(c, working: working)
+                } else {
+                    Text(T("Waiting on a BoD decision. The attendance record has not changed."))
+                        .font(NXFont.text(11)).foregroundStyle(NX.warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else {
+                decision(c)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    @ViewBuilder private func comparison(_ c: AttendanceCorrection) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            if c.hadNoRecord {
+                Text(T("No attendance was recorded that day — this would create it."))
+                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    .fixedSize(horizontal: false, vertical: true)
+                proposedRow(T("Check-in"), c.proposedCheckInAt)
+                proposedRow(T("Check-out"), c.proposedCheckOutAt)
+            } else {
+                compareRow(T("Check-in"), before: c.before?.checkInAt, proposed: c.proposedCheckInAt)
+                compareRow(T("Check-out"), before: c.before?.checkOutAt, proposed: c.proposedCheckOutAt)
+            }
+        }
+    }
+
+    /// Before → after for one side of the day. A `nil` proposal is "leave this one alone", so the
+    /// row draws no arrow and strikes nothing through: an empty after-column would read as an
+    /// erasure, which is the opposite of what null means here.
+    private func compareRow(_ label: String, before: String?, proposed: String?) -> some View {
+        HStack(spacing: 8) {
+            Text(label).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).frame(width: 68, alignment: .leading)
+            Text(clock(before)).font(NXFont.text(13, .semibold)).foregroundStyle(NX.mutedFg)
+                .strikethrough(proposed != nil)
+            if let proposed {
+                Image(systemName: "arrow.right").font(.system(size: 9, weight: .bold)).foregroundStyle(NX.mutedFg)
+                Text(clock(proposed)).font(NXFont.text(13, .bold)).foregroundStyle(NX.violetText)
+            } else {
+                Text(T("unchanged")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func proposedRow(_ label: String, _ proposed: String?) -> some View {
+        HStack(spacing: 8) {
+            Text(label).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).frame(width: 68, alignment: .leading)
+            Text(clock(proposed)).font(NXFont.text(13, .bold))
+                .foregroundStyle(proposed == nil ? NX.mutedFg : NX.violetText)
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func decision(_ c: AttendanceCorrection) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.seal").font(.system(size: 10)).foregroundStyle(NX.mutedFg)
+                Text(decidedLine(c)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(2)
+            }
+            if let note = c.decisionNote, !note.isEmpty {
+                Text(note).font(NXFont.text(12)).foregroundStyle(NX.foreground.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func decidedLine(_ c: AttendanceCorrection) -> String {
+        var parts = ["\(T("Decided by")) \(c.decidedBy?.name ?? "BoD")"]
+        if let at = c.decidedAt, let d = ProjDate.parse(at) {
+            parts.append("\(ProjDate.dayLabel(d)) · \(AgendaRange.timeLabel(at))")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func decideControls(_ c: AttendanceCorrection, working: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField(T("Note for the decision (optional)"),
+                      text: Binding(get: { notes[c.id] ?? "" }, set: { notes[c.id] = $0 }),
+                      axis: .vertical)
+                .font(NXFont.text(13)).lineLimit(1...3).padding(10)
+                .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(NX.border))
+            HStack(spacing: 8) {
+                if working {
+                    ProgressView().scaleEffect(0.7)
+                } else {
+                    actionBtn(T("Approve"), .success) { await decide(c, approve: true) }
+                    actionBtn(T("Reject"), .danger) { await decide(c, approve: false) }
+                }
+            }
+            Text(T("Approving rewrites that day's attendance record straight away."))
+                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, 2)
+    }
+
+    private func actionBtn(_ title: String, _ tone: ChipTone, _ action: @escaping () async -> Void) -> some View {
+        Button { Task { await action() } } label: {
+            Text(title).font(NXFont.text(12, .bold)).foregroundStyle(tone.fg)
+                .padding(.horizontal, 12).padding(.vertical, 6).background(tone.bg, in: Capsule())
+        }.buttonStyle(.plain)
+    }
+
+    private func clock(_ iso: String?) -> String {
+        guard let iso, !iso.isEmpty else { return "—" }
+        let t = AgendaRange.timeLabel(iso)
+        return t.isEmpty ? "—" : t
+    }
+
+    private func decide(_ c: AttendanceCorrection, approve: Bool) async {
+        busy = c.id; defer { busy = nil }
+        err = nil
+        do {
+            try await APIClient.shared.decideAttendanceCorrection(
+                complaintId: ticket.id, correctionId: c.id, approve: approve,
+                note: (notes[c.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines))
+            notes[c.id] = ""
+            await load()
+            await onDecided()
+            // An approval rewrites a real AttendanceRecord, so the widgets and the Live Activity can
+            // be sitting on a day that just moved under them. Best-effort on purpose: failing to
+            // refresh those must not turn a decision that went through into an error on screen.
+            if approve, let today = try? await APIClient.shared.attendanceToday() {
+                AttendancePresence.refresh(today: today, userName: auth.session?.userName)
+            }
+        } catch APIError.unauthorized {
+            auth.logout()
+        } catch {
+            err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't send the attendance correction.")
+        }
+    }
+
+    private func load() async {
+        do {
+            let res = try await APIClient.shared.attendanceCorrections(complaintId: ticket.id)
+            corrections = res.corrections ?? []
+            canDecide = res.canDecide ?? false
+            err = nil
+        } catch APIError.unauthorized {
+            auth.logout()
+        } catch {
+            // Deliberately silent. Most tickets never carry a correction, and this card is not why
+            // anybody opened the ticket — a red line under a report they can still read would only
+            // suggest the report itself failed to load.
+            corrections = []
+            canDecide = false
+        }
+        loading = false
+    }
+}
+
+/// Filing a correction proposal.
+///
+/// The copy carries the load here: this form ASKS for a day to be rewritten, it does not rewrite
+/// one. Somebody who is owed hours has to be able to tell those apart from the submit button alone.
+struct CorrectionComposerSheet: View {
+    let ticket: Complaint
+    let onFiled: () async -> Void
+    @Environment(AuthStore.self) private var auth
+    @Environment(\.dismiss) private var dismiss
+
+    /// The route's own rule. Mirrored so the button stays down instead of spending a round trip to
+    /// be told the reason was too short.
+    private static let reasonMin = 10
+
+    @State private var date = Date()
+    @State private var setCheckIn = true
+    @State private var checkIn = ShiftClock.date("09:00")
+    @State private var setCheckOut = false
+    @State private var checkOut = ShiftClock.date("18:00")
+    @State private var reason = ""
+    @State private var busy = false
+    @State private var err: String?
+
+    private var trimmedReason: String { reason.trimmingCharacters(in: .whitespacesAndNewlines) }
+    /// At least one side has to move — the server refuses a proposal that changes neither.
+    private var canSubmit: Bool { (setCheckIn || setCheckOut) && trimmedReason.count >= Self.reasonMin }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                NX.background.ignoresSafeArea()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        Text(T("This asks the BoD to rewrite one day's attendance. Nothing changes until they approve it."))
+                            .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                            .fixedSize(horizontal: false, vertical: true)
+                        field(T("DATE")) {
+                            DatePicker("", selection: $date, in: ...Date(), displayedComponents: .date)
+                                .datePickerStyle(.compact).labelsHidden().tint(NX.violetText)
+                        }
+                        field(T("CHECK-IN")) { timeToggle(on: $setCheckIn, time: $checkIn) }
+                        field(T("CHECK-OUT")) { timeToggle(on: $setCheckOut, time: $checkOut) }
+                        if !setCheckIn && !setCheckOut {
+                            Text(T("Set at least one of check-in or check-out."))
+                                .font(NXFont.text(11)).foregroundStyle(NX.danger)
+                        }
+                        field(T("REASON")) {
+                            VStack(alignment: .leading, spacing: 5) {
+                                TextField(T("Why the record is wrong…"), text: $reason, axis: .vertical)
+                                    .font(NXFont.text(15)).lineLimit(3...6).padding(12)
+                                    .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                                // Counts only while it is still short, so the ordinary case stays
+                                // quiet instead of counting at people while they type.
+                                if trimmedReason.count < Self.reasonMin {
+                                    Text("\(trimmedReason.count)/\(Self.reasonMin)")
+                                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                                }
+                            }
+                        }
+                        if let err {
+                            Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Button { Task { await submit() } } label: {
+                            HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text(T("Send the proposal")) }
+                        }
+                        .buttonStyle(NexusPrimaryButton()).disabled(busy || !canSubmit)
+                    }
+                    .padding(20)
+                }
+            }
+            .navigationTitle(T("Attendance correction"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() }.disabled(busy) } }
+        }
+    }
+
+    /// Off is not "blank" — it is "leave the recorded time alone", and the payload drops the field
+    /// entirely so the server reads it that way rather than as a clear.
+    private func timeToggle(on: Binding<Bool>, time: Binding<Date>) -> some View {
+        HStack(spacing: 10) {
+            Toggle("", isOn: on).labelsHidden().tint(NX.violetText)
+            if on.wrappedValue {
+                DatePicker("", selection: time, displayedComponents: .hourAndMinute)
+                    .datePickerStyle(.compact).labelsHidden().tint(NX.violetText)
+            } else {
+                Text(T("Leave the recorded time as it is")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func field<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            SectionLabel(label)
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func submit() async {
+        guard canSubmit, !busy else { return }
+        busy = true; defer { busy = false }
+        err = nil
+        // The day key is Asia/Jakarta, like every other date this API takes; the times go out as the
+        // office-local "HH:mm" the picker just showed, through the same helper the shift editor uses.
+        let day = DateFormatter()
+        day.dateFormat = "yyyy-MM-dd"
+        day.locale = Locale(identifier: "en_US_POSIX")
+        day.timeZone = ProjDate.cal.timeZone
+        do {
+            try await APIClient.shared.proposeAttendanceCorrection(
+                complaintId: ticket.id,
+                date: day.string(from: date),
+                checkInAt: setCheckIn ? ShiftClock.hhmm(checkIn) : nil,
+                checkOutAt: setCheckOut ? ShiftClock.hhmm(checkOut) : nil,
+                reason: trimmedReason)
+            await onFiled()
+            dismiss()
+        } catch APIError.unauthorized {
+            auth.logout()
+        } catch {
+            err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't send the attendance correction.")
         }
     }
 }

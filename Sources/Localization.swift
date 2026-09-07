@@ -756,6 +756,50 @@ final class AppLanguage {
         "EXP / Gamification": "EXP / Gamifikasi",
         "Leave / Day-off": "Cuti / Day-Off",
         "Other": "Lainnya",
+        // ── ticket · attendance correction ───────────────────────────────────
+        "Attendance correction": "Koreksi absen",
+        "A proposal only — the attendance record moves when a BoD approves it, not before.":
+            "Baru usulan — absen berubah kalau BoD nyetujuin, belum sebelum itu.",
+        "No correction has been proposed for this ticket yet.":
+            "Belum ada usulan koreksi absen buat tiket ini.",
+        "Propose an attendance correction": "Ajukan koreksi absen",
+        "Proposed by": "Diajukan oleh",
+        "Attendance of": "Absen milik",
+        "No attendance was recorded that day — this would create it.":
+            "Hari itu nggak ada absen tercatat — usulan ini yang bakal bikin.",
+        "unchanged": "tetap",
+        "Waiting on a BoD decision. The attendance record has not changed.":
+            "Nunggu keputusan BoD. Absennya belum berubah.",
+        "Approving rewrites that day's attendance record straight away.":
+            "Begitu disetujui, absen hari itu langsung ditulis ulang.",
+        "Note for the decision (optional)": "Catatan keputusan (opsional)",
+        "Decided by": "Diputus oleh",
+        "Couldn't send the attendance correction.": "Gagal ngirim koreksi absen.",
+        "That day's attendance moved after this proposal was written. Check the day again and ask for a fresh proposal.":
+            "Absen hari itu udah berubah setelah usulan ini dibuat. Cek lagi harinya, terus minta usulan baru.",
+        "This asks the BoD to rewrite one day's attendance. Nothing changes until they approve it.":
+            "Ini minta BoD nulis ulang absen satu hari. Nggak ada yang berubah sampai mereka nyetujuin.",
+        "DATE": "TANGGAL",
+        "Set at least one of check-in or check-out.": "Minimal isi salah satu: check-in atau check-out.",
+        "Leave the recorded time as it is": "Biarin jam yang udah tercatat",
+        "Why the record is wrong…": "Kenapa catatannya salah…",
+        "Send the proposal": "Kirim usulan",
+        // ── ticket · thread ──────────────────────────────────────────────────
+        "Conversation": "Percakapan",
+        "No replies yet. Answers land right here.": "Belum ada balasan. Jawabannya bakal muncul di sini.",
+        "Couldn't load the conversation.": "Gagal muat percakapan.",
+        "Write a reply…": "Tulis balasan…",
+        "Couldn't send the reply.": "Gagal ngirim balasan.",
+        "This ticket is closed. No more replies.": "Tiket ini udah ditutup. Nggak bisa balas lagi.",
+        "Marked resolved": "Ditandai selesai",
+        "Ticket closed": "Tiket ditutup",
+        // "Someone" — the fallback author label — is already carried above, near the chat strings.
+        // ── notification tap-through · request attachment ─────────────────────
+        // "Close" is already carried above, near the ticket strings.
+        "tap to open": "ketuk buat buka",
+        "Tap to enlarge": "Ketuk buat perbesar",
+        "View attachment": "Lihat lampiran",
+        "PDF · open it on the web": "PDF · buka di web",
     ]
 }
 

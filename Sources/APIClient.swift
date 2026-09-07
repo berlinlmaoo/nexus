@@ -626,6 +626,105 @@ struct APIClient {
         return true
     }
 
+    /// The whole ticket, message thread included. The list route answers with rows only, so this is
+    /// the only place the conversation exists — without it the app shows people the complaint they
+    /// filed and none of the answers to it.
+    func complaintDetail(_ complaintId: String) async throws -> ComplaintDetail {
+        try await run(makeRequest("/api/complaints/\(complaintId)"), decode: ComplaintDetail.self)
+    }
+
+    /// Post a reply. The route answers with the ticket detail all over again — status included, and
+    /// a BoD replying to an OPEN ticket moves it to IN_REVIEW — so the caller redraws from that
+    /// instead of splicing in a message it invented.
+    ///
+    /// Not routed through `run`, for the same reason `createComplaint` is not: the refusals here are
+    /// sentences the server already wrote for whoever is reading them ("Balasan minimal 10
+    /// karakter.", "Keluhan ini sudah ditutup."), and `run` would flatten both into a bare
+    /// "Server error (422)".
+    func replyToComplaint(_ complaintId: String, body text: String) async throws -> ComplaintDetail {
+        var req = makeRequest("/api/complaints/\(complaintId)/messages", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["body": text])
+
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await URLSession.shared.data(for: req)
+        } catch {
+            throw APIError.transport(error.localizedDescription)
+        }
+        guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        guard (200..<300).contains(http.statusCode) else {
+            let payload = try? JSONDecoder().decode(ServerError.self, from: data)
+            throw APIError.transport(payload?.error ?? T("Couldn't send the reply."))
+        }
+        do { return try JSONDecoder().decode(ComplaintDetail.self, from: data) }
+        catch { throw APIError.decoding }
+    }
+
+    // MARK: - Attendance correction (attached to a ticket)
+
+    /// The ticket payload already carries `corrections`, but only this route answers the other half
+    /// of the question — whether the VIEWER may decide one. Both come back together, so the sheet
+    /// asks once instead of stitching two payloads into one card.
+    func attendanceCorrections(complaintId: String) async throws -> AttendanceCorrectionsResponse {
+        try await run(makeRequest("/api/complaints/\(complaintId)/correction"),
+                      decode: AttendanceCorrectionsResponse.self)
+    }
+
+    /// APPROVE / REJECT a proposal. BoD only — the server answers everyone else with a 403.
+    @discardableResult
+    func decideAttendanceCorrection(complaintId: String, correctionId: String,
+                                    approve: Bool, note: String?) async throws -> Bool {
+        var body: [String: Any] = ["decision": approve ? "APPROVE" : "REJECT", "correctionId": correctionId]
+        if let note, !note.isEmpty { body["note"] = note }
+        try await postCorrection(complaintId, body)
+        return true
+    }
+
+    /// File a proposal against ONE day. `checkInAt` / `checkOutAt` are office-local "HH:mm" and at
+    /// least one has to be present. A side that is not being moved is DROPPED from the payload
+    /// rather than sent as null — null on this route means "leave the recorded time alone", and a
+    /// key that is there but empty is not the same promise.
+    @discardableResult
+    func proposeAttendanceCorrection(complaintId: String, date: String, checkInAt: String?,
+                                     checkOutAt: String?, reason: String) async throws -> Bool {
+        var body: [String: Any] = ["decision": "PROPOSE", "date": date, "reason": reason]
+        if let checkInAt, !checkInAt.isEmpty { body["checkInAt"] = checkInAt }
+        if let checkOutAt, !checkOutAt.isEmpty { body["checkOutAt"] = checkOutAt }
+        try await postCorrection(complaintId, body)
+        return true
+    }
+
+    /// Not routed through `run`, for the same reason `createComplaint` is not: every refusal here
+    /// is a sentence the server already wrote for the person reading it, and `run` would flatten
+    /// all of them into a bare "Server error (422)".
+    private func postCorrection(_ complaintId: String, _ body: [String: Any]) async throws {
+        var req = makeRequest("/api/complaints/\(complaintId)/correction", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await URLSession.shared.data(for: req)
+        } catch {
+            throw APIError.transport(error.localizedDescription)
+        }
+        guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        guard (200..<300).contains(http.statusCode) else {
+            // 409 is the optimistic lock: the attendance record moved after the snapshot inside the
+            // proposal was taken, so nothing was written — and re-sending this same proposal would
+            // keep failing. Spelled out rather than passed through, because the way out is a NEW
+            // proposal against the day as it stands now, which no status line says on its own.
+            if http.statusCode == 409 {
+                throw APIError.transport(T("That day's attendance moved after this proposal was written. Check the day again and ask for a fresh proposal."))
+            }
+            let payload = try? JSONDecoder().decode(ServerError.self, from: data)
+            throw APIError.transport(payload?.error ?? T("Couldn't send the attendance correction."))
+        }
+    }
+
     func auditLogs() async throws -> [AuditLog] {
         (try await run(makeRequest("/api/audit"), decode: AuditLogsResponse.self)).logs ?? []
     }
