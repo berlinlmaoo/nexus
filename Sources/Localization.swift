@@ -758,6 +758,18 @@ final class AppLanguage {
         "Couldn't revoke the passkey. Try again.": "Gagal nyabut passkey. Coba lagi.",
         "Passkey added ✓": "Passkey ditambahkan ✓",
         "Couldn't add the passkey. Try again.": "Gagal nambah passkey. Coba lagi.",
+        // ── ticket · statuses and row markers ────────────────────────────────
+        // AWAITING_DECISION: GIDEON has answered, or a correction is sitting undecided. Not
+        // IN_REVIEW — that one means a director took the ticket on. ("Open" is carried above, with
+        // the generic states.)
+        "Awaiting decision": "Menunggu keputusan",
+        "In review": "Sedang ditinjau",
+        "Resolved": "Selesai",
+        "Closed": "Ditutup",
+        // The row markers. Shorter than the status chip they sit under, and deliberately worded
+        // apart from it: the chip says what the ticket IS, these say what is waiting inside it.
+        "Decision waiting": "Nunggu diputusin",
+        "GIDEON replied": "GIDEON udah jawab",
         // ── ticket composer ─────────────────────────────────────────────────
         "New ticket": "Tiket baru",
         "CATEGORY": "KATEGORI",

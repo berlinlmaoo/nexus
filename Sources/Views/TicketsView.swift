@@ -4,8 +4,8 @@ import UIKit
 
 // MARK: - models
 //
-// Shape taken from the web bundle (assets/complaints-*.js), which renders
-// .subject / .body / .category / .status / .createdAt / .reporter / .attachments.
+// Shape taken from `serializeComplaint` in src/lib/complaints.ts — the one serializer behind both
+// the list route and the detail route, so a field missing there is missing from both.
 // Everything optional so a backend field rename degrades instead of failing to decode.
 
 struct ComplaintsResponse: Decodable, Sendable {
@@ -15,15 +15,23 @@ struct ComplaintsResponse: Decodable, Sendable {
 struct Complaint: Decodable, Identifiable, Sendable {
     let id: String
     let subject: String?
-    let body: String?
     let category: String?
     let status: String?
     let createdAt: String?
+    /// What the list is ORDERED by. `createdAt` answers a different question — when it was filed —
+    /// and a row stamped with it slides out of order the moment anybody replies.
+    let lastMessageAt: String?
     let reporter: Reporter?
     let attachments: [Attachment]?
     /// The server already says whose ticket this is; the app needs it to decide who may file
     /// an attendance correction against it.
     let isMine: Bool?
+    /// The two row markers. Both are deliberately INDEPENDENT of `status`: a director who has
+    /// already taken a ticket on (so it reads IN_REVIEW) still needs to see a proposal sitting there
+    /// undecided. Optional like everything else here, so a server that predates them decodes to nil
+    /// and the row simply draws no marker.
+    let gideonReplied: Bool?
+    let pendingCorrection: Bool?
 
     struct Reporter: Decodable, Sendable { let name: String?; let avatar: String? }
     struct Attachment: Decodable, Sendable { let url: String? }
@@ -32,6 +40,11 @@ struct Complaint: Decodable, Identifiable, Sendable {
     var title: String { subject?.isEmpty == false ? subject! : T("(no subject)") }
     var tone: ChipTone { ticketStatusTone(statusKey) }
     var statusLabel: String { ticketStatusLabel(statusKey) }
+    /// Mirror of `isUnclaimedComplaintStatus` in src/lib/complaints.ts: no human has taken this on.
+    /// GIDEON answering ANNOTATES a ticket, it does not hand it to anybody.
+    var isUnclaimed: Bool { statusKey == "OPEN" || statusKey == "AWAITING_DECISION" }
+    var awaitsDecision: Bool { pendingCorrection == true }
+    var hasGideonReply: Bool { gideonReplied == true }
 }
 
 // Free functions rather than members of `Complaint`, because the detail sheet has to draw the same
@@ -39,16 +52,20 @@ struct Complaint: Decodable, Identifiable, Sendable {
 // on the list row it was opened from is stale the moment anybody answers.
 func ticketStatusLabel(_ key: String) -> String {
     switch key {
-    case "IN_REVIEW": return "In review"
-    case "RESOLVED": return "Resolved"
-    case "CLOSED": return "Closed"
-    default: return "Open"
+    case "AWAITING_DECISION": return T("Awaiting decision")
+    case "IN_REVIEW": return T("In review")
+    case "RESOLVED": return T("Resolved")
+    case "CLOSED": return T("Closed")
+    default: return T("Open")
     }
 }
 func ticketStatusTone(_ key: String) -> ChipTone {
     switch key {
     case "RESOLVED": return .success
     case "IN_REVIEW": return .warning
+    // Violet, the colour the web gives it, and its own case rather than OPEN's red on the way to
+    // `default`: the ticket HAS been answered, it just is not anybody's yet. Red said "untouched".
+    case "AWAITING_DECISION": return .accent
     case "CLOSED": return .neutral
     default: return .danger
     }
@@ -194,15 +211,25 @@ struct TicketsView: View {
     private let filters = ["ALL", "OPEN", "IN_REVIEW", "RESOLVED", "CLOSED"]
     private func filterLabel(_ f: String) -> String {
         switch f {
-        case "OPEN": return "Open"
-        case "IN_REVIEW": return "In review"
-        case "RESOLVED": return "Resolved"
-        case "CLOSED": return "Closed"
+        case "OPEN": return T("Open")
+        case "IN_REVIEW": return T("In review")
+        case "RESOLVED": return T("Resolved")
+        case "CLOSED": return T("Closed")
         default: return T("All")
         }
     }
+    /// A chip picks a QUEUE, not a status to compare against — which is why "Open" carries
+    /// AWAITING_DECISION too. Mirror of COMPLAINT_INBOX_STATUSES in src/lib/complaints.ts and of the
+    /// web's Inbox tab: a ticket GIDEON answered is still work nobody has claimed. A sixth chip
+    /// would have split that one queue in two and pushed the rest off the scroller; the row's own
+    /// status chip already says which of the two a ticket is. Without the widening an answered
+    /// ticket would be reachable from ALL and nowhere else.
     private var filtered: [Complaint] {
-        filter == "ALL" ? items : items.filter { $0.statusKey == filter }
+        switch filter {
+        case "ALL": return items
+        case "OPEN": return items.filter { $0.isUnclaimed }
+        default: return items.filter { $0.statusKey == filter }
+        }
     }
 
     var body: some View {
@@ -281,9 +308,7 @@ struct TicketsView: View {
                 Spacer(minLength: 4)
                 NexusChip(text: t.statusLabel, tone: t.tone)
             }
-            if let b = t.body, !b.isEmpty {
-                Text(b).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(2)
-            }
+            markers(t)
             HStack(spacing: 8) {
                 if let c = t.category, !c.isEmpty {
                     NexusChip(text: humanizeEnum(c), tone: .accent, systemImage: "tag.fill")
@@ -292,7 +317,9 @@ struct TicketsView: View {
                     Label(n, systemImage: "person.fill").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer(minLength: 0)
-                if let d = ProjDate.parse(t.createdAt) {
+                // The date the list is SORTED by. Stamping the row with `createdAt` instead made a
+                // correctly ordered list look shuffled as soon as an old ticket got a new reply.
+                if let d = ProjDate.parse(t.lastMessageAt ?? t.createdAt) {
                     Text(ProjDate.dayLabel(d)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 }
             }
@@ -306,9 +333,56 @@ struct TicketsView: View {
         }
     }
 
+    /// The two things a row could never say before: a decision is sitting unmade, and GIDEON has
+    /// been in the thread. In that order, and both when both hold — the decision is the one that
+    /// needs a person, the reply is only context for it.
+    @ViewBuilder private func markers(_ t: Complaint) -> some View {
+        if t.awaitsDecision || t.hasGideonReply {
+            HStack(spacing: 6) {
+                if t.awaitsDecision {
+                    NexusChip(text: T("Decision waiting"), tone: .accent,
+                              systemImage: "calendar.badge.clock")
+                }
+                if t.hasGideonReply { gideonMarker }
+            }
+        }
+    }
+
+    /// GIDEON's own mark rather than an SF Symbol — the same swap `TicketDetailSheet.shoulder`
+    /// makes, for the same reason: a stock glyph beside the name reads as one more system notice.
+    /// Hand-rolled instead of a `NexusChip` only because that one takes a symbol name, not an image;
+    /// the metrics and the 0.16 tint are copied from it so the two capsules sit level.
+    private var gideonMarker: some View {
+        HStack(spacing: 4) {
+            Image("GideonLogo").renderingMode(.template).resizable().scaledToFit()
+                .frame(width: 10, height: 10)
+            Text(T("GIDEON replied")).font(NXFont.text(11, .bold))
+        }
+        .padding(.horizontal, 8).padding(.vertical, 4)
+        .foregroundStyle(NX.violetText)
+        .background(NX.violetText.opacity(0.16), in: Capsule())
+    }
+
+    /// A decision nobody has made outranks everything else in the queue; inside each group the
+    /// server's own `lastMessageAt desc` order survives, which a partition guarantees and
+    /// `sort(by:)` would not — Swift's sort is not stable, so equal rows may come back reshuffled.
+    ///
+    /// Sorted once per fetch rather than inside `filtered`, which SwiftUI reads on every body pass.
+    ///
+    /// A ticket GIDEON merely ANSWERED is deliberately NOT floated, matching the web: an
+    /// assistant-first queue buries the genuinely new tickets under a pile of replies. Those say so
+    /// with a marker on the row instead.
+    private static func decisionsFirst(_ list: [Complaint]) -> [Complaint] {
+        let waiting = list.filter { $0.awaitsDecision }
+        return waiting.isEmpty ? list : waiting + list.filter { !$0.awaitsDecision }
+    }
+
     private func load() async {
         error = nil
-        do { items = try await APIClient.shared.complaints() }
+        do {
+            let fetched = try await APIClient.shared.complaints()
+            items = Self.decisionsFirst(fetched)
+        }
         catch APIError.unauthorized { auth.logout() }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load tickets.") }
         loading = false
@@ -348,6 +422,13 @@ struct TicketDetailSheet: View {
     /// fetched and not one moment longer.
     private var statusKey: String { (detail?.status ?? ticket.status ?? "OPEN").uppercased() }
     private var messages: [ComplaintMessage] { detail?.messages ?? [] }
+    /// The report itself, which is NOT a field on the ticket: `serializeComplaint` has never sent a
+    /// `body`, and POST /api/complaints writes what the reporter typed as the first message of the
+    /// thread. The card above was reading a key the server does not send and so drew nothing at all.
+    private var reportBody: String { messages.first?.text ?? "" }
+    /// …and the thread therefore starts at the second message. The report is already up there in its
+    /// own card, and drawing it again as the opening bubble reads as the reporter saying it twice.
+    private var replies: [ComplaintMessage] { Array(messages.dropFirst()) }
     private var trimmedDraft: String { draft.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var canSend: Bool { !sending && (Self.replyMin...Self.replyMax).contains(trimmedDraft.count) }
     /// The server already decided this and its answer covers cases this app cannot see. The fallback
@@ -383,10 +464,10 @@ struct TicketDetailSheet: View {
                                 Text(n).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
                             }
                         }
-                        if let b = ticket.body, !b.isEmpty {
+                        if !reportBody.isEmpty {
                             VStack(alignment: .leading, spacing: 6) {
                                 SectionLabel(T("Report body"))
-                                Text(b).font(NXFont.text(14)).foregroundStyle(NX.foreground)
+                                Text(reportBody).font(NXFont.text(14)).foregroundStyle(NX.foreground)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -464,12 +545,12 @@ struct TicketDetailSheet: View {
             } else if let threadError {
                 Text(threadError).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
                     .fixedSize(horizontal: false, vertical: true)
-            } else if messages.isEmpty {
+            } else if replies.isEmpty {
                 Text(T("No replies yet. Answers land right here."))
                     .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
-                ForEach(messages) { bubble($0) }
+                ForEach(replies) { bubble($0) }
             }
             closingNote
         }
