@@ -91,6 +91,10 @@ struct AttendanceRequest: Decodable, Identifiable, Sendable {
     /// requester a red chip and nothing whatsoever about why.
     let reviewNote: String?
     let reviewedBy: UserRef?
+    /// When it was decided. In this payload all along, like the two above it, and read for the
+    /// same kind of reason: it is what puts a settled row where the person who settled it will look
+    /// for it. See `SubmissionEntry.decidedKey`.
+    let reviewedAt: String?
     /// "ADMIN" when the row was written by something other than a review screen — including the
     /// nightly penalty cron. Only meaningful together with `reviewedBy`; see `isAutoDeduction`.
     let approvalSource: String?
@@ -157,6 +161,8 @@ struct OffsiteCheckout: Decodable, Identifiable, Sendable {
     let lng: Double?
     let photoUrl: String?
     let approverName: String?
+    /// When the BoD decided. The offsite half of `AttendanceRequest.reviewedAt`.
+    let approvedAt: String?
     let user: UserRef?
 
     struct UserRef: Decodable, Sendable { let id: String?; let name: String? }

@@ -235,9 +235,13 @@ struct TaskAttachmentsCard: View {
                 // is only trying to open is the worst button in the app.
                 .opacity(open ? 1 : 0)
                 .allowsHitTesting(open)
+                // Neither of those hides it from VoiceOver, which would otherwise find a Delete
+                // button under every closed row — and now a second one, since the row itself
+                // carries the same action.
+                .accessibilityHidden(!open)
             }
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .gesture(swipe(a))
+            .gesture(swipe(a).exclusively(before: tap(a)))
             .contextMenu {
                 Button { Task { await show(a) } } label: { Label(T("Open file"), systemImage: "eye") }
                 Button { Task { await save(a) } } label: { Label(T("Save or share"), systemImage: "square.and.arrow.up") }
@@ -245,30 +249,42 @@ struct TaskAttachmentsCard: View {
             }
     }
 
+    /// Not a `Button`, and that is the fix rather than a detail of it. A button takes the touch on
+    /// the way down and fires on release wherever the finger ended up inside its own bounds; a
+    /// full-width row is wide enough that a sideways swipe never leaves them, so the file opened
+    /// instead of the delete action appearing. Arbitration could not save it either: the button's
+    /// gesture is a descendant of the view carrying the swipe, and a descendant wins by default, so
+    /// the drag was never even consulted.
+    ///
+    /// The tap is a gesture now, beside the swipe and under one arbiter (see `tap`). What the button
+    /// was giving away for free is spelled out here instead: the trait VoiceOver announces, the
+    /// action it performs on a double tap, and — because a swipe is not a gesture VoiceOver can
+    /// make — the delete and the share that the swipe and the long press already offer.
     private func face(_ a: TaskAttachment) -> some View {
         let kind = AttachmentKind(mime: a.mimeType, name: a.name)
-        return Button {
-            // A row that is already open is closed by tapping it, which is the gesture everybody
-            // tries first and otherwise leaves a row stuck sideways.
-            if swiped != nil { withAnimation(Self.slide) { swiped = nil } } else { Task { await show(a) } }
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: kind?.glyph ?? "doc.fill").font(.system(size: 15)).foregroundStyle(NX.mutedFg)
-                    .frame(width: 32, height: 32).background(NX.muted.opacity(0.6), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(a.name ?? "file").font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                    Text(sub(a)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
-                }
-                Spacer()
-                if fetching == a.id { ProgressView().scaleEffect(0.8) }
-                else if kind != nil { Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(NX.mutedFg) }
-                else { Image(systemName: "square.and.arrow.down").font(.system(size: 13)).foregroundStyle(NX.mutedFg) }
+        return HStack(spacing: 12) {
+            Image(systemName: kind?.glyph ?? "doc.fill").font(.system(size: 15)).foregroundStyle(NX.mutedFg)
+                .frame(width: 32, height: 32).background(NX.muted.opacity(0.6), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(a.name ?? "file").font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                Text(sub(a)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
             }
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            Spacer()
+            if fetching == a.id { ProgressView().scaleEffect(0.8) }
+            else if kind != nil { Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(NX.mutedFg) }
+            else { Image(systemName: "square.and.arrow.down").font(.system(size: 13)).foregroundStyle(NX.mutedFg) }
         }
-        .buttonStyle(.plain)
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        // The corners the background rounds away are still part of the row as far as a finger is
+        // concerned, and the gestures in `row` hit-test through this.
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { tapped(a) }
+        .accessibilityAction(named: Text(T("Save or share"))) { Task { await save(a) } }
+        .accessibilityAction(named: Text(T("Delete"))) { deleteTarget = a }
     }
 
     /// Swipe left to uncover delete, right to put it back.
@@ -284,6 +300,27 @@ struct TaskAttachmentsCard: View {
                 guard abs(value.translation.width) > abs(value.translation.height) else { return }
                 withAnimation(Self.slide) { swiped = value.translation.width < 0 ? a.id : nil }
             }
+    }
+
+    /// The tap and the swipe over the same row, arbitrated rather than raced.
+    ///
+    /// The swipe goes first in the pair, and an `ExclusiveGesture` only lets the second gesture
+    /// through once the first has failed — which for a drag with a minimum distance is precisely
+    /// what a finger that stayed put is. So a finger that travels uncovers delete and cannot also
+    /// open the file, and a finger that does not opens the file and cannot also move the row.
+    ///
+    /// Both go on with `.gesture` rather than `.highPriorityGesture`, so a vertical pan still
+    /// belongs to the ScrollView this card sits inside — the same rule `SwipeToReply` follows in
+    /// MessagesView, and for the same reason.
+    private func tap(_ a: TaskAttachment) -> some Gesture {
+        TapGesture().onEnded { _ in tapped(a) }
+    }
+
+    /// A row that is already open is closed by tapping it, which is the gesture everybody tries
+    /// first and otherwise leaves a row stuck sideways. VoiceOver never has one open, so from there
+    /// this only ever opens the file.
+    private func tapped(_ a: TaskAttachment) {
+        if swiped != nil { withAnimation(Self.slide) { swiped = nil } } else { Task { await show(a) } }
     }
 
     private func sub(_ a: TaskAttachment) -> String {

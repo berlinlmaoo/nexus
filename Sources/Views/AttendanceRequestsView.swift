@@ -71,6 +71,15 @@ private enum SubmissionEntry: Identifiable {
         case .offsite(let o): return String((o.attendanceDate ?? "").prefix(10))
         }
     }
+
+    /// When this was decided, or "" for one nobody has decided: a pending row, and a withdrawn one
+    /// (cancelling your own request is not a review, so the server records no moment for it).
+    var decidedKey: String {
+        switch self {
+        case .request(let r): return r.reviewedAt ?? ""
+        case .offsite(let o): return o.approvedAt ?? ""
+        }
+    }
 }
 
 // MARK: - Requests card (submit + review)
@@ -114,13 +123,27 @@ struct AttendanceRequestsCard: View {
     private var activeFilter: String { filter ?? (canReview ? "PENDING" : "ALL") }
 
     /// Both kinds in one list. Pending first — this is a work queue and a settled row is noise —
-    /// then newest day first within each group, which is what makes the two kinds read as one
-    /// queue instead of two blocks stacked on each other. `enumerated()` breaks the remaining ties:
-    /// Swift's sort is not stable, so equal keys would otherwise shuffle on every redraw.
+    /// and then, within each group, on the scale that group is actually read on: a pending row by
+    /// the day it is ABOUT, the one key both kinds share and what makes them interleave instead of
+    /// sitting in two blocks; a settled one by WHEN IT WAS DECIDED, newest decision first.
+    ///
+    /// That second half is a fix, not a preference. Ordering settled rows by their day too put a
+    /// check-out approved ten seconds ago wherever its attendance date happened to fall — under
+    /// every approved leave and public holiday dated later in the year, a few hundred rows down the
+    /// Approved chip. The row was in the list; it was nowhere near the person who had just decided
+    /// it. Nothing of the sort happened before the merge, because an offsite decision landed at the
+    /// top of a card of its own that held nothing else.
+    ///
+    /// ISO-8601 sorts correctly as a plain string, so neither key needs date parsing. `enumerated()`
+    /// breaks the remaining ties: Swift's sort is not stable, so equal keys would otherwise shuffle
+    /// on every redraw.
     private var entries: [SubmissionEntry] {
         let combined = requests.map { SubmissionEntry.request($0) } + offsite.map { SubmissionEntry.offsite($0) }
         return combined.enumerated().sorted { a, b in
             if a.element.isPending != b.element.isPending { return a.element.isPending }
+            if !a.element.isPending, a.element.decidedKey != b.element.decidedKey {
+                return a.element.decidedKey > b.element.decidedKey
+            }
             if a.element.dayKey != b.element.dayKey { return a.element.dayKey > b.element.dayKey }
             return a.offset < b.offset
         }.map { $0.element }
