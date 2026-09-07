@@ -218,6 +218,12 @@ export async function handleWaInbound(input: { chatId: string; senderId: string;
     const code = (parts[0] || "").trim().toUpperCase()
     const note = (parts.slice(1).join(" ").trim() || "").slice(0, 1000) || null
     if (!code) { await sendWaChat(input.chatId, `Format: \`/${cmd} <kode> [alasan]\`. Kodenya ada di notifikasi permintaan, atau ketik /pending.`); return }
+    // Same rule the web route enforces: a rejection always carries a reason, whichever door it comes
+    // through. Otherwise /reject stays a silent way to route around it.
+    if (cmd === "reject" && (note ?? "").trim().length < 3) {
+      await sendWaChat(input.chatId, `Reject wajib pakai alasan: \`/reject ${code} <alasan>\`. Alasannya dikirim ke yang ngajuin.`)
+      return
+    }
     const scope = await approverScope(user.id)
     if (!scope.all && scope.workspaceIds.length === 0) { await sendWaChat(input.chatId, "Kamu gak punya akses buat approve/reject permintaan absen."); return }
     // Only consider PENDING requests WITHIN the approver's scope, then match by id-suffix code.
@@ -425,6 +431,10 @@ export async function notifyAttendanceRequestReviewed(input: {
   const who = firstNameOf(input.reviewerName)
   const verb = input.approved ? "APPROVE" : "TOLAK"
   const waOn = waNotifEnabled("NEXUS_WA_ATTENDANCE_REVIEW_ENABLED")
+  // The reason travels with the decision on EVERY channel. A rejection the requester can't explain to
+  // themselves is the bug we're fixing; WA already carried it, in-app/push didn't.
+  const note = input.note?.trim() || null
+  const noteSuffix = note ? ` Alasan: "${note}"` : ""
 
   // 1) the requester (skip the degenerate self-review)
   if (req.userId !== input.reviewerId) {
@@ -432,15 +442,18 @@ export async function notifyAttendanceRequestReviewed(input: {
       userId: req.userId,
       type: "attendance_request_reviewed",
       title: input.approved ? "Permintaan absen di-approve" : "Permintaan absen ditolak",
-      message: `${label} kamu (${range}) di-${verb} sama ${who}.`,
+      message: `${label} kamu (${range}) di-${verb} sama ${who}.${noteSuffix}`,
       link: "/attendance",
+      // Push too: a decision is exactly the kind of thing you shouldn't have to open the app to learn.
+      // (The matching "perlu approval" ping to approvers has always pushed; this one never did.)
+      push: true,
     }).catch(() => {})
     if (waOn) {
       const c = recipientChatId(req.user)
       if (c) {
         await sendWaChat(c, input.approved
-          ? `✅ *${label}* kamu (${range}) di-*APPROVE* sama ${who}. 🎉`
-          : `❌ *${label}* kamu (${range}) di-*TOLAK* sama ${who}.${input.note ? `\nAlasan: "${input.note}"` : ""}`)
+          ? `✅ *${label}* kamu (${range}) di-*APPROVE* sama ${who}. 🎉${note ? `\nCatatan: "${note}"` : ""}`
+          : `❌ *${label}* kamu (${range}) di-*TOLAK* sama ${who}.${note ? `\nAlasan: "${note}"` : ""}`)
       }
     }
   }
@@ -450,8 +463,8 @@ export async function notifyAttendanceRequestReviewed(input: {
     workspaceId: req.workspaceId, reviewerId: input.reviewerId, requesterId: req.userId, waEnabled: waOn,
     type: "attendance_request_handled",
     title: "Permintaan absen sudah diproses",
-    inApp: `${label} ${req.user.name ?? "staff"} (${range}) di-${verb} sama ${who}.`,
-    wa: `ℹ️ *${label}* ${req.user.name ?? "staff"} (${range}) udah di-*${verb}* sama ${who}.`,
+    inApp: `${label} ${req.user.name ?? "staff"} (${range}) di-${verb} sama ${who}.${noteSuffix}`,
+    wa: `ℹ️ *${label}* ${req.user.name ?? "staff"} (${range}) udah di-*${verb}* sama ${who}.${note ? `\nAlasan: "${note}"` : ""}`,
   })
 }
 

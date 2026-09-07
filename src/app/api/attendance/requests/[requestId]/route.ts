@@ -25,8 +25,13 @@ export async function PATCH(
     const payload = await request.json()
     const validation = attendanceRequestPatchSchema.safeParse(payload)
     if (!validation.success) {
+      const fieldErrors = validation.error.flatten().fieldErrors
+      // Surface the actual message (e.g. "Alasan penolakan wajib diisi") instead of a bare
+      // "Validation failed" — the client shows `error` verbatim, and a reviewer who forgot the
+      // reason needs to be told what's missing.
+      const firstMessage = Object.values(fieldErrors).flat().find(Boolean)
       return NextResponse.json(
-        { error: "Validation failed", details: validation.error.flatten().fieldErrors },
+        { error: firstMessage ?? "Validation failed", details: fieldErrors },
         { status: 400 }
       )
     }
