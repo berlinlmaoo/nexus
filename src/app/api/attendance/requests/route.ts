@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { mkdir, writeFile } from "fs/promises"
 import path from "path"
 import { NextRequest, NextResponse } from "next/server"
+import type { Prisma } from "@/generated/prisma/client"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
@@ -22,7 +23,7 @@ import {
   serializeAttendanceRequest,
   startOfAttendanceMonth,
 } from "@/lib/attendance"
-import { cancelAttendancePenaltiesForRange } from "@/lib/attendance-absence"
+import { cancelAttendancePenaltiesForRange, isAutoDeduction } from "@/lib/attendance-absence"
 import {
   attendanceRequestCreateSchema,
   attendanceRequestQuerySchema,
@@ -46,6 +47,25 @@ function formatMonthKey(date: Date) {
   return date.toISOString().slice(0, 7)
 }
 
+/**
+ * SQL-side mirror of `isAutoDeduction` (approvalSource ADMIN + no reviewer + reason "Auto:…"),
+ * negated. It exists so the cron's penalties never eat into `take` — 2/3 of the table is auto rows,
+ * and filtering only in JS would silently truncate the real requests a reviewer needs to see.
+ *
+ * Written as an OR of the three negations rather than `NOT: { … }` on purpose: `approvalSource` is
+ * nullable, and under SQL three-valued logic `NOT (approvalSource = 'ADMIN' AND …)` evaluates to
+ * NULL — i.e. drops the row — whenever it is NULL. The explicit `{ approvalSource: null }` arm keeps
+ * those rows in. `reason` is non-null in the schema, so negating its LIKE is safe.
+ */
+const NOT_AUTO_DEDUCTION: Prisma.AttendanceRequestWhereInput = {
+  OR: [
+    { approvalSource: null },
+    { approvalSource: { not: "ADMIN" } },
+    { reviewedById: { not: null } },
+    { NOT: { reason: { startsWith: "Auto:" } } },
+  ],
+}
+
 export async function GET(request: NextRequest) {
   try {
     const session = await auth()
@@ -63,6 +83,7 @@ export async function GET(request: NextRequest) {
       teamId: request.nextUrl.searchParams.get("teamId") ?? undefined,
       type: request.nextUrl.searchParams.get("type") ?? undefined,
       status: request.nextUrl.searchParams.get("status") ?? undefined,
+      includeAutoDeductions: request.nextUrl.searchParams.get("includeAutoDeductions") ?? undefined,
     })
 
     if (!parsed.success) {
@@ -109,13 +130,24 @@ export async function GET(request: NextRequest) {
     if (parsed.data.type) where.type = parsed.data.type
     if (parsed.data.status) where.status = parsed.data.status
 
+    const andClauses: Prisma.AttendanceRequestWhereInput[] = []
+
     if (parsed.data.month) {
       const { start, end } = attendanceMonthRange(parsed.data.month)
-      where.AND = [
-        { startDate: { lte: end } },
-        { endDate: { gte: start } },
-      ]
+      andClauses.push({ startDate: { lte: end } }, { endDate: { gte: start } })
     }
+
+    // This list is for requests a PERSON filed — sick, izin, day-off. The nightly absence cron also
+    // writes AttendanceRequest rows ("Auto: tidak check-in/out pada …") as day-off penalties: nobody
+    // submitted them, nobody approved them, and their `reviewNote` ("Auto-deducted: bolos …") renders
+    // as if an approver had written it. They belong in GET /api/attendance/deductions, which already
+    // shows every one of them, so they are excluded here unless a caller explicitly asks — the only
+    // one that does is the staff-facing day-off quota log, where the penalty IS the subject and the
+    // rows have to reconcile with the "N/4 used" counter on the card that opens it.
+    const includeAutoDeductions = Boolean(parsed.data.includeAutoDeductions)
+    if (!includeAutoDeductions) andClauses.push(NOT_AUTO_DEDUCTION)
+
+    if (andClauses.length > 0) where.AND = andClauses
 
     const requests = await prisma.attendanceRequest.findMany({
       where,
@@ -146,6 +178,11 @@ export async function GET(request: NextRequest) {
       take: scope === "me" ? 200 : 1000,
     })
 
+    // The SQL above is the fast path (it is what keeps `take` from being spent on penalties);
+    // `isAutoDeduction` is the definition the other five attendance endpoints share, so it gets the
+    // last word on what counts as one.
+    const visibleRequests = includeAutoDeductions ? requests : requests.filter((r) => !isAutoDeduction(r))
+
     const now = new Date()
     const monthStart = startOfAttendanceMonth(now)
     const monthEnd = endOfAttendanceMonth(now)
@@ -175,7 +212,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       scope,
       dayOffUsedThisMonth,
-      requests: requests.map((attendanceRequest) => serializeAttendanceRequest(attendanceRequest)),
+      requests: visibleRequests.map((attendanceRequest) => serializeAttendanceRequest(attendanceRequest)),
     })
   } catch (error) {
     console.error("Error fetching attendance requests:", error)
