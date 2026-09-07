@@ -1,4 +1,13 @@
 import Foundation
+
+/// Bytes as a person reads them. Lives here rather than in a view because the networking layer
+/// names sizes in its own refusals ("this file is 140.2 MB, the limit is 64 MB") — and a view file
+/// that a future refactor deletes must not be able to break uploads.
+func nxBytes(_ b: Int) -> String {
+    let units = ["B", "KB", "MB", "GB"]; var v = Double(b); var i = 0
+    while v >= 1024 && i < units.count - 1 { v /= 1024; i += 1 }
+    return String(format: i == 0 ? "%.0f %@" : "%.1f %@", v, units[i])
+}
 import UIKit
 
 enum APIError: LocalizedError {
@@ -667,6 +676,39 @@ struct APIClient {
     func projectFiles(_ projectId: String, path: String = "") async throws -> ProjectFilesResponse {
         try await run(makeRequest("/api/projects/\(projectId)/files?path=\(enc(path))"), decode: ProjectFilesResponse.self)
     }
+    /// One project file, from a file on disk.
+    ///
+    /// There is no `/api/projects/…/files/chunk`. The only chunk route the server has writes an
+    /// `Attachment` row against a `taskId`, so a project file has nowhere to split a body across
+    /// and this is one request or nothing.
+    ///
+    /// Which makes the route's own 200 MB cap the trap: the server accepts a size the edge in front
+    /// of it will not carry, so everything between the ceiling below and 200 MB was refused at
+    /// Cloudflare after a couple of megabytes — and a `try?` at the call site turned that into a
+    /// file that simply never appeared. It is refused here now, before a byte moves, and the
+    /// refusal names both sizes so "too big" is a number rather than an opinion.
+    ///
+    /// A URL rather than `Data` for the reason `uploadAttachment` takes one: the caller is a view
+    /// on the main actor, and reading 200 MB there freezes the screen for the length of the read.
+    @discardableResult
+    func uploadProjectFile(_ projectId: String, path: String, fileName: String, file: URL,
+                           progress: UploadProgress? = nil) async throws -> Bool {
+        let size = Self.fileSize(of: file)
+        guard size > 0 else { throw APIError.transport(T("Couldn't read that file.")) }
+        guard size <= Self.singleRequestCeiling else {
+            throw Self.tooBigToSend(size, limit: Self.singleRequestCeiling)
+        }
+        // Mapped rather than read, so the pages the multipart builder copies are faulted in as it
+        // goes instead of the whole file being resident first. This runs off the main actor:
+        // `APIClient` is a plain struct, so an async method of it is nonisolated.
+        let data = try Data(contentsOf: file, options: .mappedIfSafe)
+        return try await uploadProjectFile(projectId, path: path, fileName: fileName, data: data,
+                                           progress: progress)
+    }
+
+    /// Not routed through `run`, for the reason `createComplaint` is not: the answer worth showing
+    /// here is the route's own "File exceeds 200MB limit", and `run` would flatten it into a bare
+    /// "Server error (400)" that tells the person nothing they can act on.
     @discardableResult
     func uploadProjectFile(_ projectId: String, path: String, fileName: String, data: Data,
                            progress: UploadProgress? = nil) async throws -> Bool {
@@ -680,7 +722,15 @@ struct APIClient {
         body.append(data)
         add("\r\n--\(boundary)--\r\n")
         req.httpBody = body
-        _ = try await run(req, decode: SuccessResponse.self, reporting: progress)
+
+        let (answer, response): (Data, URLResponse)
+        do { (answer, response) = try await perform(req, reporting: progress) }
+        catch { throw APIError.transport(error.localizedDescription) }
+        guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        guard (200..<300).contains(http.statusCode) else {
+            throw Self.refusal(answer, status: http.statusCode)
+        }
         return true
     }
     @discardableResult
@@ -1318,6 +1368,58 @@ struct APIClient {
         return true
     }
 
+    // MARK: - Uploads · what fits in one request, and what to say when it does not
+
+    /// What `/api/upload/avatar` and `/api/upload/folder-icon` accept. Asked BEFORE the picked file
+    /// is read, so choosing a 4 GB film where a folder icon was wanted is a sentence rather than a
+    /// read of 4 GB into memory to be refused afterwards.
+    static let iconByteLimit = 5 << 20
+
+    /// A picked file's size, without reading it.
+    ///
+    /// Every upload in this app now asks this first, and on a large file it is the difference
+    /// between a question and a freeze: `Data(contentsOf:)` on a 200 MB pick blocks whatever thread
+    /// it is on for the length of the read, and on the main actor that is the whole screen.
+    static func fileSize(of file: URL) -> Int {
+        ((try? FileManager.default.attributesOfItem(atPath: file.path))?[.size] as? Int) ?? 0
+    }
+
+    /// A picked file's bytes, read somewhere that is not the main actor.
+    ///
+    /// `async` and nonisolated is the whole point: awaiting this from a view hops to the cooperative
+    /// pool for the length of the read and comes back, so a 40 MB attachment off iCloud Drive costs
+    /// a spinner rather than a locked screen. Callers are expected to have asked `fileSize` first —
+    /// this reads whatever it is pointed at.
+    ///
+    /// A real copy and NOT `.mappedIfSafe`, deliberately. A form holds its picked files until the
+    /// person taps Submit, long after the importer's security-scoped access has been given back,
+    /// and a mapping whose file has gone out of scope faults at the moment the body is assembled.
+    /// Where the bytes are used inside the same call — `uploadAttachment`, `uploadProjectFile` —
+    /// mapping is safe and is what those do.
+    static func bytes(of file: URL) async -> Data? {
+        try? Data(contentsOf: file)
+    }
+
+    /// A file this destination cannot carry, said out loud.
+    ///
+    /// The alternative is what the app used to do: send it anyway, have the edge drop it after a
+    /// couple of megabytes, and show nothing. A destination with a chunk route never reaches here;
+    /// one without it stops here instead of failing three seconds later with no reason attached.
+    static func tooBigToSend(_ size: Int, limit: Int) -> APIError {
+        .transport("\(T("This file is too big to upload here.")) (\(nxBytes(size)) → max \(nxBytes(limit)))")
+    }
+
+    /// The server's own words for a refusal, when it wrote any.
+    ///
+    /// Every route this client posts a file to answers a refusal it authored with `{ error }`, and
+    /// those sentences — "File exceeds 200MB limit", a task deleted mid-upload, a finalize already
+    /// running — say more than the status code they arrive with. `run` flattens all of them into
+    /// "Server error (400)", which is why an upload that wants to be understood does not use it.
+    private static func refusal(_ body: Data, status: Int) -> APIError {
+        let said = try? JSONDecoder().decode(ServerError.self, from: body)
+        return .transport(said?.error ?? "\(T("Upload failed. Try again.")) (\(status))")
+    }
+
     // MARK: - Attachments
 
     func taskAttachments(_ taskId: String) async throws -> [TaskAttachment] {
@@ -1334,7 +1436,13 @@ struct APIClient {
     ///
     /// The server grew `/api/attachments/chunk` for exactly this and the web has used it for a
     /// while. This is iOS finally learning it.
-    private static let chunkThreshold = 64 << 20
+    ///
+    /// The number is now shared, because that wall stands in front of every upload in the app and
+    /// only ONE destination has a door through it. `/api/attachments/chunk` is the server's only
+    /// chunk route and it writes an `Attachment` row against a `taskId`, so nothing else can borrow
+    /// it: project files, form submits, chat photos, ticket evidence and the icons all have exactly
+    /// one request to fit in. For those this is not a threshold but a ceiling — see `tooBigToSend`.
+    static let singleRequestCeiling = 64 << 20
     /// 1 GB spread over the route's 64-chunk ceiling is 16 MB, so this is the smallest chunk that
     /// can still carry the largest file the route accepts — and far enough under the edge's limit
     /// that a chunk is never the thing that fails.
@@ -1348,9 +1456,9 @@ struct APIClient {
     @discardableResult
     func uploadAttachment(taskId: String, file: URL, fileName: String,
                           progress: UploadProgress? = nil) async throws -> Bool {
-        let size = ((try? FileManager.default.attributesOfItem(atPath: file.path))?[.size] as? Int) ?? 0
+        let size = Self.fileSize(of: file)
         guard size > 0 else { throw APIError.transport(T("Couldn't read that file.")) }
-        guard size > Self.chunkThreshold else {
+        guard size > Self.singleRequestCeiling else {
             // Small enough for one request, which is the path this app has always taken. Mapped
             // rather than read, so the pages the multipart builder copies are faulted in as it goes
             // instead of the whole file being resident first.
@@ -1426,8 +1534,7 @@ struct APIClient {
                     // The route answers with a reason for every refusal it authors — a task that was
                     // deleted mid-upload, a finalize already running, too many sessions — and those
                     // are worth repeating to whoever is standing there.
-                    let said = try? JSONDecoder().decode(ServerError.self, from: data)
-                    throw APIError.transport(said?.error ?? "\(T("Upload failed. Try again.")) (\(http.statusCode))")
+                    throw Self.refusal(data, status: http.statusCode)
                 }
             }
         } catch {

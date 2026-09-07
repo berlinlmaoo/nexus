@@ -1254,12 +1254,18 @@ struct NewTicketSheet: View {
     /// A library original is a full-size camera frame — several megabytes each, and up to five of
     /// them on a phone connection — so every pick is downscaled before it is even held in memory.
     private func absorb(_ items: [PhotosPickerItem]) async {
+        var lost = 0
         for item in items {
             guard photos.count < Self.maxPhotos else { break }
             if let data = try? await item.loadTransferable(type: Data.self) {
                 photos.append(GideonPanel.shrink(data))
+            } else {
+                // A pick the library could not hand over — a photo still in iCloud, or one it
+                // cannot decode. Dropped silently, five of these read as "the picker is broken".
+                lost += 1
             }
         }
+        if lost > 0 { err = T("Couldn't read that photo.") }
         pickedPhotos = []
     }
 

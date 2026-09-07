@@ -42,11 +42,15 @@ struct FormFillView: View {
         .task { await load() }
         .fileImporter(isPresented: $showFilesImporter, allowedContentTypes: [.item],
                       allowsMultipleSelection: true) { result in
-            if case let .success(urls) = result { addFiles(urls, to: pickTarget) }
+            // In a Task, because reading the picked file is what these do and this closure runs on
+            // the main actor — see `read`.
+            if case let .success(urls) = result { Task { await addFiles(urls, to: pickTarget) } }
         }
         .fileImporter(isPresented: $showAttachImporter, allowedContentTypes: [.item],
                       allowsMultipleSelection: false) { result in
-            if case let .success(urls) = result, let url = urls.first { addAttachment(url, to: pickTarget) }
+            if case let .success(urls) = result, let url = urls.first {
+                Task { await addAttachment(url, to: pickTarget) }
+            }
         }
     }
 
@@ -447,35 +451,71 @@ struct FormFillView: View {
 
     // MARK: - files
 
-    private func addFiles(_ urls: [URL], to fieldId: String) {
+    private func addFiles(_ urls: [URL], to fieldId: String) async {
         guard !fieldId.isEmpty else { return }
         var picked = fileValue(fieldId)
+        // What the submit would already be carrying, kept current across the loop: `values` is not
+        // written until the end, so a second file picked in the same breath has to be counted here
+        // or the ceiling below would be measured against a stale total.
+        var carried = pickedBytes
         for url in urls {
-            if let upload = read(url, partName: "file:\(fieldId)") { picked.append(upload) }
+            guard let upload = await read(url, partName: "file:\(fieldId)", carrying: carried) else { continue }
+            carried += upload.data.count
+            picked.append(upload)
         }
         values[fieldId] = .files(picked)
     }
 
-    private func addAttachment(_ url: URL, to fieldId: String) {
+    private func addAttachment(_ url: URL, to fieldId: String) async {
         guard !fieldId.isEmpty else { return }
-        guard let upload = read(url, partName: "attachment:\(fieldId)") else { return }
+        let already = fileValue("attachment:\(fieldId)").reduce(0) { $0 + $1.data.count }
+        guard let upload = await read(url, partName: "attachment:\(fieldId)",
+                                      carrying: pickedBytes - already) else { return }
         values["attachment:\(fieldId)"] = .files([upload])
     }
 
+    /// Everything already picked, across every field. A submit is ONE multipart request carrying
+    /// all of it, so what matters is the sum and not any single file.
+    private var pickedBytes: Int {
+        values.values.reduce(0) { total, value in
+            guard case .files(let uploads) = value else { return total }
+            return total + uploads.reduce(0) { $0 + $1.data.count }
+        }
+    }
+
     /// Reads the picked file into memory and reports the reason inline when it cannot. Returning
-    /// nil rather than throwing keeps the two callers above to one line each.
-    private func read(_ url: URL, partName: String) -> FormUpload? {
+    /// nil rather than throwing keeps the callers above short.
+    ///
+    /// The size is asked of the file system BEFORE anything is read. The picker hands back whatever
+    /// was tapped — a film, a disk image — and the old order read it whole and then rejected it,
+    /// which on the main actor is a frozen screen paid for a refusal. `read` no longer runs there:
+    /// it is async and the read itself is done by a nonisolated call, so the hop off the main actor
+    /// happens at the `await`.
+    ///
+    /// Two ceilings, and they are different things. The 50 MB is the submit route's own per-file
+    /// cap, refused by name. `singleRequestCeiling` is the edge's: there is no chunk route for
+    /// `/api/forms/{id}/submit`, so five legal 40 MB attachments still make one 200 MB body that
+    /// Cloudflare drops after a couple of megabytes. Nobody could act on that failure at submit
+    /// time — a form filled in for ten minutes and then refused — so it is caught at the pick.
+    private func read(_ url: URL, partName: String, carrying: Int) async -> FormUpload? {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
 
-        guard let data = try? Data(contentsOf: url) else {
+        let size = APIClient.fileSize(of: url)
+        guard size > 0 else {
             actionError = T("Couldn't read that file.")
             return nil
         }
-        // The submit route refuses anything past 50MB by name; checking here saves sending it over
-        // mobile data first.
-        guard data.count <= FormUpload.maxBytes else {
+        guard size <= FormUpload.maxBytes else {
             actionError = T("That file is over the 50MB limit.")
+            return nil
+        }
+        guard carrying + size <= APIClient.singleRequestCeiling else {
+            actionError = T("These files are too big to send together.")
+            return nil
+        }
+        guard let data = await APIClient.bytes(of: url) else {
+            actionError = T("Couldn't read that file.")
             return nil
         }
 

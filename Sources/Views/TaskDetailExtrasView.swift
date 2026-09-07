@@ -1,12 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-func nxBytes(_ b: Int) -> String {
-    let units = ["B", "KB", "MB", "GB"]; var v = Double(b); var i = 0
-    while v >= 1024 && i < units.count - 1 { v /= 1024; i += 1 }
-    return String(format: i == 0 ? "%.0f %@" : "%.1f %@", v, units[i])
-}
-
 private func taskCardHeader(_ title: String, _ icon: String) -> some View {
     HStack(spacing: 8) {
         Image(systemName: icon).foregroundStyle(NX.mutedFg)

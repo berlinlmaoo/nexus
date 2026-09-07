@@ -442,7 +442,23 @@ struct CreateFolderSheet: View {
                 if case let .success(urls) = result, let url = urls.first {
                     let scoped = url.startAccessingSecurityScopedResource()
                     defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-                    if let data = try? Data(contentsOf: url) { photo = (url.lastPathComponent, data) }
+                    // Measured before it is read. This closure runs on the main actor, and the
+                    // picker will happily hand back a 4 GB panorama that /api/upload/folder-icon
+                    // would refuse anyway — reading it first to find that out is a frozen screen
+                    // followed by a refusal.
+                    let size = APIClient.fileSize(of: url)
+                    guard size > 0 else { err = T("Couldn't read that file."); return }
+                    guard size <= APIClient.iconByteLimit else {
+                        err = APIClient.tooBigToSend(size, limit: APIClient.iconByteLimit)
+                            .errorDescription ?? T("Upload failed. Try again.")
+                        return
+                    }
+                    guard let data = try? Data(contentsOf: url) else {
+                        err = T("Couldn't read that file.")
+                        return
+                    }
+                    err = nil
+                    photo = (url.lastPathComponent, data)
                 }
             }
         }
@@ -466,7 +482,19 @@ struct CreateFolderSheet: View {
             } else {
                 folderId = try await APIClient.shared.projectFolderCreate(workspaceId: workspaceId, name: trimmed, icon: icon, color: color)
             }
-            if let photo { try? await APIClient.shared.uploadFolderIcon(folderId: folderId, fileName: photo.name, data: photo.data) }
+            // Not `try?`. The folder itself is already saved by the time this runs, so a picture
+            // that was refused used to leave the sheet closing on a folder with no icon and nothing
+            // said about why. The folder is kept and the reason is shown instead.
+            if let photo {
+                do {
+                    try await APIClient.shared.uploadFolderIcon(folderId: folderId, fileName: photo.name,
+                                                                data: photo.data)
+                } catch {
+                    await onCreated()
+                    err = (error as? LocalizedError)?.errorDescription ?? T("Upload failed. Try again.")
+                    return
+                }
+            }
             await onCreated()
             dismiss()
         } catch {

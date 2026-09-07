@@ -583,6 +583,10 @@ struct ProjectFilesTab: View {
     @State private var deleteTarget: ProjectFile?
     @State private var shareItem: ShareItem?
     @State private var uploadProgress = UploadProgress()
+    /// What went wrong, shown rather than swallowed. Every call below used to be `try?`, so a file
+    /// the edge refused for being too large — see APIClient.uploadProjectFile — looked exactly like
+    /// one that worked, right up to the list reloading without it.
+    @State private var problem: String?
 
     private var path: String { stack.last ?? "" }
     private var folderName: String { path.isEmpty ? "Files" : (path.split(separator: "/").last.map(String.init) ?? "Files") }
@@ -593,6 +597,7 @@ struct ProjectFilesTab: View {
             if uploadProgress.isActive {
                 UploadProgressBar(progress: uploadProgress).padding(.horizontal, 16).padding(.bottom, 10)
             }
+            if let problem { complaint(problem).padding(.horizontal, 16).padding(.bottom, 10) }
             if loading { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity) }
             else if files.isEmpty { TabEmpty(icon: "folder", text: T("This folder is empty. Upload a file or create a folder with the + button.")) }
             else {
@@ -636,6 +641,23 @@ struct ProjectFilesTab: View {
             .disabled(busy)
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
+    }
+
+    /// Same banner as the task attachments card, for the same reason: a refusal nobody can see is
+    /// indistinguishable from a success, and that is the whole bug this file was opened for.
+    private func complaint(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 12)).foregroundStyle(NX.danger)
+            Text(text).font(NXFont.text(12)).foregroundStyle(NX.danger).lineLimit(4)
+            Spacer(minLength: 0)
+            Button { problem = nil } label: {
+                Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).foregroundStyle(NX.mutedFg)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(T("Close"))
+        }
+        .padding(10)
+        .background(NX.danger.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     @ViewBuilder private func fileRow(_ f: ProjectFile) -> some View {
@@ -691,28 +713,48 @@ struct ProjectFilesTab: View {
     private func upload(_ url: URL) async {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        guard let data = try? Data(contentsOf: url) else { return }
         busy = true; defer { busy = false }
-        try? await APIClient.shared.uploadProjectFile(projectId, path: path, fileName: url.lastPathComponent,
-                                                      data: data, progress: uploadProgress)
+        problem = nil
+        do {
+            // Handed over as a URL and not as bytes. This runs on the main actor, so reading a
+            // 200 MB file here would freeze the screen for the length of the read and then hold it
+            // twice while a multipart body was built around it. The client measures it off disk,
+            // refuses what it cannot send, and reads the rest off the main thread.
+            try await APIClient.shared.uploadProjectFile(projectId, path: path,
+                                                         fileName: url.lastPathComponent,
+                                                         file: url, progress: uploadProgress)
+        } catch APIError.unauthorized {
+            auth.logout()
+        } catch {
+            problem = error.localizedDescription
+        }
         await load()
     }
     private func download(_ f: ProjectFile) async {
         downloading = f.path; defer { downloading = nil }
-        if let url = try? await APIClient.shared.downloadProjectFile(projectId, path: f.relPath ?? f.path, fileName: f.name) {
+        do {
+            let url = try await APIClient.shared.downloadProjectFile(projectId, path: f.relPath ?? f.path, fileName: f.name)
             shareItem = ShareItem(url: url)
+        } catch APIError.unauthorized {
+            auth.logout()
+        } catch {
+            problem = error.localizedDescription
         }
     }
     private func delete(_ f: ProjectFile) async {
         busy = true; defer { busy = false }
-        try? await APIClient.shared.deleteProjectFile(projectId, path: f.relPath ?? f.path)
+        do { try await APIClient.shared.deleteProjectFile(projectId, path: f.relPath ?? f.path) }
+        catch APIError.unauthorized { auth.logout() }
+        catch { problem = error.localizedDescription }
         await load()
     }
     private func createFolder() async {
         let name = newFolderName.trimmingCharacters(in: .whitespaces); newFolderName = ""
         guard !name.isEmpty else { return }
         busy = true; defer { busy = false }
-        try? await APIClient.shared.createProjectFolder(projectId, name: name, path: path)
+        do { try await APIClient.shared.createProjectFolder(projectId, name: name, path: path) }
+        catch APIError.unauthorized { auth.logout() }
+        catch { problem = error.localizedDescription }
         await load()
     }
 }

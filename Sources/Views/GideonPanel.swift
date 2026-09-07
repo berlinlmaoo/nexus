@@ -448,14 +448,22 @@ struct GideonPanel: View {
             error = T("GIDEON can't read that kind of file yet.")
             return
         }
-        guard let data = try? Data(contentsOf: url) else {
+        // Asked of the file system rather than of the bytes, and asked first. The picker hands back
+        // whatever was tapped, and the old order read the whole thing before measuring it — a 4 GB
+        // film locked the main actor for the length of the read purely in order to refuse it.
+        let size = APIClient.fileSize(of: url)
+        guard size > 0 else {
             error = T("Couldn't read that file.")
             return
         }
         // The server enforces this too, and says so in Indonesian. Checking here saves sending ten
         // megabytes over mobile data to be told they were nine too many.
-        guard data.count <= GideonDocument.maxBytes else {
+        guard size <= GideonDocument.maxBytes else {
             error = T("File is over the 10MB limit.")
+            return
+        }
+        guard let data = try? Data(contentsOf: url) else {
+            error = T("Couldn't read that file.")
             return
         }
         error = nil

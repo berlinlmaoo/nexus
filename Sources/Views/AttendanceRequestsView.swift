@@ -575,9 +575,19 @@ struct RequestComposerSheet: View {
                 if case let .success(urls) = result, let url = urls.first {
                     let scoped = url.startAccessingSecurityScopedResource()
                     defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-                    if let data = try? Data(contentsOf: url), data.count <= 10 * 1024 * 1024 {
-                        attach = (url.lastPathComponent, data)
-                    } else { err = T("File is over the 10MB limit.") }
+                    // Size first, bytes second. The old order read the file and then measured it,
+                    // so picking a two-hour video here locked the main actor for the length of the
+                    // read before saying it was too big — and said "over the 10MB limit" even when
+                    // the real problem was that the file could not be read at all.
+                    let size = APIClient.fileSize(of: url)
+                    guard size > 0 else { err = T("Couldn't read that file."); return }
+                    guard size <= 10 * 1024 * 1024 else { err = T("File is over the 10MB limit."); return }
+                    guard let data = try? Data(contentsOf: url) else {
+                        err = T("Couldn't read that file.")
+                        return
+                    }
+                    err = nil
+                    attach = (url.lastPathComponent, data)
                 }
             }
             // A PhotosPicker nested in a Menu draws its row but never opens, so the menu only

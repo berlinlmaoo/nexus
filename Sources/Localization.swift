@@ -622,6 +622,12 @@ final class AppLanguage {
         "Open file": "Buka file",
         "Save or share": "Simpan atau bagikan",
         "Couldn't open this file.": "Gagal buka file ini.",
+        // ── the upload wall, for the destinations with no chunk route ─────────
+        // Task attachments split themselves across /api/attachments/chunk and never reach these.
+        // Project files, form submits and the icons have no such route, so this is where they stop.
+        // The sizes are appended outside the sentence — see APIClient.tooBigToSend.
+        "This file is too big to upload here.": "File ini kegedean buat diupload di sini.",
+        "These files are too big to send together.": "Total filenya kegedean buat dikirim sekaligus.",
         "No dependencies yet.": "Belum ada dependency.",
         "No other tasks.": "Gak ada task lain.",
         "Search tasks…": "Cari task…",
