@@ -21,6 +21,7 @@ struct FormFillView: View {
     /// Drives the clock-vs-lock icon: "opens later" and "gone" are different news.
     @State private var errorIsSchedule = false
     @State private var submitting = false
+    @State private var uploadProgress = UploadProgress()
     @State private var actionError: String?
     @State private var done = false
 
@@ -371,6 +372,7 @@ struct FormFillView: View {
 
     private func footer(missing: [String]) -> some View {
         VStack(spacing: 8) {
+            if uploadProgress.isActive { UploadProgressBar(progress: uploadProgress) }
             Button { Task { await submit() } } label: {
                 HStack(spacing: 8) {
                     if submitting { ProgressView().tint(.white) }
@@ -531,7 +533,8 @@ struct FormFillView: View {
 
         let payload = FormLogic.payload(visible: visible, values: values)
         do {
-            try await APIClient.shared.submitForm(formId, data: payload.data, files: payload.files)
+            try await APIClient.shared.submitForm(formId, data: payload.data, files: payload.files,
+                                                  progress: uploadProgress)
             done = true
         } catch {
             actionError = (error as? LocalizedError)?.errorDescription ?? T("Submission failed. Try again.")

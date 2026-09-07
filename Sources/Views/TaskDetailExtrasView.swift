@@ -144,6 +144,10 @@ struct TaskAttachmentsCard: View {
     @State private var downloading: String?
     @State private var shareItem: ShareItem?
     @State private var deleteTarget: TaskAttachment?
+    /// Handed to the client for the length of one upload. The bar is a separate view because it is
+    /// the only thing that may read the fraction: read here, every byte would rebuild this card and
+    /// the list of files in it. See UploadProgress.swift.
+    @State private var uploadProgress = UploadProgress()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -153,6 +157,7 @@ struct TaskAttachmentsCard: View {
                 if busy { ProgressView().scaleEffect(0.8) }
                 Button { showImporter = true } label: { Image(systemName: "plus.circle.fill").font(.system(size: 20)).foregroundStyle(NX.violetText) }.disabled(busy)
             }
+            if uploadProgress.isActive { UploadProgressBar(progress: uploadProgress) }
             if loading {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
             } else if items.isEmpty {
@@ -207,7 +212,8 @@ struct TaskAttachmentsCard: View {
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         guard let data = try? Data(contentsOf: url) else { return }
         busy = true; defer { busy = false }
-        try? await APIClient.shared.uploadAttachment(taskId: taskId, fileName: url.lastPathComponent, data: data)
+        try? await APIClient.shared.uploadAttachment(taskId: taskId, fileName: url.lastPathComponent,
+                                                     data: data, progress: uploadProgress)
         await load()
     }
     private func download(_ a: TaskAttachment) async {

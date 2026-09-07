@@ -1073,6 +1073,7 @@ struct NewTicketSheet: View {
     @State private var showCamera = false
     @State private var busy = false
     @State private var err: String?
+    @State private var uploadProgress = UploadProgress()
 
     private var trimmedSubject: String { subject.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var trimmedBody: String { detail.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -1112,6 +1113,7 @@ struct NewTicketSheet: View {
                         }
                         field(T("EVIDENCE PHOTOS (REQUIRED)")) { evidence }
                         if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
+                        if uploadProgress.isActive { UploadProgressBar(progress: uploadProgress) }
                         Button { Task { await submit() } } label: {
                             HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text(T("File ticket")) }
                         }
@@ -1270,7 +1272,8 @@ struct NewTicketSheet: View {
                 category: category,
                 subject: trimmedSubject,
                 body: trimmedBody,
-                evidence: photos)
+                evidence: photos,
+                progress: uploadProgress)
             await onCreated()
             dismiss()
         } catch APIError.unauthorized {

@@ -493,6 +493,7 @@ struct RequestComposerSheet: View {
     @State private var pickedPhoto: PhotosPickerItem?
     @State private var busy = false
     @State private var err: String?
+    @State private var uploadProgress = UploadProgress()
 
     private var types: [String] { canGrant ? ["LEAVE", "SICK", "PERMIT", "DAY_OFF", "RED_DATE"] : ["PERMIT", "SICK", "DAY_OFF", "RED_DATE"] }
     private var showAttachment: Bool { type == "SICK" || type == "PERMIT" }
@@ -558,6 +559,7 @@ struct RequestComposerSheet: View {
                             }
                         }
                         if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
+                        if uploadProgress.isActive { UploadProgressBar(progress: uploadProgress) }
                         Button { Task { await submit() } } label: {
                             HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text(T("Submit request")) }
                         }
@@ -617,7 +619,8 @@ struct RequestComposerSheet: View {
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = ProjDate.cal.timeZone
         do {
             try await APIClient.shared.createAttendanceRequest(type: type, startDate: f.string(from: start), endDate: f.string(from: end),
-                                                               reason: reason.trimmingCharacters(in: .whitespaces), attachment: attach)
+                                                               reason: reason.trimmingCharacters(in: .whitespaces), attachment: attach,
+                                                               progress: uploadProgress)
             await onCreated()
             dismiss()
         } catch {

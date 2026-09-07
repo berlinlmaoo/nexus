@@ -582,6 +582,7 @@ struct ProjectFilesTab: View {
     @State private var newFolderName = ""
     @State private var deleteTarget: ProjectFile?
     @State private var shareItem: ShareItem?
+    @State private var uploadProgress = UploadProgress()
 
     private var path: String { stack.last ?? "" }
     private var folderName: String { path.isEmpty ? "Files" : (path.split(separator: "/").last.map(String.init) ?? "Files") }
@@ -589,6 +590,9 @@ struct ProjectFilesTab: View {
     var body: some View {
         VStack(spacing: 0) {
             toolbar
+            if uploadProgress.isActive {
+                UploadProgressBar(progress: uploadProgress).padding(.horizontal, 16).padding(.bottom, 10)
+            }
             if loading { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity) }
             else if files.isEmpty { TabEmpty(icon: "folder", text: T("This folder is empty. Upload a file or create a folder with the + button.")) }
             else {
@@ -689,7 +693,8 @@ struct ProjectFilesTab: View {
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         guard let data = try? Data(contentsOf: url) else { return }
         busy = true; defer { busy = false }
-        try? await APIClient.shared.uploadProjectFile(projectId, path: path, fileName: url.lastPathComponent, data: data)
+        try? await APIClient.shared.uploadProjectFile(projectId, path: path, fileName: url.lastPathComponent,
+                                                      data: data, progress: uploadProgress)
         await load()
     }
     private func download(_ f: ProjectFile) async {

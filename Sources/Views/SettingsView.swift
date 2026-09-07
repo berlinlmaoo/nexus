@@ -17,6 +17,7 @@ struct SettingsView: View {
     @State private var pickedPhoto: PhotosPickerItem?
     @State private var uploadingPhoto = false
     @State private var photoError: String?
+    @State private var uploadProgress = UploadProgress()
 
     private static let roleLabel: [String: String] = ["ONE_ABOVE_ALL": "One Above All", "BOD": "BoD", "MANAGER": "Manager", "STAFF": "Staff"]
     private var initial: String { String((name.isEmpty ? email : name).first ?? "?").uppercased() }
@@ -50,6 +51,11 @@ struct SettingsView: View {
                         if let photoError {
                             Text(photoError).font(NXFont.text(11)).foregroundStyle(NX.danger)
                                 .multilineTextAlignment(.center)
+                        }
+                        // Held to a readable width: this column is centred on the avatar, and a bar
+                        // spanning the whole screen would read as belonging to the card below it.
+                        if uploadProgress.isActive {
+                            UploadProgressBar(progress: uploadProgress).frame(maxWidth: 180)
                         }
                         if let role, let label = Self.roleLabel[role.uppercased()] {
                             NexusChip(text: label, tone: .accent, systemImage: "shield.fill")
@@ -154,7 +160,8 @@ struct SettingsView: View {
             return
         }
         do {
-            avatarURL = try await APIClient.shared.uploadAvatar(fileName: "avatar.jpg", mime: "image/jpeg", data: jpeg)
+            avatarURL = try await APIClient.shared.uploadAvatar(fileName: "avatar.jpg", mime: "image/jpeg",
+                                                                data: jpeg, progress: uploadProgress)
         } catch {
             photoError = (error as? LocalizedError)?.errorDescription ?? T("Upload failed. Try again.")
         }

@@ -62,11 +62,54 @@ struct APIClient {
         }
         // A LAN-bound request gets a much shorter leash than the 60 s default, because the address it
         // is aimed at ceases to exist the moment someone walks out of the building.
+        //
+        // Applied unconditionally HERE and lifted again in `perform` for anything that carries a
+        // body — see `retimed`. It cannot be decided here: this hands the request back BEFORE the
+        // caller attaches its body, so an `httpBody != nil` test on this line is false for every
+        // request in the app, uploads included.
         if base.host == Config.lanBaseURL.host { req.timeoutInterval = Config.lanRequestTimeout }
         return req
     }
 
     /// The one place every request actually goes out, so the LAN detour has exactly one exit.
+    ///
+    /// `session` is a parameter for one caller. `ImageLoader` owns a URLSession with a 256 MB
+    /// URLCache, and making it borrow `URLSession.shared` in order to reach these rules would throw
+    /// that cache away; passing its session in keeps the rules here instead of in a second copy that
+    /// would be free to drift.
+    ///
+    /// `progress` is the second such parameter, and it is what makes an upload watchable at all.
+    /// `data(for:)` returns when the whole exchange is over and reports nothing on the way, so a body
+    /// somebody is watching goes out as an upload task with a per-task delegate instead. Only the
+    /// TRANSPORT changes: which host it is aimed at, and whether it may be sent a second time, are
+    /// decided by exactly the same code either way. A second send path with its own idea of replay
+    /// safety is the one thing this must never become.
+    func perform(_ req: URLRequest, on session: URLSession = .shared,
+                 reporting progress: UploadProgress? = nil) async throws -> (Data, URLResponse) {
+        var outgoing = Self.retimed(req)
+        // Nothing to watch on a request with no body, and nothing to watch when nobody asked. Both
+        // go out through the call this client has always made, untouched.
+        guard let progress, let body = outgoing.httpBody, !body.isEmpty else {
+            return try await route(outgoing, body: nil, on: session, reporting: nil)
+        }
+        // An upload task reads its bytes from `from:` and ignores the request's own `httpBody`, so
+        // the body is lifted off here rather than carried twice — it is 20 MB on a form submit.
+        // Note the order: the leash above is decided while the body is still attached.
+        outgoing.httpBody = nil
+
+        do {
+            let result = try await route(outgoing, body: body, on: session, reporting: progress)
+            await progress.finish()
+            return result
+        } catch {
+            // A refusal, a link that died, or a tap somebody took back. Whichever it was the bar
+            // goes: one left sitting at 40% is the state this whole change exists to remove.
+            await progress.stop()
+            throw error
+        }
+    }
+
+    /// Which host the bytes are aimed at, and whether they may be sent a second time.
     ///
     /// A request aimed at the LAN that gets no answer at all demotes the route immediately, and — if
     /// it is safe to send twice, see `isReplayable` — is replayed once over the internet. That retry
@@ -74,17 +117,14 @@ struct APIClient {
     /// for a route the app chose on their behalf, and must not be left holding a stuck tap either.
     /// Anything the SERVER said — 401, 422, 500 — is not a route failure at all, and travels back to
     /// the caller untouched exactly as it did before.
-    ///
-    /// `session` is a parameter for one caller. `ImageLoader` owns a URLSession with a 256 MB
-    /// URLCache, and making it borrow `URLSession.shared` in order to reach these rules would throw
-    /// that cache away; passing its session in keeps the rules here instead of in a second copy that
-    /// would be free to drift.
-    func perform(_ req: URLRequest, on session: URLSession = .shared) async throws -> (Data, URLResponse) {
+    private func route(_ req: URLRequest, body: Data?, on session: URLSession,
+                       reporting progress: UploadProgress?) async throws -> (Data, URLResponse) {
+        var meter = await progress?.start(expecting: body?.count ?? 0)
         guard req.url?.host == Config.lanBaseURL.host else {
-            return try await session.data(for: req)
+            return try await transfer(req, body: body, on: session, meter: meter)
         }
         do {
-            return try await session.data(for: req)
+            return try await transfer(req, body: body, on: session, meter: meter)
         } catch {
             // Cancellation is the caller changing its mind, not the LAN disappearing. Replaying it
             // would resurrect work that was deliberately abandoned — and, on an upload, send it twice.
@@ -93,9 +133,48 @@ struct APIClient {
             // request after it must already be going out over the internet.
             LANRoute.shared.noteUnreachable()
             guard Self.isReplayable(req, after: error) else { throw error }
-            return try await session.data(for: Self.overInternet(req))
+            // Whatever went out over the LAN went nowhere, so the bar counts the second attempt from
+            // zero instead of resuming a number that now measures nothing. A NEW meter rather than a
+            // reset one, and that is the whole guard against a backwards jump: anything the abandoned
+            // task still reports lands in the old meter, which nothing reads any more.
+            meter = await progress?.restart(expecting: body?.count ?? 0)
+            return try await transfer(Self.overInternet(req), body: body, on: session, meter: meter)
         }
     }
+
+    /// One attempt. `data(for:)` when nothing is watching — byte for byte the call this client has
+    /// always made — and an upload task with a per-task delegate when something is. The task holds
+    /// the delegate until it completes or fails, so nothing here has to keep it alive.
+    private func transfer(_ req: URLRequest, body: Data?, on session: URLSession,
+                          meter: UploadMeter?) async throws -> (Data, URLResponse) {
+        guard let body, let meter else { return try await session.data(for: req) }
+        return try await session.upload(for: req, from: body, delegate: UploadReporter(meter))
+    }
+
+    /// The LAN's short leash, lifted for a request that carries a body.
+    ///
+    /// `timeoutInterval` is an INACTIVITY timer, and the 10 s exists to notice a dead private
+    /// address fast — which is settled while connecting, in the first few hundred milliseconds, not
+    /// while a body is streaming. Once bytes are moving the short window buys nothing and costs a
+    /// great deal: ten quiet seconds on a weak office AP would fail a 20 MB form submit that had
+    /// sixty through Cloudflare. And that failure is one of the ones `isReplayable` correctly
+    /// refuses to retry, because the route behind a submit creates a task, a submission and its
+    /// attachments, writes an activity log, then fires the project's automations and its webhook.
+    ///
+    /// Decided here rather than in `makeRequest` because the body is attached after that returns,
+    /// and on the request rather than in `route` because the watched path lifts the body off before
+    /// sending. `overInternet` already rebuilds at the same value, so a replay is unaffected.
+    private static func retimed(_ req: URLRequest) -> URLRequest {
+        guard req.url?.host == Config.lanBaseURL.host,
+              req.httpBody != nil || req.httpBodyStream != nil else { return req }
+        var out = req
+        out.timeoutInterval = standardTimeout
+        return out
+    }
+
+    /// URLRequest's own default, spelled out because two places have to agree on it: a LAN request
+    /// that carries a body, and any request re-aimed at the public host.
+    private static let standardTimeout: TimeInterval = 60
 
     /// Whether a request that failed on the LAN may simply be sent again over the internet.
     ///
@@ -124,7 +203,7 @@ struct APIClient {
     private static func overInternet(_ req: URLRequest) -> URLRequest {
         var out = req
         // Back to URLRequest's own default: the short leash above exists only for the private address.
-        out.timeoutInterval = 60
+        out.timeoutInterval = standardTimeout
         if let url = req.url { out.url = reaimed(url, at: Config.baseURL) }
         return out
     }
@@ -156,6 +235,7 @@ struct APIClient {
         var req = URLRequest(url: reaimed(url, at: base))
         // The same short leash `makeRequest` applies, for the same reason: the private address stops
         // existing the moment somebody walks out, and a picture must not hang for a minute over it.
+        // Nothing built here ever carries a body, so `retimed`'s exception for one cannot apply.
         if base.host == Config.lanBaseURL.host { req.timeoutInterval = Config.lanRequestTimeout }
         return req
     }
@@ -163,10 +243,11 @@ struct APIClient {
     /// `cache` opts an endpoint into keeping its last good response on disk. Only pass it for
     /// GETs whose data is fine to show a few seconds stale — never for attendance state, which has
     /// to be exact, and never for anything already delivered live over the socket.
-    private func run<T: Decodable>(_ req: URLRequest, decode: T.Type, cache key: String? = nil) async throws -> T {
+    private func run<T: Decodable>(_ req: URLRequest, decode: T.Type, cache key: String? = nil,
+                                   reporting progress: UploadProgress? = nil) async throws -> T {
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await perform(req)
+            (data, response) = try await perform(req, reporting: progress)
         } catch {
             throw APIError.transport(error.localizedDescription)
         }
@@ -325,7 +406,8 @@ struct APIClient {
         return try await run(makeRequest("/api/tasks?projectIds=\(enc(projectIds.joined(separator: ",")))"), decode: [FolderTask].self)
     }
     @discardableResult
-    func uploadFolderIcon(folderId: String, fileName: String, data: Data) async throws -> Bool {
+    func uploadFolderIcon(folderId: String, fileName: String, data: Data,
+                          progress: UploadProgress? = nil) async throws -> Bool {
         let boundary = "Boundary-\(UUID().uuidString)"
         var req = makeRequest("/api/upload/folder-icon", method: "POST")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
@@ -336,13 +418,14 @@ struct APIClient {
         body.append(data)
         add("\r\n--\(boundary)--\r\n")
         req.httpBody = body
-        _ = try await run(req, decode: SuccessResponse.self)
+        _ = try await run(req, decode: SuccessResponse.self, reporting: progress)
         return true
     }
     /// Profile photo. The server takes a multipart field named "file" (PNG/JPG/WEBP, 5 MB cap)
     /// and answers `{ user, url }`; `user.avatar` already carries a `?t=` cache-buster, so the
     /// new picture shows up immediately instead of being served from a stale cache.
-    func uploadAvatar(fileName: String, mime: String, data: Data) async throws -> String? {
+    func uploadAvatar(fileName: String, mime: String, data: Data,
+                      progress: UploadProgress? = nil) async throws -> String? {
         let boundary = "Boundary-\(UUID().uuidString)"
         var req = makeRequest("/api/upload/avatar", method: "POST")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
@@ -352,7 +435,7 @@ struct APIClient {
         body.append(data)
         add("\r\n--\(boundary)--\r\n")
         req.httpBody = body
-        return try await run(req, decode: ProfileResponse.self).user.avatar
+        return try await run(req, decode: ProfileResponse.self, reporting: progress).user.avatar
     }
 
     /// Drop the profile photo and fall back to the initial.
@@ -509,7 +592,8 @@ struct APIClient {
         try await run(makeRequest("/api/projects/\(projectId)/files?path=\(enc(path))"), decode: ProjectFilesResponse.self)
     }
     @discardableResult
-    func uploadProjectFile(_ projectId: String, path: String, fileName: String, data: Data) async throws -> Bool {
+    func uploadProjectFile(_ projectId: String, path: String, fileName: String, data: Data,
+                           progress: UploadProgress? = nil) async throws -> Bool {
         let boundary = "Boundary-\(UUID().uuidString)"
         var req = makeRequest("/api/projects/\(projectId)/files", method: "POST")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
@@ -520,7 +604,7 @@ struct APIClient {
         body.append(data)
         add("\r\n--\(boundary)--\r\n")
         req.httpBody = body
-        _ = try await run(req, decode: SuccessResponse.self)
+        _ = try await run(req, decode: SuccessResponse.self, reporting: progress)
         return true
     }
     @discardableResult
@@ -714,7 +798,7 @@ struct APIClient {
     /// and `run` would flatten every one of them into a bare "Server error (422)".
     @discardableResult
     func createComplaint(category: String, subject: String, body message: String,
-                         evidence: [Data]) async throws -> Bool {
+                         evidence: [Data], progress: UploadProgress? = nil) async throws -> Bool {
         let boundary = "Boundary-\(UUID().uuidString)"
         var req = makeRequest("/api/complaints", method: "POST")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
@@ -730,7 +814,7 @@ struct APIClient {
 
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await perform(req)
+            (data, response) = try await perform(req, reporting: progress)
         } catch {
             throw APIError.transport(error.localizedDescription)
         }
@@ -963,7 +1047,8 @@ struct APIClient {
 
     /// Upload one chat picture and get back the path to attach to a message. The server checks that
     /// you belong to the conversation before writing anything.
-    func uploadChatImage(conversationId: String, fileName: String, mime: String, data: Data) async throws -> ChatUpload {
+    func uploadChatImage(conversationId: String, fileName: String, mime: String, data: Data,
+                         progress: UploadProgress? = nil) async throws -> ChatUpload {
         let boundary = "Boundary-\(UUID().uuidString)"
         var req = makeRequest("/api/upload/chat", method: "POST")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
@@ -974,7 +1059,7 @@ struct APIClient {
         body.append(data)
         add("\r\n--\(boundary)--\r\n")
         req.httpBody = body
-        return try await run(req, decode: ChatUpload.self)
+        return try await run(req, decode: ChatUpload.self, reporting: progress)
     }
 
     @discardableResult
@@ -1154,7 +1239,8 @@ struct APIClient {
         try await run(makeRequest("/api/attachments?taskId=\(enc(taskId))"), decode: [TaskAttachment].self)
     }
     @discardableResult
-    func uploadAttachment(taskId: String, fileName: String, data: Data) async throws -> Bool {
+    func uploadAttachment(taskId: String, fileName: String, data: Data,
+                          progress: UploadProgress? = nil) async throws -> Bool {
         let boundary = "Boundary-\(UUID().uuidString)"
         var req = makeRequest("/api/attachments", method: "POST")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
@@ -1165,7 +1251,7 @@ struct APIClient {
         body.append(data)
         add("\r\n--\(boundary)--\r\n")
         req.httpBody = body
-        _ = try await run(req, decode: SuccessResponse.self)
+        _ = try await run(req, decode: SuccessResponse.self, reporting: progress)
         return true
     }
     @discardableResult
@@ -1260,7 +1346,9 @@ struct APIClient {
         (try await run(makeRequest("/api/attendance/requests?scope=\(enc(scope))"), decode: AttendanceRequestsResponse.self)).requests
     }
     @discardableResult
-    func createAttendanceRequest(type: String, startDate: String, endDate: String, reason: String, attachment: (name: String, data: Data)? = nil) async throws -> Bool {
+    func createAttendanceRequest(type: String, startDate: String, endDate: String, reason: String,
+                                 attachment: (name: String, data: Data)? = nil,
+                                 progress: UploadProgress? = nil) async throws -> Bool {
         let boundary = "Boundary-\(UUID().uuidString)"
         var req = makeRequest("/api/attendance/requests", method: "POST")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
@@ -1276,7 +1364,7 @@ struct APIClient {
         }
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
         req.httpBody = body
-        _ = try await run(req, decode: SuccessResponse.self)
+        _ = try await run(req, decode: SuccessResponse.self, reporting: progress)
         return true
     }
     /// `reviewNote` is the approver's reason for the decision, carried on the same PATCH:
@@ -1409,12 +1497,14 @@ struct APIClient {
 
     func checkIn(lat: Double, lng: Double, selfie: Data, notes: String? = nil,
                  fix: LocationManager.Fix? = nil,
-                 clientId: String? = nil, deviceAt: Date? = nil, uptimeSec: Int? = nil) async throws -> AttendanceOutcome {
+                 clientId: String? = nil, deviceAt: Date? = nil, uptimeSec: Int? = nil,
+                 progress: UploadProgress? = nil) async throws -> AttendanceOutcome {
         var fields = ["lat": String(lat), "lng": String(lng)]
         if let notes, !notes.isEmpty { fields["notes"] = notes }
         Self.applyFixFields(&fields, fix)
         Self.applyOfflineFields(&fields, clientId: clientId, deviceAt: deviceAt, uptimeSec: uptimeSec)
-        return try await attendanceUpload("/api/attendance/check-in", fields: fields, selfie: selfie)
+        return try await attendanceUpload("/api/attendance/check-in", fields: fields, selfie: selfie,
+                                          progress: progress)
     }
 
     /// Only a replayed tap carries these. A live one omits them entirely, so the server records it
@@ -1442,7 +1532,8 @@ struct APIClient {
     func checkOut(lat: Double, lng: Double, selfie: Data, reflection: String,
                   offsite: Bool = false, reason: String? = nil,
                   fix: LocationManager.Fix? = nil,
-                  clientId: String? = nil, deviceAt: Date? = nil, uptimeSec: Int? = nil) async throws -> AttendanceOutcome {
+                  clientId: String? = nil, deviceAt: Date? = nil, uptimeSec: Int? = nil,
+                  progress: UploadProgress? = nil) async throws -> AttendanceOutcome {
         var fields = ["lat": String(lat), "lng": String(lng)]
         let trimmedReflection = reflection.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedReflection.isEmpty { fields["reflection"] = trimmedReflection }
@@ -1452,7 +1543,8 @@ struct APIClient {
         }
         Self.applyFixFields(&fields, fix)
         Self.applyOfflineFields(&fields, clientId: clientId, deviceAt: deviceAt, uptimeSec: uptimeSec)
-        return try await attendanceUpload("/api/attendance/check-out", fields: fields, selfie: selfie)
+        return try await attendanceUpload("/api/attendance/check-out", fields: fields, selfie: selfie,
+                                          progress: progress)
     }
 
     /// The only multipart body builder in this client. Attendance selfies and ticket evidence differ
@@ -1481,7 +1573,8 @@ struct APIClient {
 
     /// Shared multipart upload for check-in/out. Maps the server's OUTSIDE_RADIUS 422 into a typed
     /// outcome so the UI can ask for an offsite reason; surfaces any other error message verbatim.
-    private func attendanceUpload(_ path: String, fields: [String: String], selfie: Data) async throws -> AttendanceOutcome {
+    private func attendanceUpload(_ path: String, fields: [String: String], selfie: Data,
+                                  progress: UploadProgress? = nil) async throws -> AttendanceOutcome {
         let boundary = "Boundary-\(UUID().uuidString)"
         var req = makeRequest(path, method: "POST")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
@@ -1491,7 +1584,7 @@ struct APIClient {
 
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await perform(req)
+            (data, response) = try await perform(req, reporting: progress)
         } catch {
             // Nothing came back at all, so the tap is queueable. Anything below this line is the
             // server having an opinion, which must never be replayed.

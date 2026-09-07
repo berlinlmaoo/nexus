@@ -78,14 +78,15 @@ extension APIClient {
     /// REPEAT for a multi-file field, which is why this does not go through the client's other
     /// multipart builder: that one takes a dictionary of fields, and a dictionary cannot repeat.
     @discardableResult
-    func submitForm(_ formId: String, data: [String: Any], files: [FormUpload]) async throws -> Bool {
+    func submitForm(_ formId: String, data: [String: Any], files: [FormUpload],
+                    progress: UploadProgress? = nil) async throws -> Bool {
         let boundary = "Boundary-\(UUID().uuidString)"
         var req = makeRequest("/api/forms/\(formId)/submit", method: "POST")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         let json = try JSONSerialization.data(withJSONObject: data)
         req.httpBody = Self.formMultipartBody(boundary: boundary, json: json, files: files)
 
-        let (body, http) = try await send(req)
+        let (body, http) = try await send(req, reporting: progress)
         if (200..<300).contains(http.statusCode) { return true }
 
         let payload = try? JSONDecoder().decode(FormServerError.self, from: body)
@@ -112,11 +113,11 @@ extension APIClient {
     /// things, and a second copy of somebody's request is worse than one refusal they can answer.
     ///
     /// The error mapping is what it always was, so every `catch` at the call sites still matches.
-    private func send(_ req: URLRequest) async throws -> (Data, HTTPURLResponse) {
+    private func send(_ req: URLRequest, reporting progress: UploadProgress? = nil) async throws -> (Data, HTTPURLResponse) {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await perform(req)
+            (data, response) = try await perform(req, reporting: progress)
         } catch {
             throw APIError.transport(error.localizedDescription)
         }

@@ -367,6 +367,7 @@ struct ChatThreadView: View {
     @State private var pendingAttachment: ChatUpload?
     @State private var replyingTo: ChatMessage?
     @State private var uploadingPhoto = false
+    @State private var uploadProgress = UploadProgress()
     @State private var renameDraft = ""
     @State private var shownTitle: String? = nil
     @State private var notice: String?
@@ -606,6 +607,9 @@ struct ChatThreadView: View {
                     Spacer()
                 }
                 .padding(.horizontal, 12).padding(.top, 8)
+            }
+            if uploadProgress.isActive {
+                UploadProgressBar(progress: uploadProgress).padding(.horizontal, 12).padding(.top, 8)
             }
             HStack(alignment: .bottom, spacing: 8) {
                 Menu {
@@ -874,7 +878,8 @@ struct ChatThreadView: View {
         defer { uploadingPhoto = false }
         do {
             pendingAttachment = try await APIClient.shared.uploadChatImage(
-                conversationId: conversationId, fileName: "photo.jpg", mime: "image/jpeg", data: jpeg)
+                conversationId: conversationId, fileName: "photo.jpg", mime: "image/jpeg", data: jpeg,
+                progress: uploadProgress)
         } catch {
             notice = (error as? LocalizedError)?.errorDescription ?? T("Upload failed. Try again.")
         }
