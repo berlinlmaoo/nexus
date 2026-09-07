@@ -800,6 +800,23 @@ final class AppLanguage {
         "Tap to enlarge": "Ketuk buat perbesar",
         "View attachment": "Lihat lampiran",
         "PDF · open it on the web": "PDF · buka di web",
+        // ── attendance request · the decision and its reason ────────────
+        "Nothing in this filter.": "Nggak ada yang cocok sama filter ini.",
+        "Why it was rejected": "Alasan ditolak",
+        "Note from the approver": "Catatan dari approver",
+        "REJECTION REASON": "ALASAN PENOLAKAN",
+        "Say why, so they can fix it and file again…": "Tulis alasannya, biar dia bisa benerin terus ngajuin lagi…",
+        "The person who filed it reads this next to the decision.": "Yang ngajuin bakal baca ini di sebelah keputusannya.",
+        "Reject request": "Tolak pengajuan",
+        "Could not send the decision.": "Gagal ngirim keputusannya.",
+        // ── my submissions · the detail behind a card ─────────────────
+        "Submission": "Pengajuan",
+        "Submission details": "Isi pengajuan",
+        "No answers were recorded.": "Nggak ada jawaban yang tercatat.",
+        "Couldn't load the details.": "Gagal muat detailnya.",
+        "Open it on the web": "Buka di web",
+        "Yes": "Ya",
+        "No": "Tidak",
     ]
 }
 

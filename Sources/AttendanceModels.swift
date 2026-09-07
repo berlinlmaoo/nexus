@@ -86,7 +86,19 @@ struct AttendanceRequest: Decodable, Identifiable, Sendable {
     /// never showed one back, which left a reviewer approving a sick day they could not look at.
     let supportingDocumentUrl: String?
     let supportingDocumentName: String?
+    /// The approver's reason, and who gave it. Both have always been in this endpoint's payload
+    /// (`serializeAttendanceRequest`); the app decoded neither, so a rejected request showed the
+    /// requester a red chip and nothing whatsoever about why.
+    let reviewNote: String?
+    let reviewedBy: UserRef?
     struct UserRef: Decodable, Sendable { let name: String? }
+
+    /// The note, or nil when there is nothing to read. The column is nullable AND the route writes
+    /// `trim() || null`, but a note typed on an older client can still arrive as whitespace.
+    var reviewNoteText: String? {
+        let t = (reviewNote ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? nil : t
+    }
 
     /// Absolute URL for the attachment. The server hands out an app-relative path, and the route
     /// behind it (`/api/files/...`) refuses anyone without the session cookie — so it can only be

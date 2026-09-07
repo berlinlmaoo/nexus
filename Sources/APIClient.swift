@@ -385,6 +385,12 @@ struct APIClient {
     func mySubmissions() async throws -> MySubmissionsResponse {
         try await run(makeRequest("/api/forms/my-submissions"), decode: MySubmissionsResponse.self)
     }
+    /// One of your own submissions in full: the answers that were filled in, plus whatever the
+    /// finance team has attached since. The board list carries none of that — there it is a title
+    /// and a column name, which is why its cards had nothing to open.
+    func mySubmissionDetail(_ id: String) async throws -> MySubmissionDetail {
+        try await run(makeRequest("/api/forms/my-submissions/\(enc(id))"), decode: MySubmissionDetail.self)
+    }
     func projectDocs(_ projectId: String) async throws -> [Doc] {
         (try await run(makeRequest("/api/docs?projectId=\(enc(projectId))"), decode: DocsResponse.self)).docs ?? []
     }
@@ -1162,11 +1168,17 @@ struct APIClient {
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }
+    /// `reviewNote` is the approver's reason for the decision, carried on the same PATCH:
+    /// `attendanceRequestPatchSchema` accepts it beside `approve` and `reject` alike, and the route
+    /// stores `trim() || null`. Left out rather than sent empty, so a blank field and an absent one
+    /// cannot end up meaning two different things.
     @discardableResult
-    func reviewAttendanceRequest(id: String, action: String) async throws -> Bool {
+    func reviewAttendanceRequest(id: String, action: String, reviewNote: String? = nil) async throws -> Bool {
         var req = makeRequest("/api/attendance/requests/\(id)", method: "PATCH")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["action": action])
+        var body: [String: Any] = ["action": action]
+        if let reviewNote, !reviewNote.isEmpty { body["reviewNote"] = reviewNote }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }

@@ -21,6 +21,10 @@ private func reqStatusTone(_ s: String?) -> ChipTone {
     case "APPROVED": return .success; case "REJECTED": return .danger; case "CANCELED", "CANCELLED": return .neutral; default: return .warning
     }
 }
+private func reqDateRange(_ r: AttendanceRequest) -> String {
+    let s = attDayLabel(r.startDate), e = attDayLabel(r.endDate)
+    return s == e || e.isEmpty ? s : "\(s) – \(e)"
+}
 private func attDayLabel(_ iso: String?) -> String {
     guard let iso, !iso.isEmpty else { return "" }
     if let d = ProjDate.parse(iso) { return ProjDate.dayLabel(d) }
@@ -38,6 +42,33 @@ struct AttendanceRequestsCard: View {
     @State private var showComposer = false
     @State private var busy: String?
     @State private var viewingPhoto: PhotoRef?
+    @State private var rejecting: AttendanceRequest?
+    /// Settled requests are hidden until somebody asks for them. This list is every request ever
+    /// filed, newest last, so the handful that still need a decision sat under months of finished
+    /// ones — the reviewer had to scroll past their own history to find any work.
+    ///
+    /// nil means "the user has not chosen", NOT a value — see `activeFilter`. Storing a default
+    /// here instead would have to be decided before `canReview` has loaded, latching the wrong
+    /// answer for the whole session.
+    @State private var filter: String?
+
+    private let filters = ["PENDING", "APPROVED", "REJECTED", "CANCELED", "ALL"]
+    private func filterLabel(_ f: String) -> String { f == "ALL" ? T("All") : reqStatusLabel(f) }
+
+    /// Pending-first is right for a reviewer: this is their work queue and finished rows are noise.
+    /// It is wrong for everybody else. A staff member opens this screen to find out what happened to
+    /// what they filed — and a rejection now carries the reason it was rejected, which is the single
+    /// most important thing on the screen for them. Defaulting them to PENDING would hide exactly
+    /// that behind a chip they have no reason to tap.
+    ///
+    /// Computed rather than stored so it follows `canReview` when the permission finally lands, and
+    /// stops following it the moment the user taps a chip themselves.
+    private var activeFilter: String { filter ?? (canReview ? "PENDING" : "ALL") }
+
+    private var filtered: [AttendanceRequest] {
+        let f = activeFilter
+        return f == "ALL" ? requests : requests.filter { ($0.status ?? "").uppercased() == f }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -58,8 +89,18 @@ struct AttendanceRequestsCard: View {
             } else if requests.isEmpty {
                 Text(T("No requests yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             } else {
-                ForEach(requests) { row($0) }
+                filterBar
+                if filtered.isEmpty {
+                    Text(T("Nothing in this filter.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                } else {
+                    ForEach(filtered) { row($0) }
+                }
             }
+        }
+        // Hung here rather than on the outer chain beside the composer: two .sheet modifiers on one
+        // view is the oldest way in SwiftUI to end up with one of them that never opens.
+        .sheet(item: $rejecting) { r in
+            RejectReasonSheet(request: r) { await load() }
         }
         .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
         // Keyed on canReview: it starts false while /attendance/today is still in flight, and a
@@ -68,6 +109,26 @@ struct AttendanceRequestsCard: View {
         .task(id: canReview) { await load() }
         .sheet(isPresented: $showComposer) { RequestComposerSheet(canGrant: canReview) { await load() } }
         .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
+    }
+
+    /// The Ticket screen's chip row, same shape and same colours — one filter idiom in the app
+    /// is worth more than a second one tuned to this card.
+    private var filterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(filters, id: \.self) { f in
+                    let on = activeFilter == f
+                    Button { filter = f } label: {
+                        Text(filterLabel(f)).font(NXFont.text(12, .semibold))
+                            .foregroundStyle(on ? Color.white : NX.mutedFg)
+                            .padding(.horizontal, 13).padding(.vertical, 7)
+                            .background(on ? NX.violet : NX.card, in: Capsule())
+                            .overlay(Capsule().strokeBorder(on ? Color.clear : NX.border))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
     }
 
     private func row(_ r: AttendanceRequest) -> some View {
@@ -81,19 +142,22 @@ struct AttendanceRequestsCard: View {
             }
             HStack(spacing: 6) {
                 Image(systemName: "calendar").font(.system(size: 10)).foregroundStyle(NX.mutedFg)
-                Text(dateRange(r)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                Text(reqDateRange(r)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 if canReview, let n = r.user?.name { Text("· \(n)").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }
             }
             if let reason = r.reason, !reason.isEmpty {
                 Text(reason).font(NXFont.text(12)).foregroundStyle(NX.foreground.opacity(0.85)).lineLimit(2)
             }
             if let url = r.attachmentURL { attachment(r, url) }
+            if let note = r.reviewNoteText { decisionNote(note, rejected: r.status?.uppercased() == "REJECTED", by: r.reviewedBy?.name) }
             if pending {
                 HStack(spacing: 8) {
                     if working { ProgressView().scaleEffect(0.7) }
                     else if canReview {
                         actionBtn(T("Approve"), .success) { await review(r, "approve") }
-                        actionBtn(T("Reject"), .danger) { await review(r, "reject") }
+                        // Straight to the reason sheet: the decision and the reason go up in the
+                        // same PATCH, so there is nothing to undo if the sheet is cancelled.
+                        actionBtn(T("Reject"), .danger) { rejecting = r }
                     } else {
                         actionBtn(T("Cancel it"), .neutral) { await review(r, "cancel") }
                     }
@@ -110,6 +174,29 @@ struct AttendanceRequestsCard: View {
             Text(title).font(NXFont.text(12, .bold)).foregroundStyle(tone.fg)
                 .padding(.horizontal, 12).padding(.vertical, 6).background(tone.bg, in: Capsule())
         }.buttonStyle(.plain)
+    }
+
+    /// Why the request was decided the way it was. The field has been in this payload all along and
+    /// nothing read it, so somebody whose leave was refused saw a red chip and had to go and ask.
+    private func decisionNote(_ note: String, rejected: Bool, by: String?) -> some View {
+        let tint = rejected ? NX.danger : NX.success
+        return HStack(alignment: .top, spacing: 6) {
+            Image(systemName: rejected ? "exclamationmark.bubble.fill" : "text.bubble.fill")
+                .font(.system(size: 10)).foregroundStyle(tint).padding(.top, 2)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(rejected ? T("Why it was rejected") : T("Note from the approver"))
+                    .font(NXFont.text(10, .bold)).foregroundStyle(tint)
+                Text(note).font(NXFont.text(12)).foregroundStyle(NX.foreground.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+                if let by, !by.isEmpty {
+                    Text("· \(by)").font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     /// The evidence behind the request. The web offers it as a link; a link is no use here, because
@@ -139,12 +226,6 @@ struct AttendanceRequestsCard: View {
             .buttonStyle(.plain)
         }
     }
-
-    private func dateRange(_ r: AttendanceRequest) -> String {
-        let s = day(r.startDate); let e = day(r.endDate)
-        return s == e || e.isEmpty ? s : "\(s) – \(e)"
-    }
-    private func day(_ iso: String?) -> String { attDayLabel(iso) }
 
     private func review(_ r: AttendanceRequest, _ action: String) async {
         busy = r.id; defer { busy = nil }
@@ -274,6 +355,76 @@ struct OffsiteCheckoutsCard: View {
         }
         catch APIError.unauthorized { auth.logout() } catch { items = [] }
         loading = false
+    }
+}
+
+// MARK: - Reject with a reason
+
+/// Rejecting used to be one tap and no explanation, which left the requester with a red chip and a
+/// conversation to start. The server takes the reason as `reviewNote` on the very same PATCH that
+/// records the decision, so there is no second call and nothing to reconcile if this sheet is
+/// dismissed instead.
+///
+/// A reason is REQUIRED here even though the route would accept the reject without one: an empty
+/// note puts the requester back exactly where this change is meant to move them from.
+struct RejectReasonSheet: View {
+    let request: AttendanceRequest
+    let onReviewed: () async -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var note = ""
+    @State private var busy = false
+    @State private var err: String?
+
+    private var trimmed: String { note.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                NX.background.ignoresSafeArea()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(reqLabel(request.type)).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+                            Text([request.user?.name, reqDateRange(request)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " — "))
+                                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                            if let reason = request.reason, !reason.isEmpty {
+                                Text(reason).font(NXFont.text(13)).foregroundStyle(NX.foreground.opacity(0.85))
+                                    .padding(.top, 4).fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        VStack(alignment: .leading, spacing: 7) {
+                            SectionLabel(T("REJECTION REASON"))
+                            TextField(T("Say why, so they can fix it and file again…"), text: $note, axis: .vertical)
+                                .font(NXFont.text(15)).lineLimit(3...6).padding(12)
+                                .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                            Text(T("The person who filed it reads this next to the decision."))
+                                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                        }
+                        if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
+                        Button { Task { await send() } } label: {
+                            HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text(T("Reject request")) }
+                        }
+                        .buttonStyle(NexusPrimaryButton(tint: NX.danger)).disabled(busy || trimmed.isEmpty)
+                    }
+                    .padding(20)
+                }
+            }
+            .navigationTitle(T("Reject"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
+        }
+    }
+
+    private func send() async {
+        busy = true; err = nil; defer { busy = false }
+        do {
+            try await APIClient.shared.reviewAttendanceRequest(id: request.id, action: "reject", reviewNote: trimmed)
+            await onReviewed()
+            dismiss()
+        } catch {
+            err = (error as? LocalizedError)?.errorDescription ?? T("Could not send the decision.")
+        }
     }
 }
 
