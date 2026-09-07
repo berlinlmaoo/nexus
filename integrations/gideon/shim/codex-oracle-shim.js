@@ -31,11 +31,17 @@ const HERMES = process.env.HERMES_BIN || "/Users/jagainmacmini1/.local/bin/herme
 // catalogue does not list gpt-6-astra under openai-codex — so without naming the provider Hermes
 // refuses in two seconds with "No LLM provider configured", which reads like the model is gone.
 // Verified against v0.21.0; updating Hermes did not change it.
-const PROVIDER = "openai-codex"
+// Each tier names its own provider now, because one of them does not live at OpenAI. Keeping the
+// provider beside the model means adding a fourth engine is a line in this table rather than a
+// branch further down.
 const TIERS = {
-  astra: "gpt-6-astra",   // newest generation. Fastest AND deepest in every measurement so far.
-  luna: "gpt-5.6-luna",   // the default
-  terra: "gpt-5.6-terra", // lighter
+  astra: { model: "gpt-6-astra", provider: "openai-codex", timeoutMs: 140000 },
+  luna: { model: "gpt-5.6-luna", provider: "openai-codex", timeoutMs: 140000 },
+  terra: { model: "gpt-5.6-terra", provider: "openai-codex", timeoutMs: 140000 },
+  // Local: Qwen3.5-27B IQ2_M on the RTX 5070 in this building. Measured at 142s for a question the
+  // hosted tiers answer in 42, so it gets its own ceiling — 140s would have timed it out at the
+  // exact moment it was about to succeed.
+  experimental: { model: "gideon-experimental", provider: "ollama-local", timeoutMs: 420000 },
 }
 const DEFAULT_TIER = "luna"
 // Neutral, empty workdir so Codex has nothing to act on even if it tried.
@@ -114,18 +120,19 @@ function runHermes(prompt, actorEmail, tier, imagePath) {
     if (actorEmail) env.NEXUS_GIDEON_ACTOR_EMAIL = actorEmail
     // An unknown tier falls back rather than failing: a client sending a name this shim has not
     // learned yet should get an answer from the default, not an error.
-    const model = TIERS[tier] || TIERS[DEFAULT_TIER]
+    const chosen = TIERS[tier] || TIERS[DEFAULT_TIER]
+    const { model, provider, timeoutMs } = chosen
     // Hermes has no attachment flag. Its vision toolset reads from disk, so an image reaches the
     // model as a path named in the prompt — verified: it read every field off a screenshot.
     const full = imagePath
       ? `Ada gambar terlampir di ${imagePath}. Lihat gambar itu lebih dulu, lalu jawab.\n\n${prompt}`
       : prompt
-    const child = spawn(HERMES, ["-z", full, "-m", model, "--provider", PROVIDER], { cwd: WORKDIR, env })
+    const child = spawn(HERMES, ["-z", full, "-m", model, "--provider", provider], { cwd: WORKDIR, env })
     let out = "", err = ""
     try { child.stdin.end() } catch {}
     child.stdout.on("data", (d) => { out += d.toString() })
     child.stderr.on("data", (d) => { err += d.toString() })
-    const timer = setTimeout(() => { try { child.kill("SIGKILL") } catch {} }, 140000)
+    const timer = setTimeout(() => { try { child.kill("SIGKILL") } catch {} }, timeoutMs)
     child.on("close", () => {
       clearTimeout(timer)
       const reply = out.trim()
