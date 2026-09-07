@@ -475,21 +475,26 @@ async function proposeAttendanceCorrection(actor: User, input: Record<string, un
     },
     select: { id: true, checkInAt: true, checkOutAt: true, status: true },
   })
-  // No record = nothing to correct. Say so instead of proposing something that can never be approved,
-  // and do NOT offer to create one: a missing day goes through AttendanceRequest (permit/leave), which
-  // is what cancels the day's penalties and waives the absence cron. Inventing a bare record here
-  // would erase an alpha with none of that bookkeeping.
-  if (!record) {
+  // A missing record used to be refused outright, on the grounds that inventing a bare one erases an
+  // alpha with none of the bookkeeping. That reasoning was about creating it SILENTLY — and it turned
+  // out to refuse the commonest complaint there is: nine of the first fourteen tickets were "check-in
+  // never landed", which is precisely a day with no record.
+  //
+  // So a missing day is now proposable, and only proposable. The approver sees that no record exists
+  // and what would be written, and the same tap that creates it runs the penalty refund and the
+  // waiver — the bookkeeping the old comment was protecting. Creating one still requires a check-in
+  // time: a record with no arrival is not a record of anything.
+  if (!record && !proposedCheckInAt) {
     throw new Error(
-      `Gak ada record absen tanggal ${dateKey} buat pelapor tiket ini, jadi gak ada yang bisa dikoreksi. ` +
-        'Kalau emang gak ada absen sama sekali hari itu, jalurnya pengajuan izin/cuti (attendance request), bukan koreksi.'
+      `Gak ada record absen tanggal ${dateKey} buat pelapor tiket ini. Kalau mau diusulkan dibuat, ` +
+        'sertakan checkInAt — jam masuk yang kamu baca dari bukti.'
     )
   }
 
   const timeError = validateCorrectionTimes(
     dateKey,
-    proposedCheckInAt ?? record.checkInAt,
-    proposedCheckOutAt ?? record.checkOutAt
+    proposedCheckInAt ?? record?.checkInAt ?? null,
+    proposedCheckOutAt ?? record?.checkOutAt ?? null
   )
   if (timeError) throw new Error(timeError)
 
@@ -505,8 +510,8 @@ async function proposeAttendanceCorrection(actor: User, input: Record<string, un
 
   const summary = describeCorrection({
     dateKey,
-    beforeCheckInAt: record.checkInAt,
-    beforeCheckOutAt: record.checkOutAt,
+    beforeCheckInAt: record?.checkInAt ?? null,
+    beforeCheckOutAt: record?.checkOutAt ?? null,
     proposedCheckInAt,
     proposedCheckOutAt,
   })
@@ -526,10 +531,13 @@ async function proposeAttendanceCorrection(actor: User, input: Record<string, un
         reason: reason.slice(0, CORRECTION_REASON_MAX),
         proposedById: gideonId,
         status: 'PENDING',
-        beforeRecordId: record.id,
-        beforeCheckInAt: record.checkInAt,
-        beforeCheckOutAt: record.checkOutAt,
-        beforeStatus: record.status,
+        // All null when the day has no record at all. That absence IS the snapshot, and it is what
+        // tells the approve path to create rather than update — and what the card reads to say
+        // "belum ada catatan" instead of drawing a comparison against nothing.
+        beforeRecordId: record?.id ?? null,
+        beforeCheckInAt: record?.checkInAt ?? null,
+        beforeCheckOutAt: record?.checkOutAt ?? null,
+        beforeStatus: record?.status ?? null,
       },
       include: ATTENDANCE_CORRECTION_INCLUDE,
     })

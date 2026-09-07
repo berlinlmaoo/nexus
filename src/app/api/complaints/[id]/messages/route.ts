@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { notifyComplaintReply } from "@/lib/notification-service"
+import { reviewAttendanceTicket } from "@/lib/gideon-ticket"
 import {
   isBodPlus, BODY_MIN, BODY_MAX, COMPLAINT_DETAIL_INCLUDE, serializeComplaintDetail,
 } from "@/lib/complaints"
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const text = String(payload?.body ?? "").trim()
     if (text.length < BODY_MIN) return NextResponse.json({ error: `Balasan minimal ${BODY_MIN} karakter.` }, { status: 422 })
 
-    const complaint = await prisma.complaint.findUnique({ where: { id }, select: { id: true, workspaceId: true, status: true, reporterId: true } })
+    const complaint = await prisma.complaint.findUnique({ where: { id }, select: { id: true, workspaceId: true, status: true, reporterId: true, category: true } })
     if (!complaint || complaint.workspaceId !== membership.workspaceId) return NextResponse.json({ error: "Not found" }, { status: 404 })
     if (!viewerIsBod && complaint.reporterId !== me) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     if (complaint.status === "CLOSED") return NextResponse.json({ error: "Keluhan ini sudah ditutup." }, { status: 409 })
@@ -39,6 +40,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Notify the other side: a BoD reply pings the reporter; a reporter reply pings the BoD.
     void notifyComplaintReply({ complaintId: id, workspaceId: membership.workspaceId, reporterId: complaint.reporterId, fromReviewer: viewerIsBod, replierId: me }).catch(() => {})
+
+    // GIDEON answers the reporter, not the reviewers: a BoD reply is a human taking over, and an
+    // assistant talking back over them is noise. Its own two brakes — never answer itself, and never
+    // twice inside a minute — live in reviewAttendanceTicket, where anything else that triggers it
+    // gets them too.
+    if (complaint.category === "ATTENDANCE" && !viewerIsBod) {
+      void reviewAttendanceTicket(id).catch(() => {})
+    }
 
     const fresh = await prisma.complaint.findUnique({ where: { id }, include: COMPLAINT_DETAIL_INCLUDE })
     return NextResponse.json(serializeComplaintDetail(fresh!, me, viewerIsBod))

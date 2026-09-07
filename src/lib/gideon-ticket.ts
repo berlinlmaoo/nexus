@@ -2,7 +2,7 @@ import path from "path"
 import { readFile } from "fs/promises"
 import sharp from "sharp"
 import prisma from "@/lib/prisma"
-import { getGideonUserId } from "@/lib/gideon-identity"
+import { getGideonUserId, GIDEON_EMAIL } from "@/lib/gideon-identity"
 
 /**
  * GIDEON's first pass over an attendance ticket.
@@ -45,8 +45,20 @@ function buildPrompt(input: {
   body: string
   filedAt: Date
   hasImage: boolean
+  /** Everything said after the opening message, oldest first. Empty on the first pass. */
+  history: { who: string; text: string }[]
 }): string {
   const filed = input.filedAt.toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })
+  const conversation = input.history.length
+    ? [
+        ``,
+        `Percakapan sejauh ini:`,
+        ...input.history.map((h) => `  ${h.who}: ${h.text}`),
+        ``,
+        `Pesan terakhir belum kamu jawab. Jawab itu — jangan mengulang analisis yang sudah kamu tulis`,
+        `sebelumnya kecuali ada informasi baru yang mengubahnya.`,
+      ].join("\n")
+    : ""
   return [
     `Kamu menangani tiket absensi di NEXUS sebagai support. Tiket ini dibuka oleh ${input.reporterName} pada ${filed}.`,
     ``,
@@ -68,6 +80,7 @@ function buildPrompt(input: {
     `- Jangan menyebut angka atau jam yang tidak kamu lihat sendiri, baik di foto maupun dari tool.`,
     `- Kalau catatan absensinya ternyata sudah benar, katakan begitu.`,
     ``,
+    conversation,
     `Balas ringkas dalam Bahasa Indonesia, maksimal 6 kalimat: apa yang kamu lihat di bukti, apa kata`,
     `catatan absensinya, dan kesimpulanmu. Kalau kamu mengusulkan koreksi, sebutkan usulannya.`,
   ].join("\n")
@@ -88,19 +101,40 @@ export async function reviewAttendanceTicket(complaintId: string): Promise<void>
       select: {
         id: true, subject: true, category: true, evidenceUrl: true, createdAt: true,
         reporter: { select: { id: true, name: true, email: true } },
-        messages: { orderBy: { createdAt: "asc" }, take: 1, select: { body: true } },
+        messages: {
+          orderBy: { createdAt: "asc" },
+          take: 12,
+          select: { body: true, authorId: true, fromReviewer: true, createdAt: true, author: { select: { name: true, email: true } } },
+        },
       },
     })
     if (!complaint || complaint.category !== "ATTENDANCE") return
+
+    const thread = complaint.messages
+    const last = thread[thread.length - 1]
+    // Never answer itself. Two guards rather than one because they fail differently: the first stops
+    // a loop where GIDEON's own message would prompt another, the second stops a burst where several
+    // replies land while it is still thinking about the first.
+    if (last && (last.author as { email?: string } | null)?.email === GIDEON_EMAIL) return
+    const lastGideon = [...thread].reverse().find((m) => (m.author as { email?: string } | null)?.email === GIDEON_EMAIL)
+    if (lastGideon && Date.now() - lastGideon.createdAt.getTime() < 60_000) return
 
     const imageBase64 = await loadEvidence(complaint.evidenceUrl)
     const prompt = buildPrompt({
       complaintId: complaint.id,
       reporterName: complaint.reporter?.name || "seorang anggota",
       subject: complaint.subject,
-      body: complaint.messages[0]?.body || "",
+      body: thread[0]?.body || "",
       filedAt: complaint.createdAt,
       hasImage: Boolean(imageBase64),
+      history: thread.slice(1).map((m) => ({
+        who: (m.author as { email?: string } | null)?.email === GIDEON_EMAIL
+          ? "GIDEON"
+          : m.fromReviewer
+            ? "BoD"
+            : (m.author?.name ?? "Pelapor"),
+        text: m.body.slice(0, 500),
+      })),
     })
 
     const res = await fetch(url, {
