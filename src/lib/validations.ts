@@ -123,10 +123,23 @@ export const attendanceRequestCreateSchema = z.object({
   reason: z.string().min(3, "Reason is required").max(1000),
 })
 
-export const attendanceRequestPatchSchema = z.object({
-  action: z.enum(["approve", "reject", "cancel"]),
-  reviewNote: z.string().max(1000).nullable().optional(),
-})
+export const attendanceRequestPatchSchema = z
+  .object({
+    action: z.enum(["approve", "reject", "cancel"]),
+    reviewNote: z.string().max(1000).nullable().optional(),
+  })
+  .superRefine((data, ctx) => {
+    // A rejection MUST explain itself. "Rejected" with no reason is the whole complaint about this
+    // flow: the requester gets a red badge and no idea what to fix. Approvals stay optional — nobody
+    // needs a paragraph to say yes — and `cancel` (the requester withdrawing) never takes a note.
+    if (data.action === "reject" && (data.reviewNote ?? "").trim().length < 3) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["reviewNote"],
+        message: "Alasan penolakan wajib diisi (minimal 3 karakter).",
+      })
+    }
+  })
 
 export const attendanceRequestQuerySchema = z.object({
   scope: z.enum(["me", "approvals", "workspace"]).optional(),

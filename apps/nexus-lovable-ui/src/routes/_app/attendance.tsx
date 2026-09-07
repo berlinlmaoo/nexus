@@ -1002,11 +1002,22 @@ function OfficeComposer({ office, onClose, onCreated }: { office?: NexusOffice; 
 function RequestsSection({ canReview, viewerId }: { canReview: boolean; viewerId: string | null }) {
   const qc = useQueryClient();
   const [composerOpen, setComposerOpen] = useState(false);
+  // Settled (approved / rejected / canceled) rows are collapsed behind "Show settled" — see the
+  // split further down. Everything still awaiting a decision is what this list is FOR.
+  const [showSettled, setShowSettled] = useState(false);
+  // Rejecting is a two-step: click Reject → a reason box opens on that row → Confirm. The server
+  // refuses a reason-less rejection, so we collect it before the request is ever sent.
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectNote, setRejectNote] = useState("");
   const requestsQuery = useQuery({ queryKey: ["attendance-requests"], queryFn: () => nexusApi.attendanceRequests("scope=workspace"), retry: 1 });
   const rows = Array.isArray(requestsQuery.data) ? requestsQuery.data : requestsQuery.data?.requests ?? [];
   const pending = rows.filter((r) => (r.status || "").toUpperCase() === "PENDING");
   const invalidate = () => { qc.invalidateQueries({ queryKey: ["attendance-requests"] }); qc.invalidateQueries({ queryKey: ["attendance-today"] }); qc.invalidateQueries({ queryKey: ["attendance-history"] }); };
-  const review = useMutation({ mutationFn: ({ id, action }: { id: string; action: "approve" | "reject" | "cancel" }) => nexusApi.reviewAttendanceRequest(id, action), onSuccess: invalidate });
+  const closeReject = () => { setRejectingId(null); setRejectNote(""); };
+  const review = useMutation({
+    mutationFn: ({ id, action, reviewNote }: { id: string; action: "approve" | "reject" | "cancel"; reviewNote?: string }) => nexusApi.reviewAttendanceRequest(id, action, reviewNote),
+    onSuccess: () => { closeReject(); invalidate(); },
+  });
 
   // Offsite checkouts (BoD only) merged into this same approvals list.
   const offsiteQ = useQuery({ queryKey: ["offsite-checkouts", "all"], queryFn: () => nexusApi.offsiteCheckouts("ALL"), retry: false, enabled: canReview });
@@ -1024,6 +1035,22 @@ function RequestsSection({ canReview, viewerId }: { canReview: boolean; viewerId
   const offsiteResolved = offsiteSorted.filter((i) => i.approval !== "PENDING");
   const rowsPending = rows.filter((r) => (r.status || "").toUpperCase() === "PENDING");
   const rowsResolved = rows.filter((r) => (r.status || "").toUpperCase() !== "PENDING");
+
+  // Settled requests are hidden by default for EVERYONE — a BoD and a staff member look at the same
+  // list, and neither of them needs last quarter's approvals in the way of this morning's decision.
+  // One exception, and it exists because of the rejection reason: your OWN request stays on screen
+  // for a week after it was decided, so a rejection doesn't disappear before the person it's about
+  // has read why. Offsite checkouts carry no reason, so they get no grace period.
+  const SETTLED_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+  const isFreshOwn = (r: (typeof rows)[number]) => {
+    if (!viewerId || r.user?.id !== viewerId) return false;
+    const t = r.reviewedAt ? Date.parse(r.reviewedAt) : NaN;
+    return Number.isFinite(t) && Date.now() - t < SETTLED_GRACE_MS;
+  };
+  const rowsFreshOwn = rowsResolved.filter(isFreshOwn);
+  const rowsSettledHidden = rowsResolved.filter((r) => !isFreshOwn(r));
+  const settledHiddenCount = rowsSettledHidden.length + offsiteResolved.length;
+  const alwaysVisibleCount = offsitePending.length + rowsPending.length + rowsFreshOwn.length;
 
   const renderOffsite = (it: (typeof offsiteItems)[number]) => {
     const isPending = it.approval === "PENDING";
@@ -1089,14 +1116,54 @@ function RequestsSection({ canReview, viewerId }: { canReview: boolean; viewerId
             </div>
           )}
         </div>
-        {canReview && isPending && (
+        {canReview && isPending && rejectingId !== r.id && (
           <div className="flex items-center gap-1.5">
             <button disabled={review.isPending} onClick={() => review.mutate({ id: r.id, action: "approve" })} className="rounded-lg bg-success/10 px-2.5 py-1 text-xs font-semibold text-success transition-colors hover:bg-success/20 active:scale-[0.97] disabled:opacity-50">Approve</button>
-            <button disabled={review.isPending} onClick={() => review.mutate({ id: r.id, action: "reject" })} className="rounded-lg bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.97] disabled:opacity-50">Reject</button>
+            <button disabled={review.isPending} onClick={() => { setRejectingId(r.id); setRejectNote(""); }} className="rounded-lg bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.97] disabled:opacity-50">Reject</button>
           </div>
         )}
-        {(!canReview || isMine) && isPending && (
+        {(!canReview || isMine) && isPending && rejectingId !== r.id && (
           <button disabled={review.isPending} onClick={() => review.mutate({ id: r.id, action: "cancel" })} className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-accent active:scale-[0.97] disabled:opacity-50">Cancel</button>
+        )}
+
+        {/* The reason box. Rejecting used to be one click and the requester learned nothing; now the
+            reviewer types WHY, and that text is what lands in their notification and on this row. */}
+        {canReview && isPending && rejectingId === r.id && (
+          <div className="w-full space-y-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-destructive">Reason for rejection — {r.user?.name ?? "the requester"} will see this</div>
+            <textarea
+              autoFocus
+              value={rejectNote}
+              onChange={(e) => setRejectNote(e.target.value)}
+              rows={2}
+              maxLength={1000}
+              placeholder="e.g. Foto buktinya nggak kebaca — tolong ajukan ulang sama fotonya."
+              className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-destructive"
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                disabled={review.isPending || rejectNote.trim().length < 3}
+                onClick={() => review.mutate({ id: r.id, action: "reject", reviewNote: rejectNote })}
+                className="rounded-lg bg-destructive px-3 py-1.5 text-xs font-bold text-destructive-foreground transition-colors hover:bg-destructive/90 active:scale-[0.97] disabled:opacity-40"
+              >
+                {review.isPending ? "Rejecting…" : "Confirm reject"}
+              </button>
+              <button disabled={review.isPending} onClick={closeReject} className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-accent active:scale-[0.97] disabled:opacity-50">Cancel</button>
+              <span className="text-[11px] text-muted-foreground">{rejectNote.trim().length < 3 ? "A reason is required." : `${rejectNote.trim().length}/1000`}</span>
+              {review.isError && <span className="text-[11px] font-semibold text-destructive">{review.error instanceof ApiError ? review.error.message : "Couldn't save the rejection."}</span>}
+            </div>
+          </div>
+        )}
+
+        {/* Decision, once it's settled — visible to the requester AND to every reviewer. */}
+        {!isPending && (r.reviewNote || r.reviewedBy?.name) && (
+          <div className="w-full rounded-xl border border-border bg-muted/30 px-3 py-2">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+              {(r.status || "").toUpperCase() === "REJECTED" ? "Reason for rejection" : "Reviewer note"}
+              {r.reviewedBy?.name ? ` · ${r.reviewedBy.name}` : ""}
+            </div>
+            {r.reviewNote && <p className="mt-0.5 whitespace-pre-wrap text-xs">“{r.reviewNote}”</p>}
+          </div>
         )}
       </div>
     );
@@ -1109,16 +1176,27 @@ function RequestsSection({ canReview, viewerId }: { canReview: boolean; viewerId
           <h2 className="text-lg font-semibold tracking-tight">Leave & permit requests</h2>
           <p className="text-sm text-muted-foreground">{canReview ? "Review pending requests (permit, day-off, offsite checkout) & submit your own." : "Submit leave, sick, or permit requests."}</p>
         </div>
-        <button onClick={() => setComposerOpen(true)} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><ClipboardCheck className="h-3.5 w-3.5" /> New request</button>
+        <div className="flex flex-wrap items-center gap-2">
+          {settledHiddenCount > 0 && (
+            <button onClick={() => setShowSettled((v) => !v)} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-muted-foreground transition-all duration-150 hover:bg-accent active:scale-[0.98]">
+              {showSettled ? "Hide settled" : `Show settled (${settledHiddenCount})`}
+            </button>
+          )}
+          <button onClick={() => setComposerOpen(true)} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><ClipboardCheck className="h-3.5 w-3.5" /> New request</button>
+        </div>
       </div>
       <div className="divide-y divide-border">
         {requestsQuery.isLoading && <div className="px-5 py-4 text-sm text-muted-foreground">Loading requests…</div>}
         {!requestsQuery.isLoading && rows.length === 0 && offsiteSorted.length === 0 && <div className="px-5 py-6 text-center text-sm text-muted-foreground">No attendance requests yet.</div>}
+        {!requestsQuery.isLoading && alwaysVisibleCount === 0 && settledHiddenCount > 0 && !showSettled && (
+          <div className="px-5 py-6 text-center text-sm text-muted-foreground">Nothing waiting on a decision. {settledHiddenCount} settled request{settledHiddenCount === 1 ? "" : "s"} hidden.</div>
+        )}
         {/* Pending first (both types), so approvals-needed never get buried under approved history. */}
         {offsitePending.map(renderOffsite)}
         {rowsPending.map(renderRequest)}
-        {offsiteResolved.map(renderOffsite)}
-        {rowsResolved.map(renderRequest)}
+        {rowsFreshOwn.map(renderRequest)}
+        {showSettled && offsiteResolved.map(renderOffsite)}
+        {showSettled && rowsSettledHidden.map(renderRequest)}
       </div>
       {canReview && pendingTotal > 0 && <div className="border-t border-border bg-warning/10 px-5 py-2 text-xs font-semibold text-warning-foreground">{pendingTotal} pending review</div>}
       {composerOpen && <RequestComposer onClose={() => setComposerOpen(false)} onCreated={invalidate} />}
