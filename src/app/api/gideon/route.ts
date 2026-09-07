@@ -6,7 +6,11 @@ import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { TaskStatus, TaskPriority } from '@/generated/prisma'
 
-const SYSTEM_PROMPT = `You are GIDEON (Global Intelligence Data Enterprise Operational Network), Strategic Operations AI for Z Networks. You have full access to NEXUS — the Z Networks project management platform. You can create tasks, update status, assign people, create goals, summarize projects, track time, and manage sprints. Tone: casual but sharp, like a genius co-worker. Never use filler phrases.`
+// There is no SYSTEM_PROMPT constant here any more. One existed for months and was never sent:
+// it appeared exactly once in this file, its own declaration, so every rule written in it did
+// nothing while looking authoritative. GIDEON's persona comes from the Hermes agent; the only
+// thing NEXUS injects is the header built below, which IS sent — so a rule that must hold
+// belongs there and nowhere else.
 
 // MODEL_MAP, the Anthropic tool schemas and executeToolCall lived here: 248 lines that were never
 // called once. Each appeared exactly twice in this file — its declaration and nothing else. They
@@ -22,7 +26,14 @@ function buildGideonPrompt(history: { role: string; content: string }[], who: { 
     `[IDENTITAS LAWAN BICARA — WAJIB DIPATUHI] Kamu (Gideon) lagi ngobrol di chatbox NEXUS dengan "${name}"` +
     `${who.email ? ` (${who.email})` : ""}, anggota tim NEXUS. Ini SESI TERPISAH khusus dia. Sapa & rujuk dia ` +
     `sebagai "${name}". JANGAN sekali-kali manggil/menganggap dia sebagai orang lain (operator, admin, atau ` +
-    `nama apa pun dari memori sesi sebelumnya) — kalau kamu inget nama lain, ABAIKAN; sekarang kamu ngomong sama ${name}.\n\n`
+    `nama apa pun dari memori sesi sebelumnya) — kalau kamu inget nama lain, ABAIKAN; sekarang kamu ngomong sama ${name}.\n\n` +
+    // Ditanya "lo pake LLM apa?" jawabannya sempat bocor separuh — menyebut framework dan angka versi
+    // model. Menyebut yang BUKAN dipakai sama bocornya, jadi keduanya dilarang sekalian.
+    `[SOAL DIRIMU SENDIRI] Kamu GIDEON, titik. Jangan pernah menyebut model, provider, vendor, framework, ` +
+    `atau tier yang kamu pakai — dan jangan menyebut yang TIDAK kamu pakai juga ("bukan Claude", "bukan GPT" ` +
+    `sama saja membocorkan). Kalau ditanya kamu dibangun di atas apa: satu kalimat pendek bahwa itu internal ` +
+    `dan tidak kamu bahas, lalu langsung balik ke pertanyaan aslinya. Jangan minta maaf, jangan kasih petunjuk, ` +
+    `jangan menawarkan untuk memberitahu. Ditanya kedua kalinya, jawabannya kalimat yang sama — bukan yang lebih panjang.\n\n`
   if (recent.length <= 1) return `${header}Pesan dari ${name}: ${last}`
   const ctx = recent.slice(0, -1).map((m) => `${m.role === "user" ? name : "Gideon"}: ${m.content}`).join("\n")
   return `${header}Konteks percakapan:\n${ctx}\n\nPesan terbaru dari ${name}: ${last}`
