@@ -91,13 +91,37 @@ struct AttendanceRequest: Decodable, Identifiable, Sendable {
     /// requester a red chip and nothing whatsoever about why.
     let reviewNote: String?
     let reviewedBy: UserRef?
+    /// "ADMIN" when the row was written by something other than a review screen — including the
+    /// nightly penalty cron. Only meaningful together with `reviewedBy`; see `isAutoDeduction`.
+    let approvalSource: String?
     struct UserRef: Decodable, Sendable { let name: String? }
+
+    /// The nightly cron's own penalty row, NOT something a person filed: ">120 min late" and
+    /// "no check-in/out" both land as an APPROVED DAY_OFF that eats a day-off token. Mirrors
+    /// `isAutoDeduction` in src/lib/attendance-absence.ts exactly — the three conditions together,
+    /// because a real admin-granted day-off also has `approvalSource == "ADMIN"` and would be
+    /// swallowed by the reason prefix alone.
+    ///
+    /// The server filters these out of the requests list; this is the same test on our side, so a
+    /// build running against a server that predates that filter (or a scope it does not cover) does
+    /// not put penalties back into a list of things people asked for.
+    var isAutoDeduction: Bool {
+        (approvalSource ?? "") == "ADMIN" && reviewedBy == nil && (reason ?? "").hasPrefix("Auto:")
+    }
 
     /// The note, or nil when there is nothing to read. The column is nullable AND the route writes
     /// `trim() || null`, but a note typed on an older client can still arrive as whitespace.
     var reviewNoteText: String? {
         let t = (reviewNote ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return t.isEmpty ? nil : t
+    }
+
+    /// Who to credit for `reviewNoteText`, or nil when nobody wrote it. The cron leaves
+    /// `reviewedById` null and still writes a note ("Auto-deducted: bolos …"), so a note is only
+    /// the approver's word when there is an approver to attach it to.
+    var reviewerName: String? {
+        let n = (reviewedBy?.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return n.isEmpty ? nil : n
     }
 
     /// Absolute URL for the attachment. The server hands out an app-relative path, and the route
@@ -124,6 +148,9 @@ struct OffsiteCheckout: Decodable, Identifiable, Sendable {
     let attendanceDate: String?
     let checkOutAt: String?
     let reason: String?
+    /// Reverse-geocoded street address of the check-out point. A reviewer deciding this reads a
+    /// place name far faster than "±420 m", and the map link is a whole context switch away.
+    let address: String?
     let distanceMeters: Double?
     let officeName: String?
     let lat: Double?

@@ -32,12 +32,60 @@ private func attDayLabel(_ iso: String?) -> String {
     return f.date(from: String(iso.prefix(10))).map { ProjDate.dayLabel($0) } ?? ""
 }
 
+// MARK: - one queue, two kinds
+
+/// A leave request and an offsite check-out are different models, from different endpoints, decided
+/// through different endpoints — but for a reviewer they are the same job: something is waiting on a
+/// decision. They used to be two cards, so clearing the queue meant remembering the second one
+/// existed. This wrapper is the merge, and it is a UI merge only: it carries nothing but what the
+/// list has to sort and filter on, and each kind still approves through the endpoint that owns it.
+private enum SubmissionEntry: Identifiable {
+    case request(AttendanceRequest)
+    case offsite(OffsiteCheckout)
+
+    /// Prefixed because the two ids come from different tables and nothing guarantees they differ.
+    var id: String {
+        switch self {
+        case .request(let r): return "req-" + r.id
+        case .offsite(let o): return "off-" + o.id
+        }
+    }
+
+    /// Matched against the filter chips, which speak the AttendanceRequest vocabulary. An offsite
+    /// approval only ever holds three of those five values, so CANCELED simply matches none.
+    var statusKey: String {
+        switch self {
+        case .request(let r): return (r.status ?? "").uppercased()
+        case .offsite(let o): return (o.approval ?? "").uppercased()
+        }
+    }
+
+    var isPending: Bool { statusKey == "PENDING" }
+
+    /// The day the entry is ABOUT, not when it was filed — the one scale both kinds share, and the
+    /// only thing that lets them interleave instead of sitting in two blocks. ISO-8601 dates sort
+    /// correctly as plain strings, so this needs no date parsing.
+    var dayKey: String {
+        switch self {
+        case .request(let r): return String((r.startDate ?? "").prefix(10))
+        case .offsite(let o): return String((o.attendanceDate ?? "").prefix(10))
+        }
+    }
+}
+
 // MARK: - Requests card (submit + review)
 
 struct AttendanceRequestsCard: View {
     let canReview: Bool
+    /// Offsite check-outs are governed by `canManageAttendance`, requests by
+    /// `canReviewAttendanceRequests` — two different permissions, and the offsite endpoint 403s on
+    /// the wrong one. Merging the queues must not merge the rights: a team lead who can review
+    /// requests but not manage attendance simply never sees the offsite kind, rather than seeing
+    /// rows whose buttons can only fail.
+    let canReviewOffsite: Bool
     @Environment(AuthStore.self) private var auth
     @State private var requests: [AttendanceRequest] = []
+    @State private var offsite: [OffsiteCheckout] = []
     @State private var loading = true
     @State private var showComposer = false
     @State private var busy: String?
@@ -65,17 +113,40 @@ struct AttendanceRequestsCard: View {
     /// stops following it the moment the user taps a chip themselves.
     private var activeFilter: String { filter ?? (canReview ? "PENDING" : "ALL") }
 
-    private var filtered: [AttendanceRequest] {
-        let f = activeFilter
-        return f == "ALL" ? requests : requests.filter { ($0.status ?? "").uppercased() == f }
+    /// Both kinds in one list. Pending first — this is a work queue and a settled row is noise —
+    /// then newest day first within each group, which is what makes the two kinds read as one
+    /// queue instead of two blocks stacked on each other. `enumerated()` breaks the remaining ties:
+    /// Swift's sort is not stable, so equal keys would otherwise shuffle on every redraw.
+    private var entries: [SubmissionEntry] {
+        let combined = requests.map { SubmissionEntry.request($0) } + offsite.map { SubmissionEntry.offsite($0) }
+        return combined.enumerated().sorted { a, b in
+            if a.element.isPending != b.element.isPending { return a.element.isPending }
+            if a.element.dayKey != b.element.dayKey { return a.element.dayKey > b.element.dayKey }
+            return a.offset < b.offset
+        }.map { $0.element }
     }
+
+    private var filtered: [SubmissionEntry] {
+        let f = activeFilter
+        return f == "ALL" ? entries : entries.filter { $0.statusKey == f }
+    }
+
+    private var subtitle: String {
+        if canReviewOffsite { return T("Review requests and offsite check-outs, and file your own.") }
+        return canReview ? T("Review the crew's requests and file your own.") : T("File leave, permit, sick or day-off.")
+    }
+
+    /// `.task(id:)` takes one value, and this card now waits on two permissions that land at
+    /// different moments — the offsite fetch has to start when `canReviewOffsite` flips, not only
+    /// when `canReview` does.
+    private var permissionKey: String { "\(canReview)-\(canReviewOffsite)" }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(T("Submissions")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
-                    Text(canReview ? T("Review the crew's requests and file your own.") : T("File leave, permit, sick or day-off."))
+                    Text(subtitle)
                         .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer()
@@ -86,7 +157,7 @@ struct AttendanceRequestsCard: View {
             }
             if loading {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
-            } else if requests.isEmpty {
+            } else if entries.isEmpty {
                 Text(T("No requests yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
             } else {
                 filterBar
@@ -103,10 +174,10 @@ struct AttendanceRequestsCard: View {
             RejectReasonSheet(request: r) { await load() }
         }
         .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
-        // Keyed on canReview: it starts false while /attendance/today is still in flight, and a
-        // plain .task fetched scope=me once and never ran again — so a reviewer kept looking at
+        // Keyed on the permissions: both start false while /attendance/today is still in flight, and
+        // a plain .task fetched scope=me once and never ran again — so a reviewer kept looking at
         // their own history while the crew's pending requests sat on the server unseen.
-        .task(id: canReview) { await load() }
+        .task(id: permissionKey) { await load() }
         .sheet(isPresented: $showComposer) { RequestComposerSheet(canGrant: canReview) { await load() } }
         .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
     }
@@ -131,7 +202,14 @@ struct AttendanceRequestsCard: View {
         }
     }
 
-    private func row(_ r: AttendanceRequest) -> some View {
+    @ViewBuilder private func row(_ entry: SubmissionEntry) -> some View {
+        switch entry {
+        case .request(let r): requestRow(r)
+        case .offsite(let o): offsiteRow(o)
+        }
+    }
+
+    private func requestRow(_ r: AttendanceRequest) -> some View {
         let pending = (r.status ?? "").uppercased() == "PENDING"
         let working = busy == r.id
         return VStack(alignment: .leading, spacing: 6) {
@@ -149,7 +227,7 @@ struct AttendanceRequestsCard: View {
                 Text(reason).font(NXFont.text(12)).foregroundStyle(NX.foreground.opacity(0.85)).lineLimit(2)
             }
             if let url = r.attachmentURL { attachment(r, url) }
-            if let note = r.reviewNoteText { decisionNote(note, rejected: r.status?.uppercased() == "REJECTED", by: r.reviewedBy?.name) }
+            if let note = r.reviewNoteText { decisionNote(note, rejected: r.status?.uppercased() == "REJECTED", by: r.reviewerName) }
             if pending {
                 HStack(spacing: 8) {
                     if working { ProgressView().scaleEffect(0.7) }
@@ -178,14 +256,20 @@ struct AttendanceRequestsCard: View {
 
     /// Why the request was decided the way it was. The field has been in this payload all along and
     /// nothing read it, so somebody whose leave was refused saw a red chip and had to go and ask.
+    ///
+    /// The heading follows `by`, and that is the whole point of it: the nightly cron writes a note
+    /// too ("Auto-deducted: bolos …") with `reviewedById` null, and calling that "Note from the
+    /// approver" tells the reader a person judged them when nothing of the sort happened.
     private func decisionNote(_ note: String, rejected: Bool, by: String?) -> some View {
-        let tint = rejected ? NX.danger : NX.success
+        let accent = rejected ? NX.danger : NX.success
+        let heading = rejected ? T("Why it was rejected")
+            : (by == nil ? T("Recorded automatically") : T("Note from the approver"))
         return HStack(alignment: .top, spacing: 6) {
             Image(systemName: rejected ? "exclamationmark.bubble.fill" : "text.bubble.fill")
-                .font(.system(size: 10)).foregroundStyle(tint).padding(.top, 2)
+                .font(.system(size: 10)).foregroundStyle(accent).padding(.top, 2)
             VStack(alignment: .leading, spacing: 2) {
-                Text(rejected ? T("Why it was rejected") : T("Note from the approver"))
-                    .font(NXFont.text(10, .bold)).foregroundStyle(tint)
+                Text(heading)
+                    .font(NXFont.text(10, .bold)).foregroundStyle(accent)
                 Text(note).font(NXFont.text(12)).foregroundStyle(NX.foreground.opacity(0.85))
                     .fixedSize(horizontal: false, vertical: true)
                 if let by, !by.isEmpty {
@@ -196,7 +280,7 @@ struct AttendanceRequestsCard: View {
         }
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     /// The evidence behind the request. The web offers it as a link; a link is no use here, because
@@ -227,71 +311,17 @@ struct AttendanceRequestsCard: View {
         }
     }
 
-    private func review(_ r: AttendanceRequest, _ action: String) async {
-        busy = r.id; defer { busy = nil }
-        try? await APIClient.shared.reviewAttendanceRequest(id: r.id, action: action)
-        await load()
-    }
-    private func load() async {
-        do {
-            let all = try await APIClient.shared.attendanceRequests(scope: canReview ? "workspace" : "me")
-            // PENDING first. The web renders this queue as two blocks (pending, then the rest); the
-            // app rendered whatever order the API returned, so a reviewer's actual work — somebody
-            // else's pending request — sat below dozens of their own cancelled rows and looked like
-            // "no one ever asks me for approval". `enumerated()` keeps it stable: Swift's sort isn't.
-            requests = all.enumerated().sorted { a, b in
-                let ap = (a.element.status ?? "").uppercased() == "PENDING"
-                let bp = (b.element.status ?? "").uppercased() == "PENDING"
-                return ap == bp ? a.offset < b.offset : ap
-            }.map { $0.element }
-        }
-        catch APIError.unauthorized { auth.logout() } catch { requests = [] }
-        loading = false
-    }
-}
-
-// MARK: - Offsite check-out approvals (BoD)
-
-/// The second approval queue, which the app was missing entirely: check-outs taken outside the
-/// office geofence sit at `PENDING` until a BoD approves them. Only rendered for reviewers.
-struct OffsiteCheckoutsCard: View {
-    @Environment(AuthStore.self) private var auth
-    @State private var items: [OffsiteCheckout] = []
-    @State private var loading = true
-    @State private var busy: String?
-
-    private var pendingCount: Int { items.filter(\.isPending).count }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(T("Offsite checkouts")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
-                    Text(T("Check-outs from outside the office area, waiting on you."))
-                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-                }
-                Spacer()
-                if pendingCount > 0 { NexusChip(text: "\(pendingCount)", tone: .warning) }
-            }
-            if loading {
-                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
-            } else if items.isEmpty {
-                Text(T("Nothing waiting for approval.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-            } else {
-                ForEach(items) { row($0) }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
-        .task { await load() }
-    }
-
-    private func row(_ o: OffsiteCheckout) -> some View {
+    /// The offsite kind. Same list, same spacing, same chips — but spelled out as its own thing,
+    /// because approving one means "that check-out from outside the geofence was legitimate", not
+    /// "this person may have the day off", and a reviewer must not confuse the two.
+    private func offsiteRow(_ o: OffsiteCheckout) -> some View {
         // Anti self-approve, same rule as the web: the buttons only appear on somebody else's row.
         let mine = o.user?.id != nil && o.user?.id == auth.session?.userId
         let working = busy == o.id
         return VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(o.user?.name ?? T("Someone")).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+            HStack(spacing: 6) {
+                Image(systemName: "location.fill").font(.system(size: 10)).foregroundStyle(NX.violetText)
+                Text(T("Offsite check-out")).font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground)
                 Spacer()
                 NexusChip(text: reqStatusLabel(o.approval), tone: reqStatusTone(o.approval))
             }
@@ -299,13 +329,19 @@ struct OffsiteCheckoutsCard: View {
                 Image(systemName: "clock").font(.system(size: 10)).foregroundStyle(NX.mutedFg)
                 Text("\(attDayLabel(o.attendanceDate)) · \(AgendaRange.timeLabel(o.checkOutAt ?? ""))")
                     .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                if let n = o.user?.name { Text("· \(n)").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }
+            }
+            if let reason = o.reason, !reason.isEmpty {
+                Text(reason).font(NXFont.text(12)).foregroundStyle(NX.foreground.opacity(0.85)).lineLimit(3)
+            }
+            // Where they actually were, in the order a reviewer reads it: the place first, then how
+            // far off it is from the office they should have been at.
+            if let addr = o.address, !addr.isEmpty {
+                Text(addr).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(2)
             }
             if let d = o.distanceMeters {
                 Text("±\(Int(d.rounded())) m · \(o.officeName ?? T("office"))")
                     .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-            }
-            if let reason = o.reason, !reason.isEmpty {
-                Text(reason).font(NXFont.text(12)).foregroundStyle(NX.foreground.opacity(0.85)).lineLimit(3)
             }
             if let url = o.mapURL {
                 Link(destination: url) {
@@ -322,8 +358,8 @@ struct OffsiteCheckoutsCard: View {
                     else if mine {
                         Text(T("You can't approve your own.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                     } else {
-                        actionBtn(T("Approve"), .success) { await review(o, "approve") }
-                        actionBtn(T("Reject"), .danger) { await review(o, "reject") }
+                        actionBtn(T("Approve"), .success) { await reviewOffsite(o, "approve") }
+                        actionBtn(T("Reject"), .danger) { await reviewOffsite(o, "reject") }
                     }
                 }.padding(.top, 2)
             }
@@ -333,14 +369,16 @@ struct OffsiteCheckoutsCard: View {
         .background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    private func actionBtn(_ title: String, _ tone: ChipTone, _ action: @escaping () async -> Void) -> some View {
-        Button { Task { await action() } } label: {
-            Text(title).font(NXFont.text(12, .bold)).foregroundStyle(tone.fg)
-                .padding(.horizontal, 12).padding(.vertical, 6).background(tone.bg, in: Capsule())
-        }.buttonStyle(.plain)
+    private func review(_ r: AttendanceRequest, _ action: String) async {
+        busy = r.id; defer { busy = nil }
+        try? await APIClient.shared.reviewAttendanceRequest(id: r.id, action: action)
+        await load()
     }
 
-    private func review(_ o: OffsiteCheckout, _ action: String) async {
+    /// Deliberately a second call to a second endpoint. The queue is merged; the decision is not —
+    /// an offsite check-out is an AttendanceRecord and only `/attendance/offsite-checkouts/[id]`
+    /// knows what approving one has to do (the −25 XP on reject, the four-eyes guard, the notify).
+    private func reviewOffsite(_ o: OffsiteCheckout, _ action: String) async {
         busy = o.id; defer { busy = nil }
         try? await APIClient.shared.reviewOffsiteCheckout(id: o.id, action: action)
         await load()
@@ -348,12 +386,22 @@ struct OffsiteCheckoutsCard: View {
 
     private func load() async {
         do {
-            let all = try await APIClient.shared.offsiteCheckouts()
-            items = all.enumerated().sorted { a, b in
-                a.element.isPending == b.element.isPending ? a.offset < b.offset : a.element.isPending
-            }.map { $0.element }
+            let all = try await APIClient.shared.attendanceRequests(scope: canReview ? "workspace" : "me")
+            // Auto-deductions are the nightly cron's penalties, not something anyone filed, so they
+            // do not belong in a list of submissions. The server drops them from this endpoint; we
+            // repeat the test rather than trust it, because a build outlives the server it was
+            // written against and the alternative is a penalty row wearing an approver's face.
+            requests = all.filter { !$0.isAutoDeduction }
         }
-        catch APIError.unauthorized { auth.logout() } catch { items = [] }
+        catch APIError.unauthorized { auth.logout(); loading = false; return } catch { requests = [] }
+        // Only if this reviewer can actually act on them — see `canReviewOffsite`. Fetched second and
+        // separately: a 403 or an outage here must leave the requests already on screen alone.
+        if canReviewOffsite {
+            do { offsite = try await APIClient.shared.offsiteCheckouts() }
+            catch APIError.unauthorized { auth.logout() } catch { offsite = [] }
+        } else {
+            offsite = []
+        }
         loading = false
     }
 }

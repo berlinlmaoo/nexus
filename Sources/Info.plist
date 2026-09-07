@@ -50,6 +50,11 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<!-- ProMotion. Without this key iOS caps the app at 60Hz on a 120Hz iPhone, no matter how
+	     cheap the frame is — the display simply never offers the higher rate. It is opt-in, and
+	     its absence looks exactly like a slow app rather than a missing entry. -->
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>CFBundleURLTypes</key>

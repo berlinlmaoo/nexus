@@ -676,10 +676,10 @@ final class AppLanguage {
         "No token yet. Allow notifications, then reopen this screen.":
             "Belum ada token. Izinin notifikasi dulu, terus buka lagi layar ini.",
 
-        // ── approval checkout luar area (antrian BoD) ─────────────────────────
-        "Offsite checkouts": "Checkout luar area",
-        "Check-outs from outside the office area, waiting on you.": "Checkout dari luar area kantor, nunggu kamu.",
-        "Nothing waiting for approval.": "Nggak ada yang nunggu approval.",
+        // ── approval checkout luar area (satu antrian sama Pengajuan) ─────────
+        "Offsite check-out": "Checkout luar area",
+        "Review requests and offsite check-outs, and file your own.":
+            "Tinjau pengajuan & checkout luar area, sekalian ajuin punya kamu.",
         "You can't approve your own.": "Punya sendiri nggak bisa di-approve.",
         "View map": "Lihat peta",
         "Approve": "Setujui",
@@ -804,6 +804,7 @@ final class AppLanguage {
         "Nothing in this filter.": "Nggak ada yang cocok sama filter ini.",
         "Why it was rejected": "Alasan ditolak",
         "Note from the approver": "Catatan dari approver",
+        "Recorded automatically": "Dicatat otomatis sistem",
         "REJECTION REASON": "ALASAN PENOLAKAN",
         "Say why, so they can fix it and file again…": "Tulis alasannya, biar dia bisa benerin terus ngajuin lagi…",
         "The person who filed it reads this next to the decision.": "Yang ngajuin bakal baca ini di sebelah keputusannya.",

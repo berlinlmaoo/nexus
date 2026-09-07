@@ -83,8 +83,13 @@ struct AttendanceView: View {
                     // With `??`, a server that sends canReviewAttendanceRequests=false stops the chain
                     // dead and an attendance MANAGER loses the review UI they're entitled to.
                     let canReview = (today?.canReviewAttendanceRequests ?? false) || (today?.canManageAttendance ?? false)
-                    AttendanceRequestsCard(canReview: canReview)
-                    if canReview { OffsiteCheckoutsCard() }
+                    // Offsite check-outs used to be a second card below this one, and the reviewer
+                    // had to know it was there. They are now one queue inside Submissions — but on
+                    // canManageAttendance alone, which is what their endpoint actually checks. The
+                    // old card was gated on `canReview`, so a team lead with only the requests
+                    // permission got a card that could do nothing but 403.
+                    AttendanceRequestsCard(canReview: canReview,
+                                           canReviewOffsite: today?.canManageAttendance ?? false)
                     StreakBoardCard(canManage: today?.canManageAttendance ?? false)
                     if today?.canManageAttendance == true { OfficesCard() }
                 }
