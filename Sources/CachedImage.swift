@@ -10,13 +10,302 @@ import ImageIO
 // network on every cell, which is the single biggest scroll-jank source on device.
 //
 // `CachedImage` is a drop-in replacement (same `url:content:placeholder:` shape) with
-// a two-tier cache:
-//   • in-memory decoded UIImage (NSCache) → instant, zero re-decode on re-scroll
+// a three-tier cache:
+//   • in-memory decoded UIImage (NSCache)  → instant, zero re-decode on re-scroll
+//   • on-disk downsampled tiles            → survives relaunch WITH the decode already done
 //   • on-disk HTTP cache (URLCache)        → survives relaunch, avoids re-download
-// Decoding happens off the main thread (`byPreparingForDisplay`) so the first paint
-// of a row never blocks the scroll. The NEXUS session cookie is attached for same-host
-// URLs so private `/api/files` icons load just like the rest of the API.
+//
+// The middle tier exists because the bottom one was not enough. URLCache keeps the bytes of the
+// ORIGINAL upload, so a relaunch still paid a full-size ImageIO downsample for every avatar on
+// screen before it could draw one, and the synchronous warm-seed in `CachedImage.init` — the thing
+// that stops the placeholder flashing — only ever looks at the NSCache, which dies with the
+// process. `ImageDiskCache` stores the finished tile and is swept back into the NSCache in the
+// background at startup, so the second launch paints on the first frame the same faces the first
+// launch needed a round trip for.
+//
+// Decoding happens off the main thread AND off the loader's actor, so neither the first paint of a
+// row nor a decode of a neighbouring row blocks the scroll. The NEXUS session cookie is attached
+// for same-host URLs so private `/api/files` icons load just like the rest of the API.
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// Downsampled pictures kept on disk between launches, keyed by the same (url, maxPixel) identity
+/// as the memory cache.
+///
+/// It lives inside `Caches/responses/` DELIBERATELY, as a subdirectory of `ResponseCache`'s own
+/// folder rather than beside it. Logout calls `ResponseCache.clearAll()`, which removes that whole
+/// tree — so the faces of a workspace's staff leave the device together with the roster that named
+/// them, with no second call for anybody to remember. `clearAll()` afterwards recreates only its
+/// own directory, which is why every write here is prepared to find its directory gone and put it
+/// back.
+///
+/// Everything read back is treated as hostile: a truncated file, a leftover from an older layout,
+/// or a collision on the hashed filename all resolve to "miss", and a miss is just a normal fetch.
+/// Nothing in here can produce a WRONG or broken picture — at worst it produces no picture, and
+/// then the network path runs exactly as it did before this type existed.
+actor ImageDiskCache {
+    static let shared = ImageDiskCache()
+
+    /// Budget for the whole directory. A 300px tile lands around 20–40 KB, so this holds on the
+    /// order of a thousand avatars and icons — far more than one workspace has — while staying
+    /// small enough that iOS purging the Caches folder under storage pressure costs the user
+    /// nothing worse than one slow launch.
+    private static let maxBytes = 40 << 20
+    /// A single entry this large is a page-sized photo of a document; anything beyond it is either
+    /// a pathological upload or an encode that went wrong, and neither deserves a slice of the
+    /// budget that size.
+    private static let maxEntryBytes = 2 << 20
+    /// How many entries the startup sweep may decode, and how many bytes it may read.
+    ///
+    /// The count is the constraint that matters, and it is deliberately small. A decoded 300px tile
+    /// is around 360 KB of bitmap whatever the file on disk weighs, so this is a promise about
+    /// RESIDENT MEMORY at launch, not about disk: 48 of them is roughly 17 MB, about what one busy
+    /// screen of avatars already costs. The sweep is meant to cover the first screens somebody
+    /// actually opens — Messages, Home — not to rebuild the whole cache; past that it is paying
+    /// memory and launch CPU for pictures nobody is going to look at.
+    private static let prewarmCount = 48
+    private static let prewarmBytes = 8 << 20
+    /// Sweeping the directory costs a `stat` per file, so it happens every N writes rather than on
+    /// each one. A write only happens on a true miss, so N writes means N pictures never seen
+    /// before.
+    private static let writesBetweenTrims = 24
+
+    private static let magic: [UInt8] = [0x4E, 0x58, 0x49, 0x31]   // "NXI1"
+    private static let headerBytes = 12
+
+    private static let dir: URL = {
+        let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let d = base.appendingPathComponent("responses", isDirectory: true)
+                    .appendingPathComponent("images", isDirectory: true)
+        try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+        return d
+    }()
+
+    nonisolated private static func ensureDir() {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    }
+
+    // MARK: - Naming
+
+    /// FNV-1a, written out by hand rather than reaching for `hashValue`. Swift's `Hasher` is seeded
+    /// per process, so a filename derived from it would be a DIFFERENT filename on the next launch
+    /// and this cache would never hit once — which is exactly the bug it exists to fix, and it
+    /// would fail silently while looking like it worked.
+    nonisolated private static func fingerprint(_ s: String) -> String {
+        var h: UInt64 = 0xcbf2_9ce4_8422_2325
+        for b in s.utf8 { h = (h ^ UInt64(b)) &* 0x0000_0100_0000_01b3 }
+        return String(h, radix: 16)
+    }
+
+    /// The pixel size is repeated in the filename even though it also sits inside the file, so the
+    /// startup sweep can pick out tile-sized entries by name and never open a page-sized one: a
+    /// full-screen photo is not on any list, and decoding one at launch would spend the whole
+    /// budget on a picture nobody is looking at.
+    nonisolated private static func fileURL(_ key: URL, _ maxPixel: CGFloat) -> URL {
+        dir.appendingPathComponent(fingerprint(key.absoluteString) + "-\(Int(maxPixel)).nxi")
+    }
+
+    // MARK: - Container format
+
+    // One file is:  "NXI1" | UInt32 maxPixel | UInt32 key length | key UTF-8 | encoded image
+    //
+    // The key is written INTO the file, not merely hashed into its name, so a hash collision or a
+    // stale file from an older naming scheme is detected rather than quietly handing back somebody
+    // else's face — the one failure of an image cache a user would actually report. The startup
+    // sweep needs it too: it has files, and it must know which memory-cache key each one goes under.
+    //
+    // The integers are assembled and read byte by byte on purpose. `Data`'s storage is not
+    // guaranteed to be 4-byte aligned, and `load(as: UInt32.self)` against an unaligned buffer is
+    // undefined behaviour rather than a slow path.
+
+    nonisolated private static func le32(_ v: UInt32) -> [UInt8] {
+        [UInt8(v & 0xff), UInt8((v >> 8) & 0xff), UInt8((v >> 16) & 0xff), UInt8((v >> 24) & 0xff)]
+    }
+
+    nonisolated private static func u32(_ d: Data, _ i: Int) -> UInt32 {
+        UInt32(d[i]) | (UInt32(d[i + 1]) << 8) | (UInt32(d[i + 2]) << 16) | (UInt32(d[i + 3]) << 24)
+    }
+
+    /// JPEG unless the picture carries an alpha channel. Project icons are PNGs with transparent
+    /// corners and re-encoding one as JPEG would put a black square behind it; a photograph is the
+    /// opposite case — a PNG of it is several times the size of the JPEG for no visible gain, and
+    /// this cache is bounded by size.
+    nonisolated private static func encode(_ image: UIImage) -> Data? {
+        guard let cg = image.cgImage else { return image.pngData() }
+        let opaque = cg.alphaInfo == .none || cg.alphaInfo == .noneSkipFirst || cg.alphaInfo == .noneSkipLast
+        return opaque ? image.jpegData(compressionQuality: 0.9) : image.pngData()
+    }
+
+    /// Builds the bytes of one entry. Kept separate from the write, and off the actor, so the
+    /// encode runs on whichever concurrent thread produced the image instead of queueing behind
+    /// every other encode — and so nothing but `Data` ever has to cross into the actor.
+    nonisolated static func container(for image: UIImage, key: URL, maxPixel: CGFloat) -> Data? {
+        guard let payload = encode(image), !payload.isEmpty, payload.count <= maxEntryBytes else { return nil }
+        let keyBytes = Array(key.absoluteString.utf8)
+        guard !keyBytes.isEmpty, keyBytes.count <= 4096 else { return nil }
+        var out = Data(capacity: headerBytes + keyBytes.count + payload.count)
+        out.append(contentsOf: magic)
+        out.append(contentsOf: le32(UInt32(max(1, Int(maxPixel)))))
+        out.append(contentsOf: le32(UInt32(keyBytes.count)))
+        out.append(contentsOf: keyBytes)
+        out.append(payload)
+        return out
+    }
+
+    /// Every field is checked against the length actually on disk before it is used, so a truncated
+    /// or foreign file returns nil instead of indexing past the end.
+    nonisolated private static func parse(_ data: Data) -> (key: String, maxPixel: Int, payload: Data)? {
+        let start = data.startIndex
+        guard data.count > headerBytes,
+              Array(data[start ..< (start + 4)]) == magic else { return nil }
+        let px = Int(u32(data, start + 4))
+        let keyLen = Int(u32(data, start + 8))
+        guard px > 0, px <= 8192, keyLen > 0, keyLen <= 4096,
+              data.count > headerBytes + keyLen else { return nil }
+        let keyStart = start + headerBytes
+        guard let key = String(data: Data(data[keyStart ..< (keyStart + keyLen)]), encoding: .utf8),
+              !key.isEmpty else { return nil }
+        return (key, px, Data(data[(keyStart + keyLen)...]))
+    }
+
+    // MARK: - Reading
+
+    /// Reads and decodes one entry, or returns nil for absolutely any reason.
+    ///
+    /// Synchronous and off the actor: callers are already on a background thread, and putting reads
+    /// behind the actor would serialise a screen's worth of them behind each other and behind every
+    /// pending write. Plain read rather than a memory map — mapping would be marginally cheaper,
+    /// but it turns a file that vanishes mid-read into a signal instead of an error, and this
+    /// directory is swept both by the janitor below and by iOS itself.
+    ///
+    /// The payload goes back through `downsample` rather than straight into `UIImage(data:)` for
+    /// two reasons: it forces the decode to happen HERE, off the main thread, instead of lazily
+    /// during the first draw, and it clamps whatever the file contains to the size that was asked
+    /// for, so a corrupt or swapped entry cannot expand into a full-resolution bitmap.
+    nonisolated static func load(key: URL, maxPixel: CGFloat) -> UIImage? {
+        let file = fileURL(key, maxPixel)
+        guard let data = try? Data(contentsOf: file) else { return nil }
+        guard let entry = parse(data),
+              entry.key == key.absoluteString,
+              entry.maxPixel == Int(maxPixel),
+              let image = ImageLoader.downsample(entry.payload, maxPixel: maxPixel) else {
+            // Unreadable, or not the picture this filename claims. Drop it so the next launch does
+            // not pay to find out the same thing again. The caller falls through to the network and
+            // the user sees nothing unusual.
+            try? FileManager.default.removeItem(at: file)
+            return nil
+        }
+        return image
+    }
+
+    // MARK: - Startup sweep
+
+    /// Starts the disk → memory sweep, once per process.
+    ///
+    /// `CachedImage.init` calls this, so it runs on the main thread and must therefore do nothing
+    /// but a `swift_once` check and, the first time, spawn a task. No file is touched here. An
+    /// earlier audit found main-thread disk reads inside `init`/`.task` to be a real source of
+    /// hitching, and seeding a cache is not worth reintroducing that.
+    nonisolated static func prewarm() { _ = prewarmStarted }
+
+    private static let prewarmStarted: Bool = {
+        Task(priority: .utility) {
+            await ImageDiskCache.sweepIn()
+            // Also the only trim that is guaranteed to run. The counted one below needs a session
+            // that fetches enough new pictures to reach its threshold, and plenty of sessions end
+            // long before that — without this pass the directory could creep past its budget one
+            // short launch at a time.
+            await ImageDiskCache.shared.trim()
+        }
+        return true
+    }()
+
+    /// Newest entries first, tile-sized only, bounded by count and by bytes. Yields between
+    /// pictures so this background catch-up can never hold on to a cooperative thread through a
+    /// scroll.
+    nonisolated private static func sweepIn() async {
+        let fm = FileManager.default
+        let wanted: [URLResourceKey] = [.contentModificationDateKey, .fileSizeKey]
+        guard let files = try? fm.contentsOfDirectory(at: dir,
+                                                      includingPropertiesForKeys: wanted,
+                                                      options: [.skipsHiddenFiles]) else { return }
+        let tileSuffix = "-\(Int(ImageLoader.tilePixel)).nxi"
+        var rows: [(url: URL, at: Date, size: Int)] = []
+        for f in files where f.lastPathComponent.hasSuffix(tileSuffix) {
+            let v = try? f.resourceValues(forKeys: Set(wanted))
+            rows.append((f, v?.contentModificationDate ?? Date.distantPast, v?.fileSize ?? 0))
+        }
+        rows.sort { $0.at > $1.at }
+
+        var remaining = prewarmCount
+        var budget = prewarmBytes
+        for row in rows {
+            if remaining <= 0 || budget <= 0 { break }
+            remaining -= 1
+            budget -= row.size
+            guard let data = try? Data(contentsOf: row.url),
+                  let entry = parse(data),
+                  let key = URL(string: entry.key) else { continue }
+            // Something already loaded this one the ordinary way; that decode is at least as fresh
+            // as ours and replacing it would only churn the cache.
+            if ImageLoader.memory.object(forKey: key as NSURL) != nil { continue }
+            guard let image = ImageLoader.downsample(entry.payload, maxPixel: CGFloat(entry.maxPixel)) else { continue }
+            ImageLoader.memory.setObject(image, forKey: key as NSURL)
+            await Task.yield()
+        }
+    }
+
+    // MARK: - Writing — the only part that has to be serialised
+
+    private var writesSinceTrim = 0
+
+    func write(_ bytes: Data, key: URL, maxPixel: CGFloat) {
+        let file = Self.fileURL(key, maxPixel)
+        if !store(bytes, at: file) {
+            // Nearly always means logout removed the enclosing `responses` tree while this task was
+            // in flight. Put the directory back and try once more; if that fails too the cache
+            // simply does not persist, which is a slower app, not a broken one.
+            Self.ensureDir()
+            _ = store(bytes, at: file)
+        }
+        writesSinceTrim += 1
+        if writesSinceTrim >= Self.writesBetweenTrims {
+            writesSinceTrim = 0
+            trim()
+        }
+    }
+
+    /// `.atomic` so an entry is never half-written: a reader sees the old file or the new one, and
+    /// an interrupted write leaves a temporary file for iOS to reclaim rather than a torn entry
+    /// that decodes to nonsense.
+    private func store(_ data: Data, at file: URL) -> Bool {
+        do { try data.write(to: file, options: .atomic); return true } catch { return false }
+    }
+
+    /// Oldest first, down to well under the limit rather than exactly to it — trimming to the line
+    /// would mean sweeping the whole directory again after the very next picture.
+    func trim() {
+        let fm = FileManager.default
+        let wanted: [URLResourceKey] = [.contentModificationDateKey, .fileSizeKey]
+        guard let files = try? fm.contentsOfDirectory(at: Self.dir,
+                                                      includingPropertiesForKeys: wanted,
+                                                      options: [.skipsHiddenFiles]) else { return }
+        var rows: [(url: URL, at: Date, size: Int)] = []
+        var total = 0
+        for f in files {
+            let v = try? f.resourceValues(forKeys: Set(wanted))
+            let size = v?.fileSize ?? 0
+            total += size
+            rows.append((f, v?.contentModificationDate ?? Date.distantPast, size))
+        }
+        guard total > Self.maxBytes else { return }
+        let target = Self.maxBytes * 3 / 4
+        rows.sort { $0.at < $1.at }
+        for row in rows where total > target {
+            try? fm.removeItem(at: row.url)
+            total -= row.size
+        }
+    }
+}
 
 actor ImageLoader {
     static let shared = ImageLoader()
@@ -61,19 +350,16 @@ actor ImageLoader {
         if let hit = Self.memory.object(forKey: key as NSURL) { return hit }
         if let task = inFlight[key] { return await task.value }   // dedupe concurrent requests
 
-        let task = Task<UIImage?, Never> {
-            // The REQUEST always uses the real URL — the size lives in the cache key and nowhere
-            // else, so a fragment never reaches the server.
-            var req = URLRequest(url: url)
-            if url.host == Config.baseURL.host, let s = Keychain.load() {
-                req.setValue(s.cookieHeader, forHTTPHeaderField: "Cookie")
-            }
-            guard let (data, resp) = try? await ImageLoader.session.data(for: req) else { return nil }
-            if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) { return nil }
-            // Almost every consumer is a small tile (avatar/icon). Decode AND downsample in one
-            // ImageIO pass so we never hold a 1280px bitmap to draw into a 56px frame.
-            return ImageLoader.downsample(data, maxPixel: maxPixel) ?? UIImage(data: data)
-        }
+        // The body of this task USED to be written inline here. `Task { }` inherits the isolation of
+        // the context that creates it, so everything inside ran on THIS actor's executor —
+        // including `downsample`, a synchronous multi-millisecond ImageIO job. Two consequences,
+        // neither of them visible in the code and both very visible on a screen full of avatars: no
+        // two pictures could decode at the same time even on an idle six-core phone, and every
+        // other caller queued behind whichever decode was running — including callers that only
+        // wanted to read the memory cache and return. `fetch` is `nonisolated async`, which runs on
+        // the generic concurrent executor, so the work leaves this actor at the first await and
+        // only the bookkeeping below stays here, where it has to be.
+        let task = Task<UIImage?, Never> { await Self.fetch(url, key: key, maxPixel: maxPixel) }
         inFlight[key] = task
         let img = await task.value
         inFlight[key] = nil
@@ -81,9 +367,40 @@ actor ImageLoader {
         return img
     }
 
+    /// Disk first, then the network. Deliberately not isolated to the actor — see `image(for:)`.
+    nonisolated private static func fetch(_ url: URL, key: URL, maxPixel: CGFloat) async -> UIImage? {
+        // The disk tier is consulted BEFORE URLSession, even though URLSession has a cache of its
+        // own, because the two hold different things: URLCache holds the bytes of the original
+        // upload, so answering from it still costs a full-size ImageIO downsample, while a disk
+        // entry is already the tile about to be drawn. It also adds no staleness the app did not
+        // already have — the server marks these `immutable` for a year, and an avatar URL carries
+        // the upload time, so one URL is one picture, permanently.
+        if let cached = ImageDiskCache.load(key: key, maxPixel: maxPixel) { return cached }
+
+        // The REQUEST always uses the real URL — the size lives in the cache key and nowhere
+        // else, so a fragment never reaches the server.
+        var req = URLRequest(url: url)
+        if url.host == Config.baseURL.host, let s = Keychain.load() {
+            req.setValue(s.cookieHeader, forHTTPHeaderField: "Cookie")
+        }
+        guard let (data, resp) = try? await ImageLoader.session.data(for: req) else { return nil }
+        if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) { return nil }
+        // Almost every consumer is a small tile (avatar/icon). Decode AND downsample in one
+        // ImageIO pass so we never hold a 1280px bitmap to draw into a 56px frame.
+        guard let img = ImageLoader.downsample(data, maxPixel: maxPixel) ?? UIImage(data: data) else { return nil }
+        // Encode here, on this concurrent thread, and hand the actor nothing but bytes. Awaiting the
+        // write costs this one picture a file write on top of a network round trip it has already
+        // paid for, and in exchange the entry is on disk before anything can cancel it.
+        if let bytes = ImageDiskCache.container(for: img, key: key, maxPixel: maxPixel) {
+            await ImageDiskCache.shared.write(bytes, key: key, maxPixel: maxPixel)
+        }
+        return img
+    }
+
     /// Decode + downscale to `maxPixel` (longest edge) in a single ImageIO pass — the WWDC
     /// "Image and Graphics Best Practices" pattern. Honors EXIF orientation; caches the decoded
-    /// bitmap immediately so the first draw on the main thread is cheap.
+    /// bitmap immediately so the first draw on the main thread is cheap. ImageIO never enlarges, so
+    /// passing something already smaller than `maxPixel` back through here is safe.
     nonisolated static func downsample(_ data: Data, maxPixel: CGFloat) -> UIImage? {
         guard let src = CGImageSourceCreateWithData(data as CFData,
                                                     [kCGImageSourceShouldCache: false] as CFDictionary) else { return nil }
@@ -112,10 +429,17 @@ struct CachedImage<Content: View, Placeholder: View>: View {
          @ViewBuilder content: @escaping (Image) -> Content,
          @ViewBuilder placeholder: @escaping () -> Placeholder) {
         self.url = url; self.maxPixel = maxPixel; self.content = content; self.placeholder = placeholder
+        // The first picture the app asks for is the cue to start refilling the memory cache from
+        // disk. After that first call this is a once-check and nothing more, and it never touches a
+        // file on this thread. It is done here rather than at launch because here is the earliest
+        // moment the app has actually shown it cares about pictures.
+        ImageDiskCache.prewarm()
         // Warm hit: seed the state synchronously so the first frame already carries the picture.
         // Without this every avatar draws its placeholder once and swaps a frame later - on a
         // screen full of them (Leaderboard) that reads as a flash of grey on every open, even
-        // though nothing was downloaded.
+        // though nothing was downloaded. Still a memory-cache read and nothing else: the sweep
+        // started above is what gives this line something to find on the second launch, precisely
+        // so that it never has to go near the disk on the main thread.
         _ui = State(initialValue: url.flatMap { ImageLoader.memory.object(forKey: ImageLoader.cacheKey($0, maxPixel) as NSURL) })
     }
 
