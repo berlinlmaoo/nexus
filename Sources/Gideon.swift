@@ -1,13 +1,16 @@
 import Foundation
+import Observation
+import SwiftUI
+import UIKit
 
 /// Something that rode along with a question, kept so the thread can still show it.
 ///
-/// It has two lives. Freshly attached it is bytes in this process and nothing else — `preview` is
-/// the picture the composer is holding, and there is no file anywhere yet. Once the answer lands the
-/// server keeps a copy of what was sent, under /api/files behind the same session as every other
-/// upload in the app, and history hands it back with a `url`. That second life is what makes the
-/// chip survive closing the panel, and what makes it worth tapping: a handle onto a real file rather
-/// than a paperclip drawn from a remembered name.
+/// It has two lives. Freshly attached it is bytes in this process and nothing else — `bytes` is the
+/// file the composer is holding, and there is no copy anywhere else yet. Once the answer lands the
+/// server keeps what was sent, under /api/files behind the same session as every other upload in the
+/// app, and history hands it back with a `url`. That second life is what makes the chip survive the
+/// app being killed, and what makes it worth tapping later: a handle onto a real file rather than a
+/// paperclip drawn from a remembered name.
 ///
 /// The shim's copy is a third thing and unrelated: /api/gideon still hands it the file, it still
 /// writes it to its workdir, and it still deletes it once it has answered.
@@ -17,9 +20,14 @@ struct GideonAttachment: Sendable, Equatable {
     let kind: Kind
     /// Filename with its extension for a document. Empty for a photo, which never had one.
     let name: String
-    /// The bytes that were uploaded, kept for the thumbnail. Nil for a document, and nil for
-    /// anything read back from history — there the picture is fetched from `url` instead.
-    let preview: Data?
+    /// The bytes this process is still holding — the downscaled JPEG for a photo, the file byte for
+    /// byte for a document. Nil for anything read back from history, where the file is at `url`.
+    ///
+    /// Carried for BOTH kinds, not just the picture it started as, because for the thirty to ninety
+    /// seconds a question is open this is the only copy of the file that exists anywhere the app can
+    /// reach: the server keeps nothing until it has an answer to keep it with. It is what the chip
+    /// draws its thumbnail from and, more importantly, what it opens.
+    let bytes: Data?
     /// Where the file lives now, e.g. "/api/files/attachments/gideon/<uuid>.pdf".
     ///
     /// A PATH and never a full URL, the same as every other file reference in this app: the host is
@@ -29,10 +37,10 @@ struct GideonAttachment: Sendable, Equatable {
     /// The server's type for it, for choosing a viewer. Empty for one that is not stored yet.
     let mime: String
 
-    init(kind: Kind, name: String, preview: Data?, url: String? = nil, mime: String = "") {
+    init(kind: Kind, name: String, bytes: Data?, url: String? = nil, mime: String = "") {
         self.kind = kind
         self.name = name
-        self.preview = preview
+        self.bytes = bytes
         self.url = url
         self.mime = mime
     }
@@ -176,7 +184,7 @@ enum GideonClient {
                 guard let url = item.url, !url.isEmpty else { return nil }
                 return GideonAttachment(kind: item.kind == "image" ? .image : .document,
                                         name: item.name ?? "",
-                                        preview: nil,
+                                        bytes: nil,
                                         url: url,
                                         mime: item.mime ?? "")
             }
@@ -309,5 +317,240 @@ enum GideonClient {
         case 415: throw APIError.transport(T("GIDEON can't read that kind of file yet."))
         default: throw APIError.http(http.statusCode)
         }
+    }
+}
+
+/// The GIDEON conversation, held OUTSIDE the panel that draws it.
+///
+/// It lives here because the panel is a sheet, and a sheet's `@State` is destroyed the moment it is
+/// dismissed. An answer takes thirty to ninety seconds, people close the panel while they wait, and
+/// with the transcript in the view that close took the question, the dots and the queue with it —
+/// reopening ran `.task` on a fresh view, which refetched a history that could not contain any of
+/// them: /api/gideon writes the question and the answer TOGETHER, once, after the model replies, so
+/// for the whole length of a question the server has nothing to hand back.
+///
+/// The request itself was never the thing that broke. `Task { }` started from a tap is unstructured
+/// and is not cancelled by a view going away, so it ran to completion and wrote its rows — into
+/// `@State` storage that nothing was left holding. What was lost was the transcript, not the answer.
+///
+/// A singleton for the reason AppRouter is one: there is exactly one conversation per person, and
+/// whether a sheet happens to be mounted is not a fact about it. `reset()` is what stops it
+/// outliving the session that filled it.
+@MainActor
+@Observable
+final class GideonChat {
+    static let shared = GideonChat()
+
+    private(set) var turns: [GideonTurn] = []
+    private(set) var sending = false
+    /// The last thing that went wrong, in words. Settable from outside because the composer's own
+    /// refusals — a file that is too big, one nothing here can read — belong on the same line.
+    var error: String?
+    /// What the composer is holding. Here rather than in the view for the same reason the transcript
+    /// is: a half-typed question and an already-picked file are work somebody did, and closing a
+    /// panel is not a decision to throw it away.
+    var draft = ""
+    /// JPEG bytes, held until the next question is sent.
+    var attachment: Data?
+    /// A picked document, held until the next question is sent.
+    var document: GideonDocument?
+    /// Set when GIDEON answered a 401, and read by the panel — which is the thing that has an
+    /// AuthStore to tell. Deliberately not acted on here: signing somebody out from a background
+    /// task while they are reading the dashboard is a worse surprise than the next screen they open
+    /// doing it, and this type having no view attachments is what lets it survive the panel at all.
+    private(set) var sessionExpired = false
+
+    /// Questions the composer has accepted but the network has not taken yet. See `submit()`.
+    private var outbox: [Outgoing] = []
+    private var drainTask: Task<Void, Never>?
+
+    private init() {}
+
+    /// One accepted-but-not-yet-sent question, paired with the transcript turn already drawn for it.
+    /// The tier is captured here rather than read at dispatch: a queued question is answered by the
+    /// model that was selected when it was written, not by whatever the picker says a minute later.
+    private struct Outgoing {
+        let turnId: String
+        let text: String
+        let model: String
+        let image: Data?
+        let document: GideonDocument?
+    }
+
+    /// The one animation a turn arriving is allowed to have.
+    ///
+    /// Read from UIAccessibility rather than taken from the environment, because the two places that
+    /// add a turn without a view in the call stack — the answer's empty bubble, and the queue
+    /// reaching its next question — have no environment to read it from.
+    private var arrive: Animation? {
+        UIAccessibility.isReduceMotionEnabled ? nil : Animation.easeOut(duration: 0.22)
+    }
+
+    // MARK: - history
+
+    /// Picks up whatever was said on the web, and swaps a just-sent attachment's bytes for the url
+    /// the server kept once there is one.
+    ///
+    /// Skipped outright while anything is in flight or queued. History is only written once an
+    /// answer exists, so a refetch mid-question would replace the transcript with one missing the
+    /// very exchange being waited on — which is the bug this whole type exists to end.
+    ///
+    /// A failed fetch leaves what is on screen alone. This used to read `?? []`, which was harmless
+    /// while the panel owned the state and rebuilt it on every open; now that the transcript
+    /// outlives the panel, it would blank a conversation the app is still holding the moment
+    /// somebody opened the panel out of signal.
+    func refresh() async {
+        guard !sending, outbox.isEmpty else { return }
+        guard let fresh = try? await GideonClient.history() else { return }
+        turns = fresh
+    }
+
+    func clear() async {
+        do {
+            try await GideonClient.clearHistory()
+            turns = []
+            error = nil
+        } catch {
+            self.error = (error as? LocalizedError)?.errorDescription ?? T("Failed.")
+        }
+    }
+
+    // MARK: - asking
+
+    /// Takes the composer's question and puts it in the outbox. Returns the turn that was drawn for
+    /// it, which is what lets the caller decode its thumbnail before the first frame that shows it.
+    ///
+    /// The composer stays live while an answer is in flight, so a second question can arrive before
+    /// the first is answered. It is QUEUED rather than sent alongside: the conversation is stored
+    /// server-side as one thread, so two requests in flight would both append to it and the second
+    /// answer would be written against a transcript missing the first. Either way the user's bubble
+    /// is drawn at the moment of the tap — text that leaves the composer and appears nowhere is the
+    /// one outcome worth ruling out.
+    func submit(tier: GideonTier) -> GideonTurn? {
+        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        draft = ""
+        error = nil
+
+        // The attachment is recorded ON the turn as well as posted with it. A question about a file
+        // that draws as bare text leaves nothing in the thread saying which file was meant, so the
+        // answer under it reads as if it came from nowhere. Image first, then document: the order
+        // the composer strip lists them in, so nothing appears to move when the message is sent.
+        //
+        // The BYTES ride along and not merely the name. They are the same bytes the request is
+        // already carrying, so this costs a retain and not a copy, and they are what makes the chip
+        // openable in the minute before /api/files has anything to serve.
+        var carried: [GideonAttachment] = []
+        if let attachment {
+            carried.append(GideonAttachment(kind: .image, name: "", bytes: attachment))
+        }
+        if let document {
+            carried.append(GideonAttachment(kind: .document, name: document.name, bytes: document.data))
+        }
+
+        let turn = GideonTurn(role: .user, content: text, attachments: carried)
+        withAnimation(arrive) { turns.append(turn) }
+        outbox.append(Outgoing(turnId: turn.id, text: text, model: tier.rawValue,
+                               image: attachment, document: document))
+        // Cleared with the draft, not after the request: an attachment silently riding along on the
+        // NEXT question would be baffling, and re-attaching is one tap.
+        attachment = nil
+        document = nil
+
+        // A drain already running will reach this on its next lap. The flag is raised HERE and not
+        // inside `drain`, because a Task's first line runs on a later turn of the main actor and two
+        // taps inside that gap would each start a drain competing for the same outbox.
+        guard !sending else { return turn }
+        sending = true
+        drainTask = Task { await drain() }
+        return turn
+    }
+
+    private func drain() async {
+        defer { sending = false }
+        while !outbox.isEmpty, !Task.isCancelled {
+            await send(outbox.removeFirst())
+        }
+    }
+
+    private func send(_ item: Outgoing) async {
+        // History is cut at this question. Anything queued behind it is already in `turns`, and
+        // sending that as context would have the server answer the wrong message.
+        let messages = history(upTo: item)
+        // The empty assistant turn goes in directly after its question rather than at the end of the
+        // list, which with a queue is somebody else's place. It is what the dots are drawn in and
+        // where the answer lands.
+        let answer = GideonTurn(role: .assistant, content: "")
+        let at = turns.firstIndex(where: { $0.id == item.turnId }).map { $0 + 1 } ?? turns.count
+        withAnimation(arrive) { turns.insert(answer, at: at) }
+
+        do {
+            for try await chunk in GideonClient.stream(messages: messages, model: item.model,
+                                                       image: item.image, document: item.document) {
+                guard let index = turns.firstIndex(where: { $0.id == answer.id }) else { continue }
+                // Only the first chunk is animated, and only to cross-fade the dots out. Animating
+                // every chunk would put an animation on the path a token-by-token backend takes.
+                if turns[index].content.isEmpty {
+                    withAnimation(.easeOut(duration: 0.18)) { turns[index].content += chunk }
+                } else {
+                    turns[index].content += chunk
+                }
+            }
+            // A stream that ends without a word is a failure the user can see but not explain.
+            if let index = turns.firstIndex(where: { $0.id == answer.id }), turns[index].content.isEmpty {
+                turns.remove(at: index)
+                error = T("GIDEON didn't answer. Try again.")
+            }
+        } catch APIError.unauthorized {
+            // Drop the queue as well: the session is gone, so replaying it would only produce the
+            // same 401 once per queued message.
+            turns.removeAll { $0.id == answer.id }
+            outbox.removeAll()
+            sessionExpired = true
+        } catch {
+            // A cancelled drain is `reset()` taking the session away, not something that went
+            // wrong. The transcript this would write into belongs to somebody who has signed out.
+            guard !Task.isCancelled else { return }
+            turns.removeAll { $0.id == answer.id }
+            // The server writes its own sentence for a refused attachment — which file, and what to
+            // do about it. Replacing that with "GIDEON failed." would throw the useful half away.
+            self.error = (error as? LocalizedError)?.errorDescription ?? T("GIDEON failed.")
+        }
+    }
+
+    /// Everything up to and including this question, minus assistant turns still waiting to be
+    /// filled in. Cutting there is what keeps a queued question out of the context of the one in
+    /// front of it — the server answers the LAST message it is given.
+    private func history(upTo item: Outgoing) -> [GideonTurn] {
+        guard let end = turns.firstIndex(where: { $0.id == item.turnId }) else {
+            // The transcript was replaced under us. Ask the question on its own rather than posting
+            // an empty `messages`, which the route reads the last element of.
+            return [GideonTurn(id: item.turnId, role: .user, content: item.text)]
+        }
+        return turns[...end].filter { !($0.role == .assistant && $0.content.isEmpty) }
+    }
+
+    // MARK: - session
+
+    /// The panel has passed the 401 on to the AuthStore. Cleared so signing back in on the same
+    /// launch is not immediately undone by a flag nobody lowered.
+    func clearSessionExpiry() { sessionExpired = false }
+
+    /// A conversation must not outlive the session that held it — the next person to sign in on this
+    /// phone would open the panel onto somebody else's questions, and onto a file they attached.
+    /// Called from `AuthStore.logout()`, beside the cached roster and the Live Activity, for exactly
+    /// that reason. Cancelling the drain is part of it: an answer still arriving would otherwise
+    /// write itself into the transcript the next person sees.
+    func reset() {
+        drainTask?.cancel()
+        drainTask = nil
+        outbox.removeAll()
+        turns = []
+        draft = ""
+        attachment = nil
+        document = nil
+        error = nil
+        sessionExpired = false
+        sending = false
     }
 }

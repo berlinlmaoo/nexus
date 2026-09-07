@@ -3,13 +3,13 @@ import PhotosUI
 import UniformTypeIdentifiers
 import UIKit
 
-/// The one place that decides WHERE the launcher may be drawn. `true` = Home only, `false` = the
-/// every-screen behaviour it shipped with.
+/// The one place that decides WHERE the launcher may be drawn. `true` = the Home screen itself,
+/// `false` = the every-screen behaviour it shipped with.
 ///
 /// The owner asked for Home only: hung above the whole app, the circle covered whatever scrolled
-/// underneath it — a row's text on Attendance, a card's title on My Submissions. Home is the one
-/// screen laid out around it. Nothing else in the app reads the current screen for this, so putting
-/// the button back everywhere is this constant and nothing more.
+/// underneath it — a row's text on Attendance, a card's title on My Submissions, the composer's own
+/// buttons on a chat. Home is the one screen laid out around it. Nothing else in the app reads the
+/// current screen for this, so putting the button back everywhere is this constant and nothing more.
 private let gideonLauncherHomeOnly = true
 
 /// The floating GIDEON button, and the chat it opens.
@@ -27,7 +27,13 @@ struct GideonLauncher: View {
         // Home in both shapes: the phone's first tab, and the sidebar's Dashboard row. Read here in
         // `body` rather than in a computed property of its own, because the router is main-actor
         // isolated and `body` is the only member of a View that is guaranteed to be too.
-        let onHome = hSize == .regular ? router.sidebarScreen == .dashboard : router.tab == .dashboard
+        //
+        // The tab is not enough on its own. Six screens are reached from Home's quick tiles and are
+        // pushed onto Home's own stack, so the tab stays `.dashboard` on every one of them — which
+        // is how the button ended up sitting on top of a chat composer. `homeIsRoot` is the second
+        // half: is Home the screen, or only the tab.
+        let onHomeTab = hSize == .regular ? router.sidebarScreen == .dashboard : router.tab == .dashboard
+        let onHome = onHomeTab && router.homeIsRoot
         if gideonLauncherHomeOnly && !onHome {
             EmptyView()
         } else {
@@ -68,42 +74,24 @@ struct GideonPanel: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    @State private var turns: [GideonTurn] = []
-    @State private var draft = ""
-    @State private var sending = false
-    @State private var error: String?
-    @State private var loaded = false
-    /// JPEG bytes, held only until the next message is sent.
-    @State private var attachment: Data?
-    /// A picked document, held only until the next message is sent.
-    @State private var document: GideonDocument?
+    /// The conversation, the composer's draft and the queue — all of it outside this view, because
+    /// this view is a sheet and a sheet is destroyed when it is dismissed. See `GideonChat`.
+    @State private var chat = GideonChat.shared
     @State private var pickedPhoto: PhotosPickerItem?
     @State private var showPhotoPicker = false
     @State private var showCamera = false
     @State private var showFilePicker = false
-    /// A kept attachment being looked at, and one being handed to the share sheet. Both driven by
-    /// tapping a chip in the transcript — see `open`.
+    /// An attachment being looked at, and one being handed to the share sheet. Both driven by
+    /// tapping a chip in the transcript — see `open`. View state on purpose: what is on the screen
+    /// when the screen goes away is nothing to keep.
     @State private var preview: AttachmentPreview?
     @State private var shareItem: ShareItem?
-    /// Questions the composer has accepted but the network has not taken yet. See `submit()`.
-    @State private var outbox: [Outgoing] = []
     @FocusState private var composerFocused: Bool
     /// Remembered on the device: somebody who picks Terra for quick questions should not have to
     /// pick it again every time the panel opens.
     @AppStorage("gideon.tier") private var tierRaw = GideonTier.fallback.rawValue
 
     private var tier: GideonTier { GideonTier(rawValue: tierRaw) ?? .fallback }
-
-    /// One accepted-but-not-yet-sent question, paired with the transcript turn already drawn for it.
-    /// The tier is captured here rather than read at dispatch: a queued question is answered by the
-    /// model that was selected when it was written, not by whatever the picker says a minute later.
-    private struct Outgoing {
-        let turnId: String
-        let text: String
-        let model: String
-        let image: Data?
-        let document: GideonDocument?
-    }
 
     var body: some View {
         NavigationStack {
@@ -124,21 +112,29 @@ struct GideonPanel: View {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Button(T("Clear chat"), role: .destructive) {
-                            Task { await clear() }
+                            Task { await chat.clear() }
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
-                    .disabled(sending || turns.isEmpty)
+                    .disabled(chat.sending || chat.turns.isEmpty)
                 }
             }
+        }
+        // GIDEON answered a 401 while the panel was closed, or answers one now. The store has no
+        // AuthStore and deliberately does not go looking for one — this is where the two meet, and
+        // `initial` is what makes a refusal that landed while nobody was watching still count.
+        .onChange(of: chat.sessionExpired, initial: true) { _, expired in
+            guard expired else { return }
+            chat.clearSessionExpiry()
+            auth.logout()
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $pickedPhoto,
                       matching: .images, photoLibrary: .shared())
         .fullScreenCover(isPresented: $showCamera) {
             // Rear lens: this one is pointed at whiteboards and documents, not at faces.
             CameraPicker(cameraDevice: .rear) { data in
-                attachment = Self.shrink(data)
+                chat.attachment = Self.shrink(data)
                 showCamera = false
             }
             .ignoresSafeArea()
@@ -154,7 +150,7 @@ struct GideonPanel: View {
             guard let item else { return }
             Task {
                 if let data = try? await item.loadTransferable(type: Data.self) {
-                    attachment = Self.shrink(data)
+                    chat.attachment = Self.shrink(data)
                 }
                 pickedPhoto = nil
             }
@@ -200,7 +196,7 @@ struct GideonPanel: View {
             }
             .foregroundStyle(NX.foreground)
         }
-        .disabled(sending)
+        .disabled(chat.sending)
     }
 
     // MARK: - transcript
@@ -209,13 +205,13 @@ struct GideonPanel: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
-                    if turns.isEmpty && !sending {
+                    if chat.turns.isEmpty && !chat.sending {
                         empty
                     }
-                    ForEach(turns) { turn in
+                    ForEach(chat.turns) { turn in
                         bubble(turn).id(turn.id).transition(appear)
                     }
-                    if let error {
+                    if let error = chat.error {
                         Text(error)
                             .font(NXFont.text(12))
                             .foregroundStyle(NX.danger)
@@ -230,9 +226,9 @@ struct GideonPanel: View {
             }
             // Everything that can leave the newest message under the fold: history arriving, a turn
             // being added, the answer landing inside it, and the keyboard taking half the screen.
-            .onChange(of: turns.count) { _, _ in toBottom(proxy) }
-            .onChange(of: turns.last?.content) { _, _ in toBottom(proxy) }
-            .onChange(of: error) { _, _ in toBottom(proxy) }
+            .onChange(of: chat.turns.count) { _, _ in toBottom(proxy) }
+            .onChange(of: chat.turns.last?.content) { _, _ in toBottom(proxy) }
+            .onChange(of: chat.error) { _, _ in toBottom(proxy) }
             .onChange(of: composerFocused) { _, focused in
                 guard focused else { return }
                 toBottom(proxy)
@@ -241,10 +237,12 @@ struct GideonPanel: View {
                 Task { try? await Task.sleep(for: .milliseconds(350)); toBottom(proxy) }
             }
             .task {
-                guard !loaded else { return }
-                loaded = true
-                // The thread lives on the server, so this picks up whatever was said on the web.
-                turns = (try? await GideonClient.history()) ?? []
+                // Every open, not only the first. The thread lives on the server, so this picks up
+                // whatever was said on the web — and it is what swaps a just-sent attachment's
+                // bytes for the url the server kept, once there is one. `refresh` leaves the
+                // transcript alone while a question is in flight and when the fetch fails, which is
+                // what makes running it on every open safe rather than destructive.
+                await chat.refresh()
                 // The stack is lazy, so the last row does not exist on the pass that sets `turns`;
                 // one hop later it does. Unanimated on purpose — opening the panel should START at
                 // the newest message, not scroll there through history nobody asked to re-read.
@@ -298,7 +296,7 @@ struct GideonPanel: View {
                 // reads as being about the thing directly over it. Indices rather than the values,
                 // because two attachments can be identical in every field a struct has.
                 ForEach(turn.attachments.indices, id: \.self) { index in
-                    attachmentChip(turn.attachments[index], key: turn.id)
+                    attachmentChip(turn.attachments[index], key: "\(turn.id)-\(index)")
                 }
                 if turn.role == .assistant && turn.content.isEmpty {
                     // The answer arrives whole — there is no token stream behind this — so the dots
@@ -339,15 +337,15 @@ struct GideonPanel: View {
 
     @ViewBuilder
     private var attachmentStrip: some View {
-        if attachment != nil || document != nil {
+        if chat.attachment != nil || chat.document != nil {
             VStack(spacing: 6) {
-                if let attachment, let image = UIImage(data: attachment) {
+                if let attachment = chat.attachment, let image = UIImage(data: attachment) {
                     attachmentChip(art: .local(image), label: T("Image attached"),
-                                   remove: { self.attachment = nil })
+                                   remove: { chat.attachment = nil })
                 }
-                if let document {
+                if let document = chat.document {
                     attachmentChip(art: .glyph("doc.text"), label: document.name,
-                                   remove: { self.document = nil })
+                                   remove: { chat.document = nil })
                 }
             }
             .padding(.horizontal, 16)
@@ -361,10 +359,17 @@ struct GideonPanel: View {
     /// this process still holds them — the question sent a moment ago, whose picture is already
     /// decoded. Otherwise a stored picture is fetched from its url. A document, and a picture whose
     /// file has gone, get the glyph, which is what the chip has always worn.
+    ///
+    /// Only a PICTURE is offered to the thumbnail cache. A document carries its bytes now too, and
+    /// asking ImageIO to make a thumbnail of a PDF would both fail and, sharing a turn with a photo,
+    /// hand back the photo's cached tile under a key drawn from the same turn.
+    ///
+    /// `key` is per attachment and not per turn, so a question carrying both a picture and a file
+    /// keeps them apart in the thumbnail cache and on disk.
     private func attachmentChip(_ item: GideonAttachment, key: String) -> some View {
         let isImage = item.kind == .image
         let art: GideonChipArt
-        if let data = item.preview, let made = GideonThumbnail.image(data, key: key) {
+        if isImage, let data = item.bytes, let made = GideonThumbnail.image(data, key: key) {
             art = .local(made)
         } else if isImage, let remote = Self.remote(item.url) {
             art = .remote(remote)
@@ -375,12 +380,14 @@ struct GideonPanel: View {
                                   label: isImage ? T("Image attached") : item.name,
                                   onBubble: true,
                                   remove: nil)
-        // A chip becomes a button only once there is a file behind it. While the question is still
-        // in flight the attachment exists nowhere but in this process, and a tap that opened nothing
-        // would be a worse promise than a chip that plainly is not tappable.
+        // A chip is a button once there is a file behind it, and in the minute a question is open
+        // the only file there is is the one in this process. That is what the bytes on the turn are
+        // for: the server keeps nothing until it has an answer to keep it with, so waiting for a
+        // url meant the one attachment somebody actually wanted to check — the one they had just
+        // sent — was the one attachment they could not open.
         return Group {
-            if item.url != nil {
-                Button { Task { await open(item) } } label: { chip }
+            if item.bytes != nil || item.url != nil {
+                Button { Task { await open(item, key: key) } } label: { chip }
                     .buttonStyle(.plain)
             } else {
                 chip
@@ -439,7 +446,11 @@ struct GideonPanel: View {
     }
 
     private var composer: some View {
-        HStack(spacing: 10) {
+        // The draft lives on the store, so the field needs a binding INTO it. Declared here for the
+        // same reason RootView declares one for the router: `@Bindable` is a local wrapper, and this
+        // is the only member that writes through it.
+        @Bindable var chat = chat
+        return HStack(spacing: 10) {
             // One menu rather than three icons: a third button left the field too narrow to read
             // back what you typed. A PhotosPicker nested in a Menu draws its row but never opens, so
             // the menu only flips flags and the pickers themselves hang off the panel.
@@ -450,7 +461,7 @@ struct GideonPanel: View {
             } label: {
                 Image(systemName: "plus.circle").font(.system(size: 20)).foregroundStyle(NX.mutedFg)
             }
-            TextField(T("Ask anything about NEXUS…"), text: $draft, axis: .vertical)
+            TextField(T("Ask anything about NEXUS…"), text: $chat.draft, axis: .vertical)
                 .font(NXFont.text(14))
                 .lineLimit(1...5)
                 .focused($composerFocused)
@@ -477,9 +488,9 @@ struct GideonPanel: View {
     }
 
     /// Deliberately does not consult `sending`. The composer stays live while GIDEON is thinking;
-    /// what a mid-flight tap does is `submit()`'s problem, not the button's.
+    /// what a mid-flight tap does is the store's problem, not the button's.
     private var canSend: Bool {
-        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !chat.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     // MARK: - attachments
@@ -490,7 +501,7 @@ struct GideonPanel: View {
 
         let ext = url.pathExtension.lowercased()
         guard GideonDocument.acceptedExtensions.contains(ext) else {
-            error = T("GIDEON can't read that kind of file yet.")
+            chat.error = T("GIDEON can't read that kind of file yet.")
             return
         }
         // Asked of the file system rather than of the bytes, and asked first. The picker hands back
@@ -498,28 +509,28 @@ struct GideonPanel: View {
         // film locked the main actor for the length of the read purely in order to refuse it.
         let size = APIClient.fileSize(of: url)
         guard size > 0 else {
-            error = T("Couldn't read that file.")
+            chat.error = T("Couldn't read that file.")
             return
         }
         // The server enforces this too, and says so in Indonesian. Checking here saves sending ten
         // megabytes over mobile data to be told they were nine too many.
         guard size <= GideonDocument.maxBytes else {
-            error = T("File is over the 10MB limit.")
+            chat.error = T("File is over the 10MB limit.")
             return
         }
         guard let data = try? Data(contentsOf: url) else {
-            error = T("Couldn't read that file.")
+            chat.error = T("Couldn't read that file.")
             return
         }
-        error = nil
-        document = GideonDocument(
+        chat.error = nil
+        chat.document = GideonDocument(
             name: url.lastPathComponent,
             type: UTType(filenameExtension: ext)?.preferredMIMEType ?? "application/octet-stream",
             data: data
         )
     }
 
-    /// Opens a kept attachment.
+    /// Opens an attachment.
     ///
     /// The three viewers the app already has, chosen the way every other attachment in NEXUS is: a
     /// picture goes straight at the remote url, because `ImageLoader` fetches it with the session,
@@ -527,12 +538,33 @@ struct GideonPanel: View {
     /// PDFKit and AVPlayer both want somewhere to seek and neither can be handed a cookie. A .docx
     /// or a .xlsx — which GIDEON accepts and no viewer here draws — goes to the share sheet, which
     /// is the difference between an attachment and a download.
-    private func open(_ item: GideonAttachment) async {
-        guard let raw = item.url, !raw.isEmpty else { return }
-        // A photo has no filename of its own, so the stored file's name stands in — it is the one
-        // thing that still carries the extension `AttachmentKind` reads first.
-        let stored = raw.split(separator: "/").last.map(String.init) ?? ""
+    ///
+    /// What this process is holding is preferred over what the server has, and not only because it
+    /// is faster: for the length of a question it is the ONLY copy, and after that the two are the
+    /// same bytes. The local file is written once and kept beside every other downloaded attachment,
+    /// so a second tap costs nothing.
+    private func open(_ item: GideonAttachment, key: String) async {
         let label = item.name.isEmpty ? T("Image attached") : item.name
+        if let bytes = item.bytes {
+            // A photo has no filename of its own, and the bytes ARE the JPEG `shrink` made — so it
+            // is given one that says so. `AttachmentKind`, PDFKit and AVPlayer all read an
+            // extension before they read anything else.
+            let named = item.name.isEmpty ? "image.jpg" : item.name
+            guard let file = await Self.spill(bytes, key: key, named: named) else {
+                chat.error = T("Couldn't open this file.")
+                return
+            }
+            guard let kind = AttachmentKind(mime: item.mime, name: named) else {
+                shareItem = ShareItem(url: file)
+                return
+            }
+            preview = AttachmentPreview(id: file.absoluteString, name: label, kind: kind, source: file)
+            return
+        }
+        guard let raw = item.url, !raw.isEmpty else { return }
+        // A photo read back from history has no filename either, so the stored file's name stands
+        // in — it is the one thing that still carries the extension.
+        let stored = raw.split(separator: "/").last.map(String.init) ?? ""
         guard let kind = AttachmentKind(mime: item.mime, name: item.name.isEmpty ? stored : item.name) else {
             guard let file = await fetch(raw, named: label) else { return }
             shareItem = ShareItem(url: file)
@@ -560,7 +592,7 @@ struct GideonPanel: View {
             auth.logout()
             return nil
         } catch {
-            self.error = T("Couldn't open this file.")
+            chat.error = T("Couldn't open this file.")
             return nil
         }
     }
@@ -574,121 +606,17 @@ struct GideonPanel: View {
 
     // MARK: - work
 
-    /// Takes a question off the composer and puts it in the outbox.
+    /// Hands the question to the store, and decodes its thumbnail before the bubble is drawn.
     ///
-    /// The composer stays live while an answer is in flight, so a second question can arrive before
-    /// the first is answered. It is QUEUED rather than sent alongside: the conversation is stored
-    /// server-side as one thread, so two requests in flight would both append to it and the second
-    /// answer would be written against a transcript missing the first. Either way the user's bubble
-    /// is drawn at the moment of the tap — text that leaves the composer and appears nowhere is the
-    /// one outcome worth ruling out.
+    /// The queueing, the request and the transcript all live in `GideonChat` now, because all three
+    /// have to outlive this view. What is left here is the one thing that genuinely belongs to the
+    /// screen: the decode is done in a tap that is already paying for a layout pass, so the bubble's
+    /// first draw and every redraw an arriving answer forces are cache reads and nothing more.
     private func submit() {
-        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        draft = ""
-        error = nil
-
-        // The attachment is recorded ON the turn as well as posted with it. A question about a file
-        // that draws as bare text leaves nothing in the thread saying which file was meant, so the
-        // answer under it reads as if it came from nowhere. Image first, then document: the order
-        // the composer strip lists them in, so nothing appears to move when the message is sent.
-        var carried: [GideonAttachment] = []
-        if let attachment {
-            carried.append(GideonAttachment(kind: .image, name: "", preview: attachment))
-        }
-        if let document {
-            carried.append(GideonAttachment(kind: .document, name: document.name, preview: nil))
-        }
-
-        let turn = GideonTurn(role: .user, content: text, attachments: carried)
-        // Decoded here, in a tap that is already paying for a layout pass, so the bubble's first
-        // draw and every redraw an arriving answer forces are cache reads and nothing more.
-        if let attachment { _ = GideonThumbnail.image(attachment, key: turn.id) }
-        withAnimation(reduceMotion ? nil : Animation.easeOut(duration: 0.22)) { turns.append(turn) }
-        outbox.append(Outgoing(turnId: turn.id, text: text, model: tier.rawValue,
-                               image: attachment, document: document))
-        // Cleared with the draft, not after the request: an attachment silently riding along on the
-        // NEXT question would be baffling, and re-attaching is one tap.
-        attachment = nil
-        document = nil
-
-        // A drain already running will reach this on its next lap. The flag is raised HERE and not
-        // inside `drain`, because a Task's first line runs on a later turn of the main actor and two
-        // taps inside that gap would each start a drain competing for the same outbox.
-        guard !sending else { return }
-        sending = true
-        Task { await drain() }
-    }
-
-    private func drain() async {
-        defer { sending = false }
-        while !outbox.isEmpty {
-            await send(outbox.removeFirst())
-        }
-    }
-
-    private func send(_ item: Outgoing) async {
-        // History is cut at this question. Anything queued behind it is already in `turns`, and
-        // sending that as context would have the server answer the wrong message.
-        let messages = history(upTo: item)
-        // The empty assistant turn goes in directly after its question rather than at the end of the
-        // list, which with a queue is somebody else's place. It is what the dots are drawn in and
-        // where the answer lands.
-        let answer = GideonTurn(role: .assistant, content: "")
-        let at = turns.firstIndex(where: { $0.id == item.turnId }).map { $0 + 1 } ?? turns.count
-        withAnimation(reduceMotion ? nil : Animation.easeOut(duration: 0.22)) { turns.insert(answer, at: at) }
-
-        do {
-            for try await chunk in GideonClient.stream(messages: messages, model: item.model,
-                                                       image: item.image, document: item.document) {
-                guard let index = turns.firstIndex(where: { $0.id == answer.id }) else { continue }
-                // Only the first chunk is animated, and only to cross-fade the dots out. Animating
-                // every chunk would put an animation on the path a token-by-token backend takes.
-                if turns[index].content.isEmpty {
-                    withAnimation(.easeOut(duration: 0.18)) { turns[index].content += chunk }
-                } else {
-                    turns[index].content += chunk
-                }
-            }
-            // A stream that ends without a word is a failure the user can see but not explain.
-            if let index = turns.firstIndex(where: { $0.id == answer.id }), turns[index].content.isEmpty {
-                turns.remove(at: index)
-                error = T("GIDEON didn't answer. Try again.")
-            }
-        } catch APIError.unauthorized {
-            // Drop the queue as well: the session is gone, so replaying it would only produce the
-            // same 401 once per queued message.
-            turns.removeAll { $0.id == answer.id }
-            outbox.removeAll()
-            auth.logout()
-        } catch {
-            turns.removeAll { $0.id == answer.id }
-            // The server writes its own sentence for a refused attachment — which file, and what to
-            // do about it. Replacing that with "GIDEON failed." would throw the useful half away.
-            self.error = (error as? LocalizedError)?.errorDescription ?? T("GIDEON failed.")
-        }
-    }
-
-    /// Everything up to and including this question, minus assistant turns still waiting to be
-    /// filled in. Cutting there is what keeps a queued question out of the context of the one in
-    /// front of it — the server answers the LAST message it is given.
-    private func history(upTo item: Outgoing) -> [GideonTurn] {
-        guard let end = turns.firstIndex(where: { $0.id == item.turnId }) else {
-            // The transcript was replaced under us. Ask the question on its own rather than posting
-            // an empty `messages`, which the route reads the last element of.
-            return [GideonTurn(id: item.turnId, role: .user, content: item.text)]
-        }
-        return turns[...end].filter { !($0.role == .assistant && $0.content.isEmpty) }
-    }
-
-    private func clear() async {
-        do {
-            try await GideonClient.clearHistory()
-            turns = []
-            error = nil
-        } catch {
-            self.error = (error as? LocalizedError)?.errorDescription ?? T("Failed.")
-        }
+        guard let turn = chat.submit(tier: tier) else { return }
+        guard let index = turn.attachments.firstIndex(where: { $0.kind == .image }),
+              let bytes = turn.attachments[index].bytes else { return }
+        _ = GideonThumbnail.image(bytes, key: "\(turn.id)-\(index)")
     }
 }
 
@@ -784,5 +712,30 @@ extension GideonPanel {
             image.draw(in: CGRect(origin: .zero, size: target))
         }
         return resized.jpegData(compressionQuality: quality) ?? data
+    }
+
+    /// Puts bytes the app is holding on disk, so a viewer can be handed a file.
+    ///
+    /// `AttachmentPreview` carries a URL, and PDFKit and AVPlayer both want somewhere to seek — so
+    /// an attachment that exists only as Data has to land somewhere before it can be looked at. It
+    /// lands in the same cache every downloaded attachment lands in: one folder per file, named from
+    /// a key, swept after a day. A directory of its own would be one more thing nothing tidies.
+    ///
+    /// Written off the main actor. `async` on a type that is not itself isolated runs on the
+    /// cooperative pool, which is what keeps a ten-megabyte document off the frame that tapped it —
+    /// the same reason `APIClient.bytes(of:)` is shaped this way.
+    static func spill(_ data: Data, key: String, named: String) async -> URL? {
+        let file = AttachmentCache.destination(remote: "gideon-outgoing/" + key, fileName: named)
+        // Already written by an earlier tap. One key is one attachment — a turn's id is a UUID that
+        // is never reused — so what is there is these bytes and not somebody else's.
+        if (try? file.checkResourceIsReachable()) == true { return file }
+        do {
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+            try data.write(to: file, options: .atomic)
+            return file
+        } catch {
+            return nil
+        }
     }
 }

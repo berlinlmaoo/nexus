@@ -418,6 +418,15 @@ actor ImageLoader {
 
     /// Disk first, then the network. Deliberately not isolated to the actor — see `image(for:)`.
     nonisolated private static func fetch(_ url: URL, key: URL, maxPixel: CGFloat) async -> UIImage? {
+        // A picture this device already holds, and the one case that is not a fetch at all. It
+        // reaches here because a GIDEON attachment is openable the moment it is sent — a full round
+        // trip before the server has a copy to serve — so the viewer is pointed at a local file.
+        // URLSession cannot answer a file URL, and neither the cookie nor the LAN route below means
+        // anything for one; caching it would be a second copy of bytes already on this disk.
+        if url.isFileURL {
+            guard let data = try? Data(contentsOf: url) else { return nil }
+            return ImageLoader.downsample(data, maxPixel: maxPixel) ?? UIImage(data: data)
+        }
         // The disk tier is consulted BEFORE URLSession, even though URLSession has a cache of its
         // own, because the two hold different things: URLCache holds the bytes of the original
         // upload, so answering from it still costs a full-size ImageIO downsample, while a disk

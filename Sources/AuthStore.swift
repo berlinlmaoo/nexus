@@ -78,6 +78,10 @@ final class AuthStore {
         // Nor may a Live Activity: it would keep counting one person's hours on the Lock Screen of
         // a phone that has already been handed to somebody else.
         Viewer.shared.reset()
+        // Nor a conversation. GIDEON's transcript outlives the panel that draws it, so without this
+        // the next person to sign in on the same phone opens it onto somebody else's questions —
+        // and onto the file they attached to one.
+        GideonChat.shared.reset()
         AttendancePresence.stop()
         PhoneSessionBridge.shared.publish(nil)
         session = nil

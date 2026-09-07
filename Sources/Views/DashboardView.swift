@@ -193,6 +193,13 @@ struct DashboardView: View {
                 await refreshPasskeyNudge()
             }
             .refreshable { await load() }
+            // Home telling the app it is the thing on screen, so the floating GIDEON launcher —
+            // drawn above the whole app, outside this stack — can be Home-only rather than
+            // Home-tab-only. On the ScrollView and not on the NavigationStack: the stack stays
+            // mounted through a push and would never report one. Two writes per push, and none
+            // while scrolling.
+            .onAppear { router.homeIsRoot = true }
+            .onDisappear { router.homeIsRoot = false }
         }
     }
 

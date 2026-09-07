@@ -42,6 +42,20 @@ final class AppRouter {
     /// view in either layout is in a position to say.
     var sidebarScreen: NXScreen = .dashboard
 
+    /// Whether Home is showing its own root, or has something pushed on top of it.
+    ///
+    /// `tab` and `sidebarScreen` only answer half the question. Home is a tab AND a NavigationStack,
+    /// and Messages, Attendance, Leaderboard, Room Booking, Threads and Team Calendar are all
+    /// pushed INTO that stack by the quick-action tiles — so the tab never changes, and a launcher
+    /// that reads only the tab rides along on top of a chat composer's own buttons.
+    ///
+    /// Written by DashboardView's root content rather than read off a `path` binding, because every
+    /// push out of Home is a view-based `NavigationLink { … }`: those carry no value for a path to
+    /// hold, so a bound path would report an empty stack on every one of them. Appearing and
+    /// disappearing is the one signal that covers all of them, `.navigationDestination(item:)`
+    /// included, and it costs one write per push rather than anything per frame.
+    var homeIsRoot = true
+
     /// iPad and Mac: consumed once by the sidebar, then cleared. A request rather than a piece of
     /// state, so returning to a screen by hand is never undone by a stale flag.
     var sidebarRequest: NXScreen?
