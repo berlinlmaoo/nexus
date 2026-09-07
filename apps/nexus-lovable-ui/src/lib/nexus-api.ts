@@ -695,6 +695,52 @@ export function activeNotifications(list: NexusNotification[], maxAgeDays = 7): 
   });
 }
 
+/* ── Notification filtering ────────────────────────────────────────────────
+   There are ~30 distinct `type` strings in the wild and nobody reading their
+   inbox thinks in them: `attendance_request_reviewed`, `offsite_checkout_pending`
+   and `attendance_override` are all just "Attendance" to a human. These are the
+   buckets the filter offers; the raw type stays visible on the row itself. */
+
+export type NotificationGroupId =
+  | "all" | "tasks" | "attendance" | "messages" | "submissions" | "tickets" | "announcements" | "other";
+
+export const NOTIFICATION_GROUPS: { id: NotificationGroupId; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "tasks", label: "Tasks" },
+  { id: "attendance", label: "Attendance" },
+  { id: "messages", label: "Messages" },
+  { id: "submissions", label: "Submissions" },
+  { id: "tickets", label: "Tickets" },
+  { id: "announcements", label: "Announcements" },
+  { id: "other", label: "Other" },
+];
+
+/** Which bucket a raw notification `type` belongs to. Unknown types land in "Other"
+ *  rather than disappearing — a new type must never become invisible. */
+export function notificationGroup(type?: string | null): Exclude<NotificationGroupId, "all"> {
+  const t = (type ?? "").toLowerCase();
+  if (t.startsWith("attendance") || t.startsWith("offsite") || t === "dayoff_quota_low" || t === "red_date_quota_low") return "attendance";
+  if (t === "submission_status") return "submissions";
+  if (t.startsWith("complaint")) return "tickets";
+  if (t.includes("announcement")) return "announcements";
+  if (t.startsWith("message") || t === "feed_comment") return "messages";
+  if (t.startsWith("task") || t.startsWith("comment") || t.startsWith("quest") || t === "project_invite" || t === "status_update" || t === "streak_at_risk") return "tasks";
+  return "other";
+}
+
+/** Tabs worth drawing for THIS list: "All", plus only the buckets that actually have
+ *  something in them, each with its count. No dead tabs. */
+export function notificationFilterTabs(list: NexusNotification[]): { id: NotificationGroupId; label: string; count: number }[] {
+  const counts = new Map<NotificationGroupId, number>();
+  for (const n of list) {
+    const g = notificationGroup(n.type);
+    counts.set(g, (counts.get(g) ?? 0) + 1);
+  }
+  return NOTIFICATION_GROUPS
+    .filter((g) => g.id === "all" || (counts.get(g.id) ?? 0) > 0)
+    .map((g) => ({ ...g, count: g.id === "all" ? list.length : counts.get(g.id) ?? 0 }));
+}
+
 export type NexusCommentReaction = {
   id: string;
   emoji: string;

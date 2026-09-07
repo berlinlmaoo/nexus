@@ -198,6 +198,22 @@ async function sendSlack(webhookUrl: string, message: string) {
   }
 }
 
+/**
+ * Write one notification row, then fan it out to the socket and (optionally) APNs.
+ *
+ * `dedupeWindowMs` is opt-in, and opt-in on purpose. The suppression has to live HERE rather than at
+ * a call site because the push and the socket emit happen inside this function: a guard bolted on
+ * outside would stop the row and still buzz the phone. But it must not be the default, because the
+ * same helper carries chat (`/api/conversations/[id]/messages`), where two identical short replies a
+ * minute apart ("ok", "noted") are two real events. Notification identity is not event identity for
+ * every type, so the type's author declares the window it wants.
+ *
+ * The key is (userId, type, link, message) — an exact repeat of something we already told this
+ * person, about the same thing, within the window. `notifyAttendanceReminder` hand-rolls the same
+ * shape with no window (one reminder per shift, forever); this is that idea made reusable.
+ *
+ * Returns null when the notification was suppressed.
+ */
 export async function createInAppNotification(data: {
   userId: string
   type: string
@@ -207,7 +223,26 @@ export async function createInAppNotification(data: {
   projectId?: string
   link?: string
   push?: boolean
+  dedupeWindowMs?: number
 }) {
+  if (data.dedupeWindowMs && data.dedupeWindowMs > 0) {
+    const since = new Date(Date.now() - data.dedupeWindowMs)
+    const duplicate = await prisma.notification.findFirst({
+      where: {
+        userId: data.userId,
+        type: data.type,
+        link: data.link || null,
+        message: data.message,
+        createdAt: { gte: since },
+      },
+      select: { id: true },
+    })
+    if (duplicate) {
+      log.info("notification suppressed as duplicate", { userId: data.userId, type: data.type })
+      return null
+    }
+  }
+
   const notification = await prisma.notification.create({
     data: {
       userId: data.userId,
@@ -820,6 +855,8 @@ export async function notifyStatusUpdate(data: {
   }
 }
 
+const SUBMISSION_STATUS_DEDUPE_MS = 30 * 60 * 1000
+
 /**
  * Tell whoever filed a form submission that its status moved.
  *
@@ -831,9 +868,16 @@ export async function notifyStatusUpdate(data: {
  * Rides the existing `statusUpdate` preference rather than adding a column: that flag was written
  * for `notifyStatusUpdate`, which nothing has ever called, and "a status you care about changed" is
  * the same promise to the reader.
+ *
+ * De-duplicated over 30 minutes. Measured, not guessed: one submission collected fifteen byte-identical
+ * `todo → done` rows in ten minutes because the board re-sent the same move over and over. An exact
+ * repeat inside half an hour carries no news — the submitter has already been told this. A genuine
+ * later move reads differently (different destination) and still gets through, and so does the same
+ * move again once the window has passed.
  */
 export async function notifySubmissionStatus(data: {
   submitterId: string
+  submissionId: string
   formName: string
   fromStatus: string
   toStatus: string
@@ -844,14 +888,18 @@ export async function notifySubmissionStatus(data: {
   const prefs = await getUserPrefs(data.submitterId)
   const human = (s: string) => s.replace(/_/g, " ").toLowerCase()
 
-  // No link: there is no submissions page on the web yet, and pointing at the task would send the
-  // submitter somewhere they may not have access to.
+  // Points at the submitter's own board, opened on THIS submission — `/submissions` reads it as
+  // `?id=` and pops the detail drawer. Not the task: the submitter often has no access to the
+  // project the task lives in, and `GET /api/forms/my-submissions/[submissionId]` is the one
+  // endpoint that is scoped to them.
   await createInAppNotification({
     userId: data.submitterId,
     type: "submission_status",
     title: "Submission update",
     message: `${data.updatedByName} moved "${data.formName}" from ${human(data.fromStatus)} to ${human(data.toStatus)}`,
+    link: `/submissions?id=${data.submissionId}`,
     push: prefs.statusUpdate,
+    dedupeWindowMs: SUBMISSION_STATUS_DEDUPE_MS,
   })
 }
 

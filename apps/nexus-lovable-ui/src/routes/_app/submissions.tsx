@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FileText, Inbox, Lock, X, Trash2, Loader2, Paperclip, Download } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -146,7 +146,19 @@ function MySubmissions() {
   const statusCols = q.data?.statusColumns ?? [];
   const columns = [NEW_COL, ...statusCols];
   const colOf = (s: NexusMySubmission) => (s.procStatus && s.procStatus.trim() ? s.procStatus : NEW_COL);
-  const [openId, setOpenId] = useState<string | null>(null);
+
+  // `/submissions?id=<submissionId>` opens straight onto that submission — this is what a
+  // `submission_status` notification links to, so tapping "your submission moved" lands on the
+  // thing that moved instead of the board in general.
+  const search = useSearch({ strict: false }) as { id?: string };
+  const navigate = useNavigate();
+  const [openId, setOpenId] = useState<string | null>(search.id ?? null);
+  useEffect(() => { if (search.id) setOpenId(search.id); }, [search.id]);
+  const closeDetail = () => {
+    setOpenId(null);
+    // Drop the deep-link param so a refresh (or a back-and-forward) doesn't reopen the drawer.
+    if (search.id) navigate({ to: "/submissions", search: {}, replace: true }).catch(() => {});
+  };
 
   return (
     <div>
@@ -189,7 +201,7 @@ function MySubmissions() {
         )}
       </div>
 
-      {openId && <SubmissionDetailDrawer id={openId} onClose={() => setOpenId(null)} />}
+      {openId && <SubmissionDetailDrawer id={openId} onClose={closeDetail} />}
     </div>
   );
 }
