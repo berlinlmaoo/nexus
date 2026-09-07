@@ -3,7 +3,16 @@ import UIKit   // UIDevice, to label a passkey with the device it was made on
 
 struct DashboardView: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(AppRouter.self) private var router
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// What a tapped notification pushed into THIS stack — a task or a project, which are single
+    /// records rather than screens and so cannot travel through AppRouter the way `.attendance`
+    /// and `.messages` do.
+    ///
+    /// One binding carrying one type, rather than two `String?` ones: a NavigationStack keys a
+    /// destination by the type of its value, and ProjectDetailView — pushed from right here —
+    /// declares a `String?` destination of its own for the tasks on its board.
+    @State private var openTarget: NotificationTarget?
     @State private var profile: AppUser?
     @State private var game: Gamification?
     @State private var projectCount = 0
@@ -76,8 +85,35 @@ struct DashboardView: View {
     private func toggleLevel(_ on: Bool) {
         if on { openMorph(morphFrames["level"] ?? .zero); activeLevel = true } else { closeMorph { activeLevel = false } }
     }
-    private func toggleBell(_ on: Bool) {
-        if on { openMorph(morphFrames["bell"] ?? .zero); activeBell = true } else { closeMorph { activeBell = false } }
+    /// `then` runs once the panel has finished shrinking away.
+    private func toggleBell(_ on: Bool, then: (() -> Void)? = nil) {
+        if on { openMorph(morphFrames["bell"] ?? .zero); activeBell = true }
+        else { closeMorph { activeBell = false; then?() } }
+    }
+
+    /// Tap a notification: strike it off, close the panel, then go where the web's inbox goes.
+    private func openNotification(_ n: NexusNotification) {
+        Haptics.tap()
+        markNotificationRead(n)
+        guard let target = n.tapTarget else { toggleBell(false); return }
+        // A tab change is answered immediately: the panel belongs to THIS tab, so it is already off
+        // screen while it shrinks. A push is not — it lands in this same stack, and arriving under
+        // a card that is still visible reads as the tap having opened the wrong thing.
+        if case .screen(let screen) = target {
+            router.go(screen)
+            toggleBell(false)
+            return
+        }
+        toggleBell(false) { openTarget = target }
+    }
+
+    /// Struck off here as well as on the server: `load()` refetches the entire dashboard, which is
+    /// a lot of network for one dot whose new value is not in doubt.
+    private func markNotificationRead(_ n: NexusNotification) {
+        guard !n.isRead else { return }
+        if let i = notifs.firstIndex(where: { $0.id == n.id }) { notifs[i].read = true }
+        unread = max(0, unread - 1)
+        Task { try? await APIClient.shared.markNotificationRead(id: n.id) }
     }
 
     var body: some View {
@@ -104,6 +140,16 @@ struct DashboardView: View {
             .overlay { levelModal }
             .overlay { bellModal }
             .navigationBarHidden(true)
+            .navigationDestination(item: $openTarget) { target in
+                switch target {
+                case .task(let id):    TaskDetailView(taskId: id)
+                // A notification carries the project's id and no name; the board fills its own
+                // header in once it loads.
+                case .project(let id): ProjectDetailView(projectId: id, projectName: "")
+                // Never stored: a whole screen goes through the router, not through this stack.
+                case .screen:          EmptyView()
+                }
+            }
             .coordinateSpace(.named(morphSpace))
             .onPreferenceChange(MorphFrameKey.self) { morphFrames = $0 }
             .onChange(of: morphTarget) { _, t in
@@ -426,16 +472,25 @@ struct DashboardView: View {
                     ScrollView {
                         VStack(spacing: 8) {
                             ForEach(notifs.prefix(8)) { n in
-                                HStack(alignment: .top, spacing: 10) {
-                                    Circle().fill(n.isRead ? NX.mutedFg.opacity(0.3) : NX.violet).frame(width: 7, height: 7).padding(.top, 5)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(n.title ?? n.typeLabel).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                                        if let m = n.message { Text(m).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(2) }
+                                Button { openNotification(n) } label: {
+                                    HStack(alignment: .top, spacing: 10) {
+                                        Circle().fill(n.isRead ? NX.mutedFg.opacity(0.3) : NX.violet).frame(width: 7, height: 7).padding(.top, 5)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(n.title ?? n.typeLabel).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                                            if let m = n.message { Text(m).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(2) }
+                                        }
+                                        Spacer(minLength: 4)
+                                        // Only where the tap leads somewhere: a chevron on a row
+                                        // that goes nowhere is a promise the app cannot keep.
+                                        if n.tapTarget != nil {
+                                            Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold))
+                                                .foregroundStyle(NX.mutedFg).padding(.top, 2)
+                                        }
                                     }
-                                    Spacer(minLength: 4)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(10).background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(10).background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .buttonStyle(.plain)
                             }
                         }
                     }.frame(maxHeight: 460)

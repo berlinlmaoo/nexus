@@ -89,12 +89,23 @@ struct MoreView: View {
             .task { await viewer.loadIfNeeded() }
             .navigationTitle(T("More"))
             .navigationBarTitleDisplayMode(.inline)
-            // Attendance is a launcher tile, not a tab, so reaching it from outside the app means
-            // pushing it here. Bound rather than fired-and-forgotten, so swiping back clears the
-            // flag and a second Siri request works exactly like the first.
-            .navigationDestination(isPresented: $router.attendancePushed) {
-                AttendanceView()
+            // A launcher screen is not a tab, so reaching one from outside the app — Siri, a
+            // widget, a tapped notification — means pushing it here. Bound rather than
+            // fired-and-forgotten, so swiping back clears it and a second request works like the
+            // first.
+            .navigationDestination(item: $router.morePush) { screen in
+                pushed(screen)
             }
+        }
+    }
+
+    /// The launcher screens are written to be pushed INTO this stack, so Messages gets its
+    /// no-stack form here rather than the self-contained one the sidebar asks for: a
+    /// NavigationStack nested inside another one loses the back button on everything above it.
+    @ViewBuilder private func pushed(_ screen: NXScreen) -> some View {
+        switch screen {
+        case .messages: MessagesView()
+        default:        screen.view
         }
     }
 }

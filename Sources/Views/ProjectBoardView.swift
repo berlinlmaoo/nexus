@@ -20,6 +20,11 @@ struct ProjectDetailView: View {
 
     private var canCreate: Bool { !(detail?.taskLists?.isEmpty ?? true) }
 
+    /// A board opened from a notification knows the project's id and nothing else — the name
+    /// arrives with the payload rather than with the push, so fall back to whatever the board
+    /// itself reports once it lands.
+    private var displayName: String { projectName.isEmpty ? (detail?.name ?? "") : projectName }
+
     // MARK: which tabs this project actually gets
     //
     // Finance and P&L are opt-in per project and OFF by default — they were showing on every
@@ -68,10 +73,16 @@ struct ProjectDetailView: View {
         .task { await load() }
         // Recorded here rather than at each tap site, so a project counts as visited whichever
         // route led in: the projects list, a sidebar shortcut, or a link out of a task.
-        .task { ProjectShortcuts.shared.visit(ProjectRef(id: projectId, name: projectName, icon: nil)) }
+        .task { if !displayName.isEmpty { ProjectShortcuts.shared.visit(ProjectRef(id: projectId, name: displayName, icon: nil)) } }
         // The icon only exists after the board loads, so record it again when it arrives.
         .onChange(of: detail?.icon) { _, icon in
-            ProjectShortcuts.shared.visit(ProjectRef(id: projectId, name: projectName, icon: icon))
+            if !displayName.isEmpty { ProjectShortcuts.shared.visit(ProjectRef(id: projectId, name: displayName, icon: icon)) }
+        }
+        // A board reached from a notification has no name to record on the way in, and a nameless
+        // row in the shortcut list is worse than no row at all. Catch it when the board finally
+        // reports one — which for a project without an icon the line above never would.
+        .onChange(of: detail?.name) { _, _ in
+            if !displayName.isEmpty { ProjectShortcuts.shared.visit(ProjectRef(id: projectId, name: displayName, icon: detail?.icon)) }
         }
         .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }
     }
@@ -116,7 +127,7 @@ struct ProjectDetailView: View {
                 .background(tint.opacity(0.15), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                 .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
             }
-            Text(projectName).font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+            Text(displayName).font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
             Spacer(minLength: 6)
             if detail != nil {
                 Button { showSettings = true } label: {

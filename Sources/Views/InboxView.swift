@@ -4,16 +4,35 @@ import SwiftUI
 /// message, date·type) + mark-read / mark-all.
 struct InboxView: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(AppRouter.self) private var router
     @State private var items: [NexusNotification] = []
     @State private var unread = 0
     @State private var loading = true
     @State private var error: String?
+    /// What a tapped notification pushed into THIS stack — a task or a project, which are single
+    /// records rather than screens and so cannot travel through AppRouter the way `.attendance`
+    /// and `.messages` do.
+    ///
+    /// One binding carrying one type, rather than two `String?` ones: a NavigationStack keys a
+    /// destination by the type of its value, and ProjectDetailView — pushed from right here —
+    /// declares a `String?` destination of its own for the tasks on its board.
+    @State private var openTarget: NotificationTarget?
 
     var body: some View {
         NavigationStack {
             ZStack {
                 NX.background.ignoresSafeArea()
                 content
+            }
+            .navigationDestination(item: $openTarget) { target in
+                switch target {
+                case .task(let id):    TaskDetailView(taskId: id)
+                // A notification carries the project's id and no name; the board fills its own
+                // header in once it loads.
+                case .project(let id): ProjectDetailView(projectId: id, projectName: "")
+                // Never stored: a whole screen goes through the router, not through this stack.
+                case .screen:          EmptyView()
+                }
             }
             .navigationTitle(T("Signal Inbox"))
             .toolbar {
@@ -53,7 +72,7 @@ struct InboxView: View {
                         VStack(spacing: 0) {
                             ForEach(Array(items.enumerated()), id: \.element.id) { idx, n in
                                 if idx > 0 { Divider().overlay(NX.border) }
-                                NotificationRow(notification: n) { await markRead(n) }
+                                NotificationRow(notification: n) { open(n) }
                             }
                         }
                         .background {
@@ -88,6 +107,19 @@ struct InboxView: View {
         loading = false
     }
 
+    /// Tapping a row: mark it read, and go where the web's inbox would go.
+    ///
+    /// Mark-read runs whether or not there is anywhere to go, which is slightly more than the web
+    /// does — there a row with no destination is not clickable at all and only its "Read" button
+    /// marks it. This screen has marked on tap since it was written, and taking that away to match
+    /// would be a regression wearing parity's clothes.
+    private func open(_ n: NexusNotification) {
+        Task { await markRead(n) }
+        guard let target = n.tapTarget else { return }
+        if case .screen(let screen) = target { router.go(screen); return }
+        openTarget = target
+    }
+
     private func markRead(_ n: NexusNotification) async {
         guard !n.isRead else { return }
         try? await APIClient.shared.markNotificationRead(id: n.id)
@@ -101,7 +133,7 @@ struct InboxView: View {
 
 struct NotificationRow: View {
     let notification: NexusNotification
-    let onRead: () async -> Void
+    let onTap: () -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -112,16 +144,27 @@ struct NotificationRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(notification.title ?? notification.typeLabel).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
                 Text(notification.message ?? T("New NEXUS signal arrived.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).lineLimit(2)
-                Text("\(dateText) · \(notification.type ?? "signal")").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                Text(metaText).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             }
             Spacer(minLength: 4)
             if !notification.isRead {
                 Circle().fill(NX.violet).frame(width: 8, height: 8).padding(.top, 6)
             }
+            if notification.tapTarget != nil {
+                Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(NX.mutedFg).padding(.top, 4)
+            }
         }
         .padding(14)
         .contentShape(Rectangle())
-        .onTapGesture { Task { await onRead() } }
+        .onTapGesture { onTap() }
+    }
+
+    /// The web's own meta line, hint included: a row that opens something says so, and a row that
+    /// opens nothing must not claim otherwise.
+    private var metaText: String {
+        let base = "\(dateText) · \(notification.type ?? "signal")"
+        return notification.tapTarget == nil ? base : base + " · " + T("tap to open")
     }
 
     private var dateText: String {
