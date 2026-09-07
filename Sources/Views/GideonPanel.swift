@@ -285,6 +285,12 @@ struct GideonPanel: View {
         HStack {
             if turn.role == .user { Spacer(minLength: 44) }
             VStack(alignment: .leading, spacing: 6) {
+                // Above the text, the way a chat puts a picture above its caption: the question
+                // reads as being about the thing directly over it. Indices rather than the values,
+                // because two attachments can be identical in every field a struct has.
+                ForEach(turn.attachments.indices, id: \.self) { index in
+                    attachmentChip(turn.attachments[index], key: turn.id)
+                }
                 if turn.role == .assistant && turn.content.isEmpty {
                     // The answer arrives whole — there is no token stream behind this — so the dots
                     // claim only that the request is still open, and they are replaced the instant
@@ -327,14 +333,12 @@ struct GideonPanel: View {
         if attachment != nil || document != nil {
             VStack(spacing: 6) {
                 if let attachment, let image = UIImage(data: attachment) {
-                    attachmentChip(thumbnail: image, icon: nil, label: T("Image attached")) {
-                        self.attachment = nil
-                    }
+                    attachmentChip(thumbnail: image, icon: nil, label: T("Image attached"),
+                                   remove: { self.attachment = nil })
                 }
                 if let document {
-                    attachmentChip(thumbnail: nil, icon: "doc.text", label: document.name) {
-                        self.document = nil
-                    }
+                    attachmentChip(thumbnail: nil, icon: "doc.text", label: document.name,
+                                   remove: { self.document = nil })
                 }
             }
             .padding(.horizontal, 16)
@@ -342,9 +346,30 @@ struct GideonPanel: View {
         }
     }
 
+    /// An attachment that has already been sent: the same chip as below, with no X on it.
+    private func attachmentChip(_ item: GideonAttachment, key: String) -> some View {
+        let isImage = item.kind == .image
+        return attachmentChip(thumbnail: item.preview.flatMap { GideonThumbnail.image($0, key: key) },
+                              icon: isImage ? "photo" : "doc.text",
+                              label: isImage ? T("Image attached") : item.name,
+                              onBubble: true,
+                              remove: nil)
+    }
+
+    /// The one shape an attachment has, in both places it is drawn: under the composer with an X
+    /// while it waits, and inside the bubble of the question it went with. Same chip, so sending
+    /// does not change what the file looks like — it only moves it up the screen.
+    ///
+    /// `remove: nil` is what says "already sent": no X, and no Spacer either, since a Spacer inside
+    /// a bubble would stretch it to the full width of the panel.
     private func attachmentChip(thumbnail: UIImage?, icon: String?, label: String,
-                                remove: @escaping () -> Void) -> some View {
-        HStack(spacing: 10) {
+                                onBubble: Bool = false,
+                                remove: (() -> Void)?) -> some View {
+        // In a bubble the chip sits on violet, where the muted grey it wears under the composer is
+        // nearly gone. The same white the tools line already uses for a user turn.
+        let tone: Color = onBubble ? .white.opacity(0.85) : NX.mutedFg
+        let plate: Color = onBubble ? .white.opacity(0.18) : NX.muted.opacity(0.6)
+        return HStack(spacing: 10) {
             if let thumbnail {
                 Image(uiImage: thumbnail)
                     .resizable().scaledToFill()
@@ -353,16 +378,18 @@ struct GideonPanel: View {
             } else if let icon {
                 Image(systemName: icon)
                     .font(.system(size: 15))
-                    .foregroundStyle(NX.mutedFg)
+                    .foregroundStyle(tone)
                     .frame(width: 38, height: 38)
-                    .background(NX.muted.opacity(0.6), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .background(plate, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
-            Text(label).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
-            Spacer(minLength: 8)
-            Button(action: remove) {
-                Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg)
+            Text(label).font(NXFont.text(12)).foregroundStyle(tone).lineLimit(1)
+            if let remove {
+                Spacer(minLength: 8)
+                Button(action: remove) {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(tone)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
     }
 
@@ -455,7 +482,22 @@ struct GideonPanel: View {
         draft = ""
         error = nil
 
-        let turn = GideonTurn(role: .user, content: text)
+        // The attachment is recorded ON the turn as well as posted with it. A question about a file
+        // that draws as bare text leaves nothing in the thread saying which file was meant, so the
+        // answer under it reads as if it came from nowhere. Image first, then document: the order
+        // the composer strip lists them in, so nothing appears to move when the message is sent.
+        var carried: [GideonAttachment] = []
+        if let attachment {
+            carried.append(GideonAttachment(kind: .image, name: "", preview: attachment))
+        }
+        if let document {
+            carried.append(GideonAttachment(kind: .document, name: document.name, preview: nil))
+        }
+
+        let turn = GideonTurn(role: .user, content: text, attachments: carried)
+        // Decoded here, in a tap that is already paying for a layout pass, so the bubble's first
+        // draw and every redraw an arriving answer forces are cache reads and nothing more.
+        if let attachment { _ = GideonThumbnail.image(attachment, key: turn.id) }
         withAnimation(reduceMotion ? nil : Animation.easeOut(duration: 0.22)) { turns.append(turn) }
         outbox.append(Outgoing(turnId: turn.id, text: text, model: tier.rawValue,
                                image: attachment, document: document))
@@ -541,6 +583,33 @@ struct GideonPanel: View {
         } catch {
             self.error = (error as? LocalizedError)?.errorDescription ?? T("Failed.")
         }
+    }
+}
+
+/// Thumbnails for attachments already in the thread.
+///
+/// A bubble is rebuilt every time the transcript changes — once per chunk of an answer — and the
+/// picture behind it is the full upload, up to 1568px. Decoding that on each pass is the cost this
+/// app spent a day removing everywhere else, so it is decoded once, at the size the chip draws, and
+/// kept. The key is the turn's id, which is a UUID minted per message and never reused.
+///
+/// NSCache rather than a dictionary: it empties itself under memory pressure, and a miss is only a
+/// re-decode. `nonisolated(unsafe)` for the same reason `ImageLoader.memory` uses it — NSCache is
+/// documented thread-safe but not marked Sendable.
+private enum GideonThumbnail {
+    nonisolated(unsafe) static let cache: NSCache<NSString, UIImage> = {
+        let c = NSCache<NSString, UIImage>()
+        c.countLimit = 40
+        return c
+    }()
+
+    static func image(_ data: Data, key: String) -> UIImage? {
+        if let hit = cache.object(forKey: key as NSString) { return hit }
+        // 120px for a 38pt chip covers a 3x screen. ImageIO never enlarges, so a picture already
+        // smaller than this comes back untouched.
+        guard let made = ImageLoader.downsample(data, maxPixel: 120) else { return nil }
+        cache.setObject(made, forKey: key as NSString)
+        return made
     }
 }
 

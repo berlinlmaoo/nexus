@@ -1,5 +1,22 @@
 import Foundation
 
+/// Something that rode along with a question, kept so the thread can still show it.
+///
+/// It lives for as long as the panel is open and no longer. The server keeps no copy: /api/gideon
+/// hands the file to the shim, which deletes it once it has answered, and the turn it persists is
+/// the text alone. So a thread re-fetched from the server carries none of these, and a question read
+/// back from history draws as the words that were typed — which is the truth about what is still on
+/// the server, rather than a paperclip pointing at a file nobody can open any more.
+struct GideonAttachment: Sendable, Equatable {
+    enum Kind: Sendable, Equatable { case image, document }
+
+    let kind: Kind
+    /// Filename with its extension for a document. Empty for a photo, which never had one.
+    let name: String
+    /// The bytes that were uploaded, kept for the thumbnail. Nil for a document.
+    let preview: Data?
+}
+
 /// One turn of a GIDEON conversation.
 struct GideonTurn: Identifiable, Sendable, Equatable {
     enum Role: String, Codable, Sendable { case user, assistant }
@@ -10,12 +27,17 @@ struct GideonTurn: Identifiable, Sendable, Equatable {
     /// NEXUS tools GIDEON reached for on this turn. Empty until the tools are wired back up
     /// server-side; carried now so history from the web renders the same here.
     var tools: [String]
+    /// What was attached to this question. Always empty on an assistant turn, and on anything that
+    /// came back from history — see `GideonAttachment`.
+    var attachments: [GideonAttachment]
 
-    init(id: String = UUID().uuidString, role: Role, content: String, tools: [String] = []) {
+    init(id: String = UUID().uuidString, role: Role, content: String, tools: [String] = [],
+         attachments: [GideonAttachment] = []) {
         self.id = id
         self.role = role
         self.content = content
         self.tools = tools
+        self.attachments = attachments
     }
 }
 
