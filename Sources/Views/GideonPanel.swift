@@ -81,6 +81,10 @@ struct GideonPanel: View {
     @State private var showPhotoPicker = false
     @State private var showCamera = false
     @State private var showFilePicker = false
+    /// A kept attachment being looked at, and one being handed to the share sheet. Both driven by
+    /// tapping a chip in the transcript — see `open`.
+    @State private var preview: AttachmentPreview?
+    @State private var shareItem: ShareItem?
     /// Questions the composer has accepted but the network has not taken yet. See `submit()`.
     @State private var outbox: [Outgoing] = []
     @FocusState private var composerFocused: Bool
@@ -155,6 +159,11 @@ struct GideonPanel: View {
                 pickedPhoto = nil
             }
         }
+        // The same two the rest of the app opens an attachment with — a task's files use this exact
+        // pair. Nothing new is drawn for GIDEON: a picture, a PDF and a film already have viewers
+        // here, and what none of them can draw goes where a download goes.
+        .sheet(item: $shareItem) { item in ActivityView(items: [item.url]) }
+        .fullScreenCover(item: $preview) { AttachmentViewerView(preview: $0) }
     }
 
     // MARK: - title
@@ -333,11 +342,11 @@ struct GideonPanel: View {
         if attachment != nil || document != nil {
             VStack(spacing: 6) {
                 if let attachment, let image = UIImage(data: attachment) {
-                    attachmentChip(thumbnail: image, icon: nil, label: T("Image attached"),
+                    attachmentChip(art: .local(image), label: T("Image attached"),
                                    remove: { self.attachment = nil })
                 }
                 if let document {
-                    attachmentChip(thumbnail: nil, icon: "doc.text", label: document.name,
+                    attachmentChip(art: .glyph("doc.text"), label: document.name,
                                    remove: { self.document = nil })
                 }
             }
@@ -347,13 +356,36 @@ struct GideonPanel: View {
     }
 
     /// An attachment that has already been sent: the same chip as below, with no X on it.
+    ///
+    /// Three ways to fill the square, in the order they are worth having. The bytes are used when
+    /// this process still holds them — the question sent a moment ago, whose picture is already
+    /// decoded. Otherwise a stored picture is fetched from its url. A document, and a picture whose
+    /// file has gone, get the glyph, which is what the chip has always worn.
     private func attachmentChip(_ item: GideonAttachment, key: String) -> some View {
         let isImage = item.kind == .image
-        return attachmentChip(thumbnail: item.preview.flatMap { GideonThumbnail.image($0, key: key) },
-                              icon: isImage ? "photo" : "doc.text",
-                              label: isImage ? T("Image attached") : item.name,
-                              onBubble: true,
-                              remove: nil)
+        let art: GideonChipArt
+        if let data = item.preview, let made = GideonThumbnail.image(data, key: key) {
+            art = .local(made)
+        } else if isImage, let remote = Self.remote(item.url) {
+            art = .remote(remote)
+        } else {
+            art = .glyph(isImage ? "photo" : "doc.text")
+        }
+        let chip = attachmentChip(art: art,
+                                  label: isImage ? T("Image attached") : item.name,
+                                  onBubble: true,
+                                  remove: nil)
+        // A chip becomes a button only once there is a file behind it. While the question is still
+        // in flight the attachment exists nowhere but in this process, and a tap that opened nothing
+        // would be a worse promise than a chip that plainly is not tappable.
+        return Group {
+            if item.url != nil {
+                Button { Task { await open(item) } } label: { chip }
+                    .buttonStyle(.plain)
+            } else {
+                chip
+            }
+        }
     }
 
     /// The one shape an attachment has, in both places it is drawn: under the composer with an X
@@ -362,7 +394,7 @@ struct GideonPanel: View {
     ///
     /// `remove: nil` is what says "already sent": no X, and no Spacer either, since a Spacer inside
     /// a bubble would stretch it to the full width of the panel.
-    private func attachmentChip(thumbnail: UIImage?, icon: String?, label: String,
+    private func attachmentChip(art: GideonChipArt, label: String,
                                 onBubble: Bool = false,
                                 remove: (() -> Void)?) -> some View {
         // In a bubble the chip sits on violet, where the muted grey it wears under the composer is
@@ -370,13 +402,26 @@ struct GideonPanel: View {
         let tone: Color = onBubble ? .white.opacity(0.85) : NX.mutedFg
         let plate: Color = onBubble ? .white.opacity(0.18) : NX.muted.opacity(0.6)
         return HStack(spacing: 10) {
-            if let thumbnail {
-                Image(uiImage: thumbnail)
+            switch art {
+            case .local(let image):
+                Image(uiImage: image)
                     .resizable().scaledToFill()
                     .frame(width: 38, height: 38)
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            } else if let icon {
-                Image(systemName: icon)
+            case .remote(let url):
+                CachedImage(url: url, maxPixel: 120) {
+                    $0.resizable().scaledToFill()
+                } placeholder: {
+                    // Also what is left on screen when the row outlived its file and /api/files
+                    // answers 404: the glyph the chip would have worn anyway, rather than a spinner
+                    // that never stops or a square of nothing.
+                    Image(systemName: "photo").font(.system(size: 15)).foregroundStyle(tone)
+                }
+                .frame(width: 38, height: 38)
+                .background(plate, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            case .glyph(let name):
+                Image(systemName: name)
                     .font(.system(size: 15))
                     .foregroundStyle(tone)
                     .frame(width: 38, height: 38)
@@ -472,6 +517,59 @@ struct GideonPanel: View {
             type: UTType(filenameExtension: ext)?.preferredMIMEType ?? "application/octet-stream",
             data: data
         )
+    }
+
+    /// Opens a kept attachment.
+    ///
+    /// The three viewers the app already has, chosen the way every other attachment in NEXUS is: a
+    /// picture goes straight at the remote url, because `ImageLoader` fetches it with the session,
+    /// downsamples it once and keeps the result; a PDF or a film has to be a file on disk, because
+    /// PDFKit and AVPlayer both want somewhere to seek and neither can be handed a cookie. A .docx
+    /// or a .xlsx — which GIDEON accepts and no viewer here draws — goes to the share sheet, which
+    /// is the difference between an attachment and a download.
+    private func open(_ item: GideonAttachment) async {
+        guard let raw = item.url, !raw.isEmpty else { return }
+        // A photo has no filename of its own, so the stored file's name stands in — it is the one
+        // thing that still carries the extension `AttachmentKind` reads first.
+        let stored = raw.split(separator: "/").last.map(String.init) ?? ""
+        let label = item.name.isEmpty ? T("Image attached") : item.name
+        guard let kind = AttachmentKind(mime: item.mime, name: item.name.isEmpty ? stored : item.name) else {
+            guard let file = await fetch(raw, named: label) else { return }
+            shareItem = ShareItem(url: file)
+            return
+        }
+        if kind == .image {
+            guard let remote = Self.remote(raw) else { return }
+            preview = AttachmentPreview(id: raw, name: label, kind: kind, source: remote)
+            return
+        }
+        guard let file = await fetch(raw, named: label) else { return }
+        preview = AttachmentPreview(id: raw, name: label, kind: kind, source: file)
+    }
+
+    /// A copy on disk, or a sentence saying why there isn't one.
+    ///
+    /// The row can outlive the file — a database restored from a backup older than the uploads
+    /// beside it, or somebody clearing the directory by hand. /api/files answers that with a 404,
+    /// and this is what turns it into something the user can read instead of a viewer opening onto
+    /// a blank rectangle.
+    private func fetch(_ raw: String, named: String) async -> URL? {
+        do {
+            return try await APIClient.shared.downloadAttachment(url: raw, fileName: named)
+        } catch APIError.unauthorized {
+            auth.logout()
+            return nil
+        } catch {
+            self.error = T("Couldn't open this file.")
+            return nil
+        }
+    }
+
+    /// A server path becomes a URL the same way it does everywhere else in the app: the host is
+    /// added here rather than stored, so what is kept names a file and never the route it took.
+    private static func remote(_ raw: String?) -> URL? {
+        guard let raw, !raw.isEmpty else { return nil }
+        return URL(string: raw.hasPrefix("http") ? raw : Config.baseURL.absoluteString + raw)
     }
 
     // MARK: - work
@@ -592,6 +690,22 @@ struct GideonPanel: View {
             self.error = (error as? LocalizedError)?.errorDescription ?? T("Failed.")
         }
     }
+}
+
+/// What goes in the 38pt square at the head of a chip.
+///
+/// One type for all three cases so that the chip itself keeps ONE shape, whether its picture is
+/// already in memory, still on the server, or was never a picture at all. The alternative — a second
+/// chip for stored attachments — is how the composer's chip and the bubble's chip would start to
+/// drift apart, which is the thing the shared one was written to prevent.
+private enum GideonChipArt {
+    /// Already decoded: a photo this process is holding, freshly picked or freshly sent.
+    case local(UIImage)
+    /// Kept server-side. Fetched through `ImageLoader`, which carries the session, downsamples once
+    /// and caches — so a thread full of chips is one fetch per file and no decode per redraw.
+    case remote(URL)
+    /// Not a picture, or not one that can be shown: an SF Symbol on a plate.
+    case glyph(String)
 }
 
 /// Thumbnails for attachments already in the thread.

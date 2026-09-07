@@ -2,19 +2,40 @@ import Foundation
 
 /// Something that rode along with a question, kept so the thread can still show it.
 ///
-/// It lives for as long as the panel is open and no longer. The server keeps no copy: /api/gideon
-/// hands the file to the shim, which deletes it once it has answered, and the turn it persists is
-/// the text alone. So a thread re-fetched from the server carries none of these, and a question read
-/// back from history draws as the words that were typed — which is the truth about what is still on
-/// the server, rather than a paperclip pointing at a file nobody can open any more.
+/// It has two lives. Freshly attached it is bytes in this process and nothing else — `preview` is
+/// the picture the composer is holding, and there is no file anywhere yet. Once the answer lands the
+/// server keeps a copy of what was sent, under /api/files behind the same session as every other
+/// upload in the app, and history hands it back with a `url`. That second life is what makes the
+/// chip survive closing the panel, and what makes it worth tapping: a handle onto a real file rather
+/// than a paperclip drawn from a remembered name.
+///
+/// The shim's copy is a third thing and unrelated: /api/gideon still hands it the file, it still
+/// writes it to its workdir, and it still deletes it once it has answered.
 struct GideonAttachment: Sendable, Equatable {
     enum Kind: Sendable, Equatable { case image, document }
 
     let kind: Kind
     /// Filename with its extension for a document. Empty for a photo, which never had one.
     let name: String
-    /// The bytes that were uploaded, kept for the thumbnail. Nil for a document.
+    /// The bytes that were uploaded, kept for the thumbnail. Nil for a document, and nil for
+    /// anything read back from history — there the picture is fetched from `url` instead.
     let preview: Data?
+    /// Where the file lives now, e.g. "/api/files/attachments/gideon/<uuid>.pdf".
+    ///
+    /// A PATH and never a full URL, the same as every other file reference in this app: the host is
+    /// added where it is used, so the file keeps working over the office LAN. Nil while the question
+    /// is still in flight — nothing is stored until the turn has an answer to be stored with.
+    let url: String?
+    /// The server's type for it, for choosing a viewer. Empty for one that is not stored yet.
+    let mime: String
+
+    init(kind: Kind, name: String, preview: Data?, url: String? = nil, mime: String = "") {
+        self.kind = kind
+        self.name = name
+        self.preview = preview
+        self.url = url
+        self.mime = mime
+    }
 }
 
 /// One turn of a GIDEON conversation.
@@ -27,8 +48,8 @@ struct GideonTurn: Identifiable, Sendable, Equatable {
     /// NEXUS tools GIDEON reached for on this turn. Empty until the tools are wired back up
     /// server-side; carried now so history from the web renders the same here.
     var tools: [String]
-    /// What was attached to this question. Always empty on an assistant turn, and on anything that
-    /// came back from history — see `GideonAttachment`.
+    /// What was attached to this question. Always empty on an assistant turn. A turn read back from
+    /// history carries whatever the server kept for it — see `GideonAttachment`.
     var attachments: [GideonAttachment]
 
     init(id: String = UUID().uuidString, role: Role, content: String, tools: [String] = [],
@@ -41,13 +62,24 @@ struct GideonTurn: Identifiable, Sendable, Equatable {
     }
 }
 
-/// Wire shapes. The server answers history as `{messages:[{role,content,tools}]}`.
+/// Wire shapes. The server answers history as `{messages:[{role,content,tools,attachments}]}`.
 private struct GideonHistoryResponse: Decodable {
     let messages: [Row]?
     struct Row: Decodable {
         let role: String?
         let content: String?
         let tools: [String]?
+        /// Absent from any server that predates kept attachments, and an empty array on every turn
+        /// that carried nothing — which is nearly all of them. Optional covers both.
+        let attachments: [Attachment]?
+    }
+    /// One kept file. Mirrors `StoredGideonAttachment` in src/lib/gideon-attachments.ts; `size` is
+    /// sent as well and deliberately not read, because nothing here draws it.
+    struct Attachment: Decodable {
+        let kind: String?
+        let url: String?
+        let name: String?
+        let mime: String?
     }
 }
 
@@ -137,7 +169,18 @@ enum GideonClient {
         let decoded = try JSONDecoder().decode(GideonHistoryResponse.self, from: data)
         return (decoded.messages ?? []).compactMap { row in
             guard let role = GideonTurn.Role(rawValue: row.role ?? ""), let content = row.content else { return nil }
-            return GideonTurn(role: role, content: content, tools: row.tools ?? [])
+            // A kept file with no url is dropped rather than drawn. A chip that opens nothing is
+            // precisely what this feature exists to stop showing, so an attachment the server can
+            // no longer name is better represented by the plain text it was always shown as.
+            let carried: [GideonAttachment] = (row.attachments ?? []).compactMap { item in
+                guard let url = item.url, !url.isEmpty else { return nil }
+                return GideonAttachment(kind: item.kind == "image" ? .image : .document,
+                                        name: item.name ?? "",
+                                        preview: nil,
+                                        url: url,
+                                        mime: item.mime ?? "")
+            }
+            return GideonTurn(role: role, content: content, tools: row.tools ?? [], attachments: carried)
         }
     }
 
