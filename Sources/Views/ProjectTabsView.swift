@@ -133,6 +133,9 @@ struct TabEmpty: View {
 
 struct OverviewTab: View {
     let detail: ProjectDetail
+    /// Raised to the project screen rather than pushed from here, so the destination is registered
+    /// once on the stack instead of once per crew row.
+    let onOpenMember: (ProfileTarget) -> Void
     private var tasks: [BoardTask] { detail.allTasks }
     private var total: Int { tasks.count }
     private var done: Int { tasks.filter(\.isDone).count }
@@ -177,12 +180,19 @@ struct OverviewTab: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("CREW").font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.violetText)
                         ForEach(members) { m in
-                            HStack(spacing: 10) {
-                                Text(m.initial).font(NXFont.text(11, .bold)).foregroundStyle(NX.violetText)
-                                    .frame(width: 30, height: 30).background(NX.accentBg, in: Circle())
-                                Text(m.displayName).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground)
-                                Spacer()
+                            Button {
+                                onOpenMember(ProfileTarget(userId: m.uid, name: m.user?.name, avatar: m.user?.avatar))
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Text(m.initial).font(NXFont.text(11, .bold)).foregroundStyle(NX.violetText)
+                                        .frame(width: 30, height: 30).background(NX.accentBg, in: Circle())
+                                    Text(m.displayName).font(NXFont.text(14, .medium)).foregroundStyle(NX.foreground)
+                                    Spacer()
+                                }
+                                .contentShape(Rectangle())
                             }
+                            .buttonStyle(.plain)
+                            .disabled(m.uid.isEmpty)
                         }
                     }.nexusCard()
                 }

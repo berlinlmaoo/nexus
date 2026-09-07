@@ -140,6 +140,7 @@ struct AdminUsersSection: View {
     @State private var loading = true
     @State private var filter = "ALL"
     @State private var deleteTarget: WorkspaceRoster.Member?
+    @State private var openProfile: ProfileTarget?
 
     private var members: [WorkspaceRoster.Member] { roster?.members ?? [] }
     private var viewerRole: String? { roster?.role }
@@ -177,16 +178,30 @@ struct AdminUsersSection: View {
             Button(T("Delete permanently"), role: .destructive) { if let m = deleteTarget { deleteTarget = nil; Task { await deleteUser(m) } } }
             Button(T("Cancel"), role: .cancel) { deleteTarget = nil }
         } message: { Text(T("Their tasks/files/quests are reassigned to you. This cannot be undone.")) }
+        .navigationDestination(item: $openProfile) { MemberProfileView(target: $0) }
     }
 
     private func row(_ m: WorkspaceRoster.Member) -> some View {
         HStack(spacing: 12) {
-            AvatarView(url: m.avatarURL, initial: m.initial, size: 38)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(m.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                if let e = m.emailText, !e.isEmpty { Text(e).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }
+            // Same split as the Tuning Room roster: the name opens the person, the role chip keeps
+            // its menu, and neither swallows the other's tap.
+            Button {
+                if let uid = m.userId {
+                    openProfile = ProfileTarget(userId: uid, name: m.displayName, avatar: m.avatarURL)
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    AvatarView(url: m.avatarURL, initial: m.initial, size: 38)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(m.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                        if let e = m.emailText, !e.isEmpty { Text(e).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }
+                    }
+                    Spacer(minLength: 6)
+                }
+                .contentShape(Rectangle())
             }
-            Spacer(minLength: 6)
+            .buttonStyle(.plain)
+            .disabled(m.userId == nil)
             if canEditTier(viewerRole, m.role), let wsId = workspaceId {
                 Menu {
                     ForEach(assignableRoles(viewerRole), id: \.self) { r in Button(orgRoleLabel(r)) { Task { await setRole(m, r, wsId) } } }

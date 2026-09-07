@@ -10,7 +10,7 @@ struct SearchResults: Decodable, Sendable {
     struct ProjHit: Decodable, Identifiable, Sendable { let id: String; let name: String; let color: String? }
     struct DocHit: Decodable, Identifiable, Sendable { let id: String; let title: String }
     struct FormHit: Decodable, Identifiable, Sendable { let id: String; let name: String }
-    struct MemberHit: Decodable, Identifiable, Sendable { let id: String; let name: String?; let email: String? }
+    struct MemberHit: Decodable, Identifiable, Sendable { let id: String; let name: String?; let email: String?; let avatar: String? }
 
     var isEmpty: Bool {
         (tasks?.isEmpty ?? true) && (projects?.isEmpty ?? true) && (docs?.isEmpty ?? true) && (forms?.isEmpty ?? true) && (members?.isEmpty ?? true)
@@ -25,6 +25,7 @@ struct SearchView: View {
     @State private var results: SearchResults?
     @State private var loading = false
     @State private var openTaskId: String?
+    @State private var openProfile: ProfileTarget?
     @State private var searchTask: Task<Void, Never>?
 
     var body: some View {
@@ -38,6 +39,7 @@ struct SearchView: View {
         .navigationTitle("Search")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }
+        .navigationDestination(item: $openProfile) { MemberProfileView(target: $0) }
         .onAppear { focused = true; if query.trimmingCharacters(in: .whitespaces).count >= 2 { debounceSearch(query) } }
     }
 
@@ -99,7 +101,13 @@ struct SearchView: View {
                         }
                     }
                     if let members = r.members, !members.isEmpty {
-                        group("MEMBERS") { ForEach(members) { m in hit(icon: "person.fill", tint: NX.coral, title: m.name ?? m.email ?? "—", sub: m.email) } }
+                        group("MEMBERS") {
+                            ForEach(members) { m in
+                                Button { openProfile = ProfileTarget(userId: m.id, name: m.name, avatar: m.avatar) } label: {
+                                    hit(icon: "person.fill", tint: NX.coral, title: m.name ?? m.email ?? "—", sub: m.email)
+                                }.buttonStyle(.plain)
+                            }
+                        }
                     }
                 }.padding(16)
             }

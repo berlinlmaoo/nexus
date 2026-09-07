@@ -35,6 +35,7 @@ struct WorkspaceMembersCard: View {
     @State private var inviteRole = "STAFF"
     @State private var busy = false
     @State private var err: String?
+    @State private var openProfile: ProfileTarget?
 
     private var canInvite: Bool { !assignableRoles(viewerRole).isEmpty }
 
@@ -51,6 +52,7 @@ struct WorkspaceMembersCard: View {
         }
         .nexusCard()
         .task { await load() }
+        .navigationDestination(item: $openProfile) { MemberProfileView(target: $0) }
     }
 
     private var inviteRow: some View {
@@ -76,12 +78,25 @@ struct WorkspaceMembersCard: View {
 
     private func memberRow(_ m: WorkspaceRoster.Member) -> some View {
         HStack(spacing: 10) {
-            AvatarView(url: m.avatarURL, initial: m.initial, size: 36)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(m.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                if let e = m.emailText, !e.isEmpty { Text(e).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }
+            // The role chip below is a Menu for anyone allowed to edit this person, so only the
+            // name half becomes the button — a Menu inside a Button's label never gets the tap.
+            Button {
+                if let uid = m.userId {
+                    openProfile = ProfileTarget(userId: uid, name: m.displayName, avatar: m.avatarURL)
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    AvatarView(url: m.avatarURL, initial: m.initial, size: 36)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(m.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                        if let e = m.emailText, !e.isEmpty { Text(e).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }
+                    }
+                    Spacer(minLength: 6)
+                }
+                .contentShape(Rectangle())
             }
-            Spacer(minLength: 6)
+            .buttonStyle(.plain)
+            .disabled(m.userId == nil)
             if canEditTier(viewerRole, m.role) {
                 Menu {
                     ForEach(assignableRoles(viewerRole), id: \.self) { r in

@@ -11,6 +11,7 @@ struct ProjectDetailView: View {
     @State private var loading = true
     @State private var error: String?
     @State private var openTaskId: String?
+    @State private var openProfile: ProfileTarget?
     @State private var tab: ProjectTab = .board
     @State private var showCreate = false
     @State private var showSettings = false
@@ -85,6 +86,7 @@ struct ProjectDetailView: View {
             if !displayName.isEmpty { ProjectShortcuts.shared.visit(ProjectRef(id: projectId, name: displayName, icon: detail?.icon)) }
         }
         .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }
+        .navigationDestination(item: $openProfile) { MemberProfileView(target: $0) }
     }
 
     /// Real status-bar height from the window (does NOT include the reserved nav-bar height that the
@@ -194,7 +196,7 @@ struct ProjectDetailView: View {
                 }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
             } else if let detail {
                 switch tab {
-                case .overview: OverviewTab(detail: detail)
+                case .overview: OverviewTab(detail: detail, onOpenMember: { openProfile = $0 })
                 case .board:    boardTab(detail)
                 case .list:     ListTab(lanes: lanes, onOpen: { openTaskId = $0 })
                 case .sheet:    SpreadsheetTab(projectId: projectId, lanes: lanes, onOpen: { openTaskId = $0 })

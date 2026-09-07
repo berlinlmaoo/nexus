@@ -9,6 +9,9 @@ struct LeaderboardView: View {
     /// When what is on screen was fetched. Non-nil only while showing a cached copy that has not
     /// been refreshed yet — data that looks live but is a day old is worse than a spinner.
     @State private var showingCacheFrom: Date?
+    /// The person a tapped rank opens. Held as a value because a NavigationLink(destination:) inside
+    /// the ForEach would build every profile on the way past.
+    @State private var openProfile: ProfileTarget?
 
     /// BoD+ (atBottom) sink below staff; then by XP desc, then name.
     private var ranked: [LeaderboardRow] {
@@ -35,6 +38,7 @@ struct LeaderboardView: View {
         }
         .navigationTitle("Leaderboard")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $openProfile) { MemberProfileView(target: $0) }
         .task {
             // Draw the last known board first so the screen opens with content instead of a
             // skeleton, then refresh underneath.
@@ -65,12 +69,18 @@ struct LeaderboardView: View {
                         .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(NX.border))
 
-                    if ranked.count >= 1 { Podium(rows: Array(ranked.prefix(3))) }
+                    if ranked.count >= 1 {
+                        Podium(rows: Array(ranked.prefix(3))) { row in
+                            openProfile = ProfileTarget(userId: row.userId, name: row.name, avatar: row.avatar)
+                        }
+                    }
 
                     VStack(spacing: 0) {
                         ForEach(Array(ranked.enumerated()), id: \.element.id) { idx, r in
                             if idx > 0 { Divider().overlay(NX.border) }
-                            RankRow(rank: idx + 1, row: r)
+                            RankRow(rank: idx + 1, row: r) {
+                                openProfile = ProfileTarget(userId: r.userId, name: r.name, avatar: r.avatar)
+                            }
                         }
                     }
                     .background {
@@ -111,6 +121,7 @@ struct LeaderboardView: View {
 
 struct Podium: View {
     let rows: [LeaderboardRow]   // already ranked 1..3
+    let onOpen: (LeaderboardRow) -> Void
     // Visual order: 2nd · 1st · 3rd
     private var slots: [(rank: Int, row: LeaderboardRow?)] {
         [(2, rows.count > 1 ? rows[1] : nil), (1, rows.first), (3, rows.count > 2 ? rows[2] : nil)]
@@ -131,13 +142,21 @@ struct Podium: View {
         }()
         return VStack(spacing: 6) {
             if let row {
-                ZStack {
-                    AvatarView(url: row.avatar, initial: row.initial, size: avatar)
-                        .overlay(Circle().strokeBorder(ring, lineWidth: 3))
-                    if rank == 1 { Image(systemName: "crown.fill").font(.system(size: 18)).foregroundStyle(crown).offset(y: -avatar/2 - 6) }
+                // Only the person half of the tile opens a profile. The numbered bar below stays
+                // scenery, so a tap on the podium's base does not fire.
+                Button { onOpen(row) } label: {
+                    VStack(spacing: 6) {
+                        ZStack {
+                            AvatarView(url: row.avatar, initial: row.initial, size: avatar)
+                                .overlay(Circle().strokeBorder(ring, lineWidth: 3))
+                            if rank == 1 { Image(systemName: "crown.fill").font(.system(size: 18)).foregroundStyle(crown).offset(y: -avatar/2 - 6) }
+                        }
+                        Text(row.name ?? "—").font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
+                        Text("\(row.totalXp.formatted(.number.grouping(.automatic))) XP").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+                    }
+                    .contentShape(Rectangle())
                 }
-                Text(row.name ?? "—").font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
-                Text("\(row.totalXp.formatted(.number.grouping(.automatic))) XP").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+                .buttonStyle(.plain)
             }
             ZStack(alignment: .top) {
                 RoundedRectangle(cornerRadius: 12, style: .continuous).fill(barColor).frame(height: height)
@@ -152,20 +171,25 @@ struct Podium: View {
 struct RankRow: View {
     let rank: Int
     let row: LeaderboardRow
+    let onOpen: () -> Void
     var body: some View {
-        HStack(spacing: 12) {
-            Text("\(rank)").font(NXFont.display(15, .black)).foregroundStyle(rank <= 3 ? NX.violetText : NX.mutedFg)
-                .frame(width: 28)
-            AvatarView(url: row.avatar, initial: row.initial, size: 36)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(row.name ?? "—").font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                Text("Level \(row.level)\(row.levelName.map { " – \($0)" } ?? "")").font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+        Button(action: onOpen) {
+            HStack(spacing: 12) {
+                Text("\(rank)").font(NXFont.display(15, .black)).foregroundStyle(rank <= 3 ? NX.violetText : NX.mutedFg)
+                    .frame(width: 28)
+                AvatarView(url: row.avatar, initial: row.initial, size: 36)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(row.name ?? "—").font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    Text("Level \(row.level)\(row.levelName.map { " – \($0)" } ?? "")").font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                }
+                Spacer()
+                Text("\(row.totalXp.formatted(.number.grouping(.automatic)))")
+                    .font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
+                Text("XP").font(NXFont.text(10, .bold)).foregroundStyle(NX.mutedFg)
             }
-            Spacer()
-            Text("\(row.totalXp.formatted(.number.grouping(.automatic)))")
-                .font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
-            Text("XP").font(NXFont.text(10, .bold)).foregroundStyle(NX.mutedFg)
+            .padding(.horizontal, 14).padding(.vertical, 11)
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 14).padding(.vertical, 11)
+        .buttonStyle(.plain)
     }
 }

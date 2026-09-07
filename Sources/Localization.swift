@@ -863,6 +863,28 @@ final class AppLanguage {
         "Log in again to submit this form.": "Login lagi buat ngirim form ini.",
         "Submitted — thank you!": "Terkirim — makasih!",
         "Your response was received.": "Jawaban kamu udah masuk.",
+        // ── profile · one person's page --------------------------------
+        "Profile unavailable": "Profil nggak bisa dibuka",
+        "That person isn't in a workspace you share.": "Orang itu nggak ada di workspace yang sama sama kamu.",
+        "Couldn't load this profile.": "Gagal muat profil ini.",
+        "Joined": "Gabung",
+        "Level": "Level",
+        "BoD and One Above All sit outside the ranking.": "BoD & One Above All di luar peringkat.",
+        "No points this period yet.": "Belum ada poin periode ini.",
+        "Day streak": "Streak harian",
+        "Not on a team yet.": "Belum masuk tim mana pun.",
+        "No team you can both see.": "Nggak ada tim yang bisa kalian berdua lihat.",
+        "No project you can both see.": "Nggak ada project yang bisa kalian berdua lihat.",
+        "THIS PERIOD": "PERIODE INI",
+        "No points moved this period.": "Nggak ada poin yang gerak periode ini.",
+        "Late": "Telat",
+        "min": "mnt",
+        "Absent": "Alpha",
+        "No check-out": "Nggak check-out",
+        "Peer report · reward": "Laporan rekan · bonus",
+        "Peer report · penalty": "Laporan rekan · penalti",
+        "Adjusted by a BoD": "Disesuaikan BoD",
+        "Quest claimed": "Quest diklaim",
     ]
 }
 

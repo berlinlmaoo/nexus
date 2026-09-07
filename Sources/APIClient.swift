@@ -652,6 +652,14 @@ struct APIClient {
                        cache: "leaderboard")).rows ?? []
     }
 
+    /// A workspace peer's XP ledger for the current period. Peer-scoped by the server — it answers
+    /// 403 for somebody the caller shares no workspace with — which is also how the profile screen
+    /// asks "may I show this person at all" without inventing a permission rule of its own.
+    func xpLog(userId: String, limit: Int = 20) async throws -> XpLogResponse {
+        try await run(makeRequest("/api/gamification/xp-log?userId=\(enc(userId))&limit=\(limit)"),
+                      decode: XpLogResponse.self)
+    }
+
     func docs() async throws -> [Doc] {
         (try await run(makeRequest("/api/docs"), decode: DocsResponse.self)).docs ?? []
     }

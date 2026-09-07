@@ -18,6 +18,7 @@ struct TeamDetailView: View {
     @State private var busy: Set<String> = []
     @State private var error: String?
     @State private var showAddMember = false
+    @State private var openProfile: ProfileTarget?
     @State private var showLinkProject = false
 
     init(team: Team, onChanged: @escaping () -> Void = {}) {
@@ -65,6 +66,7 @@ struct TeamDetailView: View {
         }
         .navigationTitle(team.name)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $openProfile) { MemberProfileView(target: $0) }
         .task { await loadSupporting() }
         .sheet(isPresented: $showAddMember) {
             PickerSheet(title: T("Add member"),
@@ -121,17 +123,32 @@ struct TeamDetailView: View {
     private func memberRow(_ member: Team.Member) -> some View {
         let key = "member-\(member.idv)"
         return HStack(spacing: 12) {
-            Text(member.initial)
-                .font(NXFont.display(13, .bold)).foregroundStyle(NX.violetText)
-                .frame(width: 34, height: 34)
-                .background(NX.accentBg, in: Circle())
-            VStack(alignment: .leading, spacing: 1) {
-                Text(member.displayName).font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
-                if let email = member.user?.email {
-                    Text(email).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            // Only the person half is the button. The row's menu has to stay outside it: a Menu
+            // nested inside a Button's label never receives the tap.
+            Button {
+                if let uid = member.uid {
+                    openProfile = ProfileTarget(userId: uid, name: member.user?.name, avatar: member.user?.avatar)
                 }
+            } label: {
+                HStack(spacing: 12) {
+                    Text(member.initial)
+                        .font(NXFont.display(13, .bold)).foregroundStyle(NX.violetText)
+                        .frame(width: 34, height: 34)
+                        .background(NX.accentBg, in: Circle())
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(member.displayName).font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
+                        if let email = member.user?.email {
+                            Text(email).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                }
+                .contentShape(Rectangle())
             }
-            Spacer(minLength: 8)
+            .buttonStyle(.plain)
+            // A membership row with no user id points at nobody. Leave it inert rather than open
+            // somebody else's profile.
+            .disabled(member.uid == nil)
             if member.isLead { NexusChip(text: T("Lead"), tone: .accent) }
             if canManage, let uid = member.uid {
                 Menu {

@@ -87,6 +87,54 @@ struct LeaderboardRow: Decodable, Identifiable, Sendable {
 }
 struct LeaderboardResponse: Decodable, Sendable { let rows: [LeaderboardRow]? }
 
+/// One movement in somebody's XP ledger (GET /api/gamification/xp-log?userId=).
+///
+/// `reason` is a machine key the server writes for idempotency ("attendance:late:2026-09-01"),
+/// never a sentence, so the label is built here. An unrecognised key is shown raw rather than
+/// dropped: a score that moved for a reason this app has not been taught is still a fact, and
+/// hiding it would make the total stop adding up.
+struct XpLogEntry: Decodable, Identifiable, Sendable {
+    let id: String
+    let amount: Int
+    let reason: String
+    let createdAt: String?
+    /// A late penalty's real minutes. The ledger amount is capped at 120 of them, so for anyone
+    /// who arrived later than that the two numbers deliberately disagree.
+    let lateMinutes: Int?
+
+    private var parts: [String] {
+        reason.split(separator: ":", maxSplits: 2, omittingEmptySubsequences: false).map(String.init)
+    }
+
+    var label: String {
+        let p = parts
+        switch (p.first ?? "", p.count > 1 ? p[1] : "") {
+        case ("attendance", "late"):
+            guard let mins = lateMinutes, mins > 0 else { return T("Late") }
+            return "\(T("Late")) · \(mins) \(T("min"))"
+        case ("attendance", "alpha"):      return T("Absent")
+        case ("attendance", "nocheckout"): return T("No check-out")
+        case ("peer", "report"):
+            return reason.hasSuffix(":bounty") ? T("Peer report · reward") : T("Peer report · penalty")
+        case ("admin", "adjust"):
+            let note = p.count > 2 ? p[2] : ""
+            return note.isEmpty ? T("Adjusted by a BoD") : "\(T("Adjusted by a BoD")) · \(note)"
+        case ("quest", _):                 return T("Quest claimed")
+        default:                           return reason
+        }
+    }
+
+    var signedAmount: String { amount > 0 ? "+\(amount)" : "\(amount)" }
+    var dayLabel: String { createdAt.map { AgendaRange.dayLabel(AgendaRange.dayKey($0)) } ?? "" }
+}
+
+struct XpLogResponse: Decodable, Sendable {
+    let rows: [XpLogEntry]?
+    /// The person the log belongs to, as the SERVER resolved them — the one identity on the
+    /// profile screen that does not come from the row that opened it.
+    let user: AppUser?
+}
+
 /// Inbox notification (GET /api/notifications).
 struct NexusNotification: Decodable, Identifiable, Sendable {
     let id: String
