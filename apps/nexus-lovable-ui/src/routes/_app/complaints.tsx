@@ -24,9 +24,15 @@ const CATEGORIES: { key: string; label: string; emoji: string }[] = [
   { key: "OTHER", label: "Other", emoji: "💬" },
 ];
 const catOf = (k: string) => CATEGORIES.find((c) => c.key === k);
+// The wording is the APP's, deliberately. iOS renders the same ComplaintStatus as "Open" and
+// "In review" (Sources/Views/TicketsView.swift, ticketStatusLabel); this screen used to say "New"
+// and "In progress" for those same two values, so one ticket read as two different states
+// depending on which client you opened. Both clients now say what the enum says. Nothing here is
+// derived: the chip is `status` straight off /api/complaints, and it moves only when a BoD moves
+// it. GIDEON answering a ticket does NOT move it, by design — see src/lib/gideon-ticket.ts.
 const STATUS: Record<string, { label: string; cls: string }> = {
-  OPEN: { label: "New", cls: "bg-amber-100 text-amber-700 ring-amber-200" },
-  IN_REVIEW: { label: "In progress", cls: "bg-sky-100 text-sky-700 ring-sky-200" },
+  OPEN: { label: "Open", cls: "bg-amber-100 text-amber-700 ring-amber-200" },
+  IN_REVIEW: { label: "In review", cls: "bg-sky-100 text-sky-700 ring-sky-200" },
   RESOLVED: { label: "Resolved", cls: "bg-emerald-100 text-emerald-700 ring-emerald-200" },
   CLOSED: { label: "Closed", cls: "bg-slate-100 text-slate-500 ring-slate-200" },
 };
@@ -72,7 +78,7 @@ function ComplaintsPage() {
 
       {viewerIsBod && (
         <div className="mb-3 flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1">
-          {([["open", "Inbox"], ["review", "In progress"], ["all", "All"]] as [Tab, string][]).map(([t, label]) => (
+          {([["open", "Inbox"], ["review", "In review"], ["all", "All"]] as [Tab, string][]).map(([t, label]) => (
             <button key={t} onClick={() => setTab(t)} className="relative shrink-0 rounded-lg px-3 py-1.5 text-sm font-bold transition">
               {tab === t && <motion.span layoutId="complaint-tab" className="absolute inset-0 rounded-lg bg-primary" transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
               <span className={cn("relative flex items-center gap-1.5", tab === t ? "text-primary-foreground" : "text-muted-foreground")}>
