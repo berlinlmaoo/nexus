@@ -259,7 +259,7 @@ export async function handleWaInbound(input: { chatId: string; senderId: string;
     if (!updated) return
     // Same penalty side-effects as the web review path — without this a WA approval left the XP penalty
     // in place until the nightly cron (max 14d back) and could leave a stuck open record. Mirror exactly.
-    await applyAttendanceReviewSideEffects(
+    const { xpRefunded } = await applyAttendanceReviewSideEffects(
       { userId: updated.userId, workspaceId: updated.workspaceId, startDate: updated.startDate, endDate: updated.endDate },
       cmd === "approve",
     )
@@ -278,7 +278,7 @@ export async function handleWaInbound(input: { chatId: string; senderId: string;
     // Confirmation to the approver who typed the command.
     await sendWaChat(input.chatId, `${cmd === "approve" ? "✅" : "❌"} *${label}* ${updated.user.name} (${range}) di-${cmd === "approve" ? "APPROVE" : "TOLAK"}.`)
     // Tell the requester (outcome + who) AND the other approvers (handled → no double-action). In-app + WA.
-    notifyAttendanceRequestReviewed({ requestId: targetId, reviewerId: user.id, reviewerName: user.name, approved: cmd === "approve", note })
+    notifyAttendanceRequestReviewed({ requestId: targetId, reviewerId: user.id, reviewerName: user.name, approved: cmd === "approve", note, xpRefunded })
       .catch((e) => console.error("[wa-bot] notifyAttendanceRequestReviewed failed", e))
     return
   }
@@ -417,6 +417,8 @@ async function fanOutHandledToApprovers(opts: {
  *  requester the outcome + who decided, and tell the other approvers it's handled. In-app + WA. */
 export async function notifyAttendanceRequestReviewed(input: {
   requestId: string; reviewerId: string; reviewerName: string | null; approved: boolean; note?: string | null
+  /** XP the approval handed back (positive). Told to the requester — see refundSuffix below. */
+  xpRefunded?: number
 }): Promise<void> {
   const req = await prisma.attendanceRequest.findUnique({
     where: { id: input.requestId },
@@ -435,6 +437,11 @@ export async function notifyAttendanceRequestReviewed(input: {
   // themselves is the bug we're fixing; WA already carried it, in-app/push didn't.
   const note = input.note?.trim() || null
   const noteSuffix = note ? ` Alasan: "${note}"` : ""
+  // A refund is not a silent correction. The person was told, to the minute, what their lateness cost
+  // them; if approving this request gave it back, they are told that in the same breath as the decision.
+  // Otherwise their score simply moves overnight and the only way to understand it is to ask someone.
+  const refunded = input.approved ? Math.max(0, input.xpRefunded ?? 0) : 0
+  const refundSuffix = refunded > 0 ? ` Penalti absen hari itu dibatalin — +${refunded} XP balik.` : ""
 
   // 1) the requester (skip the degenerate self-review)
   if (req.userId !== input.reviewerId) {
@@ -442,7 +449,7 @@ export async function notifyAttendanceRequestReviewed(input: {
       userId: req.userId,
       type: "attendance_request_reviewed",
       title: input.approved ? "Permintaan absen di-approve" : "Permintaan absen ditolak",
-      message: `${label} kamu (${range}) di-${verb} sama ${who}.${noteSuffix}`,
+      message: `${label} kamu (${range}) di-${verb} sama ${who}.${noteSuffix}${refundSuffix}`,
       link: "/attendance",
       // Push too: a decision is exactly the kind of thing you shouldn't have to open the app to learn.
       // (The matching "perlu approval" ping to approvers has always pushed; this one never did.)
@@ -452,7 +459,7 @@ export async function notifyAttendanceRequestReviewed(input: {
       const c = recipientChatId(req.user)
       if (c) {
         await sendWaChat(c, input.approved
-          ? `✅ *${label}* kamu (${range}) di-*APPROVE* sama ${who}. 🎉${note ? `\nCatatan: "${note}"` : ""}`
+          ? `✅ *${label}* kamu (${range}) di-*APPROVE* sama ${who}. 🎉${note ? `\nCatatan: "${note}"` : ""}${refunded > 0 ? `\n♻️ Penalti absen hari itu dibatalin — *+${refunded} XP* balik.` : ""}`
           : `❌ *${label}* kamu (${range}) di-*TOLAK* sama ${who}.${note ? `\nAlasan: "${note}"` : ""}`)
       }
     }

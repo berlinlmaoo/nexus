@@ -158,23 +158,27 @@ export async function POST(request: NextRequest) {
 
     // A REAL leave/day-off blocks recording attendance. The cron's auto-deduction day-off (a penalty
     // on a day the staff was present, e.g. ">120 min late") must NOT block them → ignore auto-deductions.
+    // PENDING excuses are read too. They must NOT block check-in — you may perfectly well come in while
+    // your izin is still waiting on a head — but they DO hold the late-XP penalty further down.
     const coveringRequests = await prisma.attendanceRequest.findMany({
       where: {
         userId: session.user.id,
         workspaceId: context.workspace.id,
-        status: "APPROVED",
+        status: { in: ["PENDING", "APPROVED"] },
         startDate: { lte: attendanceDate },
         endDate: { gte: attendanceDate },
       },
       select: {
         type: true,
+        status: true,
         reason: true,
         reviewedById: true,
         approvalSource: true,
       },
     })
 
-    const blockingRequest = coveringRequests.find((r) => !isAutoDeduction(r))
+    const realCoveringRequests = coveringRequests.filter((r) => !isAutoDeduction(r))
+    const blockingRequest = realCoveringRequests.find((r) => r.status === "APPROVED")
     if (blockingRequest) {
       return NextResponse.json(
         { error: `Attendance cannot be recorded because an approved ${blockingRequest.type.toLowerCase().replace("_", "-")} request already covers today.` },
@@ -319,9 +323,20 @@ export async function POST(request: NextRequest) {
     const waived = !exemptFromPenalty && !beforePolicyFloor && !outageDay
       ? await hasAttendanceWaiver(session.user.id, formatAttendanceDateKey(attendanceDate))
       : false
+    // An excuse filed for today and still waiting on a head HOLDS the late penalty. Both attendance
+    // crons already treat PENDING as cover — they refuse to cut a day-off token from someone whose
+    // permit is merely unapproved — and the approval path refunds the covered days. This live path was
+    // the only one with no such protection: someone who filed izin at 07:00 and walked in at 10:30 was
+    // docked −90 XP on the spot and told so, and only got it back once a head pressed Approve.
+    // Held, not forgiven: a rejected or withdrawn excuse re-derives the penalty (see
+    // rederiveLatePenaltyForDate in attendance-absence.ts), and the nightly cron is the backstop.
+    const excusePending = realCoveringRequests.some((r) => r.status === "PENDING")
     if (!exemptFromPenalty && !beforePolicyFloor && !outageDay && !waived) {
       try {
-        if (derived.lateMinutes && derived.lateMinutes > 0) {
+        if (excusePending) {
+          // Refund whatever the per-minute accrual job already took while the shift ran on.
+          await clearLatePenalty(session.user.id, formatAttendanceDateKey(attendanceDate))
+        } else if (derived.lateMinutes && derived.lateMinutes > 0) {
           await setLatePenalty(
             session.user.id,
             formatAttendanceDateKey(attendanceDate),

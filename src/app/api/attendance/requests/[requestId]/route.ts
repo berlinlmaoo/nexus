@@ -5,7 +5,7 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { getAttendanceWorkspaceContext, serializeAttendanceRequest } from "@/lib/attendance"
-import { applyAttendanceReviewSideEffects, processAbsenceDeductions } from "@/lib/attendance-absence"
+import { applyAttendanceReviewSideEffects } from "@/lib/attendance-absence"
 import { notifyAttendanceRequestReviewed } from "@/lib/wa-bot"
 import { attendanceRequestPatchSchema } from "@/lib/validations"
 
@@ -87,9 +87,14 @@ export async function PATCH(
         },
       })
 
-      // Requester withdrew a pending excuse → re-derive penalties for the now-uncovered dates (re-applies
-      // the absence penalty for any genuinely-absent covered workday). Window-independent.
-      try { await processAbsenceDeductions({ from: updated.startDate, to: updated.endDate }) } catch (err) { console.error("processAbsenceDeductions (cancel) failed:", err) }
+      // Requester withdrew a pending excuse → exactly the path a rejection takes, because both mean the
+      // same thing: those days are no longer covered. Re-derives the absence penalty for any genuinely-
+      // absent covered workday AND today's late penalty, which check-in had been holding while this
+      // request sat pending. Window-independent; every step is best-effort inside the helper.
+      await applyAttendanceReviewSideEffects(
+        { userId: updated.userId, workspaceId: updated.workspaceId, startDate: updated.startDate, endDate: updated.endDate },
+        false,
+      )
 
       await logAudit({
         action: "update",
@@ -163,7 +168,7 @@ export async function PATCH(
     // record (can't check out, blocks next day's check-in). Clear it here so it never enters that loop.
     // Refund-on-approve (clear stuck open record + cancel covered-day penalties, window-independent) /
     // re-derive-on-reject. Shared verbatim with the WA /approve|/reject command path.
-    await applyAttendanceReviewSideEffects(
+    const { xpRefunded } = await applyAttendanceReviewSideEffects(
       { userId: updated.userId, workspaceId: updated.workspaceId, startDate: updated.startDate, endDate: updated.endDate },
       nextStatus === "APPROVED",
     )
@@ -178,6 +183,9 @@ export async function PATCH(
       metadata: {
         status: updated.status,
         approvalSource,
+        // How much XP the approval actually handed back, so "why did my score jump" is answerable
+        // from the audit trail and not only from the ledger.
+        xpRefunded,
       },
     })
 
@@ -189,6 +197,8 @@ export async function PATCH(
       reviewerName: updated.reviewedBy?.name ?? null,
       approved: nextStatus === "APPROVED",
       note: updated.reviewNote,
+      // They were told, to the minute, what the lateness cost them. Tell them it came back.
+      xpRefunded,
     }).catch((e) => console.error("[wa] notifyAttendanceRequestReviewed failed", e))
 
     return NextResponse.json({ request: serializeAttendanceRequest(updated) })

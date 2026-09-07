@@ -58,3 +58,11 @@ postgres-data/
 
 # vendored third-party project (carries its own .git, ~566M) — never commit into this repo
 /AFFiNE/
+
+# Kredensial dan rahasia yang tinggal di dalam pohon repo. Ditulis di sini karena
+# `git add -A` pernah mencoba meng-commit cloudflared/creds-znet.json dan hanya
+# tertahan oleh permission file — bukan pengaman yang layak diandalkan dua kali.
+cloudflared/
+cron/cron-secret.txt
+.env.runtime
+*.bak-*
