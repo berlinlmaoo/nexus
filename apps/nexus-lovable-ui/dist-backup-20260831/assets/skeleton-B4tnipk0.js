@@ -1,0 +1,1 @@
+import{aJ as a}from"./vendor-4zekbwJ-.js";import{c as e}from"./utils-CooUbOAy.js";function t({className:o,...r}){return a.jsx("div",{className:e("motion-safe:animate-pulse rounded-md bg-primary/10",o),...r})}export{t as S};

@@ -15,7 +15,6 @@ import { ProjectSettingsDrawer, TUNE_MORPH_ID } from "@/components/projects/Proj
 import { AutomationsView } from "@/components/automations/AutomationsView";
 import { ChatThread } from "@/components/messages/ChatThread";
 import { ProjectFormsView } from "@/components/forms/form-kit";
-import { ProjectFiles } from "@/components/projects/ProjectFiles";
 import { ProjectSheetView } from "@/components/sheets/ProjectSheetView";
 import { ProjectTableView } from "@/components/projects/ProjectTableView";
 import { FinanceDashboardView } from "@/components/finance/FinanceDashboardView";
@@ -37,7 +36,6 @@ import {
   Link2,
   FileText,
   Filter,
-  Folder,
   FormInput,
   BarChart3,
   GanttChart,
@@ -68,7 +66,7 @@ import {
 
 export const Route = createFileRoute("/_app/projects/$projectId")({ component: ProjectDetail });
 
-type ViewId = "overview" | "board" | "list" | "table" | "sheet" | "calendar" | "timeline" | "sprints" | "automations" | "pages" | "forms" | "finance" | "pnl" | "files" | "chat";
+type ViewId = "overview" | "board" | "list" | "table" | "sheet" | "calendar" | "timeline" | "sprints" | "automations" | "pages" | "forms" | "finance" | "pnl" | "chat";
 // cfSelections: per custom-field-id, the set of values to keep (OR within a field, AND across fields).
 type BoardFilters = { query: string; section: string; priority: string; hideDone: boolean; assigneeId: string; cfSelections: Record<string, string[]> };
 const EMPTY_FILTERS: BoardFilters = { query: "", section: "ALL", priority: "ALL", hideDone: false, assigneeId: "ALL", cfSelections: {} };
@@ -92,7 +90,6 @@ const TABS: { id: ViewId; label: string; icon: typeof LayoutGrid }[] = [
   { id: "pages", label: "Pages", icon: FileText },
   { id: "forms", label: "Forms", icon: FormInput },
   { id: "finance", label: "Finance Dashboard", icon: BarChart3 },
-  { id: "files", label: "Files", icon: Folder },
   { id: "chat", label: "Chat", icon: MessageSquare },
 ];
 
@@ -229,7 +226,6 @@ function ProjectDetail() {
           {view === "forms" && <ProjectFormsView projectId={data.id} />}
           {view === "finance" && <div className="p-4 md:p-8"><FinanceDashboardView projectId={data.id} /></div>}
           {view === "pnl" && !!data.enablePnlDashboard && isBod && <PnlDashboardView projectId={data.id} />}
-          {view === "files" && <ProjectFiles projectId={data.id} />}
           {view === "chat" && <ProjectChat projectId={data.id} />}
         </TaskBulkProvider>
       )}
