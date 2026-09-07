@@ -137,53 +137,89 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       },
       include: { officeLocation: true },
     })
-    // The record existed when this was proposed (the tool refuses otherwise), so if it is gone now a
-    // BoD deleted the day in between. Say that out loud rather than re-creating it: a record conjured
-    // here would have no office, no geo, no penalty bookkeeping — an absence quietly erased.
-    if (!record) {
+    // A proposal made against an EXISTING record whose record has since vanished is still refused —
+    // that is drift, and approving it would resurrect a day a BoD deliberately deleted.
+    if (!record && correction.beforeRecordId) {
       return NextResponse.json(
         { error: `Record absen ${dateKey} udah gak ada (kehapus setelah usulan ini dibikin), jadi gak ada yang bisa dikoreksi. Tolak usulan ini dan pakai jalur pengajuan izin/cuti kalau harinya emang kosong.` },
         { status: 409 }
       )
     }
+    // The other case is a day that never had a record — the commonest complaint of all, "check-in
+    // never landed". Creating one needs an office, which nothing in the proposal carries: the person
+    // was not geolocated because the check-in never happened. Taken from where they actually check
+    // in, falling back to the workspace's only office; with several and no history, a human does it
+    // by hand rather than the system picking a building for them.
+    let creationOfficeId: string | null = null
+    if (!record) {
+      const usual = await prisma.attendanceRecord.findFirst({
+        where: { userId: correction.userId, workspaceId: complaint.workspaceId },
+        orderBy: { attendanceDate: "desc" },
+        select: { officeLocationId: true },
+      })
+      if (usual) {
+        creationOfficeId = usual.officeLocationId
+      } else {
+        const offices = await prisma.officeLocation.findMany({
+          where: { workspaceId: complaint.workspaceId, isActive: true },
+          select: { id: true },
+          take: 2,
+        })
+        if (offices.length === 1) creationOfficeId = offices[0].id
+      }
+      if (!creationOfficeId) {
+        return NextResponse.json(
+          { error: `Belum ada catatan absen ${dateKey} dan kantornya gak bisa ditentukan otomatis (orang ini belum pernah absen, dan workspace punya lebih dari satu kantor aktif). Buat recordnya manual lewat menu absensi.` },
+          { status: 422 }
+        )
+      }
+    }
 
     // Optimistic lock against the snapshot. If someone corrected the same day by hand in the meantime,
     // approving would silently overwrite their edit AND leave a "before" snapshot that no longer
     // matches reality — the one thing that makes an approval reversible.
-    if (!eq(record.checkInAt, correction.beforeCheckInAt) || !eq(record.checkOutAt, correction.beforeCheckOutAt)) {
+    // Drift only means anything when there was something to drift from.
+    if (record && (!eq(record.checkInAt, correction.beforeCheckInAt) || !eq(record.checkOutAt, correction.beforeCheckOutAt))) {
       return NextResponse.json(
         { error: `Absen ${dateKey} udah berubah sejak usulan ini dibikin. Tolak usulan ini terus minta dibikinin usulan baru dari data terkini.` },
         { status: 409 }
       )
     }
+    // Creating a day and correcting one need the same three facts. Resolved once so everything below
+    // reads the same whether the record exists yet or not.
+    const office = record?.officeLocation ?? (await prisma.officeLocation.findUnique({ where: { id: creationOfficeId! } }))
+    if (!office) return NextResponse.json({ error: "Kantor buat record ini gak ketemu." }, { status: 422 })
+    const targetUserId = record?.userId ?? correction.userId
+    const targetWorkspaceId = record?.workspaceId ?? complaint.workspaceId
+    const targetDate = record?.attendanceDate ?? correction.attendanceDate
 
-    const nextCheckInAt = correction.proposedCheckInAt ?? record.checkInAt
-    const nextCheckOutAt = correction.proposedCheckOutAt ?? record.checkOutAt
+    const nextCheckInAt = correction.proposedCheckInAt ?? record?.checkInAt ?? null
+    const nextCheckOutAt = correction.proposedCheckOutAt ?? record?.checkOutAt ?? null
     if (!nextCheckInAt) return NextResponse.json({ error: "Check-in wajib ada di record absen." }, { status: 422 })
     const timeError = validateCorrectionTimes(dateKey, nextCheckInAt, nextCheckOutAt)
     if (timeError) return NextResponse.json({ error: timeError }, { status: 422 })
 
-    // Re-derive late/early/worked from the record's own day, exactly like the manual correction at
+    // Re-derive late/early/worked from the day itself, exactly like the manual correction at
     // PATCH /api/attendance/records/[recordId]. Writing the times alone leaves lateMinutes lying.
     const effectiveShift = await resolveEffectiveAttendanceShift({
-      userId: record.userId,
-      workspaceId: record.workspaceId,
-      office: record.officeLocation,
-      date: record.attendanceDate,
+      userId: targetUserId,
+      workspaceId: targetWorkspaceId,
+      office,
+      date: targetDate,
     })
     const derived = buildAttendanceDerivedFields({
-      attendanceDate: record.attendanceDate,
+      attendanceDate: targetDate,
       checkInAt: nextCheckInAt,
       checkOutAt: nextCheckOutAt,
-      office: record.officeLocation,
+      office,
       effectiveShift,
-      treatAsNonWorkday: await isHoliday(record.workspaceId, record.attendanceDate),
+      treatAsNonWorkday: await isHoliday(targetWorkspaceId, targetDate),
     })
 
     const summary = describeCorrection({
       dateKey,
-      beforeCheckInAt: record.checkInAt,
-      beforeCheckOutAt: record.checkOutAt,
+      beforeCheckInAt: record?.checkInAt ?? null,
+      beforeCheckOutAt: record?.checkOutAt ?? null,
       proposedCheckInAt: correction.proposedCheckInAt,
       proposedCheckOutAt: correction.proposedCheckOutAt,
     })
@@ -191,10 +227,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const bumpToReview = complaint.status === "OPEN"
 
     const { correction: updatedCorrection, record: updatedRecord } = await prisma.$transaction(async (tx) => {
-      const written = await tx.attendanceRecord.update({
-        where: { id: record.id },
-        data: {
-          checkInAt: nextCheckInAt,
+      // Same shape, two verbs. An update carries the corrected times onto a day that exists; a create
+      // writes the day the outage never let happen, and needs the three identity columns as well.
+      const shared = {
+        checkInAt: nextCheckInAt,
           checkOutAt: nextCheckOutAt,
           status: derived.status,
           attendanceFlexi: derived.attendanceFlexi,
@@ -213,13 +249,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           // answers for it later.
           correctedById: me,
           correctionReason: `Tiket ${id}: ${correction.reason}`.slice(0, 1000),
-        },
-        include: {
-          officeLocation: true,
-          user: { select: { id: true, name: true, email: true, avatar: true } },
-          correctedBy: { select: { id: true, name: true, email: true } },
-        },
-      })
+      }
+      const include = {
+        officeLocation: true,
+        user: { select: { id: true, name: true, email: true, avatar: true } },
+        correctedBy: { select: { id: true, name: true, email: true } },
+      }
+      const written = record
+        ? await tx.attendanceRecord.update({ where: { id: record.id }, data: shared, include })
+        : await tx.attendanceRecord.create({
+            data: {
+              ...shared,
+              userId: targetUserId,
+              workspaceId: targetWorkspaceId,
+              officeLocationId: office.id,
+              attendanceDate: targetDate,
+            },
+            include,
+          })
       const row = await tx.attendanceCorrection.update({
         where: { id: correction.id },
         data: { status: "APPROVED", decidedById: me, decidedAt, decisionNote: note },

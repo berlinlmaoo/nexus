@@ -2,6 +2,7 @@
 // Private, categorized chat between a staff member and the BoD. Confidential (BoD-only review) with an
 // optional ANONYMOUS mode (reporter hidden even from BoD). Distinct from PeerReport (public + punitive).
 export { getUserOrgRole, isBodPlus } from "@/lib/feed" // reuse the org-role gate helpers
+import { GIDEON_EMAIL } from "@/lib/gideon-identity"
 import {
   ATTENDANCE_CORRECTION_INCLUDE, serializeAttendanceCorrection, type AttendanceCorrectionRow,
 } from "@/lib/attendance-correction"
@@ -52,7 +53,7 @@ export const COMPLAINT_DETAIL_INCLUDE = {
   corrections: { include: ATTENDANCE_CORRECTION_INCLUDE, orderBy: { createdAt: "desc" as const } },
   messages: {
     orderBy: { createdAt: "asc" as const },
-    include: { author: { select: { id: true, name: true, avatar: true } } },
+    include: { author: { select: { id: true, name: true, avatar: true, email: true } } },
   },
 }
 
@@ -76,6 +77,7 @@ type MessageRow = {
   id: string
   body: string
   fromReviewer: boolean
+  fromGideon?: boolean
   createdAt: Date
   authorId: string
   author: Person
@@ -127,6 +129,10 @@ export function serializeComplaintDetail(c: ComplaintDetailRow, viewerId: string
     createdAt: m.createdAt,
     author: m.author,
     mine: m.authorId === viewerId,
+    // Reviewer replies are shown as a collective "BoD" so a reporter cannot tell which director
+    // handled their complaint. GIDEON writes on that same side and must NOT inherit that anonymity:
+    // an automated reading presented as a director's own conclusion is a claim nobody made.
+    fromGideon: (m.author as { email?: string } | null)?.email === GIDEON_EMAIL,
   }))
   return {
     ...base,
