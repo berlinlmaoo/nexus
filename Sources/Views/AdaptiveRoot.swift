@@ -382,6 +382,15 @@ struct SidebarRoot: View {
             selection = .screen(requested)
             router.sidebarRequest = nil
         }
+        // Publish where the sidebar is standing, so the floating GIDEON launcher — drawn above the
+        // whole app, outside this layout — can tell Home from everything else. A project shortcut
+        // is not Home, and reports itself as Projects.
+        .onChange(of: selection) { _, now in
+            switch now ?? .screen(.dashboard) {
+            case .screen(let screen): router.sidebarScreen = screen
+            case .project:            router.sidebarScreen = .projects
+            }
+        }
     }
 
     /// Whether the detail column draws without a navigation bar, and therefore has nowhere for the

@@ -2,6 +2,15 @@ import SwiftUI
 import PhotosUI
 import UIKit
 
+/// The one place that decides WHERE the launcher may be drawn. `true` = Home only, `false` = the
+/// every-screen behaviour it shipped with.
+///
+/// The owner asked for Home only: hung above the whole app, the circle covered whatever scrolled
+/// underneath it — a row's text on Attendance, a card's title on My Submissions. Home is the one
+/// screen laid out around it. Nothing else in the app reads the current screen for this, so putting
+/// the button back everywhere is this constant and nothing more.
+private let gideonLauncherHomeOnly = true
+
 /// The floating GIDEON button, and the chat it opens.
 ///
 /// Bottom-LEFT on purpose. The right-hand side of a phone screen is where thumbs already live —
@@ -9,9 +18,23 @@ import UIKit
 /// by accident. On the web the panel sits bottom-right because a cursor does not have that problem.
 struct GideonLauncher: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(AppRouter.self) private var router
+    @Environment(\.horizontalSizeClass) private var hSize
     @State private var open = false
 
     var body: some View {
+        // Home in both shapes: the phone's first tab, and the sidebar's Dashboard row. Read here in
+        // `body` rather than in a computed property of its own, because the router is main-actor
+        // isolated and `body` is the only member of a View that is guaranteed to be too.
+        let onHome = hSize == .regular ? router.sidebarScreen == .dashboard : router.tab == .dashboard
+        if gideonLauncherHomeOnly && !onHome {
+            EmptyView()
+        } else {
+            launcher
+        }
+    }
+
+    private var launcher: some View {
         Button {
             open = true
         } label: {

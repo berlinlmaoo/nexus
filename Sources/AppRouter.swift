@@ -23,6 +23,12 @@ final class AppRouter {
     /// clears it and a second request works exactly like the first.
     var morePush: NXScreen?
 
+    /// iPad and Mac: the screen the sidebar currently HAS selected, written by SidebarRoot.
+    /// The phone answers the same question with `tab`. Both exist so something drawn above the
+    /// whole app — the GIDEON launcher — can tell which screen it is sitting on top of, which no
+    /// view in either layout is in a position to say.
+    var sidebarScreen: NXScreen = .dashboard
+
     /// iPad and Mac: consumed once by the sidebar, then cleared. A request rather than a piece of
     /// state, so returning to a screen by hand is never undone by a stale flag.
     var sidebarRequest: NXScreen?
