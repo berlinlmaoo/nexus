@@ -200,11 +200,20 @@ function getDateTimeParts(date: Date, timeZone = ATTENDANCE_TIMEZONE) {
   const read = (type: Intl.DateTimeFormatPartTypes, fallback: string) =>
     Number(parts.find((part) => part.type === type)?.value ?? fallback)
 
+  // hour12:false reports midnight as "24", not "00" — the h24 cycle, and legal per the spec. Left
+  // as 24 it feeds Date.UTC(y, m, d, 24) which rolls into the NEXT day, so the offset this function
+  // exists to measure comes out 24 hours too large.
+  //
+  // Only one input per day can hit it: the instant that is exactly midnight in the zone, which for
+  // Jakarta is 17:00 UTC. That is why every other hour looked correct — and why a 17:00 shift start,
+  // alone among all of them, computed its late minutes against the wrong day.
+  const rawHour = read("hour", "0")
+
   return {
     year: read("year", "1970"),
     month: read("month", "1"),
     day: read("day", "1"),
-    hour: read("hour", "0"),
+    hour: rawHour === 24 ? 0 : rawHour,
     minute: read("minute", "0"),
     second: read("second", "0"),
     key: `${parts.find((part) => part.type === "year")?.value ?? "1970"}-${
