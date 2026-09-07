@@ -855,7 +855,12 @@ export async function notifyStatusUpdate(data: {
   }
 }
 
-const SUBMISSION_STATUS_DEDUPE_MS = 30 * 60 * 1000
+// Guards a double-submit of the SAME card — a double-tap on the board, or a request retried after it
+// had already succeeded — not a fan-out. Deliberately short: anything longer starts eating real
+// events, because a card genuinely moved done → todo → done inside the window would announce the
+// retreat and then go silent on the recovery. Sized in seconds because that is the timescale of the
+// only real repeat in the log (one task, two TODO→DONE rows seven seconds apart, 2026-08-18).
+const SUBMISSION_STATUS_DEDUPE_MS = 60 * 1000
 
 /**
  * Tell whoever filed a form submission that its status moved.
@@ -869,16 +874,21 @@ const SUBMISSION_STATUS_DEDUPE_MS = 30 * 60 * 1000
  * for `notifyStatusUpdate`, which nothing has ever called, and "a status you care about changed" is
  * the same promise to the reader.
  *
- * De-duplicated over 30 minutes. Measured, not guessed: one submission collected fifteen byte-identical
- * `todo → done` rows in ten minutes because the board re-sent the same move over and over. An exact
- * repeat inside half an hour carries no news — the submitter has already been told this. A genuine
- * later move reads differently (different destination) and still gets through, and so does the same
- * move again once the window has passed.
+ * NAME THE SUBMISSION, NOT THE FORM. This once quoted `form.name`, which every submission of one
+ * form shares: when Finance cleared a column of nineteen different requests, the submitter got
+ * nineteen byte-identical `moved "Pengajuan Finance PATS Entertainment" from todo to done` lines and
+ * it read as one event repeating. The rows were real and distinct — nineteen tasks, nineteen
+ * `ActivityLog` rows, one write each — so the defect was the wording, not the write path.
  */
 export async function notifySubmissionStatus(data: {
   submitterId: string
   submissionId: string
-  formName: string
+  /**
+   * What the submitter calls THIS submission: the linked task's title (e.g. "ZALEEFYA - QUEENBAR"),
+   * which is exactly the label `GET /api/forms/my-submissions` puts on their card. Never the form's
+   * name — that is shared by every submission of the form and makes distinct events indistinguishable.
+   */
+  subject: string
   fromStatus: string
   toStatus: string
   updatedByName: string
@@ -896,7 +906,7 @@ export async function notifySubmissionStatus(data: {
     userId: data.submitterId,
     type: "submission_status",
     title: "Submission update",
-    message: `${data.updatedByName} moved "${data.formName}" from ${human(data.fromStatus)} to ${human(data.toStatus)}`,
+    message: `${data.updatedByName} moved "${data.subject}" from ${human(data.fromStatus)} to ${human(data.toStatus)}`,
     link: `/submissions?id=${data.submissionId}`,
     push: prefs.statusUpdate,
     dedupeWindowMs: SUBMISSION_STATUS_DEDUPE_MS,

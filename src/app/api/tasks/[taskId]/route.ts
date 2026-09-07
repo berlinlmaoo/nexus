@@ -277,13 +277,17 @@ export async function PATCH(
       try {
         const submission = await prisma.formSubmission.findUnique({
           where: { taskId },
-          select: { id: true, submitterId: true, form: { select: { name: true } } },
+          select: { id: true, submitterId: true },
         })
         if (submission?.submitterId && submission.submitterId !== session.user.id) {
           await notifySubmissionStatus({
             submitterId: submission.submitterId,
             submissionId: submission.id,
-            formName: submission.form?.name ?? "your submission",
+            // The task's title IS the submission's subject ("ZALEEFYA - QUEENBAR"), and it is the
+            // label the submitter already sees on their "Pengajuan Saya" card. The form's name is
+            // useless here: one form backs every request in the column, so quoting it turns a
+            // cleared column of distinct submissions into a wall of identical notifications.
+            subject: title ?? existing.title,
             fromStatus: existing.status,
             toStatus: status as string,
             updatedByName: session.user.name ?? "Someone",
