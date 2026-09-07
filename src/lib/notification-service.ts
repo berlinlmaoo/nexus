@@ -1177,7 +1177,8 @@ export async function notifyComplaintReply(data: { complaintId: string; workspac
 /** A complaint's status changed → tell the reporter. */
 export async function notifyComplaintStatus(data: { reporterId: string; complaintId: string; status: string }) {
   const label: Record<string, string> = {
-    OPEN: "dibuka kembali", IN_REVIEW: "lagi ditangani BoD", RESOLVED: "ditandai selesai", CLOSED: "ditutup",
+    OPEN: "dibuka kembali", AWAITING_DECISION: "nunggu keputusan BoD",
+    IN_REVIEW: "lagi ditangani BoD", RESOLVED: "ditandai selesai", CLOSED: "ditutup",
   }
   await createInAppNotification({
     userId: data.reporterId,

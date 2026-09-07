@@ -45,12 +45,19 @@ export function isOutageDate(dateKey: string): boolean {
   return getOutageDateKeys().has(dateKey)
 }
 
+export interface AttendancePenaltyRefund {
+  /** XP actually handed back (positive; 0 if there was nothing to refund). */
+  xp: number
+  /** True if anything at all was undone — XP or the cron's auto day-off. */
+  changed: boolean
+}
+
 /**
  * Cancel EVERY attendance penalty for a date — used when a real (manually-filed) leave/day-off covers
  * it. Refunds the late, no-checkout, and alpha XP, and drops the cron's own auto-deduction day-off so
  * the user's real leave isn't double-counted against their quota.
  */
-export async function cancelAttendancePenaltiesForDate(userId: string, workspaceId: string, date: Date, dateKey: string): Promise<boolean> {
+export async function cancelAttendancePenaltiesForDateDetailed(userId: string, workspaceId: string, date: Date, dateKey: string): Promise<AttendancePenaltyRefund> {
   // All-or-nothing: the three XP refunds + the auto day-off drop happen in ONE transaction, so a crash
   // mid-way can't leave the member with (say) the late XP back but the alpha penalty still applied. Each
   // refund is advisory-locked on its (userId, reason), so a concurrent BoD override + cron amnesty can't
@@ -63,23 +70,33 @@ export async function cancelAttendancePenaltiesForDate(userId: string, workspace
       where: { userId, workspaceId, type: "DAY_OFF", reviewedById: null, approvalSource: "ADMIN", reason: { startsWith: "Auto:" }, startDate: { lte: date }, endDate: { gte: date } },
     })
     // Did this actually undo a penalty? (used by the outage amnesty to count only real refunds)
-    return late > 0 || noCheckout > 0 || alpha > 0 || dropped.count > 0
+    return { xp: late + noCheckout + alpha, changed: late > 0 || noCheckout > 0 || alpha > 0 || dropped.count > 0 }
   })
+}
+
+/** Boolean form, for callers that only need "did anything change". */
+export async function cancelAttendancePenaltiesForDate(userId: string, workspaceId: string, date: Date, dateKey: string): Promise<boolean> {
+  return (await cancelAttendancePenaltiesForDateDetailed(userId, workspaceId, date, dateKey)).changed
 }
 
 /**
  * Refund EVERY attendance penalty across a date range (inclusive) — used the moment a leave/permit/
  * day-off is FILED or APPROVED, so the covered days are cleared immediately and independently of the
  * nightly cron's 14-day window (which otherwise can't reach older dates). Idempotent: each per-date
- * cancel only refunds what actually exists. Returns the number of days that had a penalty undone.
+ * cancel only refunds what actually exists. Returns the number of days that had a penalty undone AND
+ * the XP handed back, so the caller can tell the member what they got (a silent refund of a penalty
+ * they were explicitly told about reads like the penalty simply vanished).
  */
-export async function cancelAttendancePenaltiesForRange(userId: string, workspaceId: string, start: Date, end: Date): Promise<number> {
-  let cleared = 0
+export async function cancelAttendancePenaltiesForRange(userId: string, workspaceId: string, start: Date, end: Date): Promise<{ days: number; xp: number }> {
+  let days = 0
+  let xp = 0
   for (const date of enumerateAttendanceDates(start, end)) {
     const dateKey = formatAttendanceDateKey(date)
-    if (await cancelAttendancePenaltiesForDate(userId, workspaceId, date, dateKey)) cleared++
+    const undone = await cancelAttendancePenaltiesForDateDetailed(userId, workspaceId, date, dateKey)
+    if (undone.changed) days++
+    xp += undone.xp
   }
-  return cleared
+  return { days, xp }
 }
 
 /**
@@ -119,19 +136,98 @@ export function isAutoDeduction(r: { reason: string | null; reviewedById: string
  * The penalty side-effects of reviewing an attendance request, shared by the web PATCH and the WA
  * `/approve`|`/reject` command so both behave identically. Approve → clear any stuck leave-covered open
  * record + refund every penalty on the covered days (window-independent). Reject → re-derive penalties
- * for the covered days (re-applies a genuinely-absent day even if aged out of the cron's 14-day window).
+ * for the covered days (re-applies a genuinely-absent day even if aged out of the cron's 14-day window)
+ * plus today's late penalty, which the cron by design won't touch.
+ *
+ * ALL request types refund, and the whole inclusive date range does: what earns the refund is that the
+ * person was excused from the day's attendance expectation, and LEAVE/SICK/PERMIT/DAY_OFF/RED_DATE all
+ * do that. The one thing that never counts as an excuse is the cron's own auto-deduction DAY_OFF — that
+ * request IS a penalty (see isAutoDeduction), so treating it as cover would refund a penalty with itself.
+ *
+ * No penalty WAIVER is granted here, on purpose. A waiver is permanent and status-blind; the approved
+ * request is itself the durable evidence, and both crons already read it (PENDING/APPROVED). A waiver
+ * would survive a later cancellation and silently suppress a penalty that ought to come back.
+ *
  * Each step is best-effort (a failure is logged, never throws) so it can't break the review response.
+ * Returns the XP handed back, so the caller can tell the member (see notifyAttendanceRequestReviewed).
  */
 export async function applyAttendanceReviewSideEffects(
   req: { userId: string; workspaceId: string; startDate: Date; endDate: Date },
   approved: boolean,
-): Promise<void> {
+): Promise<{ xpRefunded: number }> {
   if (approved) {
     try { await clearLeaveCoveredOpenRecords(req.userId, req.workspaceId) } catch (err) { console.error("clearLeaveCoveredOpenRecords (review) failed:", err) }
-    try { await cancelAttendancePenaltiesForRange(req.userId, req.workspaceId, req.startDate, req.endDate) } catch (err) { console.error("cancelAttendancePenaltiesForRange (review) failed:", err) }
-  } else {
-    try { await processAbsenceDeductions({ from: req.startDate, to: req.endDate }) } catch (err) { console.error("processAbsenceDeductions (review) failed:", err) }
+    try {
+      const undone = await cancelAttendancePenaltiesForRange(req.userId, req.workspaceId, req.startDate, req.endDate)
+      return { xpRefunded: undone.xp }
+    } catch (err) { console.error("cancelAttendancePenaltiesForRange (review) failed:", err) }
+    return { xpRefunded: 0 }
   }
+
+  try { await processAbsenceDeductions({ from: req.startDate, to: req.endDate }) } catch (err) { console.error("processAbsenceDeductions (review) failed:", err) }
+  // processAbsenceDeductions deliberately never processes TODAY (the day isn't over, so "no check-in"
+  // doesn't yet mean absent). But check-in now HOLDS the late-XP penalty while an excuse is pending —
+  // so if that excuse is rejected/withdrawn today, today is exactly the day whose penalty has to come
+  // back, and the cron is the one day late in doing it. Re-derive just that one day here. (The
+  // ">120 min → cut a day-off token" half stays with the nightly cron, which is idempotent.)
+  try {
+    const today = getAttendanceDate()
+    if (req.startDate.getTime() <= today.getTime() && today.getTime() <= req.endDate.getTime()) {
+      await rederiveLatePenaltyForDate(req.userId, req.workspaceId, today, formatAttendanceDateKey(today))
+    }
+  } catch (err) { console.error("rederiveLatePenaltyForDate (review) failed:", err) }
+  return { xpRefunded: 0 }
+}
+
+/**
+ * Re-apply TODAY's late-check-in XP penalty for one member from the attendance record that already
+ * exists, honouring every exemption the nightly cron honours (policy floor, outage, holiday, non-
+ * workday, pre-join, BoD/One-Above-All, BoD waiver, a still-covering excuse, a corrected record).
+ * Used when the excuse that was holding the penalty back is rejected or withdrawn. Idempotent via
+ * awardXpOnce. Returns the XP deducted (negative), or 0 if nothing was owed.
+ */
+export async function rederiveLatePenaltyForDate(userId: string, workspaceId: string, date: Date, dateKey: string): Promise<number> {
+  if (date.getTime() < startFloor().getTime()) return 0
+  if (isOutageDate(dateKey)) return 0
+
+  const member = await prisma.workspaceMember.findFirst({
+    where: { userId, workspaceId },
+    select: { role: true, joinedAt: true, user: { select: { createdAt: true } } },
+  })
+  if (!member) return 0
+  if (member.role === "BOD" || member.role === "ONE_ABOVE_ALL") return 0 // exempt from all attendance XP penalties
+  const joinKey = formatAttendanceDateKey(member.joinedAt ?? member.user?.createdAt ?? startFloor())
+  if (dateKey < joinKey) return 0 // never penalize days before this member joined
+
+  const office = await prisma.officeLocation.findFirst({ where: { workspaceId, isActive: true } })
+  if (!office) return 0
+  if (!isWorkdayForAttendanceDate(date, office)) return 0
+  if (await isHoliday(workspaceId, date)) return 0
+  if (await hasAttendanceWaiver(userId, dateKey)) return 0
+
+  // Another excuse may still cover the day (someone can file two) — then the hold stands.
+  const covering = await prisma.attendanceRequest.findMany({
+    where: { userId, workspaceId, status: { in: ["PENDING", "APPROVED"] }, startDate: { lte: date }, endDate: { gte: date } },
+    select: { reason: true, reviewedById: true, approvalSource: true },
+  })
+  if (covering.some((r) => !isAutoDeduction(r))) return 0
+
+  const record = await prisma.attendanceRecord.findUnique({
+    where: { userId_workspaceId_attendanceDate: { userId, workspaceId, attendanceDate: date } },
+    select: { checkInAt: true, correctedAt: true },
+  })
+  if (!record?.checkInAt) return 0 // never checked in → not a LATE case; the nightly cron judges absence
+  if (record.correctedAt) return 0 // a manual correction is authoritative
+
+  const shift = await resolveEffectiveAttendanceShift({ userId, workspaceId, office, date })
+  const lateBaseline = shift.flexi ? FLEXI_WINDOW_END : shift.shiftStartTime
+  const lateMin = minutesLateAgainstShift(record.checkInAt, date, lateBaseline, safeAttendanceTimezone(office.timezone))
+  const grace = Math.max(0, office.lateGraceMinutes ?? 0)
+  if (lateMin <= grace) return 0
+
+  const amount = -Math.min(lateMin, 120)
+  await awardXpOnce(userId, amount, `attendance:late:${dateKey}`)
+  return amount
 }
 
 /**
