@@ -2552,6 +2552,12 @@ model GideonMessage {
   role      String   // "user" | "assistant"
   content   String   @db.Text
   tools     String[] @default([]) // tool names Gideon invoked on this turn
+  // What rode along with this question, kept so the chip survives closing the panel. An ARRAY
+  // because one turn may carry a photo AND a document; NULL on every turn that carried neither,
+  // which is almost all of them. Shape: [{ url, name, kind, mime, size }] — see /api/gideon.
+  // Assistant turns never have one. The files live under public/uploads/attachments/gideon/ and
+  // are deleted with the row by DELETE /api/gideon/history.
+  attachments Json?
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])

@@ -2,8 +2,10 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest } from 'next/server'
 import sharp from 'sharp'
+import type { InputJsonValue } from '@prisma/client/runtime/client'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
+import { deleteGideonAttachmentFiles, storeGideonAttachments } from '@/lib/gideon-attachments'
 import { TaskStatus, TaskPriority } from '@/generated/prisma'
 
 // There is no SYSTEM_PROMPT constant here any more. One existed for months and was never sent:
@@ -132,6 +134,10 @@ export async function POST(req: NextRequest) {
   let documentBase64: string | null = null
   let documentType: string | null = null
   const documentName = (file?.name || '').toString().slice(0, 200)
+  // Carried past the shim purely so the stored copy can say what it is: the extension decides how
+  // the file is read here and how /api/files serves it, but a client choosing a viewer for a kept
+  // attachment reads the type first, and re-deriving it there would be a second copy of this table.
+  const documentMime = (file?.type || '').toString().slice(0, 128)
   if (file && typeof file.data === 'string' && file.data.length > 32) {
     const raw = file.data.startsWith('data:') ? file.data.slice(file.data.indexOf(',') + 1) : file.data
     const ext = docExtensionFor(documentName, file.type)
@@ -230,16 +236,48 @@ export async function POST(req: NextRequest) {
       if (reply) {
         const asked = [...(messages || [])].reverse().find((m) => m?.role === 'user')?.content?.trim() || ''
         const now = Date.now()
+        // The attachment is kept HERE and not on the way in, for the same reason the rows are: a
+        // request that failed leaves nothing behind to sweep up. What is written is what GIDEON was
+        // actually handed — the downscaled JPEG rather than the camera frame, and the document byte
+        // for byte. The shim's own copy is untouched by this; it still writes its workdir file and
+        // still deletes it in its finally.
+        //
+        // Only when there is a question to hang them on. With no user row, nothing could ever draw
+        // the chip and the files would be unreachable the moment they were written.
+        const stored = asked
+          ? await storeGideonAttachments({
+              imageBase64,
+              documentBase64,
+              documentExt: documentType,
+              documentName,
+              documentMime,
+            })
+          : []
         try {
           await prisma.gideonMessage.createMany({
             data: [
-              ...(asked ? [{ userId, role: 'user', content: asked, createdAt: new Date(now) }] : []),
+              ...(asked
+                ? [{
+                    userId,
+                    role: 'user',
+                    content: asked,
+                    createdAt: new Date(now),
+                    // Left off entirely when there is nothing, so a turn that carried no file keeps
+                    // the NULL every existing row has rather than an empty array to special-case.
+                    ...(stored.length ? { attachments: stored as unknown as InputJsonValue } : {}),
+                  }]
+                : []),
               { userId, role: 'assistant', content: reply, createdAt: new Date(now + 1) },
             ],
           })
         } catch (persistError) {
           // History is a convenience — never fail a reply the user already received.
           console.error('GIDEON history persist error:', persistError)
+          // The row that would have named these files did not land, so nothing can ever reach them
+          // again. Take them back out rather than leave megabytes nobody will look for.
+          if (stored.length) {
+            await deleteGideonAttachmentFiles([stored]).catch(() => {})
+          }
         }
       }
     } catch (error) {
