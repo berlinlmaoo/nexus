@@ -32,6 +32,14 @@ CUSTOM_FIELD_UPDATES = {
 }
 
 SCHEMAS = {
+    "nexus_get_attendance_day": object_schema(
+        "Read ONE day of the requesting user's own attendance record: check-in and check-out times, "
+        "status, late minutes, office. Use this before judging any attendance complaint — the photo "
+        "alone is not evidence of what the record says. Read-only; correcting a day goes through "
+        "propose_attendance_correction and a human approval.",
+        {"date": {"type": "string", "description": "YYYY-MM-DD, e.g. 2026-09-01."}},
+        ["date"],
+    ),
     "nexus_create_document": object_schema(
         "Write a document into the NEXUS Knowledge Library, inside a project. Use this whenever the "
         "user asks for a report, summary, brief, minutes, SOP or any written deliverable they will "

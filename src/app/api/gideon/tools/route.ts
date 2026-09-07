@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { formatAttendanceDateKey } from '@/lib/attendance'
 import { markdownToTipTap, extractTextFromTipTap } from '@/lib/tiptap-utils'
 import { getGideonUserId } from '@/lib/gideon-identity'
 import { authenticateGideonService } from '@/lib/gideon-service-auth'
@@ -28,6 +29,7 @@ type GideonAction =
   | 'add_task_comment'
   | 'list_custom_fields'
   | 'create_document'
+  | 'get_attendance_day'
   | 'propose_attendance_correction'
 
 type ToolBody = {
@@ -555,6 +557,82 @@ async function proposeAttendanceCorrection(actor: User, input: Record<string, un
   }
 }
 
+/**
+ * One day of the actor's OWN attendance, read-only.
+ *
+ * Added because GIDEON was being asked to validate an attendance ticket while unable to see the
+ * record it was validating against — it could read the photo and nothing else, so every conclusion
+ * rested on the picture alone.
+ *
+ * Always the actor, never a userId from the input. GIDEON acts as whoever asked, so on a ticket it
+ * reads the reporter's day and no one else's. A BoD wanting to look at a colleague's attendance has
+ * the attendance board for that; widening this tool would turn "help me with my ticket" into a way
+ * to read the whole company's hours.
+ *
+ * Reading only. There is deliberately no counterpart that writes: a correction goes through
+ * propose_attendance_correction and a human approval, because a person MAY mark themselves present
+ * and so acting-as-them guards nothing here.
+ */
+async function getAttendanceDay(actor: User, input: Record<string, unknown>) {
+  const raw = String(input.date ?? input.attendanceDate ?? '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) throw new Error('date is required, format YYYY-MM-DD')
+
+  const membership = await prisma.workspaceMember.findFirst({
+    where: { userId: actor.id },
+    select: { workspaceId: true },
+  })
+  if (!membership) throw new Error('No workspace membership found')
+
+  const record = await prisma.attendanceRecord.findFirst({
+    where: {
+      userId: actor.id,
+      workspaceId: membership.workspaceId,
+      attendanceDate: { gte: new Date(`${raw}T00:00:00.000Z`), lt: new Date(`${raw}T23:59:59.999Z`) },
+    },
+    select: {
+      id: true, attendanceDate: true, checkInAt: true, checkOutAt: true, status: true,
+      lateMinutes: true, earlyLeaveMinutes: true, workedMinutes: true,
+      checkInStatus: true, checkOutStatus: true,
+      officeLocation: { select: { name: true } },
+    },
+  })
+
+  if (!record) {
+    // Said plainly rather than returned as an empty object: "no record" is a real answer here — it
+    // usually means the check-in never landed, which is exactly what a ticket is about.
+    return {
+      date: raw,
+      user: { id: actor.id, name: actor.name },
+      found: false,
+      note: 'Tidak ada catatan absensi untuk tanggal ini. Biasanya berarti check-in tidak pernah masuk.',
+    }
+  }
+
+  // Local clock as well as the raw instant. Given only UTC the model reports "15.09 UTC" into a
+  // ticket read by people who live seven hours ahead of it — and an attendance argument settled on a
+  // misread clock is settled wrongly.
+  const jakarta = (d: Date | null) =>
+    d ? d.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }) : null
+
+  return {
+    date: formatAttendanceDateKey(record.attendanceDate),
+    user: { id: actor.id, name: actor.name },
+    found: true,
+    status: record.status,
+    checkInAt: record.checkInAt,
+    checkOutAt: record.checkOutAt,
+    checkInLocal: jakarta(record.checkInAt),
+    checkOutLocal: jakarta(record.checkOutAt),
+    timezone: 'Asia/Jakarta (WIB)',
+    checkInStatus: record.checkInStatus,
+    checkOutStatus: record.checkOutStatus,
+    lateMinutes: record.lateMinutes,
+    earlyLeaveMinutes: record.earlyLeaveMinutes,
+    workedMinutes: record.workedMinutes,
+    office: record.officeLocation?.name ?? null,
+  }
+}
+
 async function getAccessibleProject(actor: User, projectId: string) {
   const project = await prisma.project.findUnique({
     where: {
@@ -988,6 +1066,8 @@ export async function POST(req: Request) {
         return ok(await addTaskComment(auth.actor, input))
       case 'create_document':
         return ok(await createDocument(auth.actor, input))
+      case 'get_attendance_day':
+        return ok(await getAttendanceDay(auth.actor, input))
       case 'propose_attendance_correction':
         return ok(await proposeAttendanceCorrection(auth.actor, input))
       default:
