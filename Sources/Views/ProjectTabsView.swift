@@ -1,12 +1,11 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 // MARK: - Tab model
 
 enum ProjectTab: String, CaseIterable, Identifiable {
     case overview = "Overview", board = "Board", list = "List", sheet = "Spreadsheet", calendar = "Calendar"
     case timeline = "Timeline", sprints = "Sprints", automations = "Automations"
-    case pages = "Pages", forms = "Forms", finance = "Finance", pnl = "P&L", files = "Files", chat = "Chat"
+    case pages = "Pages", forms = "Forms", finance = "Finance", pnl = "P&L", chat = "Chat"
     var id: String { rawValue }
     var icon: String {
         switch self {
@@ -22,7 +21,6 @@ enum ProjectTab: String, CaseIterable, Identifiable {
         case .forms:    return "list.clipboard.fill"
         case .finance:  return "banknote.fill"
         case .pnl:      return "dollarsign.circle.fill"
-        case .files:    return "folder.fill"
         case .chat:     return "bubble.left.and.bubble.right.fill"
         }
     }
@@ -565,199 +563,9 @@ struct ProjectFormsTab: View {
     }
 }
 
-// MARK: - Files (browse · upload · download · delete · new folder)
+// MARK: - Share sheet (task attachments)
 
 struct ShareItem: Identifiable { let id = UUID(); let url: URL }
-
-struct ProjectFilesTab: View {
-    let projectId: String
-    @Environment(AuthStore.self) private var auth
-    @State private var stack: [String] = [""]       // path breadcrumb
-    @State private var files: [ProjectFile] = []
-    @State private var loading = true
-    @State private var busy = false
-    @State private var downloading: String?
-    @State private var showImporter = false
-    @State private var showNewFolder = false
-    @State private var newFolderName = ""
-    @State private var deleteTarget: ProjectFile?
-    @State private var shareItem: ShareItem?
-    @State private var uploadProgress = UploadProgress()
-    /// What went wrong, shown rather than swallowed. Every call below used to be `try?`, so a file
-    /// the edge refused for being too large — see APIClient.uploadProjectFile — looked exactly like
-    /// one that worked, right up to the list reloading without it.
-    @State private var problem: String?
-
-    private var path: String { stack.last ?? "" }
-    private var folderName: String { path.isEmpty ? "Files" : (path.split(separator: "/").last.map(String.init) ?? "Files") }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            toolbar
-            if uploadProgress.isActive {
-                UploadProgressBar(progress: uploadProgress).padding(.horizontal, 16).padding(.bottom, 10)
-            }
-            if let problem { complaint(problem).padding(.horizontal, 16).padding(.bottom, 10) }
-            if loading { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity) }
-            else if files.isEmpty { TabEmpty(icon: "folder", text: T("This folder is empty. Upload a file or create a folder with the + button.")) }
-            else {
-                ScrollView {
-                    LazyVStack(spacing: 8) { ForEach(files) { f in fileRow(f) } }.padding(16)
-                }
-            }
-        }
-        .task { await load() }
-        .fileImporter(isPresented: $showImporter, allowedContentTypes: [.item], allowsMultipleSelection: false) { result in
-            if case let .success(urls) = result, let url = urls.first { Task { await upload(url) } }
-        }
-        .alert(T("New folder"), isPresented: $showNewFolder) {
-            TextField(T("Folder name"), text: $newFolderName)
-            Button(T("Create")) { Task { await createFolder() } }
-            Button(T("Cancel"), role: .cancel) { newFolderName = "" }
-        }
-        .confirmationDialog("\(T("Delete")) \"\(deleteTarget?.name ?? "")\"?", isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }), titleVisibility: .visible) {
-            Button(T("Delete"), role: .destructive) { if let t = deleteTarget { deleteTarget = nil; Task { await delete(t) } } }
-            Button(T("Cancel"), role: .cancel) { deleteTarget = nil }
-        }
-        .sheet(item: $shareItem) { item in ActivityView(items: [item.url]) }
-    }
-
-    private var toolbar: some View {
-        HStack(spacing: 10) {
-            if stack.count > 1 {
-                Button { stack.removeLast(); Task { await load() } } label: {
-                    Image(systemName: "chevron.left").font(.system(size: 14, weight: .bold)).foregroundStyle(NX.violetText)
-                }
-            }
-            Text(folderName).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
-            Spacer()
-            if busy { ProgressView().scaleEffect(0.8) }
-            Menu {
-                Button { showImporter = true } label: { Label(T("Upload file"), systemImage: "arrow.up.doc") }
-                Button { newFolderName = ""; showNewFolder = true } label: { Label(T("New folder"), systemImage: "folder.badge.plus") }
-            } label: {
-                Image(systemName: "plus.circle.fill").font(.system(size: 22)).foregroundStyle(NX.violetText)
-            }
-            .disabled(busy)
-        }
-        .padding(.horizontal, 16).padding(.vertical, 10)
-    }
-
-    /// Same banner as the task attachments card, for the same reason: a refusal nobody can see is
-    /// indistinguishable from a success, and that is the whole bug this file was opened for.
-    private func complaint(_ text: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 12)).foregroundStyle(NX.danger)
-            Text(text).font(NXFont.text(12)).foregroundStyle(NX.danger).lineLimit(4)
-            Spacer(minLength: 0)
-            Button { problem = nil } label: {
-                Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).foregroundStyle(NX.mutedFg)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(T("Close"))
-        }
-        .padding(10)
-        .background(NX.danger.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-
-    @ViewBuilder private func fileRow(_ f: ProjectFile) -> some View {
-        let isDownloading = downloading == f.path
-        let row = HStack(spacing: 12) {
-            Image(systemName: f.isdir ? "folder.fill" : "doc.fill").font(.system(size: 16))
-                .foregroundStyle(f.isdir ? NX.violetText : NX.mutedFg)
-                .frame(width: 34, height: 34).background((f.isdir ? NX.violet : NX.mutedFg).opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(f.name).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                Text(subtitle(f)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-            }
-            Spacer()
-            if isDownloading { ProgressView().scaleEffect(0.8) }
-            else if f.isdir { Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(NX.mutedFg) }
-            else { Image(systemName: "square.and.arrow.down").font(.system(size: 14)).foregroundStyle(NX.mutedFg) }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(NX.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(NX.border))
-
-        Button {
-            if f.isdir { stack.append(f.relPath ?? f.path); Task { await load() } }
-            else { Task { await download(f) } }
-        } label: { row }
-        .buttonStyle(.plain)
-        .contextMenu {
-            if !f.isdir { Button { Task { await download(f) } } label: { Label(T("Download"), systemImage: "square.and.arrow.down") } }
-            Button(role: .destructive) { deleteTarget = f } label: { Label(T("Delete"), systemImage: "trash") }
-        }
-    }
-
-    private func subtitle(_ f: ProjectFile) -> String {
-        if f.isdir { return T("Folder") }
-        var parts: [String] = []
-        if let s = f.size { parts.append(byteLabel(s)) }
-        if let m = ProjDate.parse(f.modified) { parts.append(ProjDate.dayLabel(m)) }
-        return parts.joined(separator: " · ")
-    }
-    private func byteLabel(_ b: Int) -> String {
-        let units = ["B", "KB", "MB", "GB"]; var v = Double(b); var i = 0
-        while v >= 1024 && i < units.count - 1 { v /= 1024; i += 1 }
-        return String(format: i == 0 ? "%.0f %@" : "%.1f %@", v, units[i])
-    }
-
-    private func load() async {
-        loading = true
-        do { files = (try await APIClient.shared.projectFiles(projectId, path: path)).files ?? [] }
-        catch APIError.unauthorized { auth.logout() } catch { files = [] }
-        loading = false
-    }
-    private func upload(_ url: URL) async {
-        let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        busy = true; defer { busy = false }
-        problem = nil
-        do {
-            // Handed over as a URL and not as bytes. This runs on the main actor, so reading a
-            // 200 MB file here would freeze the screen for the length of the read and then hold it
-            // twice while a multipart body was built around it. The client measures it off disk,
-            // refuses what it cannot send, and reads the rest off the main thread.
-            try await APIClient.shared.uploadProjectFile(projectId, path: path,
-                                                         fileName: url.lastPathComponent,
-                                                         file: url, progress: uploadProgress)
-        } catch APIError.unauthorized {
-            auth.logout()
-        } catch {
-            problem = error.localizedDescription
-        }
-        await load()
-    }
-    private func download(_ f: ProjectFile) async {
-        downloading = f.path; defer { downloading = nil }
-        do {
-            let url = try await APIClient.shared.downloadProjectFile(projectId, path: f.relPath ?? f.path, fileName: f.name)
-            shareItem = ShareItem(url: url)
-        } catch APIError.unauthorized {
-            auth.logout()
-        } catch {
-            problem = error.localizedDescription
-        }
-    }
-    private func delete(_ f: ProjectFile) async {
-        busy = true; defer { busy = false }
-        do { try await APIClient.shared.deleteProjectFile(projectId, path: f.relPath ?? f.path) }
-        catch APIError.unauthorized { auth.logout() }
-        catch { problem = error.localizedDescription }
-        await load()
-    }
-    private func createFolder() async {
-        let name = newFolderName.trimmingCharacters(in: .whitespaces); newFolderName = ""
-        guard !name.isEmpty else { return }
-        busy = true; defer { busy = false }
-        do { try await APIClient.shared.createProjectFolder(projectId, name: name, path: path) }
-        catch APIError.unauthorized { auth.logout() }
-        catch { problem = error.localizedDescription }
-        await load()
-    }
-}
 
 /// UIActivityViewController bridge for the share/save sheet.
 struct ActivityView: UIViewControllerRepresentable {

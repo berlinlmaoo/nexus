@@ -371,12 +371,6 @@ final class AppLanguage {
         "No tasks to put on the timeline yet.": "Belum ada task buat di-timeline.",
         "No pages in this project yet.": "Belum ada page di project ini.",
         "No forms in this project yet.": "Belum ada form di project ini.",
-        "This folder is empty. Upload a file or create a folder with the + button.":
-            "Folder ini kosong. Upload file atau bikin folder lewat tombol +.",
-        "Upload file": "Upload file",
-        "Download": "Unduh",
-        "Folder": "Folder",
-        "Folder name": "Nama folder",
         "Project chat room isn't active yet (needs the Messages backend).":
             "Project chat room belum aktif (perlu backend Messages).",
         "Project locked — you're not a member of this project.":

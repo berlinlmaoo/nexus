@@ -222,21 +222,6 @@ struct CFOptions: Decodable, Sendable {
     enum CodingKeys: String, CodingKey { case options, choices, format }
 }
 
-/// GET /api/projects/{id}/files?path= — folder listing for the project Files tab.
-struct ProjectFilesResponse: Decodable, Sendable {
-    let path: String?
-    let files: [ProjectFile]?
-}
-struct ProjectFile: Decodable, Identifiable, Sendable {
-    let name: String
-    let path: String
-    let relPath: String?
-    let isdir: Bool
-    let size: Int?
-    let modified: String?
-    var id: String { path }
-}
-
 /// GET /api/time-entries?taskId= — logged time on a task.
 struct TimeEntriesResponse: Decodable, Sendable { let entries: [TimeEntry]? }
 struct TimeEntry: Decodable, Identifiable, Sendable {

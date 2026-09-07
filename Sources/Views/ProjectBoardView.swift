@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Project detail with the web's view-switcher tabs (Overview · Board · List · Calendar ·
-/// Timeline · Pages · Forms · Files · Chat). Task-centric tabs run off the one project(id) load.
+/// Timeline · Pages · Forms · Chat). Task-centric tabs run off the one project(id) load.
 struct ProjectDetailView: View {
     let projectId: String
     let projectName: String
@@ -173,7 +173,6 @@ struct ProjectDetailView: View {
         switch tab {
         case .pages: ProjectPagesTab(projectId: projectId)
         case .forms: ProjectFormsTab(projectId: projectId, projectName: projectName)
-        case .files: ProjectFilesTab(projectId: projectId)
         case .chat:  ProjectChatTab(projectId: projectId, projectName: projectName)
         case .sprints: SprintsTab(projectId: projectId, onOpen: { openTaskId = $0 })
         case .automations: AutomationsTab(projectId: projectId)

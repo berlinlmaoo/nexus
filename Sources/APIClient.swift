@@ -673,94 +673,6 @@ struct APIClient {
     func projectDocs(_ projectId: String) async throws -> [Doc] {
         (try await run(makeRequest("/api/docs?projectId=\(enc(projectId))"), decode: DocsResponse.self)).docs ?? []
     }
-    func projectFiles(_ projectId: String, path: String = "") async throws -> ProjectFilesResponse {
-        try await run(makeRequest("/api/projects/\(projectId)/files?path=\(enc(path))"), decode: ProjectFilesResponse.self)
-    }
-    /// One project file, from a file on disk.
-    ///
-    /// There is no `/api/projects/…/files/chunk`. The only chunk route the server has writes an
-    /// `Attachment` row against a `taskId`, so a project file has nowhere to split a body across
-    /// and this is one request or nothing.
-    ///
-    /// Which makes the route's own 200 MB cap the trap: the server accepts a size the edge in front
-    /// of it will not carry, so everything between the ceiling below and 200 MB was refused at
-    /// Cloudflare after a couple of megabytes — and a `try?` at the call site turned that into a
-    /// file that simply never appeared. It is refused here now, before a byte moves, and the
-    /// refusal names both sizes so "too big" is a number rather than an opinion.
-    ///
-    /// A URL rather than `Data` for the reason `uploadAttachment` takes one: the caller is a view
-    /// on the main actor, and reading 200 MB there freezes the screen for the length of the read.
-    @discardableResult
-    func uploadProjectFile(_ projectId: String, path: String, fileName: String, file: URL,
-                           progress: UploadProgress? = nil) async throws -> Bool {
-        let size = Self.fileSize(of: file)
-        guard size > 0 else { throw APIError.transport(T("Couldn't read that file.")) }
-        guard size <= Self.singleRequestCeiling else {
-            throw Self.tooBigToSend(size, limit: Self.singleRequestCeiling)
-        }
-        // Mapped rather than read, so the pages the multipart builder copies are faulted in as it
-        // goes instead of the whole file being resident first. This runs off the main actor:
-        // `APIClient` is a plain struct, so an async method of it is nonisolated.
-        let data = try Data(contentsOf: file, options: .mappedIfSafe)
-        return try await uploadProjectFile(projectId, path: path, fileName: fileName, data: data,
-                                           progress: progress)
-    }
-
-    /// Not routed through `run`, for the reason `createComplaint` is not: the answer worth showing
-    /// here is the route's own "File exceeds 200MB limit", and `run` would flatten it into a bare
-    /// "Server error (400)" that tells the person nothing they can act on.
-    @discardableResult
-    func uploadProjectFile(_ projectId: String, path: String, fileName: String, data: Data,
-                           progress: UploadProgress? = nil) async throws -> Bool {
-        let boundary = "Boundary-\(UUID().uuidString)"
-        var req = makeRequest("/api/projects/\(projectId)/files", method: "POST")
-        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        var body = Data()
-        func add(_ s: String) { body.append(s.data(using: .utf8)!) }
-        if !path.isEmpty { add("--\(boundary)\r\nContent-Disposition: form-data; name=\"path\"\r\n\r\n\(path)\r\n") }
-        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\nContent-Type: application/octet-stream\r\n\r\n")
-        body.append(data)
-        add("\r\n--\(boundary)--\r\n")
-        req.httpBody = body
-
-        let (answer, response): (Data, URLResponse)
-        do { (answer, response) = try await perform(req, reporting: progress) }
-        catch { throw APIError.transport(error.localizedDescription) }
-        guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
-        if http.statusCode == 401 { throw APIError.unauthorized }
-        guard (200..<300).contains(http.statusCode) else {
-            throw Self.refusal(answer, status: http.statusCode)
-        }
-        return true
-    }
-    @discardableResult
-    func createProjectFolder(_ projectId: String, name: String, path: String) async throws -> Bool {
-        var req = makeRequest("/api/projects/\(projectId)/files", method: "POST")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["name": name, "path": path])
-        _ = try await run(req, decode: SuccessResponse.self)
-        return true
-    }
-    @discardableResult
-    func deleteProjectFile(_ projectId: String, path: String) async throws -> Bool {
-        _ = try await run(makeRequest("/api/projects/\(projectId)/files?path=\(enc(path))", method: "DELETE"), decode: SuccessResponse.self)
-        return true
-    }
-    /// Downloads a project file's bytes (authed) to a temp URL for sharing/preview.
-    func downloadProjectFile(_ projectId: String, path: String, fileName: String) async throws -> URL {
-        let req = makeRequest("/api/projects/\(projectId)/files/download?path=\(enc(path))")
-        let (data, response) = try await perform(req)
-        guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
-        if http.statusCode == 401 { throw APIError.unauthorized }
-        guard (200..<300).contains(http.statusCode) else { throw APIError.http(http.statusCode) }
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("nexus-dl", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let url = dir.appendingPathComponent(fileName)
-        try? FileManager.default.removeItem(at: url)
-        try data.write(to: url)
-        return url
-    }
-
     func reports(days: Int) async throws -> Reports {
         try await run(makeRequest("/api/reports?days=\(days)"), decode: Reports.self)
     }
@@ -1394,8 +1306,8 @@ struct APIClient {
     /// A real copy and NOT `.mappedIfSafe`, deliberately. A form holds its picked files until the
     /// person taps Submit, long after the importer's security-scoped access has been given back,
     /// and a mapping whose file has gone out of scope faults at the moment the body is assembled.
-    /// Where the bytes are used inside the same call — `uploadAttachment`, `uploadProjectFile` —
-    /// mapping is safe and is what those do.
+    /// Where the bytes are used inside the same call — `uploadAttachment` — mapping is safe and
+    /// is what that does.
     static func bytes(of file: URL) async -> Data? {
         try? Data(contentsOf: file)
     }
@@ -1440,8 +1352,8 @@ struct APIClient {
     /// The number is now shared, because that wall stands in front of every upload in the app and
     /// only ONE destination has a door through it. `/api/attachments/chunk` is the server's only
     /// chunk route and it writes an `Attachment` row against a `taskId`, so nothing else can borrow
-    /// it: project files, form submits, chat photos, ticket evidence and the icons all have exactly
-    /// one request to fit in. For those this is not a threshold but a ceiling — see `tooBigToSend`.
+    /// it: form submits, chat photos, ticket evidence and the icons all have exactly one request
+    /// to fit in. For those this is not a threshold but a ceiling — see `tooBigToSend`.
     static let singleRequestCeiling = 64 << 20
     /// 1 GB spread over the route's 64-chunk ceiling is 16 MB, so this is the smallest chunk that
     /// can still carry the largest file the route accepts — and far enough under the edge's limit
