@@ -29,12 +29,12 @@ struct WorkSessionLiveActivity: Widget {
                         Image(systemName: symbol(state))
                     }
                     .font(.caption)
-                    .foregroundStyle(tint(state))
+                    .foregroundStyle(accent(state))
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     elapsed(state)
                         .font(.system(.title3, design: .rounded).weight(.semibold).monospacedDigit())
-                        .foregroundStyle(tint(state))
+                        .foregroundStyle(accent(state))
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     HStack(spacing: 10) {
@@ -61,16 +61,16 @@ struct WorkSessionLiveActivity: Widget {
                     }
                 }
             } compactLeading: {
-                Image(systemName: symbol(state)).foregroundStyle(tint(state))
+                Image(systemName: symbol(state)).foregroundStyle(accent(state))
             } compactTrailing: {
                 elapsed(state)
                     .monospacedDigit()
-                    .foregroundStyle(tint(state))
+                    .foregroundStyle(accent(state))
                     // The compact slot is narrow and a session past one hour reads h:mm:ss. Without
                     // a width the Island clips it mid-digit.
                     .frame(maxWidth: 58)
             } minimal: {
-                Image(systemName: symbol(state)).foregroundStyle(tint(state))
+                Image(systemName: symbol(state)).foregroundStyle(accent(state))
             }
         }
     }
@@ -83,7 +83,7 @@ private struct LockScreenView: View {
         HStack(spacing: 14) {
             Image(systemName: symbol(state))
                 .font(.title3)
-                .foregroundStyle(tint(state))
+                .foregroundStyle(accent(state))
             VStack(alignment: .leading, spacing: 2) {
                 Text(state.officeName ?? "NEXUS")
                     .font(.subheadline.weight(.semibold))
@@ -96,7 +96,7 @@ private struct LockScreenView: View {
             Spacer(minLength: 8)
             elapsed(state)
                 .font(.system(.title2, design: .rounded).weight(.semibold).monospacedDigit())
-                .foregroundStyle(tint(state))
+                .foregroundStyle(accent(state))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -108,7 +108,7 @@ private struct LockScreenView: View {
 /// Amber the moment anything is still in flight. Somebody who tapped at 09:00 with no signal must
 /// not see a screen identical to a confirmed check-in — that is exactly the person who needs to
 /// know it has not landed yet.
-private func tint(_ state: WorkSessionAttributes.ContentState) -> Color {
+private func accent(_ state: WorkSessionAttributes.ContentState) -> Color {
     state.isPending ? nxAmber : nxViolet
 }
 
