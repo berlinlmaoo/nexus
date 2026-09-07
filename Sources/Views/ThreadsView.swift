@@ -151,27 +151,7 @@ struct ThreadsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if !p.photos.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(p.photos, id: \.self) { u in
-                            let url = URL(string: u.hasPrefix("http") ? u : Config.baseURL.absoluteString + u)
-                            // A Button and not a tap gesture on the tile: the whole card is one tap
-                            // target now, and a button sits deeper in the hierarchy — the same
-                            // reason the like and comment buttons below still take their own taps
-                            // instead of opening the thread. Same viewer as ticket evidence and
-                            // attendance documents, so a photograph enlarges the same way wherever
-                            // it is drawn.
-                            Button { if let url { viewingPhoto = PhotoRef(url: url, name: nil) } } label: {
-                                CachedImage(url: url) {
-                                    $0.resizable().scaledToFill()
-                                } placeholder: { NX.muted }
-                                .frame(width: 160, height: 160)
-                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
+                FeedPhotoStrip(photos: p.photos) { viewingPhoto = $0 }
             }
             HStack(spacing: 16) {
                 Button { Task { await like(p) } } label: {
@@ -229,6 +209,39 @@ struct ThreadsView: View {
     }
 }
 
+// MARK: - photos
+
+/// A post's pictures, drawn the same on the feed card and inside the thread it opens. One strip
+/// rather than two: a photograph that changed size, shape or tap behaviour depending on which
+/// screen you reached it from would read as two different pictures.
+///
+/// A Button and not a tap gesture on the tile: on the feed the whole card is one tap target, and a
+/// button sits deeper in the hierarchy — the same reason the like and comment buttons still take
+/// their own taps instead of opening the thread. Same viewer as ticket evidence and attendance
+/// documents, so a photograph enlarges the same way wherever it is drawn.
+private struct FeedPhotoStrip: View {
+    let photos: [String]
+    let onOpen: (PhotoRef) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(photos, id: \.self) { u in
+                    let url = URL(string: u.hasPrefix("http") ? u : Config.baseURL.absoluteString + u)
+                    Button { if let url { onOpen(PhotoRef(url: url, name: nil)) } } label: {
+                        CachedImage(url: url) {
+                            $0.resizable().scaledToFill()
+                        } placeholder: { NX.muted }
+                        .frame(width: 160, height: 160)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+}
+
 // MARK: - one thread (post + comments)
 
 struct PostThreadView: View {
@@ -238,6 +251,8 @@ struct PostThreadView: View {
     @State private var loading = true
     @State private var draft = ""
     @State private var sending = false
+    @State private var viewingPhoto: PhotoRef?
+    @FocusState private var replying: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -258,6 +273,17 @@ struct PostThreadView: View {
                             mentionText(c).font(NXFont.text(15)).foregroundStyle(NX.foreground)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
+                        // The pictures come with the post the feed handed over — nothing here asks
+                        // the server for them, because there is nothing to ask: /api/feed/posts/[id]
+                        // answers DELETE and PATCH only, and the comments route returns comments.
+                        if !post.photos.isEmpty {
+                            FeedPhotoStrip(photos: post.photos) { ref in
+                                // The reply box below can be holding the keyboard, and a cover
+                                // raised underneath it comes up with the keyboard still on top.
+                                replying = false
+                                viewingPhoto = ref
+                            }
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .nexusCard()
@@ -277,6 +303,7 @@ struct PostThreadView: View {
             HStack(alignment: .bottom, spacing: 8) {
                 TextField(T("Reply… (@ to mention)"), text: $draft, axis: .vertical)
                     .font(NXFont.text(15)).lineLimit(1...4)
+                    .focused($replying)
                     .padding(.horizontal, 14).padding(.vertical, 10)
                     .background(NX.muted, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 Button { Task { await send() } } label: {
@@ -294,6 +321,7 @@ struct PostThreadView: View {
         .navigationTitle(T("Thread"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
+        .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
     }
 
     private func commentRow(_ c: FeedComment) -> some View {
