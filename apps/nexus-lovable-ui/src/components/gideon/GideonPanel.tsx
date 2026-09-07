@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { BarChart2, FileText, ImagePlus, Loader2, MoreHorizontal, Send, Trash2, Wrench, X } from "lucide-react";
+import { BarChart2, FileText, ImagePlus, Loader2, MoreHorizontal, Paperclip, Send, Trash2, Wrench, X } from "lucide-react";
 import { GideonMark } from "./GideonMark";
-import { clearGideonHistory, loadGideonHistory, streamGideon, GIDEON_TIERS, GIDEON_DEFAULT_TIER, type GideonMessage, type GideonTier } from "@/lib/gideon";
+import { clearGideonHistory, loadGideonHistory, streamGideon, GIDEON_TIERS, GIDEON_DEFAULT_TIER, GIDEON_FILE_ACCEPT, GIDEON_MAX_FILE_BYTES, isAcceptedGideonFile, type GideonFile, type GideonMessage, type GideonTier } from "@/lib/gideon";
 import { cn } from "@/lib/utils";
 
 type ChatTurn = GideonMessage & { tools?: string[]; streaming?: boolean };
@@ -12,6 +12,10 @@ export function GideonPanel({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   /** A data URL, held only until the next message is sent. */
   const [image, setImage] = useState<string | null>(null);
+  /** A picked document, held only until the next message is sent. Rides alongside an image, not instead of it. */
+  const [doc, setDoc] = useState<GideonFile | null>(null);
+  /** Why the last pick was refused before it was ever uploaded. Cleared by the next pick, or by sending. */
+  const [attachError, setAttachError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   // Remembered per browser: somebody who picks Terra for quick questions should not have to pick it
   // again every time the panel opens.
@@ -48,10 +52,33 @@ export function GideonPanel({ onClose }: { onClose: () => void }) {
     await clearGideonHistory();
   };
 
+  // Both checks are the route's own, run again here: refusing at the picker costs nothing, while
+  // discovering the same refusal after uploading ten megabytes costs the whole upload. The wording
+  // matches what the route answers with, so the two paths do not read like two different problems.
+  const attachDocument = (picked: File) => {
+    if (!isAcceptedGideonFile(picked.name)) {
+      setAttachError("Tipe file itu belum bisa dibaca Gideon.");
+      return;
+    }
+    if (picked.size > GIDEON_MAX_FILE_BYTES) {
+      setAttachError("File terlalu besar. Maksimal 10 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") { setAttachError("File itu gagal dibaca."); return; }
+      setAttachError(null);
+      setDoc({ name: picked.name, type: picked.type || "", data: reader.result });
+    };
+    reader.onerror = () => setAttachError("File itu gagal dibaca.");
+    reader.readAsDataURL(picked);
+  };
+
   const send = async () => {
     const text = input.trim();
     if (!text || busy) return;
     setInput("");
+    setAttachError(null);
     const history: GideonMessage[] = [...turns.map(({ role, content }) => ({ role, content })), { role: "user", content: text }];
     setTurns((cur) => [...cur, { role: "user", content: text }, { role: "assistant", content: "", streaming: true, tools: [] }]);
     setBusy(true);
@@ -72,10 +99,12 @@ export function GideonPanel({ onClose }: { onClose: () => void }) {
         acc += (acc ? "\n\n" : "") + `⚠️ ${ev.content ?? "Something went wrong."}`;
         setTurns((cur) => { const next = [...cur]; const last = next[next.length - 1]; if (last?.role === "assistant") next[next.length - 1] = { ...last, content: acc }; return next; });
       }
-    }, { signal: controller.signal, model: tier, image }).catch(() => {});
-    // Cleared whatever happened: an image silently riding along on the NEXT question would be
-    // baffling, and re-attaching is one click.
+    }, { signal: controller.signal, model: tier, image, file: doc }).catch(() => {});
+    // Cleared whatever happened: an attachment silently riding along on the NEXT question would be
+    // baffling, and re-attaching is one click. That includes a refused one — the reason came back
+    // in the bubble above, and the fix is a different file rather than the same one again.
     setImage(null);
+    setDoc(null);
 
     setTurns((cur) => { const next = [...cur]; const last = next[next.length - 1]; if (last?.role === "assistant") next[next.length - 1] = { ...last, streaming: false }; return next; });
     setBusy(false);
@@ -149,12 +178,30 @@ export function GideonPanel({ onClose }: { onClose: () => void }) {
               placeholder="Message Gideon…✨"
               className="h-14 w-full resize-none bg-transparent p-3 text-sm font-medium outline-none placeholder:text-muted-foreground"
             />
-            {image && (
-              <div className="flex items-center gap-2 border-t border-border/60 px-3 py-2">
-                <img src={image} alt="" className="h-10 w-10 rounded-lg object-cover" />
-                <span className="flex-1 truncate text-xs text-muted-foreground">Gambar terlampir</span>
-                <button type="button" onClick={() => setImage(null)} aria-label="Buang gambar" className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
+            {/* One chip per attachment, each removable on its own: a picture and a document can be
+                attached to the same question, and dropping one must not drop the other. */}
+            {(image || doc) && (
+              <div className="flex flex-col gap-2 border-t border-border/60 px-3 py-2">
+                {image && (
+                  <div className="flex items-center gap-2">
+                    <img src={image} alt="" className="h-10 w-10 rounded-lg object-cover" />
+                    <span className="flex-1 truncate text-xs text-muted-foreground">Gambar terlampir</span>
+                    <button type="button" onClick={() => setImage(null)} aria-label="Buang gambar" className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
+                  </div>
+                )}
+                {doc && (
+                  <div className="flex items-center gap-2">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"><FileText className="h-4 w-4" /></span>
+                    {/* The filename, not "Dokumen terlampir": with two files picked in a row it is the
+                        only thing that says WHICH one is about to be sent. */}
+                    <span className="flex-1 truncate text-xs text-muted-foreground" title={doc.name}>{doc.name}</span>
+                    <button type="button" onClick={() => setDoc(null)} aria-label="Buang file" className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
+                  </div>
+                )}
               </div>
+            )}
+            {attachError && (
+              <div className="border-t border-border/60 px-3 py-2 text-xs font-semibold text-destructive">{attachError}</div>
             )}
             <div className="flex items-end justify-between p-3">
               <div className="flex gap-3">
@@ -171,6 +218,23 @@ export function GideonPanel({ onClose }: { onClose: () => void }) {
                       const reader = new FileReader();
                       reader.onload = () => setImage(typeof reader.result === "string" ? reader.result : null);
                       reader.readAsDataURL(file);
+                    }}
+                  />
+                </label>
+                <label title="Lampirkan file (PDF, Word, Excel, teks…)" className="flex cursor-pointer items-center text-muted-foreground transition-colors hover:text-foreground">
+                  <Paperclip className="h-4 w-4" />
+                  <span className="sr-only">Lampirkan file</span>
+                  <input
+                    type="file"
+                    // A hint to the picker only — a file chosen through "All files" still has to get
+                    // past attachDocument, and then past the route.
+                    accept={GIDEON_FILE_ACCEPT}
+                    className="hidden"
+                    onChange={(e) => {
+                      const picked = e.target.files?.[0];
+                      // Reset first, so picking the SAME file again still fires a change event.
+                      e.target.value = "";
+                      if (picked) attachDocument(picked);
                     }}
                   />
                 </label>
