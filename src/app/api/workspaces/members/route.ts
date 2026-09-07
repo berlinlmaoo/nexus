@@ -62,6 +62,10 @@ export async function GET(req: NextRequest) {
     const member = await getWorkspaceAndRole(session.user.id, requestedWorkspaceId)
     if (!member) return NextResponse.json({ error: 'No workspace found' }, { status: 404 })
     const isSystemAdmin = await isSystemAdminUser(session.user.id)
+    // Reading a colleague's personal phone number is gated at the same tier that is allowed to WRITE
+    // it (see PATCH: tier >= 3 = BoD / One Above All / system admin). It is a personal mobile, not a
+    // work contact detail, and no screen below that tier displays it.
+    const canSeePhoneNumbers = callerTier(member.role, isSystemAdmin) >= 3
 
     const members = await prisma.workspaceMember.findMany({
       where: { workspaceId: member.workspaceId },
@@ -80,7 +84,7 @@ export async function GET(req: NextRequest) {
         name: string
         email: string
         avatar: string | null
-        phoneNumber: string | null
+        phoneNumber?: string | null
         role: string
         attendanceRole: string
         attendanceShiftStartTime: string | null
@@ -105,7 +109,9 @@ export async function GET(req: NextRequest) {
         name: m.user.name,
         email: m.user.email,
         avatar: m.user.avatar,
-        phoneNumber: m.user.phoneNumber,
+        // Omitted entirely rather than nulled, so a hidden number is indistinguishable from an unset
+        // one. Your own number always comes back — it is yours, and the profile screen shows it.
+        ...(canSeePhoneNumbers || m.user.id === session.user.id ? { phoneNumber: m.user.phoneNumber } : {}),
         role: m.role,
         attendanceRole: m.attendanceRole,
         attendanceShiftStartTime: m.attendanceShiftStartTime,
