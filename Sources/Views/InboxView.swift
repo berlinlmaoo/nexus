@@ -17,6 +17,14 @@ struct InboxView: View {
     /// destination by the type of its value, and ProjectDetailView — pushed from right here —
     /// declares a `String?` destination of its own for the tasks on its board.
     @State private var openTarget: NotificationTarget?
+    /// Which bucket the chips are on, and the chips themselves. The tabs are recomputed only when
+    /// the list is (re)loaded — the counts cannot change while nobody is fetching, and this bar
+    /// sits above a scroll view.
+    @State private var group: NotificationGroup = .all
+    @State private var tabs: [NotificationFilterTab] = []
+    /// The submission a notification asked for, opened over this screen rather than by sending the
+    /// reader off to the board and making them find the row again.
+    @State private var openSubmission: SubmissionRef?
 
     var body: some View {
         NavigationStack {
@@ -30,10 +38,12 @@ struct InboxView: View {
                 // A notification carries the project's id and no name; the board fills its own
                 // header in once it loads.
                 case .project(let id): ProjectDetailView(projectId: id, projectName: "")
-                // Never stored: a whole screen goes through the router, not through this stack.
-                case .screen:          EmptyView()
+                // Never stored: a whole screen goes through the router, and a submission opens as a
+                // sheet over this one — neither travels through this stack.
+                case .screen, .submission: EmptyView()
                 }
             }
+            .sheet(item: $openSubmission) { SubmissionDetailSheet(submissionId: $0.id, preview: $0.preview) }
             .navigationTitle(T("Signal Inbox"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -69,16 +79,25 @@ struct InboxView: View {
                             Text(T("No pings. Enjoy the rare silence.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                         }.padding(.top, 50)
                     } else {
-                        VStack(spacing: 0) {
-                            ForEach(Array(items.enumerated()), id: \.element.id) { idx, n in
-                                if idx > 0 { Divider().overlay(NX.border) }
-                                NotificationRow(notification: n) { open(n) }
+                        NotificationFilterBar(tabs: tabs, group: $group)
+                        if shown.isEmpty {
+                            VStack(spacing: 8) {
+                                Image(systemName: "line.3.horizontal.decrease.circle").font(.system(size: 34)).foregroundStyle(NX.mutedFg)
+                                Text(T("Nothing here")).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
+                                Text(T("No notifications of this kind.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                            }.padding(.top, 40)
+                        } else {
+                            VStack(spacing: 0) {
+                                ForEach(Array(shown.enumerated()), id: \.element.id) { idx, n in
+                                    if idx > 0 { Divider().overlay(NX.border) }
+                                    NotificationRow(notification: n) { open(n) }
+                                }
                             }
-                        }
-                        .background {
-                            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(NX.card)
-                                .nexusShadowSoft()
-                                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
+                            .background {
+                                RoundedRectangle(cornerRadius: 18, style: .continuous).fill(NX.card)
+                                    .nexusShadowSoft()
+                                    .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
+                            }
                         }
                     }
                 }
@@ -86,6 +105,10 @@ struct InboxView: View {
             }
             .refreshable { await load() }
         }
+    }
+
+    private var shown: [NexusNotification] {
+        group == .all ? items : items.filter { $0.group == group }
     }
 
     private func errorState(_ msg: String) -> some View {
@@ -102,6 +125,10 @@ struct InboxView: View {
             let res = try await APIClient.shared.notifications()
             items = res.notifications ?? []
             unread = res.unreadCount ?? items.filter { !$0.isRead }.count
+            tabs = notificationFilterTabs(items)
+            // The last thing in a bucket can be deleted while its chip is selected, and a filter
+            // pinned to a bucket that no longer has a chip shows an empty list with no way back.
+            if !tabs.contains(where: { $0.group == group }) { group = .all }
         } catch APIError.unauthorized { auth.logout() }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Login required to open the inbox.") }
         loading = false
@@ -117,6 +144,10 @@ struct InboxView: View {
         Task { await markRead(n) }
         guard let target = n.tapTarget else { return }
         if case .screen(let screen) = target { router.go(screen); return }
+        // The web sends the reader to the board with `?id=` and pops the drawer there. On a phone
+        // that would be a tab change plus a push plus a sheet to read three lines, so the sheet is
+        // opened here instead — same destination, one step.
+        if case .submission(let id) = target { openSubmission = SubmissionRef(id: id); return }
         openTarget = target
     }
 
@@ -170,5 +201,48 @@ struct NotificationRow: View {
     private var dateText: String {
         guard let d = ProjDate.parse(notification.createdAt) else { return "" }
         return ProjDate.fmt("d MMM, HH:mm").string(from: d)   // cached parser + formatter
+    }
+}
+
+/// The "narrow this list" chips, drawn by both notification surfaces: this screen and the
+/// dashboard's bell panel.
+///
+/// Same capsule idiom as the Ticket screen's status filter and the attendance Submissions card —
+/// this is the app's existing gesture for cutting a list down, and notifications do not need a
+/// second one. The count rides on the chip because an empty bucket is never offered: a chip that is
+/// there always has something behind it, and the number says how much.
+struct NotificationFilterBar: View {
+    let tabs: [NotificationFilterTab]
+    @Binding var group: NotificationGroup
+    /// The bell panel, where the bar sits inside a card that already has its own padding.
+    var compact = false
+
+    var body: some View {
+        // "All" plus a single bucket is not a choice — every row is in that bucket either way.
+        if tabs.count > 2 {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(tabs) { t in
+                        let on = group == t.group
+                        Button { group = t.group } label: {
+                            HStack(spacing: 5) {
+                                Text(t.group.label).font(NXFont.text(compact ? 11 : 12, .semibold))
+                                Text("\(t.count)").font(NXFont.text(compact ? 9 : 10, .bold))
+                                    .padding(.horizontal, 5).padding(.vertical, 1)
+                                    .background(on ? Color.white.opacity(0.25) : NX.muted, in: Capsule())
+                            }
+                            .foregroundStyle(on ? Color.white : NX.mutedFg)
+                            .padding(.horizontal, compact ? 10 : 13)
+                            .padding(.vertical, compact ? 6 : 7)
+                            .background(on ? NX.violet : NX.card, in: Capsule())
+                            .overlay(Capsule().strokeBorder(on ? Color.clear : NX.border))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(t.group.label), \(t.count)")
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        }
     }
 }

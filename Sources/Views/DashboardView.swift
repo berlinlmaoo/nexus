@@ -27,6 +27,13 @@ struct DashboardView: View {
     /// `tasksList` re-bucketed by due day for the agenda card. Written wherever `tasksList` is.
     @State private var tasksByDay: [Date: [MyTask]] = [:]
     @State private var notifs: [NexusNotification] = []
+    /// The bell panel's filter, and the chips for it. The chips are rebuilt where `notifs` is
+    /// written rather than in the panel's body — the dashboard is the screen that got the
+    /// performance pass, and counting 50 notifications belongs nowhere near a redraw.
+    @State private var bellGroup: NotificationGroup = .all
+    @State private var bellTabs: [NotificationFilterTab] = []
+    /// The submission a notification points at, opened over the dashboard.
+    @State private var openSubmission: SubmissionRef?
     @State private var activeStat: Int?
     @State private var activeLevel = false
     @State private var activeBell = false
@@ -91,7 +98,9 @@ struct DashboardView: View {
     }
     /// `then` runs once the panel has finished shrinking away.
     private func toggleBell(_ on: Bool, then: (() -> Void)? = nil) {
-        if on { openMorph(morphFrames["bell"]); activeBell = true }
+        // Opened fresh every time: a filter left on from a week ago would hide the very signal the
+        // badge is counting, and there is nothing on the closed bell that says a filter is set.
+        if on { bellGroup = .all; openMorph(morphFrames["bell"]); activeBell = true }
         else { closeMorph { activeBell = false; then?() } }
     }
 
@@ -108,6 +117,13 @@ struct DashboardView: View {
             toggleBell(false)
             return
         }
+        // The web goes to the board with `?id=` and pops the drawer there; here the sheet is the
+        // whole destination, presented once the panel has finished shrinking away so it does not
+        // slide up through a card that is still on screen.
+        if case .submission(let id) = target {
+            toggleBell(false) { openSubmission = SubmissionRef(id: id) }
+            return
+        }
         toggleBell(false) { openTarget = target }
     }
 
@@ -118,6 +134,16 @@ struct DashboardView: View {
         if let i = notifs.firstIndex(where: { $0.id == n.id }) { notifs[i].read = true }
         unread = max(0, unread - 1)
         Task { try? await APIClient.shared.markNotificationRead(id: n.id) }
+    }
+
+    /// Same trade as marking one read: the rows and the badge are struck off here, and the whole
+    /// dashboard is not refetched to learn something already known. The endpoint is scoped to the
+    /// caller server-side, so this can only ever clear the reader's own signals.
+    private func markAllRead() {
+        guard unread > 0 else { return }
+        for i in notifs.indices { notifs[i].read = true }
+        unread = 0
+        Task { try? await APIClient.shared.markAllNotificationsRead() }
     }
 
     var body: some View {
@@ -150,10 +176,12 @@ struct DashboardView: View {
                 // A notification carries the project's id and no name; the board fills its own
                 // header in once it loads.
                 case .project(let id): ProjectDetailView(projectId: id, projectName: "")
-                // Never stored: a whole screen goes through the router, not through this stack.
-                case .screen:          EmptyView()
+                // Never stored: a whole screen goes through the router, and a submission opens as a
+                // sheet over this one — neither travels through this stack.
+                case .screen, .submission: EmptyView()
                 }
             }
+            .sheet(item: $openSubmission) { SubmissionDetailSheet(submissionId: $0.id, preview: $0.preview) }
             .coordinateSpace(.named(morphSpace))
             .onChange(of: morphTarget) { _, t in
                 guard t.width > 1, activeStat != nil || activeLevel || activeBell, !morphExpanded else { return }
@@ -453,6 +481,12 @@ struct DashboardView: View {
         }
     }
 
+    /// The panel shows the newest eight, so the filter has to be applied BEFORE the cut — filtering
+    /// the eight would show "Attendance 12" and then two rows.
+    private var bellShown: [NexusNotification] {
+        bellGroup == .all ? notifs : notifs.filter { $0.group == bellGroup }
+    }
+
     private var bellModalCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
@@ -463,6 +497,18 @@ struct DashboardView: View {
                     Text(unread > 0 ? "\(unread) \(T("unread"))" : "Semua kebaca").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer()
+                if unread > 0 {
+                    Button { Haptics.tap(); markAllRead() } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "checkmark.circle").font(.system(size: 12, weight: .bold))
+                            Text(T("Mark all")).font(NXFont.text(12, .semibold))
+                        }
+                        .foregroundStyle(NX.mutedFg)
+                        .padding(.horizontal, 10).padding(.vertical, 7)
+                        .background(NX.muted, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
                 Button { toggleBell(false) } label: {
                     Image(systemName: "xmark").font(.system(size: 14, weight: .bold)).foregroundStyle(NX.mutedFg)
                         .frame(width: 32, height: 32).background(NX.muted, in: Circle())
@@ -472,9 +518,14 @@ struct DashboardView: View {
                 if notifs.isEmpty {
                     Text(T("No notifications yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).padding(.vertical, 8)
                 } else {
+                    NotificationFilterBar(tabs: bellTabs, group: $bellGroup, compact: true)
+                    if bellShown.isEmpty {
+                        Text(T("No notifications of this kind.")).font(NXFont.text(13))
+                            .foregroundStyle(NX.mutedFg).padding(.vertical, 8)
+                    }
                     ScrollView {
                         VStack(spacing: 8) {
-                            ForEach(notifs.prefix(8)) { n in
+                            ForEach(bellShown.prefix(8)) { n in
                                 Button { openNotification(n) } label: {
                                     HStack(alignment: .top, spacing: 10) {
                                         Circle().fill(n.isRead ? NX.mutedFg.opacity(0.3) : NX.violet).frame(width: 7, height: 7).padding(.top, 5)
@@ -840,6 +891,7 @@ struct DashboardView: View {
         let nres = await notifsN
         notifs = nres?.notifications ?? []
         unread = nres?.unreadCount ?? notifs.filter { !$0.isRead }.count
+        bellTabs = notificationFilterTabs(notifs)
 
         if let myId = prof?.user.id, let tasks = try? await APIClient.shared.myTasks(assigneeId: myId) {
             tasksList = tasks

@@ -828,6 +828,11 @@ final class AppLanguage {
         "Open it on the web": "Buka di web",
         "Yes": "Ya",
         "No": "Tidak",
+        // ── notifications · filter buckets ────────────────────────────
+        "Tickets": "Tiket",
+        "Announcements": "Pengumuman",
+        "Nothing here": "Kosong di sini",
+        "No notifications of this kind.": "Nggak ada notifikasi jenis ini.",
     ]
 }
 

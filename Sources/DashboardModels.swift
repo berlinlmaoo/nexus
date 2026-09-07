@@ -108,6 +108,24 @@ struct NexusNotification: Decodable, Identifiable, Sendable {
         return t.prefix(1).uppercased() + t.dropFirst()
     }
 
+    /// Which filter bucket this signal belongs to.
+    ///
+    /// Ported verbatim from the web's `notificationGroup` (lib/nexus-api.ts), tests in the same
+    /// order: the buckets overlap (`attendance_task_reminder` matches both "attendance" and "task"),
+    /// so the order IS the rule, and the two clients drifting on it would put the same notification
+    /// under different tabs.
+    var group: NotificationGroup {
+        let t = (type ?? "").lowercased()
+        if t.hasPrefix("attendance") || t.hasPrefix("offsite") || t == "dayoff_quota_low" || t == "red_date_quota_low" { return .attendance }
+        if t == "submission_status" { return .submissions }
+        if t.hasPrefix("complaint") { return .tickets }
+        if t.contains("announcement") { return .announcements }
+        if t.hasPrefix("message") || t == "feed_comment" { return .messages }
+        if t.hasPrefix("task") || t.hasPrefix("comment") || t.hasPrefix("quest")
+            || t == "project_invite" || t == "status_update" || t == "streak_at_risk" { return .tasks }
+        return .other
+    }
+
     /// Where tapping this notification should land, or nil for the rows that lead nowhere.
     ///
     /// Ported from the web inbox's `notificationTarget` (routes/_app/inbox.tsx), in ITS order: the
@@ -126,12 +144,60 @@ struct NexusNotification: Decodable, Identifiable, Sendable {
     }
 }
 
+/// The buckets the notification filter offers.
+///
+/// There are ~30 distinct `type` strings in the wild and nobody reading their inbox thinks in them:
+/// `attendance_request_reviewed`, `offsite_checkout_pending` and `attendance_override` are all just
+/// "Attendance" to a human. `other` is what keeps a type nobody has heard of yet visible instead of
+/// filtered into nothing.
+enum NotificationGroup: String, CaseIterable, Identifiable, Hashable, Sendable {
+    case all, tasks, attendance, messages, submissions, tickets, announcements, other
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .all:           return T("All")
+        case .tasks:         return T("Tasks")
+        case .attendance:    return T("Attendance")
+        case .messages:      return T("Messages")
+        case .submissions:   return T("Submissions")
+        case .tickets:       return T("Tickets")
+        case .announcements: return T("Announcements")
+        case .other:         return T("Other")
+        }
+    }
+}
+
+/// One drawn chip: a bucket and how many of the list are in it.
+struct NotificationFilterTab: Identifiable, Hashable, Sendable {
+    let group: NotificationGroup
+    let count: Int
+    var id: NotificationGroup { group }
+}
+
+/// The chips worth drawing for THIS list: "All", plus only the buckets that actually have something
+/// in them. No dead tabs — same rule as the web's `notificationFilterTabs`.
+///
+/// Computed once per list change by the callers rather than inside a body: with 50 notifications
+/// this walks the whole list, and a filter bar is on the scroll path of both surfaces.
+func notificationFilterTabs(_ list: [NexusNotification]) -> [NotificationFilterTab] {
+    var counts: [NotificationGroup: Int] = [:]
+    for n in list { counts[n.group, default: 0] += 1 }
+    return NotificationGroup.allCases.compactMap { g in
+        if g == .all { return NotificationFilterTab(group: .all, count: list.count) }
+        guard let c = counts[g], c > 0 else { return nil }
+        return NotificationFilterTab(group: g, count: c)
+    }
+}
+
 /// One place a notification can send somebody. `.screen` covers the destinations that are whole
-/// screens in both shapes of the app; the other two carry the id of a single record, which no
+/// screens in both shapes of the app; the others carry the id of a single record, which no
 /// eighteen-case screen enum has room for.
 enum NotificationTarget: Hashable {
     case task(String)
     case project(String)
+    case submission(String)
     case screen(NXScreen)
 
     /// Reads a web path ("/tasks/abc123") as an app destination.
@@ -163,7 +229,11 @@ enum NotificationTarget: Hashable {
         case "teams":                   self = .screen(.teams)
         case "reports", "peer-reports": self = .screen(.reports)
         case "leaderboard":             self = .screen(.leaderboard)
-        case "submissions":             self = .screen(.submissions)
+        // `/submissions?id=<id>` is the link a submission_status signal now carries, and the id in
+        // it is the entire point of the notification: "your reimbursement moved" has to open THAT
+        // reimbursement. Without the id it is still just the board.
+        case "submissions":
+            if let id = Self.queryValue("id", in: path) { self = .submission(id) } else { self = .screen(.submissions) }
         case "room-booking":            self = .screen(.roomBooking)
         case "master-calendar":         self = .screen(.teamCalendar)
         case "complaints":              self = .screen(.tickets)
@@ -172,6 +242,25 @@ enum NotificationTarget: Hashable {
         case "dashboard":               self = .screen(.dashboard)
         default:                        return nil
         }
+    }
+
+    /// One value out of a link's query string.
+    ///
+    /// The path parsing above deliberately stops at "?", which was right while no link the server
+    /// sent had a query on it. One does now, so the part that used to be thrown away is read here
+    /// rather than by loosening the path split.
+    private static func queryValue(_ key: String, in path: String) -> String? {
+        guard let mark = path.firstIndex(of: "?") else { return nil }
+        let query = path[path.index(after: mark)...].prefix { $0 != "#" }
+        for pair in query.split(separator: "&") {
+            let kv = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            guard kv.count == 2, String(kv[0]) == key else { continue }
+            // "+" for a space is form encoding, which percent-decoding alone leaves behind.
+            let raw = String(kv[1]).replacingOccurrences(of: "+", with: " ")
+            let value = raw.removingPercentEncoding ?? raw
+            return value.isEmpty ? nil : value
+        }
+        return nil
     }
 }
 

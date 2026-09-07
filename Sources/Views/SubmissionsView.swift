@@ -20,6 +20,17 @@ struct MySubmission: Decodable, Identifiable, Sendable {
     var title: String { taskTitle ?? formName ?? "Pengajuan" }
 }
 
+/// A submission to open, by id.
+///
+/// `.sheet(item:)` needs something Identifiable and `String` is not. The row it came from rides
+/// along when the tap started on a card, so the sheet has a title to draw while the detail loads —
+/// a notification names an id and nothing else, and then there is none.
+struct SubmissionRef: Identifiable {
+    let id: String
+    /// Explicitly defaulted so `SubmissionRef(id:)` reads as the notification case it is.
+    var preview: MySubmission? = nil
+}
+
 /// GET /api/forms/my-submissions/{submissionId} — the answers behind one card, plus the payout
 /// proof the finance team attaches to the task it created. The board list carries neither.
 struct MySubmissionDetail: Decodable, Sendable {
@@ -117,7 +128,7 @@ struct SubmissionsView: View {
     @State private var statusColumns: [String] = []
     @State private var loading = true
     @State private var loadError = false
-    @State private var opened: MySubmission?
+    @State private var opened: SubmissionRef?
 
     // The first column is ours; the rest are status names straight from the server (and follow
     // the server's language, not the app's).
@@ -160,7 +171,7 @@ struct SubmissionsView: View {
         .navigationTitle(T("My Submissions"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
-        .sheet(item: $opened) { SubmissionDetailSheet(submission: $0) }
+        .sheet(item: $opened) { SubmissionDetailSheet(submissionId: $0.id, preview: $0.preview) }
     }
 
     private func column(_ col: String) -> some View {
@@ -183,7 +194,7 @@ struct SubmissionsView: View {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 8) {
                     ForEach(items) { s in
-                        Button { opened = s } label: { card(s) }
+                        Button { opened = SubmissionRef(id: s.id, preview: s) } label: { card(s) }
                             .buttonStyle(.plain)
                             .hoverEffect(.highlight)
                     }
@@ -244,7 +255,10 @@ struct SubmissionsView: View {
 /// Read-only, like the board. The web drawer also deletes a submission (and the project task with
 /// it); that is a separate, destructive feature and is deliberately not here.
 struct SubmissionDetailSheet: View {
-    let submission: MySubmission
+    let submissionId: String
+    /// The board row this was opened from, when there was one. A notification carries an id alone,
+    /// so every read of it has to survive being nil.
+    var preview: MySubmission? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(AuthStore.self) private var auth
     @State private var detail: MySubmissionDetail?
@@ -281,12 +295,13 @@ struct SubmissionDetailSheet: View {
     }
 
     /// Drawn from the row that was tapped, then refined once the detail lands — so the sheet is
-    /// never a blank page with a spinner on it.
+    /// never a blank page with a spinner on it. Opened from a notification there is no row, and
+    /// the generic title stands only until the fetch answers.
     private var header: some View {
-        let subtitle = [detail?.formName ?? submission.formName, detail?.projectName ?? submission.projectName]
+        let subtitle = [detail?.formName ?? preview?.formName, detail?.projectName ?? preview?.projectName]
             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
         return VStack(alignment: .leading, spacing: 6) {
-            Text(detail?.taskTitle ?? submission.title)
+            Text(detail?.taskTitle ?? preview?.title ?? T("Submission"))
                 .font(NXFont.display(19, .bold)).foregroundStyle(NX.foreground)
                 .fixedSize(horizontal: false, vertical: true)
             if !subtitle.isEmpty {
@@ -301,7 +316,7 @@ struct SubmissionDetailSheet: View {
                     }
                 }
             }
-            Text("\(T("Submitted")) \(subDateText(detail?.createdAt ?? submission.createdAt))")
+            Text("\(T("Submitted")) \(subDateText(detail?.createdAt ?? preview?.createdAt))")
                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg.opacity(0.8))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -314,7 +329,7 @@ struct SubmissionDetailSheet: View {
     /// and ForEach keyed on the string itself would then be drawing two rows with one id.
     private var statusChips: [String] {
         var seen: [String] = []
-        for raw in [detail?.stage, detail?.procStatus ?? submission.procStatus] {
+        for raw in [detail?.stage, detail?.procStatus ?? preview?.procStatus] {
             let c = (raw ?? "").trimmingCharacters(in: .whitespaces)
             if !c.isEmpty && !seen.contains(c) { seen.append(c) }
         }
@@ -388,7 +403,7 @@ struct SubmissionDetailSheet: View {
 
     private func load() async {
         failed = false
-        do { detail = try await APIClient.shared.mySubmissionDetail(submission.id) }
+        do { detail = try await APIClient.shared.mySubmissionDetail(submissionId) }
         catch APIError.unauthorized { auth.logout() }
         catch { failed = true }
         loading = false
