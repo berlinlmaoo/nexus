@@ -7,6 +7,7 @@ struct TasksView: View {
     @State private var tasks: [MyTask] = []
     @State private var loading = true
     @State private var error: String?
+    @State private var openTaskId: String?
 
     var body: some View {
         NavigationStack {
@@ -14,6 +15,7 @@ struct TasksView: View {
                 NX.background.ignoresSafeArea()
                 content
             }
+            .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }
             .navigationTitle(T("My Quest Log"))
             .task {
                 if tasks.isEmpty, let myId = auth.session?.userId,
@@ -58,7 +60,7 @@ struct TasksView: View {
                             VStack(spacing: 0) {
                                 ForEach(Array(group.items.enumerated()), id: \.element.id) { idx, t in
                                     if idx > 0 { Divider().overlay(NX.border) }
-                                    TaskRow(task: t) { await toggle(t) }
+                                    TaskRow(task: t, onToggle: { await toggle(t) }, onOpen: { openTaskId = t.id })
                                 }
                             }
                             .background {
@@ -109,6 +111,7 @@ struct TasksView: View {
 struct TaskRow: View {
     let task: MyTask
     let onToggle: () async -> Void
+    let onOpen: () -> Void
     @State private var working = false
 
     var body: some View {
@@ -125,20 +128,29 @@ struct TaskRow: View {
             }
             .buttonStyle(.plain)
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(task.title ?? T("Untitled")).font(NXFont.text(14, .semibold))
-                    .foregroundStyle(task.isDone ? NX.mutedFg : NX.foreground)
-                    .strikethrough(task.isDone).lineLimit(1)
-                HStack(spacing: 10) {
-                    Label(task.laneName, systemImage: "sparkles").labelStyle(.titleAndIcon)
-                    if task.commentCount > 0 { Label("\(task.commentCount)", systemImage: "bubble.left") }
+            // Only the text side opens the task: the checkbox is already a button, and a button
+            // nested inside another one makes neither tap land where the finger went.
+            Button(action: onOpen) {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(task.title ?? T("Untitled")).font(NXFont.text(14, .semibold))
+                            .foregroundStyle(task.isDone ? NX.mutedFg : NX.foreground)
+                            .strikethrough(task.isDone).lineLimit(1)
+                        HStack(spacing: 10) {
+                            Label(task.laneName, systemImage: "sparkles").labelStyle(.titleAndIcon)
+                            if task.commentCount > 0 { Label("\(task.commentCount)", systemImage: "bubble.left") }
+                        }
+                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    }
+                    Spacer(minLength: 4)
+                    if let p = task.priority, p.uppercased() != "NONE" {
+                        NexusChip(text: p.capitalized, tone: priorityTone(p))
+                    }
                 }
-                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            Spacer(minLength: 4)
-            if let p = task.priority, p.uppercased() != "NONE" {
-                NexusChip(text: p.capitalized, tone: priorityTone(p))
-            }
+            .buttonStyle(.plain)
         }
         .padding(14)
     }

@@ -286,7 +286,7 @@ struct SidebarRoot: View {
                 }
 
                 Section {
-                    AccountFooter()
+                    AccountFooter { selection = .screen(.settings) }
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
                 }

@@ -229,6 +229,9 @@ struct TaskAttachmentsCard: View {
 struct TaskDependenciesCard: View {
     let taskId: String
     let projectId: String?
+    /// Hands the hop back to TaskDetailView, which owns the stack's destination binding — one
+    /// push target for parent, subtasks and dependencies alike.
+    let onOpen: (String) -> Void
     @State private var blockedBy: [TaskDependency] = []   // this task depends on these (removable)
     @State private var blocking: [TaskDependency] = []    // these depend on this task (read-only)
     @State private var loading = true
@@ -273,9 +276,15 @@ struct TaskDependenciesCard: View {
             Text(label).font(NXFont.text(10, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
             ForEach(rows, id: \.1) { ref, depId in
                 HStack(spacing: 10) {
-                    Circle().fill((ref.status ?? "").uppercased() == "DONE" ? NX.success : NX.mutedFg.opacity(0.4)).frame(width: 8, height: 8)
-                    Text(ref.title).font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(1)
-                    Spacer()
+                    Button { onOpen(ref.id) } label: {
+                        HStack(spacing: 10) {
+                            Circle().fill((ref.status ?? "").uppercased() == "DONE" ? NX.success : NX.mutedFg.opacity(0.4)).frame(width: 8, height: 8)
+                            Text(ref.title).font(NXFont.text(13)).foregroundStyle(NX.foreground).lineLimit(1)
+                            Spacer(minLength: 0)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                     if removable {
                         Button { Task { try? await APIClient.shared.removeDependency(taskId: taskId, id: depId); await load() } } label: {
                             Image(systemName: "xmark.circle.fill").font(.system(size: 15)).foregroundStyle(NX.mutedFg.opacity(0.6))

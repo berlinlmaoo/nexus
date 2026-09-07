@@ -184,6 +184,10 @@ struct ThreadsView: View {
                 .nexusShadowSoft()
                 .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(NX.border))
         }
+        // The comment count was the only way into a thread. On a feed the post itself is the door;
+        // the like and comment buttons sit deeper in the hierarchy and still take their own taps.
+        .contentShape(Rectangle())
+        .onTapGesture { openPost = p }
     }
 
     private func load() async {

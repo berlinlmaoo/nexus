@@ -22,6 +22,7 @@ struct TaskDetailView: View {
     @State private var descOriginal = ""   // parsed once on load — avoids re-parsing block-JSON on every keystroke
     @State private var isBod = false       // gates the "Make it a quest" button (BoD+)
     @State private var showQuestComposer = false
+    @State private var openTaskId: String?   // parent / subtask / dependency hops within the stack
 
     private let statuses = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"]
     private let priorities = ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"]
@@ -47,7 +48,7 @@ struct TaskDetailView: View {
                         descriptionCard(task)
                         subtasksCard(task)
                         TaskAttachmentsCard(taskId: task.id)
-                        TaskDependenciesCard(taskId: task.id, projectId: task.projectId)
+                        TaskDependenciesCard(taskId: task.id, projectId: task.projectId) { openTaskId = $0 }
                         TaskTimeCard(taskId: task.id)
                         commentsCard(task)
                         TaskActivityCard(logs: task.activityLogs ?? [])
@@ -60,6 +61,7 @@ struct TaskDetailView: View {
         }
         .navigationTitle(T("Task"))
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -118,14 +120,19 @@ struct TaskDetailView: View {
     private func header(_ t: TaskDetail) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             if let parent = t.parent {
-                HStack(spacing: 6) {
-                    Image(systemName: "checklist").font(.system(size: 11, weight: .bold))
-                    Text(T("Subtask of")).foregroundStyle(NX.accentFg.opacity(0.8))
-                    Text(parent.title ?? T("task")).fontWeight(.semibold).lineLimit(1)
+                // A breadcrumb naming the parent has to reach it. Back goes wherever you came
+                // from, which on a task opened from search or the inbox is not the parent.
+                Button { openTaskId = parent.id } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checklist").font(.system(size: 11, weight: .bold))
+                        Text(T("Subtask of")).foregroundStyle(NX.accentFg.opacity(0.8))
+                        Text(parent.title ?? T("task")).fontWeight(.semibold).lineLimit(1)
+                    }
+                    .font(NXFont.text(12, .semibold)).foregroundStyle(NX.accentFg)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(NX.accentBg, in: Capsule())
                 }
-                .font(NXFont.text(12, .semibold)).foregroundStyle(NX.accentFg)
-                .padding(.horizontal, 10).padding(.vertical, 5)
-                .background(NX.accentBg, in: Capsule())
+                .buttonStyle(.plain)
             }
             // editable title (commits on submit / when focus leaves)
             TextField(T("Task title"), text: $editTitle, axis: .vertical)
@@ -253,9 +260,18 @@ struct TaskDetailView: View {
                             Image(systemName: st.isDone ? "checkmark.circle.fill" : "circle")
                                 .font(.system(size: 18)).foregroundStyle(st.isDone ? NX.success : NX.mutedFg.opacity(0.5))
                         }.buttonStyle(.plain)
-                        Text(st.title ?? "Untitled").font(NXFont.text(14))
-                            .foregroundStyle(st.isDone ? NX.mutedFg : NX.foreground).strikethrough(st.isDone).lineLimit(2)
-                        Spacer()
+                        // A subtask is a task: its title opens it, while the circle stays a
+                        // separate button so ticking one off never navigates away.
+                        Button { openTaskId = st.id } label: {
+                            HStack(spacing: 0) {
+                                Text(st.title ?? "Untitled").font(NXFont.text(14))
+                                    .foregroundStyle(st.isDone ? NX.mutedFg : NX.foreground)
+                                    .strikethrough(st.isDone).lineLimit(2).multilineTextAlignment(.leading)
+                                Spacer(minLength: 0)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }

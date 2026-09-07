@@ -317,9 +317,15 @@ struct TimelineTab: View {
                             .padding(.leading, 12).frame(width: leftW, height: groupH, alignment: .leading)
                             .background(NX.muted.opacity(0.4))
                         ForEach(g.rows) { r in
-                            Text(r.task.isSubtask ? "↳ \(r.task.title)" : r.task.title).font(NXFont.text(12)).foregroundStyle(r.task.isDone ? NX.mutedFg : NX.foreground)
-                                .strikethrough(r.task.isDone).lineLimit(1)
-                                .padding(.leading, r.task.isSubtask ? 20 : 12).frame(width: leftW, height: rowH, alignment: .leading)
+                            // The gantt bar opens the task; so should the name, which is what the
+                            // finger reaches for when the bar is scrolled weeks off to the right.
+                            Button { onOpen(r.task.id) } label: {
+                                Text(r.task.isSubtask ? "↳ \(r.task.title)" : r.task.title).font(NXFont.text(12)).foregroundStyle(r.task.isDone ? NX.mutedFg : NX.foreground)
+                                    .strikethrough(r.task.isDone).lineLimit(1)
+                                    .padding(.leading, r.task.isSubtask ? 20 : 12).frame(width: leftW, height: rowH, alignment: .leading)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }

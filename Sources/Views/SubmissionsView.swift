@@ -373,15 +373,25 @@ struct SubmissionDetailSheet: View {
         }
     }
 
-    private func proofRow(_ p: SubmissionProof) -> some View {
+    /// The row says "Tap to enlarge", so the whole row is the target — not the 44pt thumbnail
+    /// sitting beside those words.
+    @ViewBuilder private func proofRow(_ p: SubmissionProof) -> some View {
+        if p.isImage, let url = p.absoluteURL {
+            Button { viewingPhoto = PhotoRef(url: url, name: p.name) } label: {
+                proofRowBody(p).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        } else {
+            proofRowBody(p)
+        }
+    }
+
+    private func proofRowBody(_ p: SubmissionProof) -> some View {
         HStack(spacing: 10) {
             if p.isImage, let url = p.absoluteURL {
-                Button { viewingPhoto = PhotoRef(url: url, name: p.name) } label: {
-                    CachedImage(url: url) { $0.resizable().scaledToFill() } placeholder: { NX.muted }
-                        .frame(width: 44, height: 44)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
-                .buttonStyle(.plain)
+                CachedImage(url: url) { $0.resizable().scaledToFill() } placeholder: { NX.muted }
+                    .frame(width: 44, height: 44)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             } else {
                 Image(systemName: "paperclip").font(.system(size: 13)).foregroundStyle(NX.success)
                     .frame(width: 44, height: 44)

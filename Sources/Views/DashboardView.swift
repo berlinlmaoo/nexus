@@ -570,7 +570,12 @@ struct DashboardView: View {
             HStack {
                 Text(T("Your Quests")).font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground)
                 Spacer()
-                Text(T("See All")).font(NXFont.text(12, .medium)).foregroundStyle(NX.mutedFg)
+                // The full list already exists as the Monthly Quests stat card's modal (index 2 in
+                // statData), so this opens that rather than a second screen showing the same rows.
+                Button { toggleStat(2) } label: {
+                    Text(T("See All")).font(NXFont.text(12, .medium)).foregroundStyle(NX.mutedFg)
+                }
+                .buttonStyle(.plain)
             }
             if (game?.questList.isEmpty ?? true) {
                 Text("Belum ada quest aktif. XP kamu jalan dari task, streak, & absen — cek \"Aturan XP\" di bawah.")

@@ -52,12 +52,20 @@ struct OfficesCard: View {
 
     private func row(_ o: Office) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: "mappin.circle.fill").font(.system(size: 18)).foregroundStyle((o.isActive ?? true) ? NX.violetText : NX.mutedFg)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(o.name).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                Text("\(o.address ?? "—") · radius \(o.radiusMeters ?? 0)m").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            // Everything but the switch opens the composer: the pencil is a 13pt target wedged
+            // against a toggle, and the name is what people aim at.
+            Button { editOffice = o } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "mappin.circle.fill").font(.system(size: 18)).foregroundStyle((o.isActive ?? true) ? NX.violetText : NX.mutedFg)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(o.name).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                        Text("\(o.address ?? "—") · radius \(o.radiusMeters ?? 0)m").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    }
+                    Spacer(minLength: 6)
+                }
+                .contentShape(Rectangle())
             }
-            Spacer(minLength: 6)
+            .buttonStyle(.plain)
             Toggle("", isOn: Binding(get: { o.isActive ?? true }, set: { on in Task { try? await APIClient.shared.updateOffice(id: o.id, fields: ["isActive": on]); await load() } }))
                 .labelsHidden().tint(NX.violetText)
             Button { editOffice = o } label: { Image(systemName: "pencil").font(.system(size: 13)).foregroundStyle(NX.mutedFg) }.buttonStyle(.plain)

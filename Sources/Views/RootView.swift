@@ -81,7 +81,7 @@ struct MoreView: View {
                             }
                         }
 
-                        AccountFooter()
+                        AccountFooter { router.morePush = .settings }
                     }
                     .padding(16)
                 }
@@ -158,6 +158,9 @@ struct MoreTile<Destination: View>: View {
 
 /// Account card (avatar + name + email) and logout.
 struct AccountFooter: View {
+    /// How the host opens the profile. The phone pushes it into the More stack, the sidebar
+    /// selects it — the card itself has no way to know which shell it is standing in.
+    let onOpenProfile: () -> Void
     @Environment(AuthStore.self) private var auth
     /// The Keychain `Session` only stores id/name/email — no avatar — so the footer could only ever
     /// draw an initial. Fetch the profile for the real photo.
@@ -167,17 +170,21 @@ struct AccountFooter: View {
         VStack(spacing: 12) {
             if let s = auth.session {
                 let name = s.userName.isEmpty ? s.userEmail : s.userName
-                HStack(spacing: 12) {
-                    AvatarView(url: avatar, initial: String(name.first ?? "?").uppercased(), size: 46)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(name).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                        Text(s.userEmail).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                Button(action: onOpenProfile) {
+                    HStack(spacing: 12) {
+                        AvatarView(url: avatar, initial: String(name.first ?? "?").uppercased(), size: 46)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(name).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                            Text(s.userEmail).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                        }
+                        Spacer()
                     }
-                    Spacer()
+                    .padding(14)
+                    .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
+                    .contentShape(Rectangle())
                 }
-                .padding(14)
-                .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
+                .buttonStyle(.plain)
             }
             Button { auth.logout() } label: {
                 Label(T("Logout"), systemImage: "rectangle.portrait.and.arrow.right")
