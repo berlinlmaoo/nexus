@@ -593,7 +593,7 @@ function Attendance() {
           )}
         </div>
 
-        <RequestsSection canReview={canReview} viewerId={today.data?.viewerId ?? null} />
+        <RequestsSection canReview={canReview} canManage={canManage} viewerId={today.data?.viewerId ?? null} />
         {canManage && <EmploymentStartSection />}
         {canManage && <OfficesSection />}
       </div>
@@ -999,7 +999,7 @@ function OfficeComposer({ office, onClose, onCreated }: { office?: NexusOffice; 
   );
 }
 
-function RequestsSection({ canReview, viewerId }: { canReview: boolean; viewerId: string | null }) {
+function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolean; canManage: boolean; viewerId: string | null }) {
   const qc = useQueryClient();
   const [composerOpen, setComposerOpen] = useState(false);
   // Settled (approved / rejected / canceled) rows are collapsed behind "Show settled" — see the
@@ -1009,7 +1009,13 @@ function RequestsSection({ canReview, viewerId }: { canReview: boolean; viewerId
   // refuses a reason-less rejection, so we collect it before the request is ever sent.
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState("");
-  const requestsQuery = useQuery({ queryKey: ["attendance-requests"], queryFn: () => nexusApi.attendanceRequests("scope=workspace"), retry: 1 });
+  // scope=workspace is a reviewer-only scope: the server 403s anyone without
+  // canReviewAttendanceRequests. Asking for it unconditionally meant a plain staff member's
+  // Submissions list came back empty — they could file a request and then never see it again, on
+  // the one screen built to show it to them. iOS has always picked the scope by permission
+  // (AttendanceRequestsView.swift); the web never did.
+  const requestsScope = canReview ? "scope=workspace" : "scope=me";
+  const requestsQuery = useQuery({ queryKey: ["attendance-requests", requestsScope], queryFn: () => nexusApi.attendanceRequests(requestsScope), retry: 1 });
   const rows = Array.isArray(requestsQuery.data) ? requestsQuery.data : requestsQuery.data?.requests ?? [];
   const pending = rows.filter((r) => (r.status || "").toUpperCase() === "PENDING");
   const invalidate = () => { qc.invalidateQueries({ queryKey: ["attendance-requests"] }); qc.invalidateQueries({ queryKey: ["attendance-today"] }); qc.invalidateQueries({ queryKey: ["attendance-history"] }); };
@@ -1019,38 +1025,66 @@ function RequestsSection({ canReview, viewerId }: { canReview: boolean; viewerId
     onSuccess: () => { closeReject(); invalidate(); },
   });
 
-  // Offsite checkouts (BoD only) merged into this same approvals list.
-  const offsiteQ = useQuery({ queryKey: ["offsite-checkouts", "all"], queryFn: () => nexusApi.offsiteCheckouts("ALL"), retry: false, enabled: canReview });
+  // Offsite check-outs merged into this same queue. The two halves do NOT share a permission:
+  // requests answer to `canReviewAttendanceRequests` (a team lead has it, scoped to their team),
+  // offsite check-outs to `canManageAttendance` (BoD/OAA only, enforced on both GET and PATCH).
+  // Neither is widened here — the query simply isn't run for someone who can't act on it, so a team
+  // lead sees the leave/permit half of the queue and never a row they'd only get a 403 from.
+  const offsiteQ = useQuery({ queryKey: ["offsite-checkouts", "all"], queryFn: () => nexusApi.offsiteCheckouts("ALL"), retry: false, enabled: canManage });
   const offsiteItems = offsiteQ.data?.items ?? [];
-  const offsiteSorted = [...offsiteItems].sort((a, b) => (a.approval === "PENDING" ? 0 : 1) - (b.approval === "PENDING" ? 0 : 1));
   const offsiteReview = useMutation({ mutationFn: ({ id, action }: { id: string; action: "approve" | "reject" }) => nexusApi.reviewOffsiteCheckout(id, action), onSuccess: () => { qc.invalidateQueries({ queryKey: ["offsite-checkouts"] }); invalidate(); } });
   const pendingTotal = pending.length + offsiteItems.filter((i) => i.approval === "PENDING").length;
   const offsiteStatusLabel = (a?: string | null) => (a === "APPROVED" ? "Approved" : a === "REJECTED" ? "Rejected" : "Pending");
 
-  // Everything awaiting a decision floats to the very top, across BOTH lists — offsite checkouts and
-  // leave/permit requests are different shapes, so we split each into pending/resolved and render the
-  // two pending groups before the two resolved ones. Otherwise a wall of approved offsite checkouts
-  // (the common case) buries the one request that actually needs action.
-  const offsitePending = offsiteSorted.filter((i) => i.approval === "PENDING");
-  const offsiteResolved = offsiteSorted.filter((i) => i.approval !== "PENDING");
-  const rowsPending = rows.filter((r) => (r.status || "").toUpperCase() === "PENDING");
-  const rowsResolved = rows.filter((r) => (r.status || "").toUpperCase() !== "PENDING");
+  // ── One queue, two kinds ────────────────────────────────────────────────────────────────────
+  // An offsite check-out is a genuinely different shape — an AttendanceRecord carrying a
+  // checkOutApproval, not an AttendanceRequest — but it is the same JOB: something sitting there
+  // waiting for a reviewer to decide. It used to live in a section of its own, which meant two
+  // places to look and two lists to keep an eye on. So the merge happens HERE, in the list, not in
+  // the database and not in the API: both kinds become entries of one queue, each still approved and
+  // rejected through the endpoint that owns it.
+  type QueueEntry =
+    | { kind: "request"; pending: boolean; dateKey: string; row: (typeof rows)[number] }
+    | { kind: "offsite"; pending: boolean; dateKey: string; item: (typeof offsiteItems)[number] };
 
-  // Settled requests are hidden by default for EVERYONE — a BoD and a staff member look at the same
+  const dayKey = (value?: string | null) => (value ?? "").slice(0, 10);
+  const entries: QueueEntry[] = [
+    ...rows.map((r): QueueEntry => ({
+      kind: "request",
+      pending: (r.status || "").toUpperCase() === "PENDING",
+      dateKey: dayKey(r.startDate),
+      row: r,
+    })),
+    ...offsiteItems.map((it): QueueEntry => ({
+      kind: "offsite",
+      pending: it.approval === "PENDING",
+      dateKey: dayKey(it.attendanceDate),
+      item: it,
+    })),
+  ];
+
+  // Settled entries are hidden by default for EVERYONE — a BoD and a staff member look at the same
   // list, and neither of them needs last quarter's approvals in the way of this morning's decision.
   // One exception, and it exists because of the rejection reason: your OWN request stays on screen
   // for a week after it was decided, so a rejection doesn't disappear before the person it's about
   // has read why. Offsite checkouts carry no reason, so they get no grace period.
   const SETTLED_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
-  const isFreshOwn = (r: (typeof rows)[number]) => {
-    if (!viewerId || r.user?.id !== viewerId) return false;
-    const t = r.reviewedAt ? Date.parse(r.reviewedAt) : NaN;
+  const isFreshOwn = (e: QueueEntry) => {
+    if (e.kind !== "request") return false;
+    if (!viewerId || e.row.user?.id !== viewerId) return false;
+    const t = e.row.reviewedAt ? Date.parse(e.row.reviewedAt) : NaN;
     return Number.isFinite(t) && Date.now() - t < SETTLED_GRACE_MS;
   };
-  const rowsFreshOwn = rowsResolved.filter(isFreshOwn);
-  const rowsSettledHidden = rowsResolved.filter((r) => !isFreshOwn(r));
-  const settledHiddenCount = rowsSettledHidden.length + offsiteResolved.length;
-  const alwaysVisibleCount = offsitePending.length + rowsPending.length + rowsFreshOwn.length;
+
+  // Anything awaiting a decision floats to the top — otherwise a wall of approved offsite check-outs
+  // (the common case) buries the one thing that needs action — and within that, newest date first.
+  // Both kinds share the comparator, so they interleave: the queue reads as a single list.
+  const byQueueOrder = (a: QueueEntry, b: QueueEntry) =>
+    (a.pending === b.pending ? 0 : a.pending ? -1 : 1) || b.dateKey.localeCompare(a.dateKey);
+  const visibleEntries = entries.filter((e) => e.pending || isFreshOwn(e)).sort(byQueueOrder);
+  const settledHiddenEntries = entries.filter((e) => !e.pending && !isFreshOwn(e)).sort(byQueueOrder);
+  const settledHiddenCount = settledHiddenEntries.length;
+  const alwaysVisibleCount = visibleEntries.length;
 
   const renderOffsite = (it: (typeof offsiteItems)[number]) => {
     const isPending = it.approval === "PENDING";
@@ -1062,16 +1096,23 @@ function RequestsSection({ canReview, viewerId }: { canReview: boolean; viewerId
       <div key={`offsite-${it.id}`} className="flex flex-wrap items-center gap-3 px-5 py-3">
         <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusTone(it.approval)}`}>{offsiteStatusLabel(it.approval)}</span>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold">Offsite checkout {it.user?.name ? <span className="font-normal text-muted-foreground">· {it.user.name}</span> : null}</div>
+          {/* The kind badge is what keeps the merged queue readable: these rows sit shoulder to
+              shoulder with leave/permit requests, and a reviewer has to see at a glance that this one
+              is a check-out from outside the geofence, judged on distance and not on a date range. */}
+          <div className="text-sm font-semibold">
+            <span className="mr-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700 align-middle">Offsite check-out</span>
+            {it.user?.name ? <span className="font-normal text-muted-foreground">· {it.user.name}</span> : null}
+          </div>
           <div className="text-xs text-muted-foreground">{fmtDateShort(it.attendanceDate)} · out {fmtTime(it.checkOutAt)}{it.reason ? ` · ${it.reason}` : ""}</div>
           <div className="text-xs text-muted-foreground">
             {it.distanceMeters != null ? `±${Math.round(it.distanceMeters)}m from ${it.officeName ?? "office"}` : ""}
+            {it.address ? `${it.distanceMeters != null ? " · " : ""}${it.address}` : ""}
             {mapUrl && <> · <a href={mapUrl} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">view map</a></>}
             {it.photoUrl && <> · <a href={it.photoUrl} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">photo</a></>}
             {!isPending && it.approverName ? ` · by ${it.approverName}` : ""}
           </div>
         </div>
-        {canReview && isPending && !isMine && (
+        {canManage && isPending && !isMine && (
           <div className="flex items-center gap-1.5">
             <button disabled={offsiteReview.isPending} onClick={() => offsiteReview.mutate({ id: it.id, action: "approve" })} className="rounded-lg bg-success/10 px-2.5 py-1 text-xs font-semibold text-success transition-colors hover:bg-success/20 active:scale-[0.97] disabled:opacity-50">Approve</button>
             <button disabled={offsiteReview.isPending} onClick={() => offsiteReview.mutate({ id: it.id, action: "reject" })} className="rounded-lg bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/20 active:scale-[0.97] disabled:opacity-50">Reject</button>
@@ -1169,12 +1210,20 @@ function RequestsSection({ canReview, viewerId }: { canReview: boolean; viewerId
     );
   };
 
+  const renderEntry = (e: QueueEntry) => (e.kind === "offsite" ? renderOffsite(e.item) : renderRequest(e.row));
+
   return (
     <section className="rounded-[28px] border border-border bg-card shadow-soft overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
         <div>
-          <h2 className="text-lg font-semibold tracking-tight">Leave & permit requests</h2>
-          <p className="text-sm text-muted-foreground">{canReview ? "Review pending requests (permit, day-off, offsite checkout) & submit your own." : "Submit leave, sick, or permit requests."}</p>
+          <h2 className="text-lg font-semibold tracking-tight">Submissions & approvals</h2>
+          <p className="text-sm text-muted-foreground">
+            {canManage
+              ? "One queue: leave, sick and permit requests plus offsite check-outs waiting on a decision."
+              : canReview
+                ? "Review pending requests (leave, sick, permit, day-off) & submit your own."
+                : "Submit leave, sick, or permit requests."}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {settledHiddenCount > 0 && (
@@ -1187,16 +1236,13 @@ function RequestsSection({ canReview, viewerId }: { canReview: boolean; viewerId
       </div>
       <div className="divide-y divide-border">
         {requestsQuery.isLoading && <div className="px-5 py-4 text-sm text-muted-foreground">Loading requests…</div>}
-        {!requestsQuery.isLoading && rows.length === 0 && offsiteSorted.length === 0 && <div className="px-5 py-6 text-center text-sm text-muted-foreground">No attendance requests yet.</div>}
+        {!requestsQuery.isLoading && entries.length === 0 && <div className="px-5 py-6 text-center text-sm text-muted-foreground">Nothing in the queue yet.</div>}
         {!requestsQuery.isLoading && alwaysVisibleCount === 0 && settledHiddenCount > 0 && !showSettled && (
-          <div className="px-5 py-6 text-center text-sm text-muted-foreground">Nothing waiting on a decision. {settledHiddenCount} settled request{settledHiddenCount === 1 ? "" : "s"} hidden.</div>
+          <div className="px-5 py-6 text-center text-sm text-muted-foreground">Nothing waiting on a decision. {settledHiddenCount} settled item{settledHiddenCount === 1 ? "" : "s"} hidden.</div>
         )}
-        {/* Pending first (both types), so approvals-needed never get buried under approved history. */}
-        {offsitePending.map(renderOffsite)}
-        {rowsPending.map(renderRequest)}
-        {rowsFreshOwn.map(renderRequest)}
-        {showSettled && offsiteResolved.map(renderOffsite)}
-        {showSettled && rowsSettledHidden.map(renderRequest)}
+        {/* One list: requests and offsite check-outs, pending first and then newest date first. */}
+        {visibleEntries.map(renderEntry)}
+        {showSettled && settledHiddenEntries.map(renderEntry)}
       </div>
       {canReview && pendingTotal > 0 && <div className="border-t border-border bg-warning/10 px-5 py-2 text-xs font-semibold text-warning-foreground">{pendingTotal} pending review</div>}
       {composerOpen && <RequestComposer onClose={() => setComposerOpen(false)} onCreated={invalidate} />}
@@ -1625,7 +1671,10 @@ function FunMetricButton({ onClick, className, children }: { onClick: (origin?: 
 // Self log of day-off / tanggal-merah usage (incl. auto-deductions from telat >120 menit).
 // Morphs open from the FunMetric card sharing layoutId `funmetric-${kind}`.
 function DayOffLogModal({ kind, origin, onClose }: { kind: "DAY_OFF" | "RED_DATE"; origin?: MorphOrigin; onClose: () => void }) {
-  const q = useQuery({ queryKey: ["attendance-requests", "me"], queryFn: () => nexusApi.attendanceRequests("scope=me"), retry: 1 });
+  // `includeAutoDeductions=1` because this log is the one place the cron's penalties BELONG: the card
+  // that opens it counts them in "N/4 used", so a log without them wouldn't add up. Everywhere else
+  // the endpoint now returns only what a person actually filed.
+  const q = useQuery({ queryKey: ["attendance-requests", "me", "with-auto"], queryFn: () => nexusApi.attendanceRequests("scope=me&includeAutoDeductions=1"), retry: 1 });
   const all = Array.isArray(q.data) ? q.data : q.data?.requests ?? [];
   // Only the CURRENT payroll period (cut-off 28th prev month → 27th this month), same as the board —
   // not the calendar month and not all history. Today decides which period we're in (past the 27th

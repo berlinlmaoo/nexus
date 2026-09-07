@@ -148,6 +148,11 @@ export const attendanceRequestQuerySchema = z.object({
   teamId: idString.optional(),
   type: z.enum(["LEAVE", "SICK", "PERMIT", "DAY_OFF", "RED_DATE"]).optional(),
   status: z.enum(["PENDING", "APPROVED", "REJECTED", "CANCELED"]).optional(),
+  // The nightly cron files its "potong jatah day-off" penalties as AttendanceRequest rows. Nobody
+  // submitted them and nobody approved them, so they are excluded by default — this endpoint lists
+  // what a PERSON filed. Opt back in only where the penalty itself is the subject (the day-off quota
+  // log, which has to reconcile with the "N/4 used" counter).
+  includeAutoDeductions: z.enum(["1", "true"]).optional(),
 })
 
 // ── Tasks ───────────────────────────────────────────────────────
