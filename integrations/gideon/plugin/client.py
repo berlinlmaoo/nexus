@@ -6,7 +6,10 @@ from typing import Optional
 
 
 def _base_url() -> str:
-    return os.getenv("NEXUS_BASE_URL", "http://127.0.0.1:3000").rstrip("/")
+    # Default sengaja URL NEXUS yang sebenarnya, BUKAN 127.0.0.1:3000 — port 3000 di VM `agents`
+    # itu OpenChamber, bukan NEXUS. Default lama bikin tool-nya diam-diam nembak service yang
+    # salah waktu env-nya belum keisi, dan errornya nggak kelihatan seperti salah alamat.
+    return os.getenv("NEXUS_BASE_URL", "https://nexus.znetworks.id").rstrip("/")
 
 
 def _token() -> str:

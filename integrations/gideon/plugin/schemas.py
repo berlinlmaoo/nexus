@@ -32,6 +32,24 @@ CUSTOM_FIELD_UPDATES = {
 }
 
 SCHEMAS = {
+    "nexus_propose_attendance_correction": object_schema(
+        "PROPOSE a correction to the ticket reporter's attendance for one day. This does NOT change "
+        "anything: it attaches a proposal to the ticket that a BoD approves or rejects. Call it only "
+        "after nexus_get_attendance_day, and only when the evidence actually supports the times you "
+        "give. Works for a day with no record at all — that is the usual case when a check-in never "
+        "landed — and then checkInAt is required. Only an ATTENDANCE or EXP ticket can carry one: on "
+        "an EXP ticket the XP was deducted BECAUSE the attendance record is wrong, so correcting "
+        "the record is the fix. A DAY_OFF ticket is refused — you have no way to restore a "
+        "day-off quota and must not imply otherwise.",
+        {
+            "complaintId": {"type": "string", "description": "The ticket this correction belongs to."},
+            "date": {"type": "string", "description": "YYYY-MM-DD, the day being corrected."},
+            "checkInAt": {"type": "string", "description": "Proposed check-in, \"HH:mm\" Jakarta time or full ISO-8601. Required if the day has no record."},
+            "checkOutAt": {"type": "string", "description": "Proposed check-out, same format. Optional."},
+            "reason": {"type": "string", "description": "Why, in one sentence, citing what the evidence shows. Minimum 10 characters."},
+        },
+        ["complaintId", "date", "reason"],
+    ),
     "nexus_get_attendance_day": object_schema(
         "Read ONE day of the requesting user's own attendance record: check-in and check-out times, "
         "status, late minutes, office. Use this before judging any attendance complaint — the photo "
