@@ -17,7 +17,8 @@ import { isHoliday } from "@/lib/holidays"
 import { BODY_MAX, isBodPlus } from "@/lib/complaints"
 import {
   ATTENDANCE_CORRECTION_INCLUDE, CORRECTION_NOTE_MAX, describeCorrection,
-  serializeAttendanceCorrection, validateCorrectionTimes, type CorrectionDecision,
+  proposeAttendanceCorrection, serializeAttendanceCorrection, validateCorrectionTimes,
+  type CorrectionDecision,
 } from "@/lib/attendance-correction"
 
 // Attendance correction proposed on a ticket, decided by a BoD.
@@ -57,24 +58,68 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   }
 }
 
-// POST /api/complaints/[id]/correction — { decision: "APPROVE" | "REJECT", correctionId?, note? }.
-// BoD / One-Above-All / system admin only. APPROVE writes the AttendanceRecord; REJECT touches nothing
+// POST /api/complaints/[id]/correction — two shapes on one route:
+//   { decision: "PROPOSE", date, checkInAt?, checkOutAt?, reason }  — the reporter (or a BoD) files a
+//     proposal in their own name. Writes nothing but the proposal row and a thread message.
+//   { decision: "APPROVE" | "REJECT", correctionId?, note? }  — BoD / One-Above-All / system admin only. APPROVE writes the AttendanceRecord; REJECT touches nothing
 // but the proposal row.
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const me = session.user.id
+    const { id } = await params
+
+    const payload = await request.json().catch(() => ({}))
+    const decision = String(payload?.decision ?? "").toUpperCase() as CorrectionDecision | "PROPOSE"
+
+    // ---- PROPOSE: the reporter asks for the change in their own name. ---------------------------
+    // Deliberately ABOVE the attendance gate, because this writes a proposal and never an
+    // AttendanceRecord — the BoD tap below is still the only thing that touches attendance. It runs
+    // the same proposeAttendanceCorrection GIDEON uses, with the same guardrails (own ticket, own
+    // day, ATTENDANCE or EXP category, one live proposal); only the authorship differs, so the card says
+    // who asked. This exists because GIDEON declining — or being down — must not be the only way a
+    // wrong absen gets in front of a human.
+    if (decision === "PROPOSE") {
+      try {
+        const result = await proposeAttendanceCorrection(
+          { id: me, name: session.user.name ?? null },
+          {
+            complaintId: id,
+            date: payload?.date,
+            attendanceDate: payload?.attendanceDate,
+            checkInAt: payload?.checkInAt,
+            checkOutAt: payload?.checkOutAt,
+            reason: payload?.reason,
+          },
+          me,
+        )
+        const complaint = await prisma.complaint.findUnique({
+          where: { id },
+          select: { workspaceId: true, reporterId: true },
+        })
+        if (complaint) {
+          // fromReviewer: false → every BoD gets pinged that there is something to approve.
+          void notifyComplaintReply({
+            complaintId: id, workspaceId: complaint.workspaceId, reporterId: complaint.reporterId,
+            fromReviewer: false, replierId: me,
+          }).catch(() => {})
+        }
+        logAudit({ action: "create", entityType: "attendance_correction", entityId: result.id, userId: me, request, metadata: { source: "reporter", date: String(payload?.date ?? "") } })
+        return NextResponse.json({ correction: result })
+      } catch (error) {
+        // Every throw in there is a sentence written to be read by the person who typed the form.
+        const message = error instanceof Error ? error.message : "Gagal mengusulkan koreksi."
+        const status = message.includes("not accessible") ? 404 : 422
+        return NextResponse.json({ error: message }, { status })
+      }
+    }
 
     // Same gate as every other attendance write in the app (BoD / One-Above-All / system ADMIN). A team
     // lead's team-scoped powers deliberately do NOT reach here: this rewrites the attendance history a
     // payroll run reads.
     const context = await getAttendanceWorkspaceContext(me)
     if (!context.workspace || !context.canManageAttendance) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    const { id } = await params
-
-    const payload = await request.json().catch(() => ({}))
-    const decision = String(payload?.decision ?? "").toUpperCase() as CorrectionDecision
     if (decision !== "APPROVE" && decision !== "REJECT") {
       return NextResponse.json({ error: 'decision harus "APPROVE" atau "REJECT".' }, { status: 422 })
     }

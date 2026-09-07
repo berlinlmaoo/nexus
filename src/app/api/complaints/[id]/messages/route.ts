@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { notifyComplaintReply } from "@/lib/notification-service"
-import { reviewAttendanceTicket } from "@/lib/gideon-ticket"
+import { isGideonTicketCategory, reviewSupportTicket } from "@/lib/gideon-ticket"
 import {
   isBodPlus, BODY_MIN, BODY_MAX, COMPLAINT_DETAIL_INCLUDE, serializeComplaintDetail,
 } from "@/lib/complaints"
@@ -43,10 +43,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // GIDEON answers the reporter, not the reviewers: a BoD reply is a human taking over, and an
     // assistant talking back over them is noise. Its own two brakes — never answer itself, and never
-    // twice inside a minute — live in reviewAttendanceTicket, where anything else that triggers it
-    // gets them too.
-    if (complaint.category === "ATTENDANCE" && !viewerIsBod) {
-      void reviewAttendanceTicket(id).catch(() => {})
+    // twice inside a minute — live in reviewSupportTicket, where anything else that triggers it
+    // gets them too. Which categories it answers is that module's list, not this route's.
+    if (isGideonTicketCategory(complaint.category) && !viewerIsBod) {
+      void reviewSupportTicket(id).catch(() => {})
     }
 
     const fresh = await prisma.complaint.findUnique({ where: { id }, include: COMPLAINT_DETAIL_INCLUDE })
