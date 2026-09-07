@@ -29,24 +29,99 @@ struct APIClient {
     static let shared = APIClient()
 
     private func makeRequest(_ path: String, method: String = "GET", authed: Bool = true) -> URLRequest {
+        // Which host this leaves from is decided per request rather than once at launch: the office
+        // LAN when the phone is provably on it, the public host everywhere else. Asking here costs
+        // nothing — `currentBase()` never blocks and never touches the network on this thread; see
+        // LANRoute.swift for why the route is probed instead of guessed from the Wi-Fi name.
+        let base = LANRoute.shared.currentBase()
         // Build the URL via URLComponents so a "?query" in `path` stays a real query string.
         // (URL.appendingPathComponent percent-encodes "?" into "%3F", breaking the route → 404.)
         let url: URL
         if let q = path.firstIndex(of: "?") {
-            var comps = URLComponents(url: Config.baseURL, resolvingAgainstBaseURL: false)!
+            var comps = URLComponents(url: base, resolvingAgainstBaseURL: false)!
             comps.path = String(path[..<q])
             comps.percentEncodedQuery = String(path[path.index(after: q)...])
-            url = comps.url ?? Config.baseURL.appendingPathComponent(path)
+            url = comps.url ?? base.appendingPathComponent(path)
         } else {
-            url = Config.baseURL.appendingPathComponent(path)
+            url = base.appendingPathComponent(path)
         }
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         if authed, let session = Keychain.load() {
+            // Written onto the request itself, so the session travels with whichever host was picked.
+            // Nothing here consults a cookie store, so no domain rule can quietly withhold it — and
+            // the token is host-independent: the server validates it with AUTH_SECRET and a salt
+            // derived from the cookie NAME, never from the Host header.
             req.setValue(session.cookieHeader, forHTTPHeaderField: "Cookie")
         }
+        // A LAN-bound request gets a much shorter leash than the 60 s default, because the address it
+        // is aimed at ceases to exist the moment someone walks out of the building.
+        if base.host == Config.lanBaseURL.host { req.timeoutInterval = Config.lanRequestTimeout }
         return req
+    }
+
+    /// The one place every request actually goes out, so the LAN detour has exactly one exit.
+    ///
+    /// A request aimed at the LAN that gets no answer at all demotes the route immediately, and — if
+    /// it is safe to send twice, see `isReplayable` — is replayed once over the internet. That retry
+    /// is silent on purpose: someone who has just walked out of the office must not be shown an error
+    /// for a route the app chose on their behalf, and must not be left holding a stuck tap either.
+    /// Anything the SERVER said — 401, 422, 500 — is not a route failure at all, and travels back to
+    /// the caller untouched exactly as it did before.
+    private func perform(_ req: URLRequest) async throws -> (Data, URLResponse) {
+        guard req.url?.host == Config.lanBaseURL.host else {
+            return try await URLSession.shared.data(for: req)
+        }
+        do {
+            return try await URLSession.shared.data(for: req)
+        } catch {
+            // Cancellation is the caller changing its mind, not the LAN disappearing. Replaying it
+            // would resurrect work that was deliberately abandoned — and, on an upload, send it twice.
+            if error is CancellationError || (error as? URLError)?.code == .cancelled { throw error }
+            // Demote the route first and unconditionally: whatever happens to THIS request, every
+            // request after it must already be going out over the internet.
+            LANRoute.shared.noteUnreachable()
+            guard Self.isReplayable(req, after: error) else { throw error }
+            return try await URLSession.shared.data(for: Self.overInternet(req))
+        }
+    }
+
+    /// Whether a request that failed on the LAN may simply be sent again over the internet.
+    ///
+    /// A read always may. Anything that WRITES may only be replayed when the error proves the body
+    /// never reached the server — the connection was never established — because the one thing this
+    /// shortcut must never invent is a second check-in, or a second message in a thread, out of a
+    /// reply that was merely lost on the way back. A write that fails any other way is left to fail
+    /// exactly as it did before the LAN existed, and attendance already answers that case properly:
+    /// the tap is queued with an idempotency key and replayed (see PendingAttendance).
+    private static func isReplayable(_ req: URLRequest, after error: Error) -> Bool {
+        let method = (req.httpMethod ?? "GET").uppercased()
+        if method == "GET" || method == "HEAD" { return true }
+        switch (error as? URLError)?.code {
+        case .some(.cannotFindHost), .some(.cannotConnectToHost), .some(.dnsLookupFailed),
+             .some(.notConnectedToInternet), .some(.secureConnectionFailed):
+            return true
+        default:
+            // Includes .timedOut and .networkConnectionLost, which can both happen AFTER the server
+            // has already read and acted on the body.
+            return false
+        }
+    }
+
+    /// The same request re-aimed at the public host. Method, headers and body are carried over
+    /// untouched — including `Cookie`, which is equally valid on either host.
+    private static func overInternet(_ req: URLRequest) -> URLRequest {
+        var out = req
+        // Back to URLRequest's own default: the short leash above exists only for the private address.
+        out.timeoutInterval = 60
+        guard let url = req.url,
+              var comps = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return out }
+        comps.scheme = Config.baseURL.scheme
+        comps.host = Config.baseURL.host
+        comps.port = Config.baseURL.port
+        if let rebuilt = comps.url { out.url = rebuilt }
+        return out
     }
 
     /// `cache` opts an endpoint into keeping its last good response on disk. Only pass it for
@@ -55,7 +130,7 @@ struct APIClient {
     private func run<T: Decodable>(_ req: URLRequest, decode: T.Type, cache key: String? = nil) async throws -> T {
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await URLSession.shared.data(for: req)
+            (data, response) = try await perform(req)
         } catch {
             throw APIError.transport(error.localizedDescription)
         }
@@ -428,7 +503,7 @@ struct APIClient {
     /// Downloads a project file's bytes (authed) to a temp URL for sharing/preview.
     func downloadProjectFile(_ projectId: String, path: String, fileName: String) async throws -> URL {
         let req = makeRequest("/api/projects/\(projectId)/files/download?path=\(enc(path))")
-        let (data, response) = try await URLSession.shared.data(for: req)
+        let (data, response) = try await perform(req)
         guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
         if http.statusCode == 401 { throw APIError.unauthorized }
         guard (200..<300).contains(http.statusCode) else { throw APIError.http(http.statusCode) }
@@ -619,7 +694,7 @@ struct APIClient {
 
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await URLSession.shared.data(for: req)
+            (data, response) = try await perform(req)
         } catch {
             throw APIError.transport(error.localizedDescription)
         }
@@ -654,7 +729,7 @@ struct APIClient {
 
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await URLSession.shared.data(for: req)
+            (data, response) = try await perform(req)
         } catch {
             throw APIError.transport(error.localizedDescription)
         }
@@ -712,7 +787,7 @@ struct APIClient {
 
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await URLSession.shared.data(for: req)
+            (data, response) = try await perform(req)
         } catch {
             throw APIError.transport(error.localizedDescription)
         }
@@ -1072,7 +1147,7 @@ struct APIClient {
         } else {
             req = makeRequest(url)
         }
-        let (data, response) = try await URLSession.shared.data(for: req)
+        let (data, response) = try await perform(req)
         guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
         if http.statusCode == 401 { throw APIError.unauthorized }
         guard (200..<300).contains(http.statusCode) else { throw APIError.http(http.statusCode) }
@@ -1380,7 +1455,7 @@ struct APIClient {
 
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await URLSession.shared.data(for: req)
+            (data, response) = try await perform(req)
         } catch {
             // Nothing came back at all, so the tap is queueable. Anything below this line is the
             // server having an opinion, which must never be replayed.
