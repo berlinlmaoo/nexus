@@ -40,7 +40,7 @@ private struct GideonEvent: Decodable {
 /// Which model each one runs is decided on the server, and deliberately not named here: retuning a
 /// tier must not require shipping a new build through review.
 enum GideonTier: String, CaseIterable, Identifiable, Sendable {
-    case astra, luna, terra
+    case astra, luna, terra, experimental
 
     var id: String { rawValue }
     static let fallback: GideonTier = .luna
@@ -50,6 +50,7 @@ enum GideonTier: String, CaseIterable, Identifiable, Sendable {
         case .astra: return "Astra"
         case .luna: return "Luna"
         case .terra: return "Terra"
+        case .experimental: return "Experimental"
         }
     }
 
@@ -58,6 +59,9 @@ enum GideonTier: String, CaseIterable, Identifiable, Sendable {
         case .astra: return T("Deepest. For analysis and decisions.")
         case .luna: return T("Everyday.")
         case .terra: return T("Light. Short questions.")
+        // Runs on the office GPU rather than a hosted API. Measurably weaker than the others, so
+        // the blurb says so instead of letting somebody discover it in a wrong answer.
+        case .experimental: return T("Local model in the office. Slow, and can be wrong.")
         }
     }
 }

@@ -469,6 +469,7 @@ final class AppLanguage {
         "No custom fields in this project yet.": "Belum ada custom field di project ini.",
         "Project members": "Member Project",
         "Add member": "Tambah member",
+        "Local model in the office. Slow, and can be wrong.": "Model lokal di kantor. Lambat dan bisa keliru.",
         "Using the app": "Pakai app",
         "Devices": "Perangkat",
         "Nobody has installed the app yet.": "Belum ada yang pasang app.",
