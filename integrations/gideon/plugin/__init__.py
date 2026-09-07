@@ -12,6 +12,7 @@ _ACTION_BY_TOOL = {
     "nexus_update_task": "update_task",
     "nexus_add_task_comment": "add_task_comment",
     "nexus_create_document": "create_document",
+    "nexus_get_attendance_day": "get_attendance_day",
 }
 
 
