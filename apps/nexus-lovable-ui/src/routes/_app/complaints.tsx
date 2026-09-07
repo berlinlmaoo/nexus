@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Ticket, Plus, X, Loader2, Send, CheckCircle2, MessageSquare, Camera, Inbox as InboxIcon, AlertTriangle, ArrowRight, Ban, CalendarClock, Check } from "lucide-react";
+import { GideonMark } from "@/components/gideon/GideonMark";
 import { PageHeader } from "@/components/PageHeader";
 import { Avatar } from "@/components/Avatar";
 import { cn } from "@/lib/utils";
@@ -37,6 +38,8 @@ const CORRECTION_STATUS: Record<string, { label: string; cls: string }> = {
 };
 // Keep in sync with EVIDENCE_MAX_COUNT in src/app/api/complaints/route.ts — the server rejects past this.
 const MAX_PHOTOS = 5;
+// Mirror of CORRECTABLE_COMPLAINT_CATEGORIES in src/lib/attendance-correction.ts.
+const CORRECTABLE_CATEGORIES = ["ATTENDANCE", "EXP"];
 const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 
 type Tab = "open" | "review" | "all";
@@ -335,7 +338,7 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
         {c?.messages.map((m) => (
           <div key={m.id} className={cn("flex", m.mine ? "justify-end" : "justify-start")}>
             <div className={cn("max-w-[82%] rounded-2xl px-3 py-2 text-sm shadow-sm", m.mine ? "rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md bg-card ring-1 ring-border")}>
-              {!m.mine && <div className="mb-0.5 text-[11px] font-bold opacity-70">{m.fromReviewer ? "BoD" : (m.author?.name ?? "—")}</div>}
+              {!m.mine && <div className="mb-0.5 flex items-center gap-1 text-[11px] font-bold opacity-70">{m.fromGideon ? (<><GideonMark className="h-3 w-3" /> GIDEON</>) : m.fromReviewer ? "BoD" : (m.author?.name ?? "—")}</div>}
               <p className="whitespace-pre-wrap break-words">{m.body}</p>
               <div className={cn("mt-0.5 text-right text-[10px]", m.mine ? "text-primary-foreground/70" : "text-muted-foreground")}>{fmtWhen(m.createdAt)}</div>
             </div>
@@ -346,6 +349,16 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
         {corrections.map((cor) => (
           <AttendanceCorrectionCard key={cor.id} complaintId={id} correction={cor} canDecide={correctionQ.data?.canDecide ?? false} onDecided={refreshAfterDecision} />
         ))}
+        {/* Nothing pending, correctable ticket, still open → the reporter can say what the record
+            SHOULD read, in their own name. Without this the only proposer is GIDEON, and a ticket it
+            declines has no path to a BoD tap at all.
+            EXP is in the list because an XP deduction is a CONSEQUENCE of a wrong attendance record —
+            fixing the record is the only way to fix the XP. Keep this in step with
+            CORRECTABLE_COMPLAINT_CATEGORIES in src/lib/attendance-correction.ts; the server refuses
+            anything else, so a button shown here that the server rejects is just a dead end. */}
+        {c && CORRECTABLE_CATEGORIES.includes(c.category) && c.status !== "CLOSED" && !corrections.some((cor) => cor.status === "PENDING") && (
+          <ProposeCorrectionForm complaintId={id} defaultDate={dateKeyOf(c.createdAt)} onProposed={refreshAfterDecision} />
+        )}
         {c && c.status !== "OPEN" && c.resolvedAt && (c.status === "RESOLVED" || c.status === "CLOSED") && (
           <div className="py-1 text-center text-[11px] font-semibold text-muted-foreground">— {c.status === "RESOLVED" ? "Marked resolved" : "Closed"} {c.resolvedBy ? `by ${c.resolvedBy.name}` : ""} —</div>
         )}
@@ -390,6 +403,94 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
   );
 }
 
+
+// Jakarta calendar day of an ISO timestamp, as the "YYYY-MM-DD" the correction API expects.
+// toISOString() would answer in UTC and hand back yesterday for anything before 07:00 WIB.
+function dateKeyOf(iso: string) {
+  const p = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
+  return p;
+}
+
+/**
+ * The reporter's own correction request.
+ *
+ * It writes a PROPOSAL and nothing else — same server function GIDEON uses, same guardrails (own
+ * ticket, the reporter's own attendance, one live proposal at a time). The BoD tap on the card above
+ * is still the only thing that rewrites a record, so this widens who may ask, never who may decide.
+ */
+function ProposeCorrectionForm({ complaintId, defaultDate, onProposed }: { complaintId: string; defaultDate: string; onProposed: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [date, setDate] = useState(defaultDate);
+  const [checkIn, setCheckIn] = useState("");
+  const [checkOut, setCheckOut] = useState("");
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const propose = useMutation({
+    mutationFn: () =>
+      nexusApi.proposeComplaintCorrection(complaintId, {
+        date,
+        checkInAt: checkIn || undefined,
+        checkOutAt: checkOut || undefined,
+        reason: reason.trim(),
+      }),
+    onSuccess: () => { setOpen(false); setCheckIn(""); setCheckOut(""); setReason(""); setError(null); onProposed(); },
+    // The server's refusals are written to be read (wrong day, ticket closed, one already pending).
+    onError: (e) => setError(e instanceof ApiError ? e.message : "Gagal mengirim usulan."),
+  });
+
+  const ready = !!date && (!!checkIn || !!checkOut) && reason.trim().length >= 10;
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-border py-2.5 text-xs font-bold text-muted-foreground transition hover:border-primary/50 hover:text-foreground">
+        <CalendarClock className="h-3.5 w-3.5" /> Ajukan koreksi absen
+      </button>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-3.5">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Usulan koreksi absen</span>
+        <button onClick={() => setOpen(false)} className="grid h-6 w-6 place-items-center rounded-full text-muted-foreground hover:bg-accent"><X className="h-3.5 w-3.5" /></button>
+      </div>
+      <p className="mb-2.5 text-[11px] leading-snug text-muted-foreground">Isi jam yang seharusnya tercatat. Absen kamu <b>belum berubah</b> — ini cuma usulan yang nunggu approve BoD.</p>
+
+      <div className="grid grid-cols-2 gap-2">
+        <label className="col-span-2 text-[11px] font-semibold text-muted-foreground">
+          Tanggal
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-0.5 w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm font-normal text-foreground" />
+        </label>
+        <label className="text-[11px] font-semibold text-muted-foreground">
+          Check-in
+          <input type="time" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="mt-0.5 w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm font-normal text-foreground" />
+        </label>
+        <label className="text-[11px] font-semibold text-muted-foreground">
+          Check-out
+          <input type="time" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="mt-0.5 w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm font-normal text-foreground" />
+        </label>
+      </div>
+
+      <label className="mt-2 block text-[11px] font-semibold text-muted-foreground">
+        Alasan
+        <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="Kenapa jamnya salah? Contoh: server NEXUS down jam 08.00, absen gagal kekirim."
+          className="mt-0.5 w-full resize-none rounded-lg border border-border bg-background px-2 py-1.5 text-sm font-normal text-foreground placeholder:text-muted-foreground" />
+      </label>
+
+      {error && (
+        <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-rose-50 px-2 py-1.5 text-[11px] font-semibold leading-snug text-rose-700">
+          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" /> {error}
+        </div>
+      )}
+
+      <button onClick={() => { setError(null); propose.mutate(); }} disabled={!ready || propose.isPending}
+        className="mt-2.5 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-primary py-2 text-xs font-bold text-primary-foreground transition hover:opacity-90 disabled:opacity-50">
+        {propose.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Kirim ke BoD
+      </button>
+    </div>
+  );
+}
 
 /**
  * One proposed attendance correction on a ticket.

@@ -129,7 +129,9 @@ export type Complaint = {
 export type ComplaintMessage = {
   id: string;
   body: string;
-  fromReviewer: boolean;               // true = BoD side, false = reporter side
+  fromReviewer: boolean;
+  /** Written by GIDEON, not by a person. Reviewer replies are otherwise anonymised to "BoD". */
+  fromGideon?: boolean;               // true = BoD side, false = reporter side
   createdAt: string;
   author: ComplaintPerson | null;
   mine: boolean;
@@ -569,8 +571,18 @@ export type NexusAttendanceRequest = {
   type?: string | null;
   status?: string | null;
   reason?: string | null;
+  /** The reviewer's decision note — mandatory on a reject, optional on an approve. */
+  reviewNote?: string | null;
+  reviewedAt?: string | null;
+  reviewedBy?: NexusUser | null;
   startDate?: string | null;
   endDate?: string | null;
+  submittedLat?: number | null;
+  submittedLng?: number | null;
+  submittedAddress?: string | null;
+  reportDelayMinutes?: number | null;
+  supportingDocumentUrl?: string | null;
+  supportingDocumentName?: string | null;
   user?: NexusUser | null;
 };
 
@@ -1373,7 +1385,8 @@ export const nexusApi = {
 
   attendanceOverride: (payload: { userId: string; date: string; action: "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "CLEAR_PENALTY"; note?: string; checkInAt?: string | null; checkOutAt?: string | null }) =>
     apiFetch<{ ok: boolean; action: string; date: string; refunded: boolean; alreadyCovered?: boolean; canceledRequests?: number; replacedRequests?: number; multiDayRequestsLeft?: number }>("/api/attendance/override", { method: "POST", body: JSON.stringify(payload) }),
-  reviewAttendanceRequest: (requestId: string, action: "approve" | "reject" | "cancel") => apiFetch<{ request?: NexusAttendanceRequest }>(`/api/attendance/requests/${requestId}`, { method: "PATCH", body: JSON.stringify({ action }) }),
+  // `reviewNote` is required by the server on "reject" (min 3 chars) and optional on "approve".
+  reviewAttendanceRequest: (requestId: string, action: "approve" | "reject" | "cancel", reviewNote?: string) => apiFetch<{ request?: NexusAttendanceRequest }>(`/api/attendance/requests/${requestId}`, { method: "PATCH", body: JSON.stringify({ action, reviewNote: reviewNote?.trim() || undefined }) }),
   periodRewards: () => apiFetch<{ rewards: Array<{ periodKey: string; tier: string; perk?: string | null; bonusDayOff: number; zeroAlpha: boolean; finalScore: number }> }>("/api/attendance/xp-rewards"),
   runPeriodRewards: (monthKey?: string) => apiFetch<{ monthKey: string; members: number; rewarded: number }>("/api/attendance/xp-rewards", { method: "POST", body: JSON.stringify(monthKey ? { monthKey } : {}) }),
   correctAttendanceRecord: (recordId: string, payload: { checkInAt?: string | null; checkOutAt?: string | null; notes?: string | null; correctionReason?: string }) => apiFetch<{ record?: unknown }>(`/api/attendance/records/${recordId}`, { method: "PATCH", body: JSON.stringify(payload) }),
@@ -1579,6 +1592,16 @@ export const nexusApi = {
   complaintCorrections: (id: string) => apiFetch<AttendanceCorrectionList>(`/api/complaints/${id}/correction`),
   decideComplaintCorrection: (id: string, payload: { decision: "APPROVE" | "REJECT"; correctionId?: string; note?: string }) =>
     apiFetch<AttendanceCorrectionDecision>(`/api/complaints/${id}/correction`, { method: "POST", body: JSON.stringify(payload) }),
+  // Same route, the other direction: the reporter files the change they are asking for, so a BoD has
+  // something to approve even when GIDEON declined to draft one or was down.
+  proposeComplaintCorrection: (
+    id: string,
+    payload: { date: string; checkInAt?: string; checkOutAt?: string; reason: string },
+  ) =>
+    apiFetch<{ correction: AttendanceCorrection }>(`/api/complaints/${id}/correction`, {
+      method: "POST",
+      body: JSON.stringify({ decision: "PROPOSE", ...payload }),
+    }),
 
   // --- Workspace members (org roles: BoD / Manager / Staff) ---
   workspaceMembers: (workspaceId?: string, includeRegistered = false) => {
