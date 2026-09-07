@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
 import UIKit
 
 /// The one place that decides WHERE the launcher may be drawn. `true` = Home only, `false` = the
@@ -65,6 +66,7 @@ struct GideonLauncher: View {
 struct GideonPanel: View {
     @Environment(AuthStore.self) private var auth
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var turns: [GideonTurn] = []
     @State private var draft = ""
@@ -73,13 +75,31 @@ struct GideonPanel: View {
     @State private var loaded = false
     /// JPEG bytes, held only until the next message is sent.
     @State private var attachment: Data?
+    /// A picked document, held only until the next message is sent.
+    @State private var document: GideonDocument?
     @State private var pickedPhoto: PhotosPickerItem?
+    @State private var showPhotoPicker = false
     @State private var showCamera = false
+    @State private var showFilePicker = false
+    /// Questions the composer has accepted but the network has not taken yet. See `submit()`.
+    @State private var outbox: [Outgoing] = []
+    @FocusState private var composerFocused: Bool
     /// Remembered on the device: somebody who picks Terra for quick questions should not have to
     /// pick it again every time the panel opens.
     @AppStorage("gideon.tier") private var tierRaw = GideonTier.fallback.rawValue
 
     private var tier: GideonTier { GideonTier(rawValue: tierRaw) ?? .fallback }
+
+    /// One accepted-but-not-yet-sent question, paired with the transcript turn already drawn for it.
+    /// The tier is captured here rather than read at dispatch: a queued question is answered by the
+    /// model that was selected when it was written, not by whatever the picker says a minute later.
+    private struct Outgoing {
+        let turnId: String
+        let text: String
+        let model: String
+        let image: Data?
+        let document: GideonDocument?
+    }
 
     var body: some View {
         NavigationStack {
@@ -96,22 +116,7 @@ struct GideonPanel: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(T("Close")) { dismiss() }
                 }
-                ToolbarItem(placement: .principal) {
-                    Menu {
-                        Picker(T("Model"), selection: $tierRaw) {
-                            ForEach(GideonTier.allCases) { option in
-                                Text(option.label).tag(option.rawValue)
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text("GIDEON \(tier.label)").font(NXFont.display(15, .bold))
-                            Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold))
-                        }
-                        .foregroundStyle(NX.foreground)
-                    }
-                    .disabled(sending)
-                }
+                ToolbarItem(placement: .principal) { title }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Button(T("Clear chat"), role: .destructive) {
@@ -124,6 +129,8 @@ struct GideonPanel: View {
                 }
             }
         }
+        .photosPicker(isPresented: $showPhotoPicker, selection: $pickedPhoto,
+                      matching: .images, photoLibrary: .shared())
         .fullScreenCover(isPresented: $showCamera) {
             // Rear lens: this one is pointed at whiteboards and documents, not at faces.
             CameraPicker(cameraDevice: .rear) { data in
@@ -131,6 +138,13 @@ struct GideonPanel: View {
                 showCamera = false
             }
             .ignoresSafeArea()
+        }
+        // `.item` rather than the accepted UTTypes: several of them (md, yml, log, ipynb) resolve to
+        // dynamic UTIs that a document provider need not advertise, so filtering would hide the very
+        // file the owner is looking at. `attach` refuses the wrong ones with the reason instead.
+        .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.item],
+                      allowsMultipleSelection: false) { result in
+            if case let .success(urls) = result, let url = urls.first { attach(url) }
         }
         .onChange(of: pickedPhoto) { _, item in
             guard let item else { return }
@@ -141,12 +155,43 @@ struct GideonPanel: View {
                 pickedPhoto = nil
             }
         }
-        .task {
-            guard !loaded else { return }
-            loaded = true
-            // The thread lives on the server, so this picks up whatever was said on the web.
-            turns = (try? await GideonClient.history()) ?? []
+    }
+
+    // MARK: - title
+
+    /// Every tier name is laid out; only the chosen one is drawn.
+    ///
+    /// The navigation bar sizes its centre view and animates between widths when that view changes,
+    /// and a centre view that is briefly narrower than its own text is CLIPPED rather than
+    /// truncated — clipped symmetrically, so it eats the first characters: switching to Experimental
+    /// showed "EON Experimental" for a moment. Reserving the widest name up front means the width
+    /// never changes, so there is nothing left to animate. `minimumScaleFactor` is the backstop for
+    /// the bar genuinely running out of room next to Close and the ⋯ menu, and it shrinks the whole
+    /// name rather than dropping either end of it.
+    private var title: some View {
+        Menu {
+            Picker(T("Model"), selection: $tierRaw) {
+                ForEach(GideonTier.allCases) { option in
+                    Text(option.label).tag(option.rawValue)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                ZStack {
+                    ForEach(GideonTier.allCases) { option in
+                        Text("GIDEON \(option.label)")
+                            .font(NXFont.display(15, .bold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                            .opacity(option == tier ? 1 : 0)
+                            .accessibilityHidden(option != tier)
+                    }
+                }
+                Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold))
+            }
+            .foregroundStyle(NX.foreground)
         }
+        .disabled(sending)
     }
 
     // MARK: - transcript
@@ -159,7 +204,7 @@ struct GideonPanel: View {
                         empty
                     }
                     ForEach(turns) { turn in
-                        bubble(turn).id(turn.id)
+                        bubble(turn).id(turn.id).transition(appear)
                     }
                     if let error {
                         Text(error)
@@ -168,15 +213,50 @@ struct GideonPanel: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .id("error")
                     }
+                    // A fixed anchor rather than the last turn's id: the newest thing on screen is
+                    // sometimes the error line or an answer that has not been given an id yet.
+                    Color.clear.frame(height: 1).id("bottom")
                 }
                 .padding(16)
             }
-            .onChange(of: turns.last?.content) { _, _ in
-                // Follows the answer as it grows, not just when a turn is added.
-                guard let last = turns.last else { return }
-                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(last.id, anchor: .bottom) }
+            // Everything that can leave the newest message under the fold: history arriving, a turn
+            // being added, the answer landing inside it, and the keyboard taking half the screen.
+            .onChange(of: turns.count) { _, _ in toBottom(proxy) }
+            .onChange(of: turns.last?.content) { _, _ in toBottom(proxy) }
+            .onChange(of: error) { _, _ in toBottom(proxy) }
+            .onChange(of: composerFocused) { _, focused in
+                guard focused else { return }
+                toBottom(proxy)
+                // The scroll view's keyboard inset lands with the keyboard, a beat after the focus
+                // changes, so the scroll above is aimed at the old content height; this one is not.
+                Task { try? await Task.sleep(for: .milliseconds(350)); toBottom(proxy) }
+            }
+            .task {
+                guard !loaded else { return }
+                loaded = true
+                // The thread lives on the server, so this picks up whatever was said on the web.
+                turns = (try? await GideonClient.history()) ?? []
+                // The stack is lazy, so the last row does not exist on the pass that sets `turns`;
+                // one hop later it does. Unanimated on purpose — opening the panel should START at
+                // the newest message, not scroll there through history nobody asked to re-read.
+                await Task.yield()
+                proxy.scrollTo("bottom", anchor: .bottom)
             }
         }
+    }
+
+    /// One place that decides what "show me the newest message" means, so opening the panel, a new
+    /// bubble, an error and the keyboard all land in the same spot.
+    private func toBottom(_ proxy: ScrollViewProxy) {
+        withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
+    }
+
+    /// A bubble fades and rises the first time it is drawn. An insertion transition only runs inside
+    /// an animated transaction, so this belongs to the `withAnimation` that adds a turn — a lazy
+    /// stack materialising rows during a scroll leaves it alone.
+    private var appear: AnyTransition {
+        if reduceMotion { return .identity }
+        return AnyTransition.opacity.combined(with: .offset(y: 8))
     }
 
     private var empty: some View {
@@ -205,11 +285,21 @@ struct GideonPanel: View {
         HStack {
             if turn.role == .user { Spacer(minLength: 44) }
             VStack(alignment: .leading, spacing: 6) {
-                Text(turn.content.isEmpty ? "…" : turn.content)
-                    .font(NXFont.text(14))
-                    .foregroundStyle(turn.role == .user ? .white : NX.foreground)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
+                if turn.role == .assistant && turn.content.isEmpty {
+                    // The answer arrives whole — there is no token stream behind this — so the dots
+                    // claim only that the request is still open, and they are replaced the instant
+                    // the real text lands. A typewriter here would be inventing progress.
+                    GideonTypingDots()
+                        .accessibilityLabel(T("GIDEON is typing…"))
+                        .transition(.opacity)
+                } else {
+                    Text(turn.content)
+                        .font(NXFont.text(14))
+                        .foregroundStyle(turn.role == .user ? .white : NX.foreground)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .transition(.opacity)
+                }
                 if !turn.tools.isEmpty {
                     Text(turn.tools.joined(separator: " · "))
                         .font(NXFont.text(10))
@@ -234,48 +324,73 @@ struct GideonPanel: View {
 
     @ViewBuilder
     private var attachmentStrip: some View {
-        if let attachment, let image = UIImage(data: attachment) {
-            HStack(spacing: 10) {
-                Image(uiImage: image)
-                    .resizable().scaledToFill()
-                    .frame(width: 38, height: 38)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                Text(T("Image attached")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                Spacer()
-                Button { self.attachment = nil } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg)
+        if attachment != nil || document != nil {
+            VStack(spacing: 6) {
+                if let attachment, let image = UIImage(data: attachment) {
+                    attachmentChip(thumbnail: image, icon: nil, label: T("Image attached")) {
+                        self.attachment = nil
+                    }
                 }
-                .buttonStyle(.plain)
+                if let document {
+                    attachmentChip(thumbnail: nil, icon: "doc.text", label: document.name) {
+                        self.document = nil
+                    }
+                }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 6)
         }
     }
 
-    private var composer: some View {
+    private func attachmentChip(thumbnail: UIImage?, icon: String?, label: String,
+                                remove: @escaping () -> Void) -> some View {
         HStack(spacing: 10) {
-            PhotosPicker(selection: $pickedPhoto, matching: .images) {
-                Image(systemName: "photo").font(.system(size: 17)).foregroundStyle(NX.mutedFg)
+            if let thumbnail {
+                Image(uiImage: thumbnail)
+                    .resizable().scaledToFill()
+                    .frame(width: 38, height: 38)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            } else if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 15))
+                    .foregroundStyle(NX.mutedFg)
+                    .frame(width: 38, height: 38)
+                    .background(NX.muted.opacity(0.6), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
-            .disabled(sending)
-            Button { showCamera = true } label: {
-                Image(systemName: "camera").font(.system(size: 17)).foregroundStyle(NX.mutedFg)
+            Text(label).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+            Spacer(minLength: 8)
+            Button(action: remove) {
+                Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg)
             }
             .buttonStyle(.plain)
-            .disabled(sending)
+        }
+    }
+
+    private var composer: some View {
+        HStack(spacing: 10) {
+            // One menu rather than three icons: a third button left the field too narrow to read
+            // back what you typed. A PhotosPicker nested in a Menu draws its row but never opens, so
+            // the menu only flips flags and the pickers themselves hang off the panel.
+            Menu {
+                Button { showPhotoPicker = true } label: { Label(T("Photo"), systemImage: "photo") }
+                Button { showCamera = true } label: { Label(T("Camera"), systemImage: "camera") }
+                Button { showFilePicker = true } label: { Label(T("File"), systemImage: "doc") }
+            } label: {
+                Image(systemName: "plus.circle").font(.system(size: 20)).foregroundStyle(NX.mutedFg)
+            }
             TextField(T("Ask anything about NEXUS…"), text: $draft, axis: .vertical)
                 .font(NXFont.text(14))
                 .lineLimit(1...5)
+                .focused($composerFocused)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(NX.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(NX.border))
-                .disabled(sending)
 
             Button {
-                Task { await send() }
+                submit()
             } label: {
-                Image(systemName: sending ? "ellipsis" : "arrow.up")
+                Image(systemName: "arrow.up")
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(width: 38, height: 38)
@@ -289,34 +404,103 @@ struct GideonPanel: View {
         .background(NX.background)
     }
 
+    /// Deliberately does not consult `sending`. The composer stays live while GIDEON is thinking;
+    /// what a mid-flight tap does is `submit()`'s problem, not the button's.
     private var canSend: Bool {
-        !sending && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    // MARK: - attachments
+
+    private func attach(_ url: URL) {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+
+        let ext = url.pathExtension.lowercased()
+        guard GideonDocument.acceptedExtensions.contains(ext) else {
+            error = T("GIDEON can't read that kind of file yet.")
+            return
+        }
+        guard let data = try? Data(contentsOf: url) else {
+            error = T("Couldn't read that file.")
+            return
+        }
+        // The server enforces this too, and says so in Indonesian. Checking here saves sending ten
+        // megabytes over mobile data to be told they were nine too many.
+        guard data.count <= GideonDocument.maxBytes else {
+            error = T("File is over the 10MB limit.")
+            return
+        }
+        error = nil
+        document = GideonDocument(
+            name: url.lastPathComponent,
+            type: UTType(filenameExtension: ext)?.preferredMIMEType ?? "application/octet-stream",
+            data: data
+        )
     }
 
     // MARK: - work
 
-    private func send() async {
+    /// Takes a question off the composer and puts it in the outbox.
+    ///
+    /// The composer stays live while an answer is in flight, so a second question can arrive before
+    /// the first is answered. It is QUEUED rather than sent alongside: the conversation is stored
+    /// server-side as one thread, so two requests in flight would both append to it and the second
+    /// answer would be written against a transcript missing the first. Either way the user's bubble
+    /// is drawn at the moment of the tap — text that leaves the composer and appears nowhere is the
+    /// one outcome worth ruling out.
+    private func submit() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !sending else { return }
-        error = nil
+        guard !text.isEmpty else { return }
         draft = ""
-        sending = true
-        defer { sending = false }
+        error = nil
 
-        turns.append(GideonTurn(role: .user, content: text))
-        // An empty assistant turn goes in immediately so the answer has somewhere to land and the
-        // list scrolls to it before the first chunk arrives.
+        let turn = GideonTurn(role: .user, content: text)
+        withAnimation(reduceMotion ? nil : Animation.easeOut(duration: 0.22)) { turns.append(turn) }
+        outbox.append(Outgoing(turnId: turn.id, text: text, model: tier.rawValue,
+                               image: attachment, document: document))
+        // Cleared with the draft, not after the request: an attachment silently riding along on the
+        // NEXT question would be baffling, and re-attaching is one tap.
+        attachment = nil
+        document = nil
+
+        // A drain already running will reach this on its next lap. The flag is raised HERE and not
+        // inside `drain`, because a Task's first line runs on a later turn of the main actor and two
+        // taps inside that gap would each start a drain competing for the same outbox.
+        guard !sending else { return }
+        sending = true
+        Task { await drain() }
+    }
+
+    private func drain() async {
+        defer { sending = false }
+        while !outbox.isEmpty {
+            await send(outbox.removeFirst())
+        }
+    }
+
+    private func send(_ item: Outgoing) async {
+        // History is cut at this question. Anything queued behind it is already in `turns`, and
+        // sending that as context would have the server answer the wrong message.
+        let messages = history(upTo: item)
+        // The empty assistant turn goes in directly after its question rather than at the end of the
+        // list, which with a queue is somebody else's place. It is what the dots are drawn in and
+        // where the answer lands.
         let answer = GideonTurn(role: .assistant, content: "")
-        turns.append(answer)
+        let at = turns.firstIndex(where: { $0.id == item.turnId }).map { $0 + 1 } ?? turns.count
+        withAnimation(reduceMotion ? nil : Animation.easeOut(duration: 0.22)) { turns.insert(answer, at: at) }
 
         do {
-            let image = attachment
-            // Cleared before the request, not after: an image silently riding along on the NEXT
-            // question would be baffling, and re-attaching is one tap.
-            attachment = nil
-            for try await chunk in GideonClient.stream(messages: history(), model: tier.rawValue, image: image) {
+            for try await chunk in GideonClient.stream(messages: messages, model: item.model,
+                                                       image: item.image, document: item.document) {
                 guard let index = turns.firstIndex(where: { $0.id == answer.id }) else { continue }
-                turns[index].content += chunk
+                // Only the first chunk is animated, and only to cross-fade the dots out. Animating
+                // every chunk would put an animation on the path a token-by-token backend takes.
+                if turns[index].content.isEmpty {
+                    withAnimation(.easeOut(duration: 0.18)) { turns[index].content += chunk }
+                } else {
+                    turns[index].content += chunk
+                }
             }
             // A stream that ends without a word is a failure the user can see but not explain.
             if let index = turns.firstIndex(where: { $0.id == answer.id }), turns[index].content.isEmpty {
@@ -324,16 +508,29 @@ struct GideonPanel: View {
                 error = T("GIDEON didn't answer. Try again.")
             }
         } catch APIError.unauthorized {
+            // Drop the queue as well: the session is gone, so replaying it would only produce the
+            // same 401 once per queued message.
+            turns.removeAll { $0.id == answer.id }
+            outbox.removeAll()
             auth.logout()
         } catch {
             turns.removeAll { $0.id == answer.id }
+            // The server writes its own sentence for a refused attachment — which file, and what to
+            // do about it. Replacing that with "GIDEON failed." would throw the useful half away.
             self.error = (error as? LocalizedError)?.errorDescription ?? T("GIDEON failed.")
         }
     }
 
-    /// Everything except the empty assistant turn that is still being filled in.
-    private func history() -> [GideonTurn] {
-        turns.filter { !($0.role == .assistant && $0.content.isEmpty) }
+    /// Everything up to and including this question, minus assistant turns still waiting to be
+    /// filled in. Cutting there is what keeps a queued question out of the context of the one in
+    /// front of it — the server answers the LAST message it is given.
+    private func history(upTo item: Outgoing) -> [GideonTurn] {
+        guard let end = turns.firstIndex(where: { $0.id == item.turnId }) else {
+            // The transcript was replaced under us. Ask the question on its own rather than posting
+            // an empty `messages`, which the route reads the last element of.
+            return [GideonTurn(id: item.turnId, role: .user, content: item.text)]
+        }
+        return turns[...end].filter { !($0.role == .assistant && $0.content.isEmpty) }
     }
 
     private func clear() async {
@@ -344,6 +541,36 @@ struct GideonPanel: View {
         } catch {
             self.error = (error as? LocalizedError)?.errorDescription ?? T("Failed.")
         }
+    }
+}
+
+/// Three dots that breathe while a question is open.
+///
+/// One state flip drives all three and each dot's own delay staggers them, so the animation lives in
+/// the animation system rather than in a timer writing state per frame — which is the last thing a
+/// scrolling chat list can afford.
+private struct GideonTypingDots: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var breathing = false
+
+    var body: some View {
+        HStack(spacing: 5) {
+            ForEach(0..<3, id: \.self) { dot in
+                Circle()
+                    .fill(NX.mutedFg)
+                    .frame(width: 6, height: 6)
+                    .opacity(breathing ? 1 : 0.3)
+                    .animation(
+                        reduceMotion
+                            ? nil
+                            : Animation.easeInOut(duration: 0.6).repeatForever(autoreverses: true).delay(Double(dot) * 0.18),
+                        value: breathing
+                    )
+            }
+        }
+        // Roughly one line of body text, so the bubble does not jump when the answer replaces this.
+        .frame(height: 18)
+        .onAppear { breathing = true }
     }
 }
 

@@ -491,6 +491,16 @@ final class AppLanguage {
         "Ask anything about NEXUS…": "Tanya apa saja soal NEXUS…",
         "GIDEON didn't answer. Try again.": "GIDEON tidak menjawab. Coba lagi.",
         "GIDEON failed.": "GIDEON gagal.",
+        "GIDEON is typing…": "GIDEON sedang mengetik…",
+        // ── gideon composer · what can be attached to a question ──────────────
+        // The wording of the refusal matches the sentence /api/gideon sends back for a 415, so the
+        // same file gets the same answer whether it was caught here or there.
+        "Photo": "Foto",
+        "Camera": "Kamera",
+        "File": "File",
+        "GIDEON can't read that kind of file yet.": "Tipe file itu belum bisa dibaca GIDEON.",
+        "Couldn't read that file.": "Gagal membaca file itu.",
+        // "File is over the 10MB limit." is already carried above, near the attendance strings.
         "Got it": "Oke, paham",
         "Next": "Berikutnya",
         "Link project": "Hubungkan proyek",

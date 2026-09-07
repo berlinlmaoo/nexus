@@ -35,6 +35,38 @@ private struct GideonEvent: Decodable {
     let content: String?
 }
 
+/// A refusal that arrives INSTEAD of the stream — a rejected attachment comes back as plain JSON
+/// with a 4xx before any SSE exists. `error` is written in Indonesian for the user to read.
+private struct GideonRefusal: Decodable {
+    let error: String?
+}
+
+/// A document attached to one question.
+///
+/// The filename is carried with its extension because the route decides how to read a file from the
+/// extension first and only falls back to the MIME type — a provider that hands over a generic
+/// `public.data` would otherwise get the attachment refused for no reason the owner can act on.
+struct GideonDocument: Sendable, Equatable {
+    /// Filename WITH extension, e.g. "invoice-agustus.pdf".
+    let name: String
+    /// MIME type from the picker. Only consulted when `name` has no usable extension.
+    let type: String
+    let data: Data
+
+    /// Extensions the server accepts. Mirrors DOC_EXTENSIONS in /api/gideon, which refuses anything
+    /// else with a 415: Hermes reaches a document through a converter, and a type that converter
+    /// cannot decode reaches the model as bytes it will confidently describe without having read.
+    /// The server stays the authority — this copy only ever prevents an upload, never permits one.
+    static let acceptedExtensions: Set<String> = [
+        "pdf",
+        "txt", "md", "csv", "tsv", "json", "log", "yml", "yaml", "xml", "html",
+        "docx", "doc", "xlsx", "xls", "pptx", "ppt",
+        "odt", "ods", "odp", "rtf", "epub", "ipynb",
+    ]
+
+    static let maxBytes = 10 * 1024 * 1024
+}
+
 /// The three GIDEON tiers.
 ///
 /// Which model each one runs is decided on the server, and deliberately not named here: retuning a
@@ -103,7 +135,8 @@ enum GideonClient {
     ///
     /// Today the backend answers in a single frame. Appending rather than replacing means nothing
     /// here changes when that stops being true.
-    static func stream(messages: [GideonTurn], model: String, image: Data? = nil) -> AsyncThrowingStream<String, Error> {
+    static func stream(messages: [GideonTurn], model: String, image: Data? = nil,
+                       document: GideonDocument? = nil) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
@@ -122,10 +155,19 @@ enum GideonClient {
                     // downscales again on arrival, so a slightly large upload costs seconds, not
                     // correctness.
                     if let image { payload["image"] = image.base64EncodedString() }
+                    // A document rides the same JSON body and may travel WITH an image. `name` is
+                    // what the route reads the extension off; `type` is only its fallback.
+                    if let document {
+                        payload["file"] = [
+                            "name": document.name,
+                            "type": document.type,
+                            "data": document.data.base64EncodedString(),
+                        ]
+                    }
                     request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
                     let (bytes, response) = try await URLSession.shared.bytes(for: request)
-                    try check(response)
+                    try await check(response, refusalIn: bytes)
 
                     // SSE frames are separated by a blank line, and `lines` already splits on
                     // newlines — a blank line simply carries no payload and is skipped.
@@ -173,5 +215,34 @@ enum GideonClient {
         guard let http = response as? HTTPURLResponse else { throw APIError.offline }
         if http.statusCode == 401 { throw APIError.unauthorized }
         guard (200..<300).contains(http.statusCode) else { throw APIError.http(http.statusCode) }
+    }
+
+    /// The streaming variant: on a refusal the body is JSON, not SSE, so it is read here before the
+    /// caller starts parsing frames.
+    ///
+    /// The server's own sentence names the file and says what to do about it; "Server error (415)"
+    /// would throw away the only useful part. The read is capped because a proxy can refuse an
+    /// oversized body itself, with an HTML page there is no reason to read to the end.
+    private static func check(_ response: URLResponse, refusalIn bytes: URLSession.AsyncBytes) async throws {
+        guard let http = response as? HTTPURLResponse else { throw APIError.offline }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        if (200..<300).contains(http.statusCode) { return }
+
+        var body = ""
+        for try await line in bytes.lines {
+            body += line
+            if body.count > 8192 { break }
+        }
+        if let message = try? JSONDecoder().decode(GideonRefusal.self, from: Data(body.utf8)).error,
+           !message.isEmpty {
+            throw APIError.transport(message)
+        }
+        // No JSON to read: the refusal came from something in front of the route, so say what the
+        // status means rather than repeating the number back.
+        switch http.statusCode {
+        case 413: throw APIError.transport(T("File is over the 10MB limit."))
+        case 415: throw APIError.transport(T("GIDEON can't read that kind of file yet."))
+        default: throw APIError.http(http.statusCode)
+        }
     }
 }
