@@ -133,7 +133,7 @@ struct TaskCustomFieldsCard: View {
     private static func ymdParse(_ s: String) -> Date? { let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = ProjDate.cal.timeZone; return f.date(from: s) }
 }
 
-// MARK: - Attachments (list · upload · download · delete)
+// MARK: - Attachments (list · open · upload · download · delete)
 
 struct TaskAttachmentsCard: View {
     let taskId: String
@@ -141,13 +141,27 @@ struct TaskAttachmentsCard: View {
     @State private var loading = true
     @State private var busy = false
     @State private var showImporter = false
-    @State private var downloading: String?
+    /// The row whose bytes are being fetched, and the row currently swiped open. At most one of
+    /// each, which is what makes them ids rather than sets.
+    @State private var fetching: String?
+    @State private var swiped: String?
     @State private var shareItem: ShareItem?
+    @State private var preview: AttachmentPreview?
     @State private var deleteTarget: TaskAttachment?
-    /// Handed to the client for the length of one upload. The bar is a separate view because it is
+    /// What went wrong, shown rather than swallowed. Every call here used to be `try?`, so a 140 MB
+    /// upload that Cloudflare refused at the edge — see APIClient.uploadAttachment — looked exactly
+    /// like one that worked, right up to the list refreshing without it.
+    @State private var problem: String?
+    /// Handed to the client for the length of one transfer. The bar is a separate view because it is
     /// the only thing that may read the fraction: read here, every byte would rebuild this card and
-    /// the list of files in it. See UploadProgress.swift.
+    /// the list of files in it. Two of them, so a download started while an upload is still going
+    /// cannot overwrite its numbers. See UploadProgress.swift.
     @State private var uploadProgress = UploadProgress()
+    @State private var fetchProgress = UploadProgress()
+
+    /// How far a row slides to uncover the delete action behind it.
+    private static let swipeReveal: CGFloat = 76
+    private static let slide = Animation.spring(response: 0.28, dampingFraction: 0.86)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -157,7 +171,9 @@ struct TaskAttachmentsCard: View {
                 if busy { ProgressView().scaleEffect(0.8) }
                 Button { showImporter = true } label: { Image(systemName: "plus.circle.fill").font(.system(size: 20)).foregroundStyle(NX.violetText) }.disabled(busy)
             }
-            if uploadProgress.isActive { UploadProgressBar(progress: uploadProgress) }
+            if uploadProgress.isActive { meter(T("Uploading"), uploadProgress) }
+            if fetchProgress.isActive { meter(T("Downloading"), fetchProgress) }
+            if let problem { complaint(problem) }
             if loading {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
             } else if items.isEmpty {
@@ -172,30 +188,110 @@ struct TaskAttachmentsCard: View {
             if case let .success(urls) = result, let url = urls.first { Task { await upload(url) } }
         }
         .sheet(item: $shareItem) { item in ActivityView(items: [item.url]) }
+        .fullScreenCover(item: $preview) { AttachmentViewerView(preview: $0) }
         .confirmationDialog("\(T("Delete")) \"\(deleteTarget?.name ?? "")\"?", isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }), titleVisibility: .visible) {
             Button(T("Delete"), role: .destructive) { if let a = deleteTarget { deleteTarget = nil; Task { await remove(a) } } }
             Button(T("Cancel"), role: .cancel) { deleteTarget = nil }
         }
     }
 
+    /// The bar says how far. This says which way: `UploadProgressBar` draws the same capsule over a
+    /// file going out and one coming in, on purpose, so the word beside it is what distinguishes them.
+    private func meter(_ what: String, _ progress: UploadProgress) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(what).font(NXFont.text(10, .semibold)).tracking(0.4).foregroundStyle(NX.mutedFg)
+            UploadProgressBar(progress: progress)
+        }
+    }
+
+    private func complaint(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 12)).foregroundStyle(NX.danger)
+            Text(text).font(NXFont.text(12)).foregroundStyle(NX.danger).lineLimit(4)
+            Spacer(minLength: 0)
+            Button { problem = nil } label: {
+                Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).foregroundStyle(NX.mutedFg)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(T("Close"))
+        }
+        .padding(10)
+        .background(NX.danger.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    /// One file: the row itself, the delete action it slides off, and the swipe that moves it.
+    ///
+    /// `.offset` is a drawing move and not a layout one, so the delete action added underneath it
+    /// afterwards is sized to the row and stays where it is while the row travels over it.
     private func row(_ a: TaskAttachment) -> some View {
-        Button { Task { await download(a) } } label: {
+        let open = swiped == a.id
+        return face(a)
+            .offset(x: open ? -Self.swipeReveal : 0)
+            .background(alignment: .trailing) {
+                Button { withAnimation(Self.slide) { swiped = nil }; deleteTarget = a } label: {
+                    Image(systemName: "trash.fill").font(.system(size: 15)).foregroundStyle(Color.white)
+                        .frame(width: Self.swipeReveal)
+                        .frame(maxHeight: .infinity)
+                        .background(NX.danger, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(T("Delete"))
+                // Hidden AND untappable when closed: an invisible delete button under a row somebody
+                // is only trying to open is the worst button in the app.
+                .opacity(open ? 1 : 0)
+                .allowsHitTesting(open)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .gesture(swipe(a))
+            .contextMenu {
+                Button { Task { await show(a) } } label: { Label(T("Open file"), systemImage: "eye") }
+                Button { Task { await save(a) } } label: { Label(T("Save or share"), systemImage: "square.and.arrow.up") }
+                Button(role: .destructive) { deleteTarget = a } label: { Label(T("Delete"), systemImage: "trash") }
+            }
+    }
+
+    private func face(_ a: TaskAttachment) -> some View {
+        let kind = AttachmentKind(mime: a.mimeType, name: a.name)
+        return Button {
+            // A row that is already open is closed by tapping it, which is the gesture everybody
+            // tries first and otherwise leaves a row stuck sideways.
+            if swiped != nil { withAnimation(Self.slide) { swiped = nil } } else { Task { await show(a) } }
+        } label: {
             HStack(spacing: 12) {
-                Image(systemName: "doc.fill").font(.system(size: 15)).foregroundStyle(NX.mutedFg)
+                Image(systemName: kind?.glyph ?? "doc.fill").font(.system(size: 15)).foregroundStyle(NX.mutedFg)
                     .frame(width: 32, height: 32).background(NX.muted.opacity(0.6), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(a.name ?? "file").font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                     Text(sub(a)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
                 }
                 Spacer()
-                if downloading == a.id { ProgressView().scaleEffect(0.8) }
+                if fetching == a.id { ProgressView().scaleEffect(0.8) }
+                else if kind != nil { Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(NX.mutedFg) }
                 else { Image(systemName: "square.and.arrow.down").font(.system(size: 13)).foregroundStyle(NX.mutedFg) }
             }
-            .padding(10).background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
-        .contextMenu { Button(role: .destructive) { deleteTarget = a } label: { Label(T("Delete"), systemImage: "trash") } }
     }
+
+    /// Swipe left to uncover delete, right to put it back.
+    ///
+    /// Only `onEnded`, deliberately. Tracking the finger would rewrite this card's state on every
+    /// frame of the drag and rebuild the whole list of rows with it, on a card that lives inside a
+    /// scroll view — the one thing today's performance pass was about. The row snaps instead of
+    /// following, which costs two state writes per swipe rather than sixty.
+    private func swipe(_ a: TaskAttachment) -> some Gesture {
+        DragGesture(minimumDistance: 24)
+            .onEnded { value in
+                // A drag that is mostly vertical belongs to the scroll view behind this card.
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                withAnimation(Self.slide) { swiped = value.translation.width < 0 ? a.id : nil }
+            }
+    }
+
     private func sub(_ a: TaskAttachment) -> String {
         var p: [String] = []
         if let s = a.size { p.append(nxBytes(s)) }
@@ -207,25 +303,74 @@ struct TaskAttachmentsCard: View {
         items = (try? await APIClient.shared.taskAttachments(taskId)) ?? []
         loading = false
     }
+
+    /// Tapping a file opens it here when the app can draw it, and hands it to the share sheet when
+    /// it cannot — which is the difference between an attachment and a download.
+    private func show(_ a: TaskAttachment) async {
+        guard let raw = a.url, let kind = AttachmentKind(mime: a.mimeType, name: a.name) else {
+            await save(a)
+            return
+        }
+        if kind == .image {
+            // Straight at the remote URL. `ImageLoader` fetches it with the session, downsamples it
+            // in a single pass and keeps the result, so a picture looked at twice is fetched once —
+            // and none of that is true of a copy saved to disk beside it.
+            guard let remote = Self.remote(raw) else { return }
+            preview = AttachmentPreview(id: a.id, name: a.name ?? "file", kind: kind, source: remote)
+            return
+        }
+        guard let file = await fetch(a) else { return }
+        preview = AttachmentPreview(id: a.id, name: a.name ?? "file", kind: kind, source: file)
+    }
+
+    private func save(_ a: TaskAttachment) async {
+        guard let file = await fetch(a) else { return }
+        shareItem = ShareItem(url: file)
+    }
+
+    private func fetch(_ a: TaskAttachment) async -> URL? {
+        guard let raw = a.url else { return nil }
+        fetching = a.id
+        defer { fetching = nil }
+        do {
+            return try await APIClient.shared.downloadAttachment(url: raw, fileName: a.name ?? "file",
+                                                                 progress: fetchProgress)
+        } catch {
+            problem = error.localizedDescription
+            return nil
+        }
+    }
+
+    /// A server path becomes a URL the same way it does everywhere else in the app: the host is
+    /// added here rather than stored, so what is held names a file and never the route it took.
+    private static func remote(_ raw: String) -> URL? {
+        URL(string: raw.hasPrefix("http") ? raw : Config.baseURL.absoluteString + raw)
+    }
+
     private func upload(_ url: URL) async {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        guard let data = try? Data(contentsOf: url) else { return }
         busy = true; defer { busy = false }
-        try? await APIClient.shared.uploadAttachment(taskId: taskId, fileName: url.lastPathComponent,
-                                                     data: data, progress: uploadProgress)
+        problem = nil
+        do {
+            // Handed over as a URL and not as bytes. This runs on the main actor, so reading a
+            // 140 MB file here to pass it on would freeze the screen for the length of the read and
+            // then hold the file twice while a multipart body was built around it. The client slices
+            // it off the disk instead — see APIClient.uploadAttachmentInChunks.
+            try await APIClient.shared.uploadAttachment(taskId: taskId, file: url,
+                                                        fileName: url.lastPathComponent,
+                                                        progress: uploadProgress)
+        } catch {
+            problem = error.localizedDescription
+        }
         await load()
     }
-    private func download(_ a: TaskAttachment) async {
-        guard let url = a.url else { return }
-        downloading = a.id; defer { downloading = nil }
-        if let local = try? await APIClient.shared.downloadAttachment(url: url, fileName: a.name ?? "file") {
-            shareItem = ShareItem(url: local)
-        }
-    }
+
     private func remove(_ a: TaskAttachment) async {
         busy = true; defer { busy = false }
-        try? await APIClient.shared.deleteAttachment(a.id)
+        withAnimation(Self.slide) { swiped = nil }
+        do { try await APIClient.shared.deleteAttachment(a.id) }
+        catch { problem = error.localizedDescription }
         await load()
     }
 }

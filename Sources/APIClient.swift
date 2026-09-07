@@ -71,14 +71,15 @@ struct APIClient {
         return req
     }
 
-    /// The one place every request actually goes out, so the LAN detour has exactly one exit.
+    /// How a request that expects an answer in memory goes out — which is nearly all of them. The
+    /// LAN detour still has exactly one exit: this and `download` are two doors into `send`.
     ///
     /// `session` is a parameter for one caller. `ImageLoader` owns a URLSession with a 256 MB
     /// URLCache, and making it borrow `URLSession.shared` in order to reach these rules would throw
     /// that cache away; passing its session in keeps the rules here instead of in a second copy that
     /// would be free to drift.
     ///
-    /// `progress` is the second such parameter, and it is what makes an upload watchable at all.
+    /// `progress` is the second such parameter, and it is what makes a transfer watchable at all.
     /// `data(for:)` returns when the whole exchange is over and reports nothing on the way, so a body
     /// somebody is watching goes out as an upload task with a per-task delegate instead. Only the
     /// TRANSPORT changes: which host it is aimed at, and whether it may be sent a second time, are
@@ -86,21 +87,73 @@ struct APIClient {
     /// safety is the one thing this must never become.
     func perform(_ req: URLRequest, on session: URLSession = .shared,
                  reporting progress: UploadProgress? = nil) async throws -> (Data, URLResponse) {
-        var outgoing = Self.retimed(req)
-        // Nothing to watch on a request with no body, and nothing to watch when nobody asked. Both
-        // go out through the call this client has always made, untouched.
-        guard let progress, let body = outgoing.httpBody, !body.isEmpty else {
-            return try await route(outgoing, body: nil, on: session, reporting: nil)
-        }
-        // An upload task reads its bytes from `from:` and ignores the request's own `httpBody`, so
-        // the body is lifted off here rather than carried twice — it is 20 MB on a form submit.
-        // Note the order: the leash above is decided while the body is still attached.
-        outgoing.httpBody = nil
+        let done = try await exchange(req, on: session, reporting: progress, into: .memory)
+        return (done.data, done.response)
+    }
 
+    /// The same journey for bytes coming the other way, and too many of them to hold.
+    ///
+    /// An attachment runs to 140 MB. `perform` hands back a `Data`, so saving one meant that file
+    /// resident in memory AND written out — the same bytes twice, on a device that kills an app for
+    /// less. A download task streams straight to disk and never assembles the file in RAM at all.
+    ///
+    /// Not a second send path: which host it is aimed at, the LAN leash, and whether it may be sent
+    /// again are all decided by the code below, unchanged. The only difference is where the response
+    /// body lands, which is exactly why that is a parameter here rather than a second copy of this
+    /// function somewhere else.
+    ///
+    /// The file at `destination` belongs to the CALLER the moment this returns — including when the
+    /// server refused, in which case what landed there is the refusal and not the file.
+    func download(_ req: URLRequest, to destination: URL, on session: URLSession = .shared,
+                  reporting progress: UploadProgress? = nil) async throws -> URLResponse {
+        try await exchange(req, on: session, reporting: progress, into: .file(destination)).response
+    }
+
+    /// Where the bytes coming back should land.
+    private enum Sink {
+        /// In memory, as every request in this client did before there was anything else.
+        case memory
+        /// Streamed to this path, never assembled whole.
+        case file(URL)
+    }
+
+    /// One finished round trip. `data` is empty for a download — the bytes are in the file the
+    /// caller named, and handing them back here as well would undo the point of asking for a file.
+    private struct Fetched {
+        let data: Data
+        let response: URLResponse
+    }
+
+    /// Everything `perform` and `download` share, which is nearly all of it. Named around the
+    /// exchange rather than the sending because this type already has a `send` — FormFillAPI.swift
+    /// declares one, privately, in its own file.
+    private func exchange(_ req: URLRequest, on session: URLSession,
+                          reporting progress: UploadProgress?, into sink: Sink) async throws -> Fetched {
+        var outgoing = Self.retimed(req)
+        // The body comes off the request only when something is watching it go out AND the answer is
+        // coming back in memory: an upload task reads its bytes from `from:` and ignores the
+        // request's own `httpBody`, so leaving it attached would carry 20 MB twice on a form submit.
+        // A download task reads the body from the request as usual, so lifting it off there would
+        // simply throw it away. Note the order — the leash above is decided while it is still there.
+        var going: Data?
+        if case .memory = sink, progress != nil, let body = outgoing.httpBody, !body.isEmpty {
+            going = body
+            outgoing.httpBody = nil
+        }
+        // Nothing to watch when nobody asked, and nothing to watch on a request that neither carries
+        // a body nor fills a file. Both go out through the call this client has always made.
+        let watchable: Bool
+        switch sink {
+        case .memory: watchable = going != nil
+        case .file: watchable = true
+        }
+        guard let progress, watchable else {
+            return try await route(outgoing, body: nil, on: session, reporting: nil, into: sink)
+        }
         do {
-            let result = try await route(outgoing, body: body, on: session, reporting: progress)
+            let done = try await route(outgoing, body: going, on: session, reporting: progress, into: sink)
             await progress.finish()
-            return result
+            return done
         } catch {
             // A refusal, a link that died, or a tap somebody took back. Whichever it was the bar
             // goes: one left sitting at 40% is the state this whole change exists to remove.
@@ -118,13 +171,15 @@ struct APIClient {
     /// Anything the SERVER said — 401, 422, 500 — is not a route failure at all, and travels back to
     /// the caller untouched exactly as it did before.
     private func route(_ req: URLRequest, body: Data?, on session: URLSession,
-                       reporting progress: UploadProgress?) async throws -> (Data, URLResponse) {
+                       reporting progress: UploadProgress?, into sink: Sink) async throws -> Fetched {
+        // A download declares nothing to send, so it opens at zero and the meter learns the size off
+        // the task once the response headers say what it is — see `UploadMeter.follow`.
         var meter = await progress?.start(expecting: body?.count ?? 0)
         guard req.url?.host == Config.lanBaseURL.host else {
-            return try await transfer(req, body: body, on: session, meter: meter)
+            return try await transfer(req, body: body, on: session, meter: meter, into: sink)
         }
         do {
-            return try await transfer(req, body: body, on: session, meter: meter)
+            return try await transfer(req, body: body, on: session, meter: meter, into: sink)
         } catch {
             // Cancellation is the caller changing its mind, not the LAN disappearing. Replaying it
             // would resurrect work that was deliberately abandoned — and, on an upload, send it twice.
@@ -138,19 +193,40 @@ struct APIClient {
             // reset one, and that is the whole guard against a backwards jump: anything the abandoned
             // task still reports lands in the old meter, which nothing reads any more.
             meter = await progress?.restart(expecting: body?.count ?? 0)
-            return try await transfer(Self.overInternet(req), body: body, on: session, meter: meter)
+            return try await transfer(Self.overInternet(req), body: body, on: session, meter: meter, into: sink)
         }
     }
 
     /// One attempt. `data(for:)` when nothing is watching — byte for byte the call this client has
-    /// always made — and an upload task with a per-task delegate when something is. The task holds
-    /// the delegate until it completes or fails, so nothing here has to keep it alive.
+    /// always made — an upload task when a body is being watched, and a download task when the answer
+    /// is going to a file. The task holds its delegate until it completes or fails, so nothing here
+    /// has to keep it alive.
     private func transfer(_ req: URLRequest, body: Data?, on session: URLSession,
-                          meter: UploadMeter?) async throws -> (Data, URLResponse) {
-        guard let body, let meter else { return try await session.data(for: req) }
-        return try await session.upload(for: req, from: body, delegate: UploadReporter(meter))
-    }
+                          meter: UploadMeter?, into sink: Sink) async throws -> Fetched {
+        switch sink {
+        case .memory:
+            guard let body, let meter else {
+                let (data, response) = try await session.data(for: req)
+                return Fetched(data: data, response: response)
+            }
+            let (data, response) = try await session.upload(for: req, from: body,
+                                                            delegate: UploadReporter(meter))
+            return Fetched(data: data, response: response)
 
+        case .file(let destination):
+            let watcher: (any URLSessionTaskDelegate)? = meter.map { DownloadReporter($0) }
+            let (arrived, response) = try await session.download(for: req, delegate: watcher)
+            // URLSession deletes its own temporary file as soon as this call returns, so the move
+            // belongs here rather than back at the caller. A move and not a copy: the file is already
+            // the size this whole path exists to avoid paying for twice.
+            let fm = FileManager.default
+            try? fm.createDirectory(at: destination.deletingLastPathComponent(),
+                                    withIntermediateDirectories: true)
+            try? fm.removeItem(at: destination)
+            try fm.moveItem(at: arrived, to: destination)
+            return Fetched(data: Data(), response: response)
+        }
+    }
     /// The LAN's short leash, lifted for a request that carries a body.
     ///
     /// `timeoutInterval` is an INACTIVITY timer, and the 10 s exists to notice a dead private
@@ -1010,6 +1086,15 @@ struct APIClient {
         return true
     }
     private func enc(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? s }
+    /// Stricter than `enc`, for one VALUE inside a query rather than a whole query. `.urlQueryAllowed`
+    /// leaves "&", "=", "+" and "#" alone, which is right for the string as a whole and wrong for a
+    /// part of it: a file called "before & after.pdf" would end its parameter early and the server
+    /// would store a truncated name against the wrong task.
+    private func encValue(_ s: String) -> String {
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "&=+#?")
+        return s.addingPercentEncoding(withAllowedCharacters: allowed) ?? s
+    }
     @discardableResult
     func updateProfile(name: String) async throws -> Bool {
         var req = makeRequest("/api/user/profile", method: "PATCH")
@@ -1238,6 +1323,46 @@ struct APIClient {
     func taskAttachments(_ taskId: String) async throws -> [TaskAttachment] {
         try await run(makeRequest("/api/attachments?taskId=\(enc(taskId))"), decode: [TaskAttachment].self)
     }
+    /// Cloudflare will not carry a request body past roughly 100 MB, and it does not fail politely:
+    /// measured against this server, a 120 MB POST is answered 502 at the edge after 2.3 MB and
+    /// 199 ms, while a 95 MB one reaches the origin normally in 95 s. So a large attachment sent in
+    /// one piece never leaves the building it was picked in, and the app was told nothing.
+    ///
+    /// It also explains the report that the progress bar on the attachments card "does not work":
+    /// the wiring was correct, but the upload died in a fifth of a second — inside the bar's reveal
+    /// delay — so it was cleared before it was ever drawn, leaving only the spinner beside the +.
+    ///
+    /// The server grew `/api/attachments/chunk` for exactly this and the web has used it for a
+    /// while. This is iOS finally learning it.
+    private static let chunkThreshold = 64 << 20
+    /// 1 GB spread over the route's 64-chunk ceiling is 16 MB, so this is the smallest chunk that
+    /// can still carry the largest file the route accepts — and far enough under the edge's limit
+    /// that a chunk is never the thing that fails.
+    private static let chunkBytes = 16 << 20
+
+    /// One task attachment, from a file on disk.
+    ///
+    /// Takes a URL rather than `Data` because the size decides the route, and because a 140 MB
+    /// `Data` plus the multipart body built around it is 280 MB resident before a single byte goes
+    /// out — a jetsam kill on a phone that is also holding a board and a screen of avatars.
+    @discardableResult
+    func uploadAttachment(taskId: String, file: URL, fileName: String,
+                          progress: UploadProgress? = nil) async throws -> Bool {
+        let size = ((try? FileManager.default.attributesOfItem(atPath: file.path))?[.size] as? Int) ?? 0
+        guard size > 0 else { throw APIError.transport(T("Couldn't read that file.")) }
+        guard size > Self.chunkThreshold else {
+            // Small enough for one request, which is the path this app has always taken. Mapped
+            // rather than read, so the pages the multipart builder copies are faulted in as it goes
+            // instead of the whole file being resident first.
+            let data = try Data(contentsOf: file, options: .mappedIfSafe)
+            return try await uploadAttachment(taskId: taskId, fileName: fileName, data: data,
+                                              progress: progress)
+        }
+        try await uploadAttachmentInChunks(taskId: taskId, file: file, fileName: fileName,
+                                           size: size, progress: progress)
+        return true
+    }
+
     @discardableResult
     func uploadAttachment(taskId: String, fileName: String, data: Data,
                           progress: UploadProgress? = nil) async throws -> Bool {
@@ -1254,30 +1379,110 @@ struct APIClient {
         _ = try await run(req, decode: SuccessResponse.self, reporting: progress)
         return true
     }
+
+    /// The chunked path.
+    ///
+    /// Every chunk is an ordinary request through `perform`, so each one takes the office LAN, the
+    /// replay rule and the timeouts like everything else in the app; nothing about routing is
+    /// special here. What IS special is that the chunks share one bar. Left to itself the bar would
+    /// fill and vanish once per chunk — nine of them for a 140 MB file, which says less than the
+    /// spinner it replaced — so the run is bracketed by `beginWhole`/`endWhole` and each chunk's
+    /// own `finish()` only banks what it sent. See UploadProgress.swift.
+    ///
+    /// Slices are read straight off the file at an offset. Reading the whole thing to slice it in
+    /// memory would defeat the point, and this way the resident cost of a 1 GB upload is one chunk.
+    private func uploadAttachmentInChunks(taskId: String, file: URL, fileName: String, size: Int,
+                                          progress: UploadProgress?) async throws {
+        let uploadId = UUID().uuidString
+        let total = (size + Self.chunkBytes - 1) / Self.chunkBytes
+        let handle = try FileHandle(forReadingFrom: file)
+        defer { try? handle.close() }
+
+        await progress?.beginWhole(bytes: Int64(size))
+        do {
+            for index in 0..<total {
+                try Task.checkCancellation()
+                try handle.seek(toOffset: UInt64(index) * UInt64(Self.chunkBytes))
+                guard let slice = try handle.read(upToCount: Self.chunkBytes), !slice.isEmpty else {
+                    throw APIError.transport(T("Couldn't read that file."))
+                }
+                // Metadata in the query, the chunk as the RAW body — the route streams that body
+                // straight to disk. Wrapping it in multipart would make the server buffer the whole
+                // part in memory to parse it, which is the cost the chunk route exists to avoid.
+                // `mime` is left out on purpose: the server derives it from the filename, and the
+                // filename is the only one of the two this app actually knows.
+                var req = makeRequest("/api/attachments/chunk?uploadId=\(encValue(uploadId))"
+                                      + "&chunkIndex=\(index)&totalChunks=\(total)&totalSize=\(size)"
+                                      + "&filename=\(encValue(fileName))&taskId=\(encValue(taskId))",
+                                      method: "POST")
+                req.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+                req.httpBody = slice
+                let (data, response) = try await perform(req, reporting: progress)
+                guard let http = response as? HTTPURLResponse else {
+                    throw APIError.transport("No response")
+                }
+                if http.statusCode == 401 { throw APIError.unauthorized }
+                guard (200..<300).contains(http.statusCode) else {
+                    // The route answers with a reason for every refusal it authors — a task that was
+                    // deleted mid-upload, a finalize already running, too many sessions — and those
+                    // are worth repeating to whoever is standing there.
+                    let said = try? JSONDecoder().decode(ServerError.self, from: data)
+                    throw APIError.transport(said?.error ?? "\(T("Upload failed. Try again.")) (\(http.statusCode))")
+                }
+            }
+        } catch {
+            await progress?.stop()
+            throw error
+        }
+        await progress?.endWhole()
+    }
+
     @discardableResult
     func deleteAttachment(_ id: String) async throws -> Bool {
         _ = try await run(makeRequest("/api/attachments/\(id)", method: "DELETE"), decode: SuccessResponse.self)
         return true
     }
-    /// Downloads an attachment's bytes (authed) to a temp URL for sharing. `url` may be a path or absolute.
-    func downloadAttachment(url: String, fileName: String) async throws -> URL {
+
+    /// An attachment's bytes, fetched with the session and left in a file a viewer or the share
+    /// sheet can be pointed at.
+    ///
+    /// `/api/files/…` requires the session cookie, so none of this can be handed to Safari or to a
+    /// plain QuickLook fetch — the file has to come through this client, which is also what lets it
+    /// take the office LAN like everything else. `url` may be a path or absolute; an attachment row
+    /// carries whichever the server wrote.
+    func downloadAttachment(url: String, fileName: String,
+                            progress: UploadProgress? = nil) async throws -> URL {
+        let out = AttachmentCache.destination(remote: url, fileName: fileName)
+        // Already here from an earlier look. One URL is one file permanently — the server writes a
+        // random on-disk name per upload and never reuses one — and a partial download never reaches
+        // this path, because the file is only moved into place once the transfer has completed.
+        if (try? out.checkResourceIsReachable()) == true { return out }
+
         let req: URLRequest
         if url.hasPrefix("http"), let u = URL(string: url) {
-            var r = URLRequest(url: u)
-            if let s = Keychain.load() { r.setValue(s.cookieHeader, forHTTPHeaderField: "Cookie") }
-            req = r
+            // The helper `ImageLoader` already uses, not a fourth request builder: it re-aims the URL
+            // at whichever host is answering and applies the LAN leash. The cookie is attached the
+            // same way it is there, and only ever to our own two hosts.
+            var routed = Self.routedRequest(for: u)
+            if Config.isNexusHost(u), let s = Keychain.load() {
+                routed.setValue(s.cookieHeader, forHTTPHeaderField: "Cookie")
+            }
+            req = routed
         } else {
             req = makeRequest(url)
         }
-        let (data, response) = try await perform(req)
-        guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
-        if http.statusCode == 401 { throw APIError.unauthorized }
-        guard (200..<300).contains(http.statusCode) else { throw APIError.http(http.statusCode) }
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("nexus-att", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let out = dir.appendingPathComponent(fileName)
-        try? FileManager.default.removeItem(at: out)
-        try data.write(to: out)
+        AttachmentCache.sweep()
+        let response = try await download(req, to: out, reporting: progress)
+        guard let http = response as? HTTPURLResponse else {
+            AttachmentCache.discard(out)
+            throw APIError.transport("No response")
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            // What landed on disk is the server's refusal, not the file anybody asked for.
+            AttachmentCache.discard(out)
+            if http.statusCode == 401 { throw APIError.unauthorized }
+            throw APIError.http(http.statusCode)
+        }
         return out
     }
 
@@ -1604,4 +1809,93 @@ struct APIClient {
 private struct ServerError: Decodable {
     let error: String?
     let code: String?
+}
+
+/// Where a fetched attachment sits while somebody is looking at it.
+///
+/// Inside `Caches/responses/` deliberately — a subdirectory of `ResponseCache`'s own folder rather
+/// than beside it, the same arrangement `ImageDiskCache` uses and for the same reason. Logout calls
+/// `ResponseCache.clearAll()`, which removes that whole tree, so a payslip somebody opened on the
+/// way home leaves the device with the session that fetched it and nobody has to remember to do it.
+///
+/// Not the temporary directory, which iOS is free to empty between launches while a video is still
+/// playing out of it, and not Documents, which would put a 140 MB film in the user's iCloud backup.
+///
+/// Every read here treats what it finds as disposable: a missing file is a normal fetch, and the
+/// worst this can do is make somebody wait for bytes they already had.
+enum AttachmentCache {
+    /// Longer than anybody keeps a file open, shorter than "forever".
+    private static let maxAge: TimeInterval = 24 * 60 * 60
+    /// Two films' worth. Whatever survives the age sweep is trimmed to this, oldest first.
+    private static let maxBytes = 512 << 20
+
+    /// Recomputed rather than stored, because `ResponseCache.clearAll()` deletes the parent and
+    /// recreates only its own directory — so this one has to be prepared to find itself gone.
+    private static var dir: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("responses", isDirectory: true)
+            .appendingPathComponent("attachments", isDirectory: true)
+    }
+
+    /// One folder per remote file, named from its URL, with the human filename kept inside it.
+    /// Two tasks can both hold a "scan.pdf" without one answering for the other, and the share sheet
+    /// still offers the name the person recognises rather than a hash.
+    static func destination(remote: String, fileName: String) -> URL {
+        // A name that came off a server row rather than out of this app: slashes would make it a
+        // path, and a 300-character one is simply refused by the file system. The extension is what
+        // both PDFKit and AVPlayer sniff the type from, so the tail is what survives a trim.
+        var safe = fileName.replacingOccurrences(of: "/", with: "-")
+        if safe.utf8.count > 180 { safe = String(safe.suffix(60)) }
+        if safe.isEmpty || safe == "." || safe == ".." { safe = "file" }
+        return dir.appendingPathComponent(fingerprint(remote), isDirectory: true)
+                  .appendingPathComponent(safe)
+    }
+
+    /// Throws away a file and the folder that was made for it — a refusal that landed on disk, or
+    /// bytes nobody can use.
+    static func discard(_ file: URL) {
+        try? FileManager.default.removeItem(at: file.deletingLastPathComponent())
+    }
+
+    /// FNV-1a, spelled out by hand for the reason `ImageDiskCache` spells it out: `Hasher` is seeded
+    /// per process, so a folder named from it would be a different folder on the next launch and
+    /// nothing would ever be found again — a cache that fails silently while looking like it works.
+    private static func fingerprint(_ s: String) -> String {
+        var h: UInt64 = 0xcbf2_9ce4_8422_2325
+        for b in s.utf8 { h = (h ^ UInt64(b)) &* 0x0000_0100_0000_01b3 }
+        return String(h, radix: 16)
+    }
+
+    /// Called before a fetch, and never on the main thread: `downloadAttachment` is a nonisolated
+    /// async method, so this runs on the cooperative pool along with the request it precedes.
+    static func sweep() {
+        let fm = FileManager.default
+        let keys: [URLResourceKey] = [.contentModificationDateKey]
+        guard let folders = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: keys,
+                                                        options: [.skipsHiddenFiles]) else { return }
+        let cutoff = Date().addingTimeInterval(-maxAge)
+        var kept: [(url: URL, at: Date, bytes: Int)] = []
+        for folder in folders {
+            let at = (try? folder.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate ?? .distantPast
+            if at < cutoff { try? fm.removeItem(at: folder); continue }
+            kept.append((folder, at, bytes(of: folder)))
+        }
+        var total = kept.reduce(0) { $0 + $1.bytes }
+        guard total > maxBytes else { return }
+        // Oldest first. A file somebody is watching right now is also the newest one here, so the
+        // trim reaches it last and only ever when the budget is already spent on nothing else.
+        for entry in kept.sorted(by: { $0.at < $1.at }) {
+            try? fm.removeItem(at: entry.url)
+            total -= entry.bytes
+            if total <= maxBytes { return }
+        }
+    }
+
+    private static func bytes(of folder: URL) -> Int {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.fileSizeKey])
+        else { return 0 }
+        return files.reduce(0) { $0 + (((try? $1.resourceValues(forKeys: [.fileSizeKey]))?.fileSize) ?? 0) }
+    }
 }

@@ -616,6 +616,12 @@ final class AppLanguage {
         "Select all": "Pilih semua",
         "Pick projects": "Pilih project",
         "No files yet. Tap + to upload.": "Belum ada file. Tap + buat upload.",
+        // ── task attachments · opening one, and watching it move ──────────────
+        "Uploading": "Lagi ngirim",
+        "Downloading": "Lagi ngambil",
+        "Open file": "Buka file",
+        "Save or share": "Simpan atau bagikan",
+        "Couldn't open this file.": "Gagal buka file ini.",
         "No dependencies yet.": "Belum ada dependency.",
         "No other tasks.": "Gak ada task lain.",
         "Search tasks…": "Cari task…",
