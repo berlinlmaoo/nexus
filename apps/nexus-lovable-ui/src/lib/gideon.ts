@@ -16,7 +16,31 @@ export type GideonTier = (typeof GIDEON_TIERS)[number]["id"];
 export const GIDEON_DEFAULT_TIER: GideonTier = "luna";
 
 export type GideonMessage = { role: "user" | "assistant"; content: string };
-export type GideonTurn = GideonMessage & { tools?: string[] };
+
+/**
+ * A file a question carried, as the server kept it. The authority on this shape is
+ * StoredGideonAttachment in the Next app's src/lib/gideon-attachments.ts; this is a copy of it and
+ * must not drift.
+ *
+ * `url` is a PATH and never a full URL — /api/files/attachments/gideon/<uuid>.<ext>. That endpoint
+ * wants a session, and a browser attaches its cookie to a same-origin request by itself, so the
+ * path works unchanged in an `<img src>` and in a link with nothing else done to it.
+ *
+ * The chip for a turn sent in THIS session puts a blob: url here instead — same shape, different
+ * handle, because those bytes exist in the tab before they exist anywhere the browser can fetch.
+ */
+export type GideonAttachment = {
+  kind: "image" | "document";
+  url: string;
+  /** The name the file had when it was picked. Empty for a photo, which never had one. */
+  name: string;
+  /** A hint for how to open it. /api/files sets the real Content-Type from the extension. */
+  mime: string;
+  size: number;
+};
+
+/** History sends `attachments` on every message, always an array, empty where nothing was attached. */
+export type GideonTurn = GideonMessage & { tools?: string[]; attachments?: GideonAttachment[] };
 
 export type GideonEvent =
   | { type: "text"; content: string }
@@ -66,6 +90,30 @@ export const GIDEON_FILE_ACCEPT = GIDEON_FILE_EXTENSIONS.map((ext) => `.${ext}`)
 export function isAcceptedGideonFile(name: string): boolean {
   const ext = name.toLowerCase().match(/\.([a-z0-9]{1,8})$/)?.[1];
   return Boolean(ext && GIDEON_FILE_EXTENSIONS.includes(ext));
+}
+
+/**
+ * Where an attachment chip points, and whether what it finds there should be saved.
+ *
+ * /api/files has already made this decision once — it serves a known-safe type inline and forces a
+ * download for everything else — so this only has to agree with it, and the set below is a subset
+ * of that route's INLINE_OK. What a tab can usefully show is the picture and the PDF. A .docx or a
+ * spreadsheet can only be saved, and `?download=` is the route's own way of being told to save it
+ * under the name the user picked rather than the uuid it is stored as.
+ *
+ * A blob: url is a handle this tab holds rather than a request it makes, so it takes the name as an
+ * attribute instead: a query string appended to one names nothing and breaks the handle.
+ */
+export function gideonAttachmentLink(a: GideonAttachment): { href: string; download?: string } {
+  const inline = a.kind === "image" || a.mime === "application/pdf" || /\.pdf$/i.test(a.url);
+  if (inline) return { href: a.url };
+  const name = a.name.trim();
+  if (!a.url.startsWith("/")) return name ? { href: a.url, download: name } : { href: a.url };
+  // Both, the way every other download link in this app does it: the query is what makes the
+  // RESPONSE carry the name, the attribute is what the browser falls back on. The stored basename
+  // is a uuid but it does at least end in the right extension, so it beats "file".
+  const saveAs = name || a.url.split("/").pop() || "file";
+  return { href: `${a.url}?download=${encodeURIComponent(saveAs)}`, download: saveAs };
 }
 
 export async function streamGideon(
@@ -140,7 +188,11 @@ export async function loadGideonHistory(): Promise<GideonTurn[]> {
     const res = await fetch("/api/gideon/history", { credentials: "include", headers: { Accept: "application/json" } });
     if (!res.ok) return [];
     const data = (await res.json()) as { messages?: GideonTurn[] };
-    return Array.isArray(data.messages) ? data.messages : [];
+    if (!Array.isArray(data.messages)) return [];
+    // The route promises an array here on every message and sanitises each entry before sending it,
+    // so this is not re-validation — it is the one thing the renderer would crash on if a build of
+    // the server that predates the promise is ever what answers.
+    return data.messages.map((row) => ({ ...row, attachments: Array.isArray(row?.attachments) ? row.attachments : [] }));
   } catch {
     // An unreachable history endpoint must not block a fresh chat.
     return [];

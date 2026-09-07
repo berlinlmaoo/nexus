@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { BarChart2, FileText, ImagePlus, Loader2, MoreHorizontal, Paperclip, Send, Trash2, Wrench, X } from "lucide-react";
 import { GideonMark } from "./GideonMark";
-import { clearGideonHistory, loadGideonHistory, streamGideon, GIDEON_TIERS, GIDEON_DEFAULT_TIER, GIDEON_FILE_ACCEPT, GIDEON_MAX_FILE_BYTES, isAcceptedGideonFile, type GideonFile, type GideonMessage, type GideonTier } from "@/lib/gideon";
+import { clearGideonHistory, gideonAttachmentLink, loadGideonHistory, streamGideon, GIDEON_TIERS, GIDEON_DEFAULT_TIER, GIDEON_FILE_ACCEPT, GIDEON_MAX_FILE_BYTES, isAcceptedGideonFile, type GideonAttachment, type GideonFile, type GideonMessage, type GideonTier, type GideonTurn } from "@/lib/gideon";
 import { cn } from "@/lib/utils";
 
-type ChatTurn = GideonMessage & { tools?: string[]; streaming?: boolean };
+type ChatTurn = GideonTurn & { streaming?: boolean };
 
 export function GideonPanel({ onClose }: { onClose: () => void }) {
   const [turns, setTurns] = useState<ChatTurn[]>([]);
@@ -29,9 +29,18 @@ export function GideonPanel({ onClose }: { onClose: () => void }) {
   });
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  /** Every blob: handle minted for a chip on a turn sent in this session, so all of them can go at once. */
+  const localUrls = useRef<string[]>([]);
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [turns]);
-  useEffect(() => () => abortRef.current?.abort(), []);
+  useEffect(() => () => {
+    abortRef.current?.abort();
+    // Released together with the chips that used them. The launcher unmounts this panel when it is
+    // closed, so a session's blobs live exactly as long as the messages pointing at them — and the
+    // stored copy takes over the moment the panel is opened again.
+    for (const url of localUrls.current) URL.revokeObjectURL(url);
+    localUrls.current = [];
+  }, []);
 
   // Restore the saved conversation on open. If the user already started typing a turn before the
   // history landed, their turn wins — a late response must never wipe live messages.
@@ -80,7 +89,27 @@ export function GideonPanel({ onClose }: { onClose: () => void }) {
     setInput("");
     setAttachError(null);
     const history: GideonMessage[] = [...turns.map(({ role, content }) => ({ role, content })), { role: "user", content: text }];
-    setTurns((cur) => [...cur, { role: "user", content: text }, { role: "assistant", content: "", streaming: true, tools: [] }]);
+
+    // The chip on the turn being sent points at a copy of the bytes this tab is already holding.
+    // The stream answers with text and a `done` and never says where the file was stored, so the
+    // only way to a server url from here is to re-read the whole conversation from /history — a
+    // round trip to redraw a picture the browser has in memory. Same shape either way: on the next
+    // open this turn comes back from history and the chip is drawn from the stored file instead.
+    //
+    // Image first, then document, which is the order the composer lists them in and the order
+    // storeGideonAttachments writes them in — so nothing reorders itself after a reload.
+    const sent: GideonAttachment[] = [];
+    if (image) {
+      const held = holdLocalFile(image);
+      if (held) sent.push({ kind: "image", url: held.url, name: "", mime: held.mime, size: held.size });
+    }
+    if (doc) {
+      const held = holdLocalFile(doc.data);
+      if (held) sent.push({ kind: "document", url: held.url, name: doc.name, mime: doc.type || held.mime, size: held.size });
+    }
+    localUrls.current.push(...sent.map((a) => a.url));
+
+    setTurns((cur) => [...cur, { role: "user", content: text, attachments: sent }, { role: "assistant", content: "", streaming: true, tools: [] }]);
     setBusy(true);
 
     const controller = new AbortController();
@@ -157,6 +186,16 @@ export function GideonPanel({ onClose }: { onClose: () => void }) {
                   {t.tools.map((name, j) => <span key={j} className="inline-flex items-center gap-1 rounded-full bg-card px-2 py-0.5 text-[10px] font-semibold text-muted-foreground"><Wrench className="h-2.5 w-2.5" /> {name}</span>)}
                 </div>
               )}
+              {/* Above the question, the way it sat above the box while it was being written. Until
+                  today a sent message showed nothing at all, so a conversation reopened tomorrow was
+                  a question with no sign of what it was about. */}
+              {t.attachments && t.attachments.length > 0 && (
+                <div className="mb-1.5 flex flex-col gap-2">
+                  {t.attachments.map((a, j) => (
+                    <GideonAttachmentChip key={j} kind={a.kind} name={a.name} src={a.kind === "image" ? a.url : undefined} link={gideonAttachmentLink(a)} onBubble={t.role === "user"} />
+                  ))}
+                </div>
+              )}
               {t.content ? <span className="whitespace-pre-wrap">{t.content}</span> : t.streaming ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             </div>
           </div>
@@ -182,22 +221,10 @@ export function GideonPanel({ onClose }: { onClose: () => void }) {
                 attached to the same question, and dropping one must not drop the other. */}
             {(image || doc) && (
               <div className="flex flex-col gap-2 border-t border-border/60 px-3 py-2">
-                {image && (
-                  <div className="flex items-center gap-2">
-                    <img src={image} alt="" className="h-10 w-10 rounded-lg object-cover" />
-                    <span className="flex-1 truncate text-xs text-muted-foreground">Gambar terlampir</span>
-                    <button type="button" onClick={() => setImage(null)} aria-label="Buang gambar" className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
-                  </div>
-                )}
-                {doc && (
-                  <div className="flex items-center gap-2">
-                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"><FileText className="h-4 w-4" /></span>
-                    {/* The filename, not "Dokumen terlampir": with two files picked in a row it is the
-                        only thing that says WHICH one is about to be sent. */}
-                    <span className="flex-1 truncate text-xs text-muted-foreground" title={doc.name}>{doc.name}</span>
-                    <button type="button" onClick={() => setDoc(null)} aria-label="Buang file" className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
-                  </div>
-                )}
+                {image && <GideonAttachmentChip kind="image" src={image} onRemove={() => setImage(null)} />}
+                {/* The filename, not "Dokumen terlampir": with two files picked in a row it is the
+                    only thing that says WHICH one is about to be sent. */}
+                {doc && <GideonAttachmentChip kind="document" name={doc.name} onRemove={() => setDoc(null)} />}
               </div>
             )}
             {attachError && (
@@ -262,6 +289,93 @@ export function GideonPanel({ onClose }: { onClose: () => void }) {
       </div>
     </div>
   );
+}
+
+/**
+ * One attachment, drawn the same way wherever it appears: a 40px thumbnail for a picture, a glyph
+ * for a document, and the file's name beside it.
+ *
+ * Two callers, one shape. In the composer the chip carries a remove button, because the file has
+ * not been sent and can still be dropped; on a message it is a link, because by then the only thing
+ * left to do with the file is open it. Giving the second caller a look of its own would make the
+ * same file read as two different things a few pixels apart.
+ */
+function GideonAttachmentChip({ kind, name, src, link, onRemove, onBubble }: {
+  kind: "image" | "document";
+  /** The file's own name. A photo picked on a phone has none, and gets a word instead. */
+  name?: string;
+  /** Thumbnail source: the stored file, the data url the composer holds, or this session's blob. */
+  src?: string;
+  /** Where clicking goes. Absent in the composer, where the file is not yet anywhere to go to. */
+  link?: { href: string; download?: string };
+  onRemove?: () => void;
+  /** Sitting on the primary-coloured user bubble rather than on the card. */
+  onBubble?: boolean;
+}) {
+  // A thumbnail whose file is gone draws the browser's broken-image glyph, which reads as breakage
+  // rather than as a file. Fall back to the tile a document gets: still a chip, still openable.
+  const [thumbFailed, setThumbFailed] = useState(false);
+  const label = name || (kind === "image" ? "Gambar terlampir" : "File terlampir");
+  const body = (
+    <>
+      {kind === "image" && src && !thumbFailed ? (
+        <img src={src} alt="" loading="lazy" onError={() => setThumbFailed(true)} className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+      ) : (
+        <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-lg", onBubble ? "bg-primary-foreground/15" : "bg-muted")}>
+          {kind === "image" ? <ImagePlus className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+        </span>
+      )}
+      <span className="flex-1 truncate text-xs" title={label}>{label}</span>
+    </>
+  );
+  const tone = onBubble ? "text-primary-foreground/80" : "text-muted-foreground";
+
+  // target=_blank for both: /api/files answers a picture or a PDF with `inline` and everything else
+  // with `attachment`, so the same link either opens a tab or saves a file, and the one that saves
+  // never leaves an empty tab behind. `download` is set only for the blob: handles, which have no
+  // headers of their own to carry the name.
+  if (link) {
+    return (
+      <a href={link.href} download={link.download} target="_blank" rel="noreferrer" className={cn("flex items-center gap-2 transition-opacity hover:opacity-80", tone)}>
+        {body}
+      </a>
+    );
+  }
+  return (
+    <div className={cn("flex items-center gap-2", tone)}>
+      {body}
+      {onRemove && (
+        <button type="button" onClick={onRemove} aria-label={kind === "image" ? "Buang gambar" : "Buang file"} className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A handle the browser will open, for a file that has not been anywhere yet.
+ *
+ * The composer holds a data: url because that is the form the route reads, and a tab cannot
+ * navigate to one — Chrome has refused top-level data: navigation for years, so a chip pointing at
+ * one would look like a link and do nothing when clicked. The same bytes as a blob are something
+ * both an <img> and a link accept. Returns null rather than throwing on anything that is not a data
+ * url: a chip that fails to appear is a far smaller loss than a question that fails to send.
+ */
+function holdLocalFile(dataUrl: string): { url: string; mime: string; size: number } | null {
+  try {
+    const comma = dataUrl.indexOf(",");
+    if (!dataUrl.startsWith("data:") || comma < 0) return null;
+    const meta = dataUrl.slice("data:".length, comma);
+    const base64 = meta.endsWith(";base64");
+    const mime = (base64 ? meta.slice(0, -";base64".length) : meta).split(";")[0] || "application/octet-stream";
+    const body = dataUrl.slice(comma + 1);
+    const bytes = base64
+      ? Uint8Array.from(atob(body), (c) => c.charCodeAt(0))
+      : new TextEncoder().encode(decodeURIComponent(body));
+    const blob = new Blob([bytes], { type: mime });
+    return { url: URL.createObjectURL(blob), mime, size: blob.size };
+  } catch {
+    return null;
+  }
 }
 
 // "Generate image" is gone until something implements it. GIDEON reaches ChatGPT through an OAuth
