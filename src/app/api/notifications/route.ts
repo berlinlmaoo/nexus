@@ -35,7 +35,8 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: true })
     }
     if (id) {
-      await prisma.notification.update({ where: { id }, data: { read: true } })
+      // Scoped to the caller: `where: { id }` alone would let anyone mark anyone's row read.
+      await prisma.notification.updateMany({ where: { id, userId: session.user.id }, data: { read: true } })
       logAudit({ action: 'update', entityType: 'notification', entityId: id, userId: session.user.id, request: req })
       return NextResponse.json({ success: true })
     }

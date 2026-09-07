@@ -277,11 +277,12 @@ export async function PATCH(
       try {
         const submission = await prisma.formSubmission.findUnique({
           where: { taskId },
-          select: { submitterId: true, form: { select: { name: true } } },
+          select: { id: true, submitterId: true, form: { select: { name: true } } },
         })
         if (submission?.submitterId && submission.submitterId !== session.user.id) {
           await notifySubmissionStatus({
             submitterId: submission.submitterId,
+            submissionId: submission.id,
             formName: submission.form?.name ?? "your submission",
             fromStatus: existing.status,
             toStatus: status as string,

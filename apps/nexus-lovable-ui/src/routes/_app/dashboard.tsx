@@ -28,7 +28,8 @@ import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { XpRulesCard } from "@/components/XpRulesCard";
 import { UserXpLogModal } from "@/components/UserXpLogModal";
 import { MorphPanel, type MorphOrigin } from "@/components/motion/MorphPanel";
-import { activeNotifications, fmtDate, fmtDue, nexusApi, statusLabel, type NexusDashboardResponse, type NexusProject, type NexusTask, type NexusQuest, type NexusConversation, type NexusUser, type NexusNotification, type NexusLeaderboardRow } from "@/lib/nexus-api";
+import { activeNotifications, fmtDate, fmtDue, nexusApi, notificationGroup, statusLabel, type NexusDashboardResponse, type NexusProject, type NexusTask, type NexusQuest, type NexusConversation, type NexusUser, type NexusNotification, type NexusLeaderboardRow, type NotificationGroupId } from "@/lib/nexus-api";
+import { NotificationFilterTabs } from "@/components/NotificationFilterTabs";
 import { LEVELS, levelForXp } from "@/lib/levels";
 import { TierBadge } from "@/components/gamification/TierBadge";
 import { QuestIcon } from "@/components/gamification/QuestIcon";
@@ -168,6 +169,11 @@ function NotificationsModal({ open, onClose, list, unread, loading, error }: { o
   const refresh = () => qc.invalidateQueries({ queryKey: ["notifications-unread"] });
   const markRead = useMutation({ mutationFn: (id: string) => nexusApi.markNotificationRead(id), onSuccess: refresh });
   const markAll = useMutation({ mutationFn: nexusApi.markAllNotificationsRead, onSuccess: refresh });
+  const [group, setGroup] = useState<NotificationGroupId>("all");
+  const shown = useMemo(
+    () => (group === "all" ? list : list.filter((n) => notificationGroup(n.type) === group)),
+    [list, group],
+  );
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -216,7 +222,13 @@ function NotificationsModal({ open, onClose, list, unread, loading, error }: { o
               {loading && <p className="p-3 text-sm text-muted-foreground">Loading…</p>}
               {error && <p className="p-3 text-sm text-muted-foreground">You need to be logged in to open your inbox.</p>}
               {!loading && !error && list.length === 0 && <p className="p-3 text-sm text-muted-foreground">No notifications. Enjoy the silence.</p>}
-              {list.map((n) => (
+              {!loading && !error && list.length > 0 && (
+                <div className="px-1 pb-2">
+                  <NotificationFilterTabs list={list} group={group} onChange={setGroup} layoutId="bell-filter-tab" compact />
+                </div>
+              )}
+              {!loading && !error && list.length > 0 && shown.length === 0 && <p className="p-3 text-sm text-muted-foreground">Nothing of this kind.</p>}
+              {shown.map((n) => (
                 <button
                   key={n.id}
                   onClick={() => { if (!n.read) markRead.mutate(n.id); }}

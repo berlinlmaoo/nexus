@@ -1,7 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
-import { activeNotifications, fmtDate, nexusApi, type NexusNotification } from "@/lib/nexus-api";
+import {
+  activeNotifications,
+  fmtDate,
+  nexusApi,
+  notificationGroup,
+  type NexusNotification,
+  type NotificationGroupId,
+} from "@/lib/nexus-api";
+import { NotificationFilterTabs } from "@/components/NotificationFilterTabs";
 import { AtSign, UserPlus, MessageCircle, AlarmClock, Activity, Check, Trash2, Loader2 } from "lucide-react";
 import { celebrate } from "@/components/Celebration";
 import { Reveal } from "@/components/motion";
@@ -23,6 +32,11 @@ function InboxPage() {
   });
   // Hide notifications read more than a week ago; unread always stay.
   const notifications = activeNotifications(inbox.data?.notifications ?? []);
+  const [group, setGroup] = useState<NotificationGroupId>("all");
+  const shown = useMemo(
+    () => (group === "all" ? notifications : notifications.filter((n) => notificationGroup(n.type) === group)),
+    [notifications, group],
+  );
 
   return (
     <div>
@@ -35,6 +49,11 @@ function InboxPage() {
         <div className="mb-3 rounded-2xl border border-primary/10 bg-primary/5 px-4 py-3 text-sm font-semibold text-primary">
           {inbox.data?.unreadCount ?? 0} unread signal(s) waiting for you.
         </div>
+        {!inbox.isLoading && !inbox.isError && notifications.length > 0 && (
+          <div className="mb-3">
+            <NotificationFilterTabs list={notifications} group={group} onChange={setGroup} layoutId="inbox-filter-tab" />
+          </div>
+        )}
         <Reveal>
           <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
             {inbox.isLoading && Array.from({ length: 5 }).map((_, i) => (
@@ -45,7 +64,8 @@ function InboxPage() {
             ))}
             {inbox.isError && <Empty title="Signal locked" message="You need to log in to open your live inbox." />}
             {!inbox.isLoading && !inbox.isError && notifications.length === 0 && <Empty title="Inbox clean" message="No pings. Enjoy the rare silence." />}
-            {!inbox.isLoading && notifications.map((n, idx) => <NotificationRow key={n.id} notification={n} idx={idx} />)}
+            {!inbox.isLoading && !inbox.isError && notifications.length > 0 && shown.length === 0 && <Empty title="Nothing here" message="No notifications of this kind." />}
+            {!inbox.isLoading && shown.map((n, idx) => <NotificationRow key={n.id} notification={n} idx={idx} />)}
           </div>
         </Reveal>
       </div>
@@ -54,13 +74,18 @@ function InboxPage() {
 }
 
 /** Where a notification should take you when clicked (link field first, then by type). */
-function notificationTarget(n: NexusNotification): { to: string; params?: Record<string, string> } | null {
+function notificationTarget(n: NexusNotification): { to: string; params?: Record<string, string>; search?: Record<string, string> } | null {
   if (n.taskId) return { to: "/tasks/$taskId", params: { taskId: n.taskId } };
   if (n.projectId) return { to: "/projects/$projectId", params: { projectId: n.projectId } };
   const t = (n.type ?? "").toLowerCase();
   if (t.includes("checkout") || t.includes("offsite") || t.includes("attendance") || t.includes("late") || t.includes("absen")) return { to: "/attendance" };
   if (t.includes("message")) return { to: "/messages" };
-  if (n.link && n.link.startsWith("/")) return { to: n.link };
+  if (n.link && n.link.startsWith("/")) {
+    // The router matches on the path alone — a link like `/submissions?id=abc` has to be split, or
+    // the query string ends up part of the path and nothing matches.
+    const [path, qs] = n.link.split("?");
+    return { to: path, search: qs ? Object.fromEntries(new URLSearchParams(qs)) : undefined };
+  }
   return null;
 }
 
@@ -78,7 +103,7 @@ function NotificationRow({ notification, idx }: { notification: NexusNotificatio
     if (!notification.read) markRead.mutate();
     if (target) {
       // TanStack routes are strictly typed; the path is dynamic here so cast through the navigate call.
-      (navigate as unknown as (opts: { to: string; params?: Record<string, string> }) => Promise<void>)(target).catch(() => {});
+      (navigate as unknown as (opts: { to: string; params?: Record<string, string>; search?: Record<string, string> }) => Promise<void>)(target).catch(() => {});
     }
   };
 
