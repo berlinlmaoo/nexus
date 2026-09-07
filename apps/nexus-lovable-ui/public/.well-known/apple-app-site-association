@@ -1,4 +1,17 @@
 {
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["5YR5T42G97.id.znetworks.nexus"],
+        "components": [
+          {
+            "/": "/f/*",
+            "comment": "Shared form links only. Everything else on this domain stays in the browser: the SPA is the whole product and the app is a subset of it, so claiming / would send every link to a page the app cannot draw."
+          }
+        ]
+      }
+    ]
+  },
   "webcredentials": {
     "apps": ["5YR5T42G97.id.znetworks.nexus"]
   }
