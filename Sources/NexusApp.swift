@@ -24,7 +24,12 @@ struct NexusApp: App {
                 .environment(auth)
                 .environment(router)
                 .tint(NX.violetText)
-                // Siri, Shortcuts, the Live Activity and the widgets all arrive here as a URL.
+                // Siri, Shortcuts, the Live Activity and the widgets all arrive here as a URL
+                // — and so does a tapped Universal Link on `/f/…`. Under the SwiftUI App lifecycle
+                // this is the ONLY handler iOS calls for a browsing activity; the
+                // `.onContinueUserActivity(NSUserActivityTypeBrowsingWeb)` that the same problem
+                // needs on UIKit is never invoked here, and adding it would be the bug rather than
+                // the fix. AppRouter.open decides which of the two vocabularies a URL is speaking.
                 .onOpenURL { router.open($0) }
                 .task(id: auth.session?.userId) {
                     if let userId = auth.session?.userId {

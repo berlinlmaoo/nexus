@@ -4,9 +4,11 @@ import SwiftUI
 /// AdaptiveRoot, which picks a tab bar or a sidebar from the horizontal size class.
 struct RootView: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(AppRouter.self) private var router
     @State private var appearance = AppAppearance.shared
 
     var body: some View {
+        @Bindable var router = router
         if auth.isAuthenticated {
             // In-app light/dark override. nil = follow the iOS setting.
             AdaptiveRoot()
@@ -17,6 +19,39 @@ struct RootView: View {
                 // Above the whole app rather than inside a tab: an announcement is not a screen you
                 // navigate to, and it must reach somebody wherever they happen to be standing.
                 .overlay { AnnouncementModal() }
+                // A form link tapped outside the app, drawn over whichever shape is mounted.
+                //
+                // It sits here rather than in NexusApp for two reasons that both have teeth. First,
+                // it is INSIDE the authenticated branch, so a link that arrives while signed out
+                // cannot open a form on top of the login screen — the request waits in the router
+                // and this sheet appears by itself the moment sign-in finishes, which means the
+                // login the link provoked does not throw the link away. Second, it is after
+                // `preferredColorScheme`, so the form obeys the app's own light/dark setting rather
+                // than the phone's; presented from outside that modifier it would not be covered.
+                //
+                // A sheet rather than a push, because a form reached from a link is a task and not
+                // a place: there is no list behind it to go back to, and the same code has to work
+                // under the phone's tab bar and the iPad's sidebar, which share no navigation
+                // stack for anything to be pushed onto.
+                .sheet(item: $router.formRequest) { request in
+                    NavigationStack {
+                        // FormFillView brings no bar of its own — every other way in is a
+                        // NavigationLink, which supplies the back button. Here nothing does, and a
+                        // sheet whose only exit is a drag is a trap on a form long enough to
+                        // scroll, so the way out is added from this side.
+                        //
+                        // The placeholder title shows for as long as the fetch takes and is then
+                        // replaced by the form's real name. "Form" is deliberately not in
+                        // Localization.swift: T() falls back to the English literal, and the
+                        // Indonesian for this one is the same word.
+                        FormFillView(formId: request.id, title: T("Form"))
+                            .toolbar {
+                                ToolbarItem(placement: .cancellationAction) {
+                                    Button(T("Close")) { router.formRequest = nil }
+                                }
+                            }
+                    }
+                }
         } else {
             // LoginView forces `.light` itself, and MUST stay outside that modifier.
             // `preferredColorScheme` is a preference, and a preference written by an ancestor

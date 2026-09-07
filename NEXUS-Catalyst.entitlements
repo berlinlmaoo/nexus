@@ -14,6 +14,14 @@
 	     valid on both platforms — but entitlements do not merge across the two files, so the
 	     Catalyst build only gets it if it is written here as well. See NEXUS.entitlements for the
 	     server-side half of the handshake. -->
+	<!-- `applinks:` is deliberately NOT here, though the key would be accepted.
+
+	     Claiming a domain for universal links and then failing to route them is worse than never
+	     claiming it. On Mac Catalyst a universal link is delivered as an NSUserActivity to the app
+	     delegate, and SwiftUI's `.onOpenURL` — the only handler this app has, and the correct one
+	     on iOS — is not called for it. Adding the claim here would take the link away from Safari,
+	     which opens the form perfectly well, and hand it to a Mac app that would silently do
+	     nothing with it. So the Mac lets the browser have it. -->
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>webcredentials:nexus.znetworks.id</string>

@@ -20,9 +20,29 @@
 		<string>group.id.znetworks.nexus</string>
 	</array>
 
+	<!-- Two claims on one domain, and they are independent of each other.
+
+	     `webcredentials:` is the passkey half described above. `applinks:` is what makes
+	     https://nexus.znetworks.id/f/<form> open THIS APP instead of Safari when it is tapped in
+	     Mail, WhatsApp or Messages. The server half is the same file — Apple reads both keys out of
+	     one https://nexus.znetworks.id/.well-known/apple-app-site-association, so the `applinks`
+	     object added there must sit NEXT TO the existing `webcredentials` one and never replace it,
+	     or passkey sign-in dies the moment universal links start working.
+
+	     Only `/f/*` is claimed, and only over there — an entitlement names a domain, never a path.
+	     The path list lives in the association file.
+
+	     iOS/iPadOS ONLY: this key is absent from NEXUS-Catalyst.entitlements on purpose, and that
+	     file says why. `lan.nexus.znetworks.id` is deliberately not here either — it resolves to a
+	     private address, so Apple's CDN cannot fetch an association file from it and the claim
+	     would simply never verify.
+
+	     Nothing to change in the Apple Developer portal: the Associated Domains capability is
+	     already enabled on this App ID, because passkeys needed it first. -->
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>webcredentials:nexus.znetworks.id</string>
+		<string>applinks:nexus.znetworks.id</string>
 	</array>
 </dict>
 </plist>
