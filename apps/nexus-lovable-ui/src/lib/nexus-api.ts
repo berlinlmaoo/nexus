@@ -2127,22 +2127,6 @@ export const nexusApi = {
   updateRoomBooking: (bookingId: string, payload: Partial<RoomBookingPayload> & { status?: string }) => apiFetch<{ booking: NexusRoomBooking }>(`/api/room-bookings/${bookingId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteRoomBooking: (bookingId: string) => apiFetch<{ success?: boolean }>(`/api/room-bookings/${bookingId}`, { method: "DELETE" }),
 
-  // --- Project files (NAS-backed) ---
-  projectFiles: (projectId: string, path = "") =>
-    apiFetch<ProjectFilesResponse>(`/api/projects/${projectId}/files?path=${encodeURIComponent(path)}`),
-  uploadProjectFile: (projectId: string, file: File, path = "") => {
-    const fd = new FormData();
-    fd.set("file", file);
-    if (path) fd.set("path", path);
-    return apiFetch<NexusProjectFile & { uploaded: boolean }>(`/api/projects/${projectId}/files`, { method: "POST", body: fd });
-  },
-  createProjectFolder: (projectId: string, name: string, path = "") =>
-    apiFetch<{ created: boolean; path: string }>(`/api/projects/${projectId}/files`, { method: "POST", body: JSON.stringify({ name, path }) }),
-  deleteProjectFile: (projectId: string, path: string) =>
-    apiFetch<{ deleted: boolean }>(`/api/projects/${projectId}/files?path=${encodeURIComponent(path)}`, { method: "DELETE" }),
-  projectFileDownloadUrl: (projectId: string, path: string, inline = false) =>
-    `/api/projects/${projectId}/files/download?path=${encodeURIComponent(path)}${inline ? "&inline=1" : ""}`,
-
   login: loginWithCredentials,
   // Clears all auth cookies server-side (NextAuth session/csrf/callback).
   logout: () => apiFetch<{ ok?: boolean }>("/api/auth/clear-session", { method: "POST" }),
@@ -2162,24 +2146,6 @@ export const nexusApi = {
     apiFetch<{ ok?: boolean }>("/api/auth/password/reset/verify", { method: "POST", body: JSON.stringify(payload) }),
   passwordResetResend: (email: string) =>
     apiFetch<{ ok?: boolean; resendCooldownSeconds?: number; retryAfterSeconds?: number }>("/api/auth/password/reset/resend", { method: "POST", body: JSON.stringify({ email }) }),
-};
-
-export type NexusProjectFile = {
-  name: string;
-  path: string;
-  relPath: string;
-  isdir: boolean;
-  size: number;
-  modified: string;
-  type: string;
-};
-
-export type ProjectFilesResponse = {
-  path: string;
-  files: NexusProjectFile[];
-  total: number;
-  offset: number;
-  hasMore: boolean;
 };
 
 export function isAuthError(error: unknown) {

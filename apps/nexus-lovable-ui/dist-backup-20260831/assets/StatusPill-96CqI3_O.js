@@ -1,0 +1,1 @@
+import{aJ as r}from"./vendor-4zekbwJ-.js";import{c as e}from"./utils-CooUbOAy.js";function i({value:l,color:s="bg-primary"}){return r.jsx("div",{className:"h-1.5 w-full overflow-hidden rounded-full bg-muted",children:r.jsx("div",{className:e("h-full rounded-full transition-all",s),style:{width:`${l}%`}})})}export{i as P};
