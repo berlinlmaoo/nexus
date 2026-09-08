@@ -13,7 +13,7 @@ import { refundOutageDay, type OutageRefundResult } from "@/lib/attendance-absen
 // Auth: an attendance admin session (BoD / One Above All) OR a CRON_SECRET bearer (server-triggered).
 export async function POST(req: NextRequest) {
   try {
-    type Body = { date?: string; dryRun?: boolean; workspaceId?: string }
+    type Body = { date?: string; dryRun?: boolean; workspaceId?: string; userIds?: string[] }
     let body: Body | null = null
     try {
       body = (await req.json()) as Body
@@ -65,7 +65,12 @@ export async function POST(req: NextRequest) {
     const dryRun = body.dryRun ?? false
     const perWorkspace: OutageRefundResult[] = []
     for (const wid of workspaceIds) {
-      perWorkspace.push(await refundOutageDay({ workspaceId: wid, date, dryRun, adminUserId, request: req }))
+      perWorkspace.push(await refundOutageDay({
+        workspaceId: wid, date, dryRun, adminUserId, request: req,
+        // Optional: a partial outage — one that only reached some shifts — is refunded to the
+        // people it actually reached rather than to the whole day.
+        userIds: Array.isArray(body?.userIds) ? body.userIds.filter((x): x is string => typeof x === "string") : undefined,
+      }))
     }
 
     // Merge (single workspace for the admin/button path; possibly many on the cron path).
