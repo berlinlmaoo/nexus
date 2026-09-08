@@ -161,7 +161,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         (nil,                 [.dashboard, .tasks, .inbox, .projects]),
         (T("Home Base"),      [.messages, .threads, .submissions, .teamCalendar, .roomBooking]),
         (T("Missions"),       [.leaderboard, .reports]),
-        (T("Knowledge"),      [.docs, .forms]),
+        (T("Knowledge"),      [.forms]),
         (T("Pulse Check"),    [.attendance]),
         (T("System"),         [.tickets, .teams, .settings, .admin]),
     ] }

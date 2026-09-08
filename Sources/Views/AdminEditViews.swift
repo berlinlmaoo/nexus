@@ -102,14 +102,51 @@ struct AdminView: View {
         return t
     }
 
+    /// A scrolling row of pills, not a segmented control.
+    ///
+    /// `Picker(.segmented)` divides its width equally between every option, so seven of them on a
+    /// phone leaves each about 50pt wide: the labels truncate ("Pengu…"), the tap targets fall below
+    /// what a thumb can reliably hit, and the tabs that matter most to a BoD are the ones squeezed
+    /// hardest. It also cannot grow — the next tab added makes all of them worse.
+    ///
+    /// Pills size to their own text instead, so a label is never cut and every target is at least as
+    /// wide as the word it carries. The strip scrolls, and follows the selection so a tab chosen off
+    /// screen does not leave the row looking unchanged.
+    @ViewBuilder private var tabStrip: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(tabs.indices, id: \.self) { i in
+                        let selected = i == section
+                        Button {
+                            withAnimation(.easeOut(duration: 0.18)) { section = i }
+                        } label: {
+                            Text(tabs[i].title)
+                                .font(NXFont.text(13, selected ? .bold : .semibold))
+                                .foregroundStyle(selected ? Color.white : NX.mutedFg)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(selected ? NX.violet : NX.muted.opacity(0.6),
+                                            in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .id(i)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+            }
+            .onChange(of: section) { _, new in
+                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(new, anchor: .center) }
+            }
+        }
+    }
+
     var body: some View {
         ZStack {
             NX.background.ignoresSafeArea()
             VStack(spacing: 0) {
-                Picker("", selection: $section) {
-                    ForEach(tabs.indices, id: \.self) { Text(tabs[$0].title).tag($0) }
-                }
-                .pickerStyle(.segmented).padding(12)
+                tabStrip
                 Divider().overlay(NX.border)
                 // Switched on the tab's id, not its index, so a hidden tab cannot shift the others.
                 switch tabs.indices.contains(section) ? tabs[section].id : "users" {

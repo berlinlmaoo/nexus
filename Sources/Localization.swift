@@ -657,6 +657,8 @@ final class AppLanguage {
         "Reply… (@ to mention)": "Balas… (@ buat sebut orang)",
         "Nothing on the feed yet. Be the first to post.": "Feed masih kosong. Jadi yang pertama posting.",
         "Couldn't load the feed.": "Gagal memuat feed.",
+        "Couldn't post that.":
+            "Nggak bisa ngirim postingannya.",
         "Couldn't post.": "Gagal mengirim.",
 
         // ── team calendar ─────────────────────────────────────────────────────

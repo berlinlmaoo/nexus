@@ -794,21 +794,55 @@ struct APIClient {
     /// had the right field names, which is why it looked correct, but the body was still the wrong
     /// format. (Comments ARE JSON: `addPostComment(e, t) => body: JSON.stringify(t)`. Same screen,
     /// two different content types — that's what made this easy to get wrong.)
-    /// The composer is text-only for now, so no image parts are attached.
+    /// Photos ride along as repeated `images` parts, the same shape the web sends. Text-only posts
+    /// still work: the route accepts either, and refuses only when BOTH are empty.
+    ///
+    /// `imageMeta` is a JSON array of `{w,h}` positionally matching `images`. It is optional on the
+    /// route, but without it the feed cannot reserve the right aspect ratio while a photo loads and
+    /// every post jumps as its images arrive. The caller measures the pixels — it is the side
+    /// holding a UIImage — and a nil entry is sent as `{}` so the positions never shift.
+    ///
+    /// Limits mirror src/lib/feed.ts (IMG_MAX 4, 8MB each). Enforced here as well as there so a
+    /// fifth photo is refused before it is uploaded rather than after.
     @discardableResult
-    func createPost(text: String) async throws -> Bool {
+    func createPost(text: String, images: [Data] = [], imageMeta: [(w: Int, h: Int)?] = [],
+                    progress: UploadProgress? = nil) async throws -> Bool {
         let boundary = "Boundary-\(UUID().uuidString)"
         var req = makeRequest("/api/feed/posts", method: "POST")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        var body = Data()
-        func field(_ name: String, _ value: String) {
-            body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".data(using: .utf8)!)
+
+        let meta = images.indices.map { i -> [String: Int] in
+            guard i < imageMeta.count, let m = imageMeta[i] else { return [:] }
+            return ["w": m.w, "h": m.h]
         }
-        field("text", text)
-        field("mentions", "[]")   // JSON-encoded, exactly like the web's JSON.stringify([])
-        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
-        req.httpBody = body
-        _ = try await run(req, decode: SuccessResponse.self)
+        let metaJSON = (try? JSONSerialization.data(withJSONObject: meta))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+
+        var files: [(name: String, filename: String, data: Data)] = []
+        for (i, img) in images.enumerated() {
+            files.append((name: "images", filename: "photo-\(i + 1).jpg", data: img))
+        }
+        req.httpBody = Self.multipartBody(
+            boundary: boundary,
+            // "mentions" JSON-encoded, exactly like the web's JSON.stringify([]).
+            fields: ["text": text, "mentions": "[]", "imageMeta": metaJSON],
+            files: files)
+
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await perform(req, reporting: progress)
+        } catch {
+            throw APIError.transport(error.localizedDescription)
+        }
+        guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        guard (200..<300).contains(http.statusCode) else {
+            // The route's refusals are already sentences for the person reading them ("Maksimal 4
+            // foto per post.", "Foto terlalu besar (maks 8MB)."), so they are passed through rather
+            // than flattened into a status code.
+            let payload = try? JSONDecoder().decode(ServerError.self, from: data)
+            throw APIError.transport(payload?.error ?? T("Couldn't post that."))
+        }
         return true
     }
     @discardableResult

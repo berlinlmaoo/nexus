@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 // MARK: - models
 //
@@ -70,6 +71,17 @@ struct ThreadsView: View {
     @State private var error: String?
     @State private var draft = ""
     @State private var posting = false
+    /// JPEG bytes already downscaled, in the order they were picked — the route stores `position`
+    /// from that order, so it is the order they appear in for everyone else too.
+    @State private var photos: [Data] = []
+    /// Pixel size per photo, positionally matched to `photos`. Sent so the feed can hold the right
+    /// aspect ratio while an image loads instead of reflowing as each one arrives.
+    @State private var photoSizes: [(w: Int, h: Int)?] = []
+    @State private var picking: [PhotosPickerItem] = []
+    @State private var showLibrary = false
+    /// Mirrors IMG_MAX in src/lib/feed.ts. Enforced here too so the fifth photo is refused before
+    /// it is uploaded rather than after.
+    private static let maxPhotos = 4
     @State private var liked: Set<String> = []      // optimistic, so a tap reacts instantly
     @State private var openPost: FeedPost?
     @State private var viewingPhoto: PhotoRef?
@@ -115,7 +127,44 @@ struct ThreadsView: View {
                 .font(NXFont.text(15)).lineLimit(2...6)
                 .padding(10)
                 .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            HStack {
+            if !photos.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(photos.indices, id: \.self) { i in
+                            ZStack(alignment: .topTrailing) {
+                                if let ui = UIImage(data: photos[i]) {
+                                    Image(uiImage: ui).resizable().scaledToFill()
+                                        .frame(width: 74, height: 74)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                }
+                                Button {
+                                    photos.remove(at: i)
+                                    if i < photoSizes.count { photoSizes.remove(at: i) }
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 17))
+                                        .symbolRenderingMode(.palette)
+                                        .foregroundStyle(.white, .black.opacity(0.55))
+                                }
+                                .buttonStyle(.plain).padding(3)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+            HStack(spacing: 10) {
+                Button { showLibrary = true } label: {
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(photos.count >= Self.maxPhotos ? NX.mutedFg : NX.violetText)
+                }
+                .buttonStyle(.plain)
+                .disabled(posting || photos.count >= Self.maxPhotos)
+                if !photos.isEmpty {
+                    Text("\(photos.count)/\(Self.maxPhotos)")
+                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                }
                 Spacer()
                 Button { Task { await post() } } label: {
                     HStack(spacing: 6) {
@@ -127,11 +176,51 @@ struct ThreadsView: View {
                     .background(NX.violet, in: Capsule())
                 }
                 .buttonStyle(.plain)
-                .disabled(posting || draft.trimmingCharacters(in: .whitespaces).isEmpty)
-                .opacity(draft.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1)
+                // A photo alone is a post. The route refuses only when text AND images are both
+                // empty, and a picture with nothing to say is the commonest thing on this screen.
+                .disabled(posting || !canPost)
+                .opacity(canPost ? 1 : 0.5)
             }
         }
         .nexusCard()
+        // Presented from the view, not from inside a Menu: a PhotosPicker nested in a Menu draws its
+        // row and never opens, because the menu tears down its content as it dismisses.
+        .photosPicker(isPresented: $showLibrary, selection: $picking,
+                      maxSelectionCount: max(1, Self.maxPhotos - photos.count),
+                      matching: .images, photoLibrary: .shared())
+        .onChange(of: picking) { _, items in
+            guard !items.isEmpty else { return }
+            Task { await absorb(items) }
+        }
+    }
+
+    private var canPost: Bool {
+        !draft.trimmingCharacters(in: .whitespaces).isEmpty || !photos.isEmpty
+    }
+
+    /// Shrunk on the way in, not on the way out: `GideonPanel.shrink` is the same downscaler the
+    /// ticket composer uses, and a modern iPhone photo is well past the route's 8MB ceiling
+    /// untouched. Measuring here also gets the size from the image that will actually be sent.
+    private func absorb(_ items: [PhotosPickerItem]) async {
+        var lost = 0
+        for item in items {
+            guard photos.count < Self.maxPhotos else { break }
+            if let data = try? await item.loadTransferable(type: Data.self) {
+                let shrunk = GideonPanel.shrink(data)
+                photos.append(shrunk)
+                if let ui = UIImage(data: shrunk) {
+                    photoSizes.append((w: Int(ui.size.width * ui.scale), h: Int(ui.size.height * ui.scale)))
+                } else {
+                    photoSizes.append(nil)
+                }
+            } else {
+                // A pick the library could not hand over — one still in iCloud, or one it cannot
+                // decode. Counted rather than dropped silently: five of these read as a broken picker.
+                lost += 1
+            }
+        }
+        if lost > 0 { error = T("Couldn't read that photo.") }
+        picking = []
     }
 
     private func postCard(_ p: FeedPost) -> some View {
@@ -191,12 +280,14 @@ struct ThreadsView: View {
     }
     private func post() async {
         let v = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !v.isEmpty else { return }
+        guard !v.isEmpty || !photos.isEmpty else { return }
         posting = true
         defer { posting = false }
         do {
-            try await APIClient.shared.createPost(text: v)
+            try await APIClient.shared.createPost(text: v, images: photos, imageMeta: photoSizes)
             draft = ""
+            photos = []
+            photoSizes = []
             await load()
         } catch {
             self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't post.")

@@ -96,7 +96,6 @@ struct MoreView: View {
                         }
                         MoreSection(T("Knowledge")) {
                             LazyVGrid(columns: cols, spacing: 12) {
-                                MoreTile(T("Knowledge Library"), "book.fill", NX.violetText) { DocsView() }
                                 MoreTile(T("Forms"), "doc.text.fill", NX.blue) { FormsView() }
                             }
                         }
