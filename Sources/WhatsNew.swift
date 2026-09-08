@@ -73,15 +73,13 @@ enum WhatsNew {
             icon: "ellipsis.circle",
             title: T("Delete a post in Threads"),
             body: T("BoD only. In Threads, the dots at the top right of a post remove it — your own, or anyone's. It disappears from the feed for everyone."),
-            bodOnly: true,
-            demo: AnyView(DemoDots())
+            bodOnly: true
         ),
         WhatsNewEntry(
             icon: "arrow.triangle.swap",
             title: T("Move a ticket from the app"),
             body: T("Tap the status chip at the top of a ticket to move it between Open, In review, Resolved and Closed."),
-            bodOnly: true,
-            demo: AnyView(DemoStatusChip())
+            bodOnly: true
         ),
         WhatsNewEntry(
             icon: "arrow.uturn.backward.circle",
@@ -94,8 +92,7 @@ enum WhatsNew {
             icon: "megaphone",
             title: T("Announcements can repeat"),
             body: T("Post one and have it come back every day until a date you set, at an hour you set — pop-up and push both."),
-            bodOnly: true,
-            demo: AnyView(DemoRepeat())
+            bodOnly: true
         ),
 
         // ── also new: worth knowing, not worth a picture ────────────────────────────────────
@@ -195,37 +192,6 @@ private struct DemoComposer: View {
     }
 }
 
-private struct DemoDots: View {
-    var body: some View {
-        HStack(spacing: 10) {
-            Circle().fill(NX.muted).frame(width: 26, height: 26)
-            VStack(alignment: .leading, spacing: 2) {
-                RoundedRectangle(cornerRadius: 3).fill(NX.muted).frame(width: 70, height: 8)
-                RoundedRectangle(cornerRadius: 3).fill(NX.muted.opacity(0.6)).frame(width: 40, height: 6)
-            }
-            Spacer()
-            Image(systemName: "ellipsis")
-                .font(.system(size: 15, weight: .semibold)).foregroundStyle(NX.violetText)
-                .frame(width: 34, height: 34)
-                .background(NX.violet.opacity(0.12), in: Circle())
-        }
-    }
-}
-
-private struct DemoStatusChip: View {
-    var body: some View {
-        HStack(spacing: 8) {
-            Text(T("Report body")).font(NXFont.text(13, .bold)).foregroundStyle(NX.mutedFg)
-            Spacer(minLength: 4)
-            HStack(spacing: 4) {
-                NexusChip(text: T("In review"), tone: .accent)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .bold)).foregroundStyle(NX.mutedFg)
-            }
-        }
-    }
-}
-
 private struct DemoPenaltyCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -238,20 +204,6 @@ private struct DemoPenaltyCard: View {
                 Text(T("Day off taken")).font(NXFont.text(10, .bold)).foregroundStyle(NX.mutedFg)
                 Spacer()
                 Text("-1").font(NXFont.text(15, .bold)).foregroundStyle(NX.danger).monospacedDigit()
-            }
-        }
-    }
-}
-
-private struct DemoRepeat: View {
-    var body: some View {
-        HStack(spacing: 8) {
-            ForEach([T("Once"), "+3 " + T("days"), "+7 " + T("days")], id: \.self) { label in
-                Text(label).font(NXFont.text(12, .semibold))
-                    .padding(.horizontal, 11).padding(.vertical, 6)
-                    .foregroundStyle(label.hasPrefix("+3") ? Color.white : NX.mutedFg)
-                    .background(label.hasPrefix("+3") ? NX.violet : NX.card, in: Capsule())
-                    .overlay(Capsule().strokeBorder(label.hasPrefix("+3") ? .clear : NX.border))
             }
         }
     }
