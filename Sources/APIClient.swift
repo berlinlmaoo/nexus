@@ -1109,7 +1109,6 @@ struct APIClient {
     func announcements() async throws -> [AdminAnnouncement] {
         (try await run(makeRequest("/api/announcements"), decode: AnnouncementsResponse.self)).announcements ?? []
     }
-    @discardableResult
     /// `repeatDays` counts the days AFTER today the notice should come back, at `repeatAtTime`
     /// ("HH:mm", Asia/Jakarta). 0 is the old behaviour exactly — posted once, never repeated — and
     /// the keys are omitted entirely in that case rather than sent as zero, so a server that has not
