@@ -21,13 +21,15 @@ struct NexusApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                // BEFORE .environment(auth), and the order is load-bearing: a ViewModifier's body
+                // runs in its PARENT's environment, not in the environment of the content it wraps.
+                // Put after, WhatsNewGate looks for AuthStore where nothing has put one — and a
+                // non-optional @Environment does not return nil there, it traps. The app opened on
+                // a black screen.
+                .whatsNew()
                 .environment(auth)
                 .environment(router)
                 .tint(NX.violetText)
-                // Placed after .environment(auth) on purpose: the modifier reads the session to
-                // decide whether to show anything, and a modifier cannot see an environment value
-                // injected below it.
-                .whatsNew()
                 // Siri, Shortcuts, the Live Activity and the widgets all arrive here as a URL
                 // — and so does a tapped Universal Link on `/f/…`. Under the SwiftUI App lifecycle
                 // this is the ONLY handler iOS calls for a browsing activity; the

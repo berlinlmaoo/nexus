@@ -767,6 +767,14 @@ final class AppLanguage {
             "Baru juga",
         "Fixed":
             "Diperbaiki",
+        "Files upload faster on the office WiFi":
+            "Upload file lebih cepat pakai WiFi kantor",
+        "Photos and files go straight to the server instead of out to the internet and back, so they finish sooner. Nothing to switch on — the app checks whether you are on the office WiFi and picks the faster route itself.":
+            "Foto dan file langsung ke server, nggak muter dulu ke internet, jadi lebih cepat kelar. Nggak ada yang perlu dinyalain — app-nya ngecek sendiri lagi di WiFi kantor atau nggak, terus milih jalur yang lebih cepat.",
+        "Delete a post in Threads":
+            "Hapus postingan di Threads",
+        "BoD only. In Threads, the dots at the top right of a post remove it — your own, or anyone's. It disappears from the feed for everyone.":
+            "Khusus BoD. Di Threads, titik tiga di pojok kanan atas postingan buat menghapusnya — punya sendiri maupun punya orang. Postingannya hilang dari feed buat semua orang.",
         "Couldn't post that.":
             "Nggak bisa ngirim postingannya.",
         "Couldn't post.": "Gagal mengirim.",

@@ -59,8 +59,8 @@ enum WhatsNew {
         ),
         WhatsNewEntry(
             icon: "bolt.horizontal",
-            title: T("Uploads take the office network"),
-            body: T("On the office WiFi, photos and files go straight to the server instead of out to the internet and back. Nothing to switch on — the app checks and picks the faster route itself."),
+            title: T("Files upload faster on the office WiFi"),
+            body: T("Photos and files go straight to the server instead of out to the internet and back, so they finish sooner. Nothing to switch on — the app checks whether you are on the office WiFi and picks the faster route itself."),
             demo: AnyView(DemoLan())
         ),
         WhatsNewEntry(
@@ -71,8 +71,8 @@ enum WhatsNew {
         ),
         WhatsNewEntry(
             icon: "ellipsis.circle",
-            title: T("Take a post down"),
-            body: T("BoD only. The dots sit at the top right of a post — your own, or anyone's."),
+            title: T("Delete a post in Threads"),
+            body: T("BoD only. In Threads, the dots at the top right of a post remove it — your own, or anyone's. It disappears from the feed for everyone."),
             bodOnly: true,
             demo: AnyView(DemoDots())
         ),
@@ -440,7 +440,11 @@ struct WhatsNewGate: ViewModifier {
     @State private var viewer = Viewer.shared
     /// Gated on being signed in for two reasons: a release-notes sheet over the login screen is
     /// nonsense, and the role lookup below is an API call that would only 401 there.
-    @Environment(AuthStore.self) private var auth
+    ///
+    /// OPTIONAL on purpose. The non-optional form traps when nothing upstream provided the value,
+    /// which is a whole app that will not open — over release notes. Read this way, a modifier that
+    /// ends up in the wrong place simply shows nothing.
+    @Environment(AuthStore.self) private var auth: AuthStore?
 
     private var current: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
@@ -448,8 +452,8 @@ struct WhatsNewGate: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .task(id: auth.session?.userId) {
-                guard auth.session?.userId != nil else { return }
+            .task(id: auth?.session?.userId) {
+                guard auth?.session?.userId != nil else { return }
                 guard !current.isEmpty else { return }
                 let firstEver = firstRun.isEmpty
                 if firstEver { firstRun = current }
