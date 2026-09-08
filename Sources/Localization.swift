@@ -665,6 +665,12 @@ final class AppLanguage {
             "Jam (WIB)",
         "Goes out now, then again each day at that hour — pop-up and push. It reappears for everyone, including people who already dismissed it.":
             "Dikirim sekarang, terus diulang tiap hari di jam itu — popup dan push. Muncul lagi buat semua orang, termasuk yang udah nutup sebelumnya.",
+        "Delete this post?":
+            "Hapus postingan ini?",
+        "It disappears from the feed for everyone.":
+            "Postingannya hilang dari feed buat semua orang.",
+        "Couldn't delete that post.":
+            "Nggak bisa hapus postingannya.",
         "Couldn't post that.":
             "Nggak bisa ngirim postingannya.",
         "Couldn't post.": "Gagal mengirim.",

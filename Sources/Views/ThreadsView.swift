@@ -29,6 +29,10 @@ struct FeedPost: Decodable, Identifiable, Hashable, Sendable {
     let likeCount: Int?
     let commentCount: Int?
     let likedByMe: Bool?
+    /// The server's answer to "may THIS viewer remove this post" — their own, or anyone's if they
+    /// are BoD. Read rather than re-derived: the app does not know the viewer's role here, and
+    /// guessing it is how a button appears that the route then refuses.
+    let canDelete: Bool?
 
     struct Author: Decodable, Hashable, Sendable { let id: String?; let name: String?; let avatar: String? }
 
@@ -84,6 +88,9 @@ struct ThreadsView: View {
     private static let maxPhotos = 4
     @State private var liked: Set<String> = []      // optimistic, so a tap reacts instantly
     @State private var openPost: FeedPost?
+    /// Held rather than deleted on the spot: removing somebody's post in front of everyone is not a
+    /// thing to do on one accidental tap.
+    @State private var confirmingDelete: FeedPost?
     @State private var viewingPhoto: PhotoRef?
 
     var body: some View {
@@ -96,6 +103,17 @@ struct ThreadsView: View {
         .task { await load() }
         .navigationDestination(item: $openPost) { p in PostThreadView(post: p) }
         .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
+        .confirmationDialog(T("Delete this post?"), isPresented: Binding(
+            get: { confirmingDelete != nil },
+            set: { if !$0 { confirmingDelete = nil } }
+        ), titleVisibility: .visible) {
+            Button(T("Delete"), role: .destructive) {
+                if let p = confirmingDelete { Task { await remove(p) } }
+            }
+            Button(T("Cancel"), role: .cancel) { confirmingDelete = nil }
+        } message: {
+            Text(T("It disappears from the feed for everyone."))
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -234,6 +252,14 @@ struct ThreadsView: View {
                     }
                 }
                 Spacer(minLength: 0)
+                if p.canDelete == true {
+                    Button { confirmingDelete = p } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(NX.mutedFg)
+                            .frame(width: 28, height: 28)
+                    }.buttonStyle(.plain)
+                }
             }
             if let c = p.text, !c.isEmpty {
                 mentionText(c).font(NXFont.text(14)).foregroundStyle(NX.foreground)
@@ -293,6 +319,19 @@ struct ThreadsView: View {
             self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't post.")
         }
     }
+    private func remove(_ p: FeedPost) async {
+        confirmingDelete = nil
+        // Removed from the list first so the tap answers immediately, then reloaded from the server
+        // — which is also what puts it back if the delete was refused.
+        posts.removeAll { $0.id == p.id }
+        do {
+            try await APIClient.shared.deletePost(p.id)
+        } catch {
+            self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't delete that post.")
+        }
+        await load()
+    }
+
     private func like(_ p: FeedPost) async {
         Haptics.tap()
         if liked.contains(p.id) { liked.remove(p.id) } else { liked.insert(p.id) }

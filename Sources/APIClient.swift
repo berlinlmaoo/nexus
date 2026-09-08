@@ -853,6 +853,17 @@ struct APIClient {
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }
+    /// Delete a post. Your own, or anyone's if you are BoD — the server decides, and the payload's
+    /// `canDelete` says which so the app never draws a button the route would refuse.
+    ///
+    /// A soft delete server-side (deletedAt), so this is recoverable in the database even though the
+    /// feed stops showing it. Worth knowing before anyone is told a post is gone for good.
+    @discardableResult
+    func deletePost(_ postId: String) async throws -> Bool {
+        _ = try await run(makeRequest("/api/feed/posts/\(postId)", method: "DELETE"), decode: SuccessResponse.self)
+        return true
+    }
+
     /// Toggle-like. Body-less POST, so nothing to guess about the payload.
     @discardableResult
     func likePost(_ postId: String) async throws -> Bool {
