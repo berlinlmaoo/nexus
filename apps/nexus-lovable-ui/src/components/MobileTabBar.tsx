@@ -6,6 +6,7 @@ import {
   LayoutDashboard, Inbox, CheckSquare, FolderKanban, Menu, X,
   MessageCircle, Calendar, CalendarClock, Users, Trophy,
   ClipboardCheck, Settings, Shield, LogOut, Loader2, FileText, AtSign, ShieldAlert, Ticket, Sun, Moon,
+ HardDrive,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { nexusApi, activeNotifications } from "@/lib/nexus-api";
@@ -29,6 +30,7 @@ const moreGroups = [
       { title: "Messages", url: "/messages", icon: MessageCircle },
       { title: "Notification", url: "/inbox", icon: Inbox },
       { title: "Threads", url: "/threads", icon: AtSign },
+      { title: "Z Vault", url: "/vault", icon: HardDrive },
       { title: "My Mission", url: "/my-tasks", icon: CheckSquare },
       { title: "Pengajuan Saya", url: "/submissions", icon: FileText },
       { title: "Team Calendar", url: "/master-calendar", icon: Calendar },

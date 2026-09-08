@@ -7,6 +7,10 @@
           {
             "/": "/f/*",
             "comment": "Shared form links only. Everything else on this domain stays in the browser: the SPA is the whole product and the app is a subset of it, so claiming / would send every link to a page the app cannot draw."
+          },
+          {
+            "/": "/v/*",
+            "comment": "Internal Z Vault links. EXTERNAL vault links deliberately use /s/* instead and are NOT claimed here: Apple matches on the path alone, so claiming both would open the NEXUS app on the phone of a client who has no account and can only be shown a sign-in screen. The prefix is chosen when the link is made, from the same requireAuth flag the server enforces."
           }
         ]
       }
