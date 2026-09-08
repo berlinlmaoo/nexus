@@ -153,6 +153,29 @@ struct AttendanceCorrection: Decodable, Identifiable, Sendable {
     /// business seeing one.
     let canApprove: Bool?
 
+    /// WHAT this proposal asks for. "TIME_CORRECTION" rewrites the day's recorded clock;
+    /// "PENALTY_CANCELLATION" leaves every timestamp alone and reverses the day's penalty instead —
+    /// for a day whose clock is simply right and whose punishment is still unearned (a permit covers
+    /// it, or NEXUS was down and there was nothing to check in to).
+    ///
+    /// Absent on rows written before the kind existed, and they were all time corrections, so the
+    /// fallback below is the honest reading rather than a guess.
+    let kind: String?
+    /// What the day actually cost, read off the ledger when the proposal was written (negative, or
+    /// 0). The cancellation card leads with this because it is the only number that moves.
+    let beforePenaltyXp: Int?
+    /// A day with no check-in also eats one day-off token, and approving gives that back too. Shown
+    /// because a card that names only the XP under-reports what the approver is about to do.
+    let beforeAutoDayOffs: Int?
+    /// Filled in once decided: what actually came back. Kept server-side because the refund DELETES
+    /// the ledger rows, so afterwards nothing else can answer "what did approving this do".
+    let refundedXp: Int?
+    let restoredDayOffs: Int?
+    /// Whether the pardon was made permanent. Without it the nightly cron re-derives the day and
+    /// re-cuts the same XP, so this is the difference between a refund that sticks and one that
+    /// quietly disappears overnight.
+    let waiverGranted: Bool?
+
     struct Person: Decodable, Sendable { let id: String?; let name: String?; let avatar: String? }
     /// The attendance record as it stood the moment the proposal was written.
     struct Snapshot: Decodable, Sendable {
@@ -164,6 +187,11 @@ struct AttendanceCorrection: Decodable, Identifiable, Sendable {
 
     var statusKey: String { (status ?? "PENDING").uppercased() }
     var isPending: Bool { statusKey == "PENDING" }
+    /// Anything not explicitly the cancellation is the times-diff card it has always been — the same
+    /// fallback the web card uses, so the two screens cannot disagree about an old row.
+    var isCancellation: Bool { (kind ?? "TIME_CORRECTION").uppercased() == "PENALTY_CANCELLATION" }
+    var penaltyXp: Int { beforePenaltyXp ?? 0 }
+    var autoDayOffs: Int { beforeAutoDayOffs ?? 0 }
     /// Every field of the snapshot empty means that day had NO attendance record at all. There is
     /// nothing to compare against, so the card says so instead of drawing a before/after against
     /// four blanks — which reads as "the times were wiped".
@@ -412,6 +440,10 @@ struct TicketDetailSheet: View {
     @State private var draft = ""
     @State private var sending = false
     @State private var sendError: String?
+    @State private var movingStatus = false
+    /// Kept beside the chip rather than in the reply area: a refusal about the STATUS shown next to
+    /// the send button reads as the reply having failed.
+    @State private var statusError: String?
     /// Bumped after a reply lands, to make the correction card refetch. A reply from anyone but a
     /// BoD wakes GIDEON on an attendance ticket, and what comes back can be a proposal rather than
     /// only a message.
@@ -439,6 +471,69 @@ struct TicketDetailSheet: View {
         return statusKey != "CLOSED" && (ticket.isMine == true || detail?.canManage == true)
     }
 
+    /// The status chip, and for a BoD also the way to move it. Put ON the chip rather than in a
+    /// separate button row because the chip is already the thing everyone looks at to answer "where
+    /// is this ticket" — the control belongs on the answer, not somewhere else on the screen.
+    ///
+    /// Anyone without `canManage` gets the plain chip, unchanged. The server enforces this too; the
+    /// gate here is about not offering a control that would only ever be refused.
+    @ViewBuilder private var statusControl: some View {
+        if detail?.canManage == true {
+            Menu {
+                ForEach(Self.settableStatuses, id: \.self) { key in
+                    Button {
+                        Task { await move(to: key) }
+                    } label: {
+                        // The current one stays in the list with a tick rather than being hidden:
+                        // a menu whose contents shift depending on where you are is harder to learn
+                        // than one that always shows the same four and says which you are on.
+                        if key == statusKey {
+                            Label(ticketStatusLabel(key), systemImage: "checkmark")
+                        } else {
+                            Text(ticketStatusLabel(key))
+                        }
+                    }
+                    .disabled(key == statusKey)
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    NexusChip(text: ticketStatusLabel(statusKey), tone: ticketStatusTone(statusKey))
+                    if movingStatus {
+                        ProgressView().scaleEffect(0.6)
+                    } else {
+                        Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(NX.mutedFg)
+                    }
+                }
+            }
+            .disabled(movingStatus)
+        } else {
+            NexusChip(text: ticketStatusLabel(statusKey), tone: ticketStatusTone(statusKey))
+        }
+    }
+
+    /// AWAITING_DECISION is missing on purpose and the server refuses it too (422): it is written
+    /// when GIDEON answers or a proposal lands, and a director setting it by hand would be saying
+    /// "somebody else decide this" about a ticket they are already holding.
+    private static let settableStatuses = ["OPEN", "IN_REVIEW", "RESOLVED", "CLOSED"]
+
+    private func move(to status: String) async {
+        guard status != statusKey, !movingStatus else { return }
+        movingStatus = true
+        statusError = nil
+        defer { movingStatus = false }
+        do {
+            // Redrawn from what the server returned, never from the value we asked for: RESOLVED and
+            // CLOSED also stamp resolvedAt/resolvedBy, and the reporter is notified, none of which
+            // this side can invent.
+            detail = try await APIClient.shared.updateComplaintStatus(ticket.id, status: status)
+            // The row behind this sheet still shows the old chip until the list refetches.
+            await onChanged()
+        } catch {
+            statusError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't move the ticket.")
+        }
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -447,7 +542,11 @@ struct TicketDetailSheet: View {
                         HStack(alignment: .top, spacing: 8) {
                             Text(ticket.title).font(NXFont.display(20, .bold)).foregroundStyle(NX.foreground)
                             Spacer(minLength: 4)
-                            NexusChip(text: ticketStatusLabel(statusKey), tone: ticketStatusTone(statusKey))
+                            statusControl
+                        }
+                        if let statusError {
+                            Text(statusError).font(NXFont.text(11, .semibold)).foregroundStyle(NX.danger)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         HStack(spacing: 8) {
                             if let c = ticket.category, !c.isEmpty {
@@ -850,7 +949,28 @@ struct AttendanceCorrectionCard: View {
 
     @ViewBuilder private func comparison(_ c: AttendanceCorrection) -> some View {
         VStack(alignment: .leading, spacing: 5) {
-            if c.hadNoRecord {
+            if c.isCancellation {
+                // No times move here, so the card leads with the number that does. The recorded
+                // clock is shown underneath precisely BECAUSE it is staying: an approver needs to
+                // see that approving this leaves the attendance history exactly as it stands.
+                penaltyRow(T("XP cut that day"), value: c.penaltyXp == 0 ? "—" : "\(c.penaltyXp)")
+                if c.autoDayOffs > 0 {
+                    penaltyRow(T("Day off taken"), value: "-\(c.autoDayOffs)")
+                }
+                Text(c.autoDayOffs > 0
+                     ? T("Proposal: cancel that penalty — the XP and the day off both come back. The recorded times are not touched.")
+                     : T("Proposal: cancel that penalty. The recorded times are not touched."))
+                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    .fixedSize(horizontal: false, vertical: true)
+                if c.hadNoRecord {
+                    Text(T("That day has no attendance record, and it still will not have one."))
+                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    compareRow(T("Check-in"), before: c.before?.checkInAt, proposed: nil)
+                    compareRow(T("Check-out"), before: c.before?.checkOutAt, proposed: nil)
+                }
+            } else if c.hadNoRecord {
                 Text(T("No attendance was recorded that day — this would create it."))
                     .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                     .fixedSize(horizontal: false, vertical: true)
@@ -881,6 +1001,16 @@ struct AttendanceCorrectionCard: View {
         }
     }
 
+    /// One figure the day cost, drawn in the danger tone because every value here is a deduction.
+    private func penaltyRow(_ label: String, value: String) -> some View {
+        HStack(spacing: 8) {
+            Text(label).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            Spacer(minLength: 4)
+            Text(value).font(NXFont.text(17, .bold)).foregroundStyle(NX.danger)
+                .monospacedDigit()
+        }
+    }
+
     private func proposedRow(_ label: String, _ proposed: String?) -> some View {
         HStack(spacing: 8) {
             Text(label).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).frame(width: 68, alignment: .leading)
@@ -895,6 +1025,22 @@ struct AttendanceCorrectionCard: View {
             HStack(spacing: 6) {
                 Image(systemName: "checkmark.seal").font(.system(size: 10)).foregroundStyle(NX.mutedFg)
                 Text(decidedLine(c)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(2)
+            }
+            // What approving ACTUALLY handed back. The refund deletes the ledger rows, so if this
+            // is not shown here there is nowhere left to read it.
+            if c.isCancellation, c.statusKey == "APPROVED" {
+                let back = [(c.refundedXp ?? 0) > 0 ? "+\(c.refundedXp ?? 0) XP" : nil,
+                            (c.restoredDayOffs ?? 0) > 0 ? "\((c.restoredDayOffs ?? 0)) \(T("day off"))" : nil]
+                    .compactMap { $0 }
+                if !back.isEmpty {
+                    Text("\(T("Given back")): \(back.joined(separator: " + "))")
+                        .font(NXFont.text(11, .semibold)).foregroundStyle(NX.success)
+                }
+                if c.waiverGranted == true {
+                    Text(T("That day is now marked penalty-free, so it cannot be cut again."))
+                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             if let note = c.decisionNote, !note.isEmpty {
                 Text(note).font(NXFont.text(12)).foregroundStyle(NX.foreground.opacity(0.85))
@@ -927,7 +1073,11 @@ struct AttendanceCorrectionCard: View {
                     actionBtn(T("Reject"), .danger) { await decide(c, approve: false) }
                 }
             }
-            Text(T("Approving rewrites that day's attendance record straight away."))
+            // The old single sentence was actively wrong for a cancellation: it promised a rewrite
+            // of the attendance record, which is the one thing this remedy never does.
+            Text(c.isCancellation
+                 ? T("Approving gives back what that day cost and writes NOTHING to the attendance record. If no leave covers the day, it is also marked penalty-free so the nightly job cannot cut it again.")
+                 : T("Approving rewrites that day's attendance record straight away."))
                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 .fixedSize(horizontal: false, vertical: true)
         }

@@ -909,6 +909,41 @@ struct APIClient {
         catch { throw APIError.decoding }
     }
 
+    /// Move the ticket's STATUS. BoD only; the server answers everyone else with a 403, and the
+    /// sheet draws the control only when `canManage` says so. Those are two separate answers on
+    /// purpose — the app never treats its own guess as the permission.
+    ///
+    /// AWAITING_DECISION is deliberately not offered. The server writes it when GIDEON answers or a
+    /// proposal lands, and refuses it here with a 422: a director setting it by hand would be saying
+    /// "somebody else decide this" about a ticket they are already holding.
+    ///
+    /// Answers with the whole detail, status included, so the caller redraws from what the server
+    /// actually did rather than from the move it asked for. RESOLVED and CLOSED also stamp
+    /// resolvedAt/resolvedBy server-side, which no client could invent correctly.
+    func updateComplaintStatus(_ complaintId: String, status: String) async throws -> ComplaintDetail {
+        var req = makeRequest("/api/complaints/\(complaintId)", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["status": status])
+
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await perform(req)
+        } catch {
+            throw APIError.transport(error.localizedDescription)
+        }
+        guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        guard (200..<300).contains(http.statusCode) else {
+            // Not flattened into "Server error (422)": the refusals on this route are sentences the
+            // server already wrote for whoever is reading them ("Status ini diatur otomatis, gak
+            // bisa disetel manual."), and those say more than a status code can.
+            let payload = try? JSONDecoder().decode(ServerError.self, from: data)
+            throw APIError.transport(payload?.error ?? T("Couldn't move the ticket."))
+        }
+        do { return try JSONDecoder().decode(ComplaintDetail.self, from: data) }
+        catch { throw APIError.decoding }
+    }
+
     // MARK: - Attendance correction (attached to a ticket)
 
     /// The ticket payload already carries `corrections`, but only this route answers the other half

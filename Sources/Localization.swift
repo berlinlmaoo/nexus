@@ -800,6 +800,26 @@ final class AppLanguage {
             "Nunggu keputusan BoD. Absennya belum berubah.",
         "Approving rewrites that day's attendance record straight away.":
             "Begitu disetujui, absen hari itu langsung ditulis ulang.",
+        "XP cut that day":
+            "XP kepotong hari itu",
+        "Day off taken":
+            "Jatah day off kepotong",
+        "Proposal: cancel that penalty — the XP and the day off both come back. The recorded times are not touched.":
+            "Usulannya: batalkan potongan itu — XP dan jatah day off-nya sama-sama balik. Jam yang tercatat nggak disentuh.",
+        "Proposal: cancel that penalty. The recorded times are not touched.":
+            "Usulannya: batalkan potongan itu. Jam yang tercatat nggak disentuh.",
+        "That day has no attendance record, and it still will not have one.":
+            "Hari itu memang nggak punya catatan absen, dan tetap nggak akan punya.",
+        "Approving gives back what that day cost and writes NOTHING to the attendance record. If no leave covers the day, it is also marked penalty-free so the nightly job cannot cut it again.":
+            "Begitu disetujui, yang kepotong hari itu dibalikin dan NGGAK ada apa pun yang ditulis ke catatan absennya. Kalau nggak ada izin yang nutupin hari itu, hari itu sekalian ditandai bebas potongan supaya cron malam nggak motong lagi.",
+        "Given back":
+            "Yang balik",
+        "day off":
+            "jatah day off",
+        "That day is now marked penalty-free, so it cannot be cut again.":
+            "Hari itu sekarang ditandai bebas potongan, jadi nggak bisa kepotong lagi.",
+        "Couldn't move the ticket.":
+            "Nggak bisa mindahin status tiketnya.",
         "Note for the decision (optional)": "Catatan keputusan (opsional)",
         "Decided by": "Diputus oleh",
         "Couldn't send the attendance correction.": "Gagal ngirim koreksi absen.",
