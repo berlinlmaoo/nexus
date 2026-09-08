@@ -15,9 +15,12 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as VSlugRouteImport } from './routes/v.$slug'
+import { Route as SSlugRouteImport } from './routes/s.$slug'
 import { Route as RoomDisplayRoomRouteImport } from './routes/room-display.$room'
 import { Route as OauthAuthorizeRouteImport } from './routes/oauth.authorize'
 import { Route as FFormIdRouteImport } from './routes/f.$formId'
+import { Route as AppVaultRouteImport } from './routes/_app/vault'
 import { Route as AppThreadsRouteImport } from './routes/_app/threads'
 import { Route as AppTeamsRouteImport } from './routes/_app/teams'
 import { Route as AppSubmissionsRouteImport } from './routes/_app/submissions'
@@ -72,6 +75,16 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const VSlugRoute = VSlugRouteImport.update({
+  id: '/v/$slug',
+  path: '/v/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SSlugRoute = SSlugRouteImport.update({
+  id: '/s/$slug',
+  path: '/s/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RoomDisplayRoomRoute = RoomDisplayRoomRouteImport.update({
   id: '/room-display/$room',
   path: '/room-display/$room',
@@ -86,6 +99,11 @@ const FFormIdRoute = FFormIdRouteImport.update({
   id: '/f/$formId',
   path: '/f/$formId',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AppVaultRoute = AppVaultRouteImport.update({
+  id: '/vault',
+  path: '/vault',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppThreadsRoute = AppThreadsRouteImport.update({
   id: '/threads',
@@ -233,9 +251,12 @@ export interface FileRoutesByFullPath {
   '/submissions': typeof AppSubmissionsRoute
   '/teams': typeof AppTeamsRoute
   '/threads': typeof AppThreadsRoute
+  '/vault': typeof AppVaultRoute
   '/f/$formId': typeof FFormIdRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/room-display/$room': typeof RoomDisplayRoomRoute
+  '/s/$slug': typeof SSlugRoute
+  '/v/$slug': typeof VSlugRoute
   '/docs/$docId': typeof AppDocsDocIdRoute
   '/folders/$folderId': typeof AppFoldersFolderIdRoute
   '/projects/$projectId': typeof AppProjectsProjectIdRoute
@@ -266,9 +287,12 @@ export interface FileRoutesByTo {
   '/submissions': typeof AppSubmissionsRoute
   '/teams': typeof AppTeamsRoute
   '/threads': typeof AppThreadsRoute
+  '/vault': typeof AppVaultRoute
   '/f/$formId': typeof FFormIdRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/room-display/$room': typeof RoomDisplayRoomRoute
+  '/s/$slug': typeof SSlugRoute
+  '/v/$slug': typeof VSlugRoute
   '/': typeof AppIndexRoute
   '/docs/$docId': typeof AppDocsDocIdRoute
   '/folders/$folderId': typeof AppFoldersFolderIdRoute
@@ -302,9 +326,12 @@ export interface FileRoutesById {
   '/_app/submissions': typeof AppSubmissionsRoute
   '/_app/teams': typeof AppTeamsRoute
   '/_app/threads': typeof AppThreadsRoute
+  '/_app/vault': typeof AppVaultRoute
   '/f/$formId': typeof FFormIdRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/room-display/$room': typeof RoomDisplayRoomRoute
+  '/s/$slug': typeof SSlugRoute
+  '/v/$slug': typeof VSlugRoute
   '/_app/': typeof AppIndexRoute
   '/_app/docs/$docId': typeof AppDocsDocIdRoute
   '/_app/folders/$folderId': typeof AppFoldersFolderIdRoute
@@ -339,9 +366,12 @@ export interface FileRouteTypes {
     | '/submissions'
     | '/teams'
     | '/threads'
+    | '/vault'
     | '/f/$formId'
     | '/oauth/authorize'
     | '/room-display/$room'
+    | '/s/$slug'
+    | '/v/$slug'
     | '/docs/$docId'
     | '/folders/$folderId'
     | '/projects/$projectId'
@@ -372,9 +402,12 @@ export interface FileRouteTypes {
     | '/submissions'
     | '/teams'
     | '/threads'
+    | '/vault'
     | '/f/$formId'
     | '/oauth/authorize'
     | '/room-display/$room'
+    | '/s/$slug'
+    | '/v/$slug'
     | '/'
     | '/docs/$docId'
     | '/folders/$folderId'
@@ -407,9 +440,12 @@ export interface FileRouteTypes {
     | '/_app/submissions'
     | '/_app/teams'
     | '/_app/threads'
+    | '/_app/vault'
     | '/f/$formId'
     | '/oauth/authorize'
     | '/room-display/$room'
+    | '/s/$slug'
+    | '/v/$slug'
     | '/_app/'
     | '/_app/docs/$docId'
     | '/_app/folders/$folderId'
@@ -427,6 +463,8 @@ export interface RootRouteChildren {
   FFormIdRoute: typeof FFormIdRoute
   OauthAuthorizeRoute: typeof OauthAuthorizeRoute
   RoomDisplayRoomRoute: typeof RoomDisplayRoomRoute
+  SSlugRoute: typeof SSlugRoute
+  VSlugRoute: typeof VSlugRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -473,6 +511,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/v/$slug': {
+      id: '/v/$slug'
+      path: '/v/$slug'
+      fullPath: '/v/$slug'
+      preLoaderRoute: typeof VSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/s/$slug': {
+      id: '/s/$slug'
+      path: '/s/$slug'
+      fullPath: '/s/$slug'
+      preLoaderRoute: typeof SSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/room-display/$room': {
       id: '/room-display/$room'
       path: '/room-display/$room'
@@ -493,6 +545,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/f/$formId'
       preLoaderRoute: typeof FFormIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_app/vault': {
+      id: '/_app/vault'
+      path: '/vault'
+      fullPath: '/vault'
+      preLoaderRoute: typeof AppVaultRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/threads': {
       id: '/_app/threads'
@@ -696,6 +755,7 @@ interface AppRouteChildren {
   AppSubmissionsRoute: typeof AppSubmissionsRoute
   AppTeamsRoute: typeof AppTeamsRoute
   AppThreadsRoute: typeof AppThreadsRoute
+  AppVaultRoute: typeof AppVaultRoute
   AppIndexRoute: typeof AppIndexRoute
   AppFoldersFolderIdRoute: typeof AppFoldersFolderIdRoute
   AppProjectsProjectIdRoute: typeof AppProjectsProjectIdRoute
@@ -723,6 +783,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppSubmissionsRoute: AppSubmissionsRoute,
   AppTeamsRoute: AppTeamsRoute,
   AppThreadsRoute: AppThreadsRoute,
+  AppVaultRoute: AppVaultRoute,
   AppIndexRoute: AppIndexRoute,
   AppFoldersFolderIdRoute: AppFoldersFolderIdRoute,
   AppProjectsProjectIdRoute: AppProjectsProjectIdRoute,
@@ -741,6 +802,8 @@ const rootRouteChildren: RootRouteChildren = {
   FFormIdRoute: FFormIdRoute,
   OauthAuthorizeRoute: OauthAuthorizeRoute,
   RoomDisplayRoomRoute: RoomDisplayRoomRoute,
+  SSlugRoute: SSlugRoute,
+  VSlugRoute: VSlugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

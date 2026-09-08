@@ -37,6 +37,9 @@ model User {
   goalsOwned       Goal[]
   docsAuthored     Doc[]
   docsOwned        Doc[]            @relation("DocOwner")
+  vaultUploaded    VaultItem[]      @relation("VaultUploader")
+  vaultOwned       VaultItem[]      @relation("VaultOwner")
+  vaultShares      VaultShare[]
   attachments      Attachment[]
   statusUpdates    StatusUpdate[]
   favorites        Favorite[]
@@ -197,6 +200,7 @@ model Workspace {
   members         WorkspaceMember[]
   projects        Project[]
   projectFolders  ProjectFolder[]
+  vaultItems      VaultItem[]
   goals           Goal[]
   teams           Team[]
   portfolios      Portfolio[]
@@ -2648,4 +2652,123 @@ model AttendanceOutage {
   updatedAt   DateTime @default(now()) @updatedAt
 
   @@index([dateKey])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Z VAULT — penyimpanan bersama satu kantor. Menggantikan tab Files di proyek DAN
+// Knowledge Library, keduanya dihapus di 0.1.3 dengan janji publik di catatan rilis.
+//
+// Folder dan berkas dalam SATU tabel, bukan dua. Sebuah pohon yang setengah isinya ada di
+// tabel lain berarti setiap kueri daftar jadi dua kueri dan setiap pemindahan jadi dua tulis.
+// ProjectFolder + Attachment digabung, dengan alasan tiap penyimpangan ditulis di bawah.
+// ─────────────────────────────────────────────────────────────────────────────
+model VaultItem {
+  id       String @id @default(cuid())
+  // "FOLDER" | "FILE" — gaya string yang sama dengan Attachment.kind, bukan enum: menambah
+  // jenis (misal "LINK") nanti tidak perlu migrasi di repo yang tidak punya prisma/migrations.
+  kind     String @default("FILE")
+  name     String
+  position Int    @default(0)
+  icon     String?
+  color    String?
+
+  // Muatan berkas; null pada folder.
+  //
+  // storageKey adalah path RELATIF di bawah uploads/attachments/vault/. Klien tidak pernah
+  // menyebutnya — ia menyebut id item, dan server yang menyelesaikan path-nya. Itu yang membuat
+  // traversal path mustahil secara struktural, bukan sekadar dijaga.
+  storageKey String?
+  mimeType   String?
+  size       Int?
+  // Dari PostImage: dimensi disimpan supaya pratinjau bisa memesan kotak rasio yang benar dan
+  // tata letak tidak melompat saat gambar selesai dimuat. Dikirim klien; server tidak punya sharp.
+  width      Int?
+  height     Int?
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  // Cascade, BUKAN SetNull seperti ProjectFolder. Folder di sana adalah tampilan atas proyek yang
+  // tetap ada, jadi melepas anak ke akar masuk akal. Folder vault ADALAH wadahnya — SetNull akan
+  // menumpahkan ratusan berkas ke akar drive bersama karena satu salah klik.
+  parentId String?
+  parent   VaultItem?  @relation("VaultTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children VaultItem[] @relation("VaultTree")
+
+  // Pemisahan author/owner dari Doc, yang memang bentuk yang benar untuk drive bersama:
+  // pengunggah tidak pernah berubah, pemilik bisa dipindah dan menjadi null kalau orangnya keluar.
+  uploaderId String
+  uploader   User    @relation("VaultUploader", fields: [uploaderId], references: [id])
+  ownerId    String?
+  owner      User?   @relation("VaultOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+
+  // Ambang peran, BUKAN ACL per objek. NEXUS tidak punya tabel Permission/Acl/grant di mana pun,
+  // dan membuatnya untuk 46 orang adalah cara 0.1.4 berubah jadi 0.1.6.
+  // null = warisi dari leluhur terdekat yang mengisinya. Berlin memutuskan semua staff boleh
+  // mengunggah, jadi defaultnya terbuka; kolomnya tetap ada supaya rak seperti "Brand" bisa
+  // dikunci belakangan tanpa migrasi.
+  minReadRole  String?
+  minWriteRole String?
+
+  // Sampah. 46 orang berbagi pohon ini; hapus permanen sekali klik tidak bisa dikembalikan.
+  // Pengosongan sampah HARUS benar-benar menghapus byte-nya — kuota yang menghitung baris
+  // sementara berkasnya masih di disk mengukur angka yang tidak berhubungan dengan disk.
+  deletedAt DateTime?
+
+  shares    VaultShare[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  // Sengaja TIDAK ada @@unique([workspaceId, name]) seperti ProjectFolder: milik ProjectFolder
+  // berlaku global, bukan per-induk, jadi menyalinnya akan melarang Brand/Logo dan Clients/Logo
+  // hidup bersama. Keunikan per-induk juga tidak bisa dinyatakan di Postgres karena baris dengan
+  // parentId NULL tidak pernah bertabrakan. Jadi: dicek di route, dan diberi akhiran "(2)".
+  @@index([workspaceId, parentId, position])
+  @@index([workspaceId, deletedAt])
+  @@index([parentId])
+}
+
+// Tautan berbagi, terpisah dari itemnya.
+//
+// Terpisah karena satu berkas bisa punya beberapa tautan dengan masa berlaku berbeda — satu
+// permanen untuk tim, satu 7 hari untuk klien — dan karena mencabut tautan tidak boleh menyentuh
+// berkasnya.
+//
+// Tautan menunjuk ke ITEM, bukan ke byte. Mengganti logo memperbarui berkas pada item yang sama,
+// jadi tautan yang sudah terkirim tidak putus — itu momen yang paling sering merusak berbagi aset.
+model VaultShare {
+  id String @id @default(cuid())
+  // KAPABILITAS, bukan nama. crypto.randomBytes(16).toString("base64url").
+  //
+  // JANGAN pernah memakai slugify() di sini. Slug formulir dipilih manusia dan boleh ditebak
+  // karena formulirnya memang publik; slug ini ADALAH kuncinya. Menyalin generator slug formulir
+  // ke sini adalah penghematan palsu paling berbahaya yang tersedia di fitur ini.
+  slug String @unique
+
+  itemId String
+  item   VaultItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  // true  = internal: tetap butuh sesi, tapi universal link membuka aplikasi langsung ke berkasnya.
+  // false = eksternal: bisa dibuka tanpa akun sama sekali.
+  // Ditegakkan di SERVER, bukan sekadar disimpan — satu boolean tanpa penegakan bukan izin.
+  requireAuth   Boolean @default(true)
+  allowDownload Boolean @default(true)
+
+  // null = permanen. Preset di UI: 3 hari, 7 hari, 2 minggu, 1 bulan, permanen.
+  expiresAt DateTime?
+  // Dicabut manual. Dipisah dari expiresAt supaya "sudah lewat waktu" dan "dimatikan orang"
+  // bisa dibedakan saat menjelaskan ke pemakai kenapa tautannya tidak jalan.
+  revokedAt DateTime?
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id])
+
+  // Setiap byte anonim yang keluar layak dihitung. Tanpa ini tidak ada cara menjawab
+  // "deck itu sudah dibuka klien belum".
+  viewCount    Int       @default(0)
+  lastViewedAt DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([itemId])
+  @@index([revokedAt, expiresAt])
 }

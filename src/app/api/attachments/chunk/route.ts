@@ -12,6 +12,19 @@ import { tmpdir } from "os"
 import path from "path"
 import { resolveMime } from "@/lib/mime"
 import { checkProjectAccess } from "@/lib/rbac"
+import {
+  getVaultActor,
+  canWriteItem,
+  cleanItemName,
+  uniqueNameInFolder,
+  newStorageKey,
+  ensureStorageDir,
+  assertQuota,
+  VAULT_ITEM_INCLUDE,
+  serializeVaultItem,
+  type VaultActor,
+  type VaultItemRow,
+} from "@/lib/vault"
 
 // Chunked attachment upload — lets files larger than Cloudflare's ~100MB request-body cap through by
 // splitting them client-side into sub-100MB chunks (each passes CF normally), then reassembling here.
@@ -163,6 +176,12 @@ export async function POST(request: NextRequest) {
     const mimeType = sp.get("mime") || "application/octet-stream"
     const taskId = sp.get("taskId") ?? ""
     const kind = sp.get("kind") === "PROOF" ? "PROOF" : "GENERAL"
+    // Z Vault reuses this entire transport — the chunking, the idempotent .done marker, the
+    // per-user session cap, the atomic publish — and differs only in what it authorizes against
+    // and which row it writes at the end. A separate chunked route for the vault would be the
+    // largest duplication in this repo, and the copy that drifts is always the one nobody tests.
+    const target = sp.get("target") === "vault" ? "vault" : "task"
+    const vaultParentId = sp.get("parentId") || null
     const contentLength = Number(request.headers.get("content-length") ?? "NaN")
 
     // ---- validate the envelope (fail closed on anything malformed) ----
@@ -174,7 +193,8 @@ export async function POST(request: NextRequest) {
     if (!Number.isInteger(totalSize) || totalSize <= 0 || totalSize > MAX_SIZE)
       return NextResponse.json({ error: "File too large. Maximum size is 1GB" }, { status: 400 })
     if (!filename) return NextResponse.json({ error: "filename is required" }, { status: 400 })
-    if (!taskId) return NextResponse.json({ error: "taskId is required" }, { status: 400 })
+    if (target === "task" && !taskId)
+      return NextResponse.json({ error: "taskId is required" }, { status: 400 })
     if (!request.body) return NextResponse.json({ error: "No chunk body" }, { status: 400 })
     if (!Number.isInteger(contentLength) || contentLength <= 0 || contentLength > MAX_CHUNK)
       return NextResponse.json({ error: "Bad chunk size" }, { status: 400 })
@@ -191,12 +211,35 @@ export async function POST(request: NextRequest) {
       /* not finalized */
     }
 
-    // Task must exist AND the user must be a member of its project — re-checked on EVERY chunk so a
-    // "skip chunk 0" attacker can't bypass it (and can't upload into another workspace's task).
-    const task = await prisma.task.findUnique({ where: { id: taskId }, select: { taskList: { select: { projectId: true } } } })
-    if (!task?.taskList?.projectId) return NextResponse.json({ error: "Task not found" }, { status: 404 })
-    if (!(await checkProjectAccess(userId, task.taskList.projectId, ["MEMBER"])).allowed) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    // Authorization is re-checked on EVERY chunk, not just the first, so a client that skips chunk 0
+    // can't bypass it — for either target.
+    let vaultActor: VaultActor | null = null
+    if (target === "vault") {
+      vaultActor = await getVaultActor(userId)
+      if (!vaultActor.workspaceId) return NextResponse.json({ error: "No workspace" }, { status: 403 })
+      if (vaultParentId) {
+        const parent = await prisma.vaultItem.findFirst({
+          where: { id: vaultParentId, workspaceId: vaultActor.workspaceId, deletedAt: null },
+          select: { kind: true },
+        })
+        if (!parent) return NextResponse.json({ error: "Folder tidak ada" }, { status: 404 })
+        if (parent.kind !== "FOLDER") return NextResponse.json({ error: "Tujuan bukan folder" }, { status: 400 })
+      }
+      if (!(await canWriteItem(vaultActor, vaultParentId))) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      }
+      // Checked against the DECLARED total on every chunk, so a 900MB upload into a vault with 200MB
+      // left is refused at the first chunk instead of after twenty minutes of transfer.
+      const quotaError = await assertQuota(vaultActor.workspaceId, totalSize)
+      if (quotaError) return NextResponse.json({ error: quotaError }, { status: 507 })
+    } else {
+      // Task must exist AND the user must be a member of its project (and can't upload into another
+      // workspace's task).
+      const task = await prisma.task.findUnique({ where: { id: taskId }, select: { taskList: { select: { projectId: true } } } })
+      if (!task?.taskList?.projectId) return NextResponse.json({ error: "Task not found" }, { status: 404 })
+      if (!(await checkProjectAccess(userId, task.taskList.projectId, ["MEMBER"])).allowed) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      }
     }
 
     // Per-user concurrent-session cap, enforced when opening a NEW session.
@@ -281,6 +324,60 @@ export async function POST(request: NextRequest) {
       }
       if (assembled !== totalSize || assembled > MAX_SIZE)
         return NextResponse.json({ error: "Size mismatch" }, { status: 400 })
+
+      // ── vault finalize ──────────────────────────────────────────────────────
+      if (target === "vault" && vaultActor?.workspaceId) {
+        const name = await uniqueNameInFolder(
+          vaultActor.workspaceId,
+          vaultParentId,
+          cleanItemName(filename, "Berkas"),
+        )
+        const storageKey = newStorageKey(filename || name)
+        finalPath = await ensureStorageDir(storageKey)
+
+        // Same atomic publish as the task path: assemble under a .partial name, then rename. The
+        // nightly backup walks this tree, and it must never pick up a half-assembled file.
+        await concatToFile(sdir, totalChunks, `${finalPath}.partial`)
+        await rename(`${finalPath}.partial`, finalPath)
+
+        const created = await prisma.vaultItem.create({
+          data: {
+            kind: "FILE",
+            name,
+            parentId: vaultParentId,
+            workspaceId: vaultActor.workspaceId,
+            uploaderId: userId,
+            ownerId: userId,
+            storageKey,
+            mimeType: resolveMime(mimeType, filename),
+            size: assembled,
+          },
+          include: VAULT_ITEM_INCLUDE,
+        })
+        committed = true
+
+        const payload = serializeVaultItem(created as unknown as VaultItemRow, vaultActor)
+        // Mark done BEFORE reclaiming the parts, so a lost response retries into the stored row
+        // instead of uploading the whole file a second time.
+        await writeFile(donePath, JSON.stringify(payload)).catch(() => {})
+        for (let i = 0; i < totalChunks; i++) await unlink(path.join(sdir, `${i}.part`)).catch(() => {})
+
+        try {
+          logAudit({
+            action: "create",
+            entityType: "vault_file",
+            entityId: created.id,
+            entityName: name,
+            userId,
+            request,
+            metadata: { parentId: vaultParentId, size: assembled, chunked: true },
+          })
+        } catch {
+          /* audit is best-effort */
+        }
+
+        return NextResponse.json(payload, { status: 201 })
+      }
 
       // Re-check the task at finalize (it could have been deleted mid-upload).
       const t2 = await prisma.task.findUnique({ where: { id: taskId }, select: { id: true } })

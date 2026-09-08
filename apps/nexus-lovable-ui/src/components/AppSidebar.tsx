@@ -3,6 +3,7 @@ import {
   LayoutDashboard, Inbox, MessageCircle, CheckSquare, Calendar, CalendarClock, FolderKanban,
   Users, Trophy, ClipboardCheck, Settings, Shield, FileText, Megaphone,
   Search, Plus, PanelLeftClose, ChevronRight, LogOut, Loader2, Pin, FolderPlus, Rocket, Maximize2, AtSign, ShieldAlert, Ticket, Sun, Moon,
+ HardDrive,
 } from "lucide-react";
 import { Fragment, useRef, useState, type ReactNode, type DragEvent } from "react";
 import { ProjectIcon } from "@/components/projects/ProjectIcon";
@@ -28,6 +29,7 @@ const groups = [
       { title: "Messages", url: "/messages", icon: MessageCircle },
       { title: "Notification", url: "/inbox", icon: Inbox },
       { title: "Threads", url: "/threads", icon: AtSign },
+      { title: "Z Vault", url: "/vault", icon: HardDrive },
       { title: "My Mission", url: "/my-tasks", icon: CheckSquare },
       { title: "My Submissions", url: "/submissions", icon: FileText },
       { title: "Team Calendar", url: "/master-calendar", icon: Calendar },

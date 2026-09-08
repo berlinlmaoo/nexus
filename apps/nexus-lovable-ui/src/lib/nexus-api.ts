@@ -8,6 +8,68 @@ export type NexusUser = {
   onboardedAt?: string | null;
 };
 
+// --- Z Vault ---
+export type VaultPerson = { id: string; name: string; avatar?: string | null };
+export type VaultItem = {
+  id: string;
+  kind: "FOLDER" | "FILE";
+  name: string;
+  position: number;
+  icon: string | null;
+  color: string | null;
+  mimeType: string | null;
+  size: number | null;
+  width: number | null;
+  height: number | null;
+  parentId: string | null;
+  /** Always an item URL, never a path. The vault has no client-visible storage layout. */
+  url: string | null;
+  downloadUrl: string | null;
+  uploader: VaultPerson | null;
+  owner: VaultPerson | null;
+  childCount: number;
+  shareCount: number;
+  minReadRole: string | null;
+  minWriteRole: string | null;
+  trashed: boolean;
+  deletedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  canModify: boolean;
+};
+export type VaultListing = {
+  items: VaultItem[];
+  breadcrumb: { id: string; name: string }[];
+  parentId: string | null;
+  canWrite: boolean;
+  canManageAccess: boolean;
+  quota: { usedBytes: number; totalBytes: number };
+};
+export type VaultShareExpiry = "3d" | "7d" | "14d" | "30d" | "permanent";
+export type VaultShare = {
+  id: string;
+  slug: string;
+  itemId: string;
+  url: string;
+  requireAuth: boolean;
+  allowDownload: boolean;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  status: "active" | "expired" | "revoked";
+  viewCount: number;
+  lastViewedAt: string | null;
+  createdAt: string;
+  createdBy: { id: string; name: string | null } | null;
+};
+export type VaultPublicFile = {
+  slug: string;
+  requireAuth: boolean;
+  allowDownload: boolean;
+  file: { name: string; mimeType: string | null; size: number | null; width: number | null; height: number | null };
+  previewUrl: string;
+  downloadUrl: string | null;
+};
+
 // --- The Wire (Feed) ---
 export type FeedAuthor = { id: string; name: string; avatar?: string | null };
 export type FeedImage = { id: string; url: string; width?: number | null; height?: number | null; position: number };
@@ -1312,6 +1374,90 @@ export async function downloadFile(path: string, fallbackName: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// ---------------------------------------------------------------------------
+// Shared chunked-upload transport.
+//
+// Task attachments and Z Vault both use this. The retry policy, the back-off, the "4xx is permanent
+// / 5xx is retryable" split and the aggregated progress were all tuned against how Cloudflare
+// actually behaves on this tunnel; a second copy for the vault would be tuned against nothing, and
+// would be the copy that quietly stops retrying.
+//
+// 16MB per chunk, NOT "as large as Cloudflare allows". Bodies anywhere near the ~100MB cap fail in a
+// way that looks like a hang rather than an error: a 90MB body 502s after 30s, and an 80MB chunk
+// uploads to the edge and then never receives a response, so progress freezes at a chunk boundary.
+// 16MB transmits in seconds and stays far below that. It was raised from 10MB so the web ceiling
+// (64 chunks) reaches the same 1GB as iOS — a file that uploads from the phone but not from the
+// browser is exactly the kind of split Berlin asked to stop happening.
+const UPLOAD_CHUNK_SIZE = 16 * 1024 * 1024;
+const UPLOAD_CHUNK_THRESHOLD = 20 * 1024 * 1024; // below this, one request is simpler and faster
+
+function uploadChunked<T extends { id?: string }>(
+  file: File,
+  params: Record<string, string>,
+  onProgress: (pct: number) => void,
+): Promise<T> {
+  const totalChunks = Math.ceil(file.size / UPLOAD_CHUNK_SIZE);
+  const uploadId = ((typeof crypto !== "undefined" && "randomUUID" in crypto)
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`
+  ).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
+
+  const sendChunk = (index: number, baseBytes: number) =>
+    new Promise<{ status: number; body: (T & { error?: string }) | null }>((resolve, reject) => {
+      const start = index * UPLOAD_CHUNK_SIZE;
+      const blob = file.slice(start, Math.min(start + UPLOAD_CHUNK_SIZE, file.size));
+      // Metadata travels in the query string; the chunk bytes are the RAW body so the server can
+      // stream them straight to disk (no multipart buffering).
+      const qs = new URLSearchParams({
+        uploadId,
+        chunkIndex: String(index),
+        totalChunks: String(totalChunks),
+        totalSize: String(file.size),
+        filename: file.name,
+        mime: file.type || "application/octet-stream",
+        ...params,
+      });
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `/api/attachments/chunk?${qs.toString()}`);
+      xhr.withCredentials = true;
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(Math.min(99, Math.round(((baseBytes + e.loaded) / file.size) * 100)));
+      };
+      xhr.onload = () => {
+        let body: (T & { error?: string }) | null = null;
+        try { body = JSON.parse(xhr.responseText); } catch { /* non-JSON body */ }
+        resolve({ status: xhr.status, body });
+      };
+      xhr.onerror = () => reject(new Error("network"));
+      xhr.send(blob);
+    });
+
+  return (async () => {
+    let last: (T & { error?: string }) | null = null;
+    for (let i = 0; i < totalChunks; i++) {
+      const baseBytes = i * UPLOAD_CHUNK_SIZE;
+      for (let attempt = 1; ; attempt++) {
+        try {
+          const res = await sendChunk(i, baseBytes);
+          if (res.status >= 200 && res.status < 300) { last = res.body; break; }
+          // 409 (finalize busy) / 429 (too many sessions) are transient → back off and retry.
+          if (res.status === 409 || res.status === 429) throw new Error(`retry ${res.status}`);
+          // Other 4xx is permanent (bad request / target gone / too big / over quota) → surface it.
+          if (res.status >= 400 && res.status < 500) throw new ApiError(res.status, res.body?.error || "Upload rejected by server.", null);
+          throw new Error(`server ${res.status}`); // 5xx → retryable
+        } catch (err) {
+          if (err instanceof ApiError) throw err;
+          if (attempt >= 3) throw new ApiError(0, "Upload failed (connection dropped). Try again.", null);
+          await new Promise((r) => setTimeout(r, 500 * attempt));
+        }
+      }
+    }
+    onProgress(100);
+    if (!last || !last.id) throw new ApiError(0, "Upload finished but the server didn't return the file.", null);
+    return last as T;
+  })();
+}
+
 export function loginWithCredentials(email: string, password: string, callbackUrl = "/dashboard") {
   return apiFetch<DirectLoginResponse>("/api/auth/direct-login", {
     method: "POST",
@@ -1747,6 +1893,66 @@ export const nexusApi = {
   timeEntries: (taskId: string) => apiFetch<{ entries: NexusTimeEntry[] }>(`/api/time-entries?taskId=${encodeURIComponent(taskId)}`),
   logTime: (payload: { taskId: string; duration: number; description?: string | null }) => apiFetch<{ entry: NexusTimeEntry }>("/api/time-entries", { method: "POST", body: JSON.stringify(payload) }),
 
+  // --- Z Vault ---
+  vaultList: (opts: { parentId?: string | null; trash?: boolean; q?: string } = {}) => {
+    const qs = new URLSearchParams();
+    if (opts.parentId) qs.set("parentId", opts.parentId);
+    if (opts.trash) qs.set("trash", "1");
+    if (opts.q) qs.set("q", opts.q);
+    const suffix = qs.toString();
+    return apiFetch<VaultListing>(`/api/vault/items${suffix ? `?${suffix}` : ""}`);
+  },
+  vaultItem: (itemId: string) =>
+    apiFetch<{ item: VaultItem; breadcrumb: { id: string; name: string }[] }>(`/api/vault/items/${itemId}`),
+  vaultCreateFolder: (name: string, parentId: string | null) =>
+    apiFetch<VaultItem>("/api/vault/items", { method: "POST", body: JSON.stringify({ name, parentId }) }),
+  vaultUpdateItem: (
+    itemId: string,
+    body: { name?: string; parentId?: string | null; restore?: boolean; minReadRole?: string | null; minWriteRole?: string | null },
+  ) => apiFetch<VaultItem>(`/api/vault/items/${itemId}`, { method: "PATCH", body: JSON.stringify(body) }),
+  vaultDeleteItem: (itemId: string, purge = false) =>
+    apiFetch<{ trashed?: number; purged?: number; filesUnlinked?: number }>(
+      `/api/vault/items/${itemId}${purge ? "?purge=1" : ""}`,
+      { method: "DELETE" },
+    ),
+  vaultEmptyTrash: () =>
+    apiFetch<{ purged: number; filesUnlinked: number }>("/api/vault/trash/empty", { method: "POST" }),
+  vaultShares: (itemId: string) =>
+    apiFetch<{ shares: VaultShare[] }>(`/api/vault/shares?itemId=${encodeURIComponent(itemId)}`),
+  vaultCreateShare: (body: { itemId: string; requireAuth: boolean; allowDownload: boolean; expires: VaultShareExpiry }) =>
+    apiFetch<VaultShare>("/api/vault/shares", { method: "POST", body: JSON.stringify(body) }),
+  vaultRevokeShare: (shareId: string) =>
+    apiFetch<VaultShare>(`/api/vault/shares/${shareId}`, { method: "DELETE" }),
+  vaultPublic: (slug: string) => apiFetch<VaultPublicFile>(`/api/vault/public/${encodeURIComponent(slug)}`),
+
+  // Small files go single-shot; anything larger rides the shared chunked transport with target=vault,
+  // which is what makes the browser ceiling match the phone's instead of stopping at 640MB.
+  vaultUpload: (file: File, parentId: string | null, onProgress: (pct: number) => void): Promise<VaultItem> => {
+    if (file.size <= UPLOAD_CHUNK_THRESHOLD) {
+      return new Promise<VaultItem>((resolve, reject) => {
+        const fd = new FormData();
+        fd.set("file", file);
+        if (parentId) fd.set("parentId", parentId);
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/vault/upload");
+        xhr.withCredentials = true;
+        xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)); };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try { resolve(JSON.parse(xhr.responseText) as VaultItem); } catch { reject(new ApiError(0, "Upload failed.", null)); }
+          } else {
+            let msg = "Upload failed.";
+            try { msg = String(JSON.parse(xhr.responseText).error || msg); } catch { /* non-JSON */ }
+            reject(new ApiError(xhr.status, msg, null));
+          }
+        };
+        xhr.onerror = () => reject(new Error("Upload failed."));
+        xhr.send(fd);
+      });
+    }
+    return uploadChunked<VaultItem>(file, { target: "vault", ...(parentId ? { parentId } : {}) }, onProgress);
+  },
+
   // --- Attachments ---
   taskAttachments: (taskId: string) => apiFetch<NexusAttachment[]>(`/api/attachments?taskId=${encodeURIComponent(taskId)}`),
   uploadAttachment: (taskId: string, file: File, kind: "GENERAL" | "PROOF" = "GENERAL") => {
@@ -1760,15 +1966,9 @@ export const nexusApi = {
   // stays under Cloudflare's ~100MB cap. Only genuinely small files use the single-shot path (which
   // buffers the whole file in memory + gets spooled to an nginx temp file), so we keep that band small.
   uploadAttachmentProgress: (taskId: string, file: File, onProgress: (pct: number) => void, kind: "GENERAL" | "PROOF" = "GENERAL"): Promise<NexusAttachment> => {
-    // 10MB per chunk. NOT just "under Cloudflare's 100MB cap" — bodies anywhere near that cap (tested: a
-    // 90MB body 502s through the CF tunnel after 30s, an 80MB chunk would upload to the edge then never get
-    // a response → progress freezes at the chunk boundary, e.g. ~8% of a 1GB file). 10MB transmits in
-    // seconds, stays far below the cap, gives smooth progress + cheap retries. Total file size unaffected.
-    const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB max per chunk — far below Cloudflare's 100MB cap for reliability
-    const CHUNK_THRESHOLD = 20 * 1024 * 1024; // >20MB → stream via the chunk endpoint instead of buffering
 
     // ---- small file: single request, native upload progress ----
-    if (file.size <= CHUNK_THRESHOLD) {
+    if (file.size <= UPLOAD_CHUNK_THRESHOLD) {
       return new Promise<NexusAttachment>((resolve, reject) => {
         const fd = new FormData();
         fd.set("taskId", taskId); fd.set("file", file); fd.set("kind", kind);
@@ -1786,68 +1986,8 @@ export const nexusApi = {
       });
     }
 
-    // ---- large file: chunked, sequential, per-chunk retry, aggregated progress ----
-    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    const uploadId = ((typeof crypto !== "undefined" && "randomUUID" in crypto)
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`
-    ).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64);
-
-    const sendChunk = (index: number, baseBytes: number) =>
-      new Promise<{ status: number; body: { error?: string; id?: string } | null }>((resolve, reject) => {
-        const start = index * CHUNK_SIZE;
-        const blob = file.slice(start, Math.min(start + CHUNK_SIZE, file.size));
-        // Metadata travels in the query string; the chunk bytes are the RAW body so the server can stream
-        // them straight to disk (no multipart buffering).
-        const qs = new URLSearchParams({
-          uploadId,
-          chunkIndex: String(index),
-          totalChunks: String(totalChunks),
-          totalSize: String(file.size),
-          taskId,
-          filename: file.name,
-          mime: file.type || "application/octet-stream",
-          kind,
-        });
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", `/api/attachments/chunk?${qs.toString()}`);
-        xhr.withCredentials = true;
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) onProgress(Math.min(99, Math.round(((baseBytes + e.loaded) / file.size) * 100)));
-        };
-        xhr.onload = () => {
-          let body: { error?: string; id?: string } | null = null;
-          try { body = JSON.parse(xhr.responseText); } catch { /* non-JSON body */ }
-          resolve({ status: xhr.status, body });
-        };
-        xhr.onerror = () => reject(new Error("network"));
-        xhr.send(blob);
-      });
-
-    return (async () => {
-      let last: { error?: string; id?: string } | null = null;
-      for (let i = 0; i < totalChunks; i++) {
-        const baseBytes = i * CHUNK_SIZE;
-        for (let attempt = 1; ; attempt++) {
-          try {
-            const res = await sendChunk(i, baseBytes);
-            if (res.status >= 200 && res.status < 300) { last = res.body; break; }
-            // 409 (finalize busy) / 429 (too many sessions) are transient → back off and retry.
-            if (res.status === 409 || res.status === 429) throw new Error(`retry ${res.status}`);
-            // other 4xx = permanent (bad request / task gone / too big) → surface, don't retry.
-            if (res.status >= 400 && res.status < 500) throw new ApiError(res.status, res.body?.error || "Upload rejected by server.", null);
-            throw new Error(`server ${res.status}`); // 5xx → retryable
-          } catch (err) {
-            if (err instanceof ApiError) throw err;
-            if (attempt >= 3) throw new ApiError(0, "Upload failed (connection dropped). Try again.", null);
-            await new Promise((r) => setTimeout(r, 500 * attempt));
-          }
-        }
-      }
-      onProgress(100);
-      if (!last || !last.id) throw new ApiError(0, "Upload finished but the server didn't return the attachment.", null);
-      return last as NexusAttachment;
-    })();
+    // ---- large file: the shared chunked transport (see uploadChunked above) ----
+    return uploadChunked<NexusAttachment>(file, { taskId, kind }, onProgress);
   },
   deleteAttachment: (attachmentId: string) => apiFetch<{ success?: boolean }>(`/api/attachments/${attachmentId}`, { method: "DELETE" }),
 
