@@ -133,6 +133,12 @@ targets:
     settings:
       base:
         INFOPLIST_FILE: Watch/Info.plist
+        # Without this the watch app ships with no icon at all, and App Store validation refuses the
+        # whole upload — twice over: "CFBundleIconName is missing" and "No icons found for watch
+        # application". It builds and runs fine, so nothing says anything until the upload is done.
+        # The catalog lives at Watch/Assets.xcassets and is picked up by the `- path: Watch` source
+        # above; the artwork is the same 1024 the phone app uses.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         PRODUCT_BUNDLE_IDENTIFIER: id.znetworks.nexus.watchkitapp
         PRODUCT_NAME: NEXUS
         # 4 = Apple Watch.
