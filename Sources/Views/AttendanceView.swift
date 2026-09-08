@@ -44,8 +44,20 @@ struct AttendanceView: View {
     private var pendingRec: AttendanceRecord? { today?.pendingCheckout }
     private var forcePending: Bool { pendingRec != nil }
     private var dispRec: AttendanceRecord? { rec ?? pendingRec }   // what the hero/metrics display
-    private var checkedIn: Bool { rec?.hasCheckedIn == true }
-    private var checkedOut: Bool { rec?.hasCheckedOut == true }
+    /// Taps that are on this phone and have not reached the server yet.
+    ///
+    /// While the server is down `load()` fails and `rec` is nil, so asking only the server whether
+    /// somebody is clocked in answers "no" for everyone. On 8 September that is what happened: a
+    /// person checked in offline at 10:29, and PRESENCE OUT stayed greyed out for the rest of the
+    /// day because the only thing that could have enabled it was the server that was off. The
+    /// nightly cron then read the missing check-out as an absence and took the day-off token.
+    ///
+    /// The queue is the other half of the truth, and it is on the device where the tap happened.
+    private var queuedCheckIn: Bool { queue.pending.contains { $0.kind == .checkIn } }
+    private var queuedCheckOut: Bool { queue.pending.contains { $0.kind == .checkOut } }
+
+    private var checkedIn: Bool { rec?.hasCheckedIn == true || queuedCheckIn }
+    private var checkedOut: Bool { rec?.hasCheckedOut == true || queuedCheckOut }
     private var pending: Bool { rec?.checkOutApproval == "PENDING" }   // offsite checkout awaiting BoD approval
 
     var body: some View {
@@ -408,14 +420,21 @@ struct AttendanceView: View {
     private func submit(selfie: Data) async {
         guard let action = pendingAction else { return }
         busy = true; defer { busy = false }
+        // One id for this tap, sent live AND reused if the tap ends up queued, so the two attempts
+        // are the same event as far as the server is concerned.
+        //
+        // `clientId` alone changes nothing about how the tap is recorded — the server reads the
+        // claimed time from `deviceAt` and flags a record offline on that field, neither of which a
+        // live tap sends. All it buys is the ability to recognise a replay of THIS tap.
+        let tapId = UUID().uuidString
         do {
             let fix = try await loc.currentFix()
             pendingCoords = (fix.latitude, fix.longitude)
             pendingFix = fix
             let outcome: AttendanceOutcome = try await {
                 switch action {
-                case .checkIn: return try await APIClient.shared.checkIn(lat: fix.latitude, lng: fix.longitude, selfie: selfie, fix: fix)
-                case .checkOut: return try await APIClient.shared.checkOut(lat: fix.latitude, lng: fix.longitude, selfie: selfie, reflection: reflection, fix: fix)
+                case .checkIn: return try await APIClient.shared.checkIn(lat: fix.latitude, lng: fix.longitude, selfie: selfie, fix: fix, clientId: tapId)
+                case .checkOut: return try await APIClient.shared.checkOut(lat: fix.latitude, lng: fix.longitude, selfie: selfie, reflection: reflection, fix: fix, clientId: tapId)
                 }
             }()
             switch outcome {
@@ -439,6 +458,7 @@ struct AttendanceView: View {
                 return
             }
             AttendanceQueue.shared.enqueue(
+                id: tapId,
                 kind: action == .checkIn ? .checkIn : .checkOut,
                 lat: fix.lat, lng: fix.lng, selfie: selfie,
                 reflection: action == .checkOut ? reflection : nil,
@@ -453,17 +473,35 @@ struct AttendanceView: View {
     private func submitOffsite() async {
         guard let selfie = pendingSelfie, let coords = pendingCoords else { return }
         busy = true; defer { busy = false }
+        let tapId = UUID().uuidString
+        let reason = offsiteReason.trimmingCharacters(in: .whitespaces)
         do {
             let outcome = try await APIClient.shared.checkOut(lat: coords.lat, lng: coords.lng, selfie: selfie,
                                                               reflection: reflection, offsite: true,
-                                                              reason: offsiteReason.trimmingCharacters(in: .whitespaces),
-                                                              fix: pendingFix)
+                                                              reason: reason,
+                                                              fix: pendingFix, clientId: tapId)
             if case .success = outcome {
                 banner = Banner(text: T("Checkout sent — waiting for BoD approval ⏳"), good: true)
                 reflection = ""
                 await load()
             }
         } catch APIError.unauthorized { auth.logout() }
+        catch APIError.offline {
+            // This path had no queue at all, and it is the one an outage hits hardest: the office
+            // lost power, everybody went home, and checking out from home IS an offsite check-out.
+            // Losing it costs the same day-off token as never checking out.
+            AttendanceQueue.shared.enqueue(
+                id: tapId,
+                kind: .checkOut,
+                lat: coords.lat, lng: coords.lng, selfie: selfie,
+                reflection: reflection,
+                offsite: true, reason: reason,
+                fix: pendingFix)
+            Haptics.success()
+            banner = Banner(text: T("Saved offline — will be sent when the server is back."), good: true)
+            reflection = ""
+            showOffsite = false
+        }
         catch { banner = Banner(text: (error as? LocalizedError)?.errorDescription ?? T("Failed."), good: false) }
     }
 

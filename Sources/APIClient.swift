@@ -15,9 +15,15 @@ enum APIError: LocalizedError {
     case unauthorized
     case decoding
     case transport(String)
-    /// The request never reached the server — no HTTP response at all. Deliberately separate from
-    /// `.transport`, which also carries the server's own refusals: only this case may be queued and
-    /// replayed later, because replaying something the server already refused would be wrong.
+    /// NEXUS never formed an opinion about this request.
+    ///
+    /// That is broader than "no HTTP response": an edge status that says the origin was never
+    /// reached (Cloudflare 520–527/530, nginx 502–504) means exactly the same thing to a tap as
+    /// silence does. See `APIClient.meansOriginUnreachable`.
+    ///
+    /// Deliberately separate from `.transport`, which carries the server's own refusals: only this
+    /// case may be queued and replayed, because replaying something the server already refused
+    /// would be wrong.
     case offline
 
     var errorDescription: String? {
@@ -1923,10 +1929,41 @@ struct APIClient {
         if (200..<300).contains(http.statusCode) { return .success }
         if http.statusCode == 401 { throw APIError.unauthorized }
 
+        // The edge answered; NEXUS did not.
+        //
+        // 502/503/504 come from nginx when the app container is not there. 520–527 and 530 come
+        // from Cloudflare when the tunnel cannot reach the origin at all — 530 is what every phone
+        // saw on 8 September while the office had no power. 500 is the app itself falling over
+        // before it decided anything, which is what a Postgres that has not come back after a
+        // reboot looks like from out here.
+        //
+        // In all of them NEXUS formed no opinion about this tap, which is the exact condition
+        // `.offline` describes. Throwing it here is what lets the tap be queued instead of lost,
+        // and — just as important — what stops the queue from counting an outage as a refusal and
+        // deleting somebody's attendance after five attempts.
+        //
+        // Everything BELOW this line is the server having an opinion (409 "already checked in",
+        // 422 outside radius, 400 bad data). Those must never be replayed.
+        if Self.meansOriginUnreachable(http.statusCode) { throw APIError.offline }
+
         // Decode the server's { error, code } body for a useful message.
         let payload = try? JSONDecoder().decode(ServerError.self, from: data)
         if http.statusCode == 422, payload?.code == "OUTSIDE_RADIUS" { return .outsideRadius }
         throw APIError.transport(payload?.error ?? "\(T("Failed")) (\(http.statusCode)).")
+    }
+}
+
+extension APIClient {
+    /// Statuses that mean the request never reached a decision inside NEXUS.
+    ///
+    /// Deliberately a list, not `>= 500`: 501 and 505 say the request itself was unacceptable, and
+    /// replaying something unacceptable forever is not resilience. Kept next to the one place that
+    /// reads it so the two cannot drift.
+    static func meansOriginUnreachable(_ code: Int) -> Bool {
+        code == 500                       // the app fell over before deciding
+            || (502...504).contains(code) // nginx: no upstream / unavailable / upstream timeout
+            || (520...527).contains(code) // Cloudflare: origin unknown error, down, timeout, unreachable
+            || code == 530                // Cloudflare: tunnel down (what 8 September looked like)
     }
 }
 

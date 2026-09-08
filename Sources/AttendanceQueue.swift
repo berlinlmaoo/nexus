@@ -68,11 +68,16 @@ final class AttendanceQueue {
     // MARK: - storing
 
     /// Called when a live attempt failed because the server could not be reached at all.
-    func enqueue(kind: PendingAttendance.Kind, lat: Double, lng: Double, selfie: Data,
+    /// `id` is the idempotency key, and the caller passes the SAME one it already sent on the live
+    /// attempt. That matters for the case nobody sees coming: a tap that actually reached the
+    /// server and was recorded, whose reply was lost on the way back. Replayed under the same id
+    /// the server hands back the record it already has; replayed under a fresh one it looks like a
+    /// second check-in, gets refused, and the queue eventually throws the tap away.
+    func enqueue(id: String = UUID().uuidString,
+                 kind: PendingAttendance.Kind, lat: Double, lng: Double, selfie: Data,
                  notes: String? = nil, reflection: String? = nil,
                  offsite: Bool = false, reason: String? = nil,
                  fix: LocationManager.Fix? = nil) {
-        let id = UUID().uuidString
         let entry = PendingAttendance(
             id: id,
             kind: kind,
