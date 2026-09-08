@@ -462,6 +462,15 @@ export async function refundOutageDay(opts: {
   dryRun?: boolean
   adminUserId?: string | null
   request?: Request
+  /**
+   * Limit the refund to these members. Omit for the whole workspace.
+   *
+   * An outage is not always the same event for everyone. The 8 September cut lasted 14:06–16:36:
+   * it made checking in impossible for a 15:00 shift and was over four hours before a 21:00 shift
+   * began. Refunding the whole day would have handed back penalties the outage had nothing to do
+   * with, which is its own kind of unfair — and impossible to explain to the people it skipped.
+   */
+  userIds?: string[]
 }): Promise<OutageRefundResult> {
   const { workspaceId, date } = opts
   const dryRun = opts.dryRun ?? false
@@ -480,7 +489,14 @@ export async function refundOutageDay(opts: {
   }
 
   const members = await prisma.workspaceMember.findMany({
-    where: { workspaceId, role: { notIn: ["BOD", "ONE_ABOVE_ALL"] } },
+    where: {
+      workspaceId,
+      role: { notIn: ["BOD", "ONE_ABOVE_ALL"] },
+      // An explicit list is a deliberate decision about who the outage actually reached, so it is
+      // applied as a filter rather than checked per member — a member named here who is not in this
+      // workspace simply does not match, instead of raising.
+      ...(opts.userIds?.length ? { userId: { in: opts.userIds } } : {}),
+    },
     select: { userId: true, user: { select: { id: true, name: true } } },
   })
 
@@ -506,6 +522,15 @@ export async function refundOutageDay(opts: {
 
       if (!dryRun) {
         await cancelAttendancePenaltiesForDate(userId, workspaceId, date, dateKey)
+        // Without this the refund does not survive the night.
+        //
+        // The nightly cron re-derives penalties for every day in its 14-day window, so a day whose
+        // penalties were handed back is simply cut again a few hours later — silently, because
+        // nothing distinguishes it from a day that was never refunded. Until now this function got
+        // away with it only because the two dates it had ever been used on were registered with
+        // `blocksCheckIn: true`, which makes the cron skip them for a different reason entirely.
+        // The first partial refund would have evaporated overnight with nobody able to say why.
+        await grantAttendanceWaiver(userId, dateKey)
       }
       result.refundedMembers++
       result.totalXpRefunded += xpRefund
