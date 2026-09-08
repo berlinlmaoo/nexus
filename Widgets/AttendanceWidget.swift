@@ -8,19 +8,22 @@ private let nxGreen = Color(red: 0x34 / 255, green: 0xD3 / 255, blue: 0x99 / 255
 struct AttendanceEntry: TimelineEntry {
     let date: Date
     let snapshot: AttendanceSnapshot?
+    /// Everything the medium size shows beside the clock. Read here rather than in the view so the
+    /// two blobs are fetched together, once per timeline, instead of once per redraw.
+    let glance: NexusGlance?
 }
 
 struct AttendanceProvider: TimelineProvider {
     func placeholder(in context: Context) -> AttendanceEntry {
-        AttendanceEntry(date: Date(), snapshot: nil)
+        AttendanceEntry(date: Date(), snapshot: nil, glance: nil)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (AttendanceEntry) -> Void) {
-        completion(AttendanceEntry(date: Date(), snapshot: AttendanceSnapshot.load()))
+        completion(AttendanceEntry(date: Date(), snapshot: AttendanceSnapshot.load(), glance: NexusGlance.load()))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<AttendanceEntry>) -> Void) {
-        let entry = AttendanceEntry(date: Date(), snapshot: AttendanceSnapshot.load())
+        let entry = AttendanceEntry(date: Date(), snapshot: AttendanceSnapshot.load(), glance: NexusGlance.load())
         // The running clock redraws itself, so the only thing a reload buys is the day rolling over
         // and the app publishing something new. Fifteen minutes is frequent enough for both without
         // spending the widget's refresh budget on nothing.
@@ -32,19 +35,20 @@ struct AttendanceProvider: TimelineProvider {
 struct AttendanceWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "NEXUSAttendance", provider: AttendanceProvider()) { entry in
-            AttendanceWidgetView(snapshot: entry.snapshot)
+            AttendanceWidgetView(snapshot: entry.snapshot, glance: entry.glance)
                 .containerBackground(.fill.tertiary, for: .widget)
                 .widgetURL(URL(string: "nexus://attendance"))
         }
         .configurationDisplayName("Attendance")
         .description("Where you stand today.")
-        .supportedFamilies([.systemSmall, .accessoryCircular, .accessoryRectangular, .accessoryInline])
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular, .accessoryInline])
     }
 }
 
 struct AttendanceWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let snapshot: AttendanceSnapshot?
+    let glance: NexusGlance?
 
     private var state: AttendanceSnapshot.State { snapshot?.state() ?? .stale }
     private var pending: Bool { snapshot?.isPending ?? false }
@@ -67,8 +71,69 @@ struct AttendanceWidgetView: View {
                 clock.font(.system(.title3, design: .rounded).monospacedDigit())
                 Text(detail).font(.caption2).lineLimit(1)
             }
+        case .systemMedium:
+            medium
         default:
             small
+        }
+    }
+
+    /// The clock on the left, the rest of the day on the right.
+    ///
+    /// The right-hand column is drawn from `NexusGlance`, which the app writes when the dashboard
+    /// loads. It is shown ONLY while it describes today: a widget refreshes while the app runs, so
+    /// yesterday's "3 due today" presented as today's would be a confident lie — the same rule
+    /// `AttendanceSnapshot.state` already applies to the clock.
+    private var medium: some View {
+        HStack(alignment: .top, spacing: 14) {
+            small
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 7) {
+                if let glance, glance.isFresh(), !glance.isEmpty {
+                    if glance.overdue > 0 {
+                        glanceRow("exclamationmark.circle.fill", "\(glance.overdue) overdue", nxAmber)
+                    }
+                    glanceRow("checklist", glance.dueToday > 0
+                              ? "\(glance.dueToday) due today"
+                              : "\(glance.openTasks) open", .primary)
+                    if glance.unreadNotifications > 0 {
+                        glanceRow("bell.fill", "\(glance.unreadNotifications) unread", nxViolet)
+                    }
+                    Spacer(minLength: 0)
+                    HStack(spacing: 4) {
+                        Text("LV \(glance.level)")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(nxViolet)
+                        if let streak = glance.streak, streak > 1 {
+                            Text("· \(streak)d")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } else {
+                    // Says why there is nothing rather than showing an empty column, which reads as
+                    // a broken widget.
+                    VStack(alignment: .leading, spacing: 4) {
+                        Image(systemName: "arrow.clockwise").font(.caption2).foregroundStyle(.secondary)
+                        Text("Open NEXUS to refresh")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func glanceRow(_ symbol: String, _ text: String, _ color: Color) -> some View {
+        Label {
+            Text(text).font(.caption.weight(.medium)).lineLimit(1).minimumScaleFactor(0.8)
+        } icon: {
+            Image(systemName: symbol).font(.caption2).foregroundStyle(color)
         }
     }
 

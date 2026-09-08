@@ -254,7 +254,13 @@ struct AttendanceRequestsCard: View {
             if pending {
                 HStack(spacing: 8) {
                     if working { ProgressView().scaleEffect(0.7) }
-                    else if canReview {
+                    // `canReview` is a ROLE, and a role does not stop applying to the person
+                    // holding it. A reviewer's own pending request was drawn with Approve and
+                    // Reject on it, and the server answered 403 SELF_REVIEW every time — the
+                    // four-eyes rule doing its job, reached through a button that should never
+                    // have been offered. What their own request actually needs is the same
+                    // action everybody else gets for theirs.
+                    else if canReview && !r.isOwn(viewerId: auth.session?.userId) {
                         actionBtn(T("Approve"), .success) { await review(r, "approve") }
                         // Straight to the reason sheet: the decision and the reason go up in the
                         // same PATCH, so there is nothing to undo if the sheet is cancelled.

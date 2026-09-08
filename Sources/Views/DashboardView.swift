@@ -911,6 +911,10 @@ struct DashboardView: View {
             mission = (tasks.filter(\.isDone).count, tasks.count)
         }
         loaded = true
+
+        // The one moment all three numbers are known together, which is why the Home Screen is fed
+        // from here and not from three screens each publishing its own idea of "due today".
+        GlancePresence.refresh(tasks: tasksList, unread: unread, game: game)
     }
 }
 

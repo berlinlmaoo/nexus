@@ -75,6 +75,10 @@ struct AttendanceRequestsResponse: Decodable, Sendable {
 }
 struct AttendanceRequest: Decodable, Identifiable, Sendable {
     let id: String
+    /// Who filed it. `serializeAttendanceRequest` has always sent this; nothing decoded it, which
+    /// is why the watch drew Approve/Reject on the reviewer's OWN requests and the server answered
+    /// 403 SELF_REVIEW. Optional so a reply from a server that predates this still decodes.
+    let userId: String?
     let type: String?
     let status: String?
     let reason: String?
@@ -123,6 +127,14 @@ struct AttendanceRequest: Decodable, Identifiable, Sendable {
     /// Who to credit for `reviewNoteText`, or nil when nobody wrote it. The cron leaves
     /// `reviewedById` null and still writes a note ("Auto-deducted: bolos …"), so a note is only
     /// the approver's word when there is an approver to attach it to.
+    /// True when the signed-in person filed this themselves, and therefore may not decide it.
+    /// The four-eyes rule lives on the server and stays there — this only stops the app from
+    /// offering a button whose only possible outcome is a refusal.
+    func isOwn(viewerId: String?) -> Bool {
+        guard let viewerId, !viewerId.isEmpty, let userId else { return false }
+        return userId == viewerId
+    }
+
     var reviewerName: String? {
         let n = (reviewedBy?.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return n.isEmpty ? nil : n

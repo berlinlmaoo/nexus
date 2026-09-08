@@ -51,6 +51,10 @@ enum AttendancePresence {
         lastToday = nil
         userName = ""
         AttendanceSnapshot.clear()
+        // The glance is the other half of what outlives the session — tasks, unread count, XP and
+        // level. Erased here rather than in its own writer so there is ONE place that has to be
+        // right about logging out, which is the only way it stays right.
+        NexusGlance.clear()
         WidgetCenter.shared.reloadAllTimelines()
         LiveActivityController.stop()
     }

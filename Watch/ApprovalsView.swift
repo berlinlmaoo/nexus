@@ -33,6 +33,9 @@ struct ApprovalsView: View {
                         RequestCard(
                             request: request,
                             busy: inFlight.contains(request.id),
+                            // Own requests still SHOW — seeing that yours is still waiting is worth
+                            // a glance — they just carry no buttons.
+                            isOwn: request.isOwn(viewerId: auth.session?.userId),
                             decide: { approve in await decide(request, approve: approve) }
                         )
                     }
@@ -55,6 +58,9 @@ struct ApprovalsView: View {
 
     private func decide(_ request: AttendanceRequest, approve: Bool) async {
         guard let session = auth.session, !inFlight.contains(request.id) else { return }
+        // Belt as well as braces. Hiding the buttons is the visible half; this is what makes the
+        // rule true even if a row arrives from a list drawn before the session was known.
+        guard !request.isOwn(viewerId: session.userId) else { return }
         inFlight.insert(request.id)
         defer { inFlight.remove(request.id) }
         do {
@@ -71,6 +77,7 @@ struct ApprovalsView: View {
 private struct RequestCard: View {
     let request: AttendanceRequest
     let busy: Bool
+    let isOwn: Bool
     let decide: (Bool) async -> Void
 
     var body: some View {
@@ -83,25 +90,33 @@ private struct RequestCard: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
 
-            HStack(spacing: 6) {
-                Button {
-                    Task { await decide(false) }
-                } label: {
-                    Image(systemName: "xmark").frame(maxWidth: .infinity)
-                }
-                .tint(.red)
+            if isOwn {
+                // Said rather than greyed out. A disabled button invites a second tap and then a
+                // third; a sentence answers the question the button would have raised.
+                Label("Your own request", systemImage: "person.crop.circle")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            } else {
+                HStack(spacing: 6) {
+                    Button {
+                        Task { await decide(false) }
+                    } label: {
+                        Image(systemName: "xmark").frame(maxWidth: .infinity)
+                    }
+                    .tint(.red)
 
-                Button {
-                    Task { await decide(true) }
-                } label: {
-                    Image(systemName: "checkmark").frame(maxWidth: .infinity)
+                    Button {
+                        Task { await decide(true) }
+                    } label: {
+                        Image(systemName: "checkmark").frame(maxWidth: .infinity)
+                    }
+                    .tint(.green)
                 }
-                .tint(.green)
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+                .disabled(busy)
+                .opacity(busy ? 0.4 : 1)
             }
-            .buttonStyle(.bordered)
-            .controlSize(.mini)
-            .disabled(busy)
-            .opacity(busy ? 0.4 : 1)
         }
         .padding(8)
         .background(RoundedRectangle(cornerRadius: 10).fill(.quaternary.opacity(0.4)))

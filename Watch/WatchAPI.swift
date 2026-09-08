@@ -74,7 +74,11 @@ enum WatchAPI {
             throw Failure.offline
         }
         guard let http = response as? HTTPURLResponse else { throw Failure.offline }
-        if http.statusCode == 401 || http.statusCode == 403 { throw Failure.unauthorized }
+        // 401 and 403 are NOT the same answer. 401 means the session is gone and signing in on the
+        // phone is the fix. 403 means the server understood perfectly and said no — most often the
+        // four-eyes rule on one's own request — and telling somebody to sign in again for that
+        // sends them to fix something that was never broken.
+        if http.statusCode == 401 { throw Failure.unauthorized }
         guard (200..<300).contains(http.statusCode) else {
             let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
             throw Failure.server(message ?? "Failed (\(http.statusCode))")
