@@ -150,8 +150,11 @@ export async function resolveShare(slug: string): Promise<ShareResolution> {
   }
 }
 
-/** Every anonymous byte that leaves is worth counting — without this there is no way to answer
- *  "has the client opened that deck yet". Best-effort: a failed counter must never fail a download. */
+/** Counted on the metadata route (someone OPENED the link), never on /raw.
+ *  Counting raw requests would make one video worth dozens of "views", because every seek is its own
+ *  Range request — the number would grow with how hard the file was to watch. This way it answers the
+ *  question people actually ask: has the client opened that deck yet.
+ *  Best-effort: a failed counter must never fail a download. */
 export async function countShareView(shareId: string): Promise<void> {
   try {
     await prisma.vaultShare.update({
