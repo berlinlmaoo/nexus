@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
-import { cancelAttendancePenaltiesForDate, grantAttendanceWaiver } from "@/lib/attendance-absence"
+import { cancelAttendancePenaltiesForDate, cancelAttendancePenaltiesForDateDetailed, grantAttendanceWaiver, readAttendancePenaltiesForDate } from "@/lib/attendance-absence"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
@@ -16,16 +16,27 @@ import {
 import { isHoliday } from "@/lib/holidays"
 import { BODY_MAX, isBodPlus, isUnclaimedComplaintStatus } from "@/lib/complaints"
 import {
-  ATTENDANCE_CORRECTION_INCLUDE, CORRECTION_NOTE_MAX, describeCorrection,
-  proposeAttendanceCorrection, serializeAttendanceCorrection, validateCorrectionTimes,
+  ATTENDANCE_CORRECTION_INCLUDE, CORRECTION_NOTE_MAX, describeCorrection, describePenaltyCancellation,
+  proposeAttendanceCorrection, proposeAttendancePenaltyCancellation, resolvePardonPersistence,
+  serializeAttendanceCorrection, validateCorrectionTimes,
   type CorrectionDecision,
 } from "@/lib/attendance-correction"
 
-// Attendance correction proposed on a ticket, decided by a BoD.
+// Attendance remedy proposed on a ticket, decided by a BoD.
 //
-// THIS FILE IS THE ONLY PLACE A TICKET CAN WRITE AN AttendanceRecord. GIDEON's tool
-// (propose_attendance_correction) writes the proposal and nothing else; approval here is the human tap
-// that makes it real. Keep it that way — if a second write path shows up, the guarantee is gone.
+// THIS FILE IS THE ONLY PLACE A TICKET CAN WRITE AN AttendanceRecord. GIDEON's tools
+// (propose_attendance_correction, propose_penalty_cancellation) write the proposal and nothing else;
+// approval here is the human tap that makes it real. Keep it that way — if a second write path shows
+// up, the guarantee is gone.
+//
+// Two kinds of proposal, ONE decision point:
+//   TIME_CORRECTION      — rewrites the day's AttendanceRecord, then reverses the XP the old times had
+//                          cost if the corrected day comes out clean.
+//   PENALTY_CANCELLATION — reverses the XP and touches NO time. For a day whose recorded clock is
+//                          simply right and whose penalty is still unearned: a leave/permit/sick
+//                          request covers it, or NEXUS was down and there was nothing to check in to.
+// They share this route, the card, and the one-live-proposal-per-ticket rule on purpose. A ticket must
+// never be able to carry two contradictory answers to the same question.
 
 const eq = (a: Date | null, b: Date | null) => (a ? a.getTime() : null) === (b ? b.getTime() : null)
 
@@ -82,7 +93,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // wrong absen gets in front of a human.
     if (decision === "PROPOSE") {
       try {
-        const result = await proposeAttendanceCorrection(
+        // Which remedy the reporter is asking for. Defaulting to the time correction keeps every client
+        // that predates the second kind working unchanged.
+        const kind = String(payload?.kind ?? "TIME_CORRECTION").toUpperCase()
+        if (kind !== "TIME_CORRECTION" && kind !== "PENALTY_CANCELLATION") {
+          return NextResponse.json({ error: 'kind harus "TIME_CORRECTION" atau "PENALTY_CANCELLATION".' }, { status: 422 })
+        }
+        const propose = kind === "PENALTY_CANCELLATION" ? proposeAttendancePenaltyCancellation : proposeAttendanceCorrection
+        const result = await propose(
           { id: me, name: session.user.name ?? null },
           {
             complaintId: id,
@@ -177,6 +195,94 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
       logAudit({ action: "update", entityType: "attendance_correction", entityId: correction.id, userId: me, request, metadata: { decision: "REJECT", date: dateKey, note } })
       void notifyComplaintReply({ complaintId: id, workspaceId: complaint.workspaceId, reporterId: complaint.reporterId, fromReviewer: true, replierId: me }).catch(() => {})
+      return NextResponse.json({ correction: serializeAttendanceCorrection(updated), record: null })
+    }
+
+    // ---- APPROVE, PENALTY_CANCELLATION: reverse the XP, change no time. -------------------------
+    // Deliberately BEFORE the record lookup below: this remedy does not need a record to exist, does
+    // not care whether one has drifted, and must never write one. A day the outage swallowed has no
+    // record at all, and pardoning it is still the right answer.
+    if (correction.kind === "PENALTY_CANCELLATION") {
+      // Re-derived here, not read off the proposal: minutes or days may have passed, and whether the
+      // pardon needs to be permanent depends on what is true NOW. See resolvePardonPersistence.
+      const persistence = await resolvePardonPersistence(
+        correction.userId, correction.workspaceId, correction.attendanceDate, dateKey,
+      )
+
+      // The refund IS the approval here, so it runs FIRST and outside the bookkeeping transaction. If
+      // it throws, the proposal stays PENDING and the BoD can tap again — the opposite of the time
+      // correction, where the record write is the approval and a failed refund is only logged.
+      let refundedXp = 0
+      let restoredDayOffs = 0
+      try {
+        // Dibaca SEBELUM pembatalan: fungsi itu menghapus auto day-off-nya, jadi sesudahnya jumlahnya
+        // sudah nol dan tidak ada yang bisa melaporkan apa yang barusan dikembalikan.
+        const sebelum = await readAttendancePenaltiesForDate(
+          correction.userId, correction.workspaceId, correction.attendanceDate, dateKey,
+        )
+        restoredDayOffs = sebelum.autoDayOffs
+        const undone = await cancelAttendancePenaltiesForDateDetailed(
+          correction.userId, correction.workspaceId, correction.attendanceDate, dateKey,
+        )
+        refundedXp = undone.xp
+        if (persistence.waiverNeeded) await grantAttendanceWaiver(correction.userId, dateKey)
+      } catch (err) {
+        console.error("attendance penalty cancellation: reversal failed", { correctionId: correction.id, err })
+        return NextResponse.json({ error: "Gagal mengembalikan XP-nya. Usulan ini masih PENDING — coba approve lagi." }, { status: 500 })
+      }
+
+      const summary = describePenaltyCancellation(dateKey, correction.beforePenaltyXp ?? 0)
+      // Said plainly in the thread, because "approved" alone would leave two real questions open: how
+      // much actually came back, and whether this is final or can still be undone by a later decision
+      // on the request that covers the day.
+      const outcome = refundedXp > 0 || restoredDayOffs > 0
+        ? `Yang balik: ${refundedXp > 0 ? `+${refundedXp} XP` : "XP gak ada yang perlu balik"}${restoredDayOffs > 0 ? ` dan ${restoredDayOffs} jatah day off` : ""}.`
+        : "Ternyata potongannya udah gak ada di ledger (kemungkinan udah dikembalikan sebelum ini), jadi gak ada yang perlu balik lagi."
+      const persistenceLine = persistence.waiverNeeded
+        ? `Hari ini ditandai bebas-potongan permanen, karena ${persistence.why}.`
+        : `Gak perlu ditandai permanen: ${persistence.why}.`
+
+      const updated = await prisma.$transaction(async (tx) => {
+        const row = await tx.attendanceCorrection.update({
+          where: { id: correction.id },
+          data: {
+            status: "APPROVED", decidedById: me, decidedAt, decisionNote: note,
+            refundedXp, restoredDayOffs, waiverGranted: persistence.waiverNeeded,
+          },
+          include: ATTENDANCE_CORRECTION_INCLUDE,
+        })
+        await tx.complaintMessage.create({
+          data: {
+            complaintId: id,
+            authorId: me,
+            fromReviewer: true,
+            body: `Pembatalan potongan absen di-APPROVE — ${summary}. ${outcome} Jam absen ${dateKey} TIDAK diubah. ${persistenceLine}${note ? ` Catatan: ${note}` : ""}`.slice(0, BODY_MAX),
+          },
+        })
+        await tx.complaint.update({ where: { id }, data: { lastMessageAt: decidedAt, ...(bumpToReview ? { status: "IN_REVIEW" as const } : {}) } })
+        await tx.complaintEvent.create({ data: { complaintId: id, action: "correction_approved", actorId: me } })
+        if (bumpToReview) {
+          await tx.complaintEvent.create({ data: { complaintId: id, action: "status", fromStatus: complaint.status, toStatus: "IN_REVIEW", actorId: me } })
+        }
+        return row
+      })
+
+      logAudit({
+        action: "update",
+        entityType: "attendance_correction",
+        entityId: correction.id,
+        entityName: `pembatalan potongan absen ${dateKey} via tiket`,
+        userId: me,
+        request,
+        metadata: {
+          complaintId: id, kind: "PENALTY_CANCELLATION", date: dateKey,
+          beforePenaltyXp: correction.beforePenaltyXp, refundedXp,
+          waiverGranted: persistence.waiverNeeded, waiverWhy: persistence.why,
+          reason: correction.reason, note,
+        },
+      })
+      void notifyComplaintReply({ complaintId: id, workspaceId: complaint.workspaceId, reporterId: complaint.reporterId, fromReviewer: true, replierId: me }).catch(() => {})
+      // record: null, and it means it — no AttendanceRecord was read, written or created.
       return NextResponse.json({ correction: serializeAttendanceCorrection(updated), record: null })
     }
 

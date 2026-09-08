@@ -708,12 +708,15 @@ function AnnouncementsAdmin() {
   const [audience, setAudience] = useState<"all" | "some">("all");
   const [targetIds, setTargetIds] = useState<string[]>([]);
   const [memberSearch, setMemberSearch] = useState("");
+  // Repeat. 0 = post once, which is what every announcement did before this existed.
+  const [repeatDays, setRepeatDays] = useState(0);
+  const [repeatAtTime, setRepeatAtTime] = useState("09:00");
   const membersQ = useQuery({ queryKey: ["members"], queryFn: nexusApi.members, staleTime: 300_000 });
   const members = useMemo(() => { const raw = membersQ.data; return (Array.isArray(raw) ? raw : raw?.members ?? []); }, [membersQ.data]);
   const filteredMembers = useMemo(() => members.filter((m) => (m.name ?? m.email ?? "").toLowerCase().includes(memberSearch.toLowerCase())).slice(0, 8), [members, memberSearch]);
   const toggleTarget = (id: string) => setTargetIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const invalidate = () => { qc.invalidateQueries({ queryKey: ["nexus", "announcements"] }); qc.invalidateQueries({ queryKey: ["announcements-active"] }); };
-  const create = useMutation({ mutationFn: () => nexusApi.createAnnouncement({ title: title.trim(), body: body.trim(), tone, targetUserIds: audience === "some" ? targetIds : [] }), onSuccess: () => { setTitle(""); setBody(""); setTone("info"); setAudience("all"); setTargetIds([]); setMemberSearch(""); invalidate(); } });
+  const create = useMutation({ mutationFn: () => nexusApi.createAnnouncement({ title: title.trim(), body: body.trim(), tone, targetUserIds: audience === "some" ? targetIds : [], repeatDays, repeatAtTime }), onSuccess: () => { setTitle(""); setBody(""); setTone("info"); setAudience("all"); setTargetIds([]); setMemberSearch(""); setRepeatDays(0); setRepeatAtTime("09:00"); invalidate(); } });
   const toggle = useMutation({ mutationFn: ({ id, active }: { id: string; active: boolean }) => nexusApi.updateAnnouncement(id, { active }), onSuccess: invalidate });
   const del = useMutation({ mutationFn: (id: string) => nexusApi.deleteAnnouncement(id), onSuccess: invalidate });
   const rows = list.data?.announcements ?? [];
@@ -767,6 +770,32 @@ function AnnouncementsAdmin() {
               )}
             </div>
 
+            {/* Repeat. A notice posted once reaches whoever happened to open NEXUS that hour; "wear
+                your ID card this week" has to be said on each of those days, and re-typing it daily
+                is how it stops being said at all. */}
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Repeat</span>
+                <div className="flex rounded-lg border border-border p-0.5">
+                  {[0, 2, 3, 5, 7].map((d) => (
+                    <button key={d} onClick={() => setRepeatDays(d)} className={cn("rounded-md px-2.5 py-1 text-xs font-bold transition-colors", repeatDays === d ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}>{d === 0 ? "Once" : `${d} more days`}</button>
+                  ))}
+                </div>
+                {repeatDays > 0 && (
+                  <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                    at
+                    <input type="time" value={repeatAtTime} onChange={(e) => setRepeatAtTime(e.target.value)} className="rounded-lg border border-border bg-background px-2 py-1 text-sm outline-none focus:border-primary" />
+                    WIB
+                  </label>
+                )}
+              </div>
+              {repeatDays > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Goes out now, then again each day for {repeatDays} more {repeatDays === 1 ? "day" : "days"} at about {repeatAtTime} — pop-up and push both. It reappears for everyone each time, including people who already dismissed it.
+                </p>
+              )}
+            </div>
+
             <div className="flex flex-wrap items-center gap-2">
               <select value={tone} onChange={(e) => setTone(e.target.value)} className="rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary">
                 <option value="info">Info (blue)</option>
@@ -788,6 +817,9 @@ function AnnouncementsAdmin() {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-bold">{a.title}</span>
                     <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold uppercase", a.active ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground")}>{a.active ? "Active" : "Inactive"}</span>
+                    {a.repeatUntil && new Date(a.repeatUntil) >= new Date(new Date().toDateString()) && (
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">Repeats daily {a.repeatAtTime} until {new Date(a.repeatUntil).toLocaleDateString()}</span>
+                    )}
                     <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">{a.tone}</span>
                   </div>
                   <p className="mt-1 whitespace-pre-line text-xs text-muted-foreground">{a.body}</p>

@@ -27,6 +27,12 @@ export async function GET() {
       announcements: announcements.map((a) => ({
         id: a.id, title: a.title, body: a.body, tone: a.tone, active: a.active,
         createdAt: a.createdAt.toISOString(), seenCount: a._count.seenBy,
+        // seenCount is per REPEAT, not for all time: a repeat clears the seen rows so the pop-up
+        // comes back, which also makes this the more useful number — how many have seen it since
+        // it last went out.
+        repeatUntil: a.repeatUntil?.toISOString() ?? null,
+        repeatAtTime: a.repeatAtTime ?? null,
+        lastRepeatedAt: a.lastRepeatedAt?.toISOString() ?? null,
         targetUserIds: a.targetUserIds, targetCount: a.targetUserIds.length,
       })),
     })
@@ -42,9 +48,28 @@ export async function POST(req: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     if (!(await isBoD(session.user.id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    const { title, body, tone, targetUserIds } = await req.json()
+    const { title, body, tone, targetUserIds, repeatDays, repeatAtTime } = await req.json()
     if (!title || !body) return NextResponse.json({ error: "title & body required" }, { status: 400 })
     const t = ["info", "success", "warning"].includes(tone) ? tone : "info"
+
+    // Repeat, optional. `repeatDays` counts the days AFTER today that it should come back, so 0 (or
+    // absent) is the old behaviour exactly: posted once, never repeated. Capped at 30 — a notice
+    // that repeats for longer than a month has stopped being a notice.
+    const days = Math.min(Math.max(Number(repeatDays) || 0, 0), 30)
+    const timeRaw = typeof repeatAtTime === "string" ? repeatAtTime.trim() : ""
+    const timeOk = /^([01]\d|2[0-3]):([0-5]\d)$/.test(timeRaw)
+    if (days > 0 && !timeOk) {
+      return NextResponse.json({ error: "Jam pengulangan harus format HH:mm (24 jam)." }, { status: 422 })
+    }
+    // 00:00 WIB of the last day it should fire. Built from the Jakarta calendar day rather than
+    // "now + N×24h": an announcement posted at 23:50 must still repeat on N further DAYS, not be a
+    // few minutes short of the last one.
+    let repeatUntil: Date | null = null
+    if (days > 0) {
+      const jakartaToday = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }))
+      jakartaToday.setHours(0, 0, 0, 0)
+      repeatUntil = new Date(jakartaToday.getTime() + days * 24 * 60 * 60 * 1000)
+    }
 
     // Audience: empty = everyone. Otherwise restrict to the given (real, deduped) workspace members.
     let targets: string[] = []
@@ -55,7 +80,15 @@ export async function POST(req: NextRequest) {
     }
 
     const announcement = await prisma.announcement.create({
-      data: { title: String(title).trim(), body: String(body).trim(), tone: t, active: true, createdById: session.user.id, targetUserIds: targets },
+      data: {
+        title: String(title).trim(), body: String(body).trim(), tone: t, active: true,
+        createdById: session.user.id, targetUserIds: targets,
+        repeatUntil,
+        repeatAtTime: repeatUntil ? timeRaw : null,
+        // Stamped now so today's repeat window is already spent: the push below IS today's
+        // delivery, and the cron must not send it a second time this evening.
+        lastRepeatedAt: repeatUntil ? new Date() : null,
+      },
     })
     // Awaited, not fired and forgotten: delivery IS the feature here, and a broadcast that quietly
     // failed would leave the person who posted it believing everybody had been told. Wrapped so a

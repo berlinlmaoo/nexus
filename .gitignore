@@ -66,3 +66,10 @@ cloudflared/
 cron/cron-secret.txt
 .env.runtime
 *.bak-*
+
+# Keluaran build dan sampah runtime. dist-new adalah folder kerja skrip deploy SPA
+# (build ke sana dulu, baru ditimpakan ke dist) — bukan sesuatu yang perlu dilacak,
+# dan 79 berkas hash baru setiap kali akan menenggelamkan setiap diff.
+apps/nexus-lovable-ui/dist-new/
+cron/cron.log
+__pycache__/

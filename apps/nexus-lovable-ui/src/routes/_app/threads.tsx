@@ -6,23 +6,18 @@ import { AtSign, ArrowUp, Loader2 } from "lucide-react";
 import { AvatarStack } from "@/components/Avatar";
 import { celebrate } from "@/components/Celebration";
 import { cn } from "@/lib/utils";
-import { nexusApi, ORG_HIERARCHY, type FeedPage, type FeedPost, type NexusUser } from "@/lib/nexus-api";
+import { nexusApi, type FeedPage, type FeedPost, type NexusUser } from "@/lib/nexus-api";
 import type { MentionUser } from "@/hooks/useMentionAutocomplete";
 import { Composer, type ComposerPayload } from "@/components/feed/Composer";
 import { PostCard, type FeedPostUI } from "@/components/feed/PostCard";
-import { ComingSoon } from "@/components/ComingSoon";
 
 export const Route = createFileRoute("/_app/threads")({ component: ThreadsGate });
 
-// Role gate — Threads belum dibuka untuk Manager ke bawah (belum ada ETA rilis). BoD+ akses penuh;
-// selain itu lihat halaman "Coming Soon". Wrapper terpisah supaya hooks di FeedPage tetap konsisten
-// (early-return di tengah komponen berisi hooks = crash "rendered fewer hooks").
+// Threads is open to everyone. It spent its beta behind a BoD gate that lived in three places at
+// once — this wrapper, a redirect inside FeedPage, and the API — so the menu entry was visible to
+// every member and led to "Coming Soon". The wrapper stays as the route's component because the
+// file route points at it; it no longer decides anything.
 function ThreadsGate() {
-  const roleQ = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 });
-  const roleLoaded = roleQ.isSuccess || roleQ.isError;
-  const fullAccess = (ORG_HIERARCHY[roleQ.data?.role ?? ""] ?? 0) >= ORG_HIERARCHY.BOD;
-  if (!roleLoaded) return <div className="grid min-h-[60vh] place-items-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
-  if (!fullAccess) return <ComingSoon feature="Threads" />;
   return <FeedPage />;
 }
 
@@ -44,15 +39,9 @@ function FeedPage() {
   const [tab, setTab] = useState<Tab>("all");
   const key = useMemo(() => ["feed", tab] as const, [tab]);
 
-  // BETA gate — Threads is BoD-and-above only for now. Bounce everyone else (and never call the API).
-  const roleQ = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 });
-  const roleLoaded = roleQ.isSuccess || roleQ.isError;
-  const canSeeFeed = ["ONE_ABOVE_ALL", "BOD"].includes(roleQ.data?.role ?? "");
-  useEffect(() => { if (roleLoaded && !canSeeFeed) navigate({ to: "/dashboard" }); }, [roleLoaded, canSeeFeed, navigate]);
-
-  const profile = useQuery({ queryKey: ["profile"], queryFn: nexusApi.profile, retry: 1, enabled: canSeeFeed });
+  const profile = useQuery({ queryKey: ["profile"], queryFn: nexusApi.profile, retry: 1 });
   const me = profile.data?.user;
-  const membersQ = useQuery({ queryKey: ["members"], queryFn: nexusApi.members, retry: 1, staleTime: 300_000, enabled: canSeeFeed });
+  const membersQ = useQuery({ queryKey: ["members"], queryFn: nexusApi.members, retry: 1, staleTime: 300_000 });
   const members: MentionUser[] = useMemo(() => {
     const raw = membersQ.data;
     const arr: NexusUser[] = Array.isArray(raw) ? raw : raw?.members ?? [];
@@ -64,7 +53,6 @@ function FeedPage() {
     queryFn: ({ pageParam }) => nexusApi.feedPosts({ cursor: pageParam as string | undefined, mentions: tab === "mentions" ? "me" : undefined }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
-    enabled: canSeeFeed,
   });
 
   const posts: FeedPostUI[] = useMemo(() => (feed.data?.pages ?? []).flatMap((pg) => pg.posts as FeedPostUI[]), [feed.data]);
@@ -87,7 +75,7 @@ function FeedPage() {
     queryKey: ["feed-head", tab],
     queryFn: () => nexusApi.feedPosts({ limit: 20, mentions: tab === "mentions" ? "me" : undefined }),
     refetchInterval: 30_000,
-    enabled: canSeeFeed && !!feed.data,
+    enabled: !!feed.data,
   });
   const newPosts = useMemo(() => {
     if (!head.data || !topRealId) return [] as FeedPost[];
@@ -152,9 +140,8 @@ function FeedPage() {
 
   const onCommentAdded = (postId: string) => qc.setQueryData<Inf>(key, (old) => updatePost(old, postId, (p) => ({ ...p, commentCount: p.commentCount + 1 })));
 
-  if (roleLoaded && !canSeeFeed) return null; // non-BoD → redirected to /dashboard
-  const loading = !roleLoaded || feed.isLoading;
-  const empty = roleLoaded && canSeeFeed && !feed.isLoading && posts.length === 0;
+  const loading = feed.isLoading;
+  const empty = !feed.isLoading && posts.length === 0;
 
   return (
     <div className="mx-auto min-h-screen w-full max-w-[600px] sm:border-x sm:border-border">

@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma"
+import type { Prisma } from "@/generated/prisma/client"
 import { getGideonUserId } from "@/lib/gideon-identity"
 import { isBodPlus } from "@/lib/feed"
 
@@ -23,6 +24,20 @@ const THREAD_BODY_MAX = 4000
 // Keeping the propose side and the approve side on the same helpers is what makes that split
 // enforceable — the write path is one file, and it is the only one that touches AttendanceRecord.
 import { ATTENDANCE_TIMEZONE, attendanceWallClockToUtc, formatAttendanceDateKey, parseDateOnlyToUtc } from "@/lib/attendance"
+import { findCoveringAttendanceRequests, isAutoDeduction, isOutageDay, readAttendancePenaltiesForDate } from "@/lib/attendance-absence"
+
+/**
+ * The two remedies a ticket can ask for. See the AttendanceCorrectionKind enum in schema.prisma for
+ * why they share one model: one live proposal per ticket, one card, one decide route.
+ *
+ * A ticket whose day is covered by a leave/permit/sick request, or that fell on a day NEXUS was down,
+ * does not have wrong TIMES — it has a penalty it should never have been charged. Before this existed
+ * the only tool was "propose a time", so every such case was shaped into a time: the reporter got back
+ * a proposal restating the clock he was complaining about, or one moving him from one late arrival to
+ * a slightly earlier one. Neither undoes the deduction he actually filed about.
+ */
+export const ATTENDANCE_CORRECTION_KINDS = ["TIME_CORRECTION", "PENALTY_CANCELLATION"] as const
+export type AttendanceCorrectionKind = (typeof ATTENDANCE_CORRECTION_KINDS)[number]
 
 export const CORRECTION_REASON_MIN = 10
 export const CORRECTION_REASON_MAX = 1000
@@ -110,6 +125,7 @@ type CorrectionRow = {
   userId: string
   user: CorrectionPerson
   attendanceDate: Date
+  kind: string
   proposedCheckInAt: Date | null
   proposedCheckOutAt: Date | null
   reason: string
@@ -124,6 +140,11 @@ type CorrectionRow = {
   beforeCheckInAt: Date | null
   beforeCheckOutAt: Date | null
   beforeStatus: string | null
+  beforePenaltyXp: number | null
+  beforeAutoDayOffs: number | null
+  restoredDayOffs: number | null
+  refundedXp: number | null
+  waiverGranted: boolean
   createdAt: Date
 }
 
@@ -132,6 +153,9 @@ export function serializeAttendanceCorrection(c: CorrectionRow) {
     id: c.id,
     complaintId: c.complaintId,
     status: c.status,
+    // Which remedy is being asked for. The card branches on this: a TIME_CORRECTION draws a
+    // before/after clock, a PENALTY_CANCELLATION says the clock is staying exactly as it is.
+    kind: c.kind,
     // Date-key rather than the raw 00:00 UTC Date — every attendance screen already speaks in keys,
     // and a client re-formatting the Date in its own zone would show the previous day.
     date: formatAttendanceDateKey(c.attendanceDate),
@@ -147,12 +171,73 @@ export function serializeAttendanceCorrection(c: CorrectionRow) {
       checkOutAt: c.beforeCheckOutAt?.toISOString() ?? null,
       status: c.beforeStatus,
     },
+    // What the day had cost when this was written (negative), and — once decided — what came back and
+    // whether the pardon was made permanent. The ledger rows are DELETED by the refund, so if these
+    // are not kept here nobody can answer "what did approving this actually do" afterwards.
+    beforePenaltyXp: c.beforePenaltyXp,
+    // Potongan absen tidak selalu berupa XP saja: hari tanpa check-in juga memakan satu jatah
+    // day-off, dan approve mengembalikan keduanya. Kartu yang hanya menyebut XP membuat approve
+    // terlihat lebih kecil dari kenyataannya.
+    beforeAutoDayOffs: c.beforeAutoDayOffs,
+    restoredDayOffs: c.restoredDayOffs,
+    refundedXp: c.refundedXp,
+    waiverGranted: c.waiverGranted,
     decidedBy: c.decidedBy,
     decidedAt: c.decidedAt?.toISOString() ?? null,
     decisionNote: c.decisionNote,
     createdAt: c.createdAt.toISOString(),
     canApprove: c.status === "PENDING",
   }
+}
+
+/**
+ * Does pardoning this day need a WAIVER to stick, or would one be a lie?
+ *
+ * A refund on its own does not hold. The nightly job re-derives penalties across a rolling window and
+ * would simply re-cut the same XP tomorrow. `grantAttendanceWaiver` is the marker that stops it — but
+ * it is PERMANENT and STATUS-BLIND: once written, that member-day can never be penalised again, no
+ * matter what is later decided about it. So it is exactly right in one case and wrong in the other:
+ *
+ *   - A live leave/permit/sick request already covers the day. Both crons honour it (PENDING as much as
+ *     APPROVED — see processAbsenceDeductions and accrueLatePenalties), so the refund sticks by itself,
+ *     and `cancelAttendancePenaltiesForRange` — the path that runs when such a request is filed — has
+ *     never granted a waiver either. More importantly, if a BoD later REJECTS that permit the penalty
+ *     is supposed to come back; `rederiveLatePenaltyForDate` exists for precisely that. A waiver here
+ *     would make the rejection unenforceable, quietly and forever.
+ *   - Nothing covers the day: the pardon rests on the BoD's own judgement (an outage NEXUS never
+ *     recorded is the usual one). Nothing else will hold the cron off, so without a waiver the member
+ *     watches their points come back and vanish overnight. Here the waiver IS the decision.
+ *
+ * A date the workspace has registered in ATTENDANCE_OUTAGE_DATES needs no waiver either — both crons
+ * skip the whole day. That register is sparsely maintained, so a `false` from it means "not recorded",
+ * never "did not happen", and the branch below treats it that way: unrecorded outage → waiver.
+ */
+export async function resolvePardonPersistence(userId: string, workspaceId: string, date: Date, dateKey: string) {
+  const covering = await findCoveringAttendanceRequests(userId, workspaceId, date)
+  // The cron's own "Auto:" day-off is a penalty, not cover for one, so it never counts as cover here.
+  const realCover = covering.filter((r) => !isAutoDeduction(r))
+  const outageRegistered = await isOutageDay(dateKey)
+  if (realCover.length > 0) {
+    return {
+      waiverNeeded: false,
+      why: `hari itu ketutup ${realCover.length} pengajuan (${realCover.map((r) => `${r.type}/${r.status}`).join(", ")}) — cron udah nahan potongannya sendiri, dan kalau pengajuannya nanti ditolak potongannya balik lagi (itu memang seharusnya)`,
+    }
+  }
+  if (outageRegistered) {
+    return { waiverNeeded: false, why: `${dateKey} udah tercatat sebagai hari NEXUS down, jadi semua cron ngelewatin hari itu` }
+  }
+  return {
+    waiverNeeded: true,
+    why: 'gak ada pengajuan yang nutup hari itu dan tanggalnya belum tercatat sebagai hari NEXUS down, jadi tanpa waiver potongannya bakal dipotong ulang sama cron nanti malam',
+  }
+}
+
+/** "2026-09-04: batalkan potongan 120 XP" — the cancellation's one-line equivalent of describeCorrection. */
+export function describePenaltyCancellation(dateKey: string, penaltyXp: number, autoDayOffs = 0) {
+  const parts: string[] = []
+  if (penaltyXp < 0) parts.push(`batalin potongan ${Math.abs(penaltyXp)} XP`)
+  if (autoDayOffs > 0) parts.push(`balikin ${autoDayOffs} jatah day-off yang kepotong otomatis`)
+  return `${dateKey}: ${parts.length ? parts.join(" + ") : "batalin potongan absen"}, jam absennya TETAP`
 }
 
 /** One-line "08:12 → 09:03" style summary, used for the ticket message and audit metadata. */
@@ -174,24 +259,56 @@ export function describeCorrection(input: {
 }
 
 /**
- * propose_attendance_correction — the ONLY thing GIDEON may do about attendance.
+ * The thread side of filing a proposal, identical for both remedies: say it in the ticket, mark the
+ * ticket as touched, log the event, and lift an untouched ticket into "waiting on a BoD".
  *
- * Staff file an ATTENDANCE (or EXP) ticket with a photo; a BoD used to read it and go fix the record by hand in
- * another screen. This lets GIDEON draft that fix ONTO the ticket, and stops there: it writes an
- * AttendanceCorrection row and a message in the thread, never an AttendanceRecord. The record only
- * moves when a human taps approve at POST /api/complaints/[id]/correction. There is deliberately no
- * tool action anywhere in this file that writes attendance — an assistant that can quietly rewrite who
- * was late is worth more to an attacker than every other action here combined.
- *
- * Input: { complaintId, date: "YYYY-MM-DD", checkInAt?, checkOutAt?, reason }
- * checkInAt/checkOutAt take "HH:mm" (office-local) or a full ISO-8601 timestamp; at least one is required.
+ * Shared so a penalty cancellation cannot go quiet where a time correction speaks. A proposal only the
+ * API can see is a proposal nobody approves, and that failure would be invisible: the row exists, the
+ * tool reports success, and the ticket looks like one nobody has read.
  */
-export async function proposeAttendanceCorrection(
+async function attachProposalToThread(
+  tx: Prisma.TransactionClient,
+  opts: { complaintId: string; authorId: string; actorIsBod: boolean; body: string },
+) {
+  await tx.complaintMessage.create({
+    data: {
+      complaintId: opts.complaintId,
+      authorId: opts.authorId,
+      fromReviewer: opts.actorIsBod,
+      body: opts.body.slice(0, THREAD_BODY_MAX),
+    },
+  })
+  await tx.complaint.update({ where: { id: opts.complaintId }, data: { lastMessageAt: new Date() } })
+  await tx.complaintEvent.create({
+    data: { complaintId: opts.complaintId, action: 'correction_proposed', actorId: opts.authorId },
+  })
+  // A live proposal IS a decision waiting on a BoD, whoever wrote it, so an untouched ticket says so
+  // on the list instead of looking like one nobody has read. Only ever out of OPEN: a ticket a
+  // director already took on stays IN_REVIEW, and the list marker carries the proposal there.
+  // The status is guarded in the WHERE, not by a read further up — minutes can pass between GIDEON
+  // reading the ticket and filing this.
+  const bumped = await tx.complaint.updateMany({
+    where: { id: opts.complaintId, status: 'OPEN' },
+    data: { status: 'AWAITING_DECISION' },
+  })
+  if (bumped.count > 0) {
+    await tx.complaintEvent.create({
+      data: { complaintId: opts.complaintId, action: 'status', fromStatus: 'OPEN', toStatus: 'AWAITING_DECISION', actorId: opts.authorId },
+    })
+  }
+}
+
+/**
+ * Everything both remedies must clear before anything is written: a real ticket, in the actor's
+ * workspace, that the actor may see, in a category corrections attach to, not closed, with a date and
+ * a sentence a BoD can decide on.
+ *
+ * Extracted so the second remedy cannot quietly be laxer than the first. The gate that keeps DAY_OFF
+ * out, and the one that stops a staffer filing against a colleague's day, are the same code for both.
+ */
+async function openProposal(
   actor: { id: string; role?: string | null; name?: string | null },
   input: Record<string, unknown>,
-  /** Whose name the proposal carries. GIDEON when it drafts one; the reporter when they ask for it
-   *  themselves — an assistant that declines, or is not there, must not be the only way to be heard. */
-  proposedById?: string,
 ) {
   const complaintId = asString(input.complaintId)
   const dateKey = asString(input.date) ?? asString(input.attendanceDate)
@@ -225,6 +342,43 @@ export async function proposeAttendanceCorrection(
     throw new Error(`Ticket ${complaintId} is category ${complaint.category}; an attendance correction only attaches to an ATTENDANCE or EXP ticket.`)
   }
   if (complaint.status === 'CLOSED') throw new Error('Tiket ini udah ditutup, gak bisa diusulin koreksi lagi.')
+
+  // One live proposal per ticket, of EITHER kind (the DB carries a partial unique index on complaintId
+  // WHERE status = 'PENDING' saying the same). This is why the second remedy is a kind and not a second
+  // table: two live proposals would mean the BoD approves whichever the UI happened to show, and a
+  // ticket could carry "rewrite the times" and "pardon the day" at once — two answers to one question.
+  const existingPending = await prisma.attendanceCorrection.findFirst({
+    where: { complaintId, status: 'PENDING' },
+    select: { id: true, kind: true },
+  })
+  if (existingPending) {
+    throw new Error(`Tiket ini udah punya usulan yang nunggu approval BoD (${existingPending.id}, ${existingPending.kind}).`)
+  }
+
+  return { complaintId, dateKey, reason, complaint, actorIsBod, workspaceId: membership.workspaceId }
+}
+
+/**
+ * propose_attendance_correction — one of the two things GIDEON may do about attendance.
+ *
+ * Staff file an ATTENDANCE (or EXP) ticket with a photo; a BoD used to read it and go fix the record by hand in
+ * another screen. This lets GIDEON draft that fix ONTO the ticket, and stops there: it writes an
+ * AttendanceCorrection row and a message in the thread, never an AttendanceRecord. The record only
+ * moves when a human taps approve at POST /api/complaints/[id]/correction. There is deliberately no
+ * tool action anywhere in this file that writes attendance — an assistant that can quietly rewrite who
+ * was late is worth more to an attacker than every other action here combined.
+ *
+ * Input: { complaintId, date: "YYYY-MM-DD", checkInAt?, checkOutAt?, reason }
+ * checkInAt/checkOutAt take "HH:mm" (office-local) or a full ISO-8601 timestamp; at least one is required.
+ */
+export async function proposeAttendanceCorrection(
+  actor: { id: string; role?: string | null; name?: string | null },
+  input: Record<string, unknown>,
+  /** Whose name the proposal carries. GIDEON when it drafts one; the reporter when they ask for it
+   *  themselves — an assistant that declines, or is not there, must not be the only way to be heard. */
+  proposedById?: string,
+) {
+  const { complaintId, dateKey, reason, complaint, actorIsBod } = await openProposal(actor, input)
 
   const proposedCheckInAt = parseProposedTime(input.checkInAt, dateKey, 'checkInAt') ?? null
   const proposedCheckOutAt = parseProposedTime(input.checkOutAt, dateKey, 'checkOutAt') ?? null
@@ -268,16 +422,6 @@ export async function proposeAttendanceCorrection(
   )
   if (timeError) throw new Error(timeError)
 
-  // One live proposal per ticket (the DB carries a partial unique index saying the same). Two PENDING
-  // rows means the BoD approves whichever the UI happened to show and the other stays live forever.
-  const existingPending = await prisma.attendanceCorrection.findFirst({
-    where: { complaintId, status: 'PENDING' },
-    select: { id: true },
-  })
-  if (existingPending) {
-    throw new Error(`Tiket ini udah punya usulan koreksi yang nunggu approval BoD (${existingPending.id}).`)
-  }
-
   const summary = describeCorrection({
     dateKey,
     beforeCheckInAt: record?.checkInAt ?? null,
@@ -296,6 +440,9 @@ export async function proposeAttendanceCorrection(
         workspaceId: complaint.workspaceId,
         userId: complaint.reporterId,
         attendanceDate,
+        // Spelled out rather than left to the column default: the row says which remedy it is, and a
+        // reader of this file does not have to go to schema.prisma to find out.
+        kind: 'TIME_CORRECTION',
         proposedCheckInAt,
         proposedCheckOutAt,
         reason: reason.slice(0, CORRECTION_REASON_MAX),
@@ -311,33 +458,12 @@ export async function proposeAttendanceCorrection(
       },
       include: ATTENDANCE_CORRECTION_INCLUDE,
     })
-    // Put it in the thread too. A proposal only the API can see is a proposal nobody approves.
-    await tx.complaintMessage.create({
-      data: {
-        complaintId,
-        authorId: authorId,
-        fromReviewer: actorIsBod,
-        body: `Usulan koreksi absen — ${summary}. Alasan: ${reason}\n\nAbsennya BELUM berubah; nunggu approve BoD.`.slice(0, THREAD_BODY_MAX),
-      },
+    await attachProposalToThread(tx, {
+      complaintId,
+      authorId,
+      actorIsBod,
+      body: `Usulan koreksi absen — ${summary}. Alasan: ${reason}\n\nAbsennya BELUM berubah; nunggu approve BoD.`,
     })
-    await tx.complaint.update({ where: { id: complaintId }, data: { lastMessageAt: new Date() } })
-    await tx.complaintEvent.create({
-      data: { complaintId, action: 'correction_proposed', actorId: authorId },
-    })
-    // A live proposal IS a decision waiting on a BoD, whoever wrote it, so an untouched ticket says
-    // so on the list instead of looking like one nobody has read. Only ever out of OPEN: a ticket a
-    // director already took on stays IN_REVIEW, and the list marker carries the proposal there.
-    // The status is guarded in the WHERE, not by the read further up — minutes can pass between
-    // GIDEON reading the ticket and filing this.
-    const bumped = await tx.complaint.updateMany({
-      where: { id: complaintId, status: 'OPEN' },
-      data: { status: 'AWAITING_DECISION' },
-    })
-    if (bumped.count > 0) {
-      await tx.complaintEvent.create({
-        data: { complaintId, action: 'status', fromStatus: 'OPEN', toStatus: 'AWAITING_DECISION', actorId: authorId },
-      })
-    }
     return correction
   })
 
@@ -348,3 +474,107 @@ export async function proposeAttendanceCorrection(
     note: 'Recorded as a PROPOSAL on the ticket. Attendance is unchanged until a BoD approves it.',
   }
 }
+
+/**
+ * propose_penalty_cancellation — the second remedy, and the one that was missing.
+ *
+ * Reverses the day's XP penalty and CHANGES NO TIME. It exists because two whole classes of ticket
+ * have nothing wrong with their recorded times:
+ *
+ *   - a leave / permit / sick request covers the day. PENDING counts: the crons already hold the
+ *     penalty back for a request that is merely filed, so a day covered by one is not plain lateness
+ *     however late the clock says the person arrived.
+ *   - NEXUS itself was unreachable, so the person could not check in at all. The arrival time on their
+ *     screenshot is when they gave up trying, not when they were due — proposing it as a check-in
+ *     simply moves them from one late arrival to another and refunds nothing.
+ *
+ * Shaped into "propose a time", both of those produced a proposal that either restated the record or
+ * left the deduction standing. This proposes the deduction itself.
+ *
+ * Still a PROPOSAL and nothing else: it writes an AttendanceCorrection row and a thread message. No XP
+ * moves until a BoD taps approve at POST /api/complaints/[id]/correction. GIDEON must never apply one,
+ * and there is deliberately no path in this file that does.
+ *
+ * Input: { complaintId, date: "YYYY-MM-DD", reason }. No times — accepting one would reopen the exact
+ * mistake this remedy exists to end.
+ */
+export async function proposeAttendancePenaltyCancellation(
+  actor: { id: string; role?: string | null; name?: string | null },
+  input: Record<string, unknown>,
+  /** Whose name it carries — GIDEON when it drafts one, the reporter when they ask for it themselves. */
+  proposedById?: string,
+) {
+  const { complaintId, dateKey, reason, complaint, actorIsBod } = await openProposal(actor, input)
+
+  // The target is the ticket's reporter, never an input field — same rule as the time correction, and
+  // for the same reason: otherwise any staffer could ask GIDEON to pardon a colleague's day from their
+  // own ticket.
+  const userId = complaint.reporterId
+  const workspaceId = complaint.workspaceId
+  const attendanceDate = parseDateOnlyToUtc(dateKey)
+
+  // What the day ACTUALLY cost, read from the ledger by the same function the outage refund uses.
+  const penalties = await readAttendancePenaltiesForDate(userId, workspaceId, attendanceDate, dateKey)
+  const penaltyXp = penalties.lateXp + penalties.noCheckoutXp + penalties.alphaXp // negative, or 0
+
+  // Nothing to undo is not a proposal, it is a misreading — and the commonest way to get here is a day
+  // whose penalty a cron already refunded once the permit was approved. Saying so is more useful than
+  // filing a pardon for a day that costs nothing: the reporter's XP is already back.
+  if (penaltyXp === 0 && penalties.autoDayOffs === 0) {
+    throw new Error(
+      `Tanggal ${dateKey} lagi gak punya potongan absen yang bisa dibatalin buat pelapor tiket ini — ` +
+        'ledger-nya kosong (mungkin udah dikembalikan). Jangan usulin pembatalan; jelasin aja apa adanya.'
+    )
+  }
+
+  // The times are snapshotted even though nothing will touch them. The card shows what STAYS, and an
+  // approval that changed nothing is only provably harmless if what it left alone was written down.
+  const record = await prisma.attendanceRecord.findUnique({
+    where: { userId_workspaceId_attendanceDate: { userId, workspaceId, attendanceDate } },
+    select: { id: true, checkInAt: true, checkOutAt: true, status: true },
+  })
+
+  const summary = describePenaltyCancellation(dateKey, penaltyXp, penalties.autoDayOffs)
+  // GIDEON wrote it, so GIDEON signs it. The actor's permissions got us here; the authorship says who
+  // actually typed it.
+  const authorId = proposedById ?? (await getGideonUserId())
+
+  const created = await prisma.$transaction(async (tx) => {
+    const correction = await tx.attendanceCorrection.create({
+      data: {
+        complaintId,
+        workspaceId,
+        userId,
+        attendanceDate,
+        kind: 'PENALTY_CANCELLATION',
+        // Both null, and that is the whole difference. The approve path reads the kind, not these.
+        proposedCheckInAt: null,
+        proposedCheckOutAt: null,
+        reason: reason.slice(0, CORRECTION_REASON_MAX),
+        proposedById: authorId,
+        status: 'PENDING',
+        beforeRecordId: record?.id ?? null,
+        beforeCheckInAt: record?.checkInAt ?? null,
+        beforeCheckOutAt: record?.checkOutAt ?? null,
+        beforeStatus: record?.status ?? null,
+        beforePenaltyXp: penaltyXp,
+        beforeAutoDayOffs: penalties.autoDayOffs,
+      },
+      include: ATTENDANCE_CORRECTION_INCLUDE,
+    })
+    await attachProposalToThread(tx, {
+      complaintId,
+      authorId,
+      actorIsBod,
+      body: `Usulan pembatalan potongan absen — ${summary}. Alasan: ${reason}\n\nXP-nya BELUM balik dan jam absennya gak diubah; nunggu approve BoD.`,
+    })
+    return correction
+  })
+
+  return {
+    ...serializeAttendanceCorrection(created),
+    applied: false,
+    note: 'Recorded as a PROPOSAL on the ticket. No XP has moved and no attendance time was changed; a BoD decides.',
+  }
+}
+

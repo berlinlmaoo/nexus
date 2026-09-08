@@ -17,7 +17,8 @@ export async function getUserOrgRole(userId: string): Promise<string | null> {
 export function isManagerRole(role?: string | null): boolean {
   return role === "ONE_ABOVE_ALL" || role === "BOD" || role === "MANAGER"
 }
-// BETA gate: The Wire is currently visible to BoD and above only (excludes Manager + Staff).
+// BoD and above. The Wire itself is open to everyone now — this is still what decides who may
+// DELETE somebody else's post, and it is used by several non-feed routes besides.
 export function isBodPlus(role?: string | null): boolean {
   return role === "ONE_ABOVE_ALL" || role === "BOD"
 }

@@ -10,7 +10,7 @@ import { resolveMime } from "@/lib/mime"
 import { notifyFeedMention } from "@/lib/notification-service"
 import {
   POST_TEXT_MAX, IMG_MAX, IMG_SIZE_MAX, MENTION_MAX, RATE_MIN_GAP_MS, RATE_HOURLY_MAX,
-  POST_INCLUDE, type PostRow, serializePost, getUserOrgRole, isManagerRole, isBodPlus, encodeCursor, decodeCursor,
+  POST_INCLUDE, type PostRow, serializePost, getUserOrgRole, isBodPlus, encodeCursor, decodeCursor,
 } from "@/lib/feed"
 
 // GET /api/feed/posts?cursor&limit=20[&mentions=me] — global firehose, newest first.
@@ -20,9 +20,10 @@ export async function GET(request: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const me = session.user.id
 
-    // BETA gate — The Wire is BoD-and-above only for now.
+    // Open to every signed-in member. The Wire spent its beta behind a BoD gate, which meant the
+    // menu entry was visible to everyone and answered 403 — a feed that looked broken rather than
+    // closed. Reading and posting are now the same permission as being here at all.
     const role = await getUserOrgRole(me)
-    if (!isBodPlus(role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     const sp = request.nextUrl.searchParams
     const limit = Math.min(Math.max(Number(sp.get("limit")) || 20, 1), 50)
@@ -51,11 +52,14 @@ export async function GET(request: NextRequest) {
 
     const liked = ids.length ? await prisma.postLike.findMany({ where: { userId: me, postId: { in: ids } }, select: { postId: true } }) : []
     const likedSet = new Set(liked.map((l) => l.postId))
-    const viewerIsManager = isManagerRole(role)
+    // Who may delete somebody ELSE's post. BoD and above only — deliberately narrower than
+    // isManagerRole: moderating the company feed is not a line-manager job, and the flag drives the
+    // delete button, so a manager should not be shown one that the route would refuse.
+    const viewerCanModerate = isBodPlus(role)
 
     const last = page[page.length - 1]
     return NextResponse.json({
-      posts: page.map((p) => serializePost(p as unknown as PostRow, me, likedSet, viewerIsManager)),
+      posts: page.map((p) => serializePost(p as unknown as PostRow, me, likedSet, viewerCanModerate)),
       nextCursor: hasMore && last ? encodeCursor(last.createdAt, last.id) : null,
       hasMore,
     })
@@ -72,8 +76,7 @@ export async function POST(request: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const me = session.user.id
 
-    // BETA gate — only BoD-and-above can post to The Wire.
-    if (!isBodPlus(await getUserOrgRole(me))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    // Anyone signed in may post; the rate limits below are what keep it civil, not the role.
 
     const form = await request.formData()
     const text = String(form.get("text") ?? "").trim()

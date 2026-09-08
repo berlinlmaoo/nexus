@@ -8,7 +8,7 @@ import { GideonMark } from "@/components/gideon/GideonMark";
 import { PageHeader } from "@/components/PageHeader";
 import { Avatar } from "@/components/Avatar";
 import { cn } from "@/lib/utils";
-import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, type AttendanceCorrection, type Complaint } from "@/lib/nexus-api";
+import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, type AttendanceCorrection, type AttendanceCorrectionKind, type Complaint } from "@/lib/nexus-api";
 
 export const Route = createFileRoute("/_app/complaints")({ component: ComplaintsPage });
 
@@ -404,7 +404,7 @@ function ComplaintThread({ id, viewerIsBod, onClose, onChanged }: { id: string; 
             CORRECTABLE_COMPLAINT_CATEGORIES in src/lib/attendance-correction.ts; the server refuses
             anything else, so a button shown here that the server rejects is just a dead end. */}
         {c && CORRECTABLE_CATEGORIES.includes(c.category) && c.status !== "CLOSED" && !corrections.some((cor) => cor.status === "PENDING") && (
-          <ProposeCorrectionForm complaintId={id} defaultDate={dateKeyOf(c.createdAt)} onProposed={refreshAfterDecision} />
+          <ProposeRemedyForm complaintId={id} defaultDate={dateKeyOf(c.createdAt)} onProposed={refreshAfterDecision} />
         )}
         {c && c.status !== "OPEN" && c.resolvedAt && (c.status === "RESOLVED" || c.status === "CLOSED") && (
           <div className="py-1 text-center text-[11px] font-semibold text-muted-foreground">— {c.status === "RESOLVED" ? "Marked resolved" : "Closed"} {c.resolvedBy ? `by ${c.resolvedBy.name}` : ""} —</div>
@@ -459,39 +459,51 @@ function dateKeyOf(iso: string) {
 }
 
 /**
- * The reporter's own correction request.
+ * The reporter's own request, in either shape.
  *
- * It writes a PROPOSAL and nothing else — same server function GIDEON uses, same guardrails (own
+ * It writes a PROPOSAL and nothing else — same server functions GIDEON uses, same guardrails (own
  * ticket, the reporter's own attendance, one live proposal at a time). The BoD tap on the card above
- * is still the only thing that rewrites a record, so this widens who may ask, never who may decide.
+ * is still the only thing that rewrites a record or moves XP, so this widens who may ask, never who
+ * may decide.
+ *
+ * Both remedies are offered here for the same reason GIDEON has both: someone whose permit is still
+ * awaiting approval, or who could not check in because NEXUS was down, does not have a wrong CLOCK to
+ * type in. Offering them only the times form is asking them to invent a number to describe a problem
+ * that is not about numbers.
  */
-function ProposeCorrectionForm({ complaintId, defaultDate, onProposed }: { complaintId: string; defaultDate: string; onProposed: () => void }) {
+function ProposeRemedyForm({ complaintId, defaultDate, onProposed }: { complaintId: string; defaultDate: string; onProposed: () => void }) {
   const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState<AttendanceCorrectionKind>("TIME_CORRECTION");
   const [date, setDate] = useState(defaultDate);
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const cancelling = kind === "PENALTY_CANCELLATION";
 
   const propose = useMutation({
     mutationFn: () =>
       nexusApi.proposeComplaintCorrection(complaintId, {
+        kind,
         date,
-        checkInAt: checkIn || undefined,
-        checkOutAt: checkOut || undefined,
+        // Deliberately never sent for a cancellation, even if the fields still hold something from
+        // before the toggle: the server ignores them, and sending them would suggest otherwise.
+        checkInAt: cancelling ? undefined : checkIn || undefined,
+        checkOutAt: cancelling ? undefined : checkOut || undefined,
         reason: reason.trim(),
       }),
     onSuccess: () => { setOpen(false); setCheckIn(""); setCheckOut(""); setReason(""); setError(null); onProposed(); },
-    // The server's refusals are written to be read (wrong day, ticket closed, one already pending).
+    // The server's refusals are written to be read (wrong day, ticket closed, one already pending,
+    // nothing left to cancel).
     onError: (e) => setError(e instanceof ApiError ? e.message : "Gagal mengirim usulan."),
   });
 
-  const ready = !!date && (!!checkIn || !!checkOut) && reason.trim().length >= 10;
+  const ready = !!date && reason.trim().length >= 10 && (cancelling || !!checkIn || !!checkOut);
 
   if (!open) {
     return (
       <button onClick={() => setOpen(true)} className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-border py-2.5 text-xs font-bold text-muted-foreground transition hover:border-primary/50 hover:text-foreground">
-        <CalendarClock className="h-3.5 w-3.5" /> Ajukan koreksi absen
+        <CalendarClock className="h-3.5 w-3.5" /> Ajukan perbaikan absen
       </button>
     );
   }
@@ -499,29 +511,55 @@ function ProposeCorrectionForm({ complaintId, defaultDate, onProposed }: { compl
   return (
     <div className="rounded-2xl border border-border bg-card p-3.5">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Usulan koreksi absen</span>
+        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{cancelling ? "Usulan pembatalan potongan" : "Usulan koreksi absen"}</span>
         <button onClick={() => setOpen(false)} className="grid h-6 w-6 place-items-center rounded-full text-muted-foreground hover:bg-accent"><X className="h-3.5 w-3.5" /></button>
       </div>
-      <p className="mb-2.5 text-[11px] leading-snug text-muted-foreground">Isi jam yang seharusnya tercatat. Absen kamu <b>belum berubah</b> — ini cuma usulan yang nunggu approve BoD.</p>
+
+      {/* The choice comes first, because it changes what the rest of the form even asks for. */}
+      <div className="mb-2.5 grid grid-cols-2 gap-1.5">
+        {([
+          { k: "TIME_CORRECTION" as const, title: "Jamnya salah", sub: "Jam masuk/pulang yang tercatat tidak sesuai kenyataan" },
+          { k: "PENALTY_CANCELLATION" as const, title: "Potongannya tidak adil", sub: "Jamnya benar, tapi hari itu ada izin/cuti/sakit, atau NEXUS-nya down" },
+        ]).map((opt) => (
+          <button key={opt.k} onClick={() => { setKind(opt.k); setError(null); }}
+            className={cn("rounded-xl border px-2.5 py-2 text-left transition", kind === opt.k ? "border-primary bg-primary/5" : "border-border hover:bg-accent")}>
+            <div className="text-[11px] font-bold">{opt.title}</div>
+            <div className="mt-0.5 text-[10px] leading-snug text-muted-foreground">{opt.sub}</div>
+          </button>
+        ))}
+      </div>
+
+      <p className="mb-2.5 text-[11px] leading-snug text-muted-foreground">
+        {cancelling
+          ? <>Jam absen kamu <b>tidak akan diubah</b>. Yang diusulkan cuma pembatalan potongan XP hari itu, dan itu <b>belum terjadi</b> — nunggu approve BoD.</>
+          : <>Isi jam yang seharusnya tercatat. Absen kamu <b>belum berubah</b> — ini cuma usulan yang nunggu approve BoD.</>}
+      </p>
 
       <div className="grid grid-cols-2 gap-2">
         <label className="col-span-2 text-[11px] font-semibold text-muted-foreground">
           Tanggal
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-0.5 w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm font-normal text-foreground" />
         </label>
-        <label className="text-[11px] font-semibold text-muted-foreground">
-          Check-in
-          <input type="time" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="mt-0.5 w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm font-normal text-foreground" />
-        </label>
-        <label className="text-[11px] font-semibold text-muted-foreground">
-          Check-out
-          <input type="time" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="mt-0.5 w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm font-normal text-foreground" />
-        </label>
+        {!cancelling && (
+          <>
+            <label className="text-[11px] font-semibold text-muted-foreground">
+              Check-in
+              <input type="time" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="mt-0.5 w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm font-normal text-foreground" />
+            </label>
+            <label className="text-[11px] font-semibold text-muted-foreground">
+              Check-out
+              <input type="time" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="mt-0.5 w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm font-normal text-foreground" />
+            </label>
+          </>
+        )}
       </div>
 
       <label className="mt-2 block text-[11px] font-semibold text-muted-foreground">
         Alasan
-        <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="Kenapa jamnya salah? Contoh: server NEXUS down jam 08.00, absen gagal kekirim."
+        <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3}
+          placeholder={cancelling
+            ? "Kenapa potongannya tidak adil? Contoh: hari itu sudah ajukan izin, statusnya masih nunggu approval."
+            : "Kenapa jamnya salah? Contoh: server NEXUS down jam 08.00, absen gagal kekirim."}
           className="mt-0.5 w-full resize-none rounded-lg border border-border bg-background px-2 py-1.5 text-sm font-normal text-foreground placeholder:text-muted-foreground" />
       </label>
 
@@ -540,19 +578,31 @@ function ProposeCorrectionForm({ complaintId, defaultDate, onProposed }: { compl
 }
 
 /**
- * One proposed attendance correction on a ticket.
+ * One proposed attendance remedy on a ticket — either kind, decided here and nowhere else.
  *
- * The whole job of this card is to make the CHANGE legible: what the record says against what is being
- * proposed, side by side, so nobody has to hold two timestamps in their head to see the difference.
- * A null proposed time means "leave that half alone" (the server merges it with the record on approval),
- * which is why the unchanged side reads "unchanged" rather than a dash — a dash would look like the
- * approval is about to wipe a real check-out.
+ * The whole job of this card is to make the CHANGE legible. For a TIME_CORRECTION that means what the
+ * record says against what is being proposed, side by side, so nobody has to hold two timestamps in
+ * their head to see the difference. A null proposed time means "leave that half alone" (the server
+ * merges it with the record on approval), which is why the unchanged side reads "unchanged" rather
+ * than a dash — a dash would look like the approval is about to wipe a real check-out.
+ *
+ * A PENALTY_CANCELLATION has no such diff, and drawing an empty one would be worse than useless: it
+ * would say "— → unchanged" twice and leave the approver believing the proposal does nothing. What it
+ * actually does is reverse the day's XP, so that is what the card shows, next to the times that are
+ * explicitly STAYING.
  */
 function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecided }: { complaintId: string; correction: AttendanceCorrection; canDecide: boolean; onDecided: () => void }) {
   const [note, setNote] = useState("");
   const pending = correction.status === "PENDING";
   const approved = correction.status === "APPROVED";
   const st = CORRECTION_STATUS[correction.status] ?? CORRECTION_STATUS.PENDING;
+  // Old rows predate the column and come back as TIME_CORRECTION; anything not explicitly the
+  // cancellation is treated as the times-diff card it has always been.
+  const isCancellation = correction.kind === "PENALTY_CANCELLATION";
+  const penaltyXp = correction.beforePenaltyXp ?? 0;
+  // Hari tanpa check-in memakan satu jatah day-off DI SAMPING XP, dan approve mengembalikan
+  // dua-duanya. Kartu yang cuma menyebut XP membuat approve terlihat lebih kecil dari kenyataannya.
+  const dayOffs = correction.beforeAutoDayOffs ?? 0;
 
   const decide = useMutation({
     mutationFn: (decision: "APPROVE" | "REJECT") =>
@@ -575,7 +625,7 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
     <div className="rounded-2xl border border-border bg-card p-3.5 shadow-soft">
       <div className="flex items-center gap-1.5">
         <CalendarClock className="h-3.5 w-3.5 text-primary" />
-        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Attendance correction</span>
+        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{isCancellation ? "Penalty cancellation" : "Attendance correction"}</span>
         <span className={cn("ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold ring-1", st.cls)}>{st.label}</span>
       </div>
 
@@ -587,6 +637,35 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
         </div>
       </div>
 
+      {/* No times move here, so the card leads with the number that does: the XP the day cost. The
+          recorded clock is shown underneath precisely BECAUSE it is staying — an approver needs to see
+          that approving this leaves the attendance history exactly as it stands. */}
+      {isCancellation ? (
+        <div className="mt-2.5 rounded-xl border border-border bg-muted/30 p-2.5">
+          <div className="flex items-baseline gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">XP dipotong hari itu</span>
+            <span className="ml-auto text-lg font-black tabular-nums text-rose-600">{penaltyXp === 0 ? "—" : penaltyXp}</span>
+          </div>
+          {dayOffs > 0 && (
+            <div className="mt-1 flex items-baseline gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Jatah day off kepotong</span>
+              <span className="ml-auto text-lg font-black tabular-nums text-rose-600">-{dayOffs}</span>
+            </div>
+          )}
+          <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
+            Usulannya: <b>batalkan potongan itu</b>{dayOffs > 0 ? <> — XP <b>dan</b> {dayOffs} jatah day off-nya sama-sama balik</> : null}. Jam masuk/pulang yang tercatat <b>tidak diubah sama sekali</b>
+            {correction.before.checkInAt || correction.before.checkOutAt ? (
+              <> — tetap {correction.before.checkInAt ? fmtTime(correction.before.checkInAt) : "—"} / {correction.before.checkOutAt ? fmtTime(correction.before.checkOutAt) : "—"}.</>
+            ) : (
+              <> — hari itu memang tidak punya catatan absen, dan tetap tidak akan punya.</>
+            )}
+          </p>
+          {correction.before.status && (
+            <p className="mt-1 text-[11px] leading-snug text-muted-foreground">Hari itu tercatat <b>{statusLabel(correction.before.status)}</b>, dan status itu juga tidak berubah.</p>
+          )}
+        </div>
+      ) : (
+      <>
       {/* Before / after. Struck-through on the left only where the right actually replaces it. */}
       <div className="mt-2.5 rounded-xl border border-border bg-muted/30 p-2.5">
         <div className="grid grid-cols-[4.5rem_1fr_1rem_1fr] items-center gap-x-2 gap-y-1.5">
@@ -612,6 +691,8 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
           </p>
         )}
       </div>
+      </>
+      )}
 
       <div className="mt-2.5">
         <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Reason</div>
@@ -623,7 +704,16 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
           <p className="font-bold">
             {approved ? "Approved" : "Rejected"}{correction.decidedBy ? ` by ${correction.decidedBy.name}` : ""}{correction.decidedAt ? ` · ${fmtWhen(correction.decidedAt)}` : ""}
           </p>
-          {approved && <p className="mt-0.5">The attendance record for {fmtDate(correction.date)} was rewritten to the proposed times.</p>}
+          {approved && !isCancellation && <p className="mt-0.5">The attendance record for {fmtDate(correction.date)} was rewritten to the proposed times.</p>}
+          {approved && isCancellation && (
+            <p className="mt-0.5">
+              Potongan XP {fmtDate(correction.date)} dibatalkan{typeof correction.refundedXp === "number" && correction.refundedXp > 0 ? <> — <b>+{correction.refundedXp} XP</b> dikembalikan</> : " (ternyata sudah tidak ada potongan yang tersisa)"}.
+              {" "}Jam absennya tidak diubah.{" "}
+              {correction.waiverGranted
+                ? "Hari ini ditandai bebas potongan secara permanen, karena tidak ada pengajuan yang menutupinya dan tanggalnya belum tercatat sebagai hari NEXUS down."
+                : "Tidak ditandai permanen: sudah ada yang menahan potongannya, jadi kalau pengajuan itu nanti ditolak potongannya berlaku lagi."}
+            </p>
+          )}
           {correction.decisionNote && <p className="mt-1 whitespace-pre-wrap break-words italic">“{correction.decisionNote}”</p>}
         </div>
       )}
@@ -652,7 +742,11 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
               {decide.isPending && decide.variables === "REJECT" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />} Reject
             </button>
           </div>
-          <p className="text-[11px] leading-snug text-muted-foreground">Approving writes the attendance record for {fmtDate(correction.date)}. “On record” is the snapshot taken when this proposal was written.</p>
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            {isCancellation
+              ? `Approving mengembalikan XP${dayOffs > 0 ? ` dan ${dayOffs} jatah day off` : ""} yang kepotong di ${fmtDate(correction.date)} dan TIDAK menulis apa pun ke catatan absennya. Kalau tidak ada pengajuan izin/cuti yang menutupi hari itu, hari ini sekalian ditandai bebas potongan supaya cron malam tidak memotongnya lagi.`
+              : `Approving writes the attendance record for ${fmtDate(correction.date)}. “On record” is the snapshot taken when this proposal was written.`}
+          </p>
         </div>
       )}
 

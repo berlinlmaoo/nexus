@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { notifyFeedComment } from "@/lib/notification-service"
-import { MENTION_MAX, getUserOrgRole, isBodPlus } from "@/lib/feed"
+import { MENTION_MAX } from "@/lib/feed"
 
 const COMMENT_MAX = 1000
 
@@ -13,7 +13,6 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    if (!isBodPlus(await getUserOrgRole(session.user.id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     const { id } = await params
 
     const comments = await prisma.postComment.findMany({
@@ -34,7 +33,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const me = session.user.id
-    if (!isBodPlus(await getUserOrgRole(me))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     const { id } = await params
 
     const body = await request.json().catch(() => ({}))

@@ -19,7 +19,7 @@ import {
 } from "@/lib/attendance"
 import { isHoliday } from "@/lib/holidays"
 import { setLatePenalty, clearLatePenalty } from "@/lib/gamification"
-import { startFloor, isOutageDate, isAutoDeduction, hasAttendanceWaiver } from "@/lib/attendance-absence"
+import { startFloor, isOutageDay, isAutoDeduction, hasAttendanceWaiver } from "@/lib/attendance-absence"
 import { reverseGeocodeCoordinates } from "@/lib/reverse-geocode"
 import { attendanceActionSchema } from "@/lib/validations"
 
@@ -318,7 +318,7 @@ export async function POST(request: NextRequest) {
     // check-in path consistent with "penalties start from ABSENCE_DEDUCTION_START_DATE", not today.
     const beforePolicyFloor = attendanceDate.getTime() < startFloor().getTime()
     // System outage day → staff couldn't check in on time through no fault of their own; no late penalty.
-    const outageDay = isOutageDate(formatAttendanceDateKey(attendanceDate))
+    const outageDay = await isOutageDay(formatAttendanceDateKey(attendanceDate))
     // BoD pardoned this member-day ("hapus punishment") → no late penalty at check-in either.
     const waived = !exemptFromPenalty && !beforePolicyFloor && !outageDay
       ? await hasAttendanceWaiver(session.user.id, formatAttendanceDateKey(attendanceDate))
