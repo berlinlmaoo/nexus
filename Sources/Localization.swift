@@ -775,6 +775,8 @@ final class AppLanguage {
             "Hapus postingan di Threads",
         "BoD only. In Threads, the dots at the top right of a post remove it — your own, or anyone's. It disappears from the feed for everyone.":
             "Khusus BoD. Di Threads, titik tiga di pojok kanan atas postingan buat menghapusnya — punya sendiri maupun punya orang. Postingannya hilang dari feed buat semua orang.",
+        "See today's attendance on your wrist, and approve requests there if that is your job. Keep attendance on the Home and Lock Screen, ask Siri, and watch the work session run in the Dynamic Island.":
+            "Lihat absensi hari ini dari jam tangan, dan approve pengajuan di situ kalau itu tugasmu. Taruh absensi di Home dan Lock Screen, tanya Siri, dan lihat sesi kerja jalan di Dynamic Island.",
         "Couldn't post that.":
             "Nggak bisa ngirim postingannya.",
         "Couldn't post.": "Gagal mengirim.",

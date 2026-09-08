@@ -66,7 +66,7 @@ enum WhatsNew {
         WhatsNewEntry(
             icon: "applewatch",
             title: T("Apple Watch, widgets and Siri"),
-            body: T("Check in from your wrist, keep attendance on the Home and Lock Screen, and ask Siri. The work session shows in the Dynamic Island while it runs."),
+            body: T("See today's attendance on your wrist, and approve requests there if that is your job. Keep attendance on the Home and Lock Screen, ask Siri, and watch the work session run in the Dynamic Island."),
             demo: AnyView(DemoWatch())
         ),
         WhatsNewEntry(
