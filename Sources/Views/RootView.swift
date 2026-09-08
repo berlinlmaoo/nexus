@@ -108,6 +108,7 @@ struct MoreView: View {
                             LazyVGrid(columns: cols, spacing: 12) {
                                 MoreTile(T("Ticket"), "ticket.fill", NX.blue) { TicketsView() }
                                 MoreTile(T("Teams"), "person.3.fill", NX.coral) { TeamsView() }
+                                MoreTile(T("What's new"), "sparkles", NX.violetText) { WhatsNewScreen() }
                                 MoreTile(T("Tuning Room"), "gearshape.fill", NX.mutedFg) { SettingsView() }
                                 if viewer.canAdminister {
                                     MoreTile(T("Control Room"), "shield.fill", NX.danger) { AdminView() }

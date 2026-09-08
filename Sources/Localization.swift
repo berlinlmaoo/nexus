@@ -697,6 +697,76 @@ final class AppLanguage {
             "Tab Control Room bisa digeser",
         "Seven tabs no longer share one row's width, so nothing is squeezed to five letters.":
             "Tujuh tab nggak lagi berebut satu baris, jadi nggak ada yang kepotong jadi lima huruf.",
+        "GIDEON answers attendance tickets properly":
+            "GIDEON jawab tiket absen dengan bener",
+        "File a ticket about your attendance and GIDEON now reads the record itself — your shift, whether a permit covers the day, whether NEXUS was down, and what the day actually cost you. It proposes the fix for a BoD to approve, and it can propose giving your XP back without changing your recorded hours.":
+            "Kirim tiket soal absen lo, dan sekarang GIDEON baca catatannya sendiri — shift lo, ada izin yang nutupin hari itu atau nggak, NEXUS lagi mati atau nggak, dan berapa sebenernya yang kepotong hari itu. Dia bikin usulan buat di-approve BoD, dan bisa ngusulin XP lo dibalikin tanpa ngubah jam yang tercatat.",
+        "Nothing new to show":
+            "Belum ada yang baru",
+        "No release notes were written for this version.":
+            "Belum ada catatan rilis buat versi ini.",
+        "Uploads take the office network":
+            "Upload lewat jaringan kantor",
+        "On the office WiFi, photos and files go straight to the server instead of out to the internet and back. Nothing to switch on — the app checks and picks the faster route itself.":
+            "Di WiFi kantor, foto dan file langsung ke server, nggak muter dulu ke internet. Nggak ada yang perlu dinyalain — app-nya ngecek sendiri dan milih jalur yang lebih cepet.",
+        "Apple Watch, widgets and Siri":
+            "Apple Watch, widget, dan Siri",
+        "Check in from your wrist, keep attendance on the Home and Lock Screen, and ask Siri. The work session shows in the Dynamic Island while it runs.":
+            "Absen dari jam tangan, taruh absensi di Home dan Lock Screen, dan tanya Siri. Sesi kerjanya kelihatan di Dynamic Island selama jalan.",
+        "Chat with GIDEON from the app, and show it a picture":
+            "Ngobrol sama GIDEON dari app, dan bisa kirim gambar",
+        "Fill in a form in the app, and open a form link straight into it":
+            "Isi form di dalam app, dan link form langsung kebuka di situ",
+        "File a ticket from your phone and follow the conversation on it":
+            "Kirim tiket dari HP dan ikutin percakapannya",
+        "Notifications filter, clear, and land on the thing they point at":
+            "Notifikasi bisa disaring, dibersihin, dan mendarat di hal yang ditunjuknya",
+        "Open a colleague's profile from any list of people":
+            "Buka profil rekan kerja dari daftar orang mana pun",
+        "One attendance approval queue, with the reason a request was rejected":
+            "Satu antrean approval absen, lengkap sama alasan penolakannya",
+        "Open a submission and read what was actually filed":
+            "Buka pengajuan dan baca isi yang beneran dikirim",
+        "Uploads show how far they have got":
+            "Upload nunjukin udah sampai mana",
+        "Manage team members and project access from the team":
+            "Atur anggota tim dan akses project dari tim-nya",
+        "Control Room tabs scroll instead of being squeezed into one row":
+            "Tab Control Room bisa digeser, nggak lagi berdesakan satu baris",
+        "Control Room shows who has the app, on which build, and who uses GIDEON":
+            "Control Room nunjukin siapa yang punya app, build berapa, dan siapa yang pakai GIDEON",
+        "XP and day-off tokens taken on 2–3 September have been given back — NEXUS was unreachable for 19 hours and the nightly job charged people for it":
+            "XP dan jatah day off yang kepotong 2–3 September udah dibalikin — NEXUS nggak bisa diakses 19 jam dan cron malam tetap motong",
+        "Large files could never be uploaded, and a failed upload said nothing at all":
+            "File besar dulu nggak pernah bisa diupload, dan upload yang gagal diem aja",
+        "Ten rows across the app looked tappable and did nothing":
+            "Sepuluh baris di app kelihatan bisa dipencet padahal nggak ngapa-ngapain",
+        "Photos on a post did not appear when you opened its thread":
+            "Foto di postingan nggak muncul waktu thread-nya dibuka",
+        "Closing the GIDEON panel erased the question you had just asked":
+            "Nutup panel GIDEON ngehapus pertanyaan yang barusan dikirim",
+        "An attachment sent to GIDEON showed on the wrong message":
+            "Lampiran ke GIDEON nempel di pesan yang salah",
+        "An approved request was hard to find again, and requests could not be swiped away":
+            "Pengajuan yang udah di-approve susah dicari lagi, dan nggak bisa digeser buat dihapus",
+        "A colleague's XP penalties were visible to everyone":
+            "Potongan XP rekan kerja kelihatan sama semua orang",
+        "Menu entries that only ever answered \"forbidden\" are gone":
+            "Menu yang cuma bisa jawab \"forbidden\" udah dihilangkan",
+        "Pictures load quicker and stay cached after the app restarts; the Dashboard no longer redraws itself as you scroll":
+            "Gambar kebuka lebih cepet dan tetap tersimpan setelah app dibuka ulang; Dashboard nggak lagi gambar ulang tiap di-scroll",
+        "The post menu was too small to hit reliably":
+            "Tombol menu postingan kekecilan buat dipencet",
+        "Files in a project and the Knowledge Library are gone — Z Vault replaces both in 0.1.4":
+            "Files di dalam project dan Knowledge Library dihapus — dua-duanya diganti Z Vault di 0.1.4",
+        "Office network":
+            "Jaringan kantor",
+        "direct":
+            "langsung",
+        "Also new":
+            "Baru juga",
+        "Fixed":
+            "Diperbaiki",
         "Couldn't post that.":
             "Nggak bisa ngirim postingannya.",
         "Couldn't post.": "Gagal mengirim.",
