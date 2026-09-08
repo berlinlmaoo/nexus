@@ -29,10 +29,21 @@ NEW="$APP/dist-new"
 DRY=0
 [ "${1:-}" = "--dry-run" ] && DRY=1
 
-# Dilindungi apa pun yang terjadi. Isinya apple-app-site-association — berkas yang
-# membuat tautan /f/<slug> membuka aplikasi iOS, bukan browser. Ia ditaruh di luar
-# proses build, jadi ia SELALU tampak basi; menghapusnya mematikan universal links
-# tanpa satu pun galat, dan Apple menyimpan hasil gagalnya di cache berhari-hari.
+# Dilindungi apa pun yang terjadi, DUA ARAH. Isinya apple-app-site-association — berkas
+# yang membuat tautan /f/<slug> dan /v/<slug> membuka aplikasi iOS, bukan browser.
+# Menghapusnya mematikan universal links tanpa satu pun galat, dan Apple menyimpan hasil
+# gagalnya di cache berhari-hari.
+#
+# Sampai hari ini yang dijaga cuma penghapusan, dan itu setengah jaminan: `public/` ikut
+# disalin vite ke hasil build, jadi menyunting berkas itu di source berarti ia terbit pada
+# deploy SPA BERIKUTNYA — siapa pun yang menjalankannya, untuk alasan apa pun. Yang salah
+# bukan penyuntingnya, melainkan bahwa sebuah klaim domain bisa tayang sebagai efek samping
+# dari deploy front-end.
+#
+# Berkas ini sekarang benar-benar berada di luar proses build: ia dibuang dari hasil build
+# sebelum ditimpakan, jadi satu-satunya cara mengubah yang tayang adalah menyalinnya sendiri
+# ke dist. Itu memang yang diinginkan — klaim universal link harus tayang BERSAMAAN dengan
+# build aplikasi yang bisa melayaninya, tidak sedetik lebih awal.
 LINDUNGI=".well-known"
 
 cd "$APP"
@@ -47,6 +58,15 @@ docker run --rm -v "$APP":/app -w /app node:22-alpine \
 JUMLAH=$(find "$NEW" -type f | wc -l)
 [ "$JUMLAH" -ge 20 ] || { echo "BATAL: dist-new cuma $JUMLAH berkas, terlalu sedikit untuk build utuh."; exit 1; }
 echo "     $JUMLAH berkas di hasil build"
+
+# Keluarkan berkas terlindungi dari hasil build, supaya langkah timpa di bawah tidak bisa
+# menyentuhnya. Dilakukan di sini, bukan dengan mengecualikannya satu per satu saat menyalin,
+# karena `cp -a dist-new/.` menyalin apa pun yang ada di sana dan pengecualian yang tersebar
+# adalah pengecualian yang suatu hari terlewat.
+if [ -d "$NEW/$LINDUNGI" ]; then
+  echo "     lindungi: $LINDUNGI dikeluarkan dari hasil build (diubah manual saja)"
+  sudo -n rm -rf "$NEW/$LINDUNGI"   # dist-new ditulis container sebagai root
+fi
 
 echo
 echo "### 2/4  timpa dist (tidak menghapus apa pun)"
