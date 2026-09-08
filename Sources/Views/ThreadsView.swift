@@ -257,8 +257,18 @@ struct ThreadsView: View {
                         Image(systemName: "ellipsis")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(NX.mutedFg)
-                            .frame(width: 28, height: 28)
-                    }.buttonStyle(.plain)
+                            // 44x44 is Apple's minimum tap target and this was 28: the glyph is
+                            // small on purpose, but the area you can hit should not be. contentShape
+                            // is what makes the whole frame tappable — without it only the drawn
+                            // pixels of the ellipsis respond, which is three dots' worth of target.
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    // Pulls the bigger button back so the row keeps its old spacing: the target grew
+                    // into the padding around it rather than pushing the card wider.
+                    .padding(.trailing, -8)
+                    .padding(.vertical, -8)
                 }
             }
             if let c = p.text, !c.isEmpty {

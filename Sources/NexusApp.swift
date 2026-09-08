@@ -24,6 +24,10 @@ struct NexusApp: App {
                 .environment(auth)
                 .environment(router)
                 .tint(NX.violetText)
+                // Placed after .environment(auth) on purpose: the modifier reads the session to
+                // decide whether to show anything, and a modifier cannot see an environment value
+                // injected below it.
+                .whatsNew()
                 // Siri, Shortcuts, the Live Activity and the widgets all arrive here as a URL
                 // — and so does a tapped Universal Link on `/f/…`. Under the SwiftUI App lifecycle
                 // this is the ONLY handler iOS calls for a browsing activity; the

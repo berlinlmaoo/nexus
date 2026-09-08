@@ -671,6 +671,32 @@ final class AppLanguage {
             "Postingannya hilang dari feed buat semua orang.",
         "Couldn't delete that post.":
             "Nggak bisa hapus postingannya.",
+        "What's new":
+            "Apa yang baru",
+        "Threads is open to everyone":
+            "Threads sekarang dibuka buat semua",
+        "The company feed used to be BoD-only. Everyone can read, post, comment and like it now — and posts can carry up to four photos.":
+            "Feed perusahaan dulu cuma buat BoD. Sekarang semua orang bisa baca, posting, komentar, dan like — dan tiap postingan bisa bawa sampai empat foto.",
+        "Take a post down":
+            "Hapus postingan",
+        "BoD only. The dots sit at the top right of a post — your own, or anyone's.":
+            "Khusus BoD. Titik tiganya ada di pojok kanan atas postingan — punya sendiri maupun punya orang.",
+        "Move a ticket from the app":
+            "Pindahin status tiket dari app",
+        "Tap the status chip at the top of a ticket to move it between Open, In review, Resolved and Closed.":
+            "Pencet label status di atas tiket buat mindahin antara Open, In review, Resolved, dan Closed.",
+        "Cancel an attendance penalty":
+            "Batalin potongan absen",
+        "A second kind of proposal on attendance tickets: give back the XP and the day-off token without touching the recorded times.":
+            "Jenis usulan kedua di tiket absen: balikin XP dan jatah day off-nya tanpa ngutak-ngatik jam yang tercatat.",
+        "Announcements can repeat":
+            "Pengumuman bisa diulang",
+        "Post one and have it come back every day until a date you set, at an hour you set — pop-up and push both.":
+            "Bikin sekali, terus muncul lagi tiap hari sampai tanggal yang lo tentuin, di jam yang lo tentuin — popup dan push dua-duanya.",
+        "Control Room tabs scroll":
+            "Tab Control Room bisa digeser",
+        "Seven tabs no longer share one row's width, so nothing is squeezed to five letters.":
+            "Tujuh tab nggak lagi berebut satu baris, jadi nggak ada yang kepotong jadi lima huruf.",
         "Couldn't post that.":
             "Nggak bisa ngirim postingannya.",
         "Couldn't post.": "Gagal mengirim.",
