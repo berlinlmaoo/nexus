@@ -2,25 +2,39 @@ import path from "path"
 import { readFile } from "fs/promises"
 import sharp from "sharp"
 import prisma from "@/lib/prisma"
+import { formatAttendanceDateKey } from "@/lib/attendance"
 import { getGideonUserId, GIDEON_EMAIL } from "@/lib/gideon-identity"
 
 /**
  * GIDEON's first pass over a support ticket it is allowed to touch.
  *
  * It reads what was filed, looks at the photo, checks the day against the attendance record, and
- * either proposes a correction or explains why it cannot. It never applies one: the proposal lands
- * on the ticket and a BoD decides. That boundary is the whole design, not a caution — see
- * propose_attendance_correction, which has no counterpart that writes an AttendanceRecord.
+ * proposes ONE OF TWO remedies — or explains why neither fits and says what should happen instead. It
+ * never applies either: the proposal lands on the ticket and a BoD decides. That boundary is the whole
+ * design, not a caution — neither tool has a counterpart that writes.
+ *
+ * The two remedies, and why there had to be two:
+ *   propose_attendance_correction   — the recorded TIMES are wrong.
+ *   propose_penalty_cancellation    — the times are right and the penalty is still unearned: a
+ *                                     leave/permit/sick request covers the day, or NEXUS was down.
+ *
+ * With only the first, every case got shaped into "propose a time", and two real tickets show what
+ * that costs. A man docked 120 XP with a permit still awaiting approval was handed a proposal to set
+ * his check-in to the time already on his record — a change of nothing. A man who could not check in
+ * because NEXUS was serving Cloudflare Error 1033 was handed the timestamp off his own error
+ * screenshot, a time at which he was still late, so the deduction he filed about would have survived
+ * his complaint being upheld. Neither was a bad reading of the evidence; both were the only shape the
+ * available tool had.
  *
  * Three categories reach it, and they are NOT the same job:
- *   ATTENDANCE — read the evidence, may propose a correction.
- *   EXP        — the XP deduction is downstream of a wrong attendance record, so the fix is the
- *                record; may propose a correction against the same day.
+ *   ATTENDANCE — read the evidence, may propose either remedy.
+ *   EXP        — the XP deduction is downstream of the day, so the fix is the day: either the record
+ *                was wrong (correction) or the penalty was (cancellation). Both attach here.
  *   DAY_OFF    — triage and answer only. GIDEON must never touch what the person themselves cannot
  *                change, and a day-off quota is exactly that: restoring one needs its own
- *                propose→approve flow, which does not exist. The prompt says so and
- *                proposeAttendanceCorrection refuses the category outright, so a model that tries
- *                anyway gets an error instead of a proposal.
+ *                propose→approve flow, which does not exist. The prompt says so and BOTH propose
+ *                functions refuse the category outright, so a model that tries anyway gets an error
+ *                instead of a proposal.
  *
  * Runs as the REPORTER, so GIDEON sees exactly what they see and nothing else.
  */
@@ -61,35 +75,150 @@ async function loadEvidence(url: string | null): Promise<string | null> {
 }
 
 /**
- * What changes between categories: the opening framing, the ordered steps, the hard rules, and what
- * the closing paragraph should contain. Everything else in the prompt is shared.
+ * Which day is being argued about.
  *
- * The DAY_OFF entry deliberately never names propose_attendance_correction as something to call —
- * only as something that will be refused. A prompt that pitches a tool the ticket cannot have is how
- * you get a model promising a fix it did not file.
+ * Written down as rules because the model got this exactly backwards on a real ticket: the photo's
+ * date was obscured, so it declined to call the attendance tool AT ALL — "agar tidak salah tanggal" —
+ * and answered on the photo alone. The ticket itself was dated, and the reporter's −150 alpha for that
+ * date was sitting in the database, readable, unread. An unreadable photo is a reason to lean HARDER
+ * on the record, never a reason to skip it.
+ */
+const DATE_RULES = (filedDateKey: string) => [
+  `- Tanggal acuan = ${filedDateKey} — tanggal tiket ini dibuat, waktu Jakarta. Mulai dari situ.`,
+  `- Kalau pelapor menyebut tanggal lain secara eksplisit di teks tiketnya, pakai tanggal itu.`,
+  `- Foto TIDAK PERNAH jadi sumber tanggal. Foto itu bukti pendukung, bukan penentu hari.`,
+  `- "Tanggal di foto tidak terbaca" BUKAN alasan untuk tidak memanggil tool. Panggil catatannya pakai`,
+  `  tanggal acuan dulu, baru nilai apakah fotonya mendukung.`,
+]
+
+/**
+ * The remedy chooser. The order matters: cover first, outage second, wrong times third, and only then
+ * "genuinely late". Read the other way round, every case looks like lateness — which is exactly the
+ * failure this replaces.
+ */
+const REMEDY_STEPS = (complaintId: string) => [
+  `1. Tentukan tanggal acuan (lihat "Aturan tanggal" di bawah).`,
+  `2. Panggil nexus_get_attendance_day untuk tanggal itu. SELALU, tanpa kecuali. Sekali panggil kamu dapat:`,
+  `   catatan absennya, jam shift orang ini di tanggal itu, apakah hari itu tercatat NEXUS down (plus berapa`,
+  `   orang lain kena potongan di tanggal sama), pengajuan izin/cuti/sakit yang menutupi tanggal itu beserta`,
+  `   statusnya, dan potongan XP yang benar-benar kena.`,
+  `3. Pilih SATU penyelesaian dari hasil tool itu — bukan dari foto:`,
+  `   a. coveredByRequest = true (ada izin/cuti/sakit yang menutupi hari itu, PENDING maupun APPROVED)`,
+  `      → panggil nexus_propose_penalty_cancellation dengan complaintId "${complaintId}". JANGAN mengusulkan jam.`,
+  `      Jamnya memang segitu; yang keliru adalah potongannya. Izin yang masih menunggu approval tetap dihitung.`,
+  `   b. outage.recordedByNexus = true (tanggal itu sudah tercatat sebagai hari NEXUS down)`,
+  `      → panggil nexus_propose_penalty_cancellation. Sama: jangan mengusulkan jam.`,
+  `   c. outage.recordedByNexus = false TAPI bukti atau keluhannya menunjuk sistem yang error (Error 1033,`,
+  `      tunnel, halaman tidak bisa dibuka, tombol check-in gagal, lokasi/kamera ditolak browser)`,
+  `      → syaratnya BUKTI atau keluhan itu. outage.sameDaySignal SENDIRIAN TIDAK PERNAH CUKUP:`,
+  `      workspace ini memang menghukum belasan orang setiap hari, jadi angka "sekian dari sekian kena`,
+  `      potongan" itu hari kerja biasa, bukan tanda gangguan. Pakai angka itu HANYA sebagai penguat, dan`,
+  `      hanya kalau sameDaySignal.aboveNormal = true (sudah dibandingkan dengan normalPenalizedPerDay).`,
+  `      Kalau aboveNormal = false, JANGAN menyebutnya sebagai bukti sama sekali.`,
+  `      Yang JUSTRU bukti kuat: checkInPattern.unusuallyLateStart = true — artinya hari itu tidak ada`,
+  `      seorang pun yang berhasil check-in sampai jauh lewat jam biasa (lihat firstCheckIn vs`,
+  `      normalFirstCheckIn). Kalau itu true, sebut angkanya dan ajukan ke BoD sebagai dugaan hari down`,
+  `      yang belum tercatat. Kalau false, itu TIDAK membantah gangguan sore/malam — sinyal itu cuma`,
+  `      melihat pagi, jadi jangan dipakai untuk menyimpulkan "berarti tidak ada gangguan".`,
+
+  `      → tetap panggil nexus_propose_penalty_cancellation, dan di reason sebutkan angkanya apa adanya`,
+  `      ("X dari Y anggota kena potongan absen di tanggal itu"). Bilang terus terang bahwa tanggal ini BELUM`,
+  `      tercatat sebagai hari down dan itu keputusan BoD, bukan keputusanmu.`,
+  `   d. Catatan waktunya yang keliru — jam di catatan tidak cocok dengan kenyataan, atau check-in tidak`,
+  `      pernah masuk padahal orangnya hadir`,
+  `      → panggil nexus_propose_attendance_correction dengan complaintId "${complaintId}". Kalau kamu`,
+  `      mengusulkan jam masuk, pakai shift.shiftStartTime dari tool. JANGAN jam yang tertera di foto error.`,
+  `   e. Telat beneran: tidak ada izin yang menutupi, tidak ada tanda sistem down, catatannya sudah benar`,
+  `      → JANGAN mengusulkan apa pun. Katakan apa adanya — lalu tutup sesuai "Aturan penutup".`,
+  `4. Kalau xpPenalties.hasPenaltyToCancel = false, tidak ada potongan yang bisa dibatalkan. JANGAN`,
+  `   mengusulkan pembatalan — tool-nya akan menolak, dan usulan yang membatalkan nol itu cuma bikin BoD`,
+  `   mengetuk sesuatu yang tidak mengerjakan apa-apa. Yang benar: bilang potongan hari itu SUDAH`,
+  `   dikembalikan. Kalau xpPenalties.alreadyWaived = true, sebutkan juga hari itu sudah ditandai bebas`,
+  `   potongan permanen, jadi tidak akan kepotong ulang sama cron.`,
+  `   JANGAN mengarang angkanya. Begitu potongan dikembalikan, baris ledger-nya dihapus — kamu memang`,
+  `   tidak bisa lagi melihat berapa jumlahnya. Bilang sudah kembali, tanpa angka.`,
+  `   Tutup dengan (d): yang tersisa cuma BoD menutup tiket ini.`,
+]
+
+/** The lines that stop the two failures this whole change is about: proposing the screenshot's clock,
+ *  and reading an empty outage register as proof that nothing broke. */
+const REMEDY_RULES = [
+  `- Kamu TIDAK mengubah absensi, TIDAK mengubah XP, TIDAK mengembalikan jatah day off. Semua yang kamu`,
+  `  buat cuma USULAN yang menunggu BoD. Jangan pernah bilang "sudah saya perbaiki".`,
+  `- Jam yang tertera di foto error itu jam orang tersebut MENYERAH mencoba, bukan jam dia seharusnya masuk.`,
+  `  Jangan pernah mengusulkannya sebagai jam check-in. Kalau memang perlu jam, pakai jam shift dari tool.`,
+  `- outage.recordedByNexus = false artinya BELUM TERCATAT, bukan TIDAK TERJADI. Daftar hari down diisi`,
+  `  manual dan sering ketinggalan. Jangan pernah menyimpulkan "tidak ada gangguan" cuma dari field itu.`,
+  `- Kamu tidak bisa menambahkan tanggal ke daftar hari NEXUS down. Ajukan ke BoD; jangan mengklaim sudah.`,
+  `- Satu tiket cuma boleh punya satu usulan hidup. Kalau tool menolak karena sudah ada usulan yang menunggu,`,
+  `  jangan diulang — laporkan apa adanya.`,
+  `- Jangan menjanjikan berapa XP yang akan kembali. Kamu tidak menghitung XP.`,
+  `- Jangan menyebut angka atau jam yang tidak kamu lihat sendiri, baik dari tool maupun dari foto.`,
+  `- Absen di NEXUS wajib selfie. Jangan menyarankan cara absen yang melewati foto.`,
+]
+
+/**
+ * The reporter's own device is a whole class of ticket, and it is the one class GIDEON can actually
+ * FIX rather than adjudicate. A real answer ended "Tidak ada usulan koreksi yang dibuat" to someone
+ * whose screenshot said, in English, that her browser had denied location access — a setting she could
+ * have changed in under a minute if anyone had told her where it was.
+ */
+const CLIENT_FIX_HELP = [
+  `Kalau masalahnya di perangkat pelapor — lokasi tidak terdeteksi, izin lokasi/kamera ditolak, halaman`,
+  `tidak mau memuat — kasih langkah nyata, jangan cuma menilai:`,
+  `- iOS Safari punya DUA lapis izin lokasi. Settings → Privacy & Security → Location Services (Safari`,
+  `  harus hidup), LALU Settings → Safari → Location diset "Ask" atau "Allow". Kalau yang kedua masih`,
+  `  "Deny", situsnya tidak akan pernah bisa minta izin, sebanyak apa pun dicoba ulang.`,
+  `- Aplikasi NEXUS iOS pakai izin lokasi asli, jadi tidak kena batasan per-situs itu. Kalau lewat browser`,
+  `  gagal berulang kali, arahkan ke aplikasinya.`,
+  `- Chrome/Android: ikon gembok di address bar → Permissions → Location → Allow.`,
+  `Dan tetap usulkan penyelesaian absennya. Izin browser yang menolak itu bukan salah pelapor, jadi`,
+  `tiketnya tetap butuh koreksi atau pembatalan potongan — bukan cuma tips.`,
+]
+
+/** Nobody's ticket may end in a shrug. */
+const CLOSING_RULES = [
+  `Aturan penutup — balasanmu WAJIB berakhir dengan salah satu dari empat ini:`,
+  `  (a) usulan koreksi absen yang sudah kamu buat,`,
+  `  (b) usulan pembatalan potongan yang sudah kamu buat,`,
+  `  (c) langkah perbaikan konkret yang bisa pelapor kerjakan sekarang, atau`,
+  `  (d) eskalasi eksplisit ke BoD: sebut apa yang harus diputuskan dan atas dasar apa (angka, tanggal).`,
+  `"Tidak ada usulan yang dibuat" saja BUKAN jawaban. Kalau kamu tidak mengusulkan apa pun, kamu wajib`,
+  `memberi (c) atau (d) — dan biasanya keduanya.`,
+]
+
+/**
+ * What changes between categories: the opening framing, the ordered steps, the hard rules, and what
+ * the closing paragraph should contain. Everything else in the prompt is shared — the date rules, the
+ * device-side fixes, and the four ways a reply may end.
+ *
+ * The DAY_OFF entry deliberately never names either propose tool as something to call — only as
+ * something that will be refused. A prompt that pitches a tool the ticket cannot have is how you get a
+ * model promising a fix it did not file.
  */
 const FRAMING: Record<
   GideonTicketCategory,
   { opening: string; steps: (complaintId: string) => string[]; rules: string[]; closing: string[] }
 > = {
   ATTENDANCE: {
-    opening: "Kamu menangani tiket absensi di NEXUS sebagai support.",
-    steps: (complaintId) => [
-      `1. Tentukan tanggal yang dipermasalahkan.`,
-      `2. Panggil tool NEXUS untuk melihat catatan absensi orang ini pada tanggal itu. Jangan menebak isinya.`,
-      `3. Bandingkan dengan buktinya.`,
-      `4. Kalau — dan hanya kalau — buktinya benar-benar mendukung, panggil propose_attendance_correction`,
-      `   dengan complaintId "${complaintId}", tanggalnya, jam yang diusulkan, dan alasan singkat.`,
-    ],
+    opening: [
+      "Kamu menangani tiket absensi di NEXUS sebagai support.",
+      "",
+      "Kamu punya DUA penyelesaian, dan memilih yang salah sama saja dengan tidak menolong:",
+      "  - koreksi absen  → dipakai kalau JAM yang tercatat memang salah.",
+      "  - pembatalan potongan → dipakai kalau jamnya sudah benar tapi potongannya tidak adil: ada izin/cuti/",
+      "    sakit yang menutupi hari itu, atau NEXUS-nya yang down sehingga orangnya tidak bisa absen.",
+      "Mengusulkan jam untuk kasus jenis kedua tidak memperbaiki apa pun — potongannya tetap jalan.",
+    ].join("\n"),
+    steps: (complaintId) => REMEDY_STEPS(complaintId),
     rules: [
-      `- Kamu TIDAK mengubah absensi. Kamu mengusulkan; BoD yang menyetujui.`,
-      `- Kalau tanggal atau jam di foto tidak terbaca jelas, katakan begitu dan JANGAN mengusulkan apa pun.`,
-      `- Jangan menyebut angka atau jam yang tidak kamu lihat sendiri, baik di foto maupun dari tool.`,
-      `- Kalau catatan absensinya ternyata sudah benar, katakan begitu.`,
+      ...REMEDY_RULES,
+      `- Kalau catatan absennya ternyata sudah benar DAN tidak ada yang menutupi harinya, katakan begitu.`,
     ],
     closing: [
-      `Balas ringkas dalam Bahasa Indonesia, maksimal 6 kalimat: apa yang kamu lihat di bukti, apa kata`,
-      `catatan absensinya, dan kesimpulanmu. Kalau kamu mengusulkan koreksi, sebutkan usulannya.`,
+      `Balas ringkas dalam Bahasa Indonesia, maksimal 8 kalimat: apa kata catatan absensinya, apa yang kamu`,
+      `lihat di bukti, dan penyelesaian mana yang kamu pilih beserta alasannya. Kalau kamu mengusulkan`,
+      `sesuatu, sebutkan usulannya dan tegaskan absennya belum berubah sampai BoD menyetujui.`,
     ],
   },
 
@@ -97,32 +226,25 @@ const FRAMING: Record<
     opening: [
       "Kamu menangani tiket XP di NEXUS sebagai support.",
       "",
-      "Hampir semua tiket XP sebetulnya masalah absensi: XP-nya kepotong KARENA catatan absen hari itu",
-      "salah — telat yang bukan telat, check-in yang tidak masuk, check-out yang gagal. XP tidak diedit",
-      "langsung dan kamu tidak punya cara mengubahnya. Jalan memperbaiki XP-nya adalah memperbaiki",
-      "catatan absen yang jadi sebabnya; potongannya dihitung ulang saat BoD menyetujui koreksi itu.",
+      "Hampir semua tiket XP sebetulnya masalah absensi: XP-nya kepotong KARENA hari itu. XP tidak diedit",
+      "langsung dan kamu tidak punya cara mengubahnya. Ada DUA jalan memperbaikinya, dan keduanya lewat BoD:",
+      "  - kalau catatan absennya yang salah → usulkan koreksi absen; potongannya dihitung ulang saat disetujui.",
+      "  - kalau catatan absennya sudah benar tapi potongannya tidak adil (ada izin/cuti/sakit yang menutupi",
+      "    hari itu, atau NEXUS-nya down) → usulkan PEMBATALAN POTONGAN. Jamnya tidak diubah sama sekali.",
+      "",
+      "Salah memilih di antara keduanya adalah kegagalan yang paling sering terjadi di sini: mengusulkan jam",
+      "untuk hari yang sebenarnya tertutup izin cuma menghasilkan usulan yang tidak mengembalikan XP apa pun.",
     ].join("\n"),
-    steps: (complaintId) => [
-      `1. Tentukan tanggal yang XP-nya kepotong.`,
-      `2. Panggil tool NEXUS untuk melihat catatan absensi orang ini pada tanggal itu. Jangan menebak isinya.`,
-      `3. Bandingkan dengan buktinya, dan putuskan apakah potongan XP-nya berasal dari catatan absen yang salah.`,
-      `4. Kalau — dan hanya kalau — buktinya benar-benar mendukung bahwa catatan absennya salah, panggil`,
-      `   propose_attendance_correction dengan complaintId "${complaintId}", tanggalnya, jam yang diusulkan,`,
-      `   dan alasan singkat. Tiket XP ini memang boleh dipakai untuk usulan koreksi absen.`,
-      `5. Kalau potongannya ternyata bukan dari absensi, jangan mengusulkan apa pun — jelaskan apa yang kamu`,
-      `   lihat dan serahkan ke BoD.`,
-    ],
+    steps: (complaintId) => REMEDY_STEPS(complaintId),
     rules: [
-      `- Kamu TIDAK mengubah absensi dan TIDAK mengubah XP. Kamu mengusulkan koreksi absen; BoD yang menyetujui.`,
-      `- Jangan menjanjikan berapa XP yang akan kembali. Kamu tidak menghitung XP.`,
-      `- Kalau tanggal atau jam di foto tidak terbaca jelas, katakan begitu dan JANGAN mengusulkan apa pun.`,
-      `- Jangan menyebut angka atau jam yang tidak kamu lihat sendiri, baik di foto maupun dari tool.`,
-      `- Kalau catatan absensinya ternyata sudah benar, katakan begitu — berarti potongannya bukan dari situ.`,
+      ...REMEDY_RULES,
+      `- Kalau potongannya ternyata bukan dari absensi sama sekali, jangan mengusulkan apa pun — jelaskan`,
+      `  apa yang kamu lihat dan eskalasikan ke BoD.`,
     ],
     closing: [
-      `Balas ringkas dalam Bahasa Indonesia, maksimal 6 kalimat: apa yang kamu lihat di bukti, apa kata`,
-      `catatan absensinya, dan apakah potongan XP-nya berasal dari catatan itu. Kalau kamu mengusulkan`,
-      `koreksi absen, sebutkan usulannya dan sebutkan bahwa XP-nya menyusul setelah koreksinya disetujui.`,
+      `Balas ringkas dalam Bahasa Indonesia, maksimal 8 kalimat: apa kata catatan absensinya, apakah potongan`,
+      `XP-nya berasal dari situ, dan penyelesaian mana yang kamu pilih. Kalau kamu mengusulkan sesuatu,`,
+      `sebutkan usulannya dan sebutkan bahwa XP-nya baru bergerak setelah BoD menyetujui.`,
     ],
   },
 
@@ -131,26 +253,31 @@ const FRAMING: Record<
       "Kamu menangani tiket day off di NEXUS sebagai support.",
       "",
       "Di tiket ini kamu HANYA menjawab. Kamu tidak punya cara apa pun untuk mengubah atau mengembalikan",
-      "jatah day off, dan tidak ada usulan yang bisa kamu ajukan untuk itu. Yang bisa kamu lakukan adalah",
-      "membuat duduk perkaranya jelas supaya BoD bisa memutuskan cepat.",
+      "jatah day off, dan tidak ada usulan yang bisa kamu ajukan untuk itu — dua tool usulan yang kamu punya",
+      "keduanya akan ditolak di kategori ini. Yang bisa kamu lakukan adalah membuat duduk perkaranya jelas",
+      "supaya BoD bisa memutuskan cepat, dan memberi pelapor langkah yang benar-benar bisa dia kerjakan.",
     ].join("\n"),
     steps: () => [
-      `1. Tentukan tanggal yang dipermasalahkan dan apa persisnya yang kepotong atau ditolak.`,
-      `2. Kalau keluhannya menyangkut kehadiran di tanggal itu, kamu boleh memanggil tool NEXUS untuk melihat`,
-      `   catatan absensi orang ini pada tanggal itu supaya ceritanya lengkap. Jangan menebak isinya.`,
-      `3. Rangkum: apa kata bukti, apa kata catatan absennya kalau kamu lihat, dan bagian mana yang masih kurang.`,
+      `1. Tentukan tanggal acuan (lihat "Aturan tanggal" di bawah) dan apa persisnya yang kepotong atau ditolak.`,
+      `2. Panggil nexus_get_attendance_day untuk tanggal itu supaya ceritanya lengkap — catatan absennya,`,
+      `   pengajuan yang menutupi hari itu, potongan XP-nya, dan apakah hari itu tercatat NEXUS down.`,
+      `   Panggil walaupun fotonya tidak terbaca; justru waktu bukti lemah, catatanlah satu-satunya yang kuat.`,
+      `3. Rangkum: apa kata catatannya, apa kata buktinya, dan bagian mana yang masih kurang.`,
       `4. Kalau ada satu hal yang paling menentukan dan belum jelas, tanyakan itu — satu pertanyaan, bukan daftar.`,
     ],
     rules: [
-      `- JANGAN memanggil propose_attendance_correction di tiket ini. Usulan koreksi cuma berlaku untuk catatan`,
-      `  absensi, bukan jatah day off, dan panggilanmu akan ditolak.`,
+      `- JANGAN memanggil nexus_propose_attendance_correction atau nexus_propose_penalty_cancellation di tiket`,
+      `  ini. Keduanya cuma berlaku untuk catatan absensi dan potongan XP-nya, bukan jatah day off, dan`,
+      `  panggilanmu akan ditolak.`,
       `- Kamu TIDAK bisa mengembalikan jatah day off. Jangan menjanjikannya, jangan bilang "sudah saya ajukan".`,
       `- Yang bisa mengembalikan jatah day off cuma BoD, dan manual. Katakan itu apa adanya.`,
       `- Jangan menyebut angka atau tanggal yang tidak kamu lihat sendiri, baik di foto maupun dari tool.`,
+      `- Absen di NEXUS wajib selfie. Jangan menyarankan cara absen yang melewati foto.`,
     ],
     closing: [
-      `Balas ringkas dalam Bahasa Indonesia, maksimal 6 kalimat: apa yang kamu lihat di bukti, apa yang kamu`,
-      `pahami dari keluhannya, dan apa yang perlu diputuskan BoD. Jangan menjanjikan apa pun yang bukan kamu`,
+      `Balas ringkas dalam Bahasa Indonesia, maksimal 8 kalimat: apa kata catatan absensinya, apa yang kamu`,
+      `pahami dari keluhannya, dan apa yang perlu diputuskan BoD. Di kategori ini penutupmu cuma boleh (c)`,
+      `atau (d) — kamu tidak punya usulan yang bisa diajukan. Jangan menjanjikan apa pun yang bukan kamu`,
       `yang mengerjakannya.`,
     ],
   },
@@ -163,6 +290,9 @@ function buildPrompt(input: {
   subject: string
   body: string
   filedAt: Date
+  /** The Jakarta calendar day the ticket was filed — the default day under discussion, and the one
+   *  fact that stops an unreadable photo from taking the whole investigation down with it. */
+  filedDateKey: string
   hasImage: boolean
   /** Everything said after the opening message, oldest first. Empty on the first pass. */
   history: { who: string; text: string }[]
@@ -185,15 +315,25 @@ function buildPrompt(input: {
     `ID tiket: ${input.complaintId}`,
     `Judul: ${input.subject}`,
     `Isi: ${input.body}`,
-    input.hasImage ? `Ada foto bukti terlampir. Baca tanggal dan jam yang terlihat di dalamnya.` : `Tidak ada foto bukti yang bisa dibaca.`,
+    `Tanggal acuan: ${input.filedDateKey} (Asia/Jakarta) — tanggal tiket ini dibuat.`,
+    input.hasImage
+      ? `Ada foto bukti terlampir. Baca apa yang terlihat di dalamnya, tapi jangan ambil tanggalnya dari situ.`
+      : `Tidak ada foto bukti yang bisa dibaca. Itu tidak mengubah apa pun: catatannya tetap kamu panggil.`,
     ``,
     `Yang harus kamu lakukan, berurutan:`,
     ...framing.steps(input.complaintId),
     ``,
+    `Aturan tanggal:`,
+    ...DATE_RULES(input.filedDateKey),
+    ``,
     `Aturan yang tidak boleh dilanggar:`,
     ...framing.rules,
     ``,
+    ...CLIENT_FIX_HELP,
+    ``,
     conversation,
+    ...CLOSING_RULES,
+    ``,
     ...framing.closing,
   ].join("\n")
 }
@@ -202,7 +342,16 @@ function buildPrompt(input: {
  * Fire-and-forget from the create route. Never throws into the caller: a ticket that was filed
  * successfully must not report failure because an assistant could not read the photo.
  */
-export async function reviewSupportTicket(complaintId: string): Promise<void> {
+/**
+ * `force` exists for ONE job: re-reviewing tickets GIDEON already answered badly.
+ *
+ * The two self-answer guards below are right for every automatic trigger — without them GIDEON
+ * replies to its own reply forever. But they also mean a ticket whose last message is GIDEON's can
+ * never be reconsidered, and after the remedy rules changed there were 13 such tickets carrying
+ * answers written by the old, wrong prompt. Only a human-triggered sweep passes force; nothing on the
+ * automatic paths (ticket created, new message) does, and nothing should.
+ */
+export async function reviewSupportTicket(complaintId: string, opts?: { force?: boolean }): Promise<void> {
   const url = process.env.GIDEON_CHAT_URL
   const secret = process.env.ORACLE_LLM_SECRET || ""
   if (!url) return
@@ -228,9 +377,11 @@ export async function reviewSupportTicket(complaintId: string): Promise<void> {
     // Never answer itself. Two guards rather than one because they fail differently: the first stops
     // a loop where GIDEON's own message would prompt another, the second stops a burst where several
     // replies land while it is still thinking about the first.
-    if (last && (last.author as { email?: string } | null)?.email === GIDEON_EMAIL) return
-    const lastGideon = [...thread].reverse().find((m) => (m.author as { email?: string } | null)?.email === GIDEON_EMAIL)
-    if (lastGideon && Date.now() - lastGideon.createdAt.getTime() < 60_000) return
+    if (!opts?.force) {
+      if (last && (last.author as { email?: string } | null)?.email === GIDEON_EMAIL) return
+      const lastGideon = [...thread].reverse().find((m) => (m.author as { email?: string } | null)?.email === GIDEON_EMAIL)
+      if (lastGideon && Date.now() - lastGideon.createdAt.getTime() < 60_000) return
+    }
 
     const imageBase64 = await loadEvidence(complaint.evidenceUrl)
     const prompt = buildPrompt({
@@ -240,6 +391,9 @@ export async function reviewSupportTicket(complaintId: string): Promise<void> {
       subject: complaint.subject,
       body: thread[0]?.body || "",
       filedAt: complaint.createdAt,
+      // The Jakarta day, not the UTC one: a ticket filed at 01:30 WIB is still that day's ticket, and
+      // toISOString() would hand the model yesterday.
+      filedDateKey: formatAttendanceDateKey(complaint.createdAt),
       hasImage: Boolean(imageBase64),
       history: thread.slice(1).map((m) => ({
         who: (m.author as { email?: string } | null)?.email === GIDEON_EMAIL

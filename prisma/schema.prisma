@@ -1491,7 +1491,22 @@ model Announcement {
   createdAt   DateTime            @default(now())
   seenBy      AnnouncementSeen[]
 
+  // Repeat. A notice posted once is read by whoever happened to open NEXUS that hour; "wear your
+  // ID card this week" needs saying on each of those days, and re-typing it daily is how it stops
+  // being said at all.
+  //
+  // Last day it repeats, inclusive (00:00 WIB of that day). Null = post once, as before.
+  repeatUntil    DateTime?
+  // "HH:mm" in Asia/Jakarta — the hour it should land each day. Kept as text for the same reason
+  // shifts are: it is a wall-clock time, not an instant, and storing it as one avoids the day it
+  // silently shifts an hour.
+  repeatAtTime   String?
+  // When it last went out again. The cron uses this to fire at most once per day even though it
+  // runs every quarter hour, and it is set at creation so the first day's push is not doubled.
+  lastRepeatedAt DateTime?
+
   @@index([active, createdAt])
+  @@index([active, repeatUntil])
 }
 
 model AnnouncementSeen {
@@ -2500,6 +2515,22 @@ enum AttendanceCorrectionStatus {
   REJECTED
 }
 
+// What a proposal on a ticket actually ASKS FOR. A second kind on the SAME model rather than a second
+// model, because everything that makes the first one safe is per-ticket, not per-shape: the partial
+// unique index that allows one live proposal per ticket, the single BoD card, the single decide route,
+// and Complaint.pendingCorrection. Two models would mean a ticket could carry two live proposals whose
+// approvals contradict each other (rewrite the times AND pardon the day), and the BoD would decide them
+// in two places.
+//
+//   TIME_CORRECTION      — the recorded times are wrong; approval rewrites the AttendanceRecord.
+//   PENALTY_CANCELLATION — the recorded times are RIGHT and the person is still not at fault (a
+//                          leave/permit/sick request covers the day, or NEXUS was down). Approval
+//                          reverses the day's XP penalty and touches no time at all.
+enum AttendanceCorrectionKind {
+  TIME_CORRECTION
+  PENALTY_CANCELLATION
+}
+
 // A PROPOSED attendance fix hanging off an ATTENDANCE ticket. Exists so the fix a BoD used to make by
 // hand in another screen becomes something the ticket itself carries and a BoD approves with one tap.
 //
@@ -2518,6 +2549,10 @@ model AttendanceCorrection {
   user               User                       @relation("AttendanceCorrectionUser", fields: [userId], references: [id], onDelete: Cascade)
   // 00:00 UTC of the day, matching how AttendanceRecord.attendanceDate is stored.
   attendanceDate     DateTime
+  // Which remedy this proposal asks for. Defaulted so every row written before this column existed
+  // reads as what it was: a proposal about times.
+  kind               AttendanceCorrectionKind   @default(TIME_CORRECTION)
+  // Both null on a PENALTY_CANCELLATION — that IS the point of it: the recorded times stand.
   proposedCheckInAt  DateTime?
   proposedCheckOutAt DateTime?
   reason             String
@@ -2536,6 +2571,19 @@ model AttendanceCorrection {
   beforeCheckInAt    DateTime?
   beforeCheckOutAt   DateTime?
   beforeStatus       AttendanceStatus?
+  // The XP the day had actually cost when the proposal was written (negative, or 0 when nothing was
+  // charged). The "before" snapshot for a PENALTY_CANCELLATION, and what the card shows instead of a
+  // times diff. A cancellation proposed against 0 is a proposal to undo nothing, and is refused.
+  beforePenaltyXp    Int?
+  // Filled in on APPROVE: XP actually handed back (positive), and whether the pardon was made permanent.
+  // Two facts a BoD cannot reconstruct later — the ledger rows are deleted by the refund.
+  refundedXp         Int?
+  waiverGranted      Boolean                    @default(false)
+  // Jatah day-off yang cron potong otomatis untuk hari itu, dan yang ikut kembali kalau disetujui.
+  // Disimpan karena kartu approve sebelumnya hanya menampilkan XP — melaporkan KURANG dari yang
+  // sebenarnya dilakukan approve, dan seorang BoD tidak bisa menilai sesuatu yang tidak diperlihatkan.
+  beforeAutoDayOffs  Int?
+  restoredDayOffs    Int?
   createdAt          DateTime                   @default(now())
   updatedAt          DateTime                   @updatedAt
 
@@ -2566,4 +2614,38 @@ model GideonMessage {
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+// A day (or part of one) NEXUS was unreachable, so staff physically could not check in or out.
+//
+// Exists because the previous register was the env var ATTENDANCE_OUTAGE_DATES — typed by hand, and
+// therefore empty exactly when it mattered. On 2-3 September 2026 the Cloudflare tunnel was down for
+// 19.5 hours, nobody typed the date, and the nightly cron charged 33 people 5,198 XP plus 28 day-off
+// tokens for a day they could not reach. A probe on the Proxmox host now writes these rows itself.
+//
+// The env var is still honoured on top of this table: it is a BoD's explicit word, and a table with
+// no row must never silently overrule it.
+model AttendanceOutage {
+  id       String @id
+  // YYYY-MM-DD in Asia/Jakarta, one row per affected day. An outage crossing midnight writes a row
+  // for each day it touched, because "which day is pardoned" is the only question attendance asks.
+  dateKey  String @unique
+  // The real window, in UTC. Kept so GIDEON can say "down 19:41-15:16, first check-in 15:21" instead
+  // of a bare yes/no — a bare yes/no is what produced replies telling people their photo was blurry.
+  startedAt   DateTime
+  // Null while the incident is still open; that is also how the probe finds an incident to close.
+  endedAt     DateTime?
+  minutesDown Int      @default(0)
+  // "AUTO_PROBE" (the host-side prober) or "MANUAL" (read off a log, or a BoD's own entry).
+  source      String
+  // Did the outage actually swallow this day's CHECK-IN window? False for one that began at 19:41:
+  // the day shift got in fine that morning, and pardoning their absence would be unfair the other
+  // way. Only true days carry a day-wide amnesty; false ones are still recorded and still visible
+  // to GIDEON, which is the point — the fact is kept even when the verdict is "not everyone".
+  blocksCheckIn Boolean @default(true)
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  @@index([dateKey])
 }

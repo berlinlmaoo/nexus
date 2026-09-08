@@ -8,7 +8,7 @@ import {
   safeAttendanceTimezone,
 } from "@/lib/attendance"
 import { isHoliday } from "@/lib/holidays"
-import { isOutageDate } from "@/lib/attendance-absence"
+import { isOutageDay } from "@/lib/attendance-absence"
 import { notifyAttendanceReminder, sendWA } from "@/lib/notification-service"
 import { publicBaseUrl } from "./public-url"
 
@@ -120,7 +120,7 @@ export async function sendAttendanceReminders(now: Date = new Date(), opts?: { d
   const dateKey = formatAttendanceDateKey(now)
   const result: AttendanceReminderResult = { date: dateKey, dryRun, checkinSent: 0, checkoutSent: 0, eligible: 0, preview: [] }
 
-  if (isOutageDate(dateKey)) {
+  if (await isOutageDay(dateKey)) {
     result.note = "Hari ini ditandai outage — tidak ada reminder."
     return result
   }

@@ -18,7 +18,12 @@ provides_tools:
   - nexus_create_task
   - nexus_update_task
   - nexus_add_task_comment
-  - nexus_create_document
-  # Deliberately absent, and must stay absent: anything touching attendance, shifts or day-off
-  # quota. Every other tool is safe because it acts AS the user and is refused wherever they would
-  # be — but a person MAY check themselves in, so acting as them is no guard there at all.
+  # Attendance: read one's OWN day, and PROPOSE one of two remedies on a ticket. Nothing here applies
+  # anything — both proposals wait on a BoD tap at POST /api/complaints/[id]/correction.
+  - nexus_get_attendance_day
+  - nexus_propose_attendance_correction
+  - nexus_propose_penalty_cancellation
+  # Deliberately absent, and must stay absent: anything that APPLIES a change to attendance, shifts or
+  # day-off quota. Every other tool is safe because it acts AS the user and is refused wherever they
+  # would be — but a person MAY check themselves in, so acting as them is no guard there at all. That
+  # is why the two attendance tools above only ever write a proposal.

@@ -1,7 +1,7 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import {
   LayoutDashboard, Inbox, MessageCircle, CheckSquare, Calendar, CalendarClock, FolderKanban,
-  BookOpen, Users, Trophy, ClipboardCheck, Settings, Shield, FileText, Megaphone,
+  Users, Trophy, ClipboardCheck, Settings, Shield, FileText, Megaphone,
   Search, Plus, PanelLeftClose, ChevronRight, LogOut, Loader2, Pin, FolderPlus, Rocket, Maximize2, AtSign, ShieldAlert, Ticket, Sun, Moon,
 } from "lucide-react";
 import { Fragment, useRef, useState, type ReactNode, type DragEvent } from "react";
@@ -41,12 +41,6 @@ const groups = [
       { title: "Social Approvals", url: "/social", icon: Megaphone },
       { title: "Leaderboard", url: "/leaderboard", icon: Trophy },
       { title: "Integrity", url: "/peer-reports", icon: ShieldAlert },
-    ],
-  },
-  {
-    label: "Knowledge",
-    items: [
-      { title: "Knowledge Library", url: "/docs", icon: BookOpen },
     ],
   },
   {

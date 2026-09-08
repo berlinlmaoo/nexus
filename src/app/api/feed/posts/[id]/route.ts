@@ -7,7 +7,7 @@ import { logAudit } from "@/lib/audit"
 import { notifyFeedMention } from "@/lib/notification-service"
 import {
   POST_TEXT_MAX, MENTION_MAX, EDIT_WINDOW_MS, POST_INCLUDE, type PostRow,
-  serializePost, getUserOrgRole, isManagerRole, isBodPlus,
+  serializePost, getUserOrgRole, isBodPlus,
 } from "@/lib/feed"
 
 // DELETE /api/feed/posts/[id] — soft delete. Author OR workspace manager (BoD/Manager moderation).
@@ -19,12 +19,14 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const { id } = await params
 
     const role = await getUserOrgRole(me)
-    if (!isBodPlus(role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     const post = await prisma.post.findFirst({ where: { id, deletedAt: null }, select: { authorId: true } })
     if (!post) return NextResponse.json({ error: "Post tidak ditemukan." }, { status: 404 })
 
-    if (post.authorId !== me && !isManagerRole(role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    // Your own post, or a BoD taking something down. Narrower than the old isManagerRole check on
+    // purpose: moderating the company feed is a BoD job, and canDelete in the payload says the same,
+    // so nobody is shown a button this would refuse.
+    if (post.authorId !== me && !isBodPlus(role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     await prisma.post.update({ where: { id }, data: { deletedAt: new Date() } })
     logAudit({ action: "delete", entityType: "post", entityId: id, userId: me, request, metadata: { moderation: post.authorId !== me } })
@@ -43,9 +45,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const me = session.user.id
     const { id } = await params
 
-    const role = await getUserOrgRole(me)
-    if (!isBodPlus(role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-
+    // No role gate: editing is author-only and inside 15 minutes, both enforced below.
     const body = await request.json().catch(() => ({}))
     const text = String(body?.text ?? "").trim()
     const mentionIds: string[] = Array.isArray(body?.mentions) ? body.mentions : []
@@ -79,7 +79,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const myName = session.user.name || "Seseorang"
     void Promise.all(added.map((u) => notifyFeedMention({ mentionedUserId: u.id, mentionedByName: myName, postId: id, snippet: text }).catch(() => {})))
 
-    return NextResponse.json(serializePost(updated as unknown as PostRow, me, new Set(), isManagerRole(role)))
+    return NextResponse.json(serializePost(updated as unknown as PostRow, me, new Set(), false))
   } catch (error) {
     console.error("Error editing post:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

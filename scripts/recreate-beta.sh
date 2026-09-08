@@ -48,7 +48,7 @@ echo "networks: $NETS(primary: $PRIMARY_NET)"
 #    also meant editing a plain config value in .env.production silently did nothing, forever — which
 #    is how emailed links kept pointing at a retired domain long after it was changed. Keep this list
 #    tiny and non-secret; anything not named here follows the old rule.
-OVERRIDABLE="NEXUS_PUBLIC_URL"
+OVERRIDABLE="NEXUS_PUBLIC_URL ATTENDANCE_OUTAGE_DATES"
 
 docker inspect "$C" --format '{{range .Config.Env}}{{println .}}{{end}}' > "$ENVF"
 carried=0

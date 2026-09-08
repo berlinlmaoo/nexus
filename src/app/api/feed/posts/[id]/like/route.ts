@@ -3,7 +3,6 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { getUserOrgRole, isBodPlus } from "@/lib/feed"
 
 // POST /api/feed/posts/[id]/like — body-less idempotent toggle. Returns { liked, likeCount }.
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -11,7 +10,6 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const me = session.user.id
-    if (!isBodPlus(await getUserOrgRole(me))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     const { id } = await params
 
     const post = await prisma.post.findFirst({ where: { id, deletedAt: null }, select: { id: true } })

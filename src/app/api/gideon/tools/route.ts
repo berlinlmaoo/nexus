@@ -9,10 +9,14 @@ import { authenticateGideonService } from '@/lib/gideon-service-auth'
 import { checkProjectAccess } from '@/lib/rbac'
 import { notifyCommentAdded, notifyTaskAssigned, notifyTaskCompleted } from '@/lib/notification-service'
 import { normalizeCustomFieldNumberInput, normalizeCustomFieldOptions, normalizeCustomFieldType, serializeCustomFieldValue } from '@/lib/custom-fields'
-import { parseDateOnlyToUtc } from '@/lib/attendance'
+import { FLEXI_WINDOW_END, parseDateOnlyToUtc, resolveEffectiveAttendanceShift } from '@/lib/attendance'
+import {
+  findCoveringAttendanceRequests, getOutageRecord, hasAttendanceWaiver, isAutoDeduction, isOutageDay,
+  readAttendancePenaltiesForDate } from '@/lib/attendance-absence'
 import {
   ATTENDANCE_CORRECTION_INCLUDE, CORRECTION_REASON_MAX, CORRECTION_REASON_MIN, DATE_KEY_RE,
-  describeCorrection, parseProposedTime, serializeAttendanceCorrection, validateCorrectionTimes, proposeAttendanceCorrection } from '@/lib/attendance-correction'
+  describeCorrection, parseProposedTime, serializeAttendanceCorrection, validateCorrectionTimes,
+  proposeAttendanceCorrection, proposeAttendancePenaltyCancellation } from '@/lib/attendance-correction'
 import { BODY_MAX, isBodPlus } from '@/lib/complaints'
 import { resolveAutoAssignAssigneeIds } from '@/lib/project-auto-assign'
 import type { Prisma, ProjectStatus, TaskPriority, TaskStatus, User } from '@/generated/prisma/client'
@@ -27,9 +31,9 @@ type GideonAction =
   | 'update_task'
   | 'add_task_comment'
   | 'list_custom_fields'
-  | 'create_document'
   | 'get_attendance_day'
   | 'propose_attendance_correction'
+  | 'propose_penalty_cancellation'
 
 type ToolBody = {
   action?: GideonAction | string
@@ -357,6 +361,15 @@ async function getProjectSummary(actor: User, input: Record<string, unknown>) {
 }
 
 /**
+ * DISABLED 8 September 2026, together with the Knowledge Library disappearing from the web and app
+ * ahead of Z Vault. It was never used: all four documents in the library were written by people, not
+ * by GIDEON. Leaving it wired would have meant GIDEON filing things into a library nobody can browse
+ * to and handing out links to a page that is no longer in anyone's menu.
+ *
+ * Kept rather than deleted because the need it answers is real and comes back with Z Vault: GIDEON
+ * can read the whole workspace and reason about it, and without somewhere to put the result a long
+ * answer only exists inside one chat. Re-enabling is the action entry and the union member.
+ *
  * Writes a document into the Knowledge Library.
  *
  * The one thing GIDEON could not do: it can read the whole workspace and reason about it, then had
@@ -367,6 +380,7 @@ async function getProjectSummary(actor: User, input: Record<string, unknown>) {
 /** Where a person can actually open what GIDEON wrote. */
 const PUBLIC_BASE = (process.env.NEXUS_PUBLIC_URL || 'https://nexus.znetworks.id').replace(/\/+$/, '')
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function createDocument(actor: User, input: Record<string, unknown>) {
   const projectId = String(input.projectId ?? '').trim()
   const title = String(input.title ?? '').trim()
@@ -415,11 +429,20 @@ async function createDocument(actor: User, input: Record<string, unknown>) {
 
 
 /**
- * One day of the actor's OWN attendance, read-only.
+ * One day of the actor's OWN attendance, read-only — and everything needed to choose a remedy for it.
  *
  * Added because GIDEON was being asked to validate an attendance ticket while unable to see the
  * record it was validating against — it could read the photo and nothing else, so every conclusion
  * rested on the picture alone.
+ *
+ * Widened afterwards for the same reason one step further out. Seeing only the record, the model could
+ * tell that someone checked in at 18:21 but not that a permit covered the day, that NEXUS was
+ * unreachable, that 15:00 (not 09:00) was their shift, or that 120 XP had actually been docked — so
+ * every case still came out as "propose a time", including the ones a time cannot fix. One call now
+ * returns: the record, the shift that defines "on time" for THIS person on THIS date, whether the day
+ * is on the outage register (plus an anonymous headcount of who else was penalised, because that
+ * register is unreliable), every leave/permit/sick request covering the date with its status, and the
+ * XP actually charged.
  *
  * Always the actor, never a userId from the input. GIDEON acts as whoever asked, so on a ticket it
  * reads the reporter's day and no one else's. A BoD wanting to look at a colleague's attendance has
@@ -439,31 +462,25 @@ async function getAttendanceDay(actor: User, input: Record<string, unknown>) {
     select: { workspaceId: true },
   })
   if (!membership) throw new Error('No workspace membership found')
+  // ACTOR-SCOPED, everywhere below. Every query in this function is keyed on actor.id and this
+  // workspaceId; `input.userId` is never read, and there is no code path that could. GIDEON runs as
+  // whoever asked, so on a ticket this is the reporter's own day and nobody else's.
+  const workspaceId = membership.workspaceId
+  const attendanceDate = parseDateOnlyToUtc(raw)
 
   const record = await prisma.attendanceRecord.findFirst({
     where: {
       userId: actor.id,
-      workspaceId: membership.workspaceId,
+      workspaceId,
       attendanceDate: { gte: new Date(`${raw}T00:00:00.000Z`), lt: new Date(`${raw}T23:59:59.999Z`) },
     },
     select: {
       id: true, attendanceDate: true, checkInAt: true, checkOutAt: true, status: true,
       lateMinutes: true, earlyLeaveMinutes: true, workedMinutes: true,
-      checkInStatus: true, checkOutStatus: true,
-      officeLocation: { select: { name: true } },
+      checkInStatus: true, checkOutStatus: true, correctedAt: true,
+      officeLocation: true,
     },
   })
-
-  if (!record) {
-    // Said plainly rather than returned as an empty object: "no record" is a real answer here — it
-    // usually means the check-in never landed, which is exactly what a ticket is about.
-    return {
-      date: raw,
-      user: { id: actor.id, name: actor.name },
-      found: false,
-      note: 'Tidak ada catatan absensi untuk tanggal ini. Biasanya berarti check-in tidak pernah masuk.',
-    }
-  }
 
   // Local clock as well as the raw instant. Given only UTC the model reports "15.09 UTC" into a
   // ticket read by people who live seven hours ahead of it — and an attendance argument settled on a
@@ -471,21 +488,224 @@ async function getAttendanceDay(actor: User, input: Record<string, unknown>) {
   const jakarta = (d: Date | null) =>
     d ? d.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }) : null
 
-  return {
-    date: formatAttendanceDateKey(record.attendanceDate),
+  // ---- What "on time" MEANT for this person on this date. -------------------------------------
+  // Without it there is no way to tell a fair proposal from an unfair one: the model was proposing
+  // times it had read off a screenshot, which is when someone gave up trying, not when they were due.
+  // Needs an office (the shift can come from the office default, and the offices here disagree —
+  // 15:00 at HQ, 09:00 elsewhere). The day's own office first; failing that the one this person
+  // actually checks in at; failing that the workspace's only office. Never a guess between several.
+  let office = record?.officeLocation ?? null
+  let officeSource: 'record' | 'usual' | 'only-active' | 'unknown' = record?.officeLocation ? 'record' : 'unknown'
+  if (!office) {
+    const usual = await prisma.attendanceRecord.findFirst({
+      where: { userId: actor.id, workspaceId },
+      orderBy: { attendanceDate: 'desc' },
+      select: { officeLocation: true },
+    })
+    if (usual?.officeLocation) {
+      office = usual.officeLocation
+      officeSource = 'usual'
+    } else {
+      const offices = await prisma.officeLocation.findMany({ where: { workspaceId, isActive: true }, take: 2 })
+      if (offices.length === 1) {
+        office = offices[0]
+        officeSource = 'only-active'
+      }
+    }
+  }
+  const effectiveShift = office
+    ? await resolveEffectiveAttendanceShift({ userId: actor.id, workspaceId, office, date: attendanceDate })
+    : null
+  const shift = effectiveShift
+    ? {
+        // The wall-clock the person was due, in Jakarta time. THIS is the time to propose when a
+        // proposal is warranted at all — never a timestamp read off an error screenshot.
+        shiftStartTime: effectiveShift.shiftStartTime,
+        shiftEndTime: effectiveShift.shiftEndTime,
+        // Flexi people are not late until the window END; that, not the start, is the on-time line.
+        onTimeCutoff: effectiveShift.flexi ? FLEXI_WINDOW_END : effectiveShift.shiftStartTime,
+        flexi: effectiveShift.flexi,
+        source: effectiveShift.source,
+        teamName: effectiveShift.teamName,
+        graceMinutes: Math.max(0, office?.lateGraceMinutes ?? 0),
+        office: office?.name ?? null,
+        officeSource,
+      }
+    : { unknown: true, note: 'Kantornya gak bisa ditentukan (orang ini belum pernah absen dan workspace punya lebih dari satu kantor aktif), jadi jam shift-nya gak bisa dipastikan. Jangan menebak jamnya.' }
+
+  // ---- Cover: a leave / permit / sick request over this date. ----------------------------------
+  // PENDING counts, and that is the point. Both attendance crons hold the penalty back for a request
+  // that is merely filed, so a day covered by one is not plain lateness however late the clock reads.
+  const covering = await findCoveringAttendanceRequests(actor.id, workspaceId, attendanceDate)
+  const coveringRequests = covering.map((r) => ({
+    id: r.id,
+    type: r.type,
+    status: r.status,
+    // The cron's own "Auto: telat >120 menit" day-off is a PENALTY, not cover for one. Marked, because
+    // a model reading a list of "APPROVED DAY_OFF" rows would otherwise conclude the day was excused
+    // when that row IS the punishment being complained about.
+    isAutoDeduction: isAutoDeduction(r),
+    reason: r.reason,
+    filedAt: r.createdAt,
+    reviewedAt: r.reviewedAt,
+  }))
+  const realCover = coveringRequests.filter((r) => !r.isAutoDeduction)
+
+  // ---- What the day actually cost, off the XP ledger. ------------------------------------------
+  const pen = await readAttendancePenaltiesForDate(actor.id, workspaceId, attendanceDate, raw)
+  const totalPenaltyXp = pen.lateXp + pen.noCheckoutXp + pen.alphaXp
+  const waived = await hasAttendanceWaiver(actor.id, raw)
+
+  // ---- Was NEXUS down that day? ----------------------------------------------------------------
+  // isOutageDay reads the AttendanceOutage table (written by the host-side probe) as well as the
+  // hand-typed env var, and counts only days whose CHECK-IN WINDOW the outage actually swallowed —
+  // an outage that began at 19:41 did not stop that morning's shift and must not pardon it.
+  //
+  // A false here still means NOT RECORDED, never DID NOT HAPPEN. The probe only started running after
+  // 2–3 Sep 2026 went unrecorded and cost 33 people 5,198 XP, so anything before it depends on someone
+  // having noticed. The field is named for what it actually knows.
+  //
+  // The corroboration is a headcount, and a headcount only: how many people in this workspace carry an
+  // attendance penalty for that same date. It is deliberately anonymous — no names, no ids, nothing
+  // per-person — so it stays a fact about the SYSTEM, which is what an outage is, and reading it can
+  // never become a way to read a colleague's hours. Everyone in the workspace losing XP on one day is
+  // the signature of an outage; one person losing XP is a person who was late.
+  const memberIds = (await prisma.workspaceMember.findMany({ where: { workspaceId }, select: { userId: true } })).map((m) => m.userId)
+  const dayPenaltyRows = await prisma.xpTransaction.findMany({
+    where: { userId: { in: memberIds }, reason: { in: [`attendance:late:${raw}`, `attendance:nocheckout:${raw}`, `attendance:alpha:${raw}`] } },
+    select: { userId: true, reason: true },
+  })
+  const penalizedMembers = new Set(dayPenaltyRows.map((r) => r.userId))
+  const alphaMembers = new Set(dayPenaltyRows.filter((r) => r.reason.startsWith('attendance:alpha:')).map((r) => r.userId))
+  // A headcount with NOTHING to compare it against is not evidence, and shipping one as if it were
+  // produced a real defect: this workspace penalises 18-28 people EVERY day, so "22 of 46 were
+  // penalised" reads as alarming while being exactly average. GIDEON quoted it as corroboration of an
+  // outage on an ordinary day. So the baseline ships WITH the number — the median of the 14 days
+  // before this one — and `aboveNormal` does the comparison here rather than hoping the model does.
+  const baselineStart = new Date(attendanceDate.getTime() - 14 * 24 * 60 * 60 * 1000)
+  const baselineRows = await prisma.$queryRaw<{ tgl: string; n: bigint }[]>`
+    SELECT substring(reason from '[0-9]{4}-[0-9]{2}-[0-9]{2}') AS tgl, count(DISTINCT "userId") AS n
+    FROM "XpTransaction"
+    WHERE reason ~ '^attendance:(alpha|late|nocheckout):'
+      AND substring(reason from '[0-9]{4}-[0-9]{2}-[0-9]{2}') >= ${formatAttendanceDateKey(baselineStart)}
+      AND substring(reason from '[0-9]{4}-[0-9]{2}-[0-9]{2}') < ${raw}
+    GROUP BY 1`
+  const counts = baselineRows.map((r) => Number(r.n)).sort((a, b) => a - b)
+  const median = counts.length ? counts[Math.floor(counts.length / 2)] : null
+
+  // Jam check-in PERTAMA hari itu dibanding kebiasaan 21 hari sebelumnya, dalam menit sejak tengah
+  // malam WIB supaya shift malam ikut terhitung apa adanya.
+  const firstRows = await prisma.$queryRaw<{ tgl: string; menit: number }[]>`
+    SELECT to_char("attendanceDate", 'YYYY-MM-DD') AS tgl,
+           MIN(EXTRACT(EPOCH FROM (
+             ("checkInAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Jakarta')
+             - date_trunc('day', "checkInAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Jakarta')
+           )) / 60)::float AS menit
+    FROM "AttendanceRecord"
+    WHERE "workspaceId" = ${membership.workspaceId}
+      AND "checkInAt" IS NOT NULL
+      AND "attendanceDate" >= ${new Date(attendanceDate.getTime() - 21 * 24 * 60 * 60 * 1000)}
+      AND "attendanceDate" <= ${attendanceDate}
+    GROUP BY 1`
+  const hhmm = (m: number | null) =>
+    m === null ? null : `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(Math.round(m % 60)).padStart(2, '0')}`
+  const todayFirst = firstRows.find((r) => r.tgl === raw)?.menit ?? null
+  const priorFirsts = firstRows.filter((r) => r.tgl !== raw).map((r) => r.menit).sort((a, b) => a - b)
+  const medianFirst = priorFirsts.length >= 5 ? priorFirsts[Math.floor(priorFirsts.length / 2)] : null
+  const laterBy = todayFirst !== null && medianFirst !== null ? Math.round(todayFirst - medianFirst) : null
+  const checkInPattern = {
+    firstCheckIn: hhmm(todayFirst),
+    normalFirstCheckIn: hhmm(medianFirst),
+    minutesLaterThanNormal: laterBy,
+    // Ambang 150 menit: pada 21 hari di sekitar 3 September 2026 ambang ini memisahkan hari itu
+    // (+257) dari SEMUA hari lain (tertinggi berikutnya +134).
+    unusuallyLateStart: laterBy !== null && laterBy >= 150,
+    meaning:
+      'unusuallyLateStart=true berarti HARI ITU tidak ada seorang pun yang bisa check-in sampai jauh lewat ' +
+      'jam biasa — tanda kuat sistemnya memang tidak bisa diakses, walaupun tanggalnya belum tercatat. ' +
+      'false TIDAK menutup kemungkinan gangguan sore/malam: sinyal ini hanya melihat pagi.',
+  }
+
+  const outage = {
+    recordedByNexus: await isOutageDay(raw),
+    meaning:
+      'recordedByNexus=true berarti tanggal ini SUDAH terdaftar sebagai hari NEXUS down (semua cron melewatinya). ' +
+      'recordedByNexus=false berarti BELUM TERCATAT — bukan berarti sistemnya tidak down. Daftar itu diisi otomatis ' +
+      'oleh prober sejak 8 September 2026; sebelum tanggal itu ia bergantung pada ada tidaknya orang yang mengetiknya.',
+    // Anonymous headcounts, for raising a suspected outage to a BoD with a number attached.
+    sameDaySignal: {
+      workspaceMembers: memberIds.length,
+      membersPenalized: penalizedMembers.size,
+      membersWithNoCheckInAtAll: alphaMembers.size,
+      // Median orang kena potongan pada 14 hari sebelumnya. Inilah pembandingnya.
+      normalPenalizedPerDay: median,
+      // true hanya kalau hari ini JELAS di atas kebiasaan (>=1,5x median). Angka di bawah ini
+      // BUKAN tanda gangguan apa pun — cuma hari kerja biasa di workspace ini.
+      aboveNormal: median !== null && median > 0 ? penalizedMembers.size >= median * 1.5 : false,
+    },
+    // Sinyal yang benar-benar bekerja untuk outage yang tidak sempat dicatat, dan yang selama ini
+    // hanya dipura-purakan oleh jumlah kepala. Pada 3 September 2026 tunnel mati sampai 15:16 WIB dan
+    // check-in pertama hari itu 15:00 — sementara 20 hari di sekitarnya mulai antara 00:08 dan 12:57.
+    // Kalau TIDAK SEORANG PUN bisa masuk sampai sore, ada sesuatu di depan pintunya.
+    //
+    // Batasnya nyata dan harus disebut: ia hanya melihat outage yang memakan PAGI. Outage 2 September
+    // mulai 19:41 dan check-in pertama hari itu 12:20 yang biasa saja — tidak terlihat di sini. Itu
+    // pertukaran yang benar, karena outage yang memakan pagi persis kasus blocksCheckIn.
+    //
+    // Shift malam masuk jam 00:08 dan 02:02, jadi pembandingnya median workspace ini sendiri, bukan
+    // jam kantor yang diketik seseorang. Ia menyesuaikan diri kalau pola shift berubah.
+    checkInPattern,
+  }
+
+  const common = {
+    date: raw,
     user: { id: actor.id, name: actor.name },
+    timezone: 'Asia/Jakarta (WIB)',
+    shift,
+    outage,
+    coveringRequests,
+    // Pre-chewed because it is the single fact that decides the remedy, and a model that has to derive
+    // it from the array above will sometimes derive it wrong.
+    coveredByRequest: realCover.length > 0,
+    xpPenalties: {
+      lateXp: pen.lateXp,
+      noCheckoutXp: pen.noCheckoutXp,
+      alphaXp: pen.alphaXp,
+      autoDayOffsDeducted: pen.autoDayOffs,
+      totalPenaltyXp,
+      // Nothing on the ledger = nothing to cancel. Usually means a cron already refunded it once the
+      // permit was approved, and the honest answer is "your XP is already back", not a proposal.
+      hasPenaltyToCancel: totalPenaltyXp < 0 || pen.autoDayOffs > 0,
+      alreadyWaived: waived,
+    },
+  }
+
+  if (!record) {
+    // Said plainly rather than returned as an empty object: "no record" is a real answer here — it
+    // usually means the check-in never landed, which is exactly what a ticket is about. Everything
+    // above is still returned: a day the outage swallowed has no record and is still judgeable.
+    return {
+      ...common,
+      found: false,
+      note: 'Tidak ada catatan absensi untuk tanggal ini. Biasanya berarti check-in tidak pernah masuk.',
+    }
+  }
+
+  return {
+    ...common,
+    date: formatAttendanceDateKey(record.attendanceDate),
     found: true,
     status: record.status,
     checkInAt: record.checkInAt,
     checkOutAt: record.checkOutAt,
     checkInLocal: jakarta(record.checkInAt),
     checkOutLocal: jakarta(record.checkOutAt),
-    timezone: 'Asia/Jakarta (WIB)',
     checkInStatus: record.checkInStatus,
     checkOutStatus: record.checkOutStatus,
     lateMinutes: record.lateMinutes,
     earlyLeaveMinutes: record.earlyLeaveMinutes,
     workedMinutes: record.workedMinutes,
+    correctedAt: record.correctedAt,
     office: record.officeLocation?.name ?? null,
   }
 }
@@ -921,12 +1141,15 @@ export async function POST(req: Request) {
         return ok(await updateTask(auth.actor, input))
       case 'add_task_comment':
         return ok(await addTaskComment(auth.actor, input))
-      case 'create_document':
-        return ok(await createDocument(auth.actor, input))
       case 'get_attendance_day':
         return ok(await getAttendanceDay(auth.actor, input))
       case 'propose_attendance_correction':
         return ok(await proposeAttendanceCorrection(auth.actor, input))
+      // The second remedy. Still a proposal: it writes an AttendanceCorrection row and a thread
+      // message, and no XP moves until a BoD taps approve. There is no tool action here that applies
+      // one, by design and not by omission.
+      case 'propose_penalty_cancellation':
+        return ok(await proposeAttendancePenaltyCancellation(auth.actor, input))
       default:
         return error(`Unknown GIDEON tool action: ${body.action}`)
     }

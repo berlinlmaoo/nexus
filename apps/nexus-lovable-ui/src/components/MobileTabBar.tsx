@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   LayoutDashboard, Inbox, CheckSquare, FolderKanban, Menu, X,
-  MessageCircle, Calendar, CalendarClock, Users, BookOpen, Trophy,
+  MessageCircle, Calendar, CalendarClock, Users, Trophy,
   ClipboardCheck, Settings, Shield, LogOut, Loader2, FileText, AtSign, ShieldAlert, Ticket, Sun, Moon,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -41,12 +41,6 @@ const moreGroups = [
       { title: "Mission Control", url: "/projects", icon: FolderKanban },
       { title: "Leaderboard", url: "/leaderboard", icon: Trophy },
       { title: "Integrity", url: "/peer-reports", icon: ShieldAlert },
-    ],
-  },
-  {
-    label: "Knowledge",
-    items: [
-      { title: "Knowledge Library", url: "/docs", icon: BookOpen },
     ],
   },
   {

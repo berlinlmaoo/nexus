@@ -11,9 +11,11 @@ _ACTION_BY_TOOL = {
     "nexus_create_task": "create_task",
     "nexus_update_task": "update_task",
     "nexus_add_task_comment": "add_task_comment",
-    "nexus_create_document": "create_document",
     "nexus_get_attendance_day": "get_attendance_day",
+    # Two remedies, both PROPOSAL-only. Neither has a counterpart that applies one: a BoD decides both
+    # at POST /api/complaints/[id]/correction, and that is the only place attendance or XP moves.
     "nexus_propose_attendance_correction": "propose_attendance_correction",
+    "nexus_propose_penalty_cancellation": "propose_penalty_cancellation",
 }
 
 

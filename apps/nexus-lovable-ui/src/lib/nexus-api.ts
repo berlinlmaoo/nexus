@@ -150,20 +150,42 @@ export type ComplaintMessage = {
 // A proposal only; nothing about attendance moves until a BoD decides it at
 // POST /api/complaints/[id]/correction — that route is the only writer of the AttendanceRecord.
 export type AttendanceCorrectionStatus = "PENDING" | "APPROVED" | "REJECTED";
+/**
+ * Which remedy the proposal asks for. Two kinds on ONE model so a ticket can only ever carry one live
+ * proposal, decided on one card:
+ *   TIME_CORRECTION      — the recorded times are wrong; approval rewrites the AttendanceRecord.
+ *   PENALTY_CANCELLATION — the times are right and the penalty is not: a leave/permit/sick request
+ *                          covers the day, or NEXUS was down. Approval reverses the XP and changes no
+ *                          time at all, so the before/after clock the card draws for the other kind
+ *                          would be actively misleading here.
+ */
+export type AttendanceCorrectionKind = "TIME_CORRECTION" | "PENALTY_CANCELLATION";
 export type AttendanceCorrection = {
   id: string;
   complaintId: string;
   status: AttendanceCorrectionStatus;
+  kind: AttendanceCorrectionKind;
   /** Attendance date key "YYYY-MM-DD" (Asia/Jakarta), not a timestamp — never re-zone it. */
   date: string;
   user: ComplaintPerson;               // whose attendance this would rewrite
-  /** null = "leave the recorded time alone", NOT "clear it". Approval merges nulls with the record. */
+  /** null = "leave the recorded time alone", NOT "clear it". Approval merges nulls with the record.
+   *  Always null on a PENALTY_CANCELLATION — that is the whole point of that kind. */
   proposedCheckInAt: string | null;
   proposedCheckOutAt: string | null;
   reason: string;
   proposedBy: ComplaintPerson;         // GIDEON, usually
   /** What the record held when the proposal was written — the snapshot the server optimistic-locks on. */
   before: { recordId: string | null; checkInAt: string | null; checkOutAt: string | null; status: string | null };
+  /** What the day had actually cost when the proposal was written (negative XP, or 0). The "before"
+   *  of a PENALTY_CANCELLATION — the ledger rows are deleted by the refund, so this is the only
+   *  surviving record of what approving it undid. */
+  beforePenaltyXp: number | null;
+  beforeAutoDayOffs: number | null;
+  restoredDayOffs: number | null;
+  /** Filled in on APPROVE: XP handed back (positive), and whether the pardon was made permanent (a
+   *  waiver). Permanent only when nothing else holds the nightly cron off — see resolvePardonPersistence. */
+  refundedXp: number | null;
+  waiverGranted: boolean;
   decidedBy: ComplaintPerson | null;
   decidedAt: string | null;
   decisionNote: string | null;
@@ -879,7 +901,10 @@ export type NexusSubmissionDetail = NexusMySubmission & {
 };
 
 export type NexusAnnouncement = { id: string; title: string; body: string; tone: "info" | "success" | "warning"; imageUrl?: string | null; createdAt: string };
-export type NexusAdminAnnouncement = NexusAnnouncement & { active: boolean; seenCount: number; targetUserIds?: string[]; targetCount?: number };
+// repeatUntil/repeatAtTime: while set, the notice goes out again every day until that date.
+// seenCount is per REPEAT — a repeat clears the seen rows so the pop-up comes back, which
+// makes the number mean "seen since it last went out" rather than an all-time total.
+export type NexusAdminAnnouncement = NexusAnnouncement & { active: boolean; seenCount: number; targetUserIds?: string[]; targetCount?: number; repeatUntil?: string | null; repeatAtTime?: string | null; lastRepeatedAt?: string | null };
 
 export type NexusFinanceLineItem = { id: string; name: string; order: number; monthly: number[]; total: number };
 export type NexusFinanceCategory = { id: string; kind: "OPEX" | "REVENUE"; name: string; order: number; lineItems: NexusFinanceLineItem[]; subtotalByMonth: number[]; subtotal: number };
@@ -1652,7 +1677,9 @@ export const nexusApi = {
   // something to approve even when GIDEON declined to draft one or was down.
   proposeComplaintCorrection: (
     id: string,
-    payload: { date: string; checkInAt?: string; checkOutAt?: string; reason: string },
+    // kind omitted = TIME_CORRECTION, so every existing caller keeps working. A PENALTY_CANCELLATION
+    // takes no times: passing one would reopen the mistake that kind exists to end.
+    payload: { date: string; checkInAt?: string; checkOutAt?: string; reason: string; kind?: AttendanceCorrectionKind },
   ) =>
     apiFetch<{ correction: AttendanceCorrection }>(`/api/complaints/${id}/correction`, {
       method: "POST",
@@ -1931,7 +1958,7 @@ export const nexusApi = {
   activeAnnouncements: () => apiFetch<{ announcements: NexusAnnouncement[] }>("/api/announcements/active"),
   dismissAnnouncement: (id: string) => apiFetch<{ ok?: boolean }>(`/api/announcements/${id}/seen`, { method: "POST" }),
   announcements: () => apiFetch<{ announcements: NexusAdminAnnouncement[] }>("/api/announcements"),
-  createAnnouncement: (payload: { title: string; body: string; tone?: string; targetUserIds?: string[] }) => apiFetch<{ announcement: NexusAdminAnnouncement }>("/api/announcements", { method: "POST", body: JSON.stringify(payload) }),
+  createAnnouncement: (payload: { title: string; body: string; tone?: string; targetUserIds?: string[]; repeatDays?: number; repeatAtTime?: string }) => apiFetch<{ announcement: NexusAdminAnnouncement }>("/api/announcements", { method: "POST", body: JSON.stringify(payload) }),
   updateAnnouncement: (id: string, payload: { title?: string; body?: string; tone?: string; active?: boolean }) => apiFetch<{ announcement: NexusAdminAnnouncement }>(`/api/announcements/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteAnnouncement: (id: string) => apiFetch<{ ok?: boolean }>(`/api/announcements/${id}`, { method: "DELETE" }),
 

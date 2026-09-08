@@ -41,8 +41,69 @@ export function getOutageDateKeys(): Set<string> {
       .filter(Boolean),
   )
 }
-export function isOutageDate(dateKey: string): boolean {
-  return getOutageDateKeys().has(dateKey)
+
+/**
+ * The outage register, read from the `AttendanceOutage` TABLE as well as the env var.
+ *
+ * The env var alone is why 2-3 September 2026 cost 33 people 5,198 XP: it is typed by hand, nobody
+ * typed that outage, and the nightly cron therefore charged a full day of absence for 19.5 hours
+ * during which Cloudflare was serving Error 1033 and no one could reach a check-in button. A register
+ * that only a human can write is a register that is empty exactly when it matters.
+ *
+ * `blocksCheckIn` is the whole point of reading rows rather than dates. An outage that began at 19:41
+ * did NOT stop the day shift from checking in that morning, and pardoning their absence would be as
+ * unfair in the other direction. Only days whose CHECK-IN WINDOW the outage actually swallowed carry
+ * a day-wide amnesty; the rest are recorded, visible to GIDEON, and left to a human.
+ *
+ * Env entries still count, unconditionally — they are a BoD's explicit word and must not be silently
+ * demoted by a table that happens to have no row.
+ *
+ * Fails OPEN on a DB error (env-only), never throws: this sits inside the nightly cron, and a register
+ * that crashes the run would stop every OTHER member-day from being processed too.
+ */
+export async function getOutageDateKeysForRange(from: Date, to: Date): Promise<Set<string>> {
+  const keys = getOutageDateKeys()
+  try {
+    const rows = await prisma.attendanceOutage.findMany({
+      where: { blocksCheckIn: true, dateKey: { gte: formatAttendanceDateKey(from), lte: formatAttendanceDateKey(to) } },
+      select: { dateKey: true },
+    })
+    for (const r of rows) keys.add(r.dateKey)
+  } catch (err) {
+    console.error("getOutageDateKeysForRange: tabel AttendanceOutage tidak terbaca, jatuh ke env saja:", err)
+  }
+  return keys
+}
+
+/** Single-date form of the above. Same fail-open rule, same blocksCheckIn filter. */
+export async function isOutageDay(dateKey: string): Promise<boolean> {
+  if (getOutageDateKeys().has(dateKey)) return true
+  try {
+    const row = await prisma.attendanceOutage.findFirst({
+      where: { dateKey, blocksCheckIn: true },
+      select: { id: true },
+    })
+    return Boolean(row)
+  } catch (err) {
+    console.error("isOutageDay: tabel AttendanceOutage tidak terbaca, jatuh ke env saja:", err)
+    return false
+  }
+}
+
+/**
+ * The whole recorded row for a date, for callers that must EXPLAIN rather than merely branch —
+ * GIDEON, above all. "Was it down?" answered as a bare yes/no is what produced replies telling people
+ * their evidence was too blurry; "down 19:41-15:16, first check-in 15:21" is an answer a person can
+ * argue with. Returns null when the date is not on the register at all, which means NOT RECORDED and
+ * never NOT HAPPENED.
+ */
+export async function getOutageRecord(dateKey: string) {
+  try {
+    return await prisma.attendanceOutage.findUnique({ where: { dateKey } })
+  } catch (err) {
+    console.error("getOutageRecord: tabel AttendanceOutage tidak terbaca:", err)
+    return null
+  }
 }
 
 export interface AttendancePenaltyRefund {
@@ -123,6 +184,28 @@ export async function grantAttendanceWaiver(userId: string, dateKey: string) {
 }
 
 /**
+ * Every leave/permit/sick/day-off request that COVERS a date and is still live (PENDING or APPROVED).
+ *
+ * The same query three penalty paths already run inline (the nightly deduction, the live late accrual,
+ * the outage refund) — hoisted so the ticket flow asks the identical question rather than a
+ * near-identical one. PENDING counts: a permit filed and not yet reviewed already holds the penalty
+ * back, which is exactly why a day covered by one must not be judged as plain lateness.
+ *
+ * Callers still have to filter with `isAutoDeduction` — the cron's own "Auto:" day-off comes back here
+ * too, and that row IS a penalty, not cover for one.
+ */
+export async function findCoveringAttendanceRequests(userId: string, workspaceId: string, date: Date) {
+  return prisma.attendanceRequest.findMany({
+    where: { userId, workspaceId, status: { in: ["PENDING", "APPROVED"] }, startDate: { lte: date }, endDate: { gte: date } },
+    select: {
+      id: true, type: true, status: true, reason: true, startDate: true, endDate: true,
+      approvalSource: true, reviewedById: true, reviewedAt: true, createdAt: true,
+    },
+    orderBy: { createdAt: "asc" },
+  })
+}
+
+/**
  * True if a covering request is the cron's own auto-deduction (NOT a real user-filed leave). These
  * are PENALTIES (e.g. ">120 min late → −1 day-off token", or auto-absence), so attendance flows
  * (check-in/check-out) and the report must NOT treat them like a real day-off: they should never block
@@ -188,7 +271,7 @@ export async function applyAttendanceReviewSideEffects(
  */
 export async function rederiveLatePenaltyForDate(userId: string, workspaceId: string, date: Date, dateKey: string): Promise<number> {
   if (date.getTime() < startFloor().getTime()) return 0
-  if (isOutageDate(dateKey)) return 0
+  if (await isOutageDay(dateKey)) return 0
 
   const member = await prisma.workspaceMember.findFirst({
     where: { userId, workspaceId },
@@ -332,8 +415,15 @@ export interface OutageRefundResult {
   entries: OutageRefundMemberEntry[]
 }
 
-/** Read the attendance penalties currently on the ledger for one member + date (no mutation). */
-async function readOutagePenalties(userId: string, workspaceId: string, date: Date, dateKey: string) {
+/**
+ * Read the attendance penalties currently on the ledger for one member + date (no mutation).
+ *
+ * Exported because the outage refund is no longer the only thing that needs to know what a day
+ * actually cost someone: GIDEON's read tool reports it so a ticket can be judged against the ledger
+ * instead of a guess, and the penalty-cancellation proposal snapshots it so the BoD card can say what
+ * approving would hand back. One reader, so those three can never disagree about what a penalty is.
+ */
+export async function readAttendancePenaltiesForDate(userId: string, workspaceId: string, date: Date, dateKey: string) {
   const lateReason = `attendance:late:${dateKey}`
   const noCheckoutReason = `attendance:nocheckout:${dateKey}`
   const alphaReason = `attendance:alpha:${dateKey}`
@@ -409,7 +499,7 @@ export async function refundOutageDay(opts: {
         continue
       }
 
-      const pen = await readOutagePenalties(userId, workspaceId, date, dateKey)
+      const pen = await readAttendancePenaltiesForDate(userId, workspaceId, date, dateKey)
       const xpRefund = -(pen.lateXp + pen.noCheckoutXp + pen.alphaXp) // negatives → positive refund
       const hasSomething = xpRefund > 0 || pen.autoDayOffs > 0
       if (!hasSomething) continue // nothing was cut for this member → skip silently
@@ -497,12 +587,15 @@ export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date }
     )
 
     const holidayKeys = await getHolidayKeys(workspaceId, from, to) // tanggal merah → skip
+    // Sekali per run, bukan sekali per tanggal — meniru holidayKeys di atasnya. Termasuk hari
+    // yang dicatat otomatis oleh prober, bukan cuma yang sempat diketik orang ke env.
+    const outageKeys = await getOutageDateKeysForRange(from, to)
 
     for (const date of dates) {
       if (!isWorkdayForAttendanceDate(date, office)) continue
       const dateKey = formatAttendanceDateKey(date)
       if (holidayKeys.has(dateKey)) continue // libur nasional → tidak dipotong/dipenalti
-      if (isOutageDate(dateKey)) continue // sistem down → bukan salah staff, tidak dipotong/dipenalti
+      if (outageKeys.has(dateKey)) continue // sistem down → bukan salah staff, tidak dipotong/dipenalti
 
       for (const member of members) {
         const userId = member.userId
@@ -647,7 +740,7 @@ export async function accrueLatePenalties(now: Date = new Date()): Promise<LateA
   // Policy not live yet (e.g. before ABSENCE_DEDUCTION_START_DATE) → no live accrual at all.
   if (today.getTime() < startFloor().getTime()) return result
   // System outage day → staff can't check in; don't accrue late penalties at all.
-  if (isOutageDate(dateKey)) return result
+  if (await isOutageDay(dateKey)) return result
 
   const offices = await prisma.officeLocation.findMany({ where: { isActive: true } })
   const officeByWorkspace = new Map<string, (typeof offices)[number]>()
