@@ -52,6 +52,20 @@ struct RootView: View {
                             }
                     }
                 }
+                // A vault link tapped outside the app. Inside the authenticated branch for the same
+                // reason the form sheet is: a link that arrives while signed out waits in the router
+                // and opens by itself once sign-in finishes, instead of being thrown away by the
+                // login it provoked.
+                .sheet(item: $router.vaultRequest) { request in
+                    NavigationStack {
+                        VaultSharedFileView(slug: request.id)
+                            .toolbar {
+                                ToolbarItem(placement: .cancellationAction) {
+                                    Button(T("Close")) { router.vaultRequest = nil }
+                                }
+                            }
+                    }
+                }
         } else {
             // LoginView forces `.light` itself, and MUST stay outside that modifier.
             // `preferredColorScheme` is a preference, and a preference written by an ancestor
@@ -96,6 +110,7 @@ struct MoreView: View {
                         }
                         MoreSection(T("Knowledge")) {
                             LazyVGrid(columns: cols, spacing: 12) {
+                                MoreTile(T("Z Vault"), "externaldrive.fill", NX.violetText) { VaultView() }
                                 MoreTile(T("Forms"), "doc.text.fill", NX.blue) { FormsView() }
                             }
                         }

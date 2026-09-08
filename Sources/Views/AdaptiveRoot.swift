@@ -23,7 +23,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
     // Missions
     case leaderboard, reports
     // Knowledge
-    case docs, forms
+    case docs, forms, vault
     // Pulse Check
     case attendance
     // System
@@ -46,6 +46,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .reports:      return T("Reports")
         case .docs:         return T("Knowledge Library")
         case .forms:        return T("Forms")
+        case .vault:        return T("Z Vault")
         case .attendance:   return T("Attendance")
         case .tickets:      return T("Ticket")
         case .teams:        return T("Teams")
@@ -69,6 +70,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .reports:      return "chart.bar.fill"
         case .docs:         return "book.fill"
         case .forms:        return "doc.text.fill"
+        case .vault:        return "externaldrive.fill"
         case .attendance:   return "clock.badge.checkmark.fill"
         case .tickets:      return "ticket.fill"
         case .teams:        return "person.3.fill"
@@ -79,7 +81,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
 
     var tint: Color {
         switch self {
-        case .dashboard, .projects, .threads, .teamCalendar, .docs, .settings: return NX.violetText
+        case .dashboard, .projects, .threads, .teamCalendar, .docs, .vault, .settings: return NX.violetText
         case .tasks, .attendance, .reports:                                    return NX.success
         case .inbox, .messages, .forms, .tickets:                              return NX.blue
         case .submissions, .leaderboard:                                       return NX.warning
@@ -144,6 +146,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         case .reports:      ReportsView()
         case .docs:         DocsView()
         case .forms:        FormsView()
+        case .vault:        VaultView()
         case .attendance:   AttendanceView()
         case .tickets:      TicketsView()
         case .teams:        TeamsView()
@@ -161,7 +164,7 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         (nil,                 [.dashboard, .tasks, .inbox, .projects]),
         (T("Home Base"),      [.messages, .threads, .submissions, .teamCalendar, .roomBooking]),
         (T("Missions"),       [.leaderboard, .reports]),
-        (T("Knowledge"),      [.forms]),
+        (T("Knowledge"),      [.vault, .forms]),
         (T("Pulse Check"),    [.attendance]),
         (T("System"),         [.tickets, .teams, .settings, .admin]),
     ] }

@@ -18,6 +18,17 @@ struct NXFormRequest: Identifiable, Hashable {
     let id: String
 }
 
+/// A shared vault file somebody was sent, named by the slug in its link.
+///
+/// Its own type rather than a String for the same reason NXFormRequest is one: `.sheet(item:)` needs
+/// something Identifiable, and a bare String would silently coalesce two different links that happen
+/// to be presented in the same frame.
+struct NXVaultRequest: Identifiable, Hashable {
+    /// The opaque capability out of `/v/<slug>`. Never a file name, never a path — the server
+    /// resolves what it points at and refuses if it has been revoked or has run out.
+    let id: String
+}
+
 /// Where the app should go, when the instruction comes from outside the screen you are standing on.
 ///
 /// Siri, a Shortcut, a tap on the Live Activity, a tap on a widget and a tap on a notification all
@@ -74,6 +85,11 @@ final class AppRouter {
     /// login it caused.
     var formRequest: NXFormRequest?
 
+    /// A Z Vault file somebody shared, waiting to be shown. Same rules as `formRequest` in every
+    /// respect, including the one that matters most: it is NOT cleared when the app is signed out,
+    /// so a link tapped by somebody who has to log in first still opens once they are in.
+    var vaultRequest: NXVaultRequest?
+
     /// The phone tab that IS this screen, or nil when the screen lives behind the More launcher.
     private func tabRoot(for screen: NXScreen) -> PhoneTab? {
         switch screen {
@@ -125,15 +141,20 @@ final class AppRouter {
         go(screen)
     }
 
-    /// `https://nexus.znetworks.id/f/<id-or-slug>` — the address the Forms screen copies to the
-    /// clipboard, and the only web path this app claims.
+    /// `https://nexus.znetworks.id/f/<id-or-slug>` and `/v/<slug>` — the two web paths this app
+    /// claims, and the only two.
     ///
     /// Narrow on purpose, in both directions. `Config.isNexusHost` rather than a suffix match, for
     /// exactly the reason it was written: a host that merely ENDS with the right letters belongs to
-    /// whoever registered it. And one path shape rather than a general web router, because the
-    /// entitlement claims `/f/*` and nothing else — a handler that understood more than the app
+    /// whoever registered it. And two path shapes rather than a general web router, because the
+    /// AASA claims `/f/*` and `/v/*` and nothing else — a handler that understood more than the app
     /// actually claims could only ever be dead code, while one that understood less would open the
     /// app onto whatever it was already showing.
+    ///
+    /// `/s/<slug>` — the EXTERNAL half of vault sharing — is deliberately absent from both this
+    /// function and the AASA. Apple decides whether to open an app from the path alone, so a single
+    /// prefix would mean a client with no account tapping a link and being handed a sign-in screen
+    /// by an app they never installed on purpose. Two prefixes is how that distinction gets made.
     ///
     /// `pathComponents` arrives percent-DECODED, which is what the API client wants: it encodes the
     /// id once when it builds the request, so a slug with a space in it survives the round trip and
@@ -143,7 +164,11 @@ final class AppRouter {
         let parts = url.pathComponents.filter { $0 != "/" }
         // Exactly two: `/f/<id>` is a single segment on the web too (the SPA route is `/f/$formId`).
         // A deeper path under /f/ is not a form and must not be answered with somebody else's.
-        guard parts.count == 2, parts[0] == "f", !parts[1].isEmpty else { return }
-        formRequest = NXFormRequest(id: parts[1])
+        guard parts.count == 2, !parts[1].isEmpty else { return }
+        switch parts[0] {
+        case "f": formRequest = NXFormRequest(id: parts[1])
+        case "v": vaultRequest = NXVaultRequest(id: parts[1])
+        default:  return
+        }
     }
 }

@@ -31,12 +31,23 @@ struct NexusApp: App {
                 .environment(router)
                 .tint(NX.violetText)
                 // Siri, Shortcuts, the Live Activity and the widgets all arrive here as a URL
-                // — and so does a tapped Universal Link on `/f/…`. Under the SwiftUI App lifecycle
-                // this is the ONLY handler iOS calls for a browsing activity; the
-                // `.onContinueUserActivity(NSUserActivityTypeBrowsingWeb)` that the same problem
-                // needs on UIKit is never invoked here, and adding it would be the bug rather than
-                // the fix. AppRouter.open decides which of the two vocabularies a URL is speaking.
+                // — and so does a tapped Universal Link on iOS. AppRouter.open decides which of the
+                // two vocabularies (`nexus://` or `https://`) a URL is speaking.
                 .onOpenURL { router.open($0) }
+                // The Mac half of the same job, and BOTH are required.
+                //
+                // On iOS a browsing activity reaches a SwiftUI app through `.onOpenURL` and this
+                // modifier is never called. On Mac Catalyst it is the exact reverse: a universal
+                // link arrives as an NSUserActivity and `.onOpenURL` does not fire, which is why
+                // NEXUS-Catalyst.entitlements refused to claim `applinks:` at all until now — a
+                // claimed domain with no handler takes the link away from Safari and then does
+                // nothing with it, which is worse than not claiming it.
+                //
+                // Each platform calls exactly one of these two, so there is no double-open to
+                // guard against; the router is idempotent for the same URL either way.
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                    if let url = activity.webpageURL { router.open(url) }
+                }
                 .task(id: auth.session?.userId) {
                     if let userId = auth.session?.userId {
                         await NotificationManager.shared.activate(userId: userId)

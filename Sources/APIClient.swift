@@ -1150,7 +1150,7 @@ struct APIClient {
     /// leaves "&", "=", "+" and "#" alone, which is right for the string as a whole and wrong for a
     /// part of it: a file called "before & after.pdf" would end its parameter early and the server
     /// would store a truncated name against the wrong task.
-    private func encValue(_ s: String) -> String {
+    func encValue(_ s: String) -> String {
         var allowed = CharacterSet.urlQueryAllowed
         allowed.remove(charactersIn: "&=+#?")
         return s.addingPercentEncoding(withAllowedCharacters: allowed) ?? s
@@ -1447,11 +1447,11 @@ struct APIClient {
     /// The server grew `/api/attachments/chunk` for exactly this and the web has used it for a
     /// while. This is iOS finally learning it.
     ///
-    /// The number is now shared, because that wall stands in front of every upload in the app and
-    /// only ONE destination has a door through it. `/api/attachments/chunk` is the server's only
-    /// chunk route and it writes an `Attachment` row against a `taskId`, so nothing else can borrow
-    /// it: form submits, chat photos, ticket evidence and the icons all have exactly one request
-    /// to fit in. For those this is not a threshold but a ceiling — see `tooBigToSend`.
+    /// The number is now shared, because that wall stands in front of every upload in the app.
+    /// `/api/attachments/chunk` is still the only chunk route, but it is no longer only about tasks:
+    /// it takes a `target`, and Z Vault uses the same transport with `target=vault`. Form submits,
+    /// chat photos, ticket evidence and the icons still have exactly one request to fit in, and for
+    /// those this is not a threshold but a ceiling — see `tooBigToSend`.
     static let singleRequestCeiling = 64 << 20
     /// 1 GB spread over the route's 64-chunk ceiling is 16 MB, so this is the smallest chunk that
     /// can still carry the largest file the route accepts — and far enough under the edge's limit
@@ -1476,8 +1476,8 @@ struct APIClient {
             return try await uploadAttachment(taskId: taskId, fileName: fileName, data: data,
                                               progress: progress)
         }
-        try await uploadAttachmentInChunks(taskId: taskId, file: file, fileName: fileName,
-                                           size: size, progress: progress)
+        try await uploadInChunks(file: file, fileName: fileName, size: size,
+                                 extraQuery: "&taskId=\(encValue(taskId))", progress: progress)
         return true
     }
 
@@ -1509,8 +1509,15 @@ struct APIClient {
     ///
     /// Slices are read straight off the file at an offset. Reading the whole thing to slice it in
     /// memory would defeat the point, and this way the resident cost of a 1 GB upload is one chunk.
-    private func uploadAttachmentInChunks(taskId: String, file: URL, fileName: String, size: Int,
-                                          progress: UploadProgress?) async throws {
+    ///
+    /// `extraQuery` is where the destination goes — `&taskId=…` for an attachment, `&target=vault`
+    /// (plus a folder) for the vault. Everything above it is transport and belongs to neither: the
+    /// slicing, the shared progress bar, the refusal handling and the per-chunk authorization were
+    /// all worked out once, against how this tunnel actually behaves, and a second copy for the
+    /// vault would be a copy nobody re-tests. Internal rather than private so VaultAPI.swift can
+    /// reach it; `private` does not cross a file boundary in Swift.
+    func uploadInChunks(file: URL, fileName: String, size: Int, extraQuery: String,
+                        progress: UploadProgress?) async throws {
         let uploadId = UUID().uuidString
         let total = (size + Self.chunkBytes - 1) / Self.chunkBytes
         let handle = try FileHandle(forReadingFrom: file)
@@ -1531,7 +1538,7 @@ struct APIClient {
                 // filename is the only one of the two this app actually knows.
                 var req = makeRequest("/api/attachments/chunk?uploadId=\(encValue(uploadId))"
                                       + "&chunkIndex=\(index)&totalChunks=\(total)&totalSize=\(size)"
-                                      + "&filename=\(encValue(fileName))&taskId=\(encValue(taskId))",
+                                      + "&filename=\(encValue(fileName))" + extraQuery,
                                       method: "POST")
                 req.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
                 req.httpBody = slice

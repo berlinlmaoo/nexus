@@ -274,6 +274,9 @@ enum NotificationTarget: Hashable {
         // There is no single-document screen on mobile; the library is as close as it gets.
         case "docs", "folders":         self = .screen(.docs)
         case "forms":                   self = .screen(.forms)
+        // A /vault link opens the shelf. A /v/<slug> link does NOT come through here — that is
+        // a universal link with a capability in it, and AppRouter resolves it against the server.
+        case "vault":                   self = .screen(.vault)
         case "teams":                   self = .screen(.teams)
         case "reports", "peer-reports": self = .screen(.reports)
         case "leaderboard":             self = .screen(.leaderboard)
