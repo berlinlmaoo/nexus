@@ -657,6 +657,14 @@ final class AppLanguage {
         "Reply… (@ to mention)": "Balas… (@ buat sebut orang)",
         "Nothing on the feed yet. Be the first to post.": "Feed masih kosong. Jadi yang pertama posting.",
         "Couldn't load the feed.": "Gagal memuat feed.",
+        "REPEAT":
+            "ULANGI",
+        "Once":
+            "Sekali aja",
+        "Time (WIB)":
+            "Jam (WIB)",
+        "Goes out now, then again each day at that hour — pop-up and push. It reappears for everyone, including people who already dismissed it.":
+            "Dikirim sekarang, terus diulang tiap hari di jam itu — popup dan push. Muncul lagi buat semua orang, termasuk yang udah nutup sebelumnya.",
         "Couldn't post that.":
             "Nggak bisa ngirim postingannya.",
         "Couldn't post.": "Gagal mengirim.",

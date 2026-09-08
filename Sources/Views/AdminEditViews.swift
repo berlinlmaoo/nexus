@@ -461,7 +461,19 @@ struct CreateAnnouncementSheet: View {
     @State private var body_ = ""
     @State private var tone = "info"
     @State private var busy = false
+    /// 0 = posted once, which is what every announcement did before repeats existed.
+    @State private var repeatDays = 0
+    @State private var repeatAt = Self.defaultTime
     private let tones: [(String, String)] = [("info", "Info"), ("success", "Success"), ("warning", "Warning")]
+    private let repeatChoices: [Int] = [0, 2, 3, 5, 7]
+    /// 09:00 today, in the device's own zone. Only the hour and minute are ever sent.
+    private static var defaultTime: Date {
+        Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date()) ?? Date()
+    }
+    private var repeatAtHHmm: String {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: repeatAt)
+        return String(format: "%02d:%02d", c.hour ?? 9, c.minute ?? 0)
+    }
 
     var body: some View {
         NavigationStack {
@@ -481,6 +493,34 @@ struct CreateAnnouncementSheet: View {
                                 }
                             }
                         }
+                        // Repeat. A notice posted once reaches whoever happened to open NEXUS that
+                        // hour; "wear your ID card this week" has to be said on each of those days,
+                        // and re-typing it every morning is how it stops being said at all.
+                        f(T("REPEAT")) {
+                            VStack(alignment: .leading, spacing: 10) {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 8) {
+                                        ForEach(repeatChoices, id: \.self) { d in
+                                            Button { repeatDays = d } label: {
+                                                Text(d == 0 ? T("Once") : "+\(d) \(T("days"))")
+                                                    .font(NXFont.text(13, .semibold))
+                                                    .padding(.horizontal, 14).padding(.vertical, 8)
+                                                    .foregroundStyle(repeatDays == d ? .white : NX.mutedFg)
+                                                    .background(repeatDays == d ? NX.violet : NX.card, in: Capsule())
+                                                    .overlay(Capsule().strokeBorder(repeatDays == d ? .clear : NX.border))
+                                            }.buttonStyle(.plain)
+                                        }
+                                    }
+                                }
+                                if repeatDays > 0 {
+                                    DatePicker(T("Time (WIB)"), selection: $repeatAt, displayedComponents: .hourAndMinute)
+                                        .font(NXFont.text(13))
+                                    Text(T("Goes out now, then again each day at that hour — pop-up and push. It reappears for everyone, including people who already dismissed it."))
+                                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
                         Button { Task { await create() } } label: { HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text("Posting") } }
                             .buttonStyle(NexusPrimaryButton()).disabled(busy || title.trimmingCharacters(in: .whitespaces).isEmpty || body_.trimmingCharacters(in: .whitespaces).isEmpty)
                     }.padding(20)
@@ -495,7 +535,10 @@ struct CreateAnnouncementSheet: View {
     }
     private func create() async {
         busy = true; defer { busy = false }
-        try? await APIClient.shared.createAnnouncement(title: title.trimmingCharacters(in: .whitespaces), body: body_.trimmingCharacters(in: .whitespaces), tone: tone)
+        try? await APIClient.shared.createAnnouncement(
+            title: title.trimmingCharacters(in: .whitespaces),
+            body: body_.trimmingCharacters(in: .whitespaces),
+            tone: tone, repeatDays: repeatDays, repeatAtTime: repeatAtHHmm)
         await onCreated(); dismiss()
     }
 }

@@ -1099,10 +1099,21 @@ struct APIClient {
         (try await run(makeRequest("/api/announcements"), decode: AnnouncementsResponse.self)).announcements ?? []
     }
     @discardableResult
-    func createAnnouncement(title: String, body: String, tone: String) async throws -> Bool {
+    /// `repeatDays` counts the days AFTER today the notice should come back, at `repeatAtTime`
+    /// ("HH:mm", Asia/Jakarta). 0 is the old behaviour exactly — posted once, never repeated — and
+    /// the keys are omitted entirely in that case rather than sent as zero, so a server that has not
+    /// been deployed yet behaves the same as before instead of erroring on fields it cannot read.
+    @discardableResult
+    func createAnnouncement(title: String, body: String, tone: String,
+                            repeatDays: Int = 0, repeatAtTime: String = "09:00") async throws -> Bool {
         var req = makeRequest("/api/announcements", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["title": title, "body": body, "tone": tone])
+        var payload: [String: Any] = ["title": title, "body": body, "tone": tone]
+        if repeatDays > 0 {
+            payload["repeatDays"] = repeatDays
+            payload["repeatAtTime"] = repeatAtTime
+        }
+        req.httpBody = try JSONSerialization.data(withJSONObject: payload)
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }
