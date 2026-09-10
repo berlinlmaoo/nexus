@@ -417,7 +417,7 @@ struct PasskeyCard: View {
         do {
             try await APIClient.shared.passkeyRevoke(id: p.id)
             msg = (T("Passkey revoked ✓"), true)
-        } catch APIError.http(let code) where code == 404 {
+        } catch APIError.http(let code, _) where code == 404 {
             // Already gone on the server, so the list was merely stale: the reload below IS the fix,
             // and calling that a failure would be a lie.
         } catch {

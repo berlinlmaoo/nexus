@@ -325,7 +325,7 @@ struct MemberProfileView: View {
         } catch APIError.unauthorized {
             auth.logout()
             return
-        } catch APIError.http(let code) where code == 403 {
+        } catch APIError.http(let code, _) where code == 403 {
             notAPeer = true
             loading = false
             return

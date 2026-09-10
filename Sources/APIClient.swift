@@ -11,7 +11,13 @@ func nxBytes(_ b: Int) -> String {
 import UIKit
 
 enum APIError: LocalizedError {
-    case http(Int)
+    /// A status the server answered with, and the reason it gave — when it gave one.
+    ///
+    /// The reason is the whole point. Every refusal in this API is written as a sentence meant for
+    /// the person reading it ("Jatah cuti tahunan 2026 nggak cukup. Sisa 3 dari 12 hari, kamu minta
+    /// 5 hari."), and showing "Server error (422)." instead turns a clear answer into a fault
+    /// report about the wrong thing. `nil` is for the cases where there genuinely is no body.
+    case http(Int, String?)
     case unauthorized
     case decoding
     case transport(String)
@@ -28,7 +34,10 @@ enum APIError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .http(let code): return "Server error (\(code))."
+        case .http(let code, let message):
+            // The server's own words win. It knows why it refused; this layer does not.
+            if let message, !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return message }
+            return "Server error (\(code))."
         case .unauthorized: return T("Session expired — please log in again.")
         case .decoding: return T("Couldn't read data from the server.")
         case .offline: return T("No connection to the server.")
@@ -344,7 +353,9 @@ struct APIClient {
         }
         guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
         if http.statusCode == 401 { throw APIError.unauthorized }
-        guard (200..<300).contains(http.statusCode) else { throw APIError.http(http.statusCode) }
+        guard (200..<300).contains(http.statusCode) else {
+            throw APIError.http(http.statusCode, Self.serverMessage(data))
+        }
         do {
             let value = try JSONDecoder().decode(T.self, from: data)
             // Only store what decoded cleanly: a cache that can hand back something unreadable is
@@ -1611,7 +1622,10 @@ struct APIClient {
             // What landed on disk is the server's refusal, not the file anybody asked for.
             AttachmentCache.discard(out)
             if http.statusCode == 401 { throw APIError.unauthorized }
-            throw APIError.http(http.statusCode)
+            // No message to pass on: this path streams the body straight to a file and the refusal
+            // was just discarded with it. Reading it back would mean keeping every failed download
+            // on disk to look inside, which is a worse trade than a bare status code here.
+            throw APIError.http(http.statusCode, nil)
         }
         return out
     }
@@ -1964,6 +1978,18 @@ extension APIClient {
             || (502...504).contains(code) // nginx: no upstream / unavailable / upstream timeout
             || (520...527).contains(code) // Cloudflare: origin unknown error, down, timeout, unreachable
             || code == 530                // Cloudflare: tunnel down (what 8 September looked like)
+    }
+}
+
+extension APIClient {
+    /// The `error` string every route in this API puts in its refusal body, or nil when there
+    /// isn't one. Deliberately forgiving: a refusal that cannot be parsed must still fall back to
+    /// the status code rather than throwing something else on the way out.
+    static func serverMessage(_ data: Data) -> String? {
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        let text = (obj["error"] as? String) ?? (obj["message"] as? String)
+        guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return text
     }
 }
 

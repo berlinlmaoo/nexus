@@ -251,7 +251,7 @@ struct ProjectDetailView: View {
             if !visibleTabs.contains(tab) { tab = .board }
         }
         catch APIError.unauthorized { auth.logout() }
-        catch APIError.http(403) { error = T("Project locked — you're not a member of this project.") }
+        catch APIError.http(403, _) { error = T("Project locked — you're not a member of this project.") }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load the project.") }
         loading = false
     }

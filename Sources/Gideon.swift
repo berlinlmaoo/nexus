@@ -287,7 +287,7 @@ enum GideonClient {
     private static func check(_ response: URLResponse) throws {
         guard let http = response as? HTTPURLResponse else { throw APIError.offline }
         if http.statusCode == 401 { throw APIError.unauthorized }
-        guard (200..<300).contains(http.statusCode) else { throw APIError.http(http.statusCode) }
+        guard (200..<300).contains(http.statusCode) else { throw APIError.http(http.statusCode, nil) }
     }
 
     /// The streaming variant: on a refusal the body is JSON, not SSE, so it is read here before the
@@ -315,7 +315,7 @@ enum GideonClient {
         switch http.statusCode {
         case 413: throw APIError.transport(T("File is over the 10MB limit."))
         case 415: throw APIError.transport(T("GIDEON can't read that kind of file yet."))
-        default: throw APIError.http(http.statusCode)
+        default: throw APIError.http(http.statusCode, nil)
         }
     }
 }
