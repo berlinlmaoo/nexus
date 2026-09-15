@@ -540,6 +540,38 @@ struct APIClient {
         return try await run(req, decode: ProfileResponse.self, reporting: progress).user.avatar
     }
 
+    /// Foto profil orang LAIN, oleh BoD, lewat keanggotaan workspace-nya. Field multipart "file".
+    @discardableResult
+    func uploadMemberAvatar(memberId: String, fileName: String, mime: String, data: Data) async throws -> Bool {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var req = makeRequest("/api/workspaces/members/\(enc(memberId))/avatar", method: "POST")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        var body = Data()
+        func add(_ s: String) { body.append(s.data(using: .utf8)!) }
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(fileName)\"\r\nContent-Type: \(mime)\r\n\r\n")
+        body.append(data)
+        add("\r\n--\(boundary)--\r\n")
+        req.httpBody = body
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+
+    /// Identitas akun orang lain — nama, email login, sandi baru. BoD ke atas; server menolak sisanya.
+    /// Hanya field yang diisi yang dikirim: mengirim email yang sama persis pun akan ditolak kalau
+    /// kebetulan sudah dipakai akun lain, jadi jangan kirim yang tidak berubah.
+    @discardableResult
+    func updateAdminAccount(userId: String, name: String? = nil, email: String? = nil, password: String? = nil) async throws -> Bool {
+        var body: [String: Any] = [:]
+        if let name { body["name"] = name }
+        if let email { body["email"] = email }
+        if let password { body["password"] = password }
+        var req = makeRequest("/api/admin/users/\(enc(userId))", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+
     /// Drop the profile photo and fall back to the initial.
     @discardableResult
     func deleteAvatar() async throws -> Bool {

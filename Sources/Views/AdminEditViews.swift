@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 // MARK: models
 
@@ -189,6 +190,7 @@ struct AdminUsersSection: View {
     /// baris orangnya, bukan dari halaman daftar tim tersendiri.
     @State private var openTeamId: String?
     @State private var approverTarget: ApproverPickTarget?
+    @State private var accountTarget: AccountEditTarget?
     @State private var showChain = false
 
     // A–Z, peka lokal — urutan server adalah urutan bergabung, yang tidak membantu siapa pun
@@ -309,6 +311,9 @@ struct AdminUsersSection: View {
         // bisa dipakai — tidak bisa dicari, dan separuhnya di luar layar.
         .sheet(item: $linkTarget) { t in
             NavigationStack { GoogleLinkSheet(target: t) { linkTarget = nil; Task { await load() } } }
+        }
+        .sheet(item: $accountTarget) { t in
+            NavigationStack { AccountEditSheet(target: t) { accountTarget = nil; Task { await load() } } }
         }
         .sheet(item: $approverTarget) { t in
             NavigationStack {
@@ -565,6 +570,12 @@ struct AdminUsersSection: View {
                 Menu {
                     ForEach(assignableRoles(viewerRole), id: \.self) { r in Button(orgRoleLabel(r)) { Task { await setRole(m, r, wsId) } } }
                     Divider()
+                    // Identitas akun: foto, nama, email login, sandi. BoD saja — server menolak sisanya.
+                    if canManageAttendanceFlags, let uid = m.userId, let mid = m.id {
+                        Button {
+                            accountTarget = AccountEditTarget(id: uid, userId: uid, memberId: mid, name: m.displayName, email: m.emailText ?? "", avatar: m.avatarURL)
+                        } label: { Label(T("Edit akun…"), systemImage: "person.text.rectangle") }
+                    }
                     if canManageAttendanceFlags, let mid = m.id, let wsId = workspaceId {
                         Button {
                             approverTarget = ApproverPickTarget(id: mid, memberId: mid, workspaceId: wsId, name: m.displayName, current: m.approverId, selfUserId: m.userId)
@@ -1682,5 +1693,137 @@ struct ApprovalChainView: View {
             }
         }
         .disabled(busy || s.id == nil)
+    }
+}
+
+// MARK: - Edit akun (BoD)
+
+struct AccountEditTarget: Identifiable, Hashable {
+    let id: String
+    let userId: String
+    let memberId: String
+    let name: String
+    let email: String
+    let avatar: String?
+}
+
+/// Foto, nama, email login, sandi orang lain — BoD saja. Sandi diketik sekali, terlihat, dikirim
+/// sekali; sandi lama tidak diminta karena orangnya memang tidak ada di sini. Tiga tombol simpan
+/// terpisah (identitas, sandi, foto) supaya salah satu gagal tidak membatalkan yang lain.
+struct AccountEditSheet: View {
+    let target: AccountEditTarget
+    var onDone: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var name: String
+    @State private var email: String
+    @State private var password = ""
+    @State private var busy = false
+    @State private var problem: String?
+    @State private var notice: String?
+    @State private var pickedPhoto: PhotosPickerItem?
+    @State private var avatarURL: String?
+
+    init(target: AccountEditTarget, onDone: @escaping () -> Void) {
+        self.target = target
+        self.onDone = onDone
+        _name = State(initialValue: target.name)
+        _email = State(initialValue: target.email)
+        _avatarURL = State(initialValue: target.avatar)
+    }
+
+    private var identityDirty: Bool {
+        name.trimmingCharacters(in: .whitespaces) != target.name || email.trimmingCharacters(in: .whitespaces).lowercased() != target.email.lowercased()
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                HStack(spacing: 14) {
+                    AvatarView(url: avatarURL, initial: String(name.first ?? "?").uppercased(), size: 56)
+                    PhotosPicker(selection: $pickedPhoto, matching: .images, photoLibrary: .shared()) {
+                        Label(T("Ganti foto"), systemImage: "photo").font(NXFont.text(13, .semibold))
+                    }
+                    .disabled(busy)
+                }
+            } header: { Text(T("Foto profil")) }
+
+            Section {
+                TextField(T("Nama"), text: $name).textInputAutocapitalization(.words)
+                TextField(T("Email login"), text: $email).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
+                Button { Task { await saveIdentity() } } label: {
+                    HStack { Text(T("Simpan nama & email")); Spacer(); if busy { ProgressView() } }
+                }
+                .disabled(!identityDirty || busy)
+            } header: { Text(T("Identitas")) }
+
+            Section {
+                // Teks biasa, bukan SecureField: yang mengetik BoD, dan sandi yang tidak terlihat
+                // adalah sandi yang salah ketik lalu disampaikan salah.
+                TextField(T("Sandi baru (min. 8 karakter)"), text: $password)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .font(.system(.body, design: .monospaced))
+                Button(role: .destructive) { Task { await savePassword() } } label: {
+                    Text(T("Ganti sandi"))
+                }
+                .disabled(password.count < 8 || busy)
+            } header: { Text(T("Sandi")) } footer: {
+                Text(T("Sampaikan sandi barunya langsung ke orangnya, jangan lewat chat grup."))
+            }
+
+            if let notice { Section { Text(notice).font(NXFont.text(12)).foregroundStyle(NX.success) } }
+            if let problem { Section { Text(problem).font(NXFont.text(12)).foregroundStyle(NX.danger) } }
+        }
+        .navigationTitle(target.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { onDone(); dismiss() } } }
+        .onChange(of: pickedPhoto) { _, item in
+            if let item { Task { await uploadPhoto(item) } }
+        }
+    }
+
+    private func run(_ work: () async throws -> Void, done: String) async {
+        busy = true
+        problem = nil; notice = nil
+        defer { busy = false }
+        do { try await work(); notice = done }
+        catch { problem = (error as? LocalizedError)?.errorDescription ?? T("Gagal.") }
+    }
+
+    private func saveIdentity() async {
+        let n = name.trimmingCharacters(in: .whitespaces)
+        let e = email.trimmingCharacters(in: .whitespaces).lowercased()
+        await run({
+            try await APIClient.shared.updateAdminAccount(
+                userId: target.userId,
+                name: n != target.name ? n : nil,
+                email: e != target.email.lowercased() ? e : nil)
+        }, done: T("Nama & email disimpan."))
+    }
+
+    private func savePassword() async {
+        let pw = password
+        await run({ try await APIClient.shared.updateAdminAccount(userId: target.userId, password: pw) },
+                  done: T("Sandi diganti."))
+        if problem == nil { password = "" }
+    }
+
+    /// Sama dengan SettingsView.upload: diperkecil ke 1024px sisi terpanjang, JPEG 0.85.
+    private func uploadPhoto(_ item: PhotosPickerItem) async {
+        defer { pickedPhoto = nil }
+        guard let raw = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: raw) else {
+            problem = T("Couldn't read that photo."); return
+        }
+        let maxEdge: CGFloat = 1024
+        let scale = min(1, maxEdge / max(image.size.width, image.size.height))
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let resized = UIGraphicsImageRenderer(size: size).image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
+        guard let jpeg = resized.jpegData(compressionQuality: 0.85) else { problem = T("Couldn't read that photo."); return }
+        await run({
+            try await APIClient.shared.uploadMemberAvatar(memberId: target.memberId, fileName: "avatar.jpg", mime: "image/jpeg", data: jpeg)
+            // Tampilkan langsung dari data yang baru diunggah; URL server akan menggantikannya
+            // saat daftar dimuat ulang sesudah sheet ditutup.
+            avatarURL = nil
+        }, done: T("Foto profil diganti."))
     }
 }
