@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Loader2, Search, X } from "lucide-react";
@@ -83,37 +83,73 @@ export function ApprovalChart() {
   });
 
   /**
-   * Satu orang beserta seluruh bawahannya, VERTIKAL: bawahan bertingkat ke bawah dengan garis siku,
-   * bukan melebar ke samping. Pohon melebar butuh scroll samping begitu ada manager dengan tujuh
-   * bawahan; pohon vertikal hanya bertambah tinggi — dan halaman memang sudah scroll ke bawah.
-   * Garisnya CSS (.vt-*), lihat <style>.
+   * Satu orang beserta seluruh bawahannya — bagan organisasi ala Corpnet, dengan satu trik supaya
+   * muat: bawahan yang PUNYA bawahan lagi (cabang) dijejer ke samping, bawahan yang tidak punya
+   * (daun) DITUMPUK ke bawah dalam satu kolom. Tujuh staff di bawah satu manager jadi satu kolom
+   * setinggi tujuh kartu, bukan tujuh kolom — dan lebar bagan ditentukan jumlah cabang, yang sedikit.
+   * Garisnya CSS (.oc-*), lihat <style>.
    */
-  const Node = ({ p, root }: { p: ApprovalChartPerson; root?: boolean }) => {
+  const Node = ({ p }: { p: ApprovalChartPerson }) => {
     const kids = children.get(p.userId) ?? [];
+    const branches = kids.filter((k) => (children.get(k.userId)?.length ?? 0) > 0);
+    const leaves = kids.filter((k) => (children.get(k.userId)?.length ?? 0) === 0);
     return (
-      <div className={cn(!root && "vt-item")}>
-        <PersonCard {...cardProps(p)} wide />
+      <div className="oc-node">
+        <PersonCard {...cardProps(p)} />
         {kids.length > 0 && (
-          <div className="vt">
-            {kids.map((k) => <Node key={k.userId} p={k} />)}
+          <div className="oc-kids">
+            {branches.map((k) => <div key={k.userId} className="oc-kid"><Node p={k} /></div>)}
+            {leaves.length > 0 && (
+              <div className="oc-kid">
+                <div className="oc-leaves">
+                  {leaves.map((k) => <PersonCard key={k.userId} {...cardProps(k)} />)}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
     );
   };
 
+  // Zoom-pas-layar: bagan digambar pada ukuran aslinya, diukur, lalu diskalakan ke lebar wadahnya.
+  // Tidak pernah ada scroll ke samping; yang terjadi pada bagan yang sangat lebar adalah kartunya
+  // mengecil sedikit. Tinggi wadah ikut diskalakan supaya tidak menyisakan ruang kosong di bawah.
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState({ scale: 1, height: 0 });
+  useLayoutEffect(() => {
+    const measure = () => {
+      const w = wrapRef.current?.clientWidth ?? 0;
+      const nw = innerRef.current?.scrollWidth ?? 0;
+      const nh = innerRef.current?.scrollHeight ?? 0;
+      const scale = nw > w && w > 0 ? Math.max(0.5, w / nw) : 1;
+      setFit({ scale, height: Math.ceil(nh * scale) });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (wrapRef.current) ro.observe(wrapRef.current);
+    if (innerRef.current) ro.observe(innerRef.current);
+    return () => ro.disconnect();
+  }, [people.length, dragId]);
+
   return (
     <div className="space-y-4">
       <style>{`
-        /* Pohon vertikal. Kartu tingginya tetap 46px (lihat PersonCard wide) supaya stub-nya
-           selalu tepat di tengah kartu tanpa mengukur apa pun. */
-        .vt{position:relative;margin-left:16px;padding-left:16px}
-        .vt-item{position:relative;padding-top:8px}
-        .vt-item::before{content:"";position:absolute;left:-16px;top:31px;width:14px;height:2px;background:var(--oc-line)}
-        .vt-item::after{content:"";position:absolute;left:-16px;top:0;width:2px;height:31px;background:var(--oc-line)}
-        .vt-item:not(:last-child)::after{height:100%}
-        .vt > .vt-item:first-child::after{top:-6px;height:37px}
-        .vt > .vt-item:first-child:not(:last-child)::after{height:calc(100% + 6px)}
+        .oc-node{display:flex;flex-direction:column;align-items:center}
+        .oc-kids{display:flex;align-items:flex-start;position:relative;padding-top:22px}
+        .oc-kids::before{content:"";position:absolute;top:0;left:50%;width:2px;height:22px;background:var(--oc-line);transform:translateX(-50%)}
+        .oc-kid{position:relative;padding:22px 8px 0}
+        .oc-kid::before{content:"";position:absolute;top:0;left:50%;width:2px;height:22px;background:var(--oc-line);transform:translateX(-50%)}
+        .oc-kid::after{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:var(--oc-line)}
+        .oc-kid:first-child::after{left:50%}
+        .oc-kid:last-child::after{right:50%}
+        .oc-kid:only-child::after{display:none}
+        /* Tumpukan daun: rel tegak di tengah, di belakang kartu-kartu (kartunya buram, jadi
+           relnya hanya terlihat di sela). */
+        .oc-leaves{display:flex;flex-direction:column;gap:8px;position:relative}
+        .oc-leaves::before{content:"";position:absolute;top:0;bottom:24px;left:50%;width:2px;background:var(--oc-line);transform:translateX(-50%)}
+        .oc-leaves>*{position:relative}
       `}</style>
 
       {/* Ringkasan — satu baris, tiga angka, tanpa kalimat panjang. */}
@@ -125,22 +161,32 @@ export function ApprovalChart() {
       </div>
 
       <div className="rounded-2xl border border-border bg-card shadow-soft" style={{ ["--oc-line" as string]: "#c7cfdb" }}>
-        {/* 1 · Board */}
-        <section className="border-b border-border px-5 py-4">
-          <Eyebrow>Board of Directors <span className="normal-case tracking-normal text-muted-foreground/70">· request tanpa atasan masuk ke semua orang di sini</span></Eyebrow>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {board.map((p) => <PersonCard key={p.userId} {...cardProps(p)} compact />)}
-            {board.length === 0 && <span className="text-xs text-muted-foreground">Semua BoD sudah punya bawahan — lihat pohon di bawah.</span>}
-          </div>
-        </section>
-
-        {/* 2 · Pohon — satu kolom per pohon, kolomnya wrap. Tidak pernah scroll ke samping. */}
+        {/* Satu bagan: kotak Board di puncak (seperti "Dewan Komisaris" di Corpnet), semua pohon
+            menggantung di bawahnya — termasuk pohon tanpa atasan, karena request puncaknya memang
+            jatuh ke Board. BoD yang punya bawahan muncul sebagai akar pohon, bukan di kotak. */}
         <section className="border-b border-border px-5 py-5">
-          <Eyebrow>Rantai approval <span className="normal-case tracking-normal text-muted-foreground/70">· satu kolom per pohon</span></Eyebrow>
-          <div className="mt-3 grid gap-x-8 gap-y-8" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
-            {trees.map((p) => <div key={p.userId} className="min-w-0"><Node p={p} root /></div>)}
-            {trees.length === 0 && <span className="text-xs text-muted-foreground">Belum ada yang ditaruh di bawah siapa pun.</span>}
+          <div ref={wrapRef} className="w-full overflow-hidden" style={{ height: fit.height || undefined }}>
+            <div ref={innerRef} className="w-max" style={{ transform: `scale(${fit.scale})`, transformOrigin: "top left" }}>
+              <div className="oc-node">
+                <div className="rounded-xl bg-[#1e3a5f] px-5 py-3 text-center text-white shadow-[0_2px_0_rgba(0,0,0,.2)]">
+                  <div className="text-[13px] font-bold">Board of Directors</div>
+                  <div className="text-[10.5px] opacity-75">request tanpa atasan masuk ke semua BoD</div>
+                  {board.length > 0 && (
+                    <div className="mt-2 flex flex-wrap justify-center gap-1.5">
+                      {board.map((p) => <PersonCard key={p.userId} {...cardProps(p)} compact />)}
+                    </div>
+                  )}
+                </div>
+                {trees.length > 0 && (
+                  <div className="oc-kids">
+                    {trees.map((p) => <div key={p.userId} className="oc-kid"><Node p={p} /></div>)}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
+          {trees.length === 0 && <div className="mt-3 text-xs text-muted-foreground">Belum ada yang ditaruh di bawah siapa pun.</div>}
+          {fit.scale < 1 && <div className="mt-2 text-right text-[10.5px] text-muted-foreground/70">Bagan diperkecil {Math.round(fit.scale * 100)}% supaya muat selebar layar.</div>}
         </section>
 
         {/* 3 · Sendirian — zona jatuh untuk MELEPAS */}
@@ -216,8 +262,8 @@ function PersonCard({ p, busy, dragging, over, droppable, reports, rootless, com
         title="Klik untuk pilih atasan, atau seret ke kartu atasannya"
         className={cn(
           "flex cursor-grab items-center gap-2.5 rounded-xl text-left transition active:cursor-grabbing disabled:opacity-50",
-          wide ? "h-[46px] w-full px-3" : compact ? "w-[168px] px-2.5 py-2" : "w-[176px] px-3 py-2.5",
-          senior ? "bg-[#1e3a5f] text-white shadow-[0_2px_0_rgba(0,0,0,.2)]" : manager ? "bg-[#2c5282] text-white shadow-[0_2px_0_rgba(0,0,0,.2)]" : "border border-border bg-background text-foreground shadow-sm hover:border-primary",
+          compact ? "w-[160px] px-2.5 py-1.5" : "w-[176px] px-3 py-2.5",
+          compact && senior ? "bg-white/10 text-white ring-1 ring-white/20 hover:bg-white/20" : senior ? "bg-[#1e3a5f] text-white shadow-[0_2px_0_rgba(0,0,0,.2)]" : manager ? "bg-[#2c5282] text-white shadow-[0_2px_0_rgba(0,0,0,.2)]" : "border border-border bg-background text-foreground shadow-sm hover:border-primary",
           dragging && "opacity-40",
         )}
       >
@@ -235,7 +281,7 @@ function PersonCard({ p, busy, dragging, over, droppable, reports, rootless, com
       </button>
       {/* Akar yang bukan BoD: pohonnya sah, tapi puncaknya sendiri masih jatuh ke kelompok BoD. */}
       {rootless && !compact && (
-        <span className="absolute right-2 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-amber-300 bg-amber-50 px-1.5 text-[9.5px] font-bold text-amber-800">tanpa atasan</span>
+        <span className="absolute -top-2 right-2 whitespace-nowrap rounded-full border border-amber-300 bg-amber-50 px-1.5 text-[9.5px] font-bold text-amber-800">tanpa atasan</span>
       )}
     </div>
   );
