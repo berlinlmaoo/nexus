@@ -191,7 +191,15 @@ struct AdminUsersSection: View {
     @State private var approverTarget: ApproverPickTarget?
     @State private var showChain = false
 
-    private var members: [WorkspaceRoster.Member] { roster?.members ?? [] }
+    // A–Z, peka lokal — urutan server adalah urutan bergabung, yang tidak membantu siapa pun
+    // mencari nama di daftar 49 orang.
+    private var members: [WorkspaceRoster.Member] {
+        (roster?.members ?? []).sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+    }
+    private var registered: [WorkspaceRoster.Registered] {
+        (roster?.availableUsers ?? []).sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+    }
+    @State private var joining: Set<String> = []
     private var viewerRole: String? { roster?.role }
     /// Flexi dan mode Mobile mengubah aturan absensi seseorang, jadi BoD ke atas — aturan
     /// yang sama dengan `canManageShift` di Control Room web, bukan `canEditTier`.
@@ -246,6 +254,42 @@ struct AdminUsersSection: View {
                         }
                         .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border)).nexusShadowSoft()
+
+                        // Akun yang mendaftar sendiri tanpa kode workspace. Satu tombol, langsung
+                        // jadi Staff; perannya bisa diubah sesudahnya dari daftar di atas.
+                        if !registered.isEmpty, canManageAttendanceFlags, let wsId = workspaceId {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("\(T("Belum masuk workspace")) · \(registered.count)")
+                                    .font(NXFont.text(11, .semibold)).foregroundStyle(NX.warning)
+                                VStack(spacing: 0) {
+                                    ForEach(Array(registered.enumerated()), id: \.element.id) { idx, r in
+                                        if idx > 0 { Divider().overlay(NX.border) }
+                                        HStack(spacing: 12) {
+                                            AvatarView(url: r.avatar, initial: r.initial, size: 34)
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(r.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                                                Text(r.email).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                                            }
+                                            Spacer(minLength: 6)
+                                            Button {
+                                                Task { await join(r, wsId) }
+                                            } label: {
+                                                Text(joining.contains(r.id) ? T("…") : T("Masukkan"))
+                                                    .font(NXFont.text(12, .semibold))
+                                                    .padding(.horizontal, 10).padding(.vertical, 6)
+                                                    .background(NX.success.opacity(0.12), in: Capsule())
+                                                    .foregroundStyle(NX.success)
+                                            }
+                                            .buttonStyle(.plain)
+                                            .disabled(joining.contains(r.id))
+                                        }
+                                        .padding(.horizontal, 14).padding(.vertical, 10)
+                                    }
+                                }
+                                .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border)).nexusShadowSoft()
+                            }
+                        }
                     }.padding(16)
                 }
             }
@@ -562,8 +606,17 @@ struct AdminUsersSection: View {
     }
 
     private func toggle(_ r: String) { filter = (filter == r) ? "ALL" : r }
+
+    /// Masukkan akun terdaftar ke workspace ini sebagai Staff. Server mencari user-nya lewat
+    /// email dan membuat keanggotaannya — tidak membuat akun baru.
+    private func join(_ r: WorkspaceRoster.Registered, _ wsId: String) async {
+        joining.insert(r.id)
+        defer { joining.remove(r.id) }
+        try? await APIClient.shared.inviteWorkspaceMember(email: r.email, role: "STAFF", workspaceId: wsId)
+        await load()
+    }
     private func load() async {
-        do { roster = try await APIClient.shared.roster() } catch APIError.unauthorized { auth.logout() } catch {}
+        do { roster = try await APIClient.shared.roster(includeRegistered: true) } catch APIError.unauthorized { auth.logout() } catch {}
         // Gagal diam-diam DI SINI memang yang diinginkan: keanggotaan adalah keterangan tambahan,
         // dan Control Room yang menolak terbuka karena satu panggilan tambahan gagal jauh lebih
         // buruk daripada baris tanpa dropdown.

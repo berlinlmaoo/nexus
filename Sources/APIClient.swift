@@ -814,8 +814,11 @@ struct APIClient {
         let path = "/api/master-calendar?teamId=\(enc(teamId))&rangeStart=\(enc(start))&rangeEnd=\(enc(end))"
         return (try await run(makeRequest(path), decode: CalendarResponse.self)).events ?? []
     }
-    func roster() async throws -> WorkspaceRoster {
-        try await run(makeRequest("/api/workspaces/members"), decode: WorkspaceRoster.self)
+    /// `includeRegistered` = ikut membawa akun yang belum masuk workspace mana pun (Control Room
+    /// memakainya untuk tombol "Masukkan"). Server menolak diam-diam untuk yang bukan Manager+:
+    /// field-nya sekadar tidak ada.
+    func roster(includeRegistered: Bool = false) async throws -> WorkspaceRoster {
+        try await run(makeRequest("/api/workspaces/members" + (includeRegistered ? "?includeRegistered=1" : "")), decode: WorkspaceRoster.self)
     }
     @discardableResult
     func inviteWorkspaceMember(email: String, role: String, workspaceId: String) async throws -> Bool {

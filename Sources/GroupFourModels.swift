@@ -28,7 +28,19 @@ struct CalendarResponse: Decodable, Sendable { let events: [CalendarEvent]? }
 struct WorkspaceRoster: Decodable, Sendable {
     let role: String?
     let workspaceId: String?
+    let workspaceName: String?
     let members: [Member]?
+    /// Akun yang mendaftar sendiri tanpa kode workspace — terdaftar, tapi tidak di mana pun.
+    /// Hanya dikirim server untuk Manager ke atas dan hanya kalau diminta (`includeRegistered=1`).
+    let availableUsers: [Registered]?
+    struct Registered: Decodable, Identifiable, Sendable {
+        let id: String
+        let name: String?
+        let email: String
+        let avatar: String?
+        var displayName: String { (name?.isEmpty == false ? name : nil) ?? email }
+        var initial: String { String(displayName.first ?? "?").uppercased() }
+    }
     struct Member: Decodable, Identifiable, Sendable {
         let id: String?
         let userId: String?
