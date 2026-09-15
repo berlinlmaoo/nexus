@@ -93,8 +93,11 @@ export function ApprovalChart() {
    */
   const Node = ({ p }: { p: ApprovalChartPerson }) => {
     const kids = children.get(p.userId) ?? [];
-    const branches = kids.filter((k) => (children.get(k.userId)?.length ?? 0) > 0);
-    const leaves = kids.filter((k) => (children.get(k.userId)?.length ?? 0) === 0);
+    // Hanya STAFF tanpa bawahan yang ditumpuk. Manager/BoD tanpa bawahan dapat kolom sendiri —
+    // kalau ikut ditumpuk di atas staff, dia terbaca seperti atasan mereka, padahal bukan.
+    const isLeaf = (k: ApprovalChartPerson) => (children.get(k.userId)?.length ?? 0) === 0 && k.role === "STAFF";
+    const branches = kids.filter((k) => !isLeaf(k));
+    const leaves = kids.filter(isLeaf);
     return (
       <div className="oc-node">
         <PersonCard {...cardProps(p)} />
@@ -103,7 +106,10 @@ export function ApprovalChart() {
             {branches.map((k) => <div key={k.userId} className="oc-kid"><Node p={k} /></div>)}
             {leaves.length > 0 && (
               <div className="oc-kid">
+                {/* Kotak grup, bukan rantai: satu stub dari palang ke kotak, di dalamnya kartu-kartu
+                    sejajar. Rel tegak yang menembus kartu (versi lama) terbaca seperti hierarki. */}
                 <div className="oc-leaves">
+                  <div className="oc-leaves-label">{leaves.length} staff</div>
                   {leaves.map((k) => <PersonCard key={k.userId} {...cardProps(k)} />)}
                 </div>
               </div>
@@ -230,9 +236,8 @@ export function ApprovalChart() {
         .oc-kid:only-child::after{display:none}
         /* Tumpukan daun: rel tegak di tengah, di belakang kartu-kartu (kartunya buram, jadi
            relnya hanya terlihat di sela). */
-        .oc-leaves{display:flex;flex-direction:column;gap:6px;position:relative}
-        .oc-leaves::before{content:"";position:absolute;top:0;bottom:24px;left:50%;width:2px;background:var(--oc-line);transform:translateX(-50%)}
-        .oc-leaves>*{position:relative}
+        .oc-leaves{display:flex;flex-direction:column;gap:6px;padding:6px;border:1.5px dashed var(--oc-line);border-radius:12px;background:rgba(127,127,127,.04)}
+        .oc-leaves-label{font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#7b8494;text-align:center;padding-bottom:2px}
       `}</style>
 
       {/* Ringkasan — satu baris, tiga angka, tanpa kalimat panjang. */}
