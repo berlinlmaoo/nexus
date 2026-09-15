@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Users, Plus, Trash2, X, Loader2, FolderTree, Pencil, Check, Star, Crown, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Users, Plus, Trash2, X, Loader2, FolderTree, Pencil, Check, Star, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { nexusApi, statusLabel, type NexusTeam, type NexusDivision } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 
@@ -138,7 +138,6 @@ export function TeamCard({ team, canManage, divisions, allMembers, allProjects, 
   const unlinkProject = useMutation({ mutationFn: (projectId: string) => nexusApi.unlinkTeamProject(team.id, projectId), onSuccess: onChange });
   const setDivision = useMutation({ mutationFn: (divisionId: string | null) => nexusApi.setTeamDivision(team.id, divisionId), onSuccess: onChange });
   const setPrimary = useMutation({ mutationFn: (p: { userId: string; value: boolean }) => nexusApi.setTeamAttendancePrimary(team.id, p.userId, p.value), onSuccess: onChange });
-  const setLead = useMutation({ mutationFn: (p: { userId: string; isLead: boolean }) => nexusApi.setTeamMemberRole(team.id, p.userId, p.isLead ? "LEAD" : "MEMBER"), onSuccess: onChange });
   const del = useMutation({ mutationFn: () => nexusApi.deleteTeam(team.id), onSuccess: onChange });
   const canManageAtt = team.canManageAttendanceSettings ?? canManage;
 
@@ -251,10 +250,7 @@ export function TeamCard({ team, canManage, divisions, allMembers, allProjects, 
               <span key={uid} className="group inline-flex items-center gap-1.5 rounded-full border border-border bg-background py-0.5 pl-0.5 pr-2 text-xs">
                 <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/10 text-[9px] font-bold text-primary">{initialsOf(m.user?.name)}</span>
                 <span className="max-w-[120px] truncate font-semibold" title={m.user?.name ?? ""}>{m.user?.name ?? "—"}</span>
-                {m.role === "LEAD" && <span className="shrink-0 rounded bg-primary/15 px-1 text-[9px] font-black uppercase tracking-wide text-primary">Lead</span>}
-                {canManage ? (
-                  <button onClick={() => setLead.mutate({ userId: uid, isLead: m.role !== "LEAD" })} disabled={setLead.isPending} title={m.role === "LEAD" ? "Team lead (click to unset) — can view & approve this team's attendance" : "Make team lead — so they can view & approve this team's attendance"} className={cn("shrink-0 rounded-full p-0.5 transition", m.role === "LEAD" ? "text-primary" : "text-muted-foreground/40 hover:text-primary")}><Crown className={cn("h-3.5 w-3.5", m.role === "LEAD" && "fill-current")} /></button>
-                ) : null}
+                {/* Lead tim dihapus: approval absensi sekarang diatur di Control Room > Bagan Approval. */}
                 {canManageAtt ? (
                   <button onClick={() => setPrimary.mutate({ userId: uid, value: !isPrimary })} disabled={setPrimary.isPending} title={isPrimary ? "Their primary attendance team (click to unset)" : "Make this their primary attendance team"} className={cn("shrink-0 rounded-full p-0.5 transition", isPrimary ? "text-amber-500" : "text-muted-foreground/40 hover:text-amber-500")}><Star className={cn("h-3.5 w-3.5", isPrimary && "fill-current")} /></button>
                 ) : isPrimary ? <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" /> : null}
