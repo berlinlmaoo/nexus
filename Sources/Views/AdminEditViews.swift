@@ -191,6 +191,8 @@ struct AdminUsersSection: View {
     @State private var openTeamId: String?
     @State private var approverTarget: ApproverPickTarget?
     @State private var accountTarget: AccountEditTarget?
+    @State private var allProjects: [Project] = []
+    @State private var projectPickFor: ProjectPickTarget?
     @State private var showChain = false
 
     // A–Z, peka lokal — urutan server adalah urutan bergabung, yang tidak membantu siapa pun
@@ -312,6 +314,14 @@ struct AdminUsersSection: View {
         .sheet(item: $linkTarget) { t in
             NavigationStack { GoogleLinkSheet(target: t) { linkTarget = nil; Task { await load() } } }
         }
+        .sheet(item: $projectPickFor) { t in
+            NavigationStack {
+                ProjectPickSheet(target: t, projects: allProjects.filter { !t.already.contains($0.id) }) { projectId in
+                    projectPickFor = nil
+                    Task { await runTeam { try await APIClient.shared.addProjectMember(projectId: projectId, userId: t.userId) } }
+                }
+            }
+        }
         .sheet(item: $accountTarget) { t in
             NavigationStack { AccountEditSheet(target: t) { accountTarget = nil; Task { await load() } } }
         }
@@ -405,15 +415,7 @@ struct AdminUsersSection: View {
             // hilang membuat dua baris orang yang bersebelahan terlihat seperti dua layar berbeda.
             Label(T("Projects"), systemImage: "square.stack.3d.up")
                 .font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
-            if let ps = mem?.projects, !ps.isEmpty {
-                NXFlow(ps.map { p in
-                    NXChipData(id: p.id,
-                               text: p.viaTeam == nil ? p.name : "\(p.name) · via \(p.viaTeam!)",
-                               color: Color(hex: p.color ?? "#94A3B8"))
-                })
-            } else {
-                Text(T("Belum masuk project mana pun.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-            }
+            projectChips(m, mem)
             Label(T("Teams"), systemImage: "person.3")
                 .font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
             teamChips(m, mem)
@@ -424,6 +426,53 @@ struct AdminUsersSection: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 14).padding(.bottom, 12)
+    }
+
+    /// Chip project. Yang LANGSUNG bisa dilepas dari menu; yang lewat tim tidak — sinkronisasi tim
+    /// akan menuliskannya lagi, jadi tombol lepas di sana cuma janji palsu. Plus "+ project".
+    @ViewBuilder private func projectChips(_ m: WorkspaceRoster.Member, _ mem: UserMemberships?) -> some View {
+        let ps = mem?.projects ?? []
+        let canEdit = canEditTier(viewerRole, m.role) && m.userId != nil
+        FlowLayout(spacing: 6) {
+            ForEach(ps) { p in
+                let chip = HStack(spacing: 5) {
+                    Circle().fill(Color(hex: p.color ?? "#94A3B8")).frame(width: 6, height: 6)
+                    Text(p.viaTeam == nil ? p.name : "\(p.name) · via \(p.viaTeam!)")
+                        .font(NXFont.text(11, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                }
+                .padding(.horizontal, 8).padding(.vertical, 5)
+                .background(NX.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+                if canEdit, p.viaTeam == nil, let uid = m.userId {
+                    Menu {
+                        Button(role: .destructive) {
+                            Task { await runTeam { try await APIClient.shared.removeProjectMember(projectId: p.id, userId: uid) } }
+                        } label: { Label(T("Lepas dari project"), systemImage: "minus.circle") }
+                    } label: { chip }
+                    .disabled(teamBusy)
+                } else {
+                    chip
+                }
+            }
+            if canEdit, let uid = m.userId {
+                Button {
+                    projectPickFor = ProjectPickTarget(id: uid, userId: uid, name: m.displayName, already: Set(ps.map(\.id)))
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: teamBusy ? "hourglass" : "plus").font(.system(size: 9, weight: .bold))
+                        Text(T("project")).font(NXFont.text(11, .semibold))
+                    }
+                    .foregroundStyle(NX.mutedFg)
+                    .padding(.horizontal, 8).padding(.vertical, 5)
+                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [3, 2])))
+                }
+                .buttonStyle(.plain)
+                .disabled(teamBusy)
+            }
+        }
+        if ps.isEmpty && !canEdit {
+            Text(T("Belum masuk project mana pun.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+        }
     }
 
     /// Chip tim: ketuk = menu (jadikan/lepas lead, keluarkan). Menu, bukan tombol silang kecil —
@@ -633,6 +682,7 @@ struct AdminUsersSection: View {
         // buruk daripada baris tanpa dropdown.
         if let r = try? await APIClient.shared.adminUserMemberships() { memberships = r.byUser }
         if let t = try? await APIClient.shared.teams() { allTeams = t }
+        if let p = try? await APIClient.shared.projects() { allProjects = p }
         loading = false
     }
     private func setRole(_ m: WorkspaceRoster.Member, _ role: String, _ wsId: String) async {
@@ -1686,8 +1736,24 @@ struct ApprovalChainView: View {
         } label: {
             HStack(spacing: 10) {
                 AvatarView(url: s.avatarURL, initial: s.initial, size: 28)
-                Text(s.displayName).font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
-                Text(orgRoleLabel(s.role ?? "STAFF")).font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 6) {
+                        Text(s.displayName).font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
+                        Text(orgRoleLabel(s.role ?? "STAFF")).font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
+                    }
+                    // Jam kerja + mode absensi — sama seperti kartu di bagan web. Flexi menggantikan
+                    // jamnya (jam tetap diabaikan saat Flexi menyala); Mobile cuma lencana.
+                    HStack(spacing: 6) {
+                        if s.flexiTimeEnabled ?? false {
+                            Label(T("Flexi"), systemImage: "bolt.fill").font(NXFont.text(10, .semibold)).foregroundStyle(NX.warning)
+                        } else {
+                            Text(s.shiftLabel ?? T("jam kantor")).font(NXFont.text(10)).foregroundStyle(NX.mutedFg).monospacedDigit()
+                        }
+                        if s.noGeofenceMode ?? false {
+                            Label(T("Mobile"), systemImage: "iphone").font(NXFont.text(10, .semibold)).foregroundStyle(NX.violetText)
+                        }
+                    }
+                }
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.up.chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(NX.mutedFg)
             }
@@ -1825,5 +1891,51 @@ struct AccountEditSheet: View {
             // saat daftar dimuat ulang sesudah sheet ditutup.
             avatarURL = nil
         }, done: T("Foto profil diganti."))
+    }
+}
+
+// MARK: - Pemilih project
+
+struct ProjectPickTarget: Identifiable, Hashable {
+    let id: String
+    let userId: String
+    let name: String
+    let already: Set<String>
+}
+
+/// Menambahkan orang ke project secara LANGSUNG (source "direct"), tidak lewat tim. Bisa dicari.
+struct ProjectPickSheet: View {
+    let target: ProjectPickTarget
+    let projects: [Project]
+    var onPick: (String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+
+    private var rows: [Project] {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        return q.isEmpty ? projects : projects.filter { $0.name.lowercased().contains(q) }
+    }
+
+    var body: some View {
+        List {
+            ForEach(rows) { p in
+                Button { onPick(p.id) } label: {
+                    HStack(spacing: 8) {
+                        Circle().fill(Color(hex: p.color ?? "#94A3B8")).frame(width: 8, height: 8)
+                        Text(p.name).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                        Spacer(minLength: 4)
+                    }
+                }
+            }
+            if rows.isEmpty {
+                Text(projects.isEmpty ? T("Sudah masuk semua project.") : T("Nggak ada yang cocok."))
+                    .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            }
+        }
+        .searchable(text: $query, prompt: T("Cari project…"))
+        .navigationTitle(target.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() } } }
     }
 }
