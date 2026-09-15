@@ -1050,6 +1050,8 @@ model AttendanceRecord {
   checkOutApproval      String?
   checkOutReason        String?
   checkOutApprovedById  String?
+  /// Sama seperti AttendanceRequest.escalatedAt — untuk checkout luar kantor yang menunggu.
+  escalatedAt           DateTime?
   checkOutApprovedAt    DateTime?
   // Daily Reflection — mandatory ≥200-char recap captured at check-out (work done today, progress,
   // blockers, next priorities). Stored separately from `notes` for auditability/reporting.
@@ -1139,6 +1141,9 @@ model AttendanceRequest {
   createdAt             DateTime                  @default(now())
   updatedAt             DateTime                  @updatedAt
   reviewedAt            DateTime?
+  /// Kapan request ini dieskalasi ke BoD karena manager-nya diam melewati batas (cron
+  /// attendance-escalation). Sekali saja — kolom ini yang mencegah BoD diberi tahu setiap 30 menit.
+  escalatedAt           DateTime?
 
   userId                String
   user                  User                      @relation("AttendanceRequestUser", fields: [userId], references: [id], onDelete: Cascade)
