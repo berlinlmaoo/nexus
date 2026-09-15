@@ -82,15 +82,20 @@ export function ApprovalChart() {
     drop: dropProps(p.userId),
   });
 
-  /** Satu orang beserta seluruh bawahannya. Garisnya digambar CSS (.oc-*), bukan div — lihat <style>. */
-  const Node = ({ p }: { p: ApprovalChartPerson }) => {
+  /**
+   * Satu orang beserta seluruh bawahannya, VERTIKAL: bawahan bertingkat ke bawah dengan garis siku,
+   * bukan melebar ke samping. Pohon melebar butuh scroll samping begitu ada manager dengan tujuh
+   * bawahan; pohon vertikal hanya bertambah tinggi — dan halaman memang sudah scroll ke bawah.
+   * Garisnya CSS (.vt-*), lihat <style>.
+   */
+  const Node = ({ p, root }: { p: ApprovalChartPerson; root?: boolean }) => {
     const kids = children.get(p.userId) ?? [];
     return (
-      <div className="oc-node">
-        <PersonCard {...cardProps(p)} />
+      <div className={cn(!root && "vt-item")}>
+        <PersonCard {...cardProps(p)} wide />
         {kids.length > 0 && (
-          <div className="oc-kids">
-            {kids.map((k) => <div key={k.userId} className="oc-kid"><Node p={k} /></div>)}
+          <div className="vt">
+            {kids.map((k) => <Node key={k.userId} p={k} />)}
           </div>
         )}
       </div>
@@ -100,15 +105,15 @@ export function ApprovalChart() {
   return (
     <div className="space-y-4">
       <style>{`
-        .oc-node{display:flex;flex-direction:column;align-items:center}
-        .oc-kids{display:flex;align-items:flex-start;position:relative;padding-top:22px}
-        .oc-kids::before{content:"";position:absolute;top:0;left:50%;width:2px;height:22px;background:var(--oc-line);transform:translateX(-50%)}
-        .oc-kid{position:relative;padding:22px 6px 0}
-        .oc-kid::before{content:"";position:absolute;top:0;left:50%;width:2px;height:22px;background:var(--oc-line);transform:translateX(-50%)}
-        .oc-kid::after{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:var(--oc-line)}
-        .oc-kid:first-child::after{left:50%}
-        .oc-kid:last-child::after{right:50%}
-        .oc-kid:only-child::after{display:none}
+        /* Pohon vertikal. Kartu tingginya tetap 46px (lihat PersonCard wide) supaya stub-nya
+           selalu tepat di tengah kartu tanpa mengukur apa pun. */
+        .vt{position:relative;margin-left:16px;padding-left:16px}
+        .vt-item{position:relative;padding-top:8px}
+        .vt-item::before{content:"";position:absolute;left:-16px;top:31px;width:14px;height:2px;background:var(--oc-line)}
+        .vt-item::after{content:"";position:absolute;left:-16px;top:0;width:2px;height:31px;background:var(--oc-line)}
+        .vt-item:not(:last-child)::after{height:100%}
+        .vt > .vt-item:first-child::after{top:-6px;height:37px}
+        .vt > .vt-item:first-child:not(:last-child)::after{height:calc(100% + 6px)}
       `}</style>
 
       {/* Ringkasan — satu baris, tiga angka, tanpa kalimat panjang. */}
@@ -129,14 +134,12 @@ export function ApprovalChart() {
           </div>
         </section>
 
-        {/* 2 · Pohon */}
+        {/* 2 · Pohon — satu kolom per pohon, kolomnya wrap. Tidak pernah scroll ke samping. */}
         <section className="border-b border-border px-5 py-5">
-          <Eyebrow>Rantai approval</Eyebrow>
-          <div className="mt-3 overflow-x-auto pb-2">
-            <div className="flex items-start gap-10">
-              {trees.map((p) => <Node key={p.userId} p={p} />)}
-              {trees.length === 0 && <span className="text-xs text-muted-foreground">Belum ada yang ditaruh di bawah siapa pun.</span>}
-            </div>
+          <Eyebrow>Rantai approval <span className="normal-case tracking-normal text-muted-foreground/70">· satu kolom per pohon</span></Eyebrow>
+          <div className="mt-3 grid gap-x-8 gap-y-8" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+            {trees.map((p) => <div key={p.userId} className="min-w-0"><Node p={p} root /></div>)}
+            {trees.length === 0 && <span className="text-xs text-muted-foreground">Belum ada yang ditaruh di bawah siapa pun.</span>}
           </div>
         </section>
 
@@ -187,7 +190,7 @@ function Stat({ n, of, label, tone }: { n: number; of?: number; label: string; t
 }
 
 type CardProps = {
-  p: ApprovalChartPerson; busy: boolean; dragging: boolean; over: boolean; droppable: boolean; reports: number; rootless: boolean; compact?: boolean;
+  p: ApprovalChartPerson; busy: boolean; dragging: boolean; over: boolean; droppable: boolean; reports: number; rootless: boolean; compact?: boolean; wide?: boolean;
   onDragStart: () => void; onDragEnd: () => void; onClick: () => void;
   drop: { onDragOver: (e: React.DragEvent) => void; onDragLeave: () => void; onDrop: (e: React.DragEvent) => void };
 };
@@ -197,7 +200,7 @@ type CardProps = {
  * yang menjawab "orang ini siapa". Zona jatuhnya adalah kartu itu sendiri: cincin muncul hanya saat
  * ada yang diseret dan kartu ini sah jadi tujuannya.
  */
-function PersonCard({ p, busy, dragging, over, droppable, reports, rootless, compact, onDragStart, onDragEnd, onClick, drop }: CardProps) {
+function PersonCard({ p, busy, dragging, over, droppable, reports, rootless, compact, wide, onDragStart, onDragEnd, onClick, drop }: CardProps) {
   const senior = p.role === "BOD" || p.role === "ONE_ABOVE_ALL";
   const manager = p.role === "MANAGER";
   const filled = senior || manager;
@@ -213,7 +216,7 @@ function PersonCard({ p, busy, dragging, over, droppable, reports, rootless, com
         title="Klik untuk pilih atasan, atau seret ke kartu atasannya"
         className={cn(
           "flex cursor-grab items-center gap-2.5 rounded-xl text-left transition active:cursor-grabbing disabled:opacity-50",
-          compact ? "w-[168px] px-2.5 py-2" : "w-[176px] px-3 py-2.5",
+          wide ? "h-[46px] w-full px-3" : compact ? "w-[168px] px-2.5 py-2" : "w-[176px] px-3 py-2.5",
           senior ? "bg-[#1e3a5f] text-white shadow-[0_2px_0_rgba(0,0,0,.2)]" : manager ? "bg-[#2c5282] text-white shadow-[0_2px_0_rgba(0,0,0,.2)]" : "border border-border bg-background text-foreground shadow-sm hover:border-primary",
           dragging && "opacity-40",
         )}
@@ -232,7 +235,7 @@ function PersonCard({ p, busy, dragging, over, droppable, reports, rootless, com
       </button>
       {/* Akar yang bukan BoD: pohonnya sah, tapi puncaknya sendiri masih jatuh ke kelompok BoD. */}
       {rootless && !compact && (
-        <span className="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-amber-300 bg-amber-50 px-1.5 text-[9.5px] font-bold text-amber-800">tanpa atasan</span>
+        <span className="absolute right-2 top-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-amber-300 bg-amber-50 px-1.5 text-[9.5px] font-bold text-amber-800">tanpa atasan</span>
       )}
     </div>
   );
