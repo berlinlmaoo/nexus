@@ -67,7 +67,7 @@ function Teams({ embedded = false }: { embedded?: boolean }) {
   return (
     <div>
       {!embedded && <PageHeader title="Teams" subtitle="Access groups: team members automatically get access to linked projects. Teams are grouped by division/company." />}
-      {embedded && <p className="pb-3 text-xs text-muted-foreground">Access groups: anggota tim otomatis dapat akses ke project yang ditautkan. Dikelompokkan per divisi/perusahaan.</p>}
+      {embedded && <p className="pb-3 text-xs text-muted-foreground">Pengaturan TIM-nya sendiri: bikin/hapus tim &amp; divisi, tautkan project, jam shift per tim. Siapa masuk tim mana sekarang diatur dari <b className="text-foreground">Users</b> &mdash; buka dropdown di baris orangnya.</p>}
       <div className={embedded ? "space-y-4" : "p-4 md:p-8 space-y-4"}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-muted-foreground">{rows.length} team{rows.length === 1 ? "" : "s"} · {divisions.length} division{divisions.length === 1 ? "" : "s"}{!canManage && " · view-only (need BoD/Manager to manage)"}</p>
