@@ -181,6 +181,10 @@ struct AdminUsersSection: View {
     @State private var linkTarget: GoogleLinkTarget?
     @State private var memberships: [String: UserMemberships] = [:]
     @State private var openMemberships: String?
+    @State private var allTeams: [Team] = []
+    @State private var teamBusy = false
+    @State private var addTeamFor: TeamPickTarget?
+    @State private var exitTarget: TeamExitTarget?
 
     private var members: [WorkspaceRoster.Member] { roster?.members ?? [] }
     private var viewerRole: String? { roster?.role }
@@ -224,46 +228,146 @@ struct AdminUsersSection: View {
         .sheet(item: $linkTarget) { t in
             NavigationStack { GoogleLinkSheet(target: t) { linkTarget = nil; Task { await load() } } }
         }
+        .sheet(item: $addTeamFor) { t in
+            NavigationStack {
+                TeamPickSheet(target: t, teams: allTeams.filter { $0.canManage == true && !t.already.contains($0.id) }) { teamId in
+                    addTeamFor = nil
+                    Task { await runTeam { try await APIClient.shared.teamAddMember(teamId: teamId, userId: t.userId) } }
+                }
+            }
+        }
+        // Mengeluarkan orang dari tim MENCABUT akses ke semua project yang ditautkan tim itu
+        // (lihat src/lib/team-sync.ts di server). Sebutkan berapa sebelum ditekan, bukan sesudah.
+        .confirmationDialog(
+            exitTarget.map { "\(T("Keluarkan")) \($0.userName) \(T("dari")) \($0.teamName)?" } ?? "",
+            isPresented: Binding(get: { exitTarget != nil }, set: { if !$0 { exitTarget = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button(T("Keluarkan"), role: .destructive) {
+                if let t = exitTarget {
+                    exitTarget = nil
+                    Task { await runTeam { try await APIClient.shared.teamRemoveMember(teamId: t.teamId, userId: t.userId) } }
+                }
+            }
+            Button(T("Cancel"), role: .cancel) { exitTarget = nil }
+        } message: {
+            Text(exitTarget.map { t in
+                t.losing.isEmpty
+                    ? T("Tim ini tidak menautkan project, jadi tidak ada akses yang hilang.")
+                    : "\(T("Ikut hilang: akses ke")) \(t.losing.count) project — \(t.losing.joined(separator: ", "))"
+            } ?? "")
+        }
+    }
+
+    /// Satu jalur untuk semua perubahan keanggotaan: kunci tombol, jalankan, muat ulang.
+    /// Memuat ulang dari server (bukan menambal state lokal) karena satu klik di sini juga
+    /// mengubah daftar PROJECT orang itu, dan menebak hasilnya di klien akan salah.
+    private func runTeam(_ body: () async throws -> Void) async {
+        teamBusy = true
+        try? await body()
+        await load()
+        teamBusy = false
     }
 
     @ViewBuilder private func row(_ m: WorkspaceRoster.Member) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             rowTop(m)
             if let uid = m.userId, openMemberships == uid {
-                membershipPanel(memberships[uid])
+                membershipPanel(m, memberships[uid])
             }
         }
     }
 
     /// Chip tim + project milik satu orang. Dibuat sebagai view terpisah supaya `rowTop` tetap
     /// muat dalam satu ekspresi — penyusun tipe SwiftUI menyerah pada HStack sepanjang itu.
-    @ViewBuilder private func membershipPanel(_ mem: UserMemberships?) -> some View {
+    @ViewBuilder private func membershipPanel(_ m: WorkspaceRoster.Member, _ mem: UserMemberships?) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            if (mem?.projects.isEmpty ?? true) && (mem?.teams.isEmpty ?? true) {
-                Text(T("Belum masuk project atau tim mana pun."))
-                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-            }
+            // Kedua judul selalu digambar, termasuk saat kosong. Bagian yang kadang ada kadang
+            // hilang membuat dua baris orang yang bersebelahan terlihat seperti dua layar berbeda.
+            Label(T("Projects"), systemImage: "square.stack.3d.up")
+                .font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
             if let ps = mem?.projects, !ps.isEmpty {
-                Label(T("Projects"), systemImage: "square.stack.3d.up")
-                    .font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
                 NXFlow(ps.map { p in
                     NXChipData(id: p.id,
                                text: p.viaTeam == nil ? p.name : "\(p.name) · via \(p.viaTeam!)",
                                color: Color(hex: p.color ?? "#94A3B8"))
                 })
+            } else {
+                Text(T("Belum masuk project mana pun.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             }
-            if let ts = mem?.teams, !ts.isEmpty {
-                Label(T("Teams"), systemImage: "person.3")
-                    .font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
-                NXFlow(ts.map { t in
-                    NXChipData(id: t.id,
-                               text: t.role == "LEAD" ? "\(t.name) · LEAD" : (t.division.map { "\(t.name) · \($0)" } ?? t.name),
-                               color: Color(hex: t.color ?? "#7B2FBE"))
-                })
+            Label(T("Teams"), systemImage: "person.3")
+                .font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
+            teamChips(m, mem)
+            if canEditTier(viewerRole, m.role) {
+                Text(T("Masuk tim = otomatis dapat akses ke project yang ditautkan tim itu."))
+                    .font(NXFont.text(10)).foregroundStyle(NX.mutedFg.opacity(0.8))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 14).padding(.bottom, 12)
+    }
+
+    /// Chip tim: ketuk = menu (jadikan/lepas lead, keluarkan). Menu, bukan tombol silang kecil —
+    /// target 12pt di sebelah teks adalah cara mengeluarkan orang dari tim karena salah ketuk.
+    @ViewBuilder private func teamChips(_ m: WorkspaceRoster.Member, _ mem: UserMemberships?) -> some View {
+        let teams = mem?.teams ?? []
+        let canEdit = canEditTier(viewerRole, m.role) && m.userId != nil
+        FlowLayout(spacing: 6) {
+            ForEach(teams) { t in
+                let chip = teamChipLabel(t)
+                if canEdit, let uid = m.userId {
+                    Menu {
+                        Button {
+                            Task { await runTeam { try await APIClient.shared.teamSetMemberRole(teamId: t.id, userId: uid, lead: t.role != "LEAD") } }
+                        } label: {
+                            Label(t.role == "LEAD" ? T("Turunkan jadi anggota") : T("Jadikan lead"), systemImage: "crown")
+                        }
+                        Button(role: .destructive) {
+                            exitTarget = TeamExitTarget(
+                                id: "\(uid)-\(t.id)", userId: uid, userName: m.displayName,
+                                teamId: t.id, teamName: t.name,
+                                losing: (mem?.projects ?? []).filter { $0.viaTeam == t.name }.map(\.name)
+                            )
+                        } label: { Label(T("Keluarkan dari tim"), systemImage: "person.badge.minus") }
+                    } label: { chip }
+                    .disabled(teamBusy)
+                } else {
+                    chip
+                }
+            }
+            if canEdit, let uid = m.userId {
+                Button {
+                    addTeamFor = TeamPickTarget(id: uid, userId: uid, name: m.displayName, already: Set(teams.map(\.id)))
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: teamBusy ? "hourglass" : "plus").font(.system(size: 9, weight: .bold))
+                        Text(T("tim")).font(NXFont.text(11, .semibold))
+                    }
+                    .foregroundStyle(NX.mutedFg)
+                    .padding(.horizontal, 8).padding(.vertical, 5)
+                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [3, 2])))
+                }
+                .buttonStyle(.plain)
+                .disabled(teamBusy)
+            }
+        }
+        if teams.isEmpty && !canEdit {
+            Text(T("Belum masuk tim mana pun.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+        }
+
+    }
+
+    private func teamChipLabel(_ t: UserMemberships.TeamRow) -> some View {
+        HStack(spacing: 5) {
+            Circle().fill(Color(hex: t.color ?? "#7B2FBE")).frame(width: 6, height: 6)
+            Text(t.name).font(NXFont.text(11, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+            if t.role == "LEAD" {
+                Image(systemName: "crown.fill").font(.system(size: 8)).foregroundStyle(NX.warning)
+            }
+        }
+        .padding(.horizontal, 8).padding(.vertical, 5)
+        .background(NX.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
     }
 
     private func rowTop(_ m: WorkspaceRoster.Member) -> some View {
@@ -348,6 +452,7 @@ struct AdminUsersSection: View {
         // dan Control Room yang menolak terbuka karena satu panggilan tambahan gagal jauh lebih
         // buruk daripada baris tanpa dropdown.
         if let r = try? await APIClient.shared.adminUserMemberships() { memberships = r.byUser }
+        if let t = try? await APIClient.shared.teams() { allTeams = t }
         loading = false
     }
     private func setRole(_ m: WorkspaceRoster.Member, _ role: String, _ wsId: String) async {
@@ -976,5 +1081,70 @@ struct NXFlow: View {
                 .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
             }
         }
+    }
+}
+
+struct TeamPickTarget: Identifiable, Hashable {
+    let id: String
+    let userId: String
+    let name: String
+    let already: Set<String>
+}
+
+struct TeamExitTarget: Identifiable, Hashable {
+    let id: String
+    let userId: String
+    let userName: String
+    let teamId: String
+    let teamName: String
+    let losing: [String]
+}
+
+/// Memilih tim untuk satu orang. Bisa dicari, karena workspace ini punya 21 tim dengan nama yang
+/// mirip-mirip ("BOD AGENZ", "BD AGENZ") dan memilih dari daftar panjang tanpa pencarian adalah
+/// cara paling gampang memasukkan orang ke tim yang salah.
+struct TeamPickSheet: View {
+    let target: TeamPickTarget
+    let teams: [Team]
+    var onPick: (String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+
+    private var rows: [Team] {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        return q.isEmpty ? teams : teams.filter { $0.name.lowercased().contains(q) }
+    }
+
+    var body: some View {
+        Group {
+            if teams.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "person.3").font(.system(size: 36)).foregroundStyle(NX.mutedFg)
+                    Text(T("Sudah masuk semua tim yang bisa kamu atur."))
+                        .font(NXFont.text(13)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity).padding(28)
+            } else {
+                List {
+                    ForEach(rows) { t in
+                        Button { onPick(t.id) } label: {
+                            HStack(spacing: 8) {
+                                Circle().fill(Color(hex: t.color ?? "#7B2FBE")).frame(width: 8, height: 8)
+                                Text(t.name).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                                Spacer(minLength: 4)
+                                if let n = t.members?.count {
+                                    Text("\(n)").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).monospacedDigit()
+                                }
+                            }
+                        }
+                    }
+                }
+                .searchable(text: $query, prompt: T("Cari tim…"))
+            }
+        }
+        .navigationTitle(target.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() } } }
     }
 }
