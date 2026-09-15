@@ -3,12 +3,14 @@ import prisma from "@/lib/prisma"
 /**
  * Siapa yang menyetujui request absensi siapa — Bagan Approval.
  *
- * Tiga tingkat, tanpa fallback ke tim:
+ * Rantai bebas, tanpa fallback ke tim. Berlin: "willy approve anak-anaknya, willy ke gerro,
+ * gerro ke riri" — jadi tepinya tidak terikat peran:
  *
- *   STAFF   dengan approverId  → approver-nya saja (seorang MANAGER)
- *   STAFF   tanpa approverId   → semua BoD/OAA — jaring pengaman untuk yang belum ditaruh di bagan
- *   MANAGER                    → semua BoD/OAA, sebagai kelompok
- *   BOD / ONE_ABOVE_ALL        → semua BoD/OAA LAIN
+ *   siapa pun dengan approverId  → approver-nya saja, apa pun peran keduanya
+ *   siapa pun tanpa approverId   → semua BoD/OAA (dikurangi dirinya) — jaring pengaman
+ *
+ * Yang menjaga rantai tetap waras ada di PATCH /api/workspaces/members: tidak boleh diri sendiri,
+ * dan tidak boleh membentuk lingkaran. BoD tetap bisa mereview apa pun sebagai override.
  *
  * Logika ini pernah disalin di lima tempat (izin review, daftar pending, notifikasi in-app,
  * offsite checkout, WhatsApp) dan sudah saling berbeda — offsite checkout tidak pernah memberi
@@ -38,7 +40,7 @@ export async function resolveAttendanceApprovers(requesterUserId: string, worksp
     where: { userId_workspaceId: { userId: requesterUserId, workspaceId } },
     select: { role: true, approverId: true },
   })
-  if (member?.role === "STAFF" && member.approverId && member.approverId !== requesterUserId) {
+  if (member?.approverId && member.approverId !== requesterUserId) {
     return { userIds: [member.approverId], mode: "DIRECT_MANAGER" }
   }
   return { userIds: await bodGroup(workspaceId, requesterUserId), mode: "BOD_GROUP" }

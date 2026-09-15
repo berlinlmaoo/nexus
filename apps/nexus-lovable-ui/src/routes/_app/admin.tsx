@@ -592,10 +592,12 @@ function UserRow(props: UserRowProps) {
               <div className="truncate text-xs text-muted-foreground">{user.email}</div>
               {/* Approver absensi — hanya untuk STAFF. "Belum ditaruh" berwarna peringatan karena
                   request orang ini masih jatuh ke BoD; bukan galat, tapi pekerjaan yang belum selesai. */}
-              {orgInfo?.role === "STAFF" && (
+              {orgInfo && (
                 orgInfo.approverName
                   ? <div className="truncate text-[11px] text-muted-foreground">Approver: <b className="text-foreground">{orgInfo.approverName}</b></div>
-                  : <div className="text-[11px] font-semibold text-amber-700">Belum ditaruh di Bagan Approval</div>
+                  : (orgInfo.role === "STAFF" || orgInfo.role === "MANAGER")
+                    ? <div className="text-[11px] font-semibold text-amber-700">Belum ditaruh di Bagan Approval</div>
+                    : <div className="text-[11px] text-muted-foreground">Approver: BoD lain</div>
               )}
               {isMember && (
                 <div className="mt-0.5 text-[11px] text-muted-foreground">
@@ -743,16 +745,16 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
                 )}
               </Card>
 
-              {orgInfo.role === "STAFF" && (
-                <Card title="Approver absensi" hint="Request cuti/izin/sakit orang ini masuk ke manager yang ditaruh di Bagan Approval.">
+              <Card title="Approver absensi" hint="Request cuti/izin/sakit orang ini masuk ke atasan yang ditaruh di Bagan Approval — siapa pun perannya.">
                   <div className="flex items-center justify-between gap-3">
                     {orgInfo.approverName
                       ? <span className="text-sm font-semibold">{orgInfo.approverName}</span>
-                      : <span className="text-sm font-semibold text-amber-700">Belum ditaruh — masih masuk ke BoD</span>}
+                      : (orgInfo.role === "STAFF" || orgInfo.role === "MANAGER")
+                        ? <span className="text-sm font-semibold text-amber-700">Belum ditaruh — masih masuk ke semua BoD</span>
+                        : <span className="text-sm text-muted-foreground">Tidak ditaruh — masuk ke BoD lain</span>}
                     <button type="button" onClick={() => { onClose(); onOpenApproval(); }} className="shrink-0 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold text-primary transition hover:bg-accent">Buka Bagan Approval →</button>
                   </div>
                 </Card>
-              )}
 
               <Card title="Mode absensi">
                 <div className="space-y-2">
