@@ -209,9 +209,23 @@ struct SubmissionsView: View {
         }
         .frame(maxHeight: .infinity, alignment: .top)
         // A fixed 270 looks arbitrary: on a small phone the next column is a sliver, on a large
-        // one it is half a column. Tying the width to the screen keeps the same "one column plus a
-        // hint of the next" on every device, which is what makes a horizontal board readable.
-        .frame(width: min(320, UIScreen.main.bounds.width * 0.82), alignment: .leading)
+        // one it is half a column. Tying the width to the CONTAINER keeps the same "one column plus
+        // a hint of the next" everywhere, which is what makes a horizontal board readable.
+        //
+        // The container, not `UIScreen.main.bounds`. That call answers for the DEVICE's screen, not
+        // the window this view is actually in, and the two stop agreeing the moment the app is not
+        // fullscreen on one fixed display: iPad Split View, a resized Mac window, and — the reason
+        // this was changed — a folding iPhone, where the same running app moves between a 5.4"
+        // outer and a 7.6" inner display. `UIScreen.main` reports one number through all of that,
+        // so the board would keep sizing its columns for a screen it is no longer on. It has also
+        // been deprecated since iOS 16.
+        //
+        // `containerRelativeFrame` is iOS 17+, which this app already requires, and it re-reads on
+        // every layout pass — so unfolding resizes the columns without anything having to observe
+        // the fold or know a device exists.
+        .containerRelativeFrame(.horizontal, alignment: .leading) { width, _ in
+            min(320, width * 0.82)
+        }
         .background(tone.opacity(0.08), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(tone.opacity(0.3)))
     }
