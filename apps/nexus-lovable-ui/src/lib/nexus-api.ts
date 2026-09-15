@@ -1181,6 +1181,8 @@ export type CreatedGoogleAccount = {
   created: boolean;
   linked: boolean;
   account: { email: string; fullName: string; temporaryPassword: string };
+  /** Sandi TIDAK ikut notifikasi — ia hanya lewat email pribadi. Lihat route pembuatannya. */
+  notified?: { inApp: boolean; email: boolean; emailTo?: string | null };
   error?: string;
 };
 

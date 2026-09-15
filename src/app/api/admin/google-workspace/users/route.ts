@@ -5,6 +5,8 @@ import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { getAdminSessionContext } from "@/lib/admin-access"
 import { getUserOrgRole, isBodPlus } from "@/lib/feed"
+import { createInAppNotification } from "@/lib/notification-service"
+import { sendEmail } from "@/lib/email"
 import {
   directoryConfigured,
   listDirectoryAccounts,
@@ -114,6 +116,52 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // ── Beri tahu orangnya ────────────────────────────────────────────────────
+    //
+    // Dua saluran, dan pemisahannya disengaja: SANDI TIDAK PERNAH MASUK NOTIFIKASI.
+    //
+    // Notifikasi NEXUS ikut jadi push, dan pratinjau push tampil di layar terkunci tanpa perlu
+    // membuka kunci. Sandi di sana berarti siapa pun yang melirik HP-nya di atas meja sudah
+    // memegangnya. Jadi notifikasi hanya mengabarkan alamatnya dan menunjuk ke email pribadi;
+    // sandinya berjalan lewat kotak surat yang cuma bisa dibuka orang itu sendiri — cara yang
+    // sama dipakai Google sendiri saat mengirim kredensial akun baru ke alamat cadangan.
+    const notifyResults = { inApp: false, email: false, emailTo: target.email }
+    try {
+      await createInAppNotification({
+        userId: target.id,
+        type: "google_workspace_created",
+        title: "Email kantor kamu sudah jadi",
+        message: `${created.email} sudah aktif. Sandi sementaranya dikirim ke ${target.email} — cek email pribadimu, lalu ganti sandinya saat login pertama.`,
+        link: "/settings",
+      })
+      notifyResults.inApp = true
+    } catch (error) {
+      console.error("[google-workspace] in-app notify failed:", error)
+    }
+
+    if (target.email) {
+      try {
+        notifyResults.email = await sendEmail({
+          to: target.email,
+          subject: `Email kantor kamu: ${created.email}`,
+          html: `
+            <p>Halo ${target.name ?? ""},</p>
+            <p>Email kantor kamu sudah dibuat:</p>
+            <p style="font-size:18px"><strong>${created.email}</strong></p>
+            <p>Sandi sementara:</p>
+            <p style="font-family:ui-monospace,Menlo,monospace;font-size:18px;background:#f1f3f6;padding:10px 14px;display:inline-block;border-radius:6px">${created.temporaryPassword}</p>
+            <p>Masuk lewat <a href="https://mail.google.com">mail.google.com</a>. Kamu akan diminta
+            mengganti sandi ini saat login pertama — lakukan sekarang, jangan nanti, karena sandi
+            ini pernah melewati email dan tidak boleh jadi sandi permanenmu.</p>
+            <p style="color:#656d76;font-size:13px">Dikirim otomatis oleh NEXUS. Kalau kamu merasa
+            tidak seharusnya menerima ini, kabari BoD.</p>
+          `,
+        })
+      } catch (error) {
+        console.error("[google-workspace] email notify failed:", error)
+      }
+    }
+
     logAudit({
       action: "create",
       entityType: "google_workspace_account",
@@ -123,10 +171,23 @@ export async function POST(request: NextRequest) {
       request,
       // Sandi sementara TIDAK ikut dicatat. Audit log dibaca lebih banyak orang daripada yang
       // berhak masuk ke mailbox itu.
-      metadata: { forUser: target.name, forEmail: target.email, domain, createdEmail: created.email },
+      metadata: {
+        forUser: target.name,
+        forEmail: target.email,
+        domain,
+        createdEmail: created.email,
+        notifiedInApp: notifyResults.inApp,
+        notifiedEmail: notifyResults.email,
+      },
     }).catch(() => {})
 
-    return NextResponse.json({ created: true, linked: true, account: created }, { status: 201 })
+    // `notified` dikembalikan apa adanya. Kalau emailnya gagal terkirim, BoD harus TAHU sekarang
+    // selagi sandinya masih di layar — bukan menemukannya nanti lewat orang yang bingung kenapa
+    // tidak pernah dapat apa-apa.
+    return NextResponse.json(
+      { created: true, linked: true, account: created, notified: notifyResults },
+      { status: 201 },
+    )
   } catch (error) {
     console.error("[google-workspace] create user failed:", error)
     // Pesan Google dibawa apa adanya: "Domain not found", "Entity already exists" dan kuota
