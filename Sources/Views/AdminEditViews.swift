@@ -179,6 +179,8 @@ struct AdminUsersSection: View {
     @State private var deleteTarget: WorkspaceRoster.Member?
     @State private var openProfile: ProfileTarget?
     @State private var linkTarget: GoogleLinkTarget?
+    @State private var memberships: [String: UserMemberships] = [:]
+    @State private var openMemberships: String?
 
     private var members: [WorkspaceRoster.Member] { roster?.members ?? [] }
     private var viewerRole: String? { roster?.role }
@@ -224,7 +226,47 @@ struct AdminUsersSection: View {
         }
     }
 
-    private func row(_ m: WorkspaceRoster.Member) -> some View {
+    @ViewBuilder private func row(_ m: WorkspaceRoster.Member) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            rowTop(m)
+            if let uid = m.userId, openMemberships == uid {
+                membershipPanel(memberships[uid])
+            }
+        }
+    }
+
+    /// Chip tim + project milik satu orang. Dibuat sebagai view terpisah supaya `rowTop` tetap
+    /// muat dalam satu ekspresi — penyusun tipe SwiftUI menyerah pada HStack sepanjang itu.
+    @ViewBuilder private func membershipPanel(_ mem: UserMemberships?) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if (mem?.projects.isEmpty ?? true) && (mem?.teams.isEmpty ?? true) {
+                Text(T("Belum masuk project atau tim mana pun."))
+                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            }
+            if let ps = mem?.projects, !ps.isEmpty {
+                Label(T("Projects"), systemImage: "square.stack.3d.up")
+                    .font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
+                NXFlow(ps.map { p in
+                    NXChipData(id: p.id,
+                               text: p.viaTeam == nil ? p.name : "\(p.name) · via \(p.viaTeam!)",
+                               color: Color(hex: p.color ?? "#94A3B8"))
+                })
+            }
+            if let ts = mem?.teams, !ts.isEmpty {
+                Label(T("Teams"), systemImage: "person.3")
+                    .font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
+                NXFlow(ts.map { t in
+                    NXChipData(id: t.id,
+                               text: t.role == "LEAD" ? "\(t.name) · LEAD" : (t.division.map { "\(t.name) · \($0)" } ?? t.name),
+                               color: Color(hex: t.color ?? "#7B2FBE"))
+                })
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14).padding(.bottom, 12)
+    }
+
+    private func rowTop(_ m: WorkspaceRoster.Member) -> some View {
         HStack(spacing: 12) {
             // Same split as the Tuning Room roster: the name opens the person, the role chip keeps
             // its menu, and neither swallows the other's tap.
@@ -246,6 +288,14 @@ struct AdminUsersSection: View {
                                 .foregroundStyle(NX.violetText)
                                 .lineLimit(1)
                         }
+                        if let uid = m.userId {
+                            // Angkanya digambar walau nol: "0 project" adalah jawaban, dan baris
+                            // yang kadang punya keterangan kadang tidak terbaca seperti rusak.
+                            let mem = memberships[uid]
+                            Text(membershipSummary(mem))
+                                .font(NXFont.text(10, .semibold))
+                                .foregroundStyle(openMemberships == uid ? NX.violetText : NX.mutedFg)
+                        }
                     }
                     Spacer(minLength: 6)
                 }
@@ -253,6 +303,24 @@ struct AdminUsersSection: View {
             }
             .buttonStyle(.plain)
             .disabled(m.userId == nil)
+            // Tombol sendiri, BUKAN mengganti tap pada nama: nama membuka profil orangnya, dan
+            // mengambil alih gerakan itu untuk dropdown akan menghilangkan satu-satunya jalan ke sana.
+            if let uid = m.userId {
+                Button {
+                    withAnimation(.snappy(duration: 0.18)) {
+                        openMemberships = (openMemberships == uid) ? nil : uid
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(openMemberships == uid ? NX.violetText : NX.mutedFg)
+                        .rotationEffect(.degrees(openMemberships == uid ? 180 : 0))
+                        .frame(width: 30, height: 30)
+                        .background(NX.background, in: Circle())
+                        .overlay(Circle().strokeBorder(NX.border))
+                }
+                .buttonStyle(.plain)
+            }
             if canEditTier(viewerRole, m.role), let wsId = workspaceId {
                 Menu {
                     ForEach(assignableRoles(viewerRole), id: \.self) { r in Button(orgRoleLabel(r)) { Task { await setRole(m, r, wsId) } } }
@@ -276,6 +344,10 @@ struct AdminUsersSection: View {
     private func toggle(_ r: String) { filter = (filter == r) ? "ALL" : r }
     private func load() async {
         do { roster = try await APIClient.shared.roster() } catch APIError.unauthorized { auth.logout() } catch {}
+        // Gagal diam-diam DI SINI memang yang diinginkan: keanggotaan adalah keterangan tambahan,
+        // dan Control Room yang menolak terbuka karena satu panggilan tambahan gagal jauh lebih
+        // buruk daripada baris tanpa dropdown.
+        if let r = try? await APIClient.shared.adminUserMemberships() { memberships = r.byUser }
         loading = false
     }
     private func setRole(_ m: WorkspaceRoster.Member, _ role: String, _ wsId: String) async {
@@ -869,6 +941,40 @@ struct GoogleLinkSheet: View {
             // Pesan server dibawa apa adanya: "sudah ditautkan ke X" dan "tidak ada di Google"
             // adalah dua hal berbeda, dan menggantinya dengan "gagal" membuang petunjuknya.
             problem = (error as? LocalizedError)?.errorDescription ?? T("Gagal menautkan.")
+        }
+    }
+}
+
+/// "3 projects · 2 teams" — atau "0 projects" kalau memang belum masuk ke mana pun.
+private func membershipSummary(_ mem: UserMemberships?) -> String {
+    let p = mem?.projects.count ?? 0
+    let t = mem?.teams.count ?? 0
+    let projectPart = "\(p) project" + (p == 1 ? "" : "s")
+    guard t > 0 else { return projectPart }
+    return projectPart + " · \(t) team" + (t == 1 ? "" : "s")
+}
+
+struct NXChipData: Identifiable, Hashable { let id: String; let text: String; let color: Color }
+
+/// Chip yang membungkus ke baris berikutnya, memakai FlowLayout yang sudah ada di
+/// CustomFieldChips.swift. `LazyVGrid` tidak bisa dipakai di sini: lebarnya
+/// ditentukan teks tiap chip, bukan jumlah kolom tetap, dan grid kolom-tetap membuat "BD AGENZ"
+/// dan "FINANCE MANAGEMENT" menempati ruang yang sama lalu salah satunya terpotong.
+struct NXFlow: View {
+    let items: [NXChipData]
+    init(_ items: [NXChipData]) { self.items = items }
+
+    var body: some View {
+        FlowLayout(spacing: 6) {
+            ForEach(items) { it in
+                HStack(spacing: 5) {
+                    Circle().fill(it.color).frame(width: 6, height: 6)
+                    Text(it.text).font(NXFont.text(11, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                }
+                .padding(.horizontal, 8).padding(.vertical, 5)
+                .background(NX.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
+            }
         }
     }
 }

@@ -140,3 +140,39 @@ struct GoogleWorkspaceAccounts: Codable {
     let accounts: [GoogleWorkspaceAccount]
     let error: String?
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Keanggotaan tim + project per orang — dropdown di Control Room -> Users.
+//
+// Satu panggilan untuk SELURUH daftar, bukan satu per baris: layar ini menggambar 49 baris,
+// dan versi per-baris berarti 49 permintaan jaringan sebelum apa pun terlihat. Pola yang sama
+// sudah dipakai daftar akun Google di layar yang sama.
+// ─────────────────────────────────────────────────────────────────────────────
+
+struct UserMemberships: Codable, Sendable {
+    let projects: [ProjectRow]
+    let teams: [TeamRow]
+
+    struct ProjectRow: Codable, Identifiable, Sendable {
+        let id: String
+        let name: String
+        let color: String?
+        let role: String
+        /// nil = ditambahkan langsung ke project; berisi nama tim = ikut lewat tim itu.
+        /// Perbedaannya penting: keanggotaan lewat tim ditulis ulang oleh sinkronisasi tim,
+        /// jadi mencabutnya dari halaman project tidak bertahan.
+        let viaTeam: String?
+    }
+    struct TeamRow: Codable, Identifiable, Sendable {
+        let id: String
+        let name: String
+        let color: String?
+        let role: String
+        let division: String?
+    }
+}
+
+struct UserMembershipsResponse: Codable, Sendable {
+    let byUser: [String: UserMemberships]
+}

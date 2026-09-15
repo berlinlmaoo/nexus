@@ -17,9 +17,65 @@ struct ProjectDetailView: View {
     @State private var showSettings = false
     @State private var prefillDue: Date?
     @State private var isBod = false
+    @State private var query = ""
     @Environment(\.dismiss) private var dismiss
 
     private var canCreate: Bool { !(detail?.taskLists?.isEmpty ?? true) }
+
+    // MARK: pencarian task di dalam project
+    //
+    // Menyaring di sini, BUKAN di tiap tab. Board, List, Spreadsheet, Calendar dan Timeline
+    // semuanya menggambar dari `lanes`; menaruh kotak pencarian di salah satunya berarti hasil
+    // yang berubah begitu orang berpindah tab, dan itu terbaca seperti kerusakan.
+    //
+    // Lajur yang isinya habis tersaring tetap DIGAMBAR, kosong. Menghilangkan lajurnya membuat
+    // papan melompat-lompat setiap huruf diketik, dan menyembunyikan fakta bahwa lajur itu
+    // memang tidak punya yang dicari.
+
+    private var searchTokens: [String] {
+        query.lowercased().split(whereSeparator: \.isWhitespace).map(String.init)
+    }
+
+    private var filteredLanes: [ProjectDetail.Lane] {
+        let tokens = searchTokens
+        guard !tokens.isEmpty else { return lanes }
+        return lanes.map { lane in
+            ProjectDetail.Lane(
+                id: lane.id,
+                name: lane.name,
+                tasks: (lane.tasks ?? []).filter { Self.matches($0, laneName: lane.name, tokens: tokens) }
+            )
+        }
+    }
+
+    /// Semua kata harus cocok, urutannya bebas — "budi invoice" menemukan task milik Budi yang
+    /// judulnya menyebut invoice, yang tidak bisa dilakukan pencocokan satu potong utuh.
+    ///
+    /// Isi keranjangnya mengikuti web (`taskMatchesFilters` di $projectId.tsx) sejauh datanya ada:
+    /// deskripsi TIDAK ikut karena /api/projects/:id memang tidak mengirimkannya ke sini, dan
+    /// berpura-pura mencarinya lebih buruk daripada tidak mencarinya.
+    private static func matches(_ t: BoardTask, laneName: String, tokens: [String]) -> Bool {
+        var hay = [t.title, laneName, t.status ?? "", t.priority ?? "", t.parent?.title ?? ""]
+        hay.append(contentsOf: (t.assignees ?? []).compactMap { $0.user?.name })
+        hay.append(contentsOf: (t.customFieldValues ?? []).compactMap { $0.value })
+        let joined = hay.joined(separator: " ").lowercased()
+        return tokens.allSatisfy { joined.contains($0) }
+    }
+
+    /// Tab yang menggambar task, jadi tab yang pantas punya kotak pencarian. Pages, Forms, Chat,
+    /// Finance dan P&L punya isinya sendiri dan kotak yang tidak menyaring apa pun di sana hanya
+    /// menjanjikan sesuatu yang tidak terjadi.
+    private var searchApplies: Bool {
+        switch tab {
+        // Overview SENGAJA tidak ikut: ia menggambar dari `detail`, bukan `lanes`, jadi kotak
+        // pencarian di sana akan ada tapi tidak menyaring apa pun.
+        case .board, .list, .sheet, .calendar, .timeline: return true
+        default: return false
+        }
+    }
+
+    private var matchCount: Int { filteredLanes.reduce(0) { $0 + ($1.tasks?.count ?? 0) } }
+    private var totalCount: Int { lanes.reduce(0) { $0 + ($1.tasks?.count ?? 0) } }
 
     /// A board opened from a notification knows the project's id and nothing else — the name
     /// arrives with the payload rather than with the push, so fall back to whatever the board
@@ -56,6 +112,7 @@ struct ProjectDetailView: View {
             projectHeader
             tabBar
             Divider().overlay(NX.border)
+            if searchApplies && !loading && error == nil && !lanes.isEmpty { searchBar }
             content
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -169,6 +226,38 @@ struct ProjectDetailView: View {
         }
     }
 
+    // MARK: kotak pencarian
+
+    private var searchBar: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").font(.system(size: 13, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                TextField(T("Search tasks in this project…"), text: $query)
+                    .font(NXFont.text(14))
+                    .foregroundStyle(NX.foreground)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.search)
+                if !query.isEmpty {
+                    // Angkanya sebelum tombol hapus: "0 dari 84" adalah jawaban, bukan kegagalan,
+                    // dan tanpa itu papan kosong terbaca seperti board yang gagal dimuat.
+                    Text("\(matchCount)/\(totalCount)")
+                        .font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+                        .monospacedDigit()
+                    Button { query = "" } label: {
+                        Image(systemName: "xmark.circle.fill").font(.system(size: 15)).foregroundStyle(NX.mutedFg)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 12).padding(.vertical, 9)
+            .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(query.isEmpty ? NX.border : NX.violet.opacity(0.55)))
+            .padding(.horizontal, 14).padding(.vertical, 8)
+            Divider().overlay(NX.border)
+        }
+    }
+
     // MARK: content
 
     @ViewBuilder private var content: some View {
@@ -198,10 +287,10 @@ struct ProjectDetailView: View {
                 switch tab {
                 case .overview: OverviewTab(detail: detail, onOpenMember: { openProfile = $0 })
                 case .board:    boardTab(detail)
-                case .list:     ListTab(lanes: lanes, onOpen: { openTaskId = $0 })
-                case .sheet:    SpreadsheetTab(projectId: projectId, lanes: lanes, onOpen: { openTaskId = $0 })
-                case .calendar: CalendarTab(tasks: lanes.flatMap { $0.tasks ?? [] }, onOpen: { openTaskId = $0 }, onCreate: { date in prefillDue = date; showCreate = true })
-                case .timeline: TimelineTab(lanes: lanes, onOpen: { openTaskId = $0 })
+                case .list:     ListTab(lanes: filteredLanes, onOpen: { openTaskId = $0 })
+                case .sheet:    SpreadsheetTab(projectId: projectId, lanes: filteredLanes, onOpen: { openTaskId = $0 })
+                case .calendar: CalendarTab(tasks: filteredLanes.flatMap { $0.tasks ?? [] }, onOpen: { openTaskId = $0 }, onCreate: { date in prefillDue = date; showCreate = true })
+                case .timeline: TimelineTab(lanes: filteredLanes, onOpen: { openTaskId = $0 })
                 default:        EmptyView()
                 }
             }
@@ -209,6 +298,7 @@ struct ProjectDetailView: View {
     }
 
     @ViewBuilder private func boardTab(_ detail: ProjectDetail) -> some View {
+        let lanes = filteredLanes
         if !lanes.isEmpty {
             // Horizontal-only: each lane is a full-height column that scrolls its own cards
             // vertically (see LaneColumn). The lanes fill the board height, so the HStack never

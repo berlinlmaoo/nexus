@@ -177,6 +177,11 @@ extension APIClient {
         return true
     }
 
+    /// Keanggotaan tim + project SEMUA orang sekaligus. BoD saja; server menjawab 403 untuk yang lain.
+    func adminUserMemberships() async throws -> UserMembershipsResponse {
+        try await vaultRun(makeRequest("/api/admin/users/memberships"), decode: UserMembershipsResponse.self)
+    }
+
     // MARK: Plumbing
 
     /// `run` is private to APIClient.swift and Swift's `private` does not reach across files, so this
