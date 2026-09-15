@@ -141,12 +141,17 @@ function Admin() {
   // POST /api/workspaces/members menemukan user-nya lewat email dan membuat keanggotaannya;
   // tidak membuat akun baru, karena akunnya sudah ada.
   const joinWorkspace = useMutation({
-    mutationFn: (email: string) => nexusApi.inviteWorkspaceMember({ email, role: "STAFF", workspaceId: wsId }),
+    // absorbPersonalWorkspace: daftar tanpa kode = dapat workspace pribadi, dan workspace aktif
+    // dipilih dari joinedAt tertua. Tanpa memindahkannya, dia "masuk" tapi tetap mendarat di
+    // workspace pribadinya.
+    mutationFn: (email: string) => nexusApi.inviteWorkspaceMember({ email, role: "STAFF", workspaceId: wsId, absorbPersonalWorkspace: true }),
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["nexus", "admin-users"] });
       qc.invalidateQueries({ queryKey: ["nexus", "workspace-members"] });
       qc.invalidateQueries({ queryKey: ["nexus", "approval-chart"] });
-      toast.success(`${r.member?.name ?? "Akun"} masuk sebagai Staff`, { description: "Taruh di bawah manager-nya di Bagan Approval." });
+      const moved = r.absorbed?.length ? ` · workspace pribadi "${r.absorbed[0]}" dihapus` : "";
+      toast.success(`${r.member?.name ?? "Akun"} masuk sebagai Staff${moved}`, { description: "Taruh di bawah manager-nya di Bagan Approval." });
+      if (r.kept?.length) toast.warning("Masih punya workspace lain yang tidak kosong", { description: r.kept.join(", ") + " — dibiarkan. Dia bisa mendarat di sana, bukan di sini." });
     },
     onError: (e: unknown) => toast.error("Gagal memasukkan", { description: e instanceof ApiError ? e.message : "Coba lagi." }),
   });
