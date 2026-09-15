@@ -287,6 +287,8 @@ export async function POST(req: NextRequest) {
         attendanceRole: newMember.attendanceRole,
         joinedAt: newMember.joinedAt,
       },
+      absorbed,
+      kept,
     }, { status: 201 })
   } catch (error) {
     console.error("Error inviting workspace member:", error)
@@ -387,8 +389,6 @@ export async function PATCH(req: NextRequest) {
 
     const targetMember = await prisma.workspaceMember.findUnique({
       where: { id: memberId },
-      absorbed,
-      kept,
     })
 
     if (!targetMember || targetMember.workspaceId !== currentMember.workspaceId) {
