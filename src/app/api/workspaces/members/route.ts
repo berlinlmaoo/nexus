@@ -180,7 +180,7 @@ export async function POST(req: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { email, role = 'STAFF', attendanceRole = 'NONE', workspaceId } = await req.json()
+    const { email, role = 'STAFF', attendanceRole = 'NONE', workspaceId, absorbPersonalWorkspace = false } = await req.json()
 
     const currentMember = await getWorkspaceAndRole(session.user.id, workspaceId)
     if (!currentMember) return NextResponse.json({ error: 'No workspace found' }, { status: 404 })
@@ -234,7 +234,47 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    logAudit({ action: "create", entityType: "workspace_member", entityId: newMember.id, entityName: email, userId: session.user.id, request: req, metadata: { role, attendanceRole, workspaceId: currentMember.workspaceId } })
+    // Akun yang mendaftar TANPA kode workspace tidak berakhir "tanpa workspace" — register/verify
+    // membuatkan workspace pribadi ("Kevan's workspace", dia One Above All di situ). Dan setiap
+    // jalur yang memilih workspace aktif memakai joinedAt tertua, jadi menambahkannya ke sini saja
+    // TIDAK mengubah apa pun yang dia lihat: dia tetap mendarat di workspace pribadinya.
+    //
+    // Karena itu "masukkan" harus MEMINDAHKAN: workspace pribadi yang kosong (anggotanya cuma dia,
+    // tanpa project/tim/absensi/vault) dihapus sekalian. Yang tidak kosong dibiarkan, dan
+    // disebutkan di respons supaya admin tahu orang itu masih punya dua rumah.
+    const absorbed: string[] = []
+    const kept: string[] = []
+    if (absorbPersonalWorkspace === true) {
+      const others = await prisma.workspaceMember.findMany({
+        where: { userId: user.id, workspaceId: { not: currentMember.workspaceId } },
+        select: {
+          id: true,
+          workspace: {
+            select: {
+              id: true, name: true,
+              _count: { select: { members: true, projects: true, teams: true, attendanceRecords: true, vaultItems: true } },
+            },
+          },
+        },
+      })
+      for (const o of others) {
+        const c = o.workspace._count
+        const empty = c.members === 1 && c.projects === 0 && c.teams === 0 && c.attendanceRecords === 0 && c.vaultItems === 0
+        if (!empty) { kept.push(o.workspace.name); continue }
+        try {
+          await prisma.workspace.delete({ where: { id: o.workspace.id } })
+          absorbed.push(o.workspace.name)
+        } catch (e) {
+          // Ada anak tabel tanpa cascade. Lepaskan keanggotaannya saja — cukup untuk membuat
+          // workspace ini jadi rumahnya, karena tidak ada keanggotaan lain yang lebih tua.
+          console.error("[members] gagal menghapus workspace pribadi, lepas keanggotaan saja", o.workspace.id, e)
+          await prisma.workspaceMember.delete({ where: { id: o.id } })
+          absorbed.push(o.workspace.name)
+        }
+      }
+    }
+
+    logAudit({ action: "create", entityType: "workspace_member", entityId: newMember.id, entityName: email, userId: session.user.id, request: req, metadata: { role, attendanceRole, workspaceId: currentMember.workspaceId, ...(absorbed.length ? { absorbedWorkspaces: absorbed } : {}), ...(kept.length ? { keptWorkspaces: kept } : {}) } })
 
     return NextResponse.json({
       member: {
@@ -347,6 +387,8 @@ export async function PATCH(req: NextRequest) {
 
     const targetMember = await prisma.workspaceMember.findUnique({
       where: { id: memberId },
+      absorbed,
+      kept,
     })
 
     if (!targetMember || targetMember.workspaceId !== currentMember.workspaceId) {

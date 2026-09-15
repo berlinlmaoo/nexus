@@ -1902,8 +1902,10 @@ export const nexusApi = {
     const s = qs.toString();
     return apiFetch<WorkspaceMembersResponse>(`/api/workspaces/members${s ? `?${s}` : ""}`);
   },
-  inviteWorkspaceMember: (payload: { email: string; role?: OrgRole; attendanceRole?: string; workspaceId?: string }) =>
-    apiFetch<{ member: NexusWorkspaceMember }>("/api/workspaces/members", { method: "POST", body: JSON.stringify(payload) }),
+  /** `absorbPersonalWorkspace`: hapus workspace pribadi kosong yang dibuat saat daftar tanpa kode,
+   *  supaya workspace ini benar-benar jadi rumahnya (workspace aktif dipilih dari joinedAt tertua). */
+  inviteWorkspaceMember: (payload: { email: string; role?: OrgRole; attendanceRole?: string; workspaceId?: string; absorbPersonalWorkspace?: boolean }) =>
+    apiFetch<{ member: NexusWorkspaceMember; absorbed?: string[]; kept?: string[] }>("/api/workspaces/members", { method: "POST", body: JSON.stringify(payload) }),
   updateWorkspaceMember: (payload: { memberId: string; role?: OrgRole; attendanceRole?: string; workspaceId?: string; attendanceShiftStartTime?: string | null; attendanceShiftEndTime?: string | null; attendanceShiftByDay?: Record<string, { start: string; end: string }> | null; phoneNumber?: string | null; flexiTimeEnabled?: boolean; noGeofenceMode?: boolean; approverId?: string | null }) =>
     apiFetch<{ member: NexusWorkspaceMember; orphaned?: Array<{ id: string; name: string | null }> }>("/api/workspaces/members", { method: "PATCH", body: JSON.stringify(payload) }),
   /** Seluruh Bagan Approval dalam satu panggilan. BoD saja. */
