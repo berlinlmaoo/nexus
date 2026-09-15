@@ -40,7 +40,18 @@ struct Team: Decodable, Identifiable, Sendable {
     /// key off this rather than off the caller's global role, because the answer differs per team —
     /// and every action is re-checked server-side regardless, so this only decides what is drawn.
     let canManage: Bool?
+    /// Supervisor absensi ikut boleh mengatur jam shift tim walau bukan Manager/BoD, jadi izinnya
+    /// TERPISAH dari `canManage` dan server yang memutuskan. Jangan disamakan.
+    let canManageAttendanceSettings: Bool?
+    /// Jam masuk/keluar khusus tim ini. 8 dari 21 tim memakainya, jadi ini bukan kolom hiasan:
+    /// tanpa ini di HP, satu-satunya cara mengubah jam shift tim adalah lewat web.
+    let attendanceShiftOverrideEnabled: Bool?
+    let attendanceShiftStartTime: String?
+    let attendanceShiftEndTime: String?
+    let division: DivisionRef?
     let members: [Member]?
+
+    struct DivisionRef: Decodable, Sendable { let id: String; let name: String; let color: String? }
     let projects: [ProjectLink]?
 
     struct Member: Decodable, Sendable {
@@ -86,4 +97,13 @@ struct Team: Decodable, Identifiable, Sendable {
     var memberCount: Int { members?.count ?? 0 }
     var projectNames: [String] { (projects ?? []).compactMap { $0.project?.name } }
     var initial: String { String(name.first ?? "?").uppercased() }
+}
+
+
+/// GET /api/teams?resource=divisions — lapisan pengelompokan di atas tim.
+struct Division: Decodable, Identifiable, Sendable {
+    let id: String
+    let name: String
+    let color: String?
+    let position: Int?
 }

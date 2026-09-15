@@ -741,6 +741,69 @@ struct APIClient {
         try await teamAction(["action": "unlink-project", "teamId": teamId, "projectId": projectId])
     }
 
+    @discardableResult
+    func teamRename(teamId: String, name: String) async throws -> Bool {
+        try await teamAction(["action": "rename-team", "teamId": teamId, "name": name])
+    }
+
+    @discardableResult
+    func teamDelete(teamId: String) async throws -> Bool {
+        try await teamAction(["action": "delete-team", "teamId": teamId])
+    }
+
+    @discardableResult
+    func teamSetDivision(teamId: String, divisionId: String?) async throws -> Bool {
+        // NSNull, bukan nil: `nil as Any` membuat JSONSerialization melempar, jadi "lepas dari
+        // divisi" akan gagal sementara "pindah divisi" berhasil — bentuk kerusakan yang paling
+        // sulit dilihat, karena separuh fiturnya jalan.
+        try await teamAction(["action": "set-team-division", "teamId": teamId,
+                              "divisionId": divisionId ?? NSNull()])
+    }
+
+    @discardableResult
+    func teamSetAttendancePrimary(teamId: String, userId: String, isPrimary: Bool) async throws -> Bool {
+        try await teamAction(["action": "set-attendance-primary", "teamId": teamId,
+                              "userId": userId, "isAttendancePrimary": isPrimary])
+    }
+
+    /// Jam shift khusus tim. Saat dimatikan, jamnya DIKIRIM sebagai null — bukan dibiarkan —
+    /// supaya tidak ada jam yatim yang menunggu untuk hidup lagi kalau ada yang menyalakannya.
+    @discardableResult
+    func teamUpdateShift(teamId: String, enabled: Bool, start: String?, end: String?) async throws -> Bool {
+        try await teamAction(["action": "update-attendance-shift", "teamId": teamId,
+                              "attendanceShiftOverrideEnabled": enabled,
+                              "attendanceShiftStartTime": (enabled ? start : nil) ?? NSNull(),
+                              "attendanceShiftEndTime": (enabled ? end : nil) ?? NSNull()])
+    }
+
+    func teamCreate(name: String) async throws -> Team {
+        var req = makeRequest("/api/teams", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["name": name])
+        return try await run(req, decode: Team.self)
+    }
+
+    func divisions() async throws -> [Division] {
+        try await run(makeRequest("/api/teams?resource=divisions"), decode: [Division].self)
+    }
+
+    func divisionCreate(name: String) async throws -> Division {
+        var req = makeRequest("/api/teams", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["action": "create-division", "name": name])
+        return try await run(req, decode: Division.self)
+    }
+
+    @discardableResult
+    func divisionRename(divisionId: String, name: String) async throws -> Bool {
+        try await teamAction(["action": "update-division", "divisionId": divisionId, "name": name])
+    }
+
+    @discardableResult
+    func divisionDelete(divisionId: String) async throws -> Bool {
+        try await teamAction(["action": "delete-division", "divisionId": divisionId])
+    }
+
     func teams() async throws -> [Team] {
         try await run(makeRequest("/api/teams"), decode: [Team].self)
     }

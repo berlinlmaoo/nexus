@@ -238,10 +238,29 @@ struct AdminUsersSection: View {
         }
         .sheet(item: $addTeamFor) { t in
             NavigationStack {
-                TeamPickSheet(target: t, teams: allTeams.filter { $0.canManage == true && !t.already.contains($0.id) }) { teamId in
-                    addTeamFor = nil
-                    Task { await runTeam { try await APIClient.shared.teamAddMember(teamId: teamId, userId: t.userId) } }
-                }
+                TeamPickSheet(
+                    target: t,
+                    teams: allTeams.filter { $0.canManage == true && !t.already.contains($0.id) },
+                    onPick: { teamId in
+                        addTeamFor = nil
+                        Task { await runTeam { try await APIClient.shared.teamAddMember(teamId: teamId, userId: t.userId) } }
+                    },
+                    onCreate: { name in
+                        addTeamFor = nil
+                        Task {
+                            teamBusy = true
+                            if let team = try? await APIClient.shared.teamCreate(name: name) {
+                                try? await APIClient.shared.teamAddMember(teamId: team.id, userId: t.userId)
+                                // Muat ulang DULU, baru buka layarnya. Tujuan navigasi mencari
+                                // timnya di `allTeams`; membukanya sebelum daftar itu segar akan
+                                // mendorong layar kosong yang tidak pulih sendiri.
+                                await load()
+                                openTeamId = team.id
+                            }
+                            teamBusy = false
+                        }
+                    }
+                )
             }
         }
         // Mengeluarkan orang dari tim MENCABUT akses ke semua project yang ditautkan tim itu
@@ -1120,18 +1139,31 @@ struct TeamPickSheet: View {
     let target: TeamPickTarget
     let teams: [Team]
     var onPick: (String) -> Void
+    /// Tim yang baru dibuat langsung diisi orangnya, lalu pengaturannya dibuka — tim baru selalu
+    /// butuh divisi dan project, dan membuatnya lalu meninggalkannya kosong adalah cara tim hantu
+    /// bermunculan.
+    var onCreate: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
+    @State private var creating = false
 
     private var rows: [Team] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
         return q.isEmpty ? teams : teams.filter { $0.name.lowercased().contains(q) }
     }
 
+    /// Nama untuk tim baru, atau nil kalau yang diketik terlalu pendek atau sudah jadi nama tim.
+    /// Dibandingkan ke SELURUH daftar yang lewat ke sini, bukan ke hasil saringan.
+    private var newTeamName: String? {
+        let n = query.trimmingCharacters(in: .whitespaces)
+        guard n.count > 1, !teams.contains(where: { $0.name.lowercased() == n.lowercased() }) else { return nil }
+        return n
+    }
+
     var body: some View {
         Group {
-            if teams.isEmpty {
+            if teams.isEmpty && query.trimmingCharacters(in: .whitespaces).isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "person.3").font(.system(size: 36)).foregroundStyle(NX.mutedFg)
                     Text(T("Sudah masuk semua tim yang bisa kamu atur."))
@@ -1140,6 +1172,20 @@ struct TeamPickSheet: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity).padding(28)
             } else {
                 List {
+                    // Bikin tim baru dari sini, karena tidak ada halaman Teams lagi yang punya
+                    // tombolnya. Hanya muncul kalau yang diketik belum jadi nama tim mana pun.
+                    if let n = newTeamName {
+                        Section {
+                            Button {
+                                creating = true
+                                onCreate(n)
+                            } label: {
+                                Label("\(T("Bikin tim")) \u{201C}\(n)\u{201D}", systemImage: creating ? "hourglass" : "plus.circle")
+                                    .font(NXFont.text(14, .semibold))
+                            }
+                            .disabled(creating)
+                        }
+                    }
                     ForEach(rows) { t in
                         Button { onPick(t.id) } label: {
                             HStack(spacing: 8) {
