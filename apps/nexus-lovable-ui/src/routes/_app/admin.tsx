@@ -7,11 +7,11 @@ import { type NexusAdminAnnouncement } from "@/lib/nexus-api";
 import { GideonMark } from "@/components/gideon/GideonMark";
 import { PageHeader } from "@/components/PageHeader";
 import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusAdminUser, type GoogleWorkspaceAccount, type NexusUserMemberships, type NexusTeam } from "@/lib/nexus-api";
-// Crew Hub tidak dihapus — dipindahkan. Halaman /teams sekarang mengarahkan ke sini, dan
-// panel yang sama digambar sebagai tab. Isinya bukan hiasan: divisi, lead, jam shift per tim,
-// dan tautan tim->project yang MEMBERI akses project (src/lib/team-sync.ts). Menghapus
-// halamannya berarti membuang satu-satunya cara mengatur semua itu.
-import { TeamsPanel } from "./teams";
+// Crew Hub tidak punya halaman lagi. Pengaturan TIM-nya sendiri — nama, divisi, jam shift,
+// tautan project, hapus — dibuka dari chip tim di baris ORANGNYA, memakai kartu yang sama
+// persis seperti dulu. Tidak ada tim yang jadi tak terjangkau: ke-21 tim punya minimal satu
+// anggota, jadi semuanya bisa diraih dari daftar ini.
+import { TeamCard, DivisionManager } from "./teams";
 import { cn } from "@/lib/utils";
 import { Link } from "@tanstack/react-router";
 
@@ -24,7 +24,7 @@ function initialsOf(name?: string | null) {
 
 function Admin() {
   const qc = useQueryClient();
-  const [view, setView] = useState<"users" | "teams" | "audit" | "quests" | "announcements" | "gideon" | "app">("users");
+  const [view, setView] = useState<"users" | "audit" | "quests" | "announcements" | "gideon" | "app">("users");
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState<"ALL" | "ONE_ABOVE_ALL" | "BOD" | "MANAGER" | "STAFF">("ALL");
   const [dayoffUser, setDayoffUser] = useState<{ id: string; name: string } | null>(null);
@@ -34,6 +34,11 @@ function Admin() {
   // akses ke semua project yang ditautkan ke tim itu (src/lib/team-sync.ts), dan sebuah "x" kecil
   // yang diam-diam mencabut sembilan akses sekaligus bukan tombol yang pantas tanpa pertanyaan.
   const [teamExit, setTeamExit] = useState<{ userId: string; userName: string; teamId: string; teamName: string; losing: string[] } | null>(null);
+  // Tim yang sedang dibuka pengaturannya. Menyimpan ID saja, bukan objeknya: kartu itu
+  // menulis ke tim yang sama, dan salinan basi di state akan menggambar nama lama setelah
+  // di-rename.
+  const [teamSettingsId, setTeamSettingsId] = useState<string | null>(null);
+  const [divisionsOpen, setDivisionsOpen] = useState(false);
   const users = useQuery({ queryKey: ["nexus", "admin-users"], queryFn: () => nexusApi.adminUsersAll(), retry: false });
   // The editable "Role" here is the ORG role (One Above All/BoD/Manager/Staff) — what
   // people mean by "role".
@@ -46,6 +51,11 @@ function Admin() {
   const orgCount = (role: string) => wsMembers.filter((m) => m.role === role).length;
   // Per-person shift (jam masuk/keluar) bisa diatur BoD ke atas, di sini di Members.
   const canManageShift = viewerRole === "BOD" || viewerRole === "ONE_ABOVE_ALL";
+  // Tim boleh diatur Manager ke atas — itu aturan yang dipakai Crew Hub sebelum dibubarkan
+  // (/api/teams: BOD | MANAGER | ONE_ABOVE_ALL). Menyamakannya dengan hak atur shift akan
+  // diam-diam mencabut kemampuan Manager yang selama ini mereka punya. Server tetap memeriksa
+  // ulang per tim lewat `canManage`, jadi ini hanya menentukan apa yang digambar.
+  const canManageTeamsOrg = canManageShift || viewerRole === "MANAGER";
   // Permanent account deletion = BoD / One Above All only (backend also enforces). Plain Managers can't.
   const canDeleteUsers = viewerRole === "BOD" || viewerRole === "ONE_ABOVE_ALL";
   // The same rule the server enforces in isBoD(). A MANAGER shown the compose form only ever gets a
@@ -93,10 +103,16 @@ function Admin() {
 
   // Daftar tim untuk pemilih "+ tim" di tiap baris. Hanya diambil kalau viewer-nya memang
   // boleh mengubah keanggotaan — Staff yang membuka Control Room tidak perlu 21 baris tim.
-  const teamsQ = useQuery({ queryKey: ["nexus", "teams"], queryFn: nexusApi.teams, enabled: canManageShift, staleTime: 5 * 60_000, retry: false });
+  const teamsQ = useQuery({ queryKey: ["nexus", "teams"], queryFn: nexusApi.teams, enabled: canManageTeamsOrg, staleTime: 5 * 60_000, retry: false });
+  // Dipakai kartu pengaturan tim: pilihan divisi, daftar orang yang bisa ditambahkan, dan
+  // daftar project yang bisa ditautkan. Diambil hanya kalau viewer-nya memang bisa mengatur.
+  const divisionsQ = useQuery({ queryKey: ["nexus", "divisions"], queryFn: nexusApi.divisions, enabled: canManageTeamsOrg, staleTime: 5 * 60_000, retry: false });
+  const projectsQ = useQuery({ queryKey: ["nexus", "projects"], queryFn: nexusApi.projects, enabled: canManageTeamsOrg, staleTime: 5 * 60_000, retry: false });
+  const openTeam = (teamsQ.data ?? []).find((t) => t.id === teamSettingsId) ?? null;
   const refreshMemberships = () => {
     qc.invalidateQueries({ queryKey: ["nexus", "admin-user-memberships"] });
     qc.invalidateQueries({ queryKey: ["nexus", "teams"] });
+    qc.invalidateQueries({ queryKey: ["nexus", "divisions"] });
   };
   const addToTeam = useMutation({
     mutationFn: ({ teamId, userId }: { teamId: string; userId: string }) => nexusApi.addTeamMember(teamId, userId),
@@ -126,7 +142,6 @@ function Admin() {
       <div className="p-4 md:p-8 space-y-5">
         <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-0.5 w-fit">
           <button onClick={() => setView("users")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "users" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><UsersIcon className="h-3.5 w-3.5" /> Users</button>
-          <button onClick={() => setView("teams")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "teams" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><FolderKanban className="h-3.5 w-3.5" /> Tim &amp; divisi</button>
           <button onClick={() => setView("audit")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "audit" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><ScrollText className="h-3.5 w-3.5" /> Audit log</button>
           <button onClick={() => setView("quests")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "quests" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Trophy className="h-3.5 w-3.5" /> Quests</button>
           {canAnnounce && <button onClick={() => setView("announcements")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "announcements" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Megaphone className="h-3.5 w-3.5" /> Announcements</button>}
@@ -134,7 +149,6 @@ function Admin() {
           {canAnnounce && <button onClick={() => setView("app")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "app" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Smartphone className="h-3.5 w-3.5" /> Aplikasi</button>}
         </div>
 
-        {view === "teams" && <TeamsPanel embedded />}
         {view === "audit" && <AuditLog />}
         {view === "quests" && <AdminQuests />}
         {view === "announcements" && canAnnounce && <AnnouncementsAdmin />}
@@ -191,7 +205,7 @@ function Admin() {
                 <tbody>
                   {rows.map((u) => {
                     const info = orgInfoByUser.get(u.id);
-                    return <UserRow key={u.id} user={u} orgInfo={info} assignable={viewerAssignable} canEdit={!!info && canEditTier(viewerRole, info.role)} pending={updateOrg.isPending} onOrgRole={(role) => info && updateOrg.mutate({ memberId: info.memberId, role })} canManageShift={canManageShift} shiftPending={updateShift.isPending} onSaveShift={(start, end) => info && updateShift.mutate({ memberId: info.memberId, start, end })} shiftByDayPending={updateShiftByDay.isPending} onSaveShiftByDay={(byDay) => info && updateShiftByDay.mutate({ memberId: info.memberId, byDay })} flexiPending={updateFlexi.isPending} onToggleFlexi={() => info && updateFlexi.mutate({ memberId: info.memberId, flexi: !info.flexi })} geofencePending={updateGeofence.isPending} onToggleGeofence={() => info && updateGeofence.mutate({ memberId: info.memberId, on: !info.noGeofence })} onDayoff={() => setDayoffUser({ id: u.id, name: u.name || u.email || "User" })} canDelete={canDeleteUsers} isMember={!!info} onDelete={() => setDelUser({ id: u.id, name: u.name || "Unnamed", email: u.email ?? "" })} gwConfigured={gwAccounts.data?.configured ?? false} gwAccounts={gwAccounts.data?.accounts ?? []} gwDomains={gwAccounts.data?.domains ?? []} canLinkGoogle={canDeleteUsers} memberships={memberships.data?.byUser[u.id]} membershipsLoading={memberships.isLoading} allTeams={teamsQ.data ?? []} canManageTeams={canManageShift} teamPending={addToTeam.isPending || removeFromTeam.isPending || setTeamLead.isPending} onTeamAdd={(teamId) => addToTeam.mutate({ teamId, userId: u.id })} onTeamLead={(teamId, isLead) => setTeamLead.mutate({ teamId, userId: u.id, isLead })} onTeamExit={(team, losing) => setTeamExit({ userId: u.id, userName: u.name || u.email || "User", teamId: team.id, teamName: team.name, losing })} />;
+                    return <UserRow key={u.id} user={u} orgInfo={info} assignable={viewerAssignable} canEdit={!!info && canEditTier(viewerRole, info.role)} pending={updateOrg.isPending} onOrgRole={(role) => info && updateOrg.mutate({ memberId: info.memberId, role })} canManageShift={canManageShift} shiftPending={updateShift.isPending} onSaveShift={(start, end) => info && updateShift.mutate({ memberId: info.memberId, start, end })} shiftByDayPending={updateShiftByDay.isPending} onSaveShiftByDay={(byDay) => info && updateShiftByDay.mutate({ memberId: info.memberId, byDay })} flexiPending={updateFlexi.isPending} onToggleFlexi={() => info && updateFlexi.mutate({ memberId: info.memberId, flexi: !info.flexi })} geofencePending={updateGeofence.isPending} onToggleGeofence={() => info && updateGeofence.mutate({ memberId: info.memberId, on: !info.noGeofence })} onDayoff={() => setDayoffUser({ id: u.id, name: u.name || u.email || "User" })} canDelete={canDeleteUsers} isMember={!!info} onDelete={() => setDelUser({ id: u.id, name: u.name || "Unnamed", email: u.email ?? "" })} gwConfigured={gwAccounts.data?.configured ?? false} gwAccounts={gwAccounts.data?.accounts ?? []} gwDomains={gwAccounts.data?.domains ?? []} canLinkGoogle={canDeleteUsers} memberships={memberships.data?.byUser[u.id]} membershipsLoading={memberships.isLoading} allTeams={teamsQ.data ?? []} canManageTeams={canManageTeamsOrg} teamPending={addToTeam.isPending || removeFromTeam.isPending || setTeamLead.isPending} onTeamAdd={(teamId) => addToTeam.mutate({ teamId, userId: u.id })} onTeamLead={(teamId, isLead) => setTeamLead.mutate({ teamId, userId: u.id, isLead })} onTeamOpen={(teamId) => setTeamSettingsId(teamId)} onTeamCreated={(teamId) => { refreshMemberships(); setTeamSettingsId(teamId); }} onTeamExit={(team, losing) => setTeamExit({ userId: u.id, userName: u.name || u.email || "User", teamId: team.id, teamName: team.name, losing })} />;
                   })}
                 </tbody>
               </table>
@@ -203,6 +217,38 @@ function Admin() {
       {dayoffUser && <DayoffModal user={dayoffUser} canEdit={canManageShift} onClose={() => setDayoffUser(null)} />}
       {delUser && <DeleteUserModal user={delUser} onClose={() => setDelUser(null)} />}
       {redDateOpen && <RedDateQuotaModal onClose={() => setRedDateOpen(false)} />}
+      {teamSettingsId && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 p-4" onClick={() => { setTeamSettingsId(null); setDivisionsOpen(false); }}>
+          <div className="mx-auto my-8 w-full max-w-lg space-y-3" onClick={(e) => e.stopPropagation()}>
+            {openTeam ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setDivisionsOpen((v) => !v)} className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow-soft transition hover:bg-accent">
+                    <FolderKanban className="h-3.5 w-3.5" /> Kelola divisi
+                  </button>
+                  <button onClick={() => { setTeamSettingsId(null); setDivisionsOpen(false); }} className="ml-auto rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow-soft transition hover:bg-accent">Tutup</button>
+                </div>
+                {divisionsOpen && <DivisionManager divisions={divisionsQ.data ?? []} teams={teamsQ.data ?? []} />}
+                <TeamCard
+                  team={openTeam}
+                  canManage
+                  divisions={divisionsQ.data ?? []}
+                  allMembers={wsMembers.map((m) => ({ userId: m.userId, name: m.name }))}
+                  allProjects={projectsQ.data ?? []}
+                  onChange={refreshMemberships}
+                />
+              </>
+            ) : (
+              // Tim yang baru saja dihapus dari dalam kartunya sendiri: daftarnya sudah dimuat
+              // ulang dan barisnya hilang. Menutup sendiri lebih baik daripada kotak kosong.
+              <div className="rounded-2xl border border-border bg-card p-6 text-center text-sm text-muted-foreground shadow-soft">
+                Tim ini sudah tidak ada.
+                <button onClick={() => setTeamSettingsId(null)} className="ml-2 font-semibold text-primary hover:underline">Tutup</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {teamExit && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={() => setTeamExit(null)}>
           <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-soft" onClick={(e) => e.stopPropagation()}>
@@ -463,7 +509,7 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
     </span>
   );
 }
-function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canManageShift, shiftPending, onSaveShift, shiftByDayPending, onSaveShiftByDay, flexiPending, onToggleFlexi, geofencePending, onToggleGeofence, onDayoff, canDelete, isMember, onDelete, gwConfigured, gwAccounts, gwDomains, canLinkGoogle, memberships, membershipsLoading, allTeams, canManageTeams, teamPending, onTeamAdd, onTeamLead, onTeamExit }: { memberships?: NexusUserMemberships; membershipsLoading: boolean; allTeams: NexusTeam[]; canManageTeams: boolean; teamPending: boolean; onTeamAdd: (teamId: string) => void; onTeamLead: (teamId: string, isLead: boolean) => void; onTeamExit: (team: { id: string; name: string }, losing: string[]) => void; gwConfigured: boolean; gwAccounts: GoogleWorkspaceAccount[]; gwDomains: string[]; canLinkGoogle: boolean; user: NexusAdminUser; orgInfo?: { memberId: string; role: string; shiftStart: string | null; shiftEnd: string | null; shiftByDay: Record<string, { start: string; end: string }> | null; flexi: boolean; noGeofence: boolean }; assignable: OrgRole[]; canEdit: boolean; onOrgRole: (role: string) => void; pending: boolean; canManageShift: boolean; shiftPending: boolean; onSaveShift: (start: string | null, end: string | null) => void; shiftByDayPending: boolean; onSaveShiftByDay: (byDay: Record<string, { start: string; end: string }>) => void; flexiPending: boolean; onToggleFlexi: () => void; geofencePending: boolean; onToggleGeofence: () => void; onDayoff: () => void; canDelete: boolean; isMember: boolean; onDelete: () => void }) {
+function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canManageShift, shiftPending, onSaveShift, shiftByDayPending, onSaveShiftByDay, flexiPending, onToggleFlexi, geofencePending, onToggleGeofence, onDayoff, canDelete, isMember, onDelete, gwConfigured, gwAccounts, gwDomains, canLinkGoogle, memberships, membershipsLoading, allTeams, canManageTeams, teamPending, onTeamAdd, onTeamOpen, onTeamCreated, onTeamLead, onTeamExit }: { memberships?: NexusUserMemberships; membershipsLoading: boolean; allTeams: NexusTeam[]; canManageTeams: boolean; teamPending: boolean; onTeamAdd: (teamId: string) => void; onTeamOpen: (teamId: string) => void; onTeamCreated: (teamId: string) => void; onTeamLead: (teamId: string, isLead: boolean) => void; onTeamExit: (team: { id: string; name: string }, losing: string[]) => void; gwConfigured: boolean; gwAccounts: GoogleWorkspaceAccount[]; gwDomains: string[]; canLinkGoogle: boolean; user: NexusAdminUser; orgInfo?: { memberId: string; role: string; shiftStart: string | null; shiftEnd: string | null; shiftByDay: Record<string, { start: string; end: string }> | null; flexi: boolean; noGeofence: boolean }; assignable: OrgRole[]; canEdit: boolean; onOrgRole: (role: string) => void; pending: boolean; canManageShift: boolean; shiftPending: boolean; onSaveShift: (start: string | null, end: string | null) => void; shiftByDayPending: boolean; onSaveShiftByDay: (byDay: Record<string, { start: string; end: string }>) => void; flexiPending: boolean; onToggleFlexi: () => void; geofencePending: boolean; onToggleGeofence: () => void; onDayoff: () => void; canDelete: boolean; isMember: boolean; onDelete: () => void }) {
   const [expanded, setExpanded] = useState(false);
   // Terpisah dari `expanded` (shift per hari): dua baris perluasan yang berbeda, dan membuka
   // salah satunya tidak boleh menutup yang lain.
@@ -588,7 +634,12 @@ function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canMa
                     return (
                       <span key={tm.id} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 py-1 pl-2 pr-1 text-[11px] font-semibold text-foreground">
                         <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: tm.color ?? "#7B2FBE" }} />
-                        {tm.name}
+                        {/* Nama tim = pintu ke pengaturan tim itu. Di sinilah nama, divisi, jam
+                            shift, tautan project dan tombol hapusnya sekarang tinggal — satu-satunya
+                            tempat, sejak halaman Crew Hub dibubarkan. */}
+                        {canManageTeams ? (
+                          <button type="button" onClick={() => onTeamOpen(tm.id)} title="Atur tim ini (nama, divisi, jam shift, project)" className="font-semibold underline-offset-2 transition hover:text-primary hover:underline">{tm.name}</button>
+                        ) : tm.name}
                         {tm.division && <span className="font-normal text-muted-foreground">· {tm.division}</span>}
                         {canManageTeams ? (
                           <>
@@ -605,10 +656,10 @@ function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canMa
                       </span>
                     );
                   })}
-                  {canManageTeams && <TeamAddPicker teams={allTeams} already={new Set((memberships?.teams ?? []).map((t) => t.id))} pending={teamPending} onPick={onTeamAdd} />}
+                  {canManageTeams && <TeamAddPicker teams={allTeams} already={new Set((memberships?.teams ?? []).map((t) => t.id))} pending={teamPending} onPick={onTeamAdd} onCreated={onTeamCreated} />}
                 </div>
                 {canManageTeams && (
-                  <div className="mt-2 text-[11px] text-muted-foreground/70">Masuk tim = otomatis dapat akses ke project yang ditautkan tim itu.</div>
+                  <div className="mt-2 text-[11px] text-muted-foreground/70">Masuk tim = otomatis dapat akses ke project yang ditautkan tim itu. Klik nama tim buat ngatur timnya.</div>
                 )}
               </div>
             </div>
@@ -641,9 +692,13 @@ function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canMa
  * 21 tim dengan nama yang mirip-mirip ("BOD AGENZ", "BD AGENZ"), dan memilih dari daftar gulung
  * tanpa pencarian adalah cara paling gampang memasukkan orang ke tim yang salah.
  */
-function TeamAddPicker({ teams, already, pending, onPick }: { teams: NexusTeam[]; already: Set<string>; pending: boolean; onPick: (teamId: string) => void }) {
+function TeamAddPicker({ teams, already, pending, onPick, onCreated }: { teams: NexusTeam[]; already: Set<string>; pending: boolean; onPick: (teamId: string) => void; onCreated: (teamId: string) => void }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
+  // Bikin tim baru dari sini, karena tidak ada halaman Teams lagi yang punya tombolnya.
+  // Langsung dibuka pengaturannya setelah jadi: tim baru selalu butuh divisi dan project,
+  // dan membuatnya lalu meninggalkannya kosong adalah cara tim hantu bermunculan.
+  const create = useMutation({ mutationFn: (name: string) => nexusApi.createTeam(name), onSuccess: (t) => { setOpen(false); setQ(""); onCreated(t.id); } });
   const options = teams
     .filter((t) => !already.has(t.id))
     .filter((t) => !q.trim() || t.name.toLowerCase().includes(q.toLowerCase()) || (t.division?.name ?? "").toLowerCase().includes(q.toLowerCase()));
@@ -661,7 +716,12 @@ function TeamAddPicker({ teams, already, pending, onPick }: { teams: NexusTeam[]
         <button type="button" onClick={() => { setOpen(false); setQ(""); }} className="text-xs font-semibold text-muted-foreground hover:text-foreground">Tutup</button>
       </div>
       <div className="max-h-44 space-y-0.5 overflow-y-auto">
-        {options.length === 0 && <div className="px-1 py-2 text-[11px] text-muted-foreground/70">{teams.length === 0 ? "Belum ada tim." : "Sudah masuk semua tim yang cocok."}</div>}
+        {options.length === 0 && <div className="px-1 py-2 text-[11px] text-muted-foreground/70">{teams.length === 0 ? "Belum ada tim." : "Nggak ada yang cocok."}</div>}
+        {q.trim().length > 1 && !teams.some((t) => t.name.toLowerCase() === q.trim().toLowerCase()) && (
+          <button type="button" disabled={create.isPending} onClick={() => create.mutate(q.trim())} className="mt-0.5 flex w-full items-center gap-1.5 rounded-md border border-dashed border-border px-1.5 py-1.5 text-left text-[11px] font-semibold text-muted-foreground transition hover:border-primary hover:text-primary disabled:opacity-50">
+            {create.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} Bikin tim &ldquo;{q.trim()}&rdquo;
+          </button>
+        )}
         {options.map((t) => (
           <button key={t.id} type="button" disabled={pending} onClick={() => { onPick(t.id); setOpen(false); setQ(""); }} className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[11px] font-semibold transition hover:bg-accent disabled:opacity-50">
             <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: t.color ?? "#7B2FBE" }} />
