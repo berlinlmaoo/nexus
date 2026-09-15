@@ -33,6 +33,20 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
 
+  // Chunk rute yang sudah tidak ada di server (index.html lama setelah deploy): satu-satunya obat
+  // adalah reload penuh, jadi lakukan sendiri — sekali. Penjaga di sessionStorage mencegah
+  // lingkaran reload kalau ternyata penyebabnya bukan itu.
+  const chunkError = /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|ChunkLoadError|Loading chunk/i.test(error?.message ?? "");
+  if (chunkError && typeof window !== "undefined") {
+    const key = "nexus:chunk-reload";
+    if (sessionStorage.getItem(key) !== "1") {
+      sessionStorage.setItem(key, "1");
+      window.location.reload();
+      return null;
+    }
+  }
+  if (typeof window !== "undefined" && !chunkError) sessionStorage.removeItem("nexus:chunk-reload");
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
@@ -42,6 +56,11 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
         <p className="mt-2 text-sm text-muted-foreground">
           Something went wrong on our end. You can try refreshing or head back home.
         </p>
+        {/* Pesan errornya ditampilkan apa adanya: tanpa ini, satu-satunya cara tahu penyebabnya
+            adalah membuka DevTools — dan yang melihat layar ini biasanya bukan orang yang membukanya. */}
+        {error?.message && (
+          <pre className="mt-3 max-h-32 overflow-auto rounded-md border border-border bg-muted/40 px-3 py-2 text-left text-[11px] leading-snug text-muted-foreground">{error.message}</pre>
+        )}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
