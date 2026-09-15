@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { getAdminSessionContext } from "@/lib/admin-access"
-import { directoryConfigured, listDirectoryAccounts } from "@/lib/google-directory"
+import { directoryConfigured, listDirectoryAccounts, domainsFrom } from "@/lib/google-directory"
 
 // GET /api/admin/google-workspace/accounts
 //
@@ -46,6 +46,9 @@ export async function GET() {
 
     return NextResponse.json({
       configured: true,
+      // Domain yang bisa dipilih saat membuat akun baru. Diturunkan dari akun yang ada, bukan
+      // dari domains.list — endpoint itu butuh scope yang tidak didelegasikan.
+      domains: domainsFrom(accounts),
       accounts: accounts.map((a) => ({ ...a, linkedTo: byEmail.get(a.email.toLowerCase()) ?? null })),
     })
   } catch (error) {

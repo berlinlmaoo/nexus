@@ -151,7 +151,7 @@ function Admin() {
                 <tbody>
                   {rows.map((u) => {
                     const info = orgInfoByUser.get(u.id);
-                    return <UserRow key={u.id} user={u} orgInfo={info} assignable={viewerAssignable} canEdit={!!info && canEditTier(viewerRole, info.role)} pending={updateOrg.isPending} onOrgRole={(role) => info && updateOrg.mutate({ memberId: info.memberId, role })} canManageShift={canManageShift} shiftPending={updateShift.isPending} onSaveShift={(start, end) => info && updateShift.mutate({ memberId: info.memberId, start, end })} shiftByDayPending={updateShiftByDay.isPending} onSaveShiftByDay={(byDay) => info && updateShiftByDay.mutate({ memberId: info.memberId, byDay })} flexiPending={updateFlexi.isPending} onToggleFlexi={() => info && updateFlexi.mutate({ memberId: info.memberId, flexi: !info.flexi })} geofencePending={updateGeofence.isPending} onToggleGeofence={() => info && updateGeofence.mutate({ memberId: info.memberId, on: !info.noGeofence })} onDayoff={() => setDayoffUser({ id: u.id, name: u.name || u.email || "User" })} canDelete={canDeleteUsers} isMember={!!info} onDelete={() => setDelUser({ id: u.id, name: u.name || "Unnamed", email: u.email ?? "" })} gwConfigured={gwAccounts.data?.configured ?? false} gwAccounts={gwAccounts.data?.accounts ?? []} canLinkGoogle={canDeleteUsers} />;
+                    return <UserRow key={u.id} user={u} orgInfo={info} assignable={viewerAssignable} canEdit={!!info && canEditTier(viewerRole, info.role)} pending={updateOrg.isPending} onOrgRole={(role) => info && updateOrg.mutate({ memberId: info.memberId, role })} canManageShift={canManageShift} shiftPending={updateShift.isPending} onSaveShift={(start, end) => info && updateShift.mutate({ memberId: info.memberId, start, end })} shiftByDayPending={updateShiftByDay.isPending} onSaveShiftByDay={(byDay) => info && updateShiftByDay.mutate({ memberId: info.memberId, byDay })} flexiPending={updateFlexi.isPending} onToggleFlexi={() => info && updateFlexi.mutate({ memberId: info.memberId, flexi: !info.flexi })} geofencePending={updateGeofence.isPending} onToggleGeofence={() => info && updateGeofence.mutate({ memberId: info.memberId, on: !info.noGeofence })} onDayoff={() => setDayoffUser({ id: u.id, name: u.name || u.email || "User" })} canDelete={canDeleteUsers} isMember={!!info} onDelete={() => setDelUser({ id: u.id, name: u.name || "Unnamed", email: u.email ?? "" })} gwConfigured={gwAccounts.data?.configured ?? false} gwAccounts={gwAccounts.data?.accounts ?? []} gwDomains={gwAccounts.data?.domains ?? []} canLinkGoogle={canDeleteUsers} />;
                   })}
                 </tbody>
               </table>
@@ -224,11 +224,33 @@ const WEEKDAYS: Array<[string, string]> = [["1", "Mon"], ["2", "Tue"], ["3", "We
  * Tidak semua orang di NEXUS punya email kantor, jadi keadaan "belum ditautkan" adalah
  * keadaan yang normal dan harus terlihat tenang, bukan seperti sesuatu yang kurang.
  */
-function GoogleLinkCell({ user, accounts, configured, canEdit }: { user: NexusAdminUser; accounts: GoogleWorkspaceAccount[]; configured: boolean; canEdit: boolean }) {
+function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user: NexusAdminUser; accounts: GoogleWorkspaceAccount[]; domains: string[]; configured: boolean; canEdit: boolean }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [making, setMaking] = useState(false);
+  const [madePassword, setMadePassword] = useState<{ email: string; password: string } | null>(null);
   const current = user.googleWorkspaceEmail ?? null;
+
+  const parts = (user.name ?? "").trim().split(/\s+/).filter(Boolean);
+  const [givenName, setGivenName] = useState(parts[0] ?? "");
+  const [familyName, setFamilyName] = useState(parts.slice(1).join(" ") || "-");
+  const [localPart, setLocalPart] = useState((parts[0] ?? "").toLowerCase().replace(/[^a-z0-9._-]/g, ""));
+  const [domain, setDomain] = useState(domains[0] ?? "");
+
+  const create = useMutation({
+    mutationFn: () => nexusApi.createGoogleWorkspaceAccount({ userId: user.id, localPart, domain, givenName, familyName }),
+    onSuccess: (r) => {
+      setProblem(r.linked ? null : (r.error ?? null));
+      // Sandi sementara ditampilkan SEKALI dan tidak disimpan di mana pun. Panel ini menutup
+      // sendiri hanya kalau disuruh — jangan tutup otomatis, karena sandinya hilang bersamanya.
+      setMadePassword({ email: r.account.email, password: r.account.temporaryPassword });
+      setMaking(false);
+      qc.invalidateQueries({ queryKey: ["nexus", "admin-users"] });
+      qc.invalidateQueries({ queryKey: ["nexus", "google-workspace-accounts"] });
+    },
+    onError: (e: unknown) => setProblem(e instanceof ApiError ? e.message : "Gagal membuat akun"),
+  });
 
   const link = useMutation({
     mutationFn: (email: string | null) => nexusApi.linkGoogleWorkspace(user.id, email),
@@ -244,6 +266,52 @@ function GoogleLinkCell({ user, accounts, configured, canEdit }: { user: NexusAd
   });
 
   if (!configured) return null;
+
+  // Sandi sementara: satu-satunya kesempatan melihatnya. Ditaruh di atas segalanya supaya
+  // tidak tertutup interaksi berikutnya, dan hanya hilang saat ditutup dengan sengaja.
+  if (madePassword) {
+    return (
+      <span className="inline-flex max-w-[280px] flex-col gap-1 rounded-md border border-emerald-300 bg-emerald-50 p-2 text-[11px] text-emerald-900">
+        <span className="font-semibold">{madePassword.email} dibuat</span>
+        <span>Sandi sementara — salin sekarang, tidak bisa dilihat lagi:</span>
+        <code className="select-all rounded bg-white px-1.5 py-1 font-mono text-[11px] tracking-tight">{madePassword.password}</code>
+        <span className="text-emerald-700">Dia wajib menggantinya saat login pertama.</span>
+        {problem && <span className="text-destructive">{problem}</span>}
+        <button type="button" onClick={() => { setMadePassword(null); setOpen(false); }} className="self-start rounded border border-emerald-300 px-1.5 py-0.5 font-semibold hover:bg-emerald-100">
+          Sudah disalin
+        </button>
+      </span>
+    );
+  }
+
+  if (making) {
+    return (
+      <span className="inline-flex max-w-[300px] flex-col gap-1.5 rounded-md border border-border bg-background p-2 text-[11px]">
+        <span className="font-semibold">Buat email kantor untuk {user.name || "orang ini"}</span>
+        <span className="flex gap-1">
+          <input value={givenName} onChange={(e) => setGivenName(e.target.value)} placeholder="Nama depan" className="w-1/2 rounded border border-border px-1.5 py-1" />
+          <input value={familyName} onChange={(e) => setFamilyName(e.target.value)} placeholder="Nama belakang" className="w-1/2 rounded border border-border px-1.5 py-1" />
+        </span>
+        <span className="flex items-center gap-1">
+          <input value={localPart} onChange={(e) => setLocalPart(e.target.value)} placeholder="nama.alamat" className="min-w-0 flex-1 rounded border border-border px-1.5 py-1" />
+          <span className="text-muted-foreground">@</span>
+          <select value={domain} onChange={(e) => setDomain(e.target.value)} className="rounded border border-border px-1 py-1">
+            {domains.map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+        </span>
+        <span className="text-muted-foreground">
+          Akun baru mengisi satu seat lisensi Workspace.
+        </span>
+        {problem && <span className="text-destructive">{problem}</span>}
+        <span className="flex gap-1">
+          <button type="button" disabled={create.isPending || !localPart || !domain || !givenName || !familyName} onClick={() => { setProblem(null); create.mutate(); }} className="rounded bg-primary px-2 py-1 font-semibold text-primary-foreground disabled:opacity-50">
+            {create.isPending ? "Membuat…" : "Buat & tautkan"}
+          </button>
+          <button type="button" onClick={() => { setMaking(false); setProblem(null); }} className="rounded border border-border px-2 py-1">Batal</button>
+        </span>
+      </span>
+    );
+  }
 
   if (!open) {
     return (
@@ -274,6 +342,12 @@ function GoogleLinkCell({ user, accounts, configured, canEdit }: { user: NexusAd
           className="max-w-[230px] rounded-md border border-border bg-background px-1.5 py-1 text-[11px]"
         >
           <option value="">— tidak ditautkan —</option>
+          {/* Akun yang baru dibuat BELUM tentu ada di daftar: Google menerbitkan user secara
+              asinkron dan pembacaan tepat setelah insert bisa menjawab 404 (terbukti saat uji).
+              Tanpa opsi bayangan ini, pemilih tampil kosong padahal tautannya benar. */}
+          {current && !accounts.some((a) => a.email === current) && (
+            <option value={current}>{current} (baru dibuat)</option>
+          )}
           {accounts.map((a) => {
             // Akun yang sudah dipakai profil LAIN tidak bisa dipilih. Indeks unik akan menolaknya
             // juga, tapi ditolak setelah memilih terasa seperti kesalahan pemakai; di sini
@@ -301,12 +375,17 @@ function GoogleLinkCell({ user, accounts, configured, canEdit }: { user: NexusAd
             <Link2Off className="h-3.5 w-3.5" />
           </button>
         )}
+        {!current && !link.isPending && domains.length > 0 && (
+          <button type="button" onClick={() => { setProblem(null); setMaking(true); }} title="Buat email kantor baru" className="rounded-md p-1 text-muted-foreground hover:bg-accent">
+            <Link2 className="h-3.5 w-3.5" />
+          </button>
+        )}
       </span>
       {problem && <span className="max-w-[230px] text-[10px] leading-snug text-destructive">{problem}</span>}
     </span>
   );
 }
-function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canManageShift, shiftPending, onSaveShift, shiftByDayPending, onSaveShiftByDay, flexiPending, onToggleFlexi, geofencePending, onToggleGeofence, onDayoff, canDelete, isMember, onDelete, gwConfigured, gwAccounts, canLinkGoogle }: { gwConfigured: boolean; gwAccounts: GoogleWorkspaceAccount[]; canLinkGoogle: boolean; user: NexusAdminUser; orgInfo?: { memberId: string; role: string; shiftStart: string | null; shiftEnd: string | null; shiftByDay: Record<string, { start: string; end: string }> | null; flexi: boolean; noGeofence: boolean }; assignable: OrgRole[]; canEdit: boolean; onOrgRole: (role: string) => void; pending: boolean; canManageShift: boolean; shiftPending: boolean; onSaveShift: (start: string | null, end: string | null) => void; shiftByDayPending: boolean; onSaveShiftByDay: (byDay: Record<string, { start: string; end: string }>) => void; flexiPending: boolean; onToggleFlexi: () => void; geofencePending: boolean; onToggleGeofence: () => void; onDayoff: () => void; canDelete: boolean; isMember: boolean; onDelete: () => void }) {
+function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canManageShift, shiftPending, onSaveShift, shiftByDayPending, onSaveShiftByDay, flexiPending, onToggleFlexi, geofencePending, onToggleGeofence, onDayoff, canDelete, isMember, onDelete, gwConfigured, gwAccounts, gwDomains, canLinkGoogle }: { gwConfigured: boolean; gwAccounts: GoogleWorkspaceAccount[]; gwDomains: string[]; canLinkGoogle: boolean; user: NexusAdminUser; orgInfo?: { memberId: string; role: string; shiftStart: string | null; shiftEnd: string | null; shiftByDay: Record<string, { start: string; end: string }> | null; flexi: boolean; noGeofence: boolean }; assignable: OrgRole[]; canEdit: boolean; onOrgRole: (role: string) => void; pending: boolean; canManageShift: boolean; shiftPending: boolean; onSaveShift: (start: string | null, end: string | null) => void; shiftByDayPending: boolean; onSaveShiftByDay: (byDay: Record<string, { start: string; end: string }>) => void; flexiPending: boolean; onToggleFlexi: () => void; geofencePending: boolean; onToggleGeofence: () => void; onDayoff: () => void; canDelete: boolean; isMember: boolean; onDelete: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const byDay = orgInfo?.shiftByDay ?? {};
   const overrideCount = Object.keys(byDay).length;
@@ -353,7 +432,7 @@ function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canMa
                   <Smartphone className="h-3.5 w-3.5" /> Mobile
                 </button>
               )}
-              <GoogleLinkCell user={user} accounts={gwAccounts} configured={gwConfigured} canEdit={canLinkGoogle} />
+              <GoogleLinkCell user={user} accounts={gwAccounts} domains={gwDomains} configured={gwConfigured} canEdit={canLinkGoogle} />
             </div>
           )}
         </td>
