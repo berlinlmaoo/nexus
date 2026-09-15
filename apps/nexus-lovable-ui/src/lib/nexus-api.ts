@@ -2063,6 +2063,15 @@ export const nexusApi = {
     return apiFetch<{ user: NexusUser; url: string }>("/api/upload/avatar", { method: "POST", body: fd });
   },
   deleteAvatar: () => apiFetch<{ ok?: boolean; success?: boolean }>("/api/upload/avatar", { method: "DELETE" }),
+  /** Foto profil orang LAIN, oleh BoD, lewat keanggotaan workspace-nya. Field multipart "file". */
+  uploadMemberAvatar: (memberId: string, file: File) => {
+    const fd = new FormData();
+    fd.set("file", file);
+    return apiFetch<{ member?: { avatar?: string | null } }>(`/api/workspaces/members/${encodeURIComponent(memberId)}/avatar`, { method: "POST", body: fd });
+  },
+  /** Identitas akun orang lain — nama, email login, sandi baru. BoD ke atas; server menolak sisanya. */
+  updateAdminAccount: (userId: string, body: { name?: string; email?: string; password?: string }) =>
+    apiFetch<{ user?: NexusAdminUser }>(`/api/admin/users/${userId}`, { method: "PATCH", body: JSON.stringify(body) }),
   uploadProjectIcon: (projectId: string, file: File) => {
     const fd = new FormData();
     fd.set("file", file); fd.set("projectId", projectId);

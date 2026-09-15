@@ -56,8 +56,10 @@ export async function POST(
       return NextResponse.json({ error: "No workspace found" }, { status: 404 })
     }
 
-    if (currentMember.role !== "BOD" && currentMember.role !== "MANAGER" && currentMember.role !== "ONE_ABOVE_ALL") {
-      return NextResponse.json({ error: "Only owners and admins can edit operatives" }, { status: 403 })
+    // Mengganti foto orang lain = mengubah identitasnya. BoD ke atas saja, sama seperti nama,
+    // email, dan sandi di /api/admin/users/[userId].
+    if (currentMember.role !== "BOD" && currentMember.role !== "ONE_ABOVE_ALL") {
+      return NextResponse.json({ error: "Hanya BoD ke atas yang bisa mengganti foto profil orang lain." }, { status: 403 })
     }
 
     const formData = await request.formData()
