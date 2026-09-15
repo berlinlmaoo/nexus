@@ -16,6 +16,20 @@ model User {
   /// lost device must not become a lost account.
   passkeys       Passkey[]
   avatar         String?
+
+  /// Akun Google Workspace milik orang ini, ditautkan MANUAL oleh BoD dari profilnya.
+  ///
+  /// Tidak dicocokkan otomatis dengan sengaja. Pencocokan by nama terlihat mudah dan salah
+  /// sesekali, dan kesalahannya baru ketahuan setelah surat rahasia sampai ke orang keliru.
+  ///
+  /// Namanya `googleWorkspaceEmail`, bukan `workspaceEmail`: NEXUS punya model `Workspace`
+  /// sendiri, jadi nama pendek itu terbaca sebagai "email tenant-nya".
+  ///
+  /// Unik SEBAGIAN (hanya baris non-null) lewat indeks di database — satu mailbox tidak boleh
+  /// diklaim dua profil. Prisma tidak bisa menyatakan indeks parsial, jadi @unique TIDAK
+  /// dipakai di sini; kalau ditulis, `prisma db push` akan mencoba menggantinya dengan indeks
+  /// unik penuh dan menolak setiap baris kedua yang NULL.
+  googleWorkspaceEmail String?
   phoneNumber    String?
   whatsappId       String?         @unique // verified WhatsApp identity (LID/JID) for the Gideon WA bot
   waLinkCode       String?         // short-lived code to link WhatsApp (self-service)
