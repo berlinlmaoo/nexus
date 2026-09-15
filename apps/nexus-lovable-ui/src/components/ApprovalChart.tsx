@@ -63,7 +63,6 @@ export function ApprovalChart() {
   const roots = people.filter((p) => !p.approverId).sort((a, b) => tier(a.role) - tier(b.role) || label(a).localeCompare(label(b), "id"));
   const isSenior = (p: ApprovalChartPerson) => p.role === "BOD" || p.role === "ONE_ABOVE_ALL";
   const hasKids = (p: ApprovalChartPerson) => (children.get(p.userId)?.length ?? 0) > 0;
-  const board = roots.filter((p) => isSenior(p) && !hasKids(p));
   const trees = roots.filter(hasKids);
   const alone = roots.filter((p) => !isSenior(p) && !hasKids(p));
   const unplacedCount = roots.filter((p) => !isSenior(p)).length; // pohon tanpa atasan ikut dihitung
@@ -268,21 +267,11 @@ export function ApprovalChart() {
             style={{ touchAction: "none" }}
           >
             <div ref={innerRef} className="absolute left-0 top-0 w-max" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.s})`, transformOrigin: "0 0" }}>
-              <div className="oc-node">
-                <div className="rounded-xl bg-[#1e3a5f] px-5 py-3 text-center text-white shadow-[0_2px_0_rgba(0,0,0,.2)]">
-                  <div className="text-[13px] font-bold">Board of Directors</div>
-                  <div className="text-[10.5px] opacity-75">request tanpa atasan masuk ke semua BoD</div>
-                  {board.length > 0 && (
-                    <div className="mt-2 flex flex-wrap justify-center gap-1.5">
-                      {board.map((p) => <PersonCard key={p.userId} {...cardProps(p)} compact />)}
-                    </div>
-                  )}
-                </div>
-                {trees.length > 0 && (
-                  <div className="oc-kids">
-                    {trees.map((p) => <div key={p.userId} className="oc-kid"><Node p={p} /></div>)}
-                  </div>
-                )}
+              {/* Tanpa kotak Board di puncak: tiap pohon berdiri sendiri, berdampingan. BoD yang tidak
+                  punya bawahan tidak digambar — mereka tidak ada di rantai mana pun, dan tetap bisa
+                  dipilih jadi atasan lewat pemilih (klik kartu). */}
+              <div className="flex items-start gap-8 p-4">
+                {trees.map((p) => <Node key={p.userId} p={p} />)}
               </div>
             </div>
             {trees.length === 0 && <div className="absolute inset-x-0 top-24 text-center text-xs text-muted-foreground">Belum ada yang ditaruh di bawah siapa pun.</div>}
