@@ -26,7 +26,11 @@ export async function GET() {
 
     const rows = await prisma.workspaceMember.findMany({
       where: { workspaceId: me.workspaceId },
-      select: { id: true, role: true, approverId: true, user: { select: { id: true, name: true, email: true, avatar: true } } },
+      select: {
+        id: true, role: true, approverId: true,
+        attendanceShiftStartTime: true, attendanceShiftEndTime: true, flexiTimeEnabled: true, noGeofenceMode: true,
+        user: { select: { id: true, name: true, email: true, avatar: true } },
+      },
       orderBy: { user: { name: "asc" } },
     })
     const ids = new Set(rows.map((r) => r.user.id))
@@ -34,6 +38,10 @@ export async function GET() {
       userId: r.user.id, memberId: r.id, name: r.user.name, email: r.user.email, avatar: r.user.avatar, role: r.role,
       // Tepi ke orang yang sudah keluar workspace tidak berarti apa-apa; tampilkan sebagai kosong.
       approverId: r.approverId && ids.has(r.approverId) ? r.approverId : null,
+      // Jam kerja per orang (null = ikut jam kantor/tim) + dua mode absensi. Digambar di kartu
+      // bagan supaya "anak buah gue jam berapa" terjawab tanpa membuka tiap orang.
+      shiftStart: r.attendanceShiftStartTime, shiftEnd: r.attendanceShiftEndTime,
+      flexi: r.flexiTimeEnabled, mobile: r.noGeofenceMode,
     }))
     const unassigned = people.filter((p) => !p.approverId && (p.role === "STAFF" || p.role === "MANAGER"))
 

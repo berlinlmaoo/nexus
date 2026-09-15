@@ -128,6 +128,18 @@ function Admin() {
     qc.invalidateQueries({ queryKey: ["nexus", "teams"] });
     qc.invalidateQueries({ queryKey: ["nexus", "divisions"] });
   };
+  // Keanggotaan project LANGSUNG (source "direct") — beda dari yang lewat tim. Yang lewat tim
+  // tidak bisa dilepas dari sini; sinkronisasi tim akan menuliskannya lagi.
+  const addToProject = useMutation({
+    mutationFn: ({ projectId, userId }: { projectId: string; userId: string }) => nexusApi.addProjectMember(projectId, userId),
+    onSuccess: refreshMemberships,
+    onError: (e: unknown) => toast.error("Gagal menambahkan ke project", { description: e instanceof ApiError ? e.message : "Butuh akses LEAD di project itu." }),
+  });
+  const removeFromProject = useMutation({
+    mutationFn: ({ projectId, userId }: { projectId: string; userId: string }) => nexusApi.removeProjectMember(projectId, userId),
+    onSuccess: refreshMemberships,
+    onError: (e: unknown) => toast.error("Gagal melepas dari project", { description: e instanceof ApiError ? e.message : "Butuh akses LEAD di project itu." }),
+  });
   const addToTeam = useMutation({
     mutationFn: ({ teamId, userId }: { teamId: string; userId: string }) => nexusApi.addTeamMember(teamId, userId),
     onSuccess: refreshMemberships,
@@ -243,7 +255,7 @@ function Admin() {
                 <tbody>
                   {rows.map((u) => {
                     const info = orgInfoByUser.get(u.id);
-                    return <UserRow key={u.id} user={u} orgInfo={info} assignable={viewerAssignable} canEdit={!!info && canEditTier(viewerRole, info.role)} pending={updateOrg.isPending} onOrgRole={(role) => info && updateOrg.mutate({ memberId: info.memberId, role })} canManageShift={canManageShift} shiftPending={updateShift.isPending} onSaveShift={(start, end) => info && updateShift.mutate({ memberId: info.memberId, start, end })} shiftByDayPending={updateShiftByDay.isPending} onSaveShiftByDay={(byDay) => info && updateShiftByDay.mutate({ memberId: info.memberId, byDay })} flexiPending={updateFlexi.isPending} onToggleFlexi={() => info && updateFlexi.mutate({ memberId: info.memberId, flexi: !info.flexi })} geofencePending={updateGeofence.isPending} onToggleGeofence={() => info && updateGeofence.mutate({ memberId: info.memberId, on: !info.noGeofence })} onDayoff={() => setDayoffUser({ id: u.id, name: u.name || u.email || "User" })} canDelete={canDeleteUsers} isMember={!!info} onDelete={() => setDelUser({ id: u.id, name: u.name || "Unnamed", email: u.email ?? "" })} gwConfigured={gwAccounts.data?.configured ?? false} gwAccounts={gwAccounts.data?.accounts ?? []} gwDomains={gwAccounts.data?.domains ?? []} canLinkGoogle={canDeleteUsers} memberships={memberships.data?.byUser[u.id]} membershipsLoading={memberships.isLoading} allTeams={teamsQ.data ?? []} canManageTeams={canManageTeamsOrg} teamPending={addToTeam.isPending || removeFromTeam.isPending} onTeamAdd={(teamId) => addToTeam.mutate({ teamId, userId: u.id })} onTeamOpen={(teamId) => setTeamSettingsId(teamId)} onTeamCreated={(teamId) => { refreshMemberships(); setTeamSettingsId(teamId); }} onTeamExit={(team, losing) => setTeamExit({ userId: u.id, userName: u.name || u.email || "User", teamId: team.id, teamName: team.name, losing })} canJoin={canDeleteUsers && !!u.email} joinPending={joinWorkspace.isPending && joinWorkspace.variables === u.email} onJoin={() => u.email && joinWorkspace.mutate(u.email)} workspaceName={workspaceName} onOpenApproval={() => setView("approval")} />;
+                    return <UserRow key={u.id} user={u} orgInfo={info} assignable={viewerAssignable} canEdit={!!info && canEditTier(viewerRole, info.role)} pending={updateOrg.isPending} onOrgRole={(role) => info && updateOrg.mutate({ memberId: info.memberId, role })} canManageShift={canManageShift} shiftPending={updateShift.isPending} onSaveShift={(start, end) => info && updateShift.mutate({ memberId: info.memberId, start, end })} shiftByDayPending={updateShiftByDay.isPending} onSaveShiftByDay={(byDay) => info && updateShiftByDay.mutate({ memberId: info.memberId, byDay })} flexiPending={updateFlexi.isPending} onToggleFlexi={() => info && updateFlexi.mutate({ memberId: info.memberId, flexi: !info.flexi })} geofencePending={updateGeofence.isPending} onToggleGeofence={() => info && updateGeofence.mutate({ memberId: info.memberId, on: !info.noGeofence })} onDayoff={() => setDayoffUser({ id: u.id, name: u.name || u.email || "User" })} canDelete={canDeleteUsers} isMember={!!info} onDelete={() => setDelUser({ id: u.id, name: u.name || "Unnamed", email: u.email ?? "" })} gwConfigured={gwAccounts.data?.configured ?? false} gwAccounts={gwAccounts.data?.accounts ?? []} gwDomains={gwAccounts.data?.domains ?? []} canLinkGoogle={canDeleteUsers} memberships={memberships.data?.byUser[u.id]} membershipsLoading={memberships.isLoading} allTeams={teamsQ.data ?? []} canManageTeams={canManageTeamsOrg} teamPending={addToTeam.isPending || removeFromTeam.isPending} onTeamAdd={(teamId) => addToTeam.mutate({ teamId, userId: u.id })} onTeamOpen={(teamId) => setTeamSettingsId(teamId)} onTeamCreated={(teamId) => { refreshMemberships(); setTeamSettingsId(teamId); }} onTeamExit={(team, losing) => setTeamExit({ userId: u.id, userName: u.name || u.email || "User", teamId: team.id, teamName: team.name, losing })} allProjects={projectsQ.data ?? []} projectPending={addToProject.isPending || removeFromProject.isPending} onProjectAdd={(projectId) => addToProject.mutate({ projectId, userId: u.id })} onProjectRemove={(projectId) => removeFromProject.mutate({ projectId, userId: u.id })} canJoin={canDeleteUsers && !!u.email} joinPending={joinWorkspace.isPending && joinWorkspace.variables === u.email} onJoin={() => u.email && joinWorkspace.mutate(u.email)} workspaceName={workspaceName} onOpenApproval={() => setView("approval")} />;
                   })}
                 </tbody>
               </table>
@@ -446,105 +458,121 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
     );
   }
 
-  if (making) {
-    return (
-      <span className="inline-flex max-w-[300px] flex-col gap-1.5 rounded-md border border-border bg-background p-2 text-[11px]">
-        <span className="font-semibold">Buat email kantor untuk {user.name || "orang ini"}</span>
-        <span className="flex gap-1">
-          <input value={givenName} onChange={(e) => setGivenName(e.target.value)} placeholder="Nama depan" className="w-1/2 rounded border border-border px-1.5 py-1" />
-          <input value={familyName} onChange={(e) => setFamilyName(e.target.value)} placeholder="Nama belakang" className="w-1/2 rounded border border-border px-1.5 py-1" />
-        </span>
-        <span className="flex items-center gap-1">
-          <input value={localPart} onChange={(e) => setLocalPart(e.target.value)} placeholder="nama.alamat" className="min-w-0 flex-1 rounded border border-border px-1.5 py-1" />
-          <span className="text-muted-foreground">@</span>
-          <select value={domain} onChange={(e) => setDomain(e.target.value)} className="rounded border border-border px-1 py-1">
-            {domains.map((d) => <option key={d} value={d}>{d}</option>)}
-          </select>
-        </span>
-        <span className="text-muted-foreground">
-          Akun baru mengisi satu seat lisensi Workspace.
-        </span>
-        {problem && <span className="text-destructive">{problem}</span>}
-        <span className="flex gap-1">
-          <button type="button" disabled={create.isPending || !localPart || !domain || !givenName || !familyName} onClick={() => { setProblem(null); create.mutate(); }} className="rounded bg-primary px-2 py-1 font-semibold text-primary-foreground disabled:opacity-50">
-            {create.isPending ? "Membuat…" : "Buat & tautkan"}
-          </button>
-          <button type="button" onClick={() => { setMaking(false); setProblem(null); }} className="rounded border border-border px-2 py-1">Batal</button>
-        </span>
-      </span>
-    );
-  }
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        disabled={!canEdit}
-        onClick={() => { setProblem(null); setOpen(true); }}
-        title={current ? `Google Workspace: ${current}` : "Tautkan akun Google Workspace"}
-        className={cn(
-          "inline-flex max-w-[190px] items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] font-semibold transition disabled:opacity-50",
-          current ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-dashed border-border text-muted-foreground hover:bg-accent",
-        )}
-      >
-        <AtSign className="h-3.5 w-3.5 shrink-0" />
-        <span className="truncate">{current ?? "Google"}</span>
-      </button>
-    );
-  }
+  const takenBy = (a: GoogleWorkspaceAccount) => (a.linkedTo && a.linkedTo.id !== user.id ? a.linkedTo.name : null);
+  const [q, setQ] = useState("");
+  const rows = accounts.filter((a) => !q.trim() || a.email.toLowerCase().includes(q.toLowerCase()) || (a.fullName ?? "").toLowerCase().includes(q.toLowerCase()));
+  const inputCls = "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary";
 
   return (
-    <span className="inline-flex flex-col gap-1">
-      <span className="inline-flex items-center gap-1">
-        <select
-          autoFocus
-          disabled={link.isPending}
-          defaultValue={current ?? ""}
-          onChange={(e) => link.mutate(e.target.value === "" ? null : e.target.value)}
-          className="max-w-[230px] rounded-md border border-border bg-background px-1.5 py-1 text-[11px]"
-        >
-          <option value="">— tidak ditautkan —</option>
-          {/* Akun yang baru dibuat BELUM tentu ada di daftar: Google menerbitkan user secara
-              asinkron dan pembacaan tepat setelah insert bisa menjawab 404 (terbukti saat uji).
-              Tanpa opsi bayangan ini, pemilih tampil kosong padahal tautannya benar. */}
-          {current && !accounts.some((a) => a.email === current) && (
-            <option value={current}>{current} (baru dibuat)</option>
-          )}
-          {accounts.map((a) => {
-            // Akun yang sudah dipakai profil LAIN tidak bisa dipilih. Indeks unik akan menolaknya
-            // juga, tapi ditolak setelah memilih terasa seperti kesalahan pemakai; di sini
-            // jawabannya sudah kelihatan sebelum diklik, lengkap dengan nama pemiliknya.
-            const takenByOther = a.linkedTo && a.linkedTo.id !== user.id;
-            return (
-              <option key={a.email} value={a.email} disabled={Boolean(takenByOther)}>
-                {a.email}
-                {a.fullName ? ` — ${a.fullName}` : ""}
-                {a.suspended ? " [suspended]" : ""}
-                {takenByOther ? ` (dipakai ${a.linkedTo!.name})` : ""}
-              </option>
-            );
-          })}
-        </select>
-        {link.isPending ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+    <>
+      {/* Keadaan: satu baris yang tenang. Tertaut = alamatnya; belum = kalimat, bukan peringatan
+          — sebagian besar orang memang belum punya email kantor. */}
+      <div className="flex flex-wrap items-center gap-2">
+        {current ? (
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-800"><AtSign className="h-3.5 w-3.5" /> {current}</span>
         ) : (
-          <button type="button" onClick={() => setOpen(false)} title="Tutup" className="rounded-md p-1 text-muted-foreground hover:bg-accent">
-            <X className="h-3.5 w-3.5" />
-          </button>
+          <span className="text-sm text-muted-foreground">Belum ditautkan.</span>
         )}
-        {current && !link.isPending && (
-          <button type="button" onClick={() => link.mutate(null)} title="Lepas tautan" className="rounded-md p-1 text-muted-foreground hover:bg-accent">
-            <Link2Off className="h-3.5 w-3.5" />
-          </button>
+        {canEdit && (
+          <>
+            <button type="button" onClick={() => { setProblem(null); setQ(""); setOpen(true); }} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold transition hover:border-primary hover:text-primary">
+              <Link2 className="h-3.5 w-3.5" /> {current ? "Ganti akun" : "Pilih akun"}
+            </button>
+            {!current && domains.length > 0 && (
+              <button type="button" onClick={() => { setProblem(null); setMaking(true); }} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold transition hover:border-primary hover:text-primary">
+                <Plus className="h-3.5 w-3.5" /> Buat email kantor
+              </button>
+            )}
+            {current && (
+              <button type="button" disabled={link.isPending} onClick={() => link.mutate(null)} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold text-muted-foreground transition hover:border-rose-300 hover:text-rose-700 disabled:opacity-50">
+                {link.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2Off className="h-3.5 w-3.5" />} Lepas
+              </button>
+            )}
+          </>
         )}
-        {!current && !link.isPending && domains.length > 0 && (
-          <button type="button" onClick={() => { setProblem(null); setMaking(true); }} title="Buat email kantor baru" className="rounded-md p-1 text-muted-foreground hover:bg-accent">
-            <Link2 className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </span>
-      {problem && <span className="max-w-[230px] text-[10px] leading-snug text-destructive">{problem}</span>}
-    </span>
+      </div>
+      {problem && !open && !making && <div className="mt-2 text-xs text-destructive">{problem}</div>}
+
+      {/* Pemilih: daftar yang bisa dicari, bukan <select> dengan 22 opsi sepanjang satu kalimat. Yang
+          sudah dipakai orang lain tetap terlihat tapi tidak bisa dipilih, lengkap dengan nama pemakainya. */}
+      {open && (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 p-4" onClick={() => setOpen(false)}>
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-soft" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-1 flex items-center justify-between">
+              <div className="text-sm font-bold">Akun Google Workspace untuk {user.name || "orang ini"}</div>
+              <button onClick={() => setOpen(false)} aria-label="Tutup" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+            </div>
+            <p className="mb-3 text-[11px] text-muted-foreground">Server memastikan alamatnya benar-benar ada di Google sebelum disimpan.</p>
+            <div className="relative mb-2">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari alamat atau nama…" className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-2 text-sm outline-none focus:border-primary" />
+            </div>
+            <div className="max-h-80 space-y-0.5 overflow-y-auto">
+              {current && !accounts.some((a) => a.email === current) && (
+                // Akun yang baru dibuat BELUM tentu ada di daftar: Google menerbitkan user secara
+                // asinkron dan pembacaan tepat setelah insert bisa menjawab 404 (terbukti saat uji).
+                <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-2 py-1.5 text-sm font-semibold text-primary"><AtSign className="h-3.5 w-3.5" /> {current} <span className="text-[11px] font-normal">(baru dibuat)</span></div>
+              )}
+              {rows.map((a) => {
+                const taken = takenBy(a);
+                const isCurrent = a.email === current;
+                return (
+                  <button key={a.email} type="button" disabled={Boolean(taken) || link.isPending} onClick={() => link.mutate(a.email)} className={cn("flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition", taken ? "cursor-not-allowed opacity-50" : "hover:bg-accent", isCurrent && "bg-primary/10")}>
+                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground">{initialsOf(a.fullName || a.email)}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className={cn("block truncate text-sm font-semibold", isCurrent && "text-primary")}>{a.email}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        {a.fullName || "—"}{a.suspended && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-bold text-amber-700">suspended</span>}{taken && <span className="ml-1">· dipakai {taken}</span>}
+                      </span>
+                    </span>
+                    {isCurrent && <span className="text-xs font-bold text-primary">✓</span>}
+                  </button>
+                );
+              })}
+              {rows.length === 0 && <div className="px-2 py-3 text-center text-xs text-muted-foreground">Nggak ada yang cocok.</div>}
+            </div>
+            {problem && <div className="mt-2 text-xs text-destructive">{problem}</div>}
+            {link.isPending && <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Menautkan…</div>}
+          </div>
+        </div>
+      )}
+
+      {/* Formulir buat mailbox baru. Modal sendiri: ini mengisi seat lisensi berbayar, dan formulir
+          yang ditempel di dalam baris tabel terbaca seperti sesuatu yang boleh diisi asal-asalan. */}
+      {making && (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 p-4" onClick={() => setMaking(false)}>
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-soft" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-1 flex items-center justify-between">
+              <div className="text-sm font-bold">Buat email kantor untuk {user.name || "orang ini"}</div>
+              <button onClick={() => setMaking(false)} aria-label="Tutup" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+            </div>
+            <p className="mb-3 text-[11px] text-muted-foreground">Akun baru mengisi satu seat lisensi Workspace. Sandi sementaranya cuma bisa dilihat sekali, dan dikirim ke email pribadinya.</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div><div className="mb-1 text-[11px] font-semibold text-muted-foreground">Nama depan</div><input value={givenName} onChange={(e) => setGivenName(e.target.value)} className={inputCls} /></div>
+              <div><div className="mb-1 text-[11px] font-semibold text-muted-foreground">Nama belakang</div><input value={familyName} onChange={(e) => setFamilyName(e.target.value)} className={inputCls} /></div>
+            </div>
+            <div className="mt-2">
+              <div className="mb-1 text-[11px] font-semibold text-muted-foreground">Alamat</div>
+              <div className="flex items-center gap-1.5">
+                <input value={localPart} onChange={(e) => setLocalPart(e.target.value.toLowerCase())} placeholder="nama.alamat" className={cn(inputCls, "font-mono")} />
+                <span className="text-muted-foreground">@</span>
+                <select value={domain} onChange={(e) => setDomain(e.target.value)} className="rounded-lg border border-border bg-background px-2 py-2 text-sm font-semibold outline-none focus:border-primary">
+                  {domains.map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              {localPart && domain && <div className="mt-1 text-[11px] text-muted-foreground">Akan dibuat: <b className="font-mono text-foreground">{localPart}@{domain}</b></div>}
+            </div>
+            {problem && <div className="mt-2 text-xs text-destructive">{problem}</div>}
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => { setMaking(false); setProblem(null); }} className="rounded-xl border border-border px-3 py-2 text-sm font-semibold text-muted-foreground transition hover:bg-accent">Batal</button>
+              <button type="button" disabled={create.isPending || !localPart || !domain || !givenName || !familyName} onClick={() => { setProblem(null); create.mutate(); }} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-sm font-bold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-40">
+                {create.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} {create.isPending ? "Membuat…" : "Buat & tautkan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 type UserRowProps = {
@@ -558,6 +586,9 @@ type UserRowProps = {
   shiftByDayPending: boolean; onSaveShiftByDay: (byDay: Record<string, { start: string; end: string }>) => void;
   flexiPending: boolean; onToggleFlexi: () => void; geofencePending: boolean; onToggleGeofence: () => void;
   onDayoff: () => void; canDelete: boolean; isMember: boolean; onDelete: () => void;
+  /** Project langsung: daftar untuk pemilih, dan dua aksi. Yang lewat tim tidak disentuh dari sini. */
+  allProjects: Array<{ id: string; name: string; color?: string | null; status?: string | null }>; projectPending: boolean;
+  onProjectAdd: (projectId: string) => void; onProjectRemove: (projectId: string) => void;
   /** Masukkan akun yang belum punya workspace ke workspace ini, sebagai Staff. */
   canJoin: boolean; joinPending: boolean; onJoin: () => void; workspaceName: string;
   /** Approver diatur di Bagan Approval; dari panel ini cuma ada pintunya. */
@@ -672,7 +703,7 @@ function UserRow(props: UserRowProps) {
  * bagian yang dicari tanpa membaca semuanya.
  */
 function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
-  const { user, orgInfo, assignable, canEdit, onOrgRole, pending, canManageShift, shiftPending, onSaveShift, shiftByDayPending, onSaveShiftByDay, flexiPending, onToggleFlexi, geofencePending, onToggleGeofence, onDayoff, canDelete, gwConfigured, gwAccounts, gwDomains, canLinkGoogle, memberships, membershipsLoading, allTeams, canManageTeams, teamPending, onTeamAdd, onTeamOpen, onTeamCreated, onTeamExit, onOpenApproval, onClose } = props;
+  const { user, orgInfo, assignable, canEdit, onOrgRole, pending, canManageShift, shiftPending, onSaveShift, shiftByDayPending, onSaveShiftByDay, flexiPending, onToggleFlexi, geofencePending, onToggleGeofence, onDayoff, canDelete, gwConfigured, gwAccounts, gwDomains, canLinkGoogle, memberships, membershipsLoading, allTeams, canManageTeams, teamPending, onTeamAdd, onTeamOpen, onTeamCreated, onTeamExit, allProjects, projectPending, onProjectAdd, onProjectRemove, onOpenApproval, onClose } = props;
   const byDay = orgInfo?.shiftByDay ?? {};
   const saveDay = (wd: string, start: string | null, end: string | null) => {
     const next: Record<string, { start: string; end: string }> = { ...byDay };
@@ -842,18 +873,22 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
                 <div>
                   <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground"><FolderKanban className="h-3.5 w-3.5" /> Project · {projectCount}</div>
                   {membershipsLoading && <div className="text-xs text-muted-foreground/70">Loading…</div>}
-                  {!membershipsLoading && projectCount === 0 && <div className="text-xs text-muted-foreground/70">Belum masuk project mana pun.</div>}
+                  {!membershipsLoading && projectCount === 0 && <div className="mb-1.5 text-xs text-muted-foreground/70">Belum masuk project mana pun.</div>}
                   <div className="flex flex-wrap gap-1.5">
                     {(memberships?.projects ?? []).map((pr) => (
-                      <Link key={pr.id} to="/projects/$projectId" params={{ projectId: pr.id }} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2 py-1 text-[11px] font-semibold text-foreground transition hover:border-primary hover:text-primary">
+                      <span key={pr.id} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card py-1 pl-2 pr-1 text-[11px] font-semibold text-foreground">
                         <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: pr.color ?? "#94A3B8" }} />
-                        {pr.name}
+                        <Link to="/projects/$projectId" params={{ projectId: pr.id }} className="underline-offset-2 hover:text-primary hover:underline">{pr.name}</Link>
                         {/* Lewat tim, bukan langsung: mencabutnya dari halaman project TIDAK bertahan —
-                            sinkronisasi tim menuliskannya lagi. Sebut timnya supaya jelas ke mana harus pergi. */}
+                            sinkronisasi tim menuliskannya lagi. Sebut timnya, dan jangan beri tombol lepas. */}
                         {pr.viaTeam && <span className="font-normal text-muted-foreground">· via {pr.viaTeam}</span>}
                         {pr.role !== "MEMBER" && <span className="rounded bg-primary/10 px-1 text-[10px] font-bold text-primary">{pr.role}</span>}
-                      </Link>
+                        {canManageTeams && !pr.viaTeam ? (
+                          <button type="button" disabled={projectPending} onClick={() => onProjectRemove(pr.id)} title="Lepas dari project ini" className="rounded p-0.5 text-muted-foreground/50 transition hover:bg-rose-100 hover:text-rose-600 disabled:opacity-40"><X className="h-3 w-3" /></button>
+                        ) : <span className="w-1" />}
+                      </span>
                     ))}
+                    {canManageTeams && <ProjectAddPicker projects={allProjects} already={new Set((memberships?.projects ?? []).map((p) => p.id))} pending={projectPending} onPick={onProjectAdd} />}
                   </div>
                 </div>
               </div>
@@ -933,6 +968,39 @@ function AccountCard({ user, memberId, Card }: { user: NexusAdminUser; memberId:
         </div>
       </div>
     </Card>
+  );
+}
+
+/** "+ project" — sama polanya dengan "+ tim": daftar pendek yang bisa dicari. Menambahkan langsung
+ *  (source "direct"), jadi tidak bergantung pada tim mana pun. */
+function ProjectAddPicker({ projects, already, pending, onPick }: { projects: Array<{ id: string; name: string; color?: string | null; status?: string | null }>; already: Set<string>; pending: boolean; onPick: (projectId: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const options = projects.filter((p) => !already.has(p.id)).filter((p) => !q.trim() || p.name.toLowerCase().includes(q.toLowerCase()));
+  if (!open) {
+    return (
+      <button type="button" disabled={pending} onClick={() => setOpen(true)} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground transition hover:border-primary hover:text-primary disabled:opacity-40">
+        {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} project
+      </button>
+    );
+  }
+  return (
+    <div className="w-full rounded-lg border border-primary/40 bg-background p-2">
+      <div className="mb-1.5 flex items-center gap-2">
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari project…" className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:border-primary" />
+        <button type="button" onClick={() => { setOpen(false); setQ(""); }} className="text-xs font-semibold text-muted-foreground hover:text-foreground">Tutup</button>
+      </div>
+      <div className="max-h-44 space-y-0.5 overflow-y-auto">
+        {options.length === 0 && <div className="px-1 py-2 text-[11px] text-muted-foreground/70">Nggak ada yang cocok.</div>}
+        {options.map((p) => (
+          <button key={p.id} type="button" disabled={pending} onClick={() => { onPick(p.id); setOpen(false); setQ(""); }} className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[11px] font-semibold transition hover:bg-accent disabled:opacity-50">
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: p.color ?? "#94A3B8" }} />
+            <span className="truncate">{p.name}</span>
+            {p.status && <span className="ml-auto shrink-0 font-normal text-muted-foreground">{statusLabel(p.status)}</span>}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

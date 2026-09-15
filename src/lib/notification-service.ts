@@ -273,27 +273,38 @@ export async function createInAppNotification(data: {
   return notification
 }
 
+/**
+ * Pengingat absen ke HP (in-app + push). `offsetMinutes` = berapa menit SEBELUM batas shift:
+ * 30, 15, atau 0 (tepat waktu). Tiap offset punya notifikasi sendiri per hari — dedupe-nya lewat
+ * `link`, yang memuat tanggal dan offset, jadi cron per-menit yang menabrak menit yang sama dua
+ * kali tidak mengirim dua kali.
+ */
 export async function notifyAttendanceReminder(data: {
   userId: string
   kind: "checkin" | "checkout"
   attendanceDate: string
   shiftTime: string
+  offsetMinutes?: number
 }): Promise<boolean> {
   if (await isUserDnd(data.userId)) return false
+  const off = data.offsetMinutes ?? 15
   const type = data.kind === "checkin" ? "attendance_checkin_reminder" : "attendance_checkout_reminder"
-  const link = `/attendance?reminder=${data.kind}&date=${data.attendanceDate}`
+  const link = `/attendance?reminder=${data.kind}&date=${data.attendanceDate}&t=${off}`
   const existing = await prisma.notification.findFirst({
     where: { userId: data.userId, type, link },
     select: { id: true },
   })
   if (existing) return false
+  const soon = off > 0 ? `${off} menit lagi` : "sekarang"
   await createInAppNotification({
     userId: data.userId,
     type,
-    title: data.kind === "checkin" ? "Attendance reminder" : "Check-out reminder",
+    title: data.kind === "checkin"
+      ? (off > 0 ? `Absen masuk ${soon}` : "Waktunya absen masuk")
+      : (off > 0 ? `Absen pulang ${soon}` : "Waktunya absen pulang"),
     message: data.kind === "checkin"
-      ? `Your shift starts at ${data.shiftTime}. Don't forget to check in.`
-      : `Your shift ends at ${data.shiftTime}. Don't forget to check out.`,
+      ? (off > 0 ? `Jam masuk ${data.shiftTime}. Jangan lupa check-in di NEXUS.` : `Sudah jam ${data.shiftTime} — check-in sekarang supaya tidak tercatat telat.`)
+      : (off > 0 ? `Jam pulang ${data.shiftTime}. Jangan lupa check-out.` : `Sudah jam ${data.shiftTime} — jangan lupa check-out sebelum pulang.`),
     link,
     push: true,
   })

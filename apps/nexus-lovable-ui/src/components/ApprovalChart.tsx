@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, Maximize2, Minimize2, Scan, Search, X, ZoomIn, ZoomOut } from "lucide-react";
+import { Loader2, Maximize2, Minimize2, Scan, Search, Smartphone, X, Zap, ZoomIn, ZoomOut } from "lucide-react";
 import { ApiError, nexusApi, ORG_ROLE_LABEL, type ApprovalChartPerson } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 
@@ -308,6 +308,8 @@ export function ApprovalChart() {
 }
 
 const tier = (r: string) => ({ ONE_ABOVE_ALL: 0, BOD: 1, MANAGER: 2, STAFF: 3 }[r] ?? 4);
+/** "09:00" → "9:00 AM" — ringkas, tanpa detik, tanpa nol depan; kartunya cuma 144px. */
+const to12 = (hhmm: string) => { const [h, m] = hhmm.split(":").map(Number); if (Number.isNaN(h)) return hhmm; const ap = h >= 12 ? "PM" : "AM"; return `${((h + 11) % 12) + 1}:${String(m ?? 0).padStart(2, "0")} ${ap}`; };
 const label = (p: ApprovalChartPerson) => p.name ?? p.email;
 const ROLE_SUB: Record<string, string> = { ONE_ABOVE_ALL: "One Above All", BOD: "BoD", MANAGER: "Manager", STAFF: "Staff" };
 
@@ -353,7 +355,7 @@ function PersonCard({ p, busy, dragging, over, droppable, reports, rootless, com
         title="Klik untuk pilih atasan, atau seret ke kartu atasannya"
         className={cn(
           "flex cursor-grab items-center gap-2 rounded-lg text-left transition active:cursor-grabbing disabled:opacity-50",
-          compact ? "w-[136px] px-2 py-1.5" : "w-[144px] px-2 py-2",
+          compact ? "w-[140px] px-2 py-1.5" : "w-[156px] px-2 py-2",
           compact && senior ? "bg-white/10 text-white ring-1 ring-white/20 hover:bg-white/20" : senior ? "bg-[#1e3a5f] text-white shadow-[0_2px_0_rgba(0,0,0,.2)]" : manager ? "bg-[#2c5282] text-white shadow-[0_2px_0_rgba(0,0,0,.2)]" : "border border-border bg-background text-foreground shadow-sm hover:border-primary",
           dragging && "opacity-40",
         )}
@@ -367,6 +369,14 @@ function PersonCard({ p, busy, dragging, over, droppable, reports, rootless, com
           <span className="block truncate text-[12px] font-semibold leading-tight" title={label(p)}>{label(p)}</span>
           <span className={cn("block truncate text-[10px] leading-tight", filled ? "opacity-75" : "text-muted-foreground")}>
             {ROLE_SUB[p.role] ?? p.role}{reports > 0 && ` · ${reports}`}
+          </span>
+          {/* Jam kerja + mode absensi, supaya "anak buah gue jam berapa" terjawab dari bagan. Flexi
+              menggantikan jamnya (jam tetap diabaikan saat Flexi menyala); Mobile cuma lencana. */}
+          <span className={cn("mt-0.5 flex items-center gap-1 text-[9.5px] leading-tight tabular-nums", filled ? "opacity-80" : "text-muted-foreground")}>
+            {p.flexi
+              ? <span className={cn("inline-flex items-center gap-0.5 rounded px-1 font-semibold", filled ? "bg-amber-300/25 text-amber-100" : "bg-amber-50 text-amber-700")}><Zap className="h-2.5 w-2.5" /> Flexi</span>
+              : <span>{p.shiftStart && p.shiftEnd ? `${to12(p.shiftStart)}–${to12(p.shiftEnd)}` : "jam kantor"}</span>}
+            {p.mobile && <span className={cn("inline-flex items-center gap-0.5 rounded px-1 font-semibold", filled ? "bg-sky-300/25 text-sky-100" : "bg-sky-50 text-sky-700")}><Smartphone className="h-2.5 w-2.5" /> Mobile</span>}
           </span>
         </span>
       </button>

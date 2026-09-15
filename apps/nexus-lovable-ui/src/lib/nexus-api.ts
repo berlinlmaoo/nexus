@@ -571,7 +571,11 @@ export type NexusWorkspaceMember = {
 };
 
 /** Satu orang di Bagan Approval (Control Room). */
-export type ApprovalChartPerson = { userId: string; memberId: string; name: string | null; email: string; avatar: string | null; role: string; approverId: string | null };
+export type ApprovalChartPerson = {
+  userId: string; memberId: string; name: string | null; email: string; avatar: string | null; role: string; approverId: string | null;
+  /** Jam kerja per orang; null = ikut jam kantor/tim. */
+  shiftStart?: string | null; shiftEnd?: string | null; flexi?: boolean; mobile?: boolean;
+};
 /** Rantai bebas: setiap orang punya paling banyak satu atasan (`approverId`), apa pun perannya.
  *  Klien menyusun pohonnya; akar = orang tanpa atasan. */
 export type ApprovalChart = {
