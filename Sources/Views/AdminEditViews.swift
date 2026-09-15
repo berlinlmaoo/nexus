@@ -185,6 +185,9 @@ struct AdminUsersSection: View {
     @State private var teamBusy = false
     @State private var addTeamFor: TeamPickTarget?
     @State private var exitTarget: TeamExitTarget?
+    /// Tim yang sedang dibuka pengaturannya. Pintu yang sama dengan web: dari chip tim di
+    /// baris orangnya, bukan dari halaman daftar tim tersendiri.
+    @State private var openTeamId: String?
 
     private var members: [WorkspaceRoster.Member] { roster?.members ?? [] }
     private var viewerRole: String? { roster?.role }
@@ -223,6 +226,11 @@ struct AdminUsersSection: View {
             Button(T("Cancel"), role: .cancel) { deleteTarget = nil }
         } message: { Text(T("Their tasks/files/quests are reassigned to you. This cannot be undone.")) }
         .navigationDestination(item: $openProfile) { MemberProfileView(target: $0) }
+        .navigationDestination(item: $openTeamId) { tid in
+            if let t = allTeams.first(where: { $0.id == tid }) {
+                TeamDetailView(team: t) { Task { await load() } }
+            }
+        }
         // Sheet, bukan Menu. Workspace ini punya 22 akun dan menu sepanjang itu di layar HP tidak
         // bisa dipakai — tidak bisa dicari, dan separuhnya di luar layar.
         .sheet(item: $linkTarget) { t in
@@ -321,6 +329,11 @@ struct AdminUsersSection: View {
                             Task { await runTeam { try await APIClient.shared.teamSetMemberRole(teamId: t.id, userId: uid, lead: t.role != "LEAD") } }
                         } label: {
                             Label(t.role == "LEAD" ? T("Turunkan jadi anggota") : T("Jadikan lead"), systemImage: "crown")
+                        }
+                        // Pintu ke pengaturan TIM-nya sendiri: nama, divisi, jam shift, tautan
+                        // project. Sama seperti di web — dari chip tim, bukan dari halaman terpisah.
+                        if let full = allTeams.first(where: { $0.id == t.id }), full.canManage == true {
+                            Button { openTeamId = full.id } label: { Label(T("Atur tim ini"), systemImage: "gearshape") }
                         }
                         Button(role: .destructive) {
                             exitTarget = TeamExitTarget(
