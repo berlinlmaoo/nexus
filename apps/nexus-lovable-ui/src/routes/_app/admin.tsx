@@ -672,7 +672,7 @@ function UserRow(props: UserRowProps) {
  * bagian yang dicari tanpa membaca semuanya.
  */
 function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
-  const { user, orgInfo, assignable, canEdit, onOrgRole, pending, canManageShift, shiftPending, onSaveShift, shiftByDayPending, onSaveShiftByDay, flexiPending, onToggleFlexi, geofencePending, onToggleGeofence, onDayoff, gwConfigured, gwAccounts, gwDomains, canLinkGoogle, memberships, membershipsLoading, allTeams, canManageTeams, teamPending, onTeamAdd, onTeamOpen, onTeamCreated, onTeamExit, onOpenApproval, onClose } = props;
+  const { user, orgInfo, assignable, canEdit, onOrgRole, pending, canManageShift, shiftPending, onSaveShift, shiftByDayPending, onSaveShiftByDay, flexiPending, onToggleFlexi, geofencePending, onToggleGeofence, onDayoff, canDelete, gwConfigured, gwAccounts, gwDomains, canLinkGoogle, memberships, membershipsLoading, allTeams, canManageTeams, teamPending, onTeamAdd, onTeamOpen, onTeamCreated, onTeamExit, onOpenApproval, onClose } = props;
   const byDay = orgInfo?.shiftByDay ?? {};
   const saveDay = (wd: string, start: string | null, end: string | null) => {
     const next: Record<string, { start: string; end: string }> = { ...byDay };
@@ -873,7 +873,7 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
  * yang bisa melihat apa yang diketiknya (kotaknya teks biasa, bukan titik-titik), dan kalau salah,
  * ia tinggal mengetik lagi. Sandi lama tidak diminta: orang itu memang tidak ada di sini.
  */
-function AccountCard({ user, memberId, Card }: { user: NexusAdminUser; memberId: string; Card: (p: { title: string; hint?: string; children: React.ReactNode; className?: string }) => JSX.Element }) {
+function AccountCard({ user, memberId, Card }: { user: NexusAdminUser; memberId: string; Card: (p: { title: string; hint?: string; children: React.ReactNode; className?: string }) => React.ReactElement }) {
   const qc = useQueryClient();
   const [name, setName] = useState(user.name ?? "");
   const [email, setEmail] = useState(user.email ?? "");
