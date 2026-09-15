@@ -88,6 +88,11 @@ while IFS= read -r -d '' f; do
     "$LINDUNGI"/*|"$LINDUNGI") continue ;;
   esac
   [ -e "$NEW/$rel" ] && continue          # masih dipakai build baru
+  # Basi TAPI masih muda: biarkan. Tab yang sudah terbuka memegang index.html lama dan memuat
+  # chunk rutenya secara malas — kalau chunk itu dihapus di deploy berikutnya, klik pertama ke
+  # halaman mana pun jatuh ke "This page didn't load" sampai orangnya reload. Sepuluh deploy
+  # dalam sehari = sepuluh kali kejadian. 48 jam cukup untuk tab yang ditinggal semalam.
+  if [ "$(( $(date +%s) - $(stat -c%Y "$f" 2>/dev/null || echo 0) ))" -lt 172800 ]; then continue; fi
   sz=$(stat -c%s "$f" 2>/dev/null || echo 0)
   BASI=$((BASI + 1)); BYTE=$((BYTE + sz))
   if [ "$DRY" = "1" ]; then
