@@ -50,7 +50,12 @@ echo "networks: $NETS(primary: $PRIMARY_NET)"
 #    tiny and non-secret; anything not named here follows the old rule.
 OVERRIDABLE="NEXUS_PUBLIC_URL ATTENDANCE_OUTAGE_DATES GOOGLE_DIRECTORY_CLIENT_EMAIL GOOGLE_DIRECTORY_PRIVATE_KEY GOOGLE_DIRECTORY_SUBJECT"
 
-docker inspect "$C" --format '{{range .Config.Env}}{{println .}}{{end}}' > "$ENVF"
+# APNS_PRIVATE_KEY_PATH ditambahkan lagi secara eksplisit lewat -e di bawah. Kalau salinan
+# lama ikut terbawa dari container sebelumnya, tiap deploy menambah satu duplikat — sudah
+# mencapai 74 baris dari 165 sebelum ini dibuang. Docker memakai yang terakhir jadi tidak
+# pernah rusak, cuma tumbuh diam-diam sampai suatu hari menabrak batas ukuran env.
+docker inspect "$C" --format '{{range .Config.Env}}{{println .}}{{end}}' \
+  | grep -v "^APNS_PRIVATE_KEY_PATH=" > "$ENVF"
 carried=0
 overridden=0
 while IFS= read -r line || [ -n "$line" ]; do
