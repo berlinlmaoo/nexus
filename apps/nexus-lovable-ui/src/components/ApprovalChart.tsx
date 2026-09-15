@@ -1,7 +1,7 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, Maximize2, Minimize2, Search, X, ZoomIn, ZoomOut } from "lucide-react";
+import { Loader2, Maximize2, Minimize2, Scan, Search, X, ZoomIn, ZoomOut } from "lucide-react";
 import { ApiError, nexusApi, ORG_ROLE_LABEL, type ApprovalChartPerson } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 
@@ -112,37 +112,107 @@ export function ApprovalChart() {
     );
   };
 
-  // Zoom-pas-layar: bagan digambar pada ukuran aslinya, diukur, lalu diskalakan ke lebar wadahnya.
-  // Tidak pernah ada scroll ke samping; yang terjadi pada bagan yang sangat lebar adalah kartunya
-  // mengecil sedikit. Tinggi wadah ikut diskalakan supaya tidak menyisakan ruang kosong di bawah.
+  // ── Kanvas bebas ──────────────────────────────────────────────────────────
+  // Bagan digambar pada ukuran aslinya di dalam wadah yang tingginya tetap, lalu dipindah dan
+  // diskalakan dengan satu transform: translate(x,y) scale(s). Semua gerakan mengubah tiga angka
+  // itu saja — roda/pinch untuk zoom (di sekitar kursor), seret area kosong untuk geser, dua jari
+  // untuk keduanya. Menyeret KARTU tetap milik drag-and-drop HTML (memindahkan orang), jadi
+  // geser-kanvas hanya dimulai dari pointerdown yang bukan di kartu.
   const wrapRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
-  const [fit, setFit] = useState({ scale: 1, height: 0 });
-  // Layar penuh = seluruh jendela, sidebar ikut hilang: ~300px lebih lebar, dan di sana zoom
-  // manual boleh (scroll samping hanya ada di mode yang dibuka dengan sengaja). null = pas layar.
+  const [view, setView] = useState({ x: 0, y: 0, s: 1 });
   const [full, setFull] = useState(false);
-  const [zoom, setZoom] = useState<number | null>(null);
+  const MIN_S = 0.3, MAX_S = 2.5;
+  const clampS = (v: number) => Math.min(MAX_S, Math.max(MIN_S, v));
+
+  /** Pas layar: muat seluruh bagan, rata tengah. Dipanggil saat mount, ganti mode, dan resize. */
+  const fitView = useCallback(() => {
+    const w = wrapRef.current?.clientWidth ?? 0, h = wrapRef.current?.clientHeight ?? 0;
+    const nw = innerRef.current?.scrollWidth ?? 0, nh = innerRef.current?.scrollHeight ?? 0;
+    if (!w || !h || !nw || !nh) return;
+    const s = clampS(Math.min((w - 32) / nw, (h - 32) / nh, 1.2));
+    setView({ s, x: (w - nw * s) / 2, y: Math.max(16, (h - nh * s) / 2) });
+  }, []);
+  useLayoutEffect(() => {
+    fitView();
+    const ro = new ResizeObserver(fitView);
+    if (wrapRef.current) ro.observe(wrapRef.current);
+    return () => ro.disconnect();
+  }, [fitView, full, trees.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Zoom di sekitar satu titik layar (koordinat relatif ke wadah), supaya yang di bawah kursor diam. */
+  const zoomAt = (factor: number, cx: number, cy: number) => setView((v) => {
+    const s = clampS(v.s * factor);
+    const k = s / v.s;
+    return { s, x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k };
+  });
+  const zoomCenter = (factor: number) => {
+    const w = wrapRef.current?.clientWidth ?? 0, h = wrapRef.current?.clientHeight ?? 0;
+    zoomAt(factor, w / 2, h / 2);
+  };
+  const localPoint = (e: { clientX: number; clientY: number }) => {
+    const r = wrapRef.current?.getBoundingClientRect();
+    return { x: e.clientX - (r?.left ?? 0), y: e.clientY - (r?.top ?? 0) };
+  };
+
+  // Roda: pinch trackpad datang sebagai wheel+ctrlKey → zoom; roda biasa/dua jari → geser.
+  // Dipasang non-passive lewat ref supaya preventDefault-nya dihormati (halaman tidak ikut scroll).
+  useEffect(() => {
+    const el = wrapRef.current; if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      if (e.ctrlKey || e.metaKey) { const p = localPoint(e); zoomAt(Math.exp(-e.deltaY * 0.01), p.x, p.y); }
+      else setView((v) => ({ ...v, x: v.x - e.deltaX, y: v.y - e.deltaY }));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Pointer: satu jari/mouse di area kosong = geser; dua jari = pinch (zoom + geser sekaligus).
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const gesture = useRef<{ x: number; y: number; vx: number; vy: number; dist: number; s: number } | null>(null);
+  const [panning, setPanning] = useState(false);
+  const onPointerDown = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest("[draggable='true']")) return; // kartu: milik drag-and-drop
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    const p = localPoint(e);
+    pointers.current.set(e.pointerId, p);
+    const pts = [...pointers.current.values()];
+    if (pts.length === 1) { gesture.current = { x: p.x, y: p.y, vx: view.x, vy: view.y, dist: 0, s: view.s }; setPanning(true); }
+    else if (pts.length === 2) {
+      const [a, b] = pts;
+      gesture.current = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, vx: view.x, vy: view.y, dist: Math.hypot(a.x - b.x, a.y - b.y), s: view.s };
+    }
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!pointers.current.has(e.pointerId) || !gesture.current) return;
+    pointers.current.set(e.pointerId, localPoint(e));
+    const pts = [...pointers.current.values()];
+    const g = gesture.current;
+    if (pts.length === 1) {
+      setView((v) => ({ ...v, x: g.vx + (pts[0].x - g.x), y: g.vy + (pts[0].y - g.y) }));
+    } else if (pts.length >= 2 && g.dist > 0) {
+      const [a, b] = pts;
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const s = clampS(g.s * (dist / g.dist));
+      const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+      // Titik di bawah tengah-jepitan tetap diam: hitung dari view awal gerakan, bukan view sekarang.
+      const k = s / g.s;
+      setView({ s, x: cx - (g.x - g.vx) * k, y: cy - (g.y - g.vy) * k });
+    }
+  };
+  const onPointerUp = (e: React.PointerEvent) => {
+    pointers.current.delete(e.pointerId);
+    if (pointers.current.size === 0) { gesture.current = null; setPanning(false); }
+    else if (pointers.current.size === 1) { const [p] = [...pointers.current.values()]; gesture.current = { x: p.x, y: p.y, vx: view.x, vy: view.y, dist: 0, s: view.s }; }
+  };
+
   useEffect(() => {
     if (!full) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setFull(false); setZoom(null); } };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFull(false); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [full]);
-  useLayoutEffect(() => {
-    const measure = () => {
-      const w = wrapRef.current?.clientWidth ?? 0;
-      const nw = innerRef.current?.scrollWidth ?? 0;
-      const nh = innerRef.current?.scrollHeight ?? 0;
-      const scale = nw > w && w > 0 ? Math.max(0.5, w / nw) : 1;
-      setFit({ scale, height: Math.ceil(nh * scale) });
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    if (wrapRef.current) ro.observe(wrapRef.current);
-    if (innerRef.current) ro.observe(innerRef.current);
-    return () => ro.disconnect();
-  }, [people.length, dragId, full]);
-  const scale = zoom ?? fit.scale;
 
   return (
     <div className="space-y-4">
@@ -175,28 +245,29 @@ export function ApprovalChart() {
         {/* Satu bagan: kotak Board di puncak (seperti "Dewan Komisaris" di Corpnet), semua pohon
             menggantung di bawahnya — termasuk pohon tanpa atasan, karena request puncaknya memang
             jatuh ke Board. BoD yang punya bawahan muncul sebagai akar pohon, bukan di kotak. */}
-        <section className={cn(full ? "fixed inset-0 z-[60] flex flex-col bg-card" : "border-b border-border px-5 py-5")}>
-          <div className={cn("flex items-center gap-2", full ? "border-b border-border px-5 py-3" : "mb-3")}>
-            {full && <div className="text-sm font-bold">Bagan Approval</div>}
+        <section className={cn(full ? "fixed inset-0 z-[60] flex flex-col bg-card" : "border-b border-border")}>
+          <div className={cn("flex items-center gap-2 px-5", full ? "border-b border-border py-3" : "pt-4 pb-2")}>
+            <div className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+              {full ? "Bagan Approval" : "Rantai approval"} <span className="normal-case tracking-normal text-muted-foreground/70">· scroll/pinch = zoom · seret area kosong = geser · klik dua kali = pas layar</span>
+            </div>
             <div className="ml-auto flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              {full && (
-                <>
-                  <button type="button" onClick={() => setZoom((z) => Math.max(0.5, +((z ?? fit.scale) - 0.1).toFixed(2)))} className="rounded-md border border-border p-1 hover:bg-accent" aria-label="Perkecil"><ZoomOut className="h-3.5 w-3.5" /></button>
-                  <input type="range" min={50} max={150} step={5} value={Math.round(scale * 100)} onChange={(e) => setZoom(Number(e.target.value) / 100)} className="w-28" aria-label="Zoom" />
-                  <button type="button" onClick={() => setZoom((z) => Math.min(1.5, +((z ?? fit.scale) + 0.1).toFixed(2)))} className="rounded-md border border-border p-1 hover:bg-accent" aria-label="Perbesar"><ZoomIn className="h-3.5 w-3.5" /></button>
-                  <button type="button" onClick={() => setZoom(null)} className={cn("rounded-md border border-border px-2 py-1 font-semibold hover:bg-accent", zoom === null && "bg-primary/10 text-primary")}>Pas layar</button>
-                </>
-              )}
-              <span className="tabular-nums">{Math.round(scale * 100)}%</span>
-              <button type="button" onClick={() => { setFull((f) => !f); setZoom(null); }} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-semibold hover:bg-accent">
+              <button type="button" onClick={() => zoomCenter(1 / 1.2)} className="rounded-md border border-border p-1 hover:bg-accent" aria-label="Perkecil"><ZoomOut className="h-3.5 w-3.5" /></button>
+              <span className="w-10 text-center tabular-nums">{Math.round(view.s * 100)}%</span>
+              <button type="button" onClick={() => zoomCenter(1.2)} className="rounded-md border border-border p-1 hover:bg-accent" aria-label="Perbesar"><ZoomIn className="h-3.5 w-3.5" /></button>
+              <button type="button" onClick={fitView} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-semibold hover:bg-accent"><Scan className="h-3.5 w-3.5" /> Pas layar</button>
+              <button type="button" onClick={() => setFull((f) => !f)} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-semibold hover:bg-accent">
                 {full ? <><Minimize2 className="h-3.5 w-3.5" /> Tutup</> : <><Maximize2 className="h-3.5 w-3.5" /> Layar penuh</>}
               </button>
             </div>
           </div>
-          {/* Di layar penuh dengan zoom manual, wadahnya boleh scroll dua arah — itu yang diminta
-              saat orang menekan tombol perbesar. Di mode biasa dan "pas layar": tidak pernah. */}
-          <div ref={wrapRef} className={cn("w-full", full ? "min-h-0 flex-1 p-5" : "", zoom !== null ? "overflow-auto" : "overflow-hidden")} style={{ height: !full ? (fit.height || undefined) : undefined }}>
-            <div ref={innerRef} className="w-max" style={{ transform: `scale(${scale})`, transformOrigin: "top left" }}>
+          <div
+            ref={wrapRef}
+            onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
+            onDoubleClick={(e) => { if (!(e.target as HTMLElement).closest("[draggable='true']")) fitView(); }}
+            className={cn("relative w-full select-none overflow-hidden bg-[radial-gradient(circle,rgba(0,0,0,.06)_1px,transparent_1px)] [background-size:18px_18px]", full ? "min-h-0 flex-1" : "h-[min(72vh,820px)]", panning ? "cursor-grabbing" : "cursor-grab")}
+            style={{ touchAction: "none" }}
+          >
+            <div ref={innerRef} className="absolute left-0 top-0 w-max" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.s})`, transformOrigin: "0 0" }}>
               <div className="oc-node">
                 <div className="rounded-xl bg-[#1e3a5f] px-5 py-3 text-center text-white shadow-[0_2px_0_rgba(0,0,0,.2)]">
                   <div className="text-[13px] font-bold">Board of Directors</div>
@@ -214,8 +285,8 @@ export function ApprovalChart() {
                 )}
               </div>
             </div>
+            {trees.length === 0 && <div className="absolute inset-x-0 top-24 text-center text-xs text-muted-foreground">Belum ada yang ditaruh di bawah siapa pun.</div>}
           </div>
-          {trees.length === 0 && <div className="mt-3 px-5 text-xs text-muted-foreground">Belum ada yang ditaruh di bawah siapa pun.</div>}
         </section>
 
         {/* 3 · Sendirian — zona jatuh untuk MELEPAS */}
