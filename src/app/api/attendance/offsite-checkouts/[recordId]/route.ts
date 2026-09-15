@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { getAttendanceWorkspaceContext, formatAttendanceDateKey } from "@/lib/attendance"
+import { canUserReviewRequest } from "@/lib/attendance-approvers"
 import { awardXpOnce } from "@/lib/gamification"
 import { startFloor } from "@/lib/attendance-absence"
 import { notifyOffsiteCheckoutReviewed } from "@/lib/wa-bot"
@@ -19,7 +20,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const context = await getAttendanceWorkspaceContext(session.user.id)
   if (!context.workspace) return NextResponse.json({ error: "No workspace membership found" }, { status: 404 })
-  if (!context.canManageAttendance) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  // Izinnya dicek SESUDAH record dimuat (di bawah): siapa yang boleh menyetujui bergantung pada
+  // siapa pemiliknya — manager-nya di Bagan Approval, atau BoD sebagai override.
+  if (!context.canReviewAttendanceRequests) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const { recordId } = await params
 
@@ -48,6 +51,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (record.userId === session.user.id) {
     return NextResponse.json({ error: "Kamu nggak bisa approve checkout kamu sendiri." }, { status: 403 })
   }
+  const verdict = await canUserReviewRequest(session.user.id, record.userId, context.workspace.id, context)
+  if (!verdict.ok) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const nextStatus = action === "approve" ? "APPROVED" : "REJECTED"
   // Atomic conditional write — only the first reviewer (record still PENDING) wins (no TOCTOU race).

@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma"
+import { resolveAttendanceApprovers } from "@/lib/attendance-approvers"
 import { sendPushToUser } from "@/lib/apns"
 import { emitNotification } from "@/lib/socket-emitter"
 import { postWaBridge } from "@/lib/wa-bridge"
@@ -315,9 +316,10 @@ const ATTENDANCE_TYPE_LABEL: Record<string, string> = {
  * message via wa-bot, so with the bridge down approvers were told nothing at all and requests
  * sat in the queue unseen.
  *
- * Who gets told mirrors who may actually approve: BoD and One-Above-All see every staff member,
- * while a MANAGER who LEADS a team only approves their own team, so they are only told about
- * their own members.
+ * Who gets told mirrors who may actually approve — and both come from the SAME resolver
+ * (src/lib/attendance-approvers.ts): a staff member's manager from the approval chart, or the
+ * BoD group when there is none. BoD are deliberately NOT told about requests that already have a
+ * manager; they can still open Attendance and override.
  */
 export async function notifyAttendanceRequestPending(requestId: string) {
   const req = await prisma.attendanceRequest.findUnique({
@@ -335,31 +337,8 @@ export async function notifyAttendanceRequestPending(requestId: string) {
   })
   if (!req || req.status !== "PENDING") return
 
-  const fullApprovers = await prisma.workspaceMember.findMany({
-    where: {
-      workspaceId: req.workspaceId,
-      role: { in: ["BOD", "ONE_ABOVE_ALL"] },
-      userId: { not: req.userId },
-    },
-    select: { userId: true },
-  })
-
-  const requesterTeams = await prisma.teamMember.findMany({
-    where: { userId: req.userId, team: { workspaceId: req.workspaceId } },
-    select: { teamId: true },
-  })
-  const leads = requesterTeams.length
-    ? await prisma.teamMember.findMany({
-        where: {
-          teamId: { in: requesterTeams.map((t) => t.teamId) },
-          role: "LEAD",
-          userId: { not: req.userId },
-        },
-        select: { userId: true },
-      })
-    : []
-
-  const targets = Array.from(new Set([...fullApprovers, ...leads].map((m) => m.userId)))
+  // Bagan Approval menentukan siapa yang diberi tahu — satu sumber, dipakai juga oleh izin review.
+  const { userIds: targets } = await resolveAttendanceApprovers(req.userId, req.workspaceId)
   if (!targets.length) return
 
   const typeLabel = ATTENDANCE_TYPE_LABEL[req.type] ?? req.type
@@ -390,15 +369,14 @@ export async function notifyOffsiteCheckoutPending(data: {
   staffName: string
   reason?: string | null
 }) {
-  const approvers = await prisma.workspaceMember.findMany({
-    where: { workspaceId: data.workspaceId, role: { in: ["BOD", "ONE_ABOVE_ALL"] }, userId: { not: data.staffUserId } },
-    select: { userId: true },
-  })
+  // Jalur yang sama dengan request cuti/izin. Dulu blok ini hanya menyebut BoD, jadi manager
+  // TIDAK PERNAH diberi tahu checkout luar kantor anak buahnya — padahal dialah yang menyetujuinya.
+  const { userIds: approvers } = await resolveAttendanceApprovers(data.staffUserId, data.workspaceId)
   const reasonSuffix = data.reason ? ` — “${data.reason}”` : ""
   await Promise.all(
-    approvers.map((a) =>
+    approvers.map((userId) =>
       createInAppNotification({
-        userId: a.userId,
+        userId,
         type: "offsite_checkout_pending",
         title: "Checkout di luar — perlu approval",
         message: `${data.staffName} checkout di luar area kantor${reasonSuffix}. Cek & approve di Attendance.`,

@@ -102,16 +102,12 @@ export async function GET(request: NextRequest) {
       workspaceId: context.workspace.id,
     }
 
-    // Team-scoped MANAGER: restrict to the members of the team(s) they lead (by userId — robust even
-    // when a request's teamId is null). Full managers (BoD/OAA) see everyone.
-    const isTeamManager = !context.canManageAttendance && context.teamLeadTeamIds.length > 0
+    // Bagan Approval: seorang MANAGER hanya melihat request orang-orang di bawahnya di bagan.
+    // Bukan anggota timnya — tim bukan lagi soal approval. BoD/OAA melihat semuanya.
+    const isDirectManager = !context.canManageAttendance && context.directReportIds.length > 0
     let teamScopeUserIds: string[] | null = null
-    if ((scope === "workspace" || scope === "approvals") && isTeamManager) {
-      const teamMembers = await prisma.teamMember.findMany({
-        where: { teamId: { in: context.teamLeadTeamIds } },
-        select: { userId: true },
-      })
-      teamScopeUserIds = Array.from(new Set(teamMembers.map((m) => m.userId)))
+    if ((scope === "workspace" || scope === "approvals") && isDirectManager) {
+      teamScopeUserIds = context.directReportIds
     }
 
     if (scope === "me") {

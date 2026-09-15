@@ -24,7 +24,7 @@ type HistoryRow = ReturnType<typeof serializeAttendanceRecord> & {
   attendanceDayType: AttendanceDayType
   requestType: "LEAVE" | "SICK" | "PERMIT" | "DAY_OFF" | "RED_DATE" | null
   requestStatus: "APPROVED" | null
-  approvalSource: "ADMIN" | "ATTENDANCE_SUPERVISOR" | "TEAM_HEAD" | null
+  approvalSource: "ADMIN" | "ATTENDANCE_SUPERVISOR" | "TEAM_HEAD" | "DIRECT_MANAGER" | null
   reviewedAt: string | null
   reviewedBy: {
     id: string
@@ -326,19 +326,16 @@ export async function GET(request: NextRequest) {
     }
 
     const scope = parsed.data.scope ?? "me"
-    // Full managers (BoD/OAA) see the whole workspace; a MANAGER who leads team(s) sees only those teams.
-    const isTeamManager = !context.canManageAttendance && context.teamLeadTeamIds.length > 0
+    // BoD/OAA melihat seluruh workspace; seorang MANAGER hanya orang-orang di bawahnya di Bagan
+    // Approval. (Dulu: anggota tim yang dia pimpin — lead tim sudah tidak ada.)
+    const isTeamManager = !context.canManageAttendance && context.directReportIds.length > 0
     if (scope === "workspace" && !context.canManageAttendance && !isTeamManager) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
     let teamScopeUserIds: string[] | null = null
     if (scope === "workspace" && isTeamManager) {
-      const teamMembers = await prisma.teamMember.findMany({
-        where: { teamId: { in: context.teamLeadTeamIds } },
-        select: { userId: true },
-      })
-      teamScopeUserIds = Array.from(new Set(teamMembers.map((m) => m.userId)))
+      teamScopeUserIds = context.directReportIds
     }
 
     const range = parsed.data.month

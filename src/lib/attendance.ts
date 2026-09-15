@@ -79,7 +79,7 @@ type AttendanceRequestWithRelations = {
   status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELED"
   reason: string
   reviewNote: string | null
-  approvalSource: "ADMIN" | "ATTENDANCE_SUPERVISOR" | "TEAM_HEAD" | null
+  approvalSource: "ADMIN" | "ATTENDANCE_SUPERVISOR" | "TEAM_HEAD" | "DIRECT_MANAGER" | null
   supportingDocumentUrl: string | null
   supportingDocumentName: string | null
   submittedLat?: number | null
@@ -1013,17 +1013,18 @@ export async function getAttendanceWorkspaceContext(userId: string) {
   const isSystemAdmin = user?.role === "ADMIN"
   // Full workspace attendance management (every staff) stays BoD / One-Above-All / system-admin.
   const canManageAttendance = Boolean(isSystemAdmin || workspaceRole === "BOD" || workspaceRole === "ONE_ABOVE_ALL")
-  // A MANAGER who LEADS one or more teams gets TEAM-SCOPED attendance powers: view + approve only the
-  // attendance of members of the team(s) they lead. (Set someone as team Lead in Crew Hub / Teams.)
-  let teamLeadTeamIds: string[] = []
-  if (!canManageAttendance && workspaceRole === "MANAGER" && workspace?.id) {
-    const leads = await prisma.teamMember.findMany({
-      where: { userId, role: "LEAD", team: { workspaceId: workspace.id } },
-      select: { teamId: true },
+  // Bagan Approval: seorang MANAGER melihat + menyetujui absensi orang-orang yang ditaruh di
+  // bawahnya di bagan (WorkspaceMember.approverId), dan HANYA mereka. Lead tim tidak lagi memberi
+  // kuasa apa pun — konsep itu dihapus bersama bagan.
+  let directReportIds: string[] = []
+  if (!canManageAttendance && workspace?.id) {
+    const reports = await prisma.workspaceMember.findMany({
+      where: { workspaceId: workspace.id, approverId: userId },
+      select: { userId: true },
     })
-    teamLeadTeamIds = leads.map((l) => l.teamId)
+    directReportIds = reports.map((r) => r.userId)
   }
-  const canReviewAttendanceRequests = canManageAttendance || teamLeadTeamIds.length > 0
+  const canReviewAttendanceRequests = canManageAttendance || directReportIds.length > 0
 
   return {
     user,
@@ -1033,7 +1034,7 @@ export async function getAttendanceWorkspaceContext(userId: string) {
     attendanceRole,
     isAttendanceSupervisor: false,
     canManageAttendance,
-    teamLeadTeamIds,
+    directReportIds,
     canReviewAttendanceRequests,
   }
 }

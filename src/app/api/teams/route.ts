@@ -578,39 +578,11 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.action === 'set-member-role') {
-      const { teamId, userId, role } = body
-      if (!teamId || !userId || (role !== 'LEAD' && role !== 'MEMBER')) {
-        return NextResponse.json({ error: 'teamId, userId, and role (LEAD|MEMBER) are required' }, { status: 400 })
-      }
-
-      const { team, canManageAttendanceSettings } = await getTeamContext(teamId, user.id)
-      if (!team || !canManageAttendanceSettings) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-      }
-
-      const membership = await prisma.teamMember.findUnique({
-        where: { teamId_userId: { teamId, userId } },
-      })
-      if (!membership) {
-        return NextResponse.json({ error: 'Team member not found' }, { status: 404 })
-      }
-
-      await prisma.teamMember.update({
-        where: { teamId_userId: { teamId, userId } },
-        data: { role },
-      })
-
-      logAudit({
-        action: "update",
-        entityType: "team_member_role",
-        entityId: `${teamId}:${userId}`,
-        entityName: `${team.name}:${userId}`,
-        userId: user.id,
-        request: req,
-        metadata: { teamId, memberId: userId, workspaceId: team.workspaceId, role },
-      })
-
-      return NextResponse.json({ updated: true })
+      // Lead tim dihapus bersama Bagan Approval (Control Room). Lead pernah berarti "boleh
+      // menyetujui absensi timnya"; sekarang yang menentukan itu WorkspaceMember.approverId.
+      // 410, bukan 400: aksinya memang pernah ada, dan klien lama yang masih memanggilnya perlu
+      // tahu bahwa ini bukan salah ketik.
+      return NextResponse.json({ error: 'Lead tim sudah tidak ada. Atur approver di Control Room > Bagan Approval.' }, { status: 410 })
     }
 
     if (body.action === 'create-division') {
