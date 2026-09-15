@@ -1,20 +1,24 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, Search, X, ChevronDown } from "lucide-react";
+import { Loader2, Search, X } from "lucide-react";
 import { ApiError, nexusApi, ORG_ROLE_LABEL, type ApprovalChartPerson } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 
 /**
- * Bagan Approval — siapa menyetujui absensi siapa. Rantai bebas.
+ * Bagan Approval — siapa menyetujui absensi siapa. Rantai bebas, digambar sebagai bagan organisasi.
  *
- * Bukan tiga tingkat tetap. Berlin: "willy approve anak-anaknya, willy ke gerro, gerro ke riri" —
- * jadi bagannya hutan: tiap orang punya paling banyak satu atasan, siapa pun perannya. Akar =
- * orang tanpa atasan. Akar yang BoD/OAA memang puncak; akar yang Staff/Manager berarti "belum
- * ditaruh" dan request-nya jatuh ke kelompok BoD.
+ * Tiga wilayah, dari atas:
+ *   1. Board — BoD/OAA yang tidak punya bawahan di bagan: baris chip kecil. Mereka puncak, tapi
+ *      tidak perlu pohon kalau tidak ada yang lapor ke mereka.
+ *   2. Pohon — setiap orang tanpa atasan yang PUNYA bawahan, berdampingan, dengan garis penghubung.
+ *      Akar yang bukan BoD diberi tanda "tanpa atasan": pohonnya sah, tapi puncaknya sendiri masih
+ *      jatuh ke kelompok BoD.
+ *   3. Belum ditaruh — orang yang benar-benar sendirian: tanpa atasan DAN tanpa bawahan. Chip
+ *      kecil, tanpa pohon. Dulu pohon-pohon tanpa atasan ikut masuk ke sini dan kotaknya jadi hutan.
  *
- * Memindahkan: seret kartu ke kartu orang lain (jadi bawahannya), atau klik kartu → pemilih.
- * Server menolak lingkaran; di sini kartu yang akan bikin lingkaran cuma tidak diberi zona jatuh.
+ * Memindahkan: seret kartu ke kartu atasannya, atau klik → pemilih. Server menolak lingkaran;
+ * di sini kartu yang akan bikin lingkaran cuma tidak diberi zona jatuh.
  */
 export function ApprovalChart() {
   const qc = useQueryClient();
@@ -41,9 +45,9 @@ export function ApprovalChart() {
   const children = useMemo(() => {
     const m = new Map<string, ApprovalChartPerson[]>();
     for (const p of people) if (p.approverId) m.set(p.approverId, [...(m.get(p.approverId) ?? []), p]);
+    for (const list of m.values()) list.sort((a, b) => tier(a.role) - tier(b.role) || label(a).localeCompare(label(b), "id"));
     return m;
   }, [people]);
-  // Keturunan seseorang — untuk mematikan zona jatuh yang akan bikin lingkaran.
   const descendantsOf = (id: string): Set<string> => {
     const out = new Set<string>();
     const stack = [...(children.get(id) ?? [])];
@@ -56,10 +60,13 @@ export function ApprovalChart() {
   if (chart.isLoading) return <div className="flex justify-center py-16 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>;
   if (chart.isError || !chart.data) return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">Bagan tidak bisa dimuat — butuh akses BoD.</div>;
 
-  const tier = (r: string) => ({ ONE_ABOVE_ALL: 0, BOD: 1, MANAGER: 2, STAFF: 3 }[r] ?? 4);
-  const roots = people.filter((p) => !p.approverId).sort((a, b) => tier(a.role) - tier(b.role) || (a.name ?? a.email).localeCompare(b.name ?? b.email, "id"));
-  const tops = roots.filter((p) => p.role === "BOD" || p.role === "ONE_ABOVE_ALL");
-  const unplaced = roots.filter((p) => p.role !== "BOD" && p.role !== "ONE_ABOVE_ALL");
+  const roots = people.filter((p) => !p.approverId).sort((a, b) => tier(a.role) - tier(b.role) || label(a).localeCompare(label(b), "id"));
+  const isSenior = (p: ApprovalChartPerson) => p.role === "BOD" || p.role === "ONE_ABOVE_ALL";
+  const hasKids = (p: ApprovalChartPerson) => (children.get(p.userId)?.length ?? 0) > 0;
+  const board = roots.filter((p) => isSenior(p) && !hasKids(p));
+  const trees = roots.filter(hasKids);
+  const alone = roots.filter((p) => !isSenior(p) && !hasKids(p));
+  const unplacedCount = roots.filter((p) => !isSenior(p)).length; // pohon tanpa atasan ikut dihitung
   const busy = setApprover.isPending;
 
   const dropProps = (targetId: string | null) => ({
@@ -68,25 +75,23 @@ export function ApprovalChart() {
     onDrop: (e: React.DragEvent) => { e.preventDefault(); setOverId(null); if (dragged) move(dragged, targetId); setDragId(null); },
   });
 
-  /** Satu orang beserta seluruh bawahannya, ke bawah. */
-  const Node = ({ p, depth }: { p: ApprovalChartPerson; depth: number }) => {
-    const kids = (children.get(p.userId) ?? []).sort((a, b) => tier(a.role) - tier(b.role) || (a.name ?? a.email).localeCompare(b.name ?? b.email, "id"));
-    const isOver = overId === p.userId;
-    const canDrop = dragged && !forbidden.has(p.userId);
+  const cardProps = (p: ApprovalChartPerson) => ({
+    p, busy, dragging: dragId === p.userId, over: overId === p.userId, droppable: !!dragged && !forbidden.has(p.userId),
+    reports: children.get(p.userId)?.length ?? 0, rootless: !p.approverId && !isSenior(p),
+    onDragStart: () => setDragId(p.userId), onDragEnd: () => { setDragId(null); setOverId(null); }, onClick: () => setPicker(p),
+    drop: dropProps(p.userId),
+  });
+
+  /** Satu orang beserta seluruh bawahannya. Garisnya digambar CSS (.oc-*), bukan div — lihat <style>. */
+  const Node = ({ p }: { p: ApprovalChartPerson }) => {
+    const kids = children.get(p.userId) ?? [];
     return (
-      <div className="flex flex-col items-center">
-        <div {...dropProps(p.userId)} className={cn("rounded-xl border-2 p-0.5 transition", isOver ? "border-primary bg-primary/10" : canDrop ? "border-dashed border-border" : "border-transparent")}>
-          <PersonCard p={p} depth={depth} busy={busy} dragging={dragId === p.userId}
-            onDragStart={() => setDragId(p.userId)} onDragEnd={() => { setDragId(null); setOverId(null); }}
-            onClick={() => setPicker(p)} reports={kids.length} />
-        </div>
+      <div className="oc-node">
+        <PersonCard {...cardProps(p)} />
         {kids.length > 0 && (
-          <>
-            <div className="h-4 w-0.5 bg-border" />
-            <div className="flex items-start gap-3 border-t-2 border-border pt-4">
-              {kids.map((k) => <Node key={k.userId} p={k} depth={depth + 1} />)}
-            </div>
-          </>
+          <div className="oc-kids">
+            {kids.map((k) => <div key={k.userId} className="oc-kid"><Node p={k} /></div>)}
+          </div>
         )}
       </div>
     );
@@ -94,35 +99,58 @@ export function ApprovalChart() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-        <span><b className="text-foreground">{chart.data.stats.withApprover}</b> dari <b className="text-foreground">{chart.data.stats.total}</b> orang punya atasan di bagan</span>
-        {unplaced.length > 0 ? (
-          <span className="rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 font-semibold text-amber-800">{unplaced.length} belum ditaruh — request mereka masuk ke semua BoD</span>
-        ) : (
-          <span className="rounded-md border border-emerald-300 bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-800">Semua sudah ditaruh</span>
-        )}
-        <span className="ml-auto">Seret kartu ke kartu atasannya, atau klik kartunya. Siapa pun bisa di bawah siapa pun.</span>
+      <style>{`
+        .oc-node{display:flex;flex-direction:column;align-items:center}
+        .oc-kids{display:flex;align-items:flex-start;position:relative;padding-top:22px}
+        .oc-kids::before{content:"";position:absolute;top:0;left:50%;width:2px;height:22px;background:var(--oc-line);transform:translateX(-50%)}
+        .oc-kid{position:relative;padding:22px 6px 0}
+        .oc-kid::before{content:"";position:absolute;top:0;left:50%;width:2px;height:22px;background:var(--oc-line);transform:translateX(-50%)}
+        .oc-kid::after{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:var(--oc-line)}
+        .oc-kid:first-child::after{left:50%}
+        .oc-kid:last-child::after{right:50%}
+        .oc-kid:only-child::after{display:none}
+      `}</style>
+
+      {/* Ringkasan — satu baris, tiga angka, tanpa kalimat panjang. */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-border bg-card px-4 py-2.5 text-xs shadow-soft">
+        <Stat n={chart.data.stats.withApprover} of={chart.data.stats.total} label="punya atasan" />
+        <Stat n={trees.length} label="pohon" />
+        <Stat n={unplacedCount} label="belum ditaruh" tone={unplacedCount > 0 ? "warn" : "ok"} />
+        <span className="ml-auto text-muted-foreground">Seret kartu ke kartu atasannya, atau klik kartunya.</span>
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-border bg-card p-5 shadow-soft">
-        <div className="inline-flex min-w-full flex-col items-center gap-6">
-          <div className="flex items-start gap-6">
-            {tops.map((p) => <Node key={p.userId} p={p} depth={0} />)}
-            {tops.length === 0 && <span className="text-xs text-muted-foreground">Belum ada BoD.</span>}
+      <div className="rounded-2xl border border-border bg-card shadow-soft" style={{ ["--oc-line" as string]: "#c7cfdb" }}>
+        {/* 1 · Board */}
+        <section className="border-b border-border px-5 py-4">
+          <Eyebrow>Board of Directors <span className="normal-case tracking-normal text-muted-foreground/70">· request tanpa atasan masuk ke semua orang di sini</span></Eyebrow>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {board.map((p) => <PersonCard key={p.userId} {...cardProps(p)} compact />)}
+            {board.length === 0 && <span className="text-xs text-muted-foreground">Semua BoD sudah punya bawahan — lihat pohon di bawah.</span>}
           </div>
+        </section>
 
-          {/* Belum ditaruh — zona jatuh untuk MELEPAS */}
-          <div {...dropProps(null)} className={cn("flex w-full max-w-3xl flex-col gap-2 rounded-xl border-2 border-dashed p-3 transition", overId === "__none__" ? "border-rose-400 bg-rose-50/60" : "border-border bg-muted/20")}>
-            <div className="text-center">
-              <div className="text-xs font-bold text-muted-foreground">Belum ditaruh</div>
-              <div className="text-[11px] text-muted-foreground/70">{unplaced.length} orang · request-nya ke semua BoD · jatuhkan kartu di sini untuk melepas</div>
-            </div>
-            <div className="flex flex-wrap justify-center gap-2">
-              {unplaced.map((p) => <Node key={p.userId} p={p} depth={0} />)}
-              {unplaced.length === 0 && <div className="py-2 text-[11px] text-emerald-700">Kosong — bagus.</div>}
+        {/* 2 · Pohon */}
+        <section className="border-b border-border px-5 py-5">
+          <Eyebrow>Rantai approval</Eyebrow>
+          <div className="mt-3 overflow-x-auto pb-2">
+            <div className="flex items-start gap-10">
+              {trees.map((p) => <Node key={p.userId} p={p} />)}
+              {trees.length === 0 && <span className="text-xs text-muted-foreground">Belum ada yang ditaruh di bawah siapa pun.</span>}
             </div>
           </div>
-        </div>
+        </section>
+
+        {/* 3 · Sendirian — zona jatuh untuk MELEPAS */}
+        <section {...dropProps(null)} className={cn("rounded-b-2xl px-5 py-4 transition", overId === "__none__" ? "bg-rose-50" : "bg-muted/20")}>
+          <div className="flex items-baseline justify-between gap-3">
+            <Eyebrow>Belum ditaruh <span className="normal-case tracking-normal text-muted-foreground/70">· {alone.length} orang · request-nya ke semua BoD</span></Eyebrow>
+            {dragged && <span className="text-[11px] font-semibold text-rose-700">Jatuhkan di sini untuk melepas dari bagan</span>}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {alone.map((p) => <PersonCard key={p.userId} {...cardProps(p)} compact />)}
+            {alone.length === 0 && <span className="text-xs text-emerald-700">Kosong — semua orang sudah ada di suatu pohon.</span>}
+          </div>
+        </section>
       </div>
 
       {picker && (
@@ -139,46 +167,74 @@ export function ApprovalChart() {
   );
 }
 
+const tier = (r: string) => ({ ONE_ABOVE_ALL: 0, BOD: 1, MANAGER: 2, STAFF: 3 }[r] ?? 4);
+const label = (p: ApprovalChartPerson) => p.name ?? p.email;
+const ROLE_SUB: Record<string, string> = { ONE_ABOVE_ALL: "One Above All", BOD: "BoD", MANAGER: "Manager", STAFF: "Staff" };
+
 function initialsOf(name?: string | null) {
   if (!name) return "?";
   return name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
 }
+function Eyebrow({ children }: { children: React.ReactNode }) {
+  return <div className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{children}</div>;
+}
+function Stat({ n, of, label, tone }: { n: number; of?: number; label: string; tone?: "warn" | "ok" }) {
+  return (
+    <span className={cn("inline-flex items-baseline gap-1", tone === "warn" && "text-amber-700", tone === "ok" && "text-emerald-700")}>
+      <b className="text-sm tabular-nums">{n}</b>{of !== undefined && <span className="text-muted-foreground">/ {of}</span>}<span className={cn(!tone && "text-muted-foreground")}>{label}</span>
+    </span>
+  );
+}
 
-const ROLE_SUB: Record<string, string> = { ONE_ABOVE_ALL: "One Above All", BOD: "BoD", MANAGER: "Manager", STAFF: "Staff" };
+type CardProps = {
+  p: ApprovalChartPerson; busy: boolean; dragging: boolean; over: boolean; droppable: boolean; reports: number; rootless: boolean; compact?: boolean;
+  onDragStart: () => void; onDragEnd: () => void; onClick: () => void;
+  drop: { onDragOver: (e: React.DragEvent) => void; onDragLeave: () => void; onDrop: (e: React.DragEvent) => void };
+};
 
-/** Kartu gaya "Direktur / Director". Warna turun mengikuti peran, bukan kedalaman — kedalaman bisa
- *  berapa saja sekarang, dan peran yang menjawab "orang ini siapa". */
-function PersonCard({ p, busy, dragging, onDragStart, onDragEnd, onClick, reports }: { p: ApprovalChartPerson; depth: number; busy: boolean; dragging: boolean; onDragStart: () => void; onDragEnd: () => void; onClick: () => void; reports: number }) {
+/**
+ * Kartu orang. Warna ikut PERAN, bukan kedalaman — kedalaman bisa berapa saja sekarang, dan peran
+ * yang menjawab "orang ini siapa". Zona jatuhnya adalah kartu itu sendiri: cincin muncul hanya saat
+ * ada yang diseret dan kartu ini sah jadi tujuannya.
+ */
+function PersonCard({ p, busy, dragging, over, droppable, reports, rootless, compact, onDragStart, onDragEnd, onClick, drop }: CardProps) {
   const senior = p.role === "BOD" || p.role === "ONE_ABOVE_ALL";
   const manager = p.role === "MANAGER";
+  const filled = senior || manager;
   return (
-    <button
-      type="button"
-      draggable={!busy}
-      onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", p.userId); onDragStart(); }}
-      onDragEnd={onDragEnd}
-      onClick={onClick}
-      disabled={busy}
-      title="Klik untuk pilih atasan, atau seret ke kartu atasannya"
-      className={cn(
-        "flex w-40 cursor-grab flex-col items-center rounded-lg px-3 py-2 text-center transition active:cursor-grabbing disabled:opacity-50",
-        senior ? "bg-[#1e3a5f] text-white shadow-[0_2px_0_rgba(0,0,0,.18)]" : manager ? "bg-[#2c5282] text-white shadow-[0_2px_0_rgba(0,0,0,.18)]" : "border border-border bg-background text-foreground hover:border-primary",
-        dragging && "opacity-40",
-      )}
-    >
-      <div className="flex w-full items-center justify-center gap-2">
-        {p.avatar ? (
-          <img src={p.avatar} alt="" className={cn("h-6 w-6 shrink-0 rounded-full object-cover", senior || manager ? "ring-1 ring-white/30" : "")} />
-        ) : (
-          <span className={cn("grid h-6 w-6 shrink-0 place-items-center rounded-full text-[10px] font-bold", senior || manager ? "bg-white/15" : "bg-primary/10 text-primary")}>{initialsOf(p.name)}</span>
+    <div {...drop} className={cn("relative rounded-xl transition", over && "ring-2 ring-primary ring-offset-2", droppable && !over && "ring-1 ring-dashed ring-primary/40")}>
+      <button
+        type="button"
+        draggable={!busy}
+        onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", p.userId); onDragStart(); }}
+        onDragEnd={onDragEnd}
+        onClick={onClick}
+        disabled={busy}
+        title="Klik untuk pilih atasan, atau seret ke kartu atasannya"
+        className={cn(
+          "flex cursor-grab items-center gap-2.5 rounded-xl text-left transition active:cursor-grabbing disabled:opacity-50",
+          compact ? "w-[168px] px-2.5 py-2" : "w-[176px] px-3 py-2.5",
+          senior ? "bg-[#1e3a5f] text-white shadow-[0_2px_0_rgba(0,0,0,.2)]" : manager ? "bg-[#2c5282] text-white shadow-[0_2px_0_rgba(0,0,0,.2)]" : "border border-border bg-background text-foreground shadow-sm hover:border-primary",
+          dragging && "opacity-40",
         )}
-        <span className="min-w-0 truncate text-[13px] font-semibold leading-tight" title={p.name ?? p.email}>{p.name ?? p.email}</span>
-      </div>
-      <div className={cn("mt-0.5 flex items-center gap-1 text-[10px]", senior || manager ? "opacity-75" : "text-muted-foreground")}>
-        {ROLE_SUB[p.role] ?? p.role}{reports > 0 && <span>· {reports} ↓</span>}
-        <ChevronDown className="h-3 w-3 opacity-60" />
-      </div>
-    </button>
+      >
+        {p.avatar ? (
+          <img src={p.avatar} alt="" className={cn("h-8 w-8 shrink-0 rounded-full object-cover", filled && "ring-1 ring-white/30")} />
+        ) : (
+          <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-bold", filled ? "bg-white/15" : "bg-primary/10 text-primary")}>{initialsOf(p.name)}</span>
+        )}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-semibold leading-tight" title={label(p)}>{label(p)}</span>
+          <span className={cn("block truncate text-[10.5px] leading-tight", filled ? "opacity-75" : "text-muted-foreground")}>
+            {ROLE_SUB[p.role] ?? p.role}{reports > 0 && ` · ${reports} bawahan`}
+          </span>
+        </span>
+      </button>
+      {/* Akar yang bukan BoD: pohonnya sah, tapi puncaknya sendiri masih jatuh ke kelompok BoD. */}
+      {rootless && !compact && (
+        <span className="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-amber-300 bg-amber-50 px-1.5 text-[9.5px] font-bold text-amber-800">tanpa atasan</span>
+      )}
+    </div>
   );
 }
 
@@ -186,7 +242,7 @@ function PersonCard({ p, busy, dragging, onDragStart, onDragEnd, onClick, report
  *  Dikelompokkan per peran supaya "cari BoD-nya" tidak perlu mengeja nama. */
 function ApproverPicker({ person, candidates, reportsOf, currentApproverId, onPick, onClose }: { person: ApprovalChartPerson; candidates: ApprovalChartPerson[]; reportsOf: (id: string) => number; currentApproverId: string | null; onPick: (approverId: string | null) => void; onClose: () => void }) {
   const [q, setQ] = useState("");
-  const rows = candidates.filter((m) => !q.trim() || (m.name ?? m.email).toLowerCase().includes(q.toLowerCase()));
+  const rows = candidates.filter((m) => !q.trim() || label(m).toLowerCase().includes(q.toLowerCase()));
   const groups: Array<[string, ApprovalChartPerson[]]> = (["ONE_ABOVE_ALL", "BOD", "MANAGER", "STAFF"] as const)
     .map((r) => [r, rows.filter((m) => m.role === r)] as [string, ApprovalChartPerson[]])
     .filter(([, list]) => list.length > 0);
@@ -194,7 +250,7 @@ function ApproverPicker({ person, candidates, reportsOf, currentApproverId, onPi
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
       <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-4 shadow-soft" onClick={(e) => e.stopPropagation()}>
         <div className="mb-1 flex items-center justify-between">
-          <div className="text-sm font-bold">Atasan untuk {person.name ?? person.email}</div>
+          <div className="text-sm font-bold">Atasan untuk {label(person)}</div>
           <button onClick={onClose} aria-label="Tutup" className="rounded-lg p-1 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
         <p className="mb-3 text-[11px] text-muted-foreground">Request absensinya akan masuk ke orang ini saja. BoD tetap bisa override.</p>
@@ -209,7 +265,7 @@ function ApproverPicker({ person, candidates, reportsOf, currentApproverId, onPi
               {list.map((m) => (
                 <button key={m.userId} type="button" onClick={() => onPick(m.userId)} className={cn("flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-accent", m.userId === currentApproverId && "bg-primary/10 font-semibold text-primary")}>
                   <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">{initialsOf(m.name)}</span>
-                  <span className="min-w-0 flex-1 truncate">{m.name ?? m.email}</span>
+                  <span className="min-w-0 flex-1 truncate">{label(m)}</span>
                   {reportsOf(m.userId) > 0 && <span className="shrink-0 text-[11px] text-muted-foreground">{reportsOf(m.userId)} bawahan</span>}
                 </button>
               ))}
