@@ -37,6 +37,11 @@ struct WorkspaceRoster: Decodable, Sendable {
         let name: String?
         let email: String?
         let avatar: String?
+        /// Akun Google Workspace yang ditautkan BoD dari Control Room.
+        ///
+        /// nil adalah keadaan NORMAL, bukan data yang hilang: tidak semua orang di NEXUS punya
+        /// email kantor — saat ini tiga dari empat puluh sembilan. Tampilkan dengan tenang.
+        let googleWorkspaceEmail: String?
         let attendanceRole: String?
         let attendanceShiftStartTime: String?
         let attendanceShiftEndTime: String?

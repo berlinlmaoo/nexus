@@ -154,6 +154,29 @@ extension APIClient {
         return true
     }
 
+    // MARK: Google Workspace
+
+    /// Akun Workspace yang bisa ditautkan. BoD saja; server menjawab 403 untuk yang lain.
+    func googleWorkspaceAccounts() async throws -> GoogleWorkspaceAccounts {
+        try await vaultRun(makeRequest("/api/admin/google-workspace/accounts"), decode: GoogleWorkspaceAccounts.self)
+    }
+
+    /// Tautkan (atau lepas, dengan nil). Server memverifikasi alamatnya benar-benar ada di Google
+    /// sebelum menyimpan — jadi kegagalan di sini berarti alamatnya tidak ada atau sudah dipakai
+    /// orang lain, dua hal yang pesannya perlu sampai apa adanya ke layar.
+    @discardableResult
+    func linkGoogleWorkspace(userId: String, email: String?) async throws -> Bool {
+        var req = makeRequest("/api/admin/users/\(vaultEnc(userId))", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // NSNull, bukan `nil as Any`: JSONSerialization menolak nil di dalam dictionary dan akan
+        // melempar, sehingga MELEPAS tautan gagal sementara memasangnya berhasil — cacat yang cuma
+        // muncul di satu arah dan karenanya mudah lolos dari pengujian.
+        req.httpBody = try JSONSerialization.data(
+            withJSONObject: ["googleWorkspaceEmail": email ?? NSNull()])
+        _ = try await vaultRun(req, decode: GoogleLinkResponse.self)
+        return true
+    }
+
     // MARK: Plumbing
 
     /// `run` is private to APIClient.swift and Swift's `private` does not reach across files, so this
@@ -206,4 +229,11 @@ struct VaultDeleteResult: Codable {
     let trashed: Int?
     let purged: Int?
     let filesUnlinked: Int?
+}
+
+
+/// Balasan PATCH profil. Hanya field yang benar-benar dibaca layar ini.
+struct GoogleLinkResponse: Codable {
+    struct U: Codable { let id: String?; let googleWorkspaceEmail: String? }
+    let user: U?
 }

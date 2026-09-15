@@ -178,6 +178,7 @@ struct AdminUsersSection: View {
     @State private var filter = "ALL"
     @State private var deleteTarget: WorkspaceRoster.Member?
     @State private var openProfile: ProfileTarget?
+    @State private var linkTarget: GoogleLinkTarget?
 
     private var members: [WorkspaceRoster.Member] { roster?.members ?? [] }
     private var viewerRole: String? { roster?.role }
@@ -216,6 +217,11 @@ struct AdminUsersSection: View {
             Button(T("Cancel"), role: .cancel) { deleteTarget = nil }
         } message: { Text(T("Their tasks/files/quests are reassigned to you. This cannot be undone.")) }
         .navigationDestination(item: $openProfile) { MemberProfileView(target: $0) }
+        // Sheet, bukan Menu. Workspace ini punya 22 akun dan menu sepanjang itu di layar HP tidak
+        // bisa dipakai — tidak bisa dicari, dan separuhnya di luar layar.
+        .sheet(item: $linkTarget) { t in
+            NavigationStack { GoogleLinkSheet(target: t) { linkTarget = nil; Task { await load() } } }
+        }
     }
 
     private func row(_ m: WorkspaceRoster.Member) -> some View {
@@ -232,6 +238,14 @@ struct AdminUsersSection: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(m.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
                         if let e = m.emailText, !e.isEmpty { Text(e).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }
+                        // Tenang, bukan menonjol: sebagian besar orang memang belum punya, dan
+                        // ketiadaannya bukan sesuatu yang perlu diteriakkan di tiap baris.
+                        if let g = m.googleWorkspaceEmail, !g.isEmpty {
+                            Label(g, systemImage: "at")
+                                .font(NXFont.text(10))
+                                .foregroundStyle(NX.violetText)
+                                .lineLimit(1)
+                        }
                     }
                     Spacer(minLength: 6)
                 }
@@ -242,6 +256,15 @@ struct AdminUsersSection: View {
             if canEditTier(viewerRole, m.role), let wsId = workspaceId {
                 Menu {
                     ForEach(assignableRoles(viewerRole), id: \.self) { r in Button(orgRoleLabel(r)) { Task { await setRole(m, r, wsId) } } }
+                    Divider()
+                    if let uid = m.userId {
+                        Button {
+                            linkTarget = GoogleLinkTarget(id: uid, userId: uid, name: m.displayName, current: m.googleWorkspaceEmail)
+                        } label: {
+                            Label(m.googleWorkspaceEmail == nil ? T("Link Google account") : T("Change Google account"),
+                                  systemImage: "at")
+                        }
+                    }
                     Divider()
                     Button(role: .destructive) { deleteTarget = m } label: { Label(T("Delete account"), systemImage: "trash") }
                 } label: { RoleChip(role: m.role ?? "STAFF") }
@@ -715,5 +738,137 @@ struct AdminAppInstallsSection: View {
         do { data = try await APIClient.shared.appInstalls() }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load.") }
         loading = false
+    }
+}
+
+
+/// Siapa yang sedang ditautkan. Tipe sendiri, bukan `WorkspaceRoster.Member`, karena `id` di sana
+/// opsional dan dua anggota tanpa id akan bertabrakan sebagai item sheet.
+struct GoogleLinkTarget: Identifiable, Hashable {
+    let id: String
+    let userId: String
+    let name: String
+    let current: String?
+}
+
+/// Memilih akun Google Workspace untuk satu orang.
+///
+/// Memilih, bukan mengetik. Alamat yang diketik tangan akan salah ketik suatu hari, dan alamat
+/// yang salah terlihat persis sama dengan yang benar sampai ada yang mencoba mengirim surat.
+/// Server tetap memverifikasi ulang; daftar ini hanya menghapus kesempatannya.
+///
+/// TIDAK bisa membuat akun baru di sini — itu mengisi seat lisensi berbayar dan menampilkan sandi
+/// sementara yang hanya muncul sekali. Keduanya pekerjaan meja, dan ada di Control Room web.
+struct GoogleLinkSheet: View {
+    let target: GoogleLinkTarget
+    var onDone: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var data: GoogleWorkspaceAccounts?
+    @State private var loading = true
+    @State private var busy = false
+    @State private var problem: String?
+    @State private var query = ""
+
+    private var rows: [GoogleWorkspaceAccount] {
+        let all = data?.accounts ?? []
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return all }
+        return all.filter { $0.email.lowercased().contains(q) || $0.fullName.lowercased().contains(q) }
+    }
+
+    var body: some View {
+        Group {
+            if loading {
+                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if data?.configured == false {
+                empty("link.badge.plus", T("Google Workspace belum disambungkan"),
+                      data?.error ?? T("Hubungi BoD untuk menyambungkannya."))
+            } else {
+                List {
+                    if let current = target.current {
+                        Section {
+                            Button(role: .destructive) { Task { await link(nil) } } label: {
+                                Label("\(T("Lepas tautan")) — \(current)", systemImage: "link.badge.plus")
+                            }
+                            .disabled(busy)
+                        }
+                    }
+                    Section(T("Akun di Workspace")) {
+                        ForEach(rows) { a in
+                            // Yang sudah dipakai orang LAIN tidak bisa dipilih, dan menyebut
+                            // pemakainya. Indeks unik di server menolaknya juga, tapi ditolak
+                            // setelah memilih terbaca seperti kesalahan pemakai.
+                            let takenByOther = a.linkedTo != nil && a.linkedTo?.id != target.userId
+                            Button { Task { await link(a.email) } } label: {
+                                HStack(spacing: 10) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(a.email).font(NXFont.text(14, .semibold))
+                                            .foregroundStyle(takenByOther ? NX.mutedFg : NX.foreground)
+                                        HStack(spacing: 6) {
+                                            if !a.fullName.isEmpty {
+                                                Text(a.fullName).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                                            }
+                                            if a.suspended {
+                                                Text(T("suspended")).font(NXFont.text(10)).foregroundStyle(NX.warning)
+                                            }
+                                            if let owner = a.linkedTo, takenByOther {
+                                                Text("\(T("dipakai")) \(owner.name)").font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
+                                            }
+                                        }
+                                    }
+                                    Spacer(minLength: 4)
+                                    if a.email == target.current {
+                                        Image(systemName: "checkmark").foregroundStyle(NX.success)
+                                    }
+                                }
+                            }
+                            .disabled(busy || takenByOther)
+                        }
+                    }
+                    if let problem {
+                        Section { Text(problem).font(NXFont.text(12)).foregroundStyle(NX.danger) }
+                    }
+                }
+                .searchable(text: $query, prompt: T("Cari akun…"))
+            }
+        }
+        .navigationTitle(target.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() } }
+            if busy { ToolbarItem(placement: .topBarTrailing) { ProgressView() } }
+        }
+        .task { await load() }
+    }
+
+    private func empty(_ icon: String, _ title: String, _ msg: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon).font(.system(size: 38)).foregroundStyle(NX.mutedFg)
+            Text(title).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
+            Text(msg).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity).padding(28)
+    }
+
+    private func load() async {
+        do { data = try await APIClient.shared.googleWorkspaceAccounts() }
+        catch { problem = (error as? LocalizedError)?.errorDescription ?? T("Gagal memuat daftar akun.") }
+        loading = false
+    }
+
+    private func link(_ email: String?) async {
+        busy = true
+        defer { busy = false }
+        problem = nil
+        do {
+            try await APIClient.shared.linkGoogleWorkspace(userId: target.userId, email: email)
+            onDone()
+            dismiss()
+        } catch {
+            // Pesan server dibawa apa adanya: "sudah ditautkan ke X" dan "tidak ada di Google"
+            // adalah dua hal berbeda, dan menggantinya dengan "gagal" membuang petunjuknya.
+            problem = (error as? LocalizedError)?.errorDescription ?? T("Gagal menautkan.")
+        }
     }
 }

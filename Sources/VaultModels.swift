@@ -112,3 +112,31 @@ struct VaultPublicFile: Codable {
     let previewUrl: String
     let downloadUrl: String?
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Google Workspace — penautan akun dari Control Room di HP.
+//
+// Hanya MENAUTKAN, bukan membuat. Membuat mailbox mengisi seat lisensi berbayar dan
+// menampilkan sandi sementara yang hanya muncul sekali; keduanya pekerjaan meja, bukan
+// sesuatu yang pantas dilakukan sambil berjalan dengan satu tangan.
+// ─────────────────────────────────────────────────────────────────────────────
+
+struct GoogleWorkspaceAccount: Codable, Identifiable, Hashable {
+    var id: String { email }
+    let email: String
+    let fullName: String
+    let suspended: Bool
+    let isAdmin: Bool
+    let domain: String
+    /// Profil NEXUS yang sudah memakai akun ini, atau nil.
+    let linkedTo: LinkedTo?
+    struct LinkedTo: Codable, Hashable { let id: String; let name: String }
+}
+
+struct GoogleWorkspaceAccounts: Codable {
+    let configured: Bool
+    let domains: [String]?
+    let accounts: [GoogleWorkspaceAccount]
+    let error: String?
+}
