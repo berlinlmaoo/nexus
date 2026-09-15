@@ -586,7 +586,11 @@ function UserRow(props: UserRowProps) {
       <tr className="border-b border-border last:border-0 hover:bg-muted/20">
         <td className="px-4 py-3">
           <div className="flex items-center gap-3">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary ring-1 ring-border">{initialsOf(user.name)}</span>
+            {user.avatar ? (
+              <img src={user.avatar} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-border" />
+            ) : (
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary ring-1 ring-border">{initialsOf(user.name)}</span>
+            )}
             <div className="min-w-0">
               <div className="truncate font-semibold">{user.name || "Unnamed"}</div>
               <div className="truncate text-xs text-muted-foreground">{user.email}</div>
@@ -715,7 +719,11 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
       <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
         {/* Kepala: siapa dia, dalam satu pandangan — peran, gabung, approver. Bukan pengaturan. */}
         <header className="flex items-start gap-4 border-b border-border px-6 py-5">
-          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-primary/10 text-lg font-bold text-primary ring-1 ring-border">{initialsOf(user.name)}</span>
+          {user.avatar ? (
+            <img src={user.avatar} alt="" className="h-14 w-14 shrink-0 rounded-full object-cover ring-1 ring-border" />
+          ) : (
+            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-primary/10 text-lg font-bold text-primary ring-1 ring-border">{initialsOf(user.name)}</span>
+          )}
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="truncate text-lg font-bold tracking-tight">{user.name || "Unnamed"}</h2>
@@ -735,6 +743,7 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
           <div className="grid gap-4 md:grid-cols-2">
             {/* ── kiri ── */}
             <div className="space-y-4">
+              {canDelete && <AccountCard user={user} memberId={orgInfo.memberId} Card={Card} />}
               <Card title="Peran">
                 {canEdit ? (
                   <select value={orgInfo.role} disabled={pending} onChange={(e) => onOrgRole(e.target.value)} className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold outline-none focus:border-primary disabled:opacity-50">
@@ -853,6 +862,77 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Identitas akun orang lain — foto, nama, email login, sandi. BoD ke atas saja (server menolak
+ * sisanya, tombolnya juga tidak digambar untuk yang lain).
+ *
+ * Sandi diketik sekali dan dikirim sekali; tidak ada "konfirmasi sandi" — yang mengetik adalah BoD
+ * yang bisa melihat apa yang diketiknya (kotaknya teks biasa, bukan titik-titik), dan kalau salah,
+ * ia tinggal mengetik lagi. Sandi lama tidak diminta: orang itu memang tidak ada di sini.
+ */
+function AccountCard({ user, memberId, Card }: { user: NexusAdminUser; memberId: string; Card: (p: { title: string; hint?: string; children: React.ReactNode; className?: string }) => JSX.Element }) {
+  const qc = useQueryClient();
+  const [name, setName] = useState(user.name ?? "");
+  const [email, setEmail] = useState(user.email ?? "");
+  const [password, setPassword] = useState("");
+  const refresh = () => { qc.invalidateQueries({ queryKey: ["nexus", "admin-users"] }); qc.invalidateQueries({ queryKey: ["nexus", "workspace-members"] }); qc.invalidateQueries({ queryKey: ["nexus", "approval-chart"] }); };
+  const save = useMutation({
+    mutationFn: (body: { name?: string; email?: string; password?: string }) => nexusApi.updateAdminAccount(user.id, body),
+    onSuccess: (_r, body) => {
+      refresh();
+      setPassword("");
+      toast.success(body.password ? "Sandi diganti" : "Akun disimpan", { description: body.password ? "Sampaikan sandi barunya langsung ke orangnya, jangan lewat chat grup." : undefined });
+    },
+    onError: (e: unknown) => toast.error("Gagal menyimpan", { description: e instanceof ApiError ? e.message : "Coba lagi." }),
+  });
+  const photo = useMutation({
+    mutationFn: (file: File) => nexusApi.uploadMemberAvatar(memberId, file),
+    onSuccess: () => { refresh(); toast.success("Foto profil diganti"); },
+    onError: (e: unknown) => toast.error("Gagal mengunggah foto", { description: e instanceof ApiError ? e.message : "PNG/JPG/WEBP, maksimal 5 MB." }),
+  });
+  const dirtyIdentity = name.trim() !== (user.name ?? "") || email.trim().toLowerCase() !== (user.email ?? "");
+  const inputCls = "w-full rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-primary";
+  return (
+    <Card title="Akun" hint="Foto, nama, email login, dan sandi. Hanya BoD yang melihat kartu ini.">
+      <div className="space-y-3">
+        <label className="flex cursor-pointer items-center gap-3">
+          {user.avatar ? (
+            <img src={user.avatar} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover ring-1 ring-border" />
+          ) : (
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-primary/10 text-sm font-bold text-primary ring-1 ring-border">{initialsOf(user.name)}</span>
+          )}
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold transition hover:border-primary hover:text-primary">
+            {photo.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Ganti foto
+          </span>
+          <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={photo.isPending} onChange={(e) => { const f = e.target.files?.[0]; if (f) photo.mutate(f); e.target.value = ""; }} />
+        </label>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div>
+            <div className="mb-1 text-[11px] font-semibold text-muted-foreground">Nama</div>
+            <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
+          </div>
+          <div>
+            <div className="mb-1 text-[11px] font-semibold text-muted-foreground">Email login</div>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
+          </div>
+        </div>
+        <button type="button" disabled={!dirtyIdentity || save.isPending} onClick={() => save.mutate({ ...(name.trim() !== (user.name ?? "") ? { name: name.trim() } : {}), ...(email.trim().toLowerCase() !== (user.email ?? "") ? { email: email.trim() } : {}) })} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-40">
+          {save.isPending && !password ? "Menyimpan…" : "Simpan nama & email"}
+        </button>
+        <div className="border-t border-border pt-3">
+          <div className="mb-1 text-[11px] font-semibold text-muted-foreground">Sandi baru <span className="font-normal text-muted-foreground/70">— minimal 8 karakter, terlihat saat diketik</span></div>
+          <div className="flex gap-2">
+            <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Ketik sandi baru…" autoComplete="off" spellCheck={false} className={cn(inputCls, "font-mono")} />
+            <button type="button" disabled={password.length < 8 || save.isPending} onClick={() => save.mutate({ password })} className="shrink-0 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700 transition hover:bg-rose-100 disabled:opacity-40">
+              Ganti sandi
+            </button>
+          </div>
+        </div>
+      </div>
+    </Card>
   );
 }
 

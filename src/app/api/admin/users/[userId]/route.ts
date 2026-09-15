@@ -6,6 +6,8 @@ import prisma from "@/lib/prisma"
 import { getAdminSessionContext } from "@/lib/admin-access"
 import { directoryConfigured, getDirectoryAccount } from "@/lib/google-directory"
 import { logAudit } from "@/lib/audit"
+import bcrypt from "bcryptjs"
+import { getUserOrgRole, isBodPlus } from "@/lib/feed"
 
 const SYSTEM_ROLES: SystemRole[] = ["ADMIN", "MEMBER"]
 
@@ -151,10 +153,24 @@ export async function PATCH(
     // dan memanggilnya terasa berhasil padahal tidak mengubah apa pun.
     const hasWorkspaceEmail = Object.prototype.hasOwnProperty.call(body, "googleWorkspaceEmail")
 
+    // Identitas akun — nama, email login, sandi — hanya BoD ke atas (atau system admin).
+    // `canAccessUserManagement` di atas masih meloloskan Manager; untuk peran dan tautan Google
+    // itu memang cukup, untuk mengganti sandi orang tidak.
+    const wantsName = typeof body.name === "string"
+    const wantsEmail = typeof body.email === "string"
+    const wantsPassword = typeof body.password === "string"
+    const touchesAccount = wantsName || wantsEmail || wantsPassword
+    if (touchesAccount) {
+      const orgRole = await getUserOrgRole(session.user.id)
+      if (!context.isSystemAdmin && !isBodPlus(orgRole)) {
+        return NextResponse.json({ error: "Hanya BoD ke atas yang bisa mengubah nama, email, atau sandi akun." }, { status: 403 })
+      }
+    }
+
     if (role !== undefined && !SYSTEM_ROLES.includes(role)) {
       return NextResponse.json({ error: "Invalid system role" }, { status: 400 })
     }
-    if (role === undefined && !hasWorkspaceEmail) {
+    if (role === undefined && !hasWorkspaceEmail && !touchesAccount) {
       return NextResponse.json({ error: "Tidak ada yang diubah" }, { status: 400 })
     }
 
@@ -167,8 +183,29 @@ export async function PATCH(
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    const data: { role?: SystemRole; googleWorkspaceEmail?: string | null } = {}
+    const data: { role?: SystemRole; googleWorkspaceEmail?: string | null; name?: string; email?: string; password?: string } = {}
     if (role !== undefined) data.role = role
+
+    if (wantsName) {
+      const name = String(body.name).trim()
+      if (name.length < 2 || name.length > 80) return NextResponse.json({ error: "Nama 2–80 karakter." }, { status: 400 })
+      data.name = name
+    }
+    if (wantsEmail) {
+      const email = String(body.email).trim().toLowerCase()
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return NextResponse.json({ error: "Email tidak valid." }, { status: 400 })
+      // Email adalah kunci login. Disebutkan SIAPA yang sudah memakainya, bukan galat unik database.
+      const taken = await prisma.user.findFirst({ where: { email, id: { not: (await params).userId } }, select: { name: true } })
+      if (taken) return NextResponse.json({ error: `${email} sudah dipakai ${taken.name ?? "akun lain"}.` }, { status: 409 })
+      data.email = email
+    }
+    if (wantsPassword) {
+      const pw = String(body.password)
+      if (pw.length < 8) return NextResponse.json({ error: "Sandi minimal 8 karakter." }, { status: 400 })
+      // Cost yang sama dengan pendaftaran. Sandi lama tidak diminta: ini BoD mengatur ulang
+      // sandi orang lain, dan orang itu memang tidak ada di sini untuk mengetiknya.
+      data.password = await bcrypt.hash(pw, 12)
+    }
 
     if (hasWorkspaceEmail) {
       const raw = body.googleWorkspaceEmail
@@ -227,7 +264,7 @@ export async function PATCH(
 
     await logAudit({
       action: "update",
-      entityType: "admin_user_role",
+      entityType: touchesAccount ? "admin_user_account" : "admin_user_role",
       entityId: (await params).userId,
       entityName: updated.email,
       userId: session.user.id,
@@ -237,6 +274,10 @@ export async function PATCH(
         role,
         previousGoogleWorkspaceEmail: existing.googleWorkspaceEmail,
         googleWorkspaceEmail: data.googleWorkspaceEmail,
+        // Sandinya sendiri tidak pernah masuk audit — cukup fakta bahwa ia diganti.
+        ...(wantsName ? { name: data.name } : {}),
+        ...(wantsEmail ? { email: data.email } : {}),
+        ...(wantsPassword ? { passwordReset: true } : {}),
       },
     })
 
