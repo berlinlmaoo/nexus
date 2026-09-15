@@ -393,6 +393,10 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
   const [problem, setProblem] = useState<string | null>(null);
   const [making, setMaking] = useState(false);
   const [madePassword, setMadePassword] = useState<{ email: string; password: string; notified?: { inApp: boolean; email: boolean; emailTo?: string | null } } | null>(null);
+  // Di ATAS semua `return` awal. Pernah ditaruh di bawahnya: saat daftar akun Google selesai
+  // dimuat (`configured` false → true) jumlah hook berubah, React melempar, dan seluruh halaman
+  // Control Room jatuh ke "This page didn't load".
+  const [q, setQ] = useState("");
   const current = user.googleWorkspaceEmail ?? null;
 
   const parts = (user.name ?? "").trim().split(/\s+/).filter(Boolean);
@@ -459,7 +463,6 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
   }
 
   const takenBy = (a: GoogleWorkspaceAccount) => (a.linkedTo && a.linkedTo.id !== user.id ? a.linkedTo.name : null);
-  const [q, setQ] = useState("");
   const rows = accounts.filter((a) => !q.trim() || a.email.toLowerCase().includes(q.toLowerCase()) || (a.fullName ?? "").toLowerCase().includes(q.toLowerCase()));
   const inputCls = "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary";
 
