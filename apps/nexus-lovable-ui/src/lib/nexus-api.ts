@@ -564,7 +564,21 @@ export type NexusWorkspaceMember = {
   attendanceShiftByDay?: Record<string, { start: string; end: string }> | null;
   flexiTimeEnabled?: boolean;
   noGeofenceMode?: boolean;
+  /** Atasan langsung di Bagan Approval. null = belum ditaruh (request-nya jatuh ke BoD). */
+  approverId?: string | null;
+  approver?: { id: string; name: string | null; avatar: string | null } | null;
   joinedAt: string;
+};
+
+/** Satu orang di Bagan Approval (Control Room). */
+export type ApprovalChartPerson = { userId: string; memberId: string; name: string | null; email: string; avatar: string | null; role: string };
+export type ApprovalChart = {
+  workspaceId: string;
+  oaa: ApprovalChartPerson[];
+  bod: ApprovalChartPerson[];
+  managers: Array<ApprovalChartPerson & { reports: ApprovalChartPerson[] }>;
+  unassigned: ApprovalChartPerson[];
+  stats: { staff: number; assigned: number; unassigned: number; managers: number; bod: number };
 };
 
 export type NexusHoliday = {
@@ -1888,8 +1902,10 @@ export const nexusApi = {
   },
   inviteWorkspaceMember: (payload: { email: string; role?: OrgRole; attendanceRole?: string; workspaceId?: string }) =>
     apiFetch<{ member: NexusWorkspaceMember }>("/api/workspaces/members", { method: "POST", body: JSON.stringify(payload) }),
-  updateWorkspaceMember: (payload: { memberId: string; role?: OrgRole; attendanceRole?: string; workspaceId?: string; attendanceShiftStartTime?: string | null; attendanceShiftEndTime?: string | null; attendanceShiftByDay?: Record<string, { start: string; end: string }> | null; phoneNumber?: string | null; flexiTimeEnabled?: boolean; noGeofenceMode?: boolean }) =>
-    apiFetch<{ member: NexusWorkspaceMember }>("/api/workspaces/members", { method: "PATCH", body: JSON.stringify(payload) }),
+  updateWorkspaceMember: (payload: { memberId: string; role?: OrgRole; attendanceRole?: string; workspaceId?: string; attendanceShiftStartTime?: string | null; attendanceShiftEndTime?: string | null; attendanceShiftByDay?: Record<string, { start: string; end: string }> | null; phoneNumber?: string | null; flexiTimeEnabled?: boolean; noGeofenceMode?: boolean; approverId?: string | null }) =>
+    apiFetch<{ member: NexusWorkspaceMember; orphaned?: Array<{ id: string; name: string | null }> }>("/api/workspaces/members", { method: "PATCH", body: JSON.stringify(payload) }),
+  /** Seluruh Bagan Approval dalam satu panggilan. BoD saja. */
+  approvalChart: () => apiFetch<ApprovalChart>("/api/admin/approval-chart"),
   removeWorkspaceMember: (memberId: string, workspaceId?: string) =>
     apiFetch<{ success?: boolean }>(`/api/workspaces/members?memberId=${encodeURIComponent(memberId)}${workspaceId ? `&workspaceId=${encodeURIComponent(workspaceId)}` : ""}`, { method: "DELETE" }),
   // Per-user day-off management (BoD only) for Control Room → Members.
@@ -2348,7 +2364,6 @@ export const nexusApi = {
   deleteDivision: (divisionId: string) => apiFetch<{ deleted?: boolean }>("/api/teams", { method: "POST", body: JSON.stringify({ action: "delete-division", divisionId }) }),
   setTeamDivision: (teamId: string, divisionId: string | null) => apiFetch<{ updated?: boolean }>("/api/teams", { method: "POST", body: JSON.stringify({ action: "set-team-division", teamId, divisionId }) }),
   setTeamAttendancePrimary: (teamId: string, userId: string, isAttendancePrimary: boolean) => apiFetch<{ updated?: boolean }>("/api/teams", { method: "POST", body: JSON.stringify({ action: "set-attendance-primary", teamId, userId, isAttendancePrimary }) }),
-  setTeamMemberRole: (teamId: string, userId: string, role: "LEAD" | "MEMBER") => apiFetch<{ updated?: boolean }>("/api/teams", { method: "POST", body: JSON.stringify({ action: "set-member-role", teamId, userId, role }) }),
   updateTeamShift: (teamId: string, payload: { attendanceShiftOverrideEnabled: boolean; attendanceShiftStartTime?: string | null; attendanceShiftEndTime?: string | null }) => apiFetch<{ team?: NexusTeam }>("/api/teams", { method: "POST", body: JSON.stringify({ action: "update-attendance-shift", teamId, ...payload }) }),
   masterCalendar: (teamId: string, rangeStart: string, rangeEnd: string) => apiFetch<{ events: NexusCalendarEvent[] }>(`/api/master-calendar?teamId=${encodeURIComponent(teamId)}&rangeStart=${encodeURIComponent(rangeStart)}&rangeEnd=${encodeURIComponent(rangeEnd)}`),
   createCalendarEvent: (payload: CalendarEventPayload) => apiFetch<{ event: NexusCalendarEvent }>("/api/master-calendar", { method: "POST", body: JSON.stringify(payload) }),
