@@ -55,7 +55,6 @@ const moreGroups = [
     label: "System",
     items: [
       { title: "Ticket", url: "/complaints", icon: Ticket },
-      { title: "Crew Hub", url: "/teams", icon: Users },
       { title: "Setting", url: "/settings", icon: Settings },
       { title: "Control Room", url: "/admin", icon: Shield },
     ],
@@ -198,7 +197,7 @@ function MoreSheet({ open, onClose, isActive, unread }: { open: boolean; onClose
   // page there. Ticket is OPEN to everyone since 2026-07-29 (staff see only their own tickets).
   // page (gated inside each route component) — no ETA yet, so we tease, not hide.
   const visibleGroups = moreGroups
-    .map((g) => ({ ...g, items: g.items.filter((i) => canManageOrg || (i.url !== "/admin" && i.url !== "/teams")) }))
+    .map((g) => ({ ...g, items: g.items.filter((i) => canManageOrg || i.url !== "/admin") }))
     .filter((g) => g.items.length > 0);
   useEffect(() => {
     if (!open) return;

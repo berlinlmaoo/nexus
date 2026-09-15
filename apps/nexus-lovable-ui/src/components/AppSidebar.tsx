@@ -55,7 +55,6 @@ const groups = [
     label: "System",
     items: [
       { title: "Ticket", url: "/complaints", icon: Ticket },
-      { title: "Crew Hub", url: "/teams", icon: Users },
       { title: "Setting", url: "/settings", icon: Settings },
       { title: "Control Room", url: "/admin", icon: Shield },
     ],

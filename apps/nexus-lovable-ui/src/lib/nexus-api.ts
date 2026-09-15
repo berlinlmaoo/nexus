@@ -1030,6 +1030,22 @@ export type NexusTeam = {
   attendanceShiftEndTime?: string | null;
 };
 
+
+/** Keanggotaan tim + project satu orang, untuk dropdown di Control Room -> Users. */
+export type NexusUserMemberships = {
+  projects: Array<{
+    id: string;
+    name: string;
+    icon?: string | null;
+    color?: string | null;
+    status?: string | null;
+    role: string;
+    /** null = ditambahkan langsung ke project; berisi nama tim = ikut lewat tim itu. */
+    viaTeam: string | null;
+  }>;
+  teams: Array<{ id: string; name: string; color?: string | null; role: string; division: string | null }>;
+};
+
 /** Grouping layer above teams (divisi / perusahaan). */
 export type NexusDivision = {
   id: string;
@@ -2313,6 +2329,9 @@ export const nexusApi = {
   }>("/api/admin/app-installs"),
 
   // --- Teams + Master Calendar ---
+  /** Satu panggilan untuk SELURUH daftar: 49 baris x satu query akan membuat Control Room
+   *  butuh puluhan detik untuk terbuka. Digabungkan di server, dikelompokkan per userId. */
+  adminUserMemberships: () => apiFetch<{ byUser: Record<string, NexusUserMemberships> }>("/api/admin/users/memberships"),
   teams: () => apiFetch<NexusTeam[]>("/api/teams"),
   createTeam: (name: string, color?: string) => apiFetch<NexusTeam>("/api/teams", { method: "POST", body: JSON.stringify(color ? { name, color } : { name }) }),
   deleteTeam: (teamId: string) => apiFetch<{ deleted?: boolean }>("/api/teams", { method: "POST", body: JSON.stringify({ action: "delete-team", teamId }) }),

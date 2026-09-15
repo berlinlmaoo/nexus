@@ -2,11 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Avatar } from "@/components/Avatar";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AtSign, CalendarDays, CalendarX2, ChevronDown, Link2, Link2Off, Loader2, Megaphone, Plus, ScrollText, Search, Shield, Trash2, Trophy, Users as UsersIcon, X, Zap, Smartphone } from "lucide-react";
+import { AtSign, CalendarDays, CalendarX2, ChevronDown, FolderKanban, Link2, Link2Off, Loader2, Megaphone, Plus, ScrollText, Search, Shield, Trash2, Trophy, Users as UsersIcon, X, Zap, Smartphone } from "lucide-react";
 import { type NexusAdminAnnouncement } from "@/lib/nexus-api";
 import { GideonMark } from "@/components/gideon/GideonMark";
 import { PageHeader } from "@/components/PageHeader";
-import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusAdminUser, type GoogleWorkspaceAccount } from "@/lib/nexus-api";
+import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusAdminUser, type GoogleWorkspaceAccount, type NexusUserMemberships } from "@/lib/nexus-api";
+// Crew Hub tidak dihapus — dipindahkan. Halaman /teams sekarang mengarahkan ke sini, dan
+// panel yang sama digambar sebagai tab. Isinya bukan hiasan: divisi, lead, jam shift per tim,
+// dan tautan tim->project yang MEMBERI akses project (src/lib/team-sync.ts). Menghapus
+// halamannya berarti membuang satu-satunya cara mengatur semua itu.
+import { TeamsPanel } from "./teams";
 import { cn } from "@/lib/utils";
 import { Link } from "@tanstack/react-router";
 
@@ -19,7 +24,7 @@ function initialsOf(name?: string | null) {
 
 function Admin() {
   const qc = useQueryClient();
-  const [view, setView] = useState<"users" | "audit" | "quests" | "announcements" | "gideon" | "app">("users");
+  const [view, setView] = useState<"users" | "teams" | "audit" | "quests" | "announcements" | "gideon" | "app">("users");
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState<"ALL" | "ONE_ABOVE_ALL" | "BOD" | "MANAGER" | "STAFF">("ALL");
   const [dayoffUser, setDayoffUser] = useState<{ id: string; name: string } | null>(null);
@@ -73,6 +78,15 @@ function Admin() {
     retry: false,
   });
 
+  // Sekali per halaman, sama seperti daftar akun Google di atas. Isinya berubah hanya saat ada
+  // yang dipindah tim atau project, jadi `staleTime` panjang aman dan menghemat 49 kali query.
+  const memberships = useQuery({
+    queryKey: ["nexus", "admin-user-memberships"],
+    queryFn: () => nexusApi.adminUserMemberships(),
+    staleTime: 2 * 60_000,
+    retry: false,
+  });
+
   const allUsers = users.data?.users ?? [];
   const totalUsers = users.data?.total ?? allUsers.length;
   const rows = allUsers.filter((u) => {
@@ -88,6 +102,7 @@ function Admin() {
       <div className="p-4 md:p-8 space-y-5">
         <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-0.5 w-fit">
           <button onClick={() => setView("users")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "users" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><UsersIcon className="h-3.5 w-3.5" /> Users</button>
+          <button onClick={() => setView("teams")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "teams" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><FolderKanban className="h-3.5 w-3.5" /> Teams</button>
           <button onClick={() => setView("audit")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "audit" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><ScrollText className="h-3.5 w-3.5" /> Audit log</button>
           <button onClick={() => setView("quests")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "quests" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Trophy className="h-3.5 w-3.5" /> Quests</button>
           {canAnnounce && <button onClick={() => setView("announcements")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "announcements" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Megaphone className="h-3.5 w-3.5" /> Announcements</button>}
@@ -95,6 +110,7 @@ function Admin() {
           {canAnnounce && <button onClick={() => setView("app")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "app" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Smartphone className="h-3.5 w-3.5" /> Aplikasi</button>}
         </div>
 
+        {view === "teams" && <TeamsPanel embedded />}
         {view === "audit" && <AuditLog />}
         {view === "quests" && <AdminQuests />}
         {view === "announcements" && canAnnounce && <AnnouncementsAdmin />}
@@ -151,7 +167,7 @@ function Admin() {
                 <tbody>
                   {rows.map((u) => {
                     const info = orgInfoByUser.get(u.id);
-                    return <UserRow key={u.id} user={u} orgInfo={info} assignable={viewerAssignable} canEdit={!!info && canEditTier(viewerRole, info.role)} pending={updateOrg.isPending} onOrgRole={(role) => info && updateOrg.mutate({ memberId: info.memberId, role })} canManageShift={canManageShift} shiftPending={updateShift.isPending} onSaveShift={(start, end) => info && updateShift.mutate({ memberId: info.memberId, start, end })} shiftByDayPending={updateShiftByDay.isPending} onSaveShiftByDay={(byDay) => info && updateShiftByDay.mutate({ memberId: info.memberId, byDay })} flexiPending={updateFlexi.isPending} onToggleFlexi={() => info && updateFlexi.mutate({ memberId: info.memberId, flexi: !info.flexi })} geofencePending={updateGeofence.isPending} onToggleGeofence={() => info && updateGeofence.mutate({ memberId: info.memberId, on: !info.noGeofence })} onDayoff={() => setDayoffUser({ id: u.id, name: u.name || u.email || "User" })} canDelete={canDeleteUsers} isMember={!!info} onDelete={() => setDelUser({ id: u.id, name: u.name || "Unnamed", email: u.email ?? "" })} gwConfigured={gwAccounts.data?.configured ?? false} gwAccounts={gwAccounts.data?.accounts ?? []} gwDomains={gwAccounts.data?.domains ?? []} canLinkGoogle={canDeleteUsers} />;
+                    return <UserRow key={u.id} user={u} orgInfo={info} assignable={viewerAssignable} canEdit={!!info && canEditTier(viewerRole, info.role)} pending={updateOrg.isPending} onOrgRole={(role) => info && updateOrg.mutate({ memberId: info.memberId, role })} canManageShift={canManageShift} shiftPending={updateShift.isPending} onSaveShift={(start, end) => info && updateShift.mutate({ memberId: info.memberId, start, end })} shiftByDayPending={updateShiftByDay.isPending} onSaveShiftByDay={(byDay) => info && updateShiftByDay.mutate({ memberId: info.memberId, byDay })} flexiPending={updateFlexi.isPending} onToggleFlexi={() => info && updateFlexi.mutate({ memberId: info.memberId, flexi: !info.flexi })} geofencePending={updateGeofence.isPending} onToggleGeofence={() => info && updateGeofence.mutate({ memberId: info.memberId, on: !info.noGeofence })} onDayoff={() => setDayoffUser({ id: u.id, name: u.name || u.email || "User" })} canDelete={canDeleteUsers} isMember={!!info} onDelete={() => setDelUser({ id: u.id, name: u.name || "Unnamed", email: u.email ?? "" })} gwConfigured={gwAccounts.data?.configured ?? false} gwAccounts={gwAccounts.data?.accounts ?? []} gwDomains={gwAccounts.data?.domains ?? []} canLinkGoogle={canDeleteUsers} memberships={memberships.data?.byUser[u.id]} membershipsLoading={memberships.isLoading} />;
                   })}
                 </tbody>
               </table>
@@ -396,8 +412,13 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
     </span>
   );
 }
-function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canManageShift, shiftPending, onSaveShift, shiftByDayPending, onSaveShiftByDay, flexiPending, onToggleFlexi, geofencePending, onToggleGeofence, onDayoff, canDelete, isMember, onDelete, gwConfigured, gwAccounts, gwDomains, canLinkGoogle }: { gwConfigured: boolean; gwAccounts: GoogleWorkspaceAccount[]; gwDomains: string[]; canLinkGoogle: boolean; user: NexusAdminUser; orgInfo?: { memberId: string; role: string; shiftStart: string | null; shiftEnd: string | null; shiftByDay: Record<string, { start: string; end: string }> | null; flexi: boolean; noGeofence: boolean }; assignable: OrgRole[]; canEdit: boolean; onOrgRole: (role: string) => void; pending: boolean; canManageShift: boolean; shiftPending: boolean; onSaveShift: (start: string | null, end: string | null) => void; shiftByDayPending: boolean; onSaveShiftByDay: (byDay: Record<string, { start: string; end: string }>) => void; flexiPending: boolean; onToggleFlexi: () => void; geofencePending: boolean; onToggleGeofence: () => void; onDayoff: () => void; canDelete: boolean; isMember: boolean; onDelete: () => void }) {
+function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canManageShift, shiftPending, onSaveShift, shiftByDayPending, onSaveShiftByDay, flexiPending, onToggleFlexi, geofencePending, onToggleGeofence, onDayoff, canDelete, isMember, onDelete, gwConfigured, gwAccounts, gwDomains, canLinkGoogle, memberships, membershipsLoading }: { memberships?: NexusUserMemberships; membershipsLoading: boolean; gwConfigured: boolean; gwAccounts: GoogleWorkspaceAccount[]; gwDomains: string[]; canLinkGoogle: boolean; user: NexusAdminUser; orgInfo?: { memberId: string; role: string; shiftStart: string | null; shiftEnd: string | null; shiftByDay: Record<string, { start: string; end: string }> | null; flexi: boolean; noGeofence: boolean }; assignable: OrgRole[]; canEdit: boolean; onOrgRole: (role: string) => void; pending: boolean; canManageShift: boolean; shiftPending: boolean; onSaveShift: (start: string | null, end: string | null) => void; shiftByDayPending: boolean; onSaveShiftByDay: (byDay: Record<string, { start: string; end: string }>) => void; flexiPending: boolean; onToggleFlexi: () => void; geofencePending: boolean; onToggleGeofence: () => void; onDayoff: () => void; canDelete: boolean; isMember: boolean; onDelete: () => void }) {
   const [expanded, setExpanded] = useState(false);
+  // Terpisah dari `expanded` (shift per hari): dua baris perluasan yang berbeda, dan membuka
+  // salah satunya tidak boleh menutup yang lain.
+  const [orgOpen, setOrgOpen] = useState(false);
+  const projectCount = memberships?.projects.length ?? 0;
+  const teamCount = memberships?.teams.length ?? 0;
   const byDay = orgInfo?.shiftByDay ?? {};
   const overrideCount = Object.keys(byDay).length;
   const saveDay = (wd: string, start: string | null, end: string | null) => {
@@ -415,6 +436,15 @@ function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canMa
             <div className="min-w-0">
               <div className="truncate font-semibold">{user.name || "Unnamed"}</div>
               <div className="truncate text-xs text-muted-foreground">{user.email}</div>
+              {/* Dropdown keanggotaan. Selalu digambar untuk anggota workspace — "0 project"
+                  adalah jawaban yang berguna, dan baris yang kadang punya tombol kadang tidak
+                  membuat kolomnya terbaca seperti rusak. */}
+              {isMember && (
+                <button type="button" onClick={() => setOrgOpen((v) => !v)} className={cn("mt-1 inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-semibold transition", orgOpen ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:bg-accent")}>
+                  <ChevronDown className={cn("h-3 w-3 transition-transform", orgOpen && "rotate-180")} />
+                  {membershipsLoading ? "loading…" : `${projectCount} project${projectCount === 1 ? "" : "s"}${teamCount > 0 ? ` · ${teamCount} team${teamCount === 1 ? "" : "s"}` : ""}`}
+                </button>
+              )}
             </div>
           </div>
         </td>
@@ -475,6 +505,45 @@ function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canMa
           </div>
         </td>
       </tr>
+      {orgOpen && (
+        <tr className="border-b border-border bg-muted/10">
+          <td colSpan={5} className="px-4 py-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-lg border border-border bg-background p-3">
+                <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground"><FolderKanban className="h-3.5 w-3.5" /> Projects</div>
+                {membershipsLoading && <div className="text-xs text-muted-foreground/70">Loading…</div>}
+                {!membershipsLoading && projectCount === 0 && <div className="text-xs text-muted-foreground/70">Belum masuk project mana pun.</div>}
+                <div className="flex flex-wrap gap-1.5">
+                  {(memberships?.projects ?? []).map((pr) => (
+                    <Link key={pr.id} to="/projects/$projectId" params={{ projectId: pr.id }} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2 py-1 text-[11px] font-semibold text-foreground transition hover:border-primary hover:text-primary">
+                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: pr.color ?? "#94A3B8" }} />
+                      {pr.name}
+                      {/* Lewat tim, bukan langsung: mencabutnya dari halaman project TIDAK bertahan —
+                          sinkronisasi tim menuliskannya lagi. Sebut timnya supaya jelas ke mana harus pergi. */}
+                      {pr.viaTeam && <span className="font-normal text-muted-foreground">· via {pr.viaTeam}</span>}
+                      {pr.role !== "MEMBER" && <span className="rounded bg-primary/10 px-1 text-[10px] font-bold text-primary">{pr.role}</span>}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-lg border border-border bg-background p-3">
+                <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground"><UsersIcon className="h-3.5 w-3.5" /> Teams</div>
+                {!membershipsLoading && teamCount === 0 && <div className="text-xs text-muted-foreground/70">Belum masuk tim mana pun.</div>}
+                <div className="flex flex-wrap gap-1.5">
+                  {(memberships?.teams ?? []).map((tm) => (
+                    <span key={tm.id} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2 py-1 text-[11px] font-semibold text-foreground">
+                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: tm.color ?? "#7B2FBE" }} />
+                      {tm.name}
+                      {tm.division && <span className="font-normal text-muted-foreground">· {tm.division}</span>}
+                      {tm.role === "LEAD" && <span className="rounded bg-amber-100 px-1 text-[10px] font-bold text-amber-700">LEAD</span>}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
       {expanded && orgInfo && canManageShift && (
         <tr className="border-b border-border bg-muted/10">
           <td colSpan={5} className="px-4 py-3">
