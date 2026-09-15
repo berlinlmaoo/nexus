@@ -229,7 +229,7 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
   const [open, setOpen] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [making, setMaking] = useState(false);
-  const [madePassword, setMadePassword] = useState<{ email: string; password: string } | null>(null);
+  const [madePassword, setMadePassword] = useState<{ email: string; password: string; notified?: { inApp: boolean; email: boolean; emailTo?: string | null } } | null>(null);
   const current = user.googleWorkspaceEmail ?? null;
 
   const parts = (user.name ?? "").trim().split(/\s+/).filter(Boolean);
@@ -244,7 +244,7 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
       setProblem(r.linked ? null : (r.error ?? null));
       // Sandi sementara ditampilkan SEKALI dan tidak disimpan di mana pun. Panel ini menutup
       // sendiri hanya kalau disuruh — jangan tutup otomatis, karena sandinya hilang bersamanya.
-      setMadePassword({ email: r.account.email, password: r.account.temporaryPassword });
+      setMadePassword({ email: r.account.email, password: r.account.temporaryPassword, notified: r.notified });
       setMaking(false);
       qc.invalidateQueries({ queryKey: ["nexus", "admin-users"] });
       qc.invalidateQueries({ queryKey: ["nexus", "google-workspace-accounts"] });
@@ -276,6 +276,17 @@ function GoogleLinkCell({ user, accounts, domains, configured, canEdit }: { user
         <span>Sandi sementara — salin sekarang, tidak bisa dilihat lagi:</span>
         <code className="select-all rounded bg-white px-1.5 py-1 font-mono text-[11px] tracking-tight">{madePassword.password}</code>
         <span className="text-emerald-700">Dia wajib menggantinya saat login pertama.</span>
+        {madePassword.notified?.email ? (
+          <span className="text-emerald-700">
+            Sandi sudah dikirim ke {madePassword.notified.emailTo}. Kamu tidak perlu meneruskannya.
+          </span>
+        ) : (
+          // Kegagalan email HARUS terlihat sekarang, selagi sandinya masih di layar. Ditemukan
+          // nanti lewat orang yang bingung kenapa tidak dapat apa-apa berarti sandinya sudah hilang.
+          <span className="font-semibold text-destructive">
+            Email GAGAL terkirim — sampaikan sandi ini sendiri, dan jangan lewat chat grup.
+          </span>
+        )}
         {problem && <span className="text-destructive">{problem}</span>}
         <button type="button" onClick={() => { setMadePassword(null); setOpen(false); }} className="self-start rounded border border-emerald-300 px-1.5 py-0.5 font-semibold hover:bg-emerald-100">
           Sudah disalin
