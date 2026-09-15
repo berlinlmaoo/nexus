@@ -71,6 +71,7 @@ export async function GET(req: NextRequest) {
       where: { workspaceId: member.workspaceId },
       include: {
         user: { select: { id: true, name: true, email: true, avatar: true, phoneNumber: true, googleWorkspaceEmail: true } },
+        approver: { select: { id: true, name: true, avatar: true } },
       },
       orderBy: { joinedAt: 'asc' },
     })
@@ -95,6 +96,9 @@ export async function GET(req: NextRequest) {
         attendanceShiftByDay: unknown
         flexiTimeEnabled: boolean
         noGeofenceMode: boolean
+        /** Atasan langsung di Bagan Approval. null = belum ditaruh (request-nya jatuh ke BoD). */
+        approverId: string | null
+        approver: { id: string; name: string | null; avatar: string | null } | null
         joinedAt: Date
       }>
       availableUsers?: Array<{
@@ -125,6 +129,8 @@ export async function GET(req: NextRequest) {
         attendanceShiftByDay: m.attendanceShiftByDay ?? null,
         flexiTimeEnabled: m.flexiTimeEnabled,
         noGeofenceMode: m.noGeofenceMode,
+        approverId: m.approverId,
+        approver: m.approver,
         joinedAt: m.joinedAt,
       })),
     }
@@ -251,7 +257,7 @@ export async function PATCH(req: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { memberId, role, attendanceRole, workspaceId, attendanceShiftStartTime, attendanceShiftEndTime, attendanceShiftByDay, phoneNumber, flexiTimeEnabled, noGeofenceMode } = await req.json()
+    const { memberId, role, attendanceRole, workspaceId, attendanceShiftStartTime, attendanceShiftEndTime, attendanceShiftByDay, phoneNumber, flexiTimeEnabled, noGeofenceMode, approverId } = await req.json()
 
     // Per-person shift times: "HH:mm", or null/"" to clear (inherit team/office shift).
     const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -333,6 +339,9 @@ export async function PATCH(req: NextRequest) {
     if (noGeofenceMode !== undefined && typeof noGeofenceMode !== 'boolean') {
       return NextResponse.json({ error: 'noGeofenceMode must be boolean' }, { status: 400 })
     }
+    if (approverId !== undefined && approverId !== null && typeof approverId !== 'string') {
+      return NextResponse.json({ error: 'approverId must be a string or null' }, { status: 400 })
+    }
 
     const targetMember = await prisma.workspaceMember.findUnique({
       where: { id: memberId },
@@ -350,6 +359,52 @@ export async function PATCH(req: NextRequest) {
       const targetTier = callerTier(targetMember.role, false)
       if (tier !== 4 && targetTier >= tier) {
         return NextResponse.json({ error: 'Kamu tidak bisa mengubah role member yang setara/di atas kamu.' }, { status: 403 })
+      }
+    }
+
+    // Bagan Approval. Tepi hanya sah dari STAFF ke MANAGER di workspace yang sama; selebihnya
+    // ditolak di sini supaya bagan tidak pernah berisi tepi yang tidak berarti apa-apa.
+    if (approverId !== undefined) {
+      if (tier < WORKSPACE_HIERARCHY.BOD) {
+        return NextResponse.json({ error: 'Hanya BoD ke atas yang bisa mengatur Bagan Approval.' }, { status: 403 })
+      }
+      // Peran target diambil SESUDAH kemungkinan perubahan peran di request yang sama.
+      const targetRoleAfter = role !== undefined ? role : targetMember.role
+      if (approverId !== null) {
+        if (targetRoleAfter !== 'STAFF') {
+          return NextResponse.json({ error: 'Hanya Staff yang punya approver. Request Manager masuk ke BoD.' }, { status: 400 })
+        }
+        if (approverId === targetMember.userId) {
+          return NextResponse.json({ error: 'Tidak bisa jadi approver dirinya sendiri.' }, { status: 400 })
+        }
+        const approverMember = await prisma.workspaceMember.findUnique({
+          where: { userId_workspaceId: { userId: approverId, workspaceId: currentMember.workspaceId } },
+          select: { role: true },
+        })
+        if (!approverMember) {
+          return NextResponse.json({ error: 'Approver bukan anggota workspace ini.' }, { status: 400 })
+        }
+        if (approverMember.role !== 'MANAGER') {
+          return NextResponse.json({ error: 'Approver Staff harus seorang Manager.' }, { status: 400 })
+        }
+      }
+    }
+
+    // Peran turun (MANAGER → STAFF) atau naik (→ BoD): orang ini tidak lagi boleh jadi approver
+    // Staff. Bawahannya dilepas dan dilaporkan, supaya UI bisa menyebut siapa saja yang jadi yatim
+    // — bukan diam-diam menyisakan seorang Staff sebagai approver enam orang.
+    let orphaned: Array<{ id: string; name: string | null }> = []
+    if (role !== undefined && role !== 'MANAGER' && targetMember.role === 'MANAGER') {
+      const reports = await prisma.workspaceMember.findMany({
+        where: { workspaceId: currentMember.workspaceId, approverId: targetMember.userId },
+        select: { userId: true, user: { select: { name: true } } },
+      })
+      if (reports.length > 0) {
+        await prisma.workspaceMember.updateMany({
+          where: { workspaceId: currentMember.workspaceId, approverId: targetMember.userId },
+          data: { approverId: null },
+        })
+        orphaned = reports.map((r) => ({ id: r.userId, name: r.user.name }))
       }
     }
 
@@ -375,13 +430,16 @@ export async function PATCH(req: NextRequest) {
         ...(byDay === "skip" ? {} : { attendanceShiftByDay: byDay === "clear" ? Prisma.DbNull : byDay }),
         ...(flexiTimeEnabled !== undefined ? { flexiTimeEnabled } : {}),
         ...(noGeofenceMode !== undefined ? { noGeofenceMode } : {}),
+        // Staff yang naik jadi Manager/BoD tidak butuh approver lagi — tepinya ikut dilepas.
+        ...(approverId !== undefined ? { approverId } : (role !== undefined && role !== 'STAFF' ? { approverId: null } : {})),
       },
       include: {
         user: { select: { id: true, name: true, email: true, avatar: true, phoneNumber: true } },
+        approver: { select: { id: true, name: true, avatar: true } },
       },
     })
 
-    logAudit({ action: "update", entityType: "workspace_member", entityId: memberId, userId: session.user.id, request: req, metadata: { newRole: role, attendanceRole, attendanceShiftStartTime: shiftStart, attendanceShiftEndTime: shiftEnd } })
+    logAudit({ action: "update", entityType: "workspace_member", entityId: memberId, userId: session.user.id, request: req, metadata: { newRole: role, attendanceRole, attendanceShiftStartTime: shiftStart, attendanceShiftEndTime: shiftEnd, ...(approverId !== undefined ? { approverId } : {}), ...(orphaned.length ? { orphanedReports: orphaned.map((o) => o.id) } : {}) } })
 
     return NextResponse.json({
       member: {
@@ -398,8 +456,12 @@ export async function PATCH(req: NextRequest) {
         attendanceShiftByDay: updated.attendanceShiftByDay ?? null,
         flexiTimeEnabled: updated.flexiTimeEnabled,
         noGeofenceMode: updated.noGeofenceMode,
+        approverId: updated.approverId,
+        approver: updated.approver,
         joinedAt: updated.joinedAt,
       },
+      // Nama-nama yang kehilangan approver karena perubahan peran ini. Kosong = tidak ada.
+      orphaned,
     })
   } catch (error) {
     console.error("Error updating workspace member role:", error)

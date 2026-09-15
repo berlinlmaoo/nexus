@@ -81,6 +81,8 @@ model User {
   attendanceCorrections AttendanceRecord[] @relation("AttendanceRecordCorrectedBy")
   attendanceRequests AttendanceRequest[] @relation("AttendanceRequestUser")
   reviewedAttendanceRequests AttendanceRequest[] @relation("AttendanceRequestReviewedBy")
+  /// Orang-orang yang request absensinya masuk ke saya (Bagan Approval).
+  attendanceReports WorkspaceMember[] @relation("AttendanceApprover")
   attendanceCorrectionsOnMe    AttendanceCorrection[] @relation("AttendanceCorrectionUser")
   attendanceCorrectionsProposed AttendanceCorrection[] @relation("AttendanceCorrectionProposedBy")
   attendanceCorrectionsDecided AttendanceCorrection[] @relation("AttendanceCorrectionDecidedBy")
@@ -301,6 +303,14 @@ model WorkspaceMember {
   // roles. Opt-in per person; default off = normal geofenced attendance.
   noGeofenceMode Boolean @default(false)
 
+  /// Atasan langsung untuk approval absensi — tepi di Bagan Approval (Control Room).
+  ///
+  /// Hanya bermakna untuk STAFF, dan hanya boleh menunjuk MANAGER: request staff masuk ke orang
+  /// ini saja; request manager/BoD ke kelompok BoD tanpa perlu tepi. null = belum ditaruh di
+  /// bagan → jatuh ke BoD sebagai jaring pengaman (bukan ke lead tim; lead tim sudah tidak ada).
+  approverId String?
+  approver   User?   @relation("AttendanceApprover", fields: [approverId], references: [id], onDelete: SetNull)
+
   userId      String
   workspaceId String
 
@@ -308,6 +318,7 @@ model WorkspaceMember {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([userId, workspaceId])
+  @@index([approverId])
 }
 
 model Project {
@@ -1252,7 +1263,10 @@ enum AttendanceRequestStatus {
 enum AttendanceApprovalSource {
   ADMIN
   ATTENDANCE_SUPERVISOR
+  /// Tidak ditulis lagi sejak Bagan Approval (lead tim dihapus). Dipertahankan untuk riwayat.
   TEAM_HEAD
+  /// Disetujui oleh atasan langsung di bagan.
+  DIRECT_MANAGER
 }
 
 enum ProjectRole {

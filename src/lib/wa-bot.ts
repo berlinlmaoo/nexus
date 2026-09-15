@@ -7,6 +7,7 @@ import { logAudit } from "@/lib/audit"
 import { postWaBridge } from "@/lib/wa-bridge"
 import { createInAppNotification } from "@/lib/notification-service"
 import { applyAttendanceReviewSideEffects } from "@/lib/attendance-absence"
+import { resolveAttendanceApprovers } from "@/lib/attendance-approvers"
 
 const BRIDGE_URL =
   process.env.WA_WEBHOOK_URL ||
@@ -299,8 +300,7 @@ export async function notifyApproversOfRequest(requestId: string): Promise<void>
   })
   if (!req || req.status !== "PENDING") return
 
-  const approvers = await getRequestApprovers(req.workspaceId)
-  approvers.delete(req.userId) // don't ask someone to approve their own request
+  const approvers = await getRequestApprovers(req.workspaceId, req.userId)
 
   const label = REQ_TYPE_LABEL[req.type] ?? req.type
   const range = fmtDateRange(req.startDate, req.endDate)
@@ -377,25 +377,17 @@ function waNotifEnabled(name: string): boolean {
 
 const firstNameOf = (n: string | null | undefined) => (n ?? "").trim().split(/\s+/)[0] || "BoD"
 
-/** The attendance approvers of a workspace: org BoD / One-Above-All members + system admins who are
- *  members of it. Shared by the new-request ping and the reviewed/handled fan-outs. */
-async function getRequestApprovers(workspaceId: string): Promise<Map<string, ApproverUser>> {
-  const [members, admins] = await Promise.all([
-    prisma.workspaceMember.findMany({
-      where: { workspaceId, role: { in: ["BOD", "ONE_ABOVE_ALL"] } },
-      select: { user: { select: { id: true, name: true, phoneNumber: true, whatsappId: true } } },
-    }),
-    // System admins are globally privileged, but only the ones who are members of THIS workspace —
-    // avoids blasting (and leaking the requester's name/reason to) admins of unrelated workspaces.
-    prisma.user.findMany({
-      where: { role: "ADMIN", workspaceMembers: { some: { workspaceId } } },
-      select: { id: true, name: true, phoneNumber: true, whatsappId: true },
-    }),
-  ])
-  const approvers = new Map<string, ApproverUser>()
-  for (const m of members) approvers.set(m.user.id, m.user)
-  for (const a of admins) approvers.set(a.id, a)
-  return approvers
+/** Approver untuk request milik `requesterId` — dari Bagan Approval, bukan daftar BoD tetap.
+ *  Dipakai ping request-baru dan fan-out "sudah ditangani", supaya keduanya menyebut orang yang
+ *  sama. Pemohon sendiri tidak pernah ada di dalamnya. */
+async function getRequestApprovers(workspaceId: string, requesterId: string): Promise<Map<string, ApproverUser>> {
+  const { userIds } = await resolveAttendanceApprovers(requesterId, workspaceId)
+  if (userIds.length === 0) return new Map()
+  const users = await prisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, name: true, phoneNumber: true, whatsappId: true },
+  })
+  return new Map(users.map((u) => [u.id, u]))
 }
 
 /** Tell the OTHER approvers (BoD/admins of the workspace, minus the reviewer + requester) that a
@@ -404,8 +396,7 @@ async function fanOutHandledToApprovers(opts: {
   workspaceId: string; reviewerId: string; requesterId: string; waEnabled: boolean
   type: string; title: string; inApp: string; wa: string
 }): Promise<void> {
-  const approvers = await getRequestApprovers(opts.workspaceId)
-  approvers.delete(opts.requesterId)
+  const approvers = await getRequestApprovers(opts.workspaceId, opts.requesterId)
   approvers.delete(opts.reviewerId)
   for (const a of approvers.values()) {
     await createInAppNotification({ userId: a.id, type: opts.type, title: opts.title, message: opts.inApp, link: "/attendance" }).catch(() => {})

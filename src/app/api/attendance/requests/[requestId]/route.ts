@@ -7,6 +7,7 @@ import { logAudit } from "@/lib/audit"
 import { getAttendanceWorkspaceContext, serializeAttendanceRequest } from "@/lib/attendance"
 import { applyAttendanceReviewSideEffects } from "@/lib/attendance-absence"
 import { notifyAttendanceRequestReviewed } from "@/lib/wa-bot"
+import { canUserReviewRequest } from "@/lib/attendance-approvers"
 import { attendanceRequestPatchSchema } from "@/lib/validations"
 
 export async function PATCH(
@@ -128,23 +129,12 @@ export async function PATCH(
       )
     }
 
-    // A team-scoped MANAGER may review a request when its REQUESTER belongs to a team they lead
-    // (checked by team membership, not the request's teamId, which can be null).
-    const isTeamHead =
-      context.teamLeadTeamIds.length > 0 &&
-      (await prisma.teamMember.count({
-        where: { userId: attendanceRequest.userId, teamId: { in: context.teamLeadTeamIds } },
-      })) > 0
-
-    if (!context.canManageAttendance && !isTeamHead) {
+    // Bagan Approval: manager-nya di bagan, atau BoD sebagai override. Tidak ada jalur tim.
+    const verdict = await canUserReviewRequest(session.user.id, attendanceRequest.userId, context.workspace.id, context)
+    if (!verdict.ok) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
-
-    const approvalSource = context.canManageAttendance
-      ? context.isAttendanceSupervisor
-        ? "ATTENDANCE_SUPERVISOR"
-        : "ADMIN"
-      : "TEAM_HEAD"
+    const approvalSource = verdict.source
 
     const nextStatus = validation.data.action === "approve" ? "APPROVED" : "REJECTED"
 
