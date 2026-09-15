@@ -2,28 +2,25 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Users, Plus, Trash2, X, Loader2, FolderTree, Pencil, Check, Star, Crown, Search, ChevronLeft, ChevronRight } from "lucide-react";
-import { PageHeader } from "@/components/PageHeader";
 import { nexusApi, statusLabel, type NexusTeam, type NexusDivision } from "@/lib/nexus-api";
-import { Reveal } from "@/components/motion";
-import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
-// Crew Hub sudah tidak berdiri sendiri: isinya digambar sebagai tab di Control Room.
-// Rutenya SENGAJA dipertahankan dan diarahkan ke sana, bukan dihapus — tautan /teams sudah
-// tersebar di bookmark dan di chat, dan 404 adalah cara paling mahal untuk memberi tahu orang
-// bahwa sebuah halaman pindah.
+// Halaman ini sudah tidak ada. Isinya dipecah ke tempat yang memang memilikinya:
+//   - siapa masuk tim mana  -> Control Room > Users, di dropdown baris orangnya
+//   - pengaturan tim itu sendiri (nama, divisi, jam shift, tautan project, hapus)
+//     -> TeamCard di bawah, dibuka dari chip tim di baris orang yang sama
+//
+// Rutenya SENGAJA dipertahankan dan diarahkan, bukan dihapus: tautan /teams sudah tersebar
+// di bookmark dan di chat, dan 404 adalah cara paling mahal untuk memberi tahu orang bahwa
+// sebuah halaman pindah.
+//
+// Yang hilang bersama halamannya cuma tampilan "semua tim dikelompokkan per divisi". Itu
+// memang yang dibilang tidak berguna — dan tidak ada tim yang jadi tak terjangkau karenanya:
+// ke-21 tim punya minimal satu anggota, jadi semuanya bisa dibuka dari baris orang.
 export const Route = createFileRoute("/_app/teams")({
   beforeLoad: () => { throw redirect({ to: "/admin" }); },
   component: () => null,
 });
-
-/**
- * Panel Crew Hub. `embedded` = digambar di dalam Control Room, jadi tanpa PageHeader sendiri
- * (halaman induknya sudah punya satu, dan dua judul bertumpuk terbaca seperti bug).
- */
-export function TeamsPanel({ embedded = false }: { embedded?: boolean } = {}) {
-  return <Teams embedded={embedded} />;
-}
 
 const UNGROUPED = "__ungrouped__";
 
@@ -32,156 +29,7 @@ function initialsOf(name?: string | null) {
   return name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
 }
 
-function Teams({ embedded = false }: { embedded?: boolean }) {
-  const qc = useQueryClient();
-  const teams = useQuery({ queryKey: ["nexus", "teams"], queryFn: nexusApi.teams, retry: false });
-  const divisionsQ = useQuery({ queryKey: ["nexus", "divisions"], queryFn: nexusApi.divisions, retry: false });
-  const wsm = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false });
-  const projectsQ = useQuery({ queryKey: ["nexus", "projects"], queryFn: nexusApi.projects, retry: false });
-  const rows = teams.data ?? [];
-  const divisions = divisionsQ.data ?? [];
-  const myRole = wsm.data?.role ?? "STAFF";
-  const canManage = myRole === "BOD" || myRole === "MANAGER" || myRole === "ONE_ABOVE_ALL";
-
-  const [showDivisions, setShowDivisions] = useState(false);
-
-  const refresh = () => qc.invalidateQueries({ queryKey: ["nexus", "teams"] });
-  const create = useMutation({ mutationFn: (name: string) => nexusApi.createTeam(name), onSuccess: refresh });
-  const newTeam = () => { const name = window.prompt("New team name:"); if (name?.trim()) create.mutate(name.trim()); };
-
-  // Group teams by division. Real divisions come first (in stored order), then the
-  // "Belum dikelompokin" bucket last.
-  const byDivision = new Map<string, NexusTeam[]>();
-  for (const t of rows) {
-    const key = t.divisionId ?? UNGROUPED;
-    const bucket = byDivision.get(key) ?? [];
-    bucket.push(t);
-    byDivision.set(key, bucket);
-  }
-  const ungrouped = byDivision.get(UNGROUPED) ?? [];
-  // Sections: every real division (even empty ones, so managers can see/assign), then ungrouped.
-  const sections = divisions
-    .map((d) => ({ division: d, teams: byDivision.get(d.id) ?? [] }))
-    .filter((s) => s.teams.length > 0 || canManage);
-
-  return (
-    <div>
-      {!embedded && <PageHeader title="Teams" subtitle="Access groups: team members automatically get access to linked projects. Teams are grouped by division/company." />}
-      {embedded && <p className="pb-3 text-xs text-muted-foreground">Pengaturan TIM-nya sendiri: bikin/hapus tim &amp; divisi, tautkan project, jam shift per tim. Siapa masuk tim mana sekarang diatur dari <b className="text-foreground">Users</b> &mdash; buka dropdown di baris orangnya.</p>}
-      <div className={embedded ? "space-y-4" : "p-4 md:p-8 space-y-4"}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-muted-foreground">{rows.length} team{rows.length === 1 ? "" : "s"} · {divisions.length} division{divisions.length === 1 ? "" : "s"}{!canManage && " · view-only (need BoD/Manager to manage)"}</p>
-          {canManage && (
-            <div className="flex items-center gap-2">
-              <button onClick={() => setShowDivisions((v) => !v)} className="inline-flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground shadow-soft transition-all hover:bg-accent active:scale-[0.98]"><FolderTree className="h-4 w-4" /> Manage divisions</button>
-              <button onClick={newTeam} disabled={create.isPending} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} New team</button>
-            </div>
-          )}
-        </div>
-
-        {canManage && showDivisions && <DivisionManager divisions={divisions} teams={rows} />}
-
-        {(teams.isLoading || divisionsQ.isLoading) && (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="rounded-2xl border border-border bg-card p-5 shadow-soft">
-                <div className="flex items-center gap-2"><Skeleton className="h-10 w-10 rounded-2xl" /><Skeleton className="h-4 w-28" /></div>
-                <Skeleton className="mt-4 h-3 w-16" /><Skeleton className="mt-2 h-8 w-40" />
-              </div>
-            ))}
-          </div>
-        )}
-        {!teams.isLoading && rows.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><Users className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">No teams yet</div><p className="mt-2 text-sm text-muted-foreground">{canManage ? "Create your first team to group your crew + project access." : "No teams in your workspace yet."}</p></div>
-        )}
-
-        {/* Grouped sections per division */}
-        {sections.map(({ division, teams: divTeams }) => (
-          <DivisionSection
-            key={division.id}
-            title={division.name}
-            color={division.color ?? "#64748B"}
-            teams={divTeams}
-            divisions={divisions}
-            canManage={canManage}
-            allMembers={wsm.data?.members ?? []}
-            allProjects={projectsQ.data ?? []}
-            onChange={refresh}
-          />
-        ))}
-        {ungrouped.length > 0 && (
-          <DivisionSection
-            title="Not grouped yet"
-            color="#94A3B8"
-            muted
-            teams={ungrouped}
-            divisions={divisions}
-            canManage={canManage}
-            allMembers={wsm.data?.members ?? []}
-            allProjects={projectsQ.data ?? []}
-            onChange={refresh}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
-function DivisionSection({ title, color, teams, divisions, canManage, allMembers, allProjects, onChange, muted }: {
-  title: string;
-  color: string;
-  teams: NexusTeam[];
-  divisions: NexusDivision[];
-  canManage: boolean;
-  allMembers: Array<{ userId: string; name: string }>;
-  allProjects: Array<{ id: string; name: string; color?: string | null; status?: string | null }>;
-  onChange: () => void;
-  muted?: boolean;
-}) {
-  // Reorder team cards WITHIN this division: swap a card's `position` with the neighbour it moves past
-  // (assign each other's index — positions within a division are a 0..n-1 permutation). Two rows change.
-  const reorder = useMutation({
-    mutationFn: ({ i, dir }: { i: number; dir: -1 | 1 }) => {
-      const j = i + dir;
-      if (j < 0 || j >= teams.length) return Promise.resolve();
-      return Promise.all([nexusApi.reorderTeam(teams[i].id, j), nexusApi.reorderTeam(teams[j].id, i)]).then(() => {});
-    },
-    onSuccess: onChange,
-  });
-  return (
-    <section className="space-y-3">
-      <div className="flex items-center gap-2 pt-2">
-        <span className="h-3 w-3 rounded-full ring-2 ring-background" style={{ background: color }} />
-        <h2 className={`text-sm font-bold uppercase tracking-wider ${muted ? "text-muted-foreground" : "text-foreground"}`}>{title}</h2>
-        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-bold text-muted-foreground">{teams.length}</span>
-        <span className="ml-2 h-px flex-1 bg-border" />
-      </div>
-      {teams.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No teams in this division yet — move teams here using the dropdown on each card.</p>
-      ) : (
-        <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {teams.map((t, i) => (
-            <Reveal key={t.id} delay={Math.min(i, 8) * 0.05} className="h-full">
-              <TeamCard
-                team={t}
-                canManage={canManage}
-                divisions={divisions}
-                allMembers={allMembers}
-                allProjects={allProjects}
-                onChange={onChange}
-                onMoveLeft={canManage && i > 0 ? () => reorder.mutate({ i, dir: -1 }) : undefined}
-                onMoveRight={canManage && i < teams.length - 1 ? () => reorder.mutate({ i, dir: 1 }) : undefined}
-                reordering={reorder.isPending}
-              />
-            </Reveal>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function DivisionManager({ divisions, teams }: { divisions: NexusDivision[]; teams: NexusTeam[] }) {
+export function DivisionManager({ divisions, teams }: { divisions: NexusDivision[]; teams: NexusTeam[] }) {
   const qc = useQueryClient();
   const [name, setName] = useState("");
   const refresh = () => { qc.invalidateQueries({ queryKey: ["nexus", "divisions"] }); qc.invalidateQueries({ queryKey: ["nexus", "teams"] }); };
@@ -268,7 +116,7 @@ function TeamShiftControl({ team }: { team: NexusTeam }) {
   );
 }
 
-function TeamCard({ team, canManage, divisions, allMembers, allProjects, onChange, onMoveLeft, onMoveRight, reordering }: {
+export function TeamCard({ team, canManage, divisions, allMembers, allProjects, onChange, onMoveLeft, onMoveRight, reordering }: {
   team: NexusTeam;
   canManage: boolean;
   divisions: NexusDivision[];
