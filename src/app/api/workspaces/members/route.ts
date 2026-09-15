@@ -70,7 +70,7 @@ export async function GET(req: NextRequest) {
     const members = await prisma.workspaceMember.findMany({
       where: { workspaceId: member.workspaceId },
       include: {
-        user: { select: { id: true, name: true, email: true, avatar: true, phoneNumber: true } },
+        user: { select: { id: true, name: true, email: true, avatar: true, phoneNumber: true, googleWorkspaceEmail: true } },
       },
       orderBy: { joinedAt: 'asc' },
     })
@@ -85,6 +85,9 @@ export async function GET(req: NextRequest) {
         email: string
         avatar: string | null
         phoneNumber?: string | null
+        /** Akun Google Workspace yang ditautkan BoD. null = belum ditautkan, yang normal:
+         *  tidak semua orang di NEXUS punya email kantor. */
+        googleWorkspaceEmail: string | null
         role: string
         attendanceRole: string
         attendanceShiftStartTime: string | null
@@ -112,6 +115,9 @@ export async function GET(req: NextRequest) {
         // Omitted entirely rather than nulled, so a hidden number is indistinguishable from an unset
         // one. Your own number always comes back — it is yours, and the profile screen shows it.
         ...(canSeePhoneNumbers || m.user.id === session.user.id ? { phoneNumber: m.user.phoneNumber } : {}),
+        // Tidak disembunyikan seperti nomor telepon: alamat email kantor adalah identitas kerja
+        // yang memang dipakai orang untuk saling menyurati, bukan data pribadi.
+        googleWorkspaceEmail: m.user.googleWorkspaceEmail,
         role: m.role,
         attendanceRole: m.attendanceRole,
         attendanceShiftStartTime: m.attendanceShiftStartTime,
