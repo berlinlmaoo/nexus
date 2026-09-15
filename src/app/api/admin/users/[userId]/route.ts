@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import type { SystemRole } from "@/generated/prisma/client"
 import prisma from "@/lib/prisma"
 import { getAdminSessionContext } from "@/lib/admin-access"
+import { directoryConfigured, getDirectoryAccount } from "@/lib/google-directory"
 import { logAudit } from "@/lib/audit"
 
 const SYSTEM_ROLES: SystemRole[] = ["ADMIN", "MEMBER"]
@@ -145,29 +146,80 @@ export async function PATCH(
 
     const body = await request.json()
     const role = body.role as SystemRole | undefined
+    // Penautan akun Google dikirim lewat endpoint yang sama, jadi `role` tidak lagi wajib —
+    // tapi salah satu dari keduanya harus ada, kalau tidak PATCH kosong akan lolos diam-diam
+    // dan memanggilnya terasa berhasil padahal tidak mengubah apa pun.
+    const hasWorkspaceEmail = Object.prototype.hasOwnProperty.call(body, "googleWorkspaceEmail")
 
-    if (!role || !SYSTEM_ROLES.includes(role)) {
+    if (role !== undefined && !SYSTEM_ROLES.includes(role)) {
       return NextResponse.json({ error: "Invalid system role" }, { status: 400 })
+    }
+    if (role === undefined && !hasWorkspaceEmail) {
+      return NextResponse.json({ error: "Tidak ada yang diubah" }, { status: 400 })
     }
 
     const existing = await prisma.user.findUnique({
       where: { id: (await params).userId },
-      select: { id: true, name: true, role: true },
+      select: { id: true, name: true, role: true, googleWorkspaceEmail: true },
     })
 
     if (!existing) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
+    const data: { role?: SystemRole; googleWorkspaceEmail?: string | null } = {}
+    if (role !== undefined) data.role = role
+
+    if (hasWorkspaceEmail) {
+      const raw = body.googleWorkspaceEmail
+      if (raw === null || raw === "") {
+        data.googleWorkspaceEmail = null
+      } else if (typeof raw !== "string") {
+        return NextResponse.json({ error: "googleWorkspaceEmail harus teks atau null" }, { status: 400 })
+      } else {
+        const email = raw.trim().toLowerCase()
+        // Alamatnya dibuktikan ADA di Google sebelum disimpan. Alamat yang salah ketik terlihat
+        // persis sama dengan yang benar di database, dan baru ketahuan salah pada hari seseorang
+        // mencoba mengirim surat ke sana.
+        if (!directoryConfigured()) {
+          return NextResponse.json(
+            { error: "Google Workspace belum disambungkan, jadi akun tidak bisa diverifikasi." },
+            { status: 409 },
+          )
+        }
+        const account = await getDirectoryAccount(email)
+        if (!account) {
+          return NextResponse.json(
+            { error: `Akun ${email} tidak ada di Google Workspace.` },
+            { status: 404 },
+          )
+        }
+        // Indeks uniknya parsial dan akan menolak ini juga, tapi pesannya akan berupa galat
+        // database. Diperiksa di sini supaya jawabannya menyebut SIAPA yang sudah memakainya.
+        const taken = await prisma.user.findFirst({
+          where: { googleWorkspaceEmail: account.email, id: { not: existing.id } },
+          select: { name: true },
+        })
+        if (taken) {
+          return NextResponse.json(
+            { error: `${account.email} sudah ditautkan ke ${taken.name}.` },
+            { status: 409 },
+          )
+        }
+        data.googleWorkspaceEmail = account.email
+      }
+    }
+
     const updated = await prisma.user.update({
       where: { id: (await params).userId },
-      data: { role },
+      data,
       select: {
         id: true,
         name: true,
         email: true,
         avatar: true,
         role: true,
+        googleWorkspaceEmail: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -183,6 +235,8 @@ export async function PATCH(
       metadata: {
         previousRole: existing.role,
         role,
+        previousGoogleWorkspaceEmail: existing.googleWorkspaceEmail,
+        googleWorkspaceEmail: data.googleWorkspaceEmail,
       },
     })
 
