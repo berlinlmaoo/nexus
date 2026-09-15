@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Users, Plus, Trash2, X, Loader2, FolderTree, Pencil, Check, Star, Crown, Search, ChevronLeft, ChevronRight } from "lucide-react";
@@ -8,7 +8,22 @@ import { Reveal } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/_app/teams")({ component: Teams });
+// Crew Hub sudah tidak berdiri sendiri: isinya digambar sebagai tab di Control Room.
+// Rutenya SENGAJA dipertahankan dan diarahkan ke sana, bukan dihapus — tautan /teams sudah
+// tersebar di bookmark dan di chat, dan 404 adalah cara paling mahal untuk memberi tahu orang
+// bahwa sebuah halaman pindah.
+export const Route = createFileRoute("/_app/teams")({
+  beforeLoad: () => { throw redirect({ to: "/admin" }); },
+  component: () => null,
+});
+
+/**
+ * Panel Crew Hub. `embedded` = digambar di dalam Control Room, jadi tanpa PageHeader sendiri
+ * (halaman induknya sudah punya satu, dan dua judul bertumpuk terbaca seperti bug).
+ */
+export function TeamsPanel({ embedded = false }: { embedded?: boolean } = {}) {
+  return <Teams embedded={embedded} />;
+}
 
 const UNGROUPED = "__ungrouped__";
 
@@ -17,7 +32,7 @@ function initialsOf(name?: string | null) {
   return name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
 }
 
-function Teams() {
+function Teams({ embedded = false }: { embedded?: boolean }) {
   const qc = useQueryClient();
   const teams = useQuery({ queryKey: ["nexus", "teams"], queryFn: nexusApi.teams, retry: false });
   const divisionsQ = useQuery({ queryKey: ["nexus", "divisions"], queryFn: nexusApi.divisions, retry: false });
@@ -51,8 +66,9 @@ function Teams() {
 
   return (
     <div>
-      <PageHeader title="Teams" subtitle="Access groups: team members automatically get access to linked projects. Teams are grouped by division/company." />
-      <div className="p-4 md:p-8 space-y-4">
+      {!embedded && <PageHeader title="Teams" subtitle="Access groups: team members automatically get access to linked projects. Teams are grouped by division/company." />}
+      {embedded && <p className="pb-3 text-xs text-muted-foreground">Access groups: anggota tim otomatis dapat akses ke project yang ditautkan. Dikelompokkan per divisi/perusahaan.</p>}
+      <div className={embedded ? "space-y-4" : "p-4 md:p-8 space-y-4"}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-muted-foreground">{rows.length} team{rows.length === 1 ? "" : "s"} · {divisions.length} division{divisions.length === 1 ? "" : "s"}{!canManage && " · view-only (need BoD/Manager to manage)"}</p>
           {canManage && (
