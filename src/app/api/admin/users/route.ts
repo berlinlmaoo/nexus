@@ -59,6 +59,7 @@ export async function GET(request: NextRequest) {
           email: true,
           avatar: true,
           role: true,
+          googleWorkspaceEmail: true,
           createdAt: true,
           workspaceMembers: {
             select: { joinedAt: true },
@@ -82,6 +83,7 @@ export async function GET(request: NextRequest) {
         email: user.email,
         avatar: user.avatar,
         role: user.role,
+        googleWorkspaceEmail: user.googleWorkspaceEmail,
         createdAt: user.createdAt,
         firstJoinedAt: user.workspaceMembers[0]?.joinedAt ?? null,
         workspaceMembershipCount: user._count.workspaceMembers,
