@@ -204,13 +204,13 @@ struct AdminUsersSection: View {
     /// Flexi dan mode Mobile mengubah aturan absensi seseorang, jadi BoD ke atas — aturan
     /// yang sama dengan `canManageShift` di Control Room web, bukan `canEditTier`.
     private var canManageAttendanceFlags: Bool { viewerRole == "BOD" || viewerRole == "ONE_ABOVE_ALL" }
-    private var unassignedStaff: [WorkspaceRoster.Member] { members.filter { $0.role == "STAFF" && $0.approverId == nil } }
+    private var unassignedStaff: [WorkspaceRoster.Member] { members.filter { ($0.role == "STAFF" || $0.role == "MANAGER") && $0.approverId == nil } }
     private var chainSummary: String {
-        let staff = members.filter { $0.role == "STAFF" }.count
+        let placed = members.filter { $0.approverId != nil }.count
         let n = unassignedStaff.count
         return n == 0
-            ? "\(staff) \(T("staff, semua sudah punya manager"))"
-            : "\(n) \(T("dari")) \(staff) \(T("staff belum ditaruh — request-nya masuk ke BoD"))"
+            ? "\(placed) \(T("orang punya atasan, semua sudah ditaruh"))"
+            : "\(n) \(T("belum ditaruh — request-nya masuk ke semua BoD"))"
     }
     private func count(_ r: String) -> Int { members.filter { $0.role == r }.count }
     private var rows: [WorkspaceRoster.Member] { filter == "ALL" ? members : members.filter { ($0.role ?? "STAFF") == filter } }
@@ -312,7 +312,7 @@ struct AdminUsersSection: View {
         }
         .sheet(item: $approverTarget) { t in
             NavigationStack {
-                ApproverPickSheet(target: t, managers: members.filter { $0.role == "MANAGER" }) { approverId in
+                ApproverPickSheet(target: t, candidates: members.filter { $0.userId != t.selfUserId }) { approverId in
                     approverTarget = nil
                     Task { await runTeam { try await APIClient.shared.setAttendanceApprover(memberId: t.memberId, approverId: approverId, workspaceId: t.workspaceId) } }
                 }
@@ -521,12 +521,12 @@ struct AdminUsersSection: View {
                         }
                         // Hanya STAFF yang punya approver. "Belum ditaruh" berwarna peringatan
                         // karena request orang ini masih jatuh ke BoD — pekerjaan yang belum selesai.
-                        if m.role == "STAFF" {
-                            if let a = m.approver?.name, !a.isEmpty {
-                                Text("\(T("Approver")): \(a)").font(NXFont.text(10)).foregroundStyle(NX.mutedFg).lineLimit(1)
-                            } else {
-                                Text(T("Belum ditaruh di Bagan Approval")).font(NXFont.text(10, .semibold)).foregroundStyle(NX.warning)
-                            }
+                        // Rantai bebas: siapa pun bisa punya atasan. Peringatan "belum ditaruh"
+                        // hanya untuk Staff/Manager — BoD tanpa atasan memang puncak.
+                        if let a = m.approver?.name, !a.isEmpty {
+                            Text("\(T("Approver")): \(a)").font(NXFont.text(10)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                        } else if m.role == "STAFF" || m.role == "MANAGER" {
+                            Text(T("Belum ditaruh di Bagan Approval")).font(NXFont.text(10, .semibold)).foregroundStyle(NX.warning)
                         }
                         if let uid = m.userId {
                             // Angkanya digambar walau nol: "0 project" adalah jawaban, dan baris
@@ -565,11 +565,11 @@ struct AdminUsersSection: View {
                 Menu {
                     ForEach(assignableRoles(viewerRole), id: \.self) { r in Button(orgRoleLabel(r)) { Task { await setRole(m, r, wsId) } } }
                     Divider()
-                    if canManageAttendanceFlags, m.role == "STAFF", let mid = m.id, let wsId = workspaceId {
+                    if canManageAttendanceFlags, let mid = m.id, let wsId = workspaceId {
                         Button {
-                            approverTarget = ApproverPickTarget(id: mid, memberId: mid, workspaceId: wsId, name: m.displayName, current: m.approverId)
+                            approverTarget = ApproverPickTarget(id: mid, memberId: mid, workspaceId: wsId, name: m.displayName, current: m.approverId, selfUserId: m.userId)
                         } label: {
-                            Label(m.approverId == nil ? T("Taruh di bawah manager…") : T("Ganti manager…"), systemImage: "arrow.triangle.branch")
+                            Label(m.approverId == nil ? T("Taruh di bawah atasan…") : T("Ganti atasan…"), systemImage: "arrow.triangle.branch")
                         }
                     }
                     if canManageAttendanceFlags, let mid = m.id, let wsId = workspaceId {
@@ -1517,13 +1517,16 @@ struct ApproverPickTarget: Identifiable, Hashable {
     let workspaceId: String
     let name: String
     let current: String?
+    /// userId orang yang sedang diatur — supaya dia tidak muncul sebagai calon atasannya sendiri.
+    let selfUserId: String?
 }
 
-/// Memilih manager untuk satu staff. Daftarnya MANAGER saja — bukan BoD; request manager masuk ke
-/// BoD tanpa tepi, dan server menolak approver yang bukan Manager.
+/// Memilih atasan untuk satu orang — rantai bebas, jadi kandidatnya semua orang di workspace kecuali
+/// dirinya (dan server menolak lingkaran). Dikelompokkan per peran supaya "cari BoD-nya" tidak perlu
+/// mengeja nama.
 struct ApproverPickSheet: View {
     let target: ApproverPickTarget
-    let managers: [WorkspaceRoster.Member]
+    let candidates: [WorkspaceRoster.Member]
     var onPick: (String?) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -1531,8 +1534,10 @@ struct ApproverPickSheet: View {
 
     private var rows: [WorkspaceRoster.Member] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-        return q.isEmpty ? managers : managers.filter { $0.displayName.lowercased().contains(q) }
+        return q.isEmpty ? candidates : candidates.filter { $0.displayName.lowercased().contains(q) }
     }
+    private let roleOrder = ["ONE_ABOVE_ALL", "BOD", "MANAGER", "STAFF"]
+    private func group(_ role: String) -> [WorkspaceRoster.Member] { rows.filter { ($0.role ?? "STAFF") == role } }
 
     var body: some View {
         List {
@@ -1540,21 +1545,25 @@ struct ApproverPickSheet: View {
                 Text(T("Request absensinya akan masuk ke orang ini saja. BoD tetap bisa override."))
                     .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             }
-            Section(T("Manager")) {
-                ForEach(rows, id: \.idv) { m in
-                    Button { onPick(m.userId) } label: {
-                        HStack(spacing: 10) {
-                            AvatarView(url: m.avatarURL, initial: m.initial, size: 30)
-                            Text(m.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
-                            Spacer(minLength: 4)
-                            if m.userId == target.current { Image(systemName: "checkmark").foregroundStyle(NX.success) }
+            ForEach(roleOrder, id: \.self) { role in
+                let list = group(role)
+                if !list.isEmpty {
+                    Section(orgRoleLabel(role)) {
+                        ForEach(list, id: \.idv) { m in
+                            Button { onPick(m.userId) } label: {
+                                HStack(spacing: 10) {
+                                    AvatarView(url: m.avatarURL, initial: m.initial, size: 30)
+                                    Text(m.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                                    Spacer(minLength: 4)
+                                    if m.userId == target.current { Image(systemName: "checkmark").foregroundStyle(NX.success) }
+                                }
+                            }
                         }
                     }
                 }
-                if rows.isEmpty {
-                    Text(managers.isEmpty ? T("Belum ada Manager — atur peran dulu.") : T("Nggak ada yang cocok."))
-                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                }
+            }
+            if rows.isEmpty {
+                Section { Text(T("Nggak ada yang cocok.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
             }
             if target.current != nil {
                 Section {
@@ -1564,7 +1573,7 @@ struct ApproverPickSheet: View {
                 }
             }
         }
-        .searchable(text: $query, prompt: T("Cari manager…"))
+        .searchable(text: $query, prompt: T("Cari nama…"))
         .navigationTitle(target.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() } } }
@@ -1585,43 +1594,42 @@ struct ApprovalChainView: View {
     @State private var busy = false
     @State private var problem: String?
 
-    private var bod: [WorkspaceRoster.Member] { members.filter { $0.role == "BOD" || $0.role == "ONE_ABOVE_ALL" } }
-    private var managers: [WorkspaceRoster.Member] { members.filter { $0.role == "MANAGER" } }
-    private var staff: [WorkspaceRoster.Member] { members.filter { $0.role == "STAFF" } }
-    private func reports(of m: WorkspaceRoster.Member) -> [WorkspaceRoster.Member] { staff.filter { $0.approverId == m.userId } }
+    // Rantai bebas: satu bagian per ATASAN (siapa pun yang punya bawahan), berisi bawahannya.
+    // Bawahan yang juga punya bawahan muncul lagi sebagai bagian sendiri di bawah — bacaannya
+    // "willy → gerro → riri" jadi tiga bagian berurutan, bukan pohon yang harus dilipat.
+    private func reports(of m: WorkspaceRoster.Member) -> [WorkspaceRoster.Member] { members.filter { $0.approverId == m.userId } }
+    private var approvers: [WorkspaceRoster.Member] {
+        let tier: [String: Int] = ["ONE_ABOVE_ALL": 0, "BOD": 1, "MANAGER": 2, "STAFF": 3]
+        return members.filter { !reports(of: $0).isEmpty }
+            .sorted { (tier[$0.role ?? "STAFF"] ?? 4, $0.displayName) < (tier[$1.role ?? "STAFF"] ?? 4, $1.displayName) }
+    }
     private var unassigned: [WorkspaceRoster.Member] {
-        let managerIds = Set(managers.compactMap(\.userId))
-        return staff.filter { $0.approverId == nil || !managerIds.contains($0.approverId!) }
+        let ids = Set(members.compactMap(\.userId))
+        return members.filter { ($0.role == "STAFF" || $0.role == "MANAGER") && ($0.approverId == nil || !ids.contains($0.approverId!)) }
     }
 
     var body: some View {
         List {
-            Section {
-                Text("\(bod.count) \(T("BoD — menyetujui request semua Manager, sebagai kelompok"))")
-                    .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-            } header: { Text(T("Board of Directors")) }
-
-            ForEach(managers, id: \.idv) { m in
+            ForEach(approvers, id: \.idv) { m in
                 Section {
-                    let rs = reports(of: m)
-                    if rs.isEmpty {
-                        // Kolom kosong digambar dengan sengaja: ada manager yang belum punya siapa-siapa.
-                        Text(T("Belum ada staff")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                    }
-                    ForEach(rs, id: \.idv) { s in staffRow(s) }
+                    ForEach(reports(of: m), id: \.idv) { s in staffRow(s) }
                 } header: {
                     HStack(spacing: 8) {
                         AvatarView(url: m.avatarURL, initial: m.initial, size: 22)
                         Text(m.displayName)
+                        Text(orgRoleLabel(m.role ?? "STAFF")).font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
                         Spacer()
                         Text("\(reports(of: m).count)").monospacedDigit()
                     }
                 }
             }
+            if approvers.isEmpty {
+                Section { Text(T("Belum ada yang ditaruh di bagan.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
+            }
 
             Section {
                 if unassigned.isEmpty {
-                    Text(T("Kosong — semua staff sudah punya manager.")).font(NXFont.text(12)).foregroundStyle(NX.success)
+                    Text(T("Kosong — semua sudah punya atasan.")).font(NXFont.text(12)).foregroundStyle(NX.success)
                 }
                 ForEach(unassigned, id: \.idv) { s in staffRow(s) }
             } header: {
@@ -1641,7 +1649,7 @@ struct ApprovalChainView: View {
         }
         .sheet(item: $pick) { t in
             NavigationStack {
-                ApproverPickSheet(target: t, managers: managers) { approverId in
+                ApproverPickSheet(target: t, candidates: members.filter { $0.userId != t.selfUserId }) { approverId in
                     pick = nil
                     Task {
                         busy = true
@@ -1662,12 +1670,13 @@ struct ApprovalChainView: View {
     private func staffRow(_ s: WorkspaceRoster.Member) -> some View {
         Button {
             if let mid = s.id {
-                pick = ApproverPickTarget(id: mid, memberId: mid, workspaceId: workspaceId, name: s.displayName, current: s.approverId)
+                pick = ApproverPickTarget(id: mid, memberId: mid, workspaceId: workspaceId, name: s.displayName, current: s.approverId, selfUserId: s.userId)
             }
         } label: {
             HStack(spacing: 10) {
                 AvatarView(url: s.avatarURL, initial: s.initial, size: 28)
                 Text(s.displayName).font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
+                Text(orgRoleLabel(s.role ?? "STAFF")).font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.up.chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(NX.mutedFg)
             }
