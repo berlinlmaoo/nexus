@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Avatar } from "@/components/Avatar";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, CalendarX2, ChevronDown, Loader2, Megaphone, Plus, ScrollText, Search, Shield, Trash2, Trophy, Users as UsersIcon, X, Zap, Smartphone } from "lucide-react";
+import { AtSign, CalendarDays, CalendarX2, ChevronDown, Link2, Link2Off, Loader2, Megaphone, Plus, ScrollText, Search, Shield, Trash2, Trophy, Users as UsersIcon, X, Zap, Smartphone } from "lucide-react";
 import { type NexusAdminAnnouncement } from "@/lib/nexus-api";
 import { GideonMark } from "@/components/gideon/GideonMark";
 import { PageHeader } from "@/components/PageHeader";
-import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusAdminUser } from "@/lib/nexus-api";
+import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusAdminUser, type GoogleWorkspaceAccount } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 import { Link } from "@tanstack/react-router";
 
@@ -62,6 +62,17 @@ function Admin() {
     mutationFn: ({ memberId, on }: { memberId: string; on: boolean }) => nexusApi.updateWorkspaceMember({ memberId, noGeofenceMode: on, workspaceId: wsId }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["nexus", "workspace-members"] }),
   });
+  // Sekali per halaman, bukan sekali per baris: 49 baris x satu panggilan Directory akan
+  // menghabiskan kuota Google dan membuat layar ini terbuka dalam hitungan detik.
+  // `staleTime` panjang karena daftar akun Workspace nyaris tidak pernah berubah dalam satu sesi.
+  const gwAccounts = useQuery({
+    queryKey: ["nexus", "google-workspace-accounts"],
+    queryFn: () => nexusApi.googleWorkspaceAccounts(),
+    enabled: canDeleteUsers,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+
   const allUsers = users.data?.users ?? [];
   const totalUsers = users.data?.total ?? allUsers.length;
   const rows = allUsers.filter((u) => {
@@ -140,7 +151,7 @@ function Admin() {
                 <tbody>
                   {rows.map((u) => {
                     const info = orgInfoByUser.get(u.id);
-                    return <UserRow key={u.id} user={u} orgInfo={info} assignable={viewerAssignable} canEdit={!!info && canEditTier(viewerRole, info.role)} pending={updateOrg.isPending} onOrgRole={(role) => info && updateOrg.mutate({ memberId: info.memberId, role })} canManageShift={canManageShift} shiftPending={updateShift.isPending} onSaveShift={(start, end) => info && updateShift.mutate({ memberId: info.memberId, start, end })} shiftByDayPending={updateShiftByDay.isPending} onSaveShiftByDay={(byDay) => info && updateShiftByDay.mutate({ memberId: info.memberId, byDay })} flexiPending={updateFlexi.isPending} onToggleFlexi={() => info && updateFlexi.mutate({ memberId: info.memberId, flexi: !info.flexi })} geofencePending={updateGeofence.isPending} onToggleGeofence={() => info && updateGeofence.mutate({ memberId: info.memberId, on: !info.noGeofence })} onDayoff={() => setDayoffUser({ id: u.id, name: u.name || u.email || "User" })} canDelete={canDeleteUsers} isMember={!!info} onDelete={() => setDelUser({ id: u.id, name: u.name || "Unnamed", email: u.email ?? "" })} />;
+                    return <UserRow key={u.id} user={u} orgInfo={info} assignable={viewerAssignable} canEdit={!!info && canEditTier(viewerRole, info.role)} pending={updateOrg.isPending} onOrgRole={(role) => info && updateOrg.mutate({ memberId: info.memberId, role })} canManageShift={canManageShift} shiftPending={updateShift.isPending} onSaveShift={(start, end) => info && updateShift.mutate({ memberId: info.memberId, start, end })} shiftByDayPending={updateShiftByDay.isPending} onSaveShiftByDay={(byDay) => info && updateShiftByDay.mutate({ memberId: info.memberId, byDay })} flexiPending={updateFlexi.isPending} onToggleFlexi={() => info && updateFlexi.mutate({ memberId: info.memberId, flexi: !info.flexi })} geofencePending={updateGeofence.isPending} onToggleGeofence={() => info && updateGeofence.mutate({ memberId: info.memberId, on: !info.noGeofence })} onDayoff={() => setDayoffUser({ id: u.id, name: u.name || u.email || "User" })} canDelete={canDeleteUsers} isMember={!!info} onDelete={() => setDelUser({ id: u.id, name: u.name || "Unnamed", email: u.email ?? "" })} gwConfigured={gwAccounts.data?.configured ?? false} gwAccounts={gwAccounts.data?.accounts ?? []} canLinkGoogle={canDeleteUsers} />;
                   })}
                 </tbody>
               </table>
@@ -201,7 +212,101 @@ function RedDateQuotaModal({ onClose }: { onClose: () => void }) {
 
 const WEEKDAYS: Array<[string, string]> = [["1", "Mon"], ["2", "Tue"], ["3", "Wed"], ["4", "Thu"], ["5", "Fri"], ["6", "Sat"], ["7", "Sun"]];
 
-function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canManageShift, shiftPending, onSaveShift, shiftByDayPending, onSaveShiftByDay, flexiPending, onToggleFlexi, geofencePending, onToggleGeofence, onDayoff, canDelete, isMember, onDelete }: { user: NexusAdminUser; orgInfo?: { memberId: string; role: string; shiftStart: string | null; shiftEnd: string | null; shiftByDay: Record<string, { start: string; end: string }> | null; flexi: boolean; noGeofence: boolean }; assignable: OrgRole[]; canEdit: boolean; onOrgRole: (role: string) => void; pending: boolean; canManageShift: boolean; shiftPending: boolean; onSaveShift: (start: string | null, end: string | null) => void; shiftByDayPending: boolean; onSaveShiftByDay: (byDay: Record<string, { start: string; end: string }>) => void; flexiPending: boolean; onToggleFlexi: () => void; geofencePending: boolean; onToggleGeofence: () => void; onDayoff: () => void; canDelete: boolean; isMember: boolean; onDelete: () => void }) {
+
+/**
+ * Menautkan satu profil NEXUS ke akun Google Workspace-nya.
+ *
+ * Pemilih, bukan kotak teks. Alamat yang diketik tangan akan salah ketik suatu hari, dan
+ * alamat yang salah terlihat persis sama dengan yang benar di database — barunya ketahuan
+ * pada hari seseorang mencoba mengirim surat ke sana. Server tetap memverifikasi ulang;
+ * pemilih ini hanya menghapus kesempatannya.
+ *
+ * Tidak semua orang di NEXUS punya email kantor, jadi keadaan "belum ditautkan" adalah
+ * keadaan yang normal dan harus terlihat tenang, bukan seperti sesuatu yang kurang.
+ */
+function GoogleLinkCell({ user, accounts, configured, canEdit }: { user: NexusAdminUser; accounts: GoogleWorkspaceAccount[]; configured: boolean; canEdit: boolean }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const current = user.googleWorkspaceEmail ?? null;
+
+  const link = useMutation({
+    mutationFn: (email: string | null) => nexusApi.linkGoogleWorkspace(user.id, email),
+    onSuccess: () => {
+      setProblem(null);
+      setOpen(false);
+      qc.invalidateQueries({ queryKey: ["nexus", "admin-users"] });
+      // Daftar akun ikut disegarkan: `linkedTo` di dalamnya baru saja berubah, dan tanpa ini
+      // akun yang barusan dipakai masih tampak bebas di baris orang lain.
+      qc.invalidateQueries({ queryKey: ["nexus", "google-workspace-accounts"] });
+    },
+    onError: (e: unknown) => setProblem(e instanceof ApiError ? e.message : "Gagal menautkan"),
+  });
+
+  if (!configured) return null;
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        disabled={!canEdit}
+        onClick={() => { setProblem(null); setOpen(true); }}
+        title={current ? `Google Workspace: ${current}` : "Tautkan akun Google Workspace"}
+        className={cn(
+          "inline-flex max-w-[190px] items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] font-semibold transition disabled:opacity-50",
+          current ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-dashed border-border text-muted-foreground hover:bg-accent",
+        )}
+      >
+        <AtSign className="h-3.5 w-3.5 shrink-0" />
+        <span className="truncate">{current ?? "Google"}</span>
+      </button>
+    );
+  }
+
+  return (
+    <span className="inline-flex flex-col gap-1">
+      <span className="inline-flex items-center gap-1">
+        <select
+          autoFocus
+          disabled={link.isPending}
+          defaultValue={current ?? ""}
+          onChange={(e) => link.mutate(e.target.value === "" ? null : e.target.value)}
+          className="max-w-[230px] rounded-md border border-border bg-background px-1.5 py-1 text-[11px]"
+        >
+          <option value="">— tidak ditautkan —</option>
+          {accounts.map((a) => {
+            // Akun yang sudah dipakai profil LAIN tidak bisa dipilih. Indeks unik akan menolaknya
+            // juga, tapi ditolak setelah memilih terasa seperti kesalahan pemakai; di sini
+            // jawabannya sudah kelihatan sebelum diklik, lengkap dengan nama pemiliknya.
+            const takenByOther = a.linkedTo && a.linkedTo.id !== user.id;
+            return (
+              <option key={a.email} value={a.email} disabled={Boolean(takenByOther)}>
+                {a.email}
+                {a.fullName ? ` — ${a.fullName}` : ""}
+                {a.suspended ? " [suspended]" : ""}
+                {takenByOther ? ` (dipakai ${a.linkedTo!.name})` : ""}
+              </option>
+            );
+          })}
+        </select>
+        {link.isPending ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+        ) : (
+          <button type="button" onClick={() => setOpen(false)} title="Tutup" className="rounded-md p-1 text-muted-foreground hover:bg-accent">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+        {current && !link.isPending && (
+          <button type="button" onClick={() => link.mutate(null)} title="Lepas tautan" className="rounded-md p-1 text-muted-foreground hover:bg-accent">
+            <Link2Off className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </span>
+      {problem && <span className="max-w-[230px] text-[10px] leading-snug text-destructive">{problem}</span>}
+    </span>
+  );
+}
+function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canManageShift, shiftPending, onSaveShift, shiftByDayPending, onSaveShiftByDay, flexiPending, onToggleFlexi, geofencePending, onToggleGeofence, onDayoff, canDelete, isMember, onDelete, gwConfigured, gwAccounts, canLinkGoogle }: { gwConfigured: boolean; gwAccounts: GoogleWorkspaceAccount[]; canLinkGoogle: boolean; user: NexusAdminUser; orgInfo?: { memberId: string; role: string; shiftStart: string | null; shiftEnd: string | null; shiftByDay: Record<string, { start: string; end: string }> | null; flexi: boolean; noGeofence: boolean }; assignable: OrgRole[]; canEdit: boolean; onOrgRole: (role: string) => void; pending: boolean; canManageShift: boolean; shiftPending: boolean; onSaveShift: (start: string | null, end: string | null) => void; shiftByDayPending: boolean; onSaveShiftByDay: (byDay: Record<string, { start: string; end: string }>) => void; flexiPending: boolean; onToggleFlexi: () => void; geofencePending: boolean; onToggleGeofence: () => void; onDayoff: () => void; canDelete: boolean; isMember: boolean; onDelete: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const byDay = orgInfo?.shiftByDay ?? {};
   const overrideCount = Object.keys(byDay).length;
@@ -248,6 +353,7 @@ function UserRow({ user, orgInfo, assignable, canEdit, onOrgRole, pending, canMa
                   <Smartphone className="h-3.5 w-3.5" /> Mobile
                 </button>
               )}
+              <GoogleLinkCell user={user} accounts={gwAccounts} configured={gwConfigured} canEdit={canLinkGoogle} />
             </div>
           )}
         </td>

@@ -1154,6 +1154,25 @@ export type NexusAdminUser = {
   avatar?: string | null;
   workspaceCount?: number;
   joinedAt?: string | null;
+  /** Akun Google Workspace yang ditautkan BoD dari Control Room. null = belum punya/belum ditautkan. */
+  googleWorkspaceEmail?: string | null;
+};
+
+/** Satu akun di Google Workspace, apa adanya dari Admin SDK. */
+export type GoogleWorkspaceAccount = {
+  email: string;
+  fullName: string;
+  suspended: boolean;
+  isAdmin: boolean;
+  /** Workspace ini memuat tiga domain: znetworks.id, pats.group, intoo.id. */
+  domain: string;
+  /** Profil NEXUS yang sudah memakai akun ini, atau null. */
+  linkedTo: { id: string; name: string } | null;
+};
+export type GoogleWorkspaceAccounts = {
+  configured: boolean;
+  accounts: GoogleWorkspaceAccount[];
+  error?: string;
 };
 
 export type NexusAuditLog = {
@@ -2030,6 +2049,15 @@ export const nexusApi = {
   },
   auditLogs: (query = "") => apiFetch<{ logs: NexusAuditLog[]; total: number }>(`/api/audit${query ? `?${query}` : ""}`),
   updateUserRole: (userId: string, role: string) => apiFetch<{ user?: NexusAdminUser }>(`/api/admin/users/${userId}`, { method: "PATCH", body: JSON.stringify({ role }) }),
+  googleWorkspaceAccounts: () => apiFetch<GoogleWorkspaceAccounts>("/api/admin/google-workspace/accounts"),
+  // `null` melepas tautan. Server memverifikasi alamatnya benar-benar ada di Google sebelum
+  // menyimpan, jadi kegagalan di sini berarti alamatnya tidak ada atau sudah dipakai orang lain
+  // — dua hal yang pesannya perlu sampai ke layar apa adanya.
+  linkGoogleWorkspace: (userId: string, googleWorkspaceEmail: string | null) =>
+    apiFetch<{ user?: NexusAdminUser }>(`/api/admin/users/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ googleWorkspaceEmail }),
+    }),
   deleteUser: (userId: string) => apiFetch<{ ok: boolean; deletedUser: { id: string; name: string; email: string }; reassigned: Record<string, number>; purged: Record<string, number> }>(`/api/admin/users/${userId}`, { method: "DELETE" }),
   bufferDrafts: () => apiFetch<BufferDraftsResponse>("/api/buffer/drafts"),
   bufferApprove: (postId: string, mode: "queue" | "schedule" | "now", dueAt?: string) => apiFetch<{ ok: boolean }>("/api/buffer/approve", { method: "POST", body: JSON.stringify({ postId, mode, dueAt }) }),
