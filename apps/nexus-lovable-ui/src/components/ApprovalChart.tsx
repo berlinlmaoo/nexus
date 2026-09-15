@@ -63,7 +63,10 @@ export function ApprovalChart() {
   const roots = people.filter((p) => !p.approverId).sort((a, b) => tier(a.role) - tier(b.role) || label(a).localeCompare(label(b), "id"));
   const isSenior = (p: ApprovalChartPerson) => p.role === "BOD" || p.role === "ONE_ABOVE_ALL";
   const hasKids = (p: ApprovalChartPerson) => (children.get(p.userId)?.length ?? 0) > 0;
-  const trees = roots.filter(hasKids);
+  // BoD/OAA tanpa bawahan tetap digambar sebagai kartu tunggal di baris atas, sejajar BoD lain.
+  // Mereka memang tidak punya siapa-siapa untuk disetujui, tapi menghilangkannya dari kanvas
+  // membuat "siapa saja BoD-nya" tidak terjawab — dan itu pertanyaan yang bagan ini harus jawab.
+  const trees = roots.filter((p) => hasKids(p) || isSenior(p));
   const alone = roots.filter((p) => !isSenior(p) && !hasKids(p));
   const unplacedCount = roots.filter((p) => !isSenior(p)).length; // pohon tanpa atasan ikut dihitung
   const busy = setApprover.isPending;
@@ -267,9 +270,8 @@ export function ApprovalChart() {
             style={{ touchAction: "none" }}
           >
             <div ref={innerRef} className="absolute left-0 top-0 w-max" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.s})`, transformOrigin: "0 0" }}>
-              {/* Tanpa kotak Board di puncak: tiap pohon berdiri sendiri, berdampingan. BoD yang tidak
-                  punya bawahan tidak digambar — mereka tidak ada di rantai mana pun, dan tetap bisa
-                  dipilih jadi atasan lewat pemilih (klik kartu). */}
+              {/* Tanpa kotak Board di puncak: tiap pohon berdiri sendiri, berdampingan. BoD tanpa
+                  bawahan ikut di baris ini sebagai kartu tunggal. */}
               <div className="flex items-start gap-8 p-4">
                 {trees.map((p) => <Node key={p.userId} p={p} />)}
               </div>
