@@ -51,6 +51,11 @@ struct WorkspaceRoster: Decodable, Sendable {
         let flexiTimeEnabled: Bool?
         /// Mode Mobile: absen dari mana saja (geofence mati, checkout luar kantor tanpa approval).
         let noGeofenceMode: Bool?
+        /// Atasan langsung di Bagan Approval — hanya bermakna untuk STAFF. nil = belum ditaruh:
+        /// request orang ini masih jatuh ke BoD. Itu pekerjaan yang belum selesai, bukan galat.
+        let approverId: String?
+        let approver: ApproverRef?
+        struct ApproverRef: Decodable, Sendable { let id: String; let name: String?; let avatar: String? }
         let joinedAt: String?
         // Some other endpoints nest under `user` — kept as a fallback.
         let user: UserRef?

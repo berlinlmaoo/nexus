@@ -290,14 +290,10 @@ struct TeamDetailView: View {
             if member.isAttendancePrimary ?? false {
                 Image(systemName: "star.fill").font(.system(size: 10)).foregroundStyle(NX.warning)
             }
-            if member.isLead { NexusChip(text: T("Lead"), tone: .accent) }
             if canManage, let uid = member.uid {
                 Menu {
-                    Button(member.isLead ? T("Make member") : T("Make lead")) {
-                        Task { await act(key) {
-                            try await APIClient.shared.teamSetMemberRole(teamId: team.id, userId: uid, lead: !member.isLead)
-                        } }
-                    }
+                    // Tidak ada "make lead": lead tim dihapus. Approval absensi diatur di
+                    // Control Room > Bagan Approval, bukan di tim.
                     if canManageAtt {
                         // Tim absensi UTAMA orang ini: yang jam shiftnya benar-benar dipakai kalau
                         // dia ada di lebih dari satu tim. Tanpa ini di HP, orang yang masuk dua tim

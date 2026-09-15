@@ -226,7 +226,6 @@ struct MemberProfileView: View {
                             .frame(width: 10, height: 10)
                         Text(team.name).font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
                         Spacer(minLength: 6)
-                        if leadsTeam(team) { NexusChip(text: T("Lead"), tone: .accent) }
                     }
                 }
             }
@@ -285,10 +284,6 @@ struct MemberProfileView: View {
     }
 
     // MARK: - work
-
-    private func leadsTeam(_ team: Team) -> Bool {
-        (team.members ?? []).first { $0.uid == target.userId }?.isLead ?? false
-    }
 
     private func load() async {
         failed = false

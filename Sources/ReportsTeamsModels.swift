@@ -74,7 +74,8 @@ struct Team: Decodable, Identifiable, Sendable {
         var uid: String? { userId ?? user?.id }
         var displayName: String { user?.name ?? user?.email ?? "Unknown" }
         var initial: String { String(displayName.first ?? "?").uppercased() }
-        var isLead: Bool { (role ?? "MEMBER").uppercased() == "LEAD" }
+        // `role` masih di-decode (server selalu mengirim "MEMBER" sekarang), tapi tidak ada lagi
+        // yang membaca "LEAD": lead tim dihapus bersama Bagan Approval.
     }
 
     struct ProjectLink: Decodable, Sendable {

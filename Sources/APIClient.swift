@@ -726,12 +726,6 @@ struct APIClient {
     }
 
     @discardableResult
-    func teamSetMemberRole(teamId: String, userId: String, lead: Bool) async throws -> Bool {
-        try await teamAction(["action": "set-member-role", "teamId": teamId, "userId": userId,
-                              "role": lead ? "LEAD" : "MEMBER"])
-    }
-
-    @discardableResult
     func teamLinkProject(teamId: String, projectId: String) async throws -> Bool {
         try await teamAction(["action": "link-project", "teamId": teamId, "projectId": projectId])
     }
@@ -839,6 +833,22 @@ struct APIClient {
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }
+    /// Bagan Approval: taruh seorang STAFF di bawah seorang MANAGER, atau lepas (nil).
+    ///
+    /// NSNull, bukan `nil as Any`: yang kedua membuat JSONSerialization melempar, jadi "lepas dari
+    /// bagan" gagal sementara "pindah manager" berhasil — separuh fitur yang jalan adalah bentuk
+    /// kerusakan yang paling sulit dilihat. Server memvalidasi peran keduanya.
+    @discardableResult
+    func setAttendanceApprover(memberId: String, approverId: String?, workspaceId: String) async throws -> Bool {
+        var req = makeRequest("/api/workspaces/members", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "memberId": memberId, "workspaceId": workspaceId, "approverId": approverId ?? NSNull(),
+        ])
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+
     /// Flexi Time / Mode Mobile untuk satu orang. Dikirim terpisah, bukan digabung ke pembaruan
     /// peran: server menerapkan hanya field yang dikirim, dan mengirimkan `role` di sini akan
     /// menulis ulang peran orang itu dengan nilai yang kebetulan sedang ada di layar.
