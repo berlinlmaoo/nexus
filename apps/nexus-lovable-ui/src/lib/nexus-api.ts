@@ -1171,7 +1171,16 @@ export type GoogleWorkspaceAccount = {
 };
 export type GoogleWorkspaceAccounts = {
   configured: boolean;
+  /** Domain yang bisa dipakai saat membuat akun baru, diturunkan dari akun yang ada. */
+  domains?: string[];
   accounts: GoogleWorkspaceAccount[];
+  error?: string;
+};
+
+export type CreatedGoogleAccount = {
+  created: boolean;
+  linked: boolean;
+  account: { email: string; fullName: string; temporaryPassword: string };
   error?: string;
 };
 
@@ -2050,6 +2059,10 @@ export const nexusApi = {
   auditLogs: (query = "") => apiFetch<{ logs: NexusAuditLog[]; total: number }>(`/api/audit${query ? `?${query}` : ""}`),
   updateUserRole: (userId: string, role: string) => apiFetch<{ user?: NexusAdminUser }>(`/api/admin/users/${userId}`, { method: "PATCH", body: JSON.stringify({ role }) }),
   googleWorkspaceAccounts: () => apiFetch<GoogleWorkspaceAccounts>("/api/admin/google-workspace/accounts"),
+  // Membuat mailbox BARU lalu menautkannya. BoD saja — ini satu-satunya panggilan di NEXUS yang
+  // mengisi seat lisensi berbayar.
+  createGoogleWorkspaceAccount: (body: { userId: string; localPart: string; domain: string; givenName: string; familyName: string }) =>
+    apiFetch<CreatedGoogleAccount>("/api/admin/google-workspace/users", { method: "POST", body: JSON.stringify(body) }),
   // `null` melepas tautan. Server memverifikasi alamatnya benar-benar ada di Google sebelum
   // menyimpan, jadi kegagalan di sini berarti alamatnya tidak ada atau sudah dipakai orang lain
   // — dua hal yang pesannya perlu sampai ke layar apa adanya.

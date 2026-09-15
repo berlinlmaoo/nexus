@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto"
 import { google } from "googleapis"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -118,6 +119,88 @@ export async function getDirectoryAccount(email: string): Promise<DirectoryAccou
     if (status === 404) return null
     throw error
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Membuat mailbox baru.
+//
+// Ini satu-satunya fungsi di berkas ini yang MENGUBAH sesuatu di luar NEXUS, dan yang
+// mengeluarkan uang: tiap akun baru mengisi satu seat lisensi Workspace. Pemanggilnya wajib
+// membatasi ke BoD dan mencatatnya ke audit — bukan tugas fungsi ini, tapi kalau baris ini
+// pernah dipanggil dari tempat lain, itu yang harus diperiksa lebih dulu.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface CreateAccountInput {
+  localPart: string
+  domain: string
+  givenName: string
+  familyName: string
+}
+
+export interface CreatedAccount {
+  email: string
+  fullName: string
+  /** Ditampilkan SEKALI. Tidak disimpan di mana pun — tidak di database, tidak di log. */
+  temporaryPassword: string
+}
+
+/** Bagian sebelum @: huruf, angka, titik, garis bawah, strip. Google lebih longgar dari ini,
+ *  tapi alamat yang bisa diketik ulang orang dengan benar lewat telepon lebih berharga
+ *  daripada kebebasan memakai tanda kutip di alamat surat. */
+export function normalizeLocalPart(raw: string): string {
+  return (raw || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, "")
+    .replace(/^[._-]+|[._-]+$/g, "")
+    .slice(0, 64)
+}
+
+/** Sandi sementara yang kuat, dibuat di server.
+ *
+ *  Sengaja TIDAK memakai pola yang mudah diingat. Ini sandi sekali pakai — akun dipaksa
+ *  menggantinya saat login pertama — jadi yang berharga bukan kemudahannya diingat, melainkan
+ *  bahwa ia tidak bisa ditebak oleh siapa pun yang melihat satu sandi lain buatan sistem ini. */
+function temporaryPassword(): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
+  const bytes = randomBytes(20)
+  let out = ""
+  for (const b of bytes) out += alphabet[b % alphabet.length]
+  // Satu simbol dan satu angka dijamin ada, supaya tidak tertolak kebijakan sandi domain yang
+  // mensyaratkannya — kegagalan yang pesannya dari Google sulit dihubungkan ke sebabnya.
+  return `${out.slice(0, 16)}#${out.slice(16, 19)}7`
+}
+
+export async function createDirectoryUser(input: CreateAccountInput): Promise<CreatedAccount> {
+  const admin = google.admin({ version: "directory_v1", auth: authFor(SCOPE_WRITE) })
+  const email = `${input.localPart}@${input.domain}`
+  const password = temporaryPassword()
+
+  await admin.users.insert({
+    requestBody: {
+      primaryEmail: email,
+      name: { givenName: input.givenName, familyName: input.familyName },
+      password,
+      // Wajib ganti saat login pertama. Sandi yang dibuat sistem dan dikirim lewat chat tidak
+      // boleh jadi sandi permanen siapa pun.
+      changePasswordAtNextLogin: true,
+    },
+  })
+
+  return {
+    email,
+    fullName: `${input.givenName} ${input.familyName}`.trim(),
+    temporaryPassword: password,
+  }
+}
+
+/** Domain yang benar-benar dipakai di Workspace ini.
+ *
+ *  Diturunkan dari alamat akun yang ada, bukan dari `domains.list`: endpoint itu butuh scope
+ *  `admin.directory.domain.readonly` yang TIDAK didelegasikan, dan menambah scope berarti
+ *  meminta Berlin kembali ke Admin Console. Konsekuensinya jujur dan kecil — domain yang
+ *  terdaftar tapi belum punya satu pun akun tidak akan muncul di pilihan. */
+export function domainsFrom(accounts: { domain: string }[]): string[] {
+  return Array.from(new Set(accounts.map((a) => a.domain).filter(Boolean))).sort()
 }
 
 export { SCOPE_WRITE }
