@@ -78,6 +78,7 @@ export async function GET(req: NextRequest) {
 
     const payload: {
       workspaceId: string
+      workspaceName: string
       role: string
       members: Array<{
         id: string
@@ -109,6 +110,7 @@ export async function GET(req: NextRequest) {
       }>
     } = {
       workspaceId: member.workspaceId,
+      workspaceName: member.workspace.name,
       role: member.role,
       members: members.map(m => ({
         id: m.id,

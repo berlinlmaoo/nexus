@@ -599,6 +599,8 @@ export type NexusDayoff = {
 
 export type WorkspaceMembersResponse = {
   workspaceId: string;
+  /** Nama workspace si pemanggil — untuk label tombol "Masukkan ke …". */
+  workspaceName?: string;
   role: string; // caller's own org role
   members: NexusWorkspaceMember[];
   availableUsers?: Array<{ id: string; name: string; email: string; avatar: string | null }>;
