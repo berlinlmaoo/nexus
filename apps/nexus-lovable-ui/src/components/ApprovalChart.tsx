@@ -1,7 +1,7 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, Search, X } from "lucide-react";
+import { Loader2, Maximize2, Minimize2, Search, X, ZoomIn, ZoomOut } from "lucide-react";
 import { ApiError, nexusApi, ORG_ROLE_LABEL, type ApprovalChartPerson } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 
@@ -118,6 +118,16 @@ export function ApprovalChart() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState({ scale: 1, height: 0 });
+  // Layar penuh = seluruh jendela, sidebar ikut hilang: ~300px lebih lebar, dan di sana zoom
+  // manual boleh (scroll samping hanya ada di mode yang dibuka dengan sengaja). null = pas layar.
+  const [full, setFull] = useState(false);
+  const [zoom, setZoom] = useState<number | null>(null);
+  useEffect(() => {
+    if (!full) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setFull(false); setZoom(null); } };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [full]);
   useLayoutEffect(() => {
     const measure = () => {
       const w = wrapRef.current?.clientWidth ?? 0;
@@ -131,7 +141,8 @@ export function ApprovalChart() {
     if (wrapRef.current) ro.observe(wrapRef.current);
     if (innerRef.current) ro.observe(innerRef.current);
     return () => ro.disconnect();
-  }, [people.length, dragId]);
+  }, [people.length, dragId, full]);
+  const scale = zoom ?? fit.scale;
 
   return (
     <div className="space-y-4">
@@ -139,7 +150,7 @@ export function ApprovalChart() {
         .oc-node{display:flex;flex-direction:column;align-items:center}
         .oc-kids{display:flex;align-items:flex-start;position:relative;padding-top:22px}
         .oc-kids::before{content:"";position:absolute;top:0;left:50%;width:2px;height:22px;background:var(--oc-line);transform:translateX(-50%)}
-        .oc-kid{position:relative;padding:22px 8px 0}
+        .oc-kid{position:relative;padding:22px 5px 0}
         .oc-kid::before{content:"";position:absolute;top:0;left:50%;width:2px;height:22px;background:var(--oc-line);transform:translateX(-50%)}
         .oc-kid::after{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:var(--oc-line)}
         .oc-kid:first-child::after{left:50%}
@@ -147,7 +158,7 @@ export function ApprovalChart() {
         .oc-kid:only-child::after{display:none}
         /* Tumpukan daun: rel tegak di tengah, di belakang kartu-kartu (kartunya buram, jadi
            relnya hanya terlihat di sela). */
-        .oc-leaves{display:flex;flex-direction:column;gap:8px;position:relative}
+        .oc-leaves{display:flex;flex-direction:column;gap:6px;position:relative}
         .oc-leaves::before{content:"";position:absolute;top:0;bottom:24px;left:50%;width:2px;background:var(--oc-line);transform:translateX(-50%)}
         .oc-leaves>*{position:relative}
       `}</style>
@@ -164,9 +175,28 @@ export function ApprovalChart() {
         {/* Satu bagan: kotak Board di puncak (seperti "Dewan Komisaris" di Corpnet), semua pohon
             menggantung di bawahnya — termasuk pohon tanpa atasan, karena request puncaknya memang
             jatuh ke Board. BoD yang punya bawahan muncul sebagai akar pohon, bukan di kotak. */}
-        <section className="border-b border-border px-5 py-5">
-          <div ref={wrapRef} className="w-full overflow-hidden" style={{ height: fit.height || undefined }}>
-            <div ref={innerRef} className="w-max" style={{ transform: `scale(${fit.scale})`, transformOrigin: "top left" }}>
+        <section className={cn(full ? "fixed inset-0 z-[60] flex flex-col bg-card" : "border-b border-border px-5 py-5")}>
+          <div className={cn("flex items-center gap-2", full ? "border-b border-border px-5 py-3" : "mb-3")}>
+            {full && <div className="text-sm font-bold">Bagan Approval</div>}
+            <div className="ml-auto flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              {full && (
+                <>
+                  <button type="button" onClick={() => setZoom((z) => Math.max(0.5, +((z ?? fit.scale) - 0.1).toFixed(2)))} className="rounded-md border border-border p-1 hover:bg-accent" aria-label="Perkecil"><ZoomOut className="h-3.5 w-3.5" /></button>
+                  <input type="range" min={50} max={150} step={5} value={Math.round(scale * 100)} onChange={(e) => setZoom(Number(e.target.value) / 100)} className="w-28" aria-label="Zoom" />
+                  <button type="button" onClick={() => setZoom((z) => Math.min(1.5, +((z ?? fit.scale) + 0.1).toFixed(2)))} className="rounded-md border border-border p-1 hover:bg-accent" aria-label="Perbesar"><ZoomIn className="h-3.5 w-3.5" /></button>
+                  <button type="button" onClick={() => setZoom(null)} className={cn("rounded-md border border-border px-2 py-1 font-semibold hover:bg-accent", zoom === null && "bg-primary/10 text-primary")}>Pas layar</button>
+                </>
+              )}
+              <span className="tabular-nums">{Math.round(scale * 100)}%</span>
+              <button type="button" onClick={() => { setFull((f) => !f); setZoom(null); }} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-semibold hover:bg-accent">
+                {full ? <><Minimize2 className="h-3.5 w-3.5" /> Tutup</> : <><Maximize2 className="h-3.5 w-3.5" /> Layar penuh</>}
+              </button>
+            </div>
+          </div>
+          {/* Di layar penuh dengan zoom manual, wadahnya boleh scroll dua arah — itu yang diminta
+              saat orang menekan tombol perbesar. Di mode biasa dan "pas layar": tidak pernah. */}
+          <div ref={wrapRef} className={cn("w-full", full ? "min-h-0 flex-1 p-5" : "", zoom !== null ? "overflow-auto" : "overflow-hidden")} style={{ height: !full ? (fit.height || undefined) : undefined }}>
+            <div ref={innerRef} className="w-max" style={{ transform: `scale(${scale})`, transformOrigin: "top left" }}>
               <div className="oc-node">
                 <div className="rounded-xl bg-[#1e3a5f] px-5 py-3 text-center text-white shadow-[0_2px_0_rgba(0,0,0,.2)]">
                   <div className="text-[13px] font-bold">Board of Directors</div>
@@ -185,8 +215,7 @@ export function ApprovalChart() {
               </div>
             </div>
           </div>
-          {trees.length === 0 && <div className="mt-3 text-xs text-muted-foreground">Belum ada yang ditaruh di bawah siapa pun.</div>}
-          {fit.scale < 1 && <div className="mt-2 text-right text-[10.5px] text-muted-foreground/70">Bagan diperkecil {Math.round(fit.scale * 100)}% supaya muat selebar layar.</div>}
+          {trees.length === 0 && <div className="mt-3 px-5 text-xs text-muted-foreground">Belum ada yang ditaruh di bawah siapa pun.</div>}
         </section>
 
         {/* 3 · Sendirian — zona jatuh untuk MELEPAS */}
@@ -261,21 +290,21 @@ function PersonCard({ p, busy, dragging, over, droppable, reports, rootless, com
         disabled={busy}
         title="Klik untuk pilih atasan, atau seret ke kartu atasannya"
         className={cn(
-          "flex cursor-grab items-center gap-2.5 rounded-xl text-left transition active:cursor-grabbing disabled:opacity-50",
-          compact ? "w-[160px] px-2.5 py-1.5" : "w-[176px] px-3 py-2.5",
+          "flex cursor-grab items-center gap-2 rounded-lg text-left transition active:cursor-grabbing disabled:opacity-50",
+          compact ? "w-[136px] px-2 py-1.5" : "w-[144px] px-2 py-2",
           compact && senior ? "bg-white/10 text-white ring-1 ring-white/20 hover:bg-white/20" : senior ? "bg-[#1e3a5f] text-white shadow-[0_2px_0_rgba(0,0,0,.2)]" : manager ? "bg-[#2c5282] text-white shadow-[0_2px_0_rgba(0,0,0,.2)]" : "border border-border bg-background text-foreground shadow-sm hover:border-primary",
           dragging && "opacity-40",
         )}
       >
         {p.avatar ? (
-          <img src={p.avatar} alt="" className={cn("h-8 w-8 shrink-0 rounded-full object-cover", filled && "ring-1 ring-white/30")} />
+          <img src={p.avatar} alt="" className={cn("h-7 w-7 shrink-0 rounded-full object-cover", filled && "ring-1 ring-white/30")} />
         ) : (
-          <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-bold", filled ? "bg-white/15" : "bg-primary/10 text-primary")}>{initialsOf(p.name)}</span>
+          <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-full text-[10px] font-bold", filled ? "bg-white/15" : "bg-primary/10 text-primary")}>{initialsOf(p.name)}</span>
         )}
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-semibold leading-tight" title={label(p)}>{label(p)}</span>
-          <span className={cn("block truncate text-[10.5px] leading-tight", filled ? "opacity-75" : "text-muted-foreground")}>
-            {ROLE_SUB[p.role] ?? p.role}{reports > 0 && ` · ${reports} bawahan`}
+          <span className="block truncate text-[12px] font-semibold leading-tight" title={label(p)}>{label(p)}</span>
+          <span className={cn("block truncate text-[10px] leading-tight", filled ? "opacity-75" : "text-muted-foreground")}>
+            {ROLE_SUB[p.role] ?? p.role}{reports > 0 && ` · ${reports}`}
           </span>
         </span>
       </button>
