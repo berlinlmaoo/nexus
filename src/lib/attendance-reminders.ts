@@ -26,7 +26,12 @@ import { publicBaseUrl } from "./public-url"
 //
 // dryRun (the GET preview) skips the minute gate and lists everyone in scope today with their resolved
 // shift + the exact clock times they'd be pinged — so the roster can be verified before any real send.
-const REMINDER_LEAD_MINUTES = 15
+// Pengingat MASUK tiga kali — 30 dan 15 menit sebelum, lalu tepat pada jam masuk — dan PULANG sekali,
+// tepat pada jam pulang. Semuanya push ke HP lewat notifyAttendanceReminder; WhatsApp tetap dicoba
+// kalau ada nomor, tapi bridge-nya sudah lama mati dan bukan lagi jalur yang diandalkan.
+const CHECKIN_OFFSETS = [30, 15, 0] as const
+const CHECKOUT_OFFSETS = [0] as const
+const REMINDER_LEAD_MINUTES = 15 // hanya untuk label pratinjau lama
 const ONE_DAY_MS = 86_400_000
 
 export interface ReminderPreviewRow {
@@ -156,8 +161,8 @@ export async function sendAttendanceReminders(now: Date = new Date(), opts?: { d
       // Resolve TODAY's shift window from the real instant (overnight-aware + tz-safe).
       const shiftToday = await resolveEffectiveAttendanceShift({ userId: member.userId, workspaceId, office, date: now })
       const winToday = resolveShiftWindowAt(now, office, shiftToday)
-      const checkinAt = new Date(winToday.shiftStartAt.getTime() - REMINDER_LEAD_MINUTES * 60_000)
-      const checkoutTodayAt = new Date(winToday.shiftEndAt.getTime() - REMINDER_LEAD_MINUTES * 60_000)
+      const checkinAt = new Date(winToday.shiftStartAt.getTime() - REMINDER_LEAD_MINUTES * 60_000) // label pratinjau
+      const checkoutTodayAt = winToday.shiftEndAt
 
       if (dryRun) {
         const [onLeave, record] = await Promise.all([
@@ -174,7 +179,7 @@ export async function sendAttendanceReminders(now: Date = new Date(), opts?: { d
           shiftSource: shiftToday.source,
           shiftStart: shiftToday.shiftStartTime,
           shiftEnd: shiftToday.shiftEndTime,
-          checkinReminderAt: zoneParts(checkinAt, tz).hm,
+          checkinReminderAt: CHECKIN_OFFSETS.map((o) => zoneParts(new Date(winToday.shiftStartAt.getTime() - o * 60_000), tz).hm).join(" · "),
           checkoutReminderAt: checkoutLabel,
           office: office.name ?? "—",
           officeTimezone: office.timezone ?? null,
@@ -186,21 +191,26 @@ export async function sendAttendanceReminders(now: Date = new Date(), opts?: { d
         continue
       }
 
-      // ── Check-in reminder (today's shift start − 15) ──
-      if (todayOk && zoneParts(checkinAt, tz).key === nowKey) {
-        if (!(await coveredByLeave(member.userId, workspaceId, todayDate))) {
+      // ── Check-in reminders (shift start − 30, − 15, dan tepat 0) — hanya kalau belum check-in ──
+      if (todayOk) {
+        for (const off of CHECKIN_OFFSETS) {
+          const at = new Date(winToday.shiftStartAt.getTime() - off * 60_000)
+          if (zoneParts(at, tz).key !== nowKey) continue
+          if (await coveredByLeave(member.userId, workspaceId, todayDate)) break
           const record = await dayRecord(member.userId, workspaceId, todayDate)
-          if (!record?.checkInAt) {
-            const shouldSend = await notifyAttendanceReminder({
-              userId: member.userId,
-              kind: "checkin",
-              attendanceDate: dateKey,
-              shiftTime: shiftToday.shiftStartTime,
-            })
-            if (shouldSend) {
-              if (phone) await sendWA(phone, `🔔 *Reminder Absen Masuk*\nHai ${firstName(member.user?.name)}, 15 menit lagi jam masuk (${shiftToday.shiftStartTime}). Jangan lupa check-in di NEXUS ya 🙌${url ? `\n${url}` : ""}`)
-              result.checkinSent++
-            }
+          if (record?.checkInAt) break
+          const shouldSend = await notifyAttendanceReminder({
+            userId: member.userId,
+            kind: "checkin",
+            attendanceDate: dateKey,
+            shiftTime: shiftToday.shiftStartTime,
+            offsetMinutes: off,
+          })
+          if (shouldSend) {
+            if (phone) await sendWA(phone, off > 0
+              ? `🔔 *Reminder Absen Masuk*\nHai ${firstName(member.user?.name)}, ${off} menit lagi jam masuk (${shiftToday.shiftStartTime}). Jangan lupa check-in di NEXUS ya 🙌${url ? `\n${url}` : ""}`
+              : `⏰ *Waktunya Absen Masuk*\nHai ${firstName(member.user?.name)}, sudah jam ${shiftToday.shiftStartTime}. Check-in sekarang ya 🙌${url ? `\n${url}` : ""}`)
+            result.checkinSent++
           }
         }
       }
@@ -218,20 +228,24 @@ export async function sendAttendanceReminders(now: Date = new Date(), opts?: { d
           shift = await resolveEffectiveAttendanceShift({ userId: member.userId, workspaceId, office, date: anchor.instant })
           win = resolveShiftWindowAt(anchor.instant, office, shift)
         }
-        const checkoutAt = new Date(win.shiftEndAt.getTime() - REMINDER_LEAD_MINUTES * 60_000)
-        if (zoneParts(checkoutAt, tz).key !== nowKey) continue
-        if (await coveredByLeave(member.userId, workspaceId, anchor.date)) continue
-        const record = await dayRecord(member.userId, workspaceId, anchor.date)
-        if (record?.checkInAt && !record?.checkOutAt) {
+        for (const off of CHECKOUT_OFFSETS) {
+          const checkoutAt = new Date(win.shiftEndAt.getTime() - off * 60_000)
+          if (zoneParts(checkoutAt, tz).key !== nowKey) continue
+          if (await coveredByLeave(member.userId, workspaceId, anchor.date)) break
+          const record = await dayRecord(member.userId, workspaceId, anchor.date)
+          if (!(record?.checkInAt && !record?.checkOutAt)) break
           const anchorDateKey = formatAttendanceDateKey(anchor.instant)
           const shouldSend = await notifyAttendanceReminder({
             userId: member.userId,
             kind: "checkout",
             attendanceDate: anchorDateKey,
             shiftTime: shift.shiftEndTime,
+            offsetMinutes: off,
           })
           if (shouldSend) {
-            if (phone) await sendWA(phone, `🔔 *Reminder Absen Pulang*\nHai ${firstName(member.user?.name)}, 15 menit lagi jam pulang (${shift.shiftEndTime}). Jangan lupa check-out di NEXUS ya ✅${url ? `\n${url}` : ""}`)
+            if (phone) await sendWA(phone, off > 0
+              ? `🔔 *Reminder Absen Pulang*\nHai ${firstName(member.user?.name)}, ${off} menit lagi jam pulang (${shift.shiftEndTime}). Jangan lupa check-out di NEXUS ya ✅${url ? `\n${url}` : ""}`
+              : `⏰ *Waktunya Absen Pulang*\nHai ${firstName(member.user?.name)}, sudah jam ${shift.shiftEndTime}. Jangan lupa check-out ya ✅${url ? `\n${url}` : ""}`)
             result.checkoutSent++
           }
         }
