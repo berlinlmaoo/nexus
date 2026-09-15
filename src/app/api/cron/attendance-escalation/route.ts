@@ -53,8 +53,11 @@ export async function POST(req: NextRequest) {
     }
     if (!authorized) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    let body: { dryRun?: boolean; businessDays?: number } | null = null
-    try { body = (await req.json()) as typeof body } catch { /* tanpa body */ }
+    // Tipe dinamai, bukan `typeof body`: sesudah `= null` TS menyempitkan body ke null, dan
+    // `as typeof body` lalu berarti `as null` — bangunannya gagal dengan "never".
+    type Body = { dryRun?: boolean; businessDays?: number }
+    let body: Body | null = null
+    try { body = (await req.json()) as Body } catch { /* tanpa body */ }
     const dryRun = body?.dryRun === true
     const days = Number(body?.businessDays ?? process.env.ATTENDANCE_ESCALATION_BUSINESS_DAYS ?? DEFAULT_BUSINESS_DAYS)
     const cutoff = businessDaysAgo(Number.isFinite(days) && days > 0 ? days : DEFAULT_BUSINESS_DAYS)
