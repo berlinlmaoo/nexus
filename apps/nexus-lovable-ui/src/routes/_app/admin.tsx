@@ -646,24 +646,26 @@ function UserRow(props: UserRowProps) {
             )}
             {isMember && (
               <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1 text-xs font-semibold text-foreground transition hover:border-primary hover:text-primary">
-                <Settings2 className="h-3.5 w-3.5" /> Atur
+                <Settings2 className="h-3.5 w-3.5" /> Detail
               </button>
             )}
           </div>
         </td>
       </tr>
-      {open && <UserDrawer {...props} onClose={() => setOpen(false)} />}
+      {open && <UserDetailModal {...props} onClose={() => setOpen(false)} />}
     </>
   );
 }
 
 /**
- * Panel pengaturan satu orang. Urutan bagiannya mengikuti seberapa sering dipakai: peran &
- * approver di atas, jam kerja, mode absensi, lalu yang jarang (day off, Google, tim & project).
- * Panel, bukan modal: tabel di belakangnya tetap terbaca, jadi membandingkan dua orang tidak
- * perlu tutup-buka.
+ * Kartu detail satu orang — modal di tengah layar, bukan sidebar.
+ *
+ * Dua kolom di layar lebar: kiri = siapa dia dan aturannya (peran, approver, mode absensi, day off,
+ * Google); kanan = jam kerja, karena itu bagian yang paling tinggi dan paling sering diubah.
+ * Tim & project melebar di bawah. Tiap bagian adalah kartu sendiri supaya matanya bisa lompat ke
+ * bagian yang dicari tanpa membaca semuanya.
  */
-function UserDrawer(props: UserRowProps & { onClose: () => void }) {
+function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
   const { user, orgInfo, assignable, canEdit, onOrgRole, pending, canManageShift, shiftPending, onSaveShift, shiftByDayPending, onSaveShiftByDay, flexiPending, onToggleFlexi, geofencePending, onToggleGeofence, onDayoff, gwConfigured, gwAccounts, gwDomains, canLinkGoogle, memberships, membershipsLoading, allTeams, canManageTeams, teamPending, onTeamAdd, onTeamOpen, onTeamCreated, onTeamExit, onOpenApproval, onClose } = props;
   const byDay = orgInfo?.shiftByDay ?? {};
   const saveDay = (wd: string, start: string | null, end: string | null) => {
@@ -675,7 +677,7 @@ function UserDrawer(props: UserRowProps & { onClose: () => void }) {
   const projectCount = memberships?.projects.length ?? 0;
   const teamCount = memberships?.teams.length ?? 0;
 
-  // Esc menutup — panel ini dibuka berkali-kali berturut-turut, dan mengejar tombol × 49 kali
+  // Esc menutup — kartu ini dibuka berkali-kali berturut-turut, dan mengejar tombol × 49 kali
   // adalah cara membuat orang berhenti memakainya.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -685,16 +687,16 @@ function UserDrawer(props: UserRowProps & { onClose: () => void }) {
 
   if (!orgInfo) return null;
 
-  const Section = ({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) => (
-    <section className="border-b border-border px-5 py-4 last:border-0">
-      <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{title}</div>
-      {hint && <p className="mb-2 text-[11px] text-muted-foreground/80">{hint}</p>}
-      {children}
+  const Card = ({ title, hint, children, className }: { title: string; hint?: string; children: React.ReactNode; className?: string }) => (
+    <section className={cn("rounded-xl border border-border bg-background p-4", className)}>
+      <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{title}</div>
+      {hint && <p className="mt-0.5 text-[11px] text-muted-foreground/80">{hint}</p>}
+      <div className="mt-3">{children}</div>
     </section>
   );
 
   const ToggleRow = ({ on, pending: p, onToggle, icon, title, desc, tone }: { on: boolean; pending: boolean; onToggle: () => void; icon: React.ReactNode; title: string; desc: string; tone: "amber" | "sky" }) => (
-    <button type="button" disabled={!canManageShift || p} onClick={onToggle} className={cn("flex w-full items-start gap-3 rounded-xl border p-3 text-left transition disabled:cursor-default", on ? (tone === "amber" ? "border-amber-300 bg-amber-50" : "border-sky-300 bg-sky-50") : "border-border bg-background hover:bg-accent/40")}>
+    <button type="button" disabled={!canManageShift || p} onClick={onToggle} className={cn("flex w-full items-start gap-3 rounded-lg border p-3 text-left transition disabled:cursor-default", on ? (tone === "amber" ? "border-amber-300 bg-amber-50" : "border-sky-300 bg-sky-50") : "border-border bg-card hover:bg-accent/40")}>
       <span className={cn("mt-0.5 shrink-0", on ? (tone === "amber" ? "text-amber-600" : "text-sky-600") : "text-muted-foreground")}>{icon}</span>
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold">{title}</span>
@@ -707,132 +709,147 @@ function UserDrawer(props: UserRowProps & { onClose: () => void }) {
   );
 
   return (
-    <div className="fixed inset-0 z-50" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/30" />
-      <aside className="absolute right-0 top-0 flex h-full w-full max-w-md flex-col bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <header className="flex items-center gap-3 border-b border-border px-5 py-4">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-sm font-bold text-primary ring-1 ring-border">{initialsOf(user.name)}</span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 md:p-8" onClick={onClose}>
+      <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        {/* Kepala: siapa dia, dalam satu pandangan — peran, gabung, approver. Bukan pengaturan. */}
+        <header className="flex items-start gap-4 border-b border-border px-6 py-5">
+          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-primary/10 text-lg font-bold text-primary ring-1 ring-border">{initialsOf(user.name)}</span>
           <div className="min-w-0 flex-1">
-            <div className="truncate font-semibold">{user.name || "Unnamed"}</div>
-            <div className="truncate text-xs text-muted-foreground">{user.email}</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="truncate text-lg font-bold tracking-tight">{user.name || "Unnamed"}</h2>
+              <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", ORG_ROLE_TONE[orgInfo.role] ?? "bg-muted text-muted-foreground")}>{ORG_ROLE_LABEL[orgInfo.role] ?? orgInfo.role}</span>
+            </div>
+            <div className="truncate text-sm text-muted-foreground">{user.email}</div>
+            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-muted-foreground">
+              {user.joinedAt && <span>Gabung {fmtDate(user.joinedAt)}</span>}
+              {user.googleWorkspaceEmail && <span className="inline-flex items-center gap-1"><AtSign className="h-3 w-3" /> {user.googleWorkspaceEmail}</span>}
+              <span>{teamCount} tim · {projectCount} project</span>
+            </div>
           </div>
-          <button onClick={onClose} aria-label="Tutup" className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} aria-label="Tutup" className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-accent"><X className="h-5 w-5" /></button>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <Section title="Peran">
-            {canEdit ? (
-              <select value={orgInfo.role} disabled={pending} onChange={(e) => onOrgRole(e.target.value)} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary disabled:opacity-50">
-                {[...assignable].reverse().map((r) => <option key={r} value={r}>{ORG_ROLE_LABEL[r]}</option>)}
-              </select>
-            ) : (
-              <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", ORG_ROLE_TONE[orgInfo.role] ?? "bg-muted text-muted-foreground")}>{ORG_ROLE_LABEL[orgInfo.role] ?? orgInfo.role}</span>
-            )}
-          </Section>
+        <div className="min-h-0 flex-1 overflow-y-auto bg-muted/20 p-4 md:p-6">
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* ── kiri ── */}
+            <div className="space-y-4">
+              <Card title="Peran">
+                {canEdit ? (
+                  <select value={orgInfo.role} disabled={pending} onChange={(e) => onOrgRole(e.target.value)} className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold outline-none focus:border-primary disabled:opacity-50">
+                    {[...assignable].reverse().map((r) => <option key={r} value={r}>{ORG_ROLE_LABEL[r]}</option>)}
+                  </select>
+                ) : (
+                  <span className="text-sm text-muted-foreground">Peran orang ini di atas atau setara kamu — tidak bisa diubah dari sini.</span>
+                )}
+              </Card>
 
-          {orgInfo.role === "STAFF" && (
-            <Section title="Approver absensi" hint="Request cuti/izin/sakit orang ini masuk ke manager yang ditaruh di Bagan Approval.">
-              <div className="flex items-center justify-between gap-3">
-                {orgInfo.approverName
-                  ? <span className="text-sm font-semibold">{orgInfo.approverName}</span>
-                  : <span className="text-sm font-semibold text-amber-700">Belum ditaruh — masih masuk ke BoD</span>}
-                <button type="button" onClick={() => { onClose(); onOpenApproval(); }} className="shrink-0 text-xs font-semibold text-primary hover:underline">Buka Bagan Approval →</button>
-              </div>
-            </Section>
-          )}
+              {orgInfo.role === "STAFF" && (
+                <Card title="Approver absensi" hint="Request cuti/izin/sakit orang ini masuk ke manager yang ditaruh di Bagan Approval.">
+                  <div className="flex items-center justify-between gap-3">
+                    {orgInfo.approverName
+                      ? <span className="text-sm font-semibold">{orgInfo.approverName}</span>
+                      : <span className="text-sm font-semibold text-amber-700">Belum ditaruh — masih masuk ke BoD</span>}
+                    <button type="button" onClick={() => { onClose(); onOpenApproval(); }} className="shrink-0 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold text-primary transition hover:bg-accent">Buka Bagan Approval →</button>
+                  </div>
+                </Card>
+              )}
 
-          <Section title="Jam kerja" hint={orgInfo.flexi ? "Flexi Time menyala — jam tetap di bawah ini diabaikan." : "Kosongkan = ikut jam kantor/tim. Per-hari hanya untuk hari yang diisi."}>
-            <div className={cn("space-y-3", orgInfo.flexi && "pointer-events-none opacity-40")}>
-              <div>
-                <div className="mb-1 text-[11px] font-semibold text-muted-foreground">Default</div>
-                <ShiftCell start={orgInfo.shiftStart} end={orgInfo.shiftEnd} canEdit={canManageShift && !orgInfo.flexi} pending={shiftPending} onSave={onSaveShift} />
-              </div>
+              <Card title="Mode absensi">
+                <div className="space-y-2">
+                  <ToggleRow on={orgInfo.flexi} pending={flexiPending} onToggle={onToggleFlexi} icon={<Zap className={cn("h-4 w-4", orgInfo.flexi && "fill-amber-400")} />} title="Flexi Time" desc="Masuk kapan saja 12:00–15:00 tanpa penalti telat; pulang = masuk + 9 jam." tone="amber" />
+                  <ToggleRow on={orgInfo.noGeofence} pending={geofencePending} onToggle={onToggleGeofence} icon={<Smartphone className="h-4 w-4" />} title="Mode Mobile" desc="Absen dari mana saja — geofence mati, checkout luar kantor tanpa approval." tone="sky" />
+                </div>
+              </Card>
+
               {canManageShift && (
+                <Card title="Jatah day off">
+                  <button type="button" onClick={onDayoff} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground transition hover:border-primary hover:text-primary">
+                    <CalendarDays className="h-4 w-4" /> Kelola jatah & riwayat day off
+                  </button>
+                </Card>
+              )}
+
+              {gwConfigured && (
+                <Card title="Google Workspace" hint="Email kantor yang ditautkan ke profil ini.">
+                  <GoogleLinkCell user={user} accounts={gwAccounts} domains={gwDomains} configured={gwConfigured} canEdit={canLinkGoogle} />
+                </Card>
+              )}
+            </div>
+
+            {/* ── kanan ── */}
+            <Card title="Jam kerja" hint={orgInfo.flexi ? "Flexi Time menyala — jam tetap di bawah ini diabaikan." : "Kosongkan = ikut jam kantor/tim. Per-hari hanya untuk hari yang diisi."} className="self-start">
+              <div className={cn("space-y-4", orgInfo.flexi && "pointer-events-none opacity-40")}>
                 <div>
-                  <div className="mb-1 text-[11px] font-semibold text-muted-foreground">Per-hari</div>
-                  <div className="space-y-1.5">
-                    {WEEKDAYS.map(([wd, label]) => (
-                      <div key={wd} className="flex items-center gap-3">
-                        <span className="w-9 shrink-0 text-xs font-bold text-muted-foreground">{label}</span>
-                        <ShiftCell start={byDay[wd]?.start ?? null} end={byDay[wd]?.end ?? null} canEdit={canManageShift} pending={shiftByDayPending} onSave={(s, e) => saveDay(wd, s, e)} />
-                      </div>
+                  <div className="mb-1.5 text-[11px] font-semibold text-muted-foreground">Default</div>
+                  <ShiftCell start={orgInfo.shiftStart} end={orgInfo.shiftEnd} canEdit={canManageShift && !orgInfo.flexi} pending={shiftPending} onSave={onSaveShift} />
+                </div>
+                {canManageShift && (
+                  <div>
+                    <div className="mb-1.5 text-[11px] font-semibold text-muted-foreground">Per-hari <span className="font-normal text-muted-foreground/70">— hanya hari yang beda dari default</span></div>
+                    <div className="space-y-1.5">
+                      {WEEKDAYS.map(([wd, label]) => (
+                        <div key={wd} className={cn("flex items-center gap-3 rounded-lg px-2 py-1", byDay[wd] && "bg-primary/5")}>
+                          <span className={cn("w-9 shrink-0 text-xs font-bold", byDay[wd] ? "text-primary" : "text-muted-foreground")}>{label}</span>
+                          <ShiftCell start={byDay[wd]?.start ?? null} end={byDay[wd]?.end ?? null} canEdit={canManageShift} pending={shiftByDayPending} onSave={(s, e) => saveDay(wd, s, e)} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            {/* ── bawah, melebar ── */}
+            <Card title="Tim & project" hint={canManageTeams ? "Masuk tim = otomatis dapat akses ke project yang ditautkan tim itu. Klik nama tim buat ngatur timnya." : undefined} className="md:col-span-2">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground"><UsersIcon className="h-3.5 w-3.5" /> Tim · {teamCount}</div>
+                  {!membershipsLoading && teamCount === 0 && <div className="mb-1.5 text-xs text-muted-foreground/70">Belum masuk tim mana pun.</div>}
+                  <div className="flex flex-wrap gap-1.5">
+                    {(memberships?.teams ?? []).map((tm) => {
+                      // Project yang orang ini dapat GARA-GARA tim ini — dipakai untuk memberi tahu
+                      // apa yang hilang sebelum dia dikeluarkan, bukan sesudahnya.
+                      const losing = (memberships?.projects ?? []).filter((pr) => pr.viaTeam === tm.name).map((pr) => pr.name);
+                      return (
+                        <span key={tm.id} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card py-1 pl-2 pr-1 text-[11px] font-semibold text-foreground">
+                          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: tm.color ?? "#7B2FBE" }} />
+                          {canManageTeams ? (
+                            <button type="button" onClick={() => onTeamOpen(tm.id)} title="Atur tim ini (nama, divisi, jam shift, project)" className="font-semibold underline-offset-2 transition hover:text-primary hover:underline">{tm.name}</button>
+                          ) : tm.name}
+                          {tm.division && <span className="font-normal text-muted-foreground">· {tm.division}</span>}
+                          {canManageTeams && (
+                            <button type="button" disabled={teamPending} onClick={() => onTeamExit({ id: tm.id, name: tm.name }, losing)} title="Keluarkan dari tim ini" className="rounded p-0.5 text-muted-foreground/50 transition hover:bg-rose-100 hover:text-rose-600 disabled:opacity-40">
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
+                        </span>
+                      );
+                    })}
+                    {canManageTeams && <TeamAddPicker teams={allTeams} already={new Set((memberships?.teams ?? []).map((t) => t.id))} pending={teamPending} onPick={onTeamAdd} onCreated={onTeamCreated} />}
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground"><FolderKanban className="h-3.5 w-3.5" /> Project · {projectCount}</div>
+                  {membershipsLoading && <div className="text-xs text-muted-foreground/70">Loading…</div>}
+                  {!membershipsLoading && projectCount === 0 && <div className="text-xs text-muted-foreground/70">Belum masuk project mana pun.</div>}
+                  <div className="flex flex-wrap gap-1.5">
+                    {(memberships?.projects ?? []).map((pr) => (
+                      <Link key={pr.id} to="/projects/$projectId" params={{ projectId: pr.id }} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2 py-1 text-[11px] font-semibold text-foreground transition hover:border-primary hover:text-primary">
+                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: pr.color ?? "#94A3B8" }} />
+                        {pr.name}
+                        {/* Lewat tim, bukan langsung: mencabutnya dari halaman project TIDAK bertahan —
+                            sinkronisasi tim menuliskannya lagi. Sebut timnya supaya jelas ke mana harus pergi. */}
+                        {pr.viaTeam && <span className="font-normal text-muted-foreground">· via {pr.viaTeam}</span>}
+                        {pr.role !== "MEMBER" && <span className="rounded bg-primary/10 px-1 text-[10px] font-bold text-primary">{pr.role}</span>}
+                      </Link>
                     ))}
                   </div>
                 </div>
-              )}
-            </div>
-          </Section>
-
-          <Section title="Mode absensi">
-            <div className="space-y-2">
-              <ToggleRow on={orgInfo.flexi} pending={flexiPending} onToggle={onToggleFlexi} icon={<Zap className={cn("h-4 w-4", orgInfo.flexi && "fill-amber-400")} />} title="Flexi Time" desc="Masuk kapan saja 12:00–15:00 tanpa penalti telat; pulang = masuk + 9 jam." tone="amber" />
-              <ToggleRow on={orgInfo.noGeofence} pending={geofencePending} onToggle={onToggleGeofence} icon={<Smartphone className="h-4 w-4" />} title="Mode Mobile" desc="Absen dari mana saja — geofence mati, checkout luar kantor tanpa approval." tone="sky" />
-            </div>
-          </Section>
-
-          {canManageShift && (
-            <Section title="Jatah day off">
-              <button type="button" onClick={onDayoff} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground transition hover:border-primary hover:text-primary">
-                <CalendarDays className="h-4 w-4" /> Kelola jatah & riwayat day off
-              </button>
-            </Section>
-          )}
-
-          {gwConfigured && (
-            <Section title="Google Workspace" hint="Email kantor yang ditautkan ke profil ini.">
-              <GoogleLinkCell user={user} accounts={gwAccounts} domains={gwDomains} configured={gwConfigured} canEdit={canLinkGoogle} />
-            </Section>
-          )}
-
-          <Section title={`Tim & project · ${teamCount} tim · ${projectCount} project`} hint={canManageTeams ? "Masuk tim = otomatis dapat akses ke project yang ditautkan tim itu. Klik nama tim buat ngatur timnya." : undefined}>
-            <div className="space-y-3">
-              <div>
-                <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground"><UsersIcon className="h-3.5 w-3.5" /> Tim</div>
-                {!membershipsLoading && teamCount === 0 && <div className="mb-1.5 text-xs text-muted-foreground/70">Belum masuk tim mana pun.</div>}
-                <div className="flex flex-wrap gap-1.5">
-                  {(memberships?.teams ?? []).map((tm) => {
-                    // Project yang orang ini dapat GARA-GARA tim ini — dipakai untuk memberi tahu
-                    // apa yang hilang sebelum dia dikeluarkan, bukan sesudahnya.
-                    const losing = (memberships?.projects ?? []).filter((pr) => pr.viaTeam === tm.name).map((pr) => pr.name);
-                    return (
-                      <span key={tm.id} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 py-1 pl-2 pr-1 text-[11px] font-semibold text-foreground">
-                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: tm.color ?? "#7B2FBE" }} />
-                        {canManageTeams ? (
-                          <button type="button" onClick={() => onTeamOpen(tm.id)} title="Atur tim ini (nama, divisi, jam shift, project)" className="font-semibold underline-offset-2 transition hover:text-primary hover:underline">{tm.name}</button>
-                        ) : tm.name}
-                        {tm.division && <span className="font-normal text-muted-foreground">· {tm.division}</span>}
-                        {canManageTeams && (
-                          <button type="button" disabled={teamPending} onClick={() => onTeamExit({ id: tm.id, name: tm.name }, losing)} title="Keluarkan dari tim ini" className="rounded p-0.5 text-muted-foreground/50 transition hover:bg-rose-100 hover:text-rose-600 disabled:opacity-40">
-                            <X className="h-3 w-3" />
-                          </button>
-                        )}
-                      </span>
-                    );
-                  })}
-                  {canManageTeams && <TeamAddPicker teams={allTeams} already={new Set((memberships?.teams ?? []).map((t) => t.id))} pending={teamPending} onPick={onTeamAdd} onCreated={onTeamCreated} />}
-                </div>
               </div>
-              <div>
-                <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground"><FolderKanban className="h-3.5 w-3.5" /> Project</div>
-                {membershipsLoading && <div className="text-xs text-muted-foreground/70">Loading…</div>}
-                {!membershipsLoading && projectCount === 0 && <div className="text-xs text-muted-foreground/70">Belum masuk project mana pun.</div>}
-                <div className="flex flex-wrap gap-1.5">
-                  {(memberships?.projects ?? []).map((pr) => (
-                    <Link key={pr.id} to="/projects/$projectId" params={{ projectId: pr.id }} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-2 py-1 text-[11px] font-semibold text-foreground transition hover:border-primary hover:text-primary">
-                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: pr.color ?? "#94A3B8" }} />
-                      {pr.name}
-                      {/* Lewat tim, bukan langsung: mencabutnya dari halaman project TIDAK bertahan —
-                          sinkronisasi tim menuliskannya lagi. Sebut timnya supaya jelas ke mana harus pergi. */}
-                      {pr.viaTeam && <span className="font-normal text-muted-foreground">· via {pr.viaTeam}</span>}
-                      {pr.role !== "MEMBER" && <span className="rounded bg-primary/10 px-1 text-[10px] font-bold text-primary">{pr.role}</span>}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </Section>
+            </Card>
+          </div>
         </div>
-      </aside>
+      </div>
     </div>
   );
 }
