@@ -182,6 +182,22 @@ extension APIClient {
         try await vaultRun(makeRequest("/api/admin/users/memberships"), decode: UserMembershipsResponse.self)
     }
 
+    /// Membuat mailbox Google Workspace baru dan menautkannya ke satu profil NEXUS.
+    ///
+    /// Ini MENGISI satu seat lisensi berbayar dan mengembalikan sandi sementara yang hanya bisa
+    /// dilihat sekali. BoD saja; server menolak yang lain dengan 403 dan memeriksa dulu apakah
+    /// alamatnya sudah ada sebelum membuat.
+    func createGoogleWorkspaceAccount(userId: String, localPart: String, domain: String,
+                                      givenName: String, familyName: String) async throws -> CreatedGoogleAccount {
+        var req = makeRequest("/api/admin/google-workspace/users", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "userId": userId, "localPart": localPart, "domain": domain,
+            "givenName": givenName, "familyName": familyName,
+        ])
+        return try await vaultRun(req, decode: CreatedGoogleAccount.self)
+    }
+
     // MARK: Plumbing
 
     /// `run` is private to APIClient.swift and Swift's `private` does not reach across files, so this

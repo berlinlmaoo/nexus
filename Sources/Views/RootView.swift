@@ -122,7 +122,9 @@ struct MoreView: View {
                         MoreSection(T("System")) {
                             LazyVGrid(columns: cols, spacing: 12) {
                                 MoreTile(T("Ticket"), "ticket.fill", NX.blue) { TicketsView() }
-                                MoreTile(T("Teams"), "person.3.fill", NX.coral) { TeamsView() }
+                                // Tile Teams dilepas: halaman daftar-tim sudah tidak ada juga di web.
+                                // Pengaturan tim dibuka dari chip tim di Control Room > Users, yaitu
+                                // di baris orang yang timnya sedang dibicarakan.
                                 MoreTile(T("What's new"), "sparkles", NX.violetText) { WhatsNewScreen() }
                                 MoreTile(T("Tuning Room"), "gearshape.fill", NX.mutedFg) { SettingsView() }
                                 if viewer.canAdminister {

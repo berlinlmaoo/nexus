@@ -839,6 +839,22 @@ struct APIClient {
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }
+    /// Flexi Time / Mode Mobile untuk satu orang. Dikirim terpisah, bukan digabung ke pembaruan
+    /// peran: server menerapkan hanya field yang dikirim, dan mengirimkan `role` di sini akan
+    /// menulis ulang peran orang itu dengan nilai yang kebetulan sedang ada di layar.
+    @discardableResult
+    func updateWorkspaceMemberAttendanceFlags(memberId: String, workspaceId: String,
+                                              flexi: Bool? = nil, noGeofence: Bool? = nil) async throws -> Bool {
+        var body: [String: Any] = ["memberId": memberId, "workspaceId": workspaceId]
+        if let flexi { body["flexiTimeEnabled"] = flexi }
+        if let noGeofence { body["noGeofenceMode"] = noGeofence }
+        var req = makeRequest("/api/workspaces/members", method: "PATCH")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+
     @discardableResult
     func removeWorkspaceMember(memberId: String, workspaceId: String) async throws -> Bool {
         _ = try await run(makeRequest("/api/workspaces/members?memberId=\(enc(memberId))&workspaceId=\(enc(workspaceId))", method: "DELETE"), decode: SuccessResponse.self)

@@ -191,6 +191,9 @@ struct AdminUsersSection: View {
 
     private var members: [WorkspaceRoster.Member] { roster?.members ?? [] }
     private var viewerRole: String? { roster?.role }
+    /// Flexi dan mode Mobile mengubah aturan absensi seseorang, jadi BoD ke atas — aturan
+    /// yang sama dengan `canManageShift` di Control Room web, bukan `canEditTier`.
+    private var canManageAttendanceFlags: Bool { viewerRole == "BOD" || viewerRole == "ONE_ABOVE_ALL" }
     private func count(_ r: String) -> Int { members.filter { $0.role == r }.count }
     private var rows: [WorkspaceRoster.Member] { filter == "ALL" ? members : members.filter { ($0.role ?? "STAFF") == filter } }
 
@@ -424,6 +427,21 @@ struct AdminUsersSection: View {
                                 .foregroundStyle(NX.violetText)
                                 .lineLimit(1)
                         }
+                        // Dua mode absensi yang mengubah aturan orang ini. Hanya digambar saat
+                        // MENYALA: 46 dari 49 orang tidak memakai keduanya, dan lencana "mati"
+                        // di tiap baris membuat yang menyala berhenti terlihat.
+                        if (m.flexiTimeEnabled ?? false) || (m.noGeofenceMode ?? false) {
+                            HStack(spacing: 5) {
+                                if m.flexiTimeEnabled ?? false {
+                                    Label(T("Flexi"), systemImage: "bolt.fill")
+                                        .font(NXFont.text(10, .semibold)).foregroundStyle(NX.warning)
+                                }
+                                if m.noGeofenceMode ?? false {
+                                    Label(T("Mobile"), systemImage: "iphone")
+                                        .font(NXFont.text(10, .semibold)).foregroundStyle(NX.violetText)
+                                }
+                            }
+                        }
                         if let uid = m.userId {
                             // Angkanya digambar walau nol: "0 project" adalah jawaban, dan baris
                             // yang kadang punya keterangan kadang tidak terbaca seperti rusak.
@@ -460,6 +478,23 @@ struct AdminUsersSection: View {
             if canEditTier(viewerRole, m.role), let wsId = workspaceId {
                 Menu {
                     ForEach(assignableRoles(viewerRole), id: \.self) { r in Button(orgRoleLabel(r)) { Task { await setRole(m, r, wsId) } } }
+                    Divider()
+                    if canManageAttendanceFlags, let mid = m.id, let wsId = workspaceId {
+                        Button {
+                            Task { await runTeam { try await APIClient.shared.updateWorkspaceMemberAttendanceFlags(
+                                memberId: mid, workspaceId: wsId, flexi: !(m.flexiTimeEnabled ?? false)) } }
+                        } label: {
+                            Label((m.flexiTimeEnabled ?? false) ? T("Matikan Flexi Time") : T("Flexi Time"),
+                                  systemImage: "bolt")
+                        }
+                        Button {
+                            Task { await runTeam { try await APIClient.shared.updateWorkspaceMemberAttendanceFlags(
+                                memberId: mid, workspaceId: wsId, noGeofence: !(m.noGeofenceMode ?? false)) } }
+                        } label: {
+                            Label((m.noGeofenceMode ?? false) ? T("Matikan mode Mobile") : T("Mode Mobile (absen dari mana saja)"),
+                                  systemImage: "iphone")
+                        }
+                    }
                     Divider()
                     if let uid = m.userId {
                         Button {
@@ -966,8 +1001,10 @@ struct GoogleLinkTarget: Identifiable, Hashable {
 /// yang salah terlihat persis sama dengan yang benar sampai ada yang mencoba mengirim surat.
 /// Server tetap memverifikasi ulang; daftar ini hanya menghapus kesempatannya.
 ///
-/// TIDAK bisa membuat akun baru di sini — itu mengisi seat lisensi berbayar dan menampilkan sandi
-/// sementara yang hanya muncul sekali. Keduanya pekerjaan meja, dan ada di Control Room web.
+/// Bisa juga MEMBUAT mailbox baru. Itu mengisi satu seat lisensi berbayar dan mengembalikan sandi
+/// sementara yang hanya muncul sekali — jadi jalurnya dibuat berbeda dari sekadar menautkan:
+/// sebuah formulir terpisah, dan panel sandi yang menutupi layar sampai ditutup dengan sengaja.
+/// Menutupnya membuang sandinya untuk selamanya; server tidak menyimpannya.
 struct GoogleLinkSheet: View {
     let target: GoogleLinkTarget
     var onDone: () -> Void
@@ -978,6 +1015,12 @@ struct GoogleLinkSheet: View {
     @State private var busy = false
     @State private var problem: String?
     @State private var query = ""
+    @State private var making = false
+    @State private var made: CreatedGoogleAccount?
+    @State private var givenName = ""
+    @State private var familyName = ""
+    @State private var localPart = ""
+    @State private var domain = ""
 
     private var rows: [GoogleWorkspaceAccount] {
         let all = data?.accounts ?? []
@@ -993,8 +1036,22 @@ struct GoogleLinkSheet: View {
             } else if data?.configured == false {
                 empty("link.badge.plus", T("Google Workspace belum disambungkan"),
                       data?.error ?? T("Hubungi BoD untuk menyambungkannya."))
+            } else if let made {
+                madePanel(made)
+            } else if making {
+                makeForm
             } else {
                 List {
+                    Section {
+                        Button { startMaking() } label: {
+                            Label(T("Bikin email kantor baru"), systemImage: "plus.circle")
+                                .font(NXFont.text(14, .semibold))
+                        }
+                        .disabled(busy)
+                    } footer: {
+                        Text(T("Mengisi satu seat lisensi Workspace."))
+                            .font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
+                    }
                     if let current = target.current {
                         Section {
                             Button(role: .destructive) { Task { await link(nil) } } label: {
@@ -1045,10 +1102,152 @@ struct GoogleLinkSheet: View {
         .navigationTitle(target.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() } }
-            if busy { ToolbarItem(placement: .topBarTrailing) { ProgressView() } }
+            // Tidak ada tombol Close selagi sandi sementara masih di layar: satu ketukan refleks
+            // di sana menghapus satu-satunya salinan yang pernah ada.
+            if made == nil {
+                ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() } }
+            }
+            if busy && made == nil { ToolbarItem(placement: .topBarTrailing) { ProgressView() } }
         }
+        .interactiveDismissDisabled(made != nil)
         .task { await load() }
+    }
+
+    /// Tebakan awal dari nama NEXUS orang itu. Ditebak, bukan dipaksakan: setiap kotak masih bisa
+    /// disunting, karena "Muhammad Omar Karim" bisa jadi omar@ atau omar.karim@ tergantung orangnya.
+    private func startMaking() {
+        let parts = target.name.split(whereSeparator: \.isWhitespace).map(String.init)
+        givenName = parts.first ?? ""
+        // Google MEWAJIBKAN nama belakang. "-" adalah yang dipakai web untuk nama tunggal.
+        familyName = parts.count > 1 ? parts.dropFirst().joined(separator: " ") : "-"
+        localPart = (parts.first ?? "").lowercased().filter { $0.isLetter || $0.isNumber || $0 == "." || $0 == "_" || $0 == "-" }
+        domain = data?.domains?.first ?? ""
+        problem = nil
+        making = true
+    }
+
+    private var canSubmit: Bool {
+        !busy && !localPart.trimmingCharacters(in: .whitespaces).isEmpty
+            && !domain.isEmpty && !givenName.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    private var makeForm: some View {
+        Form {
+            Section(T("Nama di Google")) {
+                TextField(T("Nama depan"), text: $givenName).textInputAutocapitalization(.words)
+                TextField(T("Nama belakang"), text: $familyName).textInputAutocapitalization(.words)
+            }
+            Section {
+                HStack(spacing: 4) {
+                    TextField("nama.alamat", text: $localPart)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    Text("@").foregroundStyle(NX.mutedFg)
+                    Menu {
+                        ForEach(data?.domains ?? [], id: \.self) { d in
+                            Button(d) { domain = d }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(domain.isEmpty ? T("pilih") : domain).font(NXFont.text(13, .semibold))
+                            Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .semibold))
+                        }
+                        .foregroundStyle(NX.violetText)
+                    }
+                }
+            } header: {
+                Text(T("Alamat"))
+            } footer: {
+                Text(T("Akun baru mengisi satu seat lisensi Workspace. Sandi sementaranya cuma bisa dilihat sekali."))
+                    .font(NXFont.text(10))
+            }
+            if let problem {
+                Section { Text(problem).font(NXFont.text(12)).foregroundStyle(NX.danger) }
+            }
+            Section {
+                Button { Task { await create() } } label: {
+                    HStack {
+                        Text(busy ? T("Membuat…") : T("Buat akun")).font(NXFont.text(14, .semibold))
+                        Spacer()
+                        if busy { ProgressView() }
+                    }
+                }
+                .disabled(!canSubmit)
+                Button(T("Batal"), role: .cancel) { making = false; problem = nil }
+            }
+        }
+    }
+
+    /// Satu-satunya kesempatan melihat sandinya. Tidak ada tombol tutup di toolbar selagi panel ini
+    /// terbuka — hanya "Sudah disalin", supaya tidak ada yang kehilangan sandinya karena refleks.
+    private func madePanel(_ r: CreatedGoogleAccount) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Label("\(r.account.email) \(T("dibuat"))", systemImage: "checkmark.seal.fill")
+                    .font(NXFont.display(15, .bold)).foregroundStyle(NX.success)
+                Text(T("Sandi sementara — salin sekarang, tidak bisa dilihat lagi:"))
+                    .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                HStack {
+                    Text(r.account.temporaryPassword)
+                        .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                        .textSelection(.enabled)
+                        .foregroundStyle(NX.foreground)
+                    Spacer(minLength: 8)
+                    Button {
+                        UIPasteboard.general.string = r.account.temporaryPassword
+                    } label: { Image(systemName: "doc.on.doc").foregroundStyle(NX.violetText) }
+                    .buttonStyle(.plain)
+                }
+                .padding(12)
+                .background(NX.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(NX.border))
+
+                Text(T("Dia wajib menggantinya saat login pertama."))
+                    .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+
+                if r.notified?.email == true {
+                    Text("\(T("Sandi sudah dikirim ke")) \(r.notified?.emailTo ?? "-"). \(T("Kamu tidak perlu meneruskannya."))")
+                        .font(NXFont.text(11)).foregroundStyle(NX.success)
+                } else {
+                    // Kegagalan email harus terlihat SEKARANG, selagi sandinya masih di layar.
+                    // Ditemukan nanti lewat orang yang bingung berarti sandinya sudah hilang.
+                    Text(T("Email GAGAL terkirim — sampaikan sandi ini sendiri, dan jangan lewat chat grup."))
+                        .font(NXFont.text(11, .semibold)).foregroundStyle(NX.danger)
+                }
+                if r.linked == false {
+                    Text(r.error ?? T("Akunnya dibuat tapi belum tertaut ke profil ini."))
+                        .font(NXFont.text(11)).foregroundStyle(NX.warning)
+                }
+
+                Button(T("Sudah disalin")) {
+                    made = nil
+                    making = false
+                    onDone()
+                    dismiss()
+                }
+                .buttonStyle(NexusPrimaryButton(fullWidth: true))
+                .padding(.top, 4)
+            }
+            .padding(18)
+        }
+    }
+
+    private func create() async {
+        busy = true
+        defer { busy = false }
+        problem = nil
+        do {
+            made = try await APIClient.shared.createGoogleWorkspaceAccount(
+                userId: target.userId,
+                localPart: localPart.trimmingCharacters(in: .whitespaces),
+                domain: domain,
+                givenName: givenName.trimmingCharacters(in: .whitespaces),
+                familyName: familyName.trimmingCharacters(in: .whitespaces))
+        } catch {
+            // Pesan server dibawa apa adanya: "alamat sudah dipakai" dan "domain tidak dikenal"
+            // adalah dua hal berbeda, dan menggantinya dengan "gagal" membuang petunjuknya.
+            problem = (error as? LocalizedError)?.errorDescription ?? T("Gagal membuat akun.")
+        }
     }
 
     private func empty(_ icon: String, _ title: String, _ msg: String) -> some View {

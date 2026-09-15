@@ -176,3 +176,20 @@ struct UserMemberships: Codable, Sendable {
 struct UserMembershipsResponse: Codable, Sendable {
     let byUser: [String: UserMemberships]
 }
+
+
+/// Hasil pembuatan mailbox Google Workspace.
+///
+/// `temporaryPassword` hanya ada DI SINI, sekali. Server tidak menyimpannya dan tidak bisa
+/// menampilkannya lagi — layar yang menutup panel ini membuangnya untuk selamanya.
+struct CreatedGoogleAccount: Codable, Sendable {
+    let created: Bool
+    let linked: Bool
+    let account: Account
+    /// Sandi TIDAK ikut notifikasi dalam aplikasi; ia hanya lewat email pribadi.
+    let notified: Notified?
+    let error: String?
+
+    struct Account: Codable, Sendable { let email: String; let fullName: String; let temporaryPassword: String }
+    struct Notified: Codable, Sendable { let inApp: Bool; let email: Bool; let emailTo: String? }
+}

@@ -166,7 +166,11 @@ enum NXScreen: String, CaseIterable, Identifiable, Hashable {
         (T("Missions"),       [.leaderboard, .reports]),
         (T("Knowledge"),      [.vault, .forms]),
         (T("Pulse Check"),    [.attendance]),
-        (T("System"),         [.tickets, .teams, .settings, .admin]),
+        // `.teams` dilepas dari daftar: halaman daftar-tim sudah tidak ada di web maupun di HP.
+        // Rute layarnya SENGAJA dibiarkan hidup di bawah — pintasan lama dan tautan dari
+        // notifikasi masih bisa menunjuk ke sana, dan layar kosong lebih buruk daripada layar
+        // yang tidak lagi ada di menu.
+        (T("System"),         [.tickets, .settings, .admin]),
     ] }
 }
 

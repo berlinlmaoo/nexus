@@ -46,6 +46,11 @@ struct WorkspaceRoster: Decodable, Sendable {
         let attendanceShiftStartTime: String?
         let attendanceShiftEndTime: String?
         let attendanceShiftByDay: [String: ShiftDay]?
+        /// Flexi Time: masuk kapan saja 12:00-15:00, pulang = masuk + 9 jam. Saat menyala, jam
+        /// shift tetap di atas DIABAIKAN — jadi menggambar keduanya sama terangnya berbohong.
+        let flexiTimeEnabled: Bool?
+        /// Mode Mobile: absen dari mana saja (geofence mati, checkout luar kantor tanpa approval).
+        let noGeofenceMode: Bool?
         let joinedAt: String?
         // Some other endpoints nest under `user` — kept as a fallback.
         let user: UserRef?
