@@ -406,51 +406,44 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    // Bagan Approval. Tepi hanya sah dari STAFF ke MANAGER di workspace yang sama; selebihnya
-    // ditolak di sini supaya bagan tidak pernah berisi tepi yang tidak berarti apa-apa.
+    // Bagan Approval — rantai bebas. Tepi boleh dari siapa pun ke siapa pun di workspace yang
+    // sama, apa pun perannya (Berlin: willy → gerro → riri). Dua hal yang dijaga di sini: bukan
+    // diri sendiri, dan tidak melingkar — lingkaran berarti sebuah request yang tidak pernah
+    // sampai ke siapa pun.
     if (approverId !== undefined) {
       if (tier < WORKSPACE_HIERARCHY.BOD) {
         return NextResponse.json({ error: 'Hanya BoD ke atas yang bisa mengatur Bagan Approval.' }, { status: 403 })
       }
-      // Peran target diambil SESUDAH kemungkinan perubahan peran di request yang sama.
-      const targetRoleAfter = role !== undefined ? role : targetMember.role
       if (approverId !== null) {
-        if (targetRoleAfter !== 'STAFF') {
-          return NextResponse.json({ error: 'Hanya Staff yang punya approver. Request Manager masuk ke BoD.' }, { status: 400 })
-        }
         if (approverId === targetMember.userId) {
           return NextResponse.json({ error: 'Tidak bisa jadi approver dirinya sendiri.' }, { status: 400 })
         }
         const approverMember = await prisma.workspaceMember.findUnique({
           where: { userId_workspaceId: { userId: approverId, workspaceId: currentMember.workspaceId } },
-          select: { role: true },
+          select: { approverId: true },
         })
         if (!approverMember) {
           return NextResponse.json({ error: 'Approver bukan anggota workspace ini.' }, { status: 400 })
         }
-        if (approverMember.role !== 'MANAGER') {
-          return NextResponse.json({ error: 'Approver Staff harus seorang Manager.' }, { status: 400 })
+        // Naik dari calon approver sampai puncak. Kalau bertemu orang yang sedang diatur, tepi
+        // ini menutup lingkaran. Batas 64 langkah cuma pagar — rantainya paling panjang 4.
+        let cursor: string | null = approverMember.approverId
+        for (let i = 0; cursor && i < 64; i++) {
+          if (cursor === targetMember.userId) {
+            return NextResponse.json({ error: 'Itu bikin lingkaran: orang itu (atau atasannya) sudah lapor ke orang ini.' }, { status: 400 })
+          }
+          const up: { approverId: string | null } | null = await prisma.workspaceMember.findUnique({
+            where: { userId_workspaceId: { userId: cursor, workspaceId: currentMember.workspaceId } },
+            select: { approverId: true },
+          })
+          cursor = up?.approverId ?? null
         }
       }
     }
 
-    // Peran turun (MANAGER → STAFF) atau naik (→ BoD): orang ini tidak lagi boleh jadi approver
-    // Staff. Bawahannya dilepas dan dilaporkan, supaya UI bisa menyebut siapa saja yang jadi yatim
-    // — bukan diam-diam menyisakan seorang Staff sebagai approver enam orang.
-    let orphaned: Array<{ id: string; name: string | null }> = []
-    if (role !== undefined && role !== 'MANAGER' && targetMember.role === 'MANAGER') {
-      const reports = await prisma.workspaceMember.findMany({
-        where: { workspaceId: currentMember.workspaceId, approverId: targetMember.userId },
-        select: { userId: true, user: { select: { name: true } } },
-      })
-      if (reports.length > 0) {
-        await prisma.workspaceMember.updateMany({
-          where: { workspaceId: currentMember.workspaceId, approverId: targetMember.userId },
-          data: { approverId: null },
-        })
-        orphaned = reports.map((r) => ({ id: r.userId, name: r.user.name }))
-      }
-    }
+    // Perubahan peran tidak lagi memutus tepi: rantai bebas tidak bergantung pada peran. Dibiarkan
+    // sebagai daftar kosong supaya bentuk balasan (dan klien yang membacanya) tidak berubah.
+    const orphaned: Array<{ id: string; name: string | null }> = []
 
     // BoD+ can set this member's WhatsApp/phone number (notif target + WA-bot fallback identity).
     if (phoneNumber !== undefined) {
@@ -474,8 +467,7 @@ export async function PATCH(req: NextRequest) {
         ...(byDay === "skip" ? {} : { attendanceShiftByDay: byDay === "clear" ? Prisma.DbNull : byDay }),
         ...(flexiTimeEnabled !== undefined ? { flexiTimeEnabled } : {}),
         ...(noGeofenceMode !== undefined ? { noGeofenceMode } : {}),
-        // Staff yang naik jadi Manager/BoD tidak butuh approver lagi — tepinya ikut dilepas.
-        ...(approverId !== undefined ? { approverId } : (role !== undefined && role !== 'STAFF' ? { approverId: null } : {})),
+        ...(approverId !== undefined ? { approverId } : {}),
       },
       include: {
         user: { select: { id: true, name: true, email: true, avatar: true, phoneNumber: true } },

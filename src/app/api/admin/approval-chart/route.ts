@@ -5,25 +5,18 @@ import prisma from "@/lib/prisma"
 import { getAdminSessionContext } from "@/lib/admin-access"
 
 /**
- * Bagan Approval — seluruh pohon dalam satu panggilan.
+ * Bagan Approval — semua orang beserta tepinya, dalam satu panggilan. Klien yang menyusun pohonnya.
  *
- *   oaa        One Above All (tingkat teratas, digambar sendiri)
- *   bod        semua BoD — satu kelompok, bukan target seret; request manager masuk ke sini
- *   managers   tiap manager dengan `reports` = staff yang ditaruh di bawahnya (boleh kosong —
- *              kolom kosong adalah informasi: ada manager yang belum punya siapa-siapa)
- *   unassigned staff tanpa approver → request-nya jatuh ke BoD sampai ditaruh
- *
- * Satu query, digabung di sini — pola yang sama dengan /api/admin/users/memberships.
+ * Bukan lagi tiga tingkat tetap. Rantai bebas (Berlin: willy → gerro → riri), jadi bentuknya
+ * hutan: akar = orang tanpa approver. Akar yang BoD/OAA memang puncak; akar yang Staff/Manager
+ * berarti "belum ditaruh" — request-nya jatuh ke kelompok BoD sampai ditaruh.
  */
-type Person = { userId: string; memberId: string; name: string | null; email: string; avatar: string | null; role: string }
-
 export async function GET() {
   try {
     const { context } = await getAdminSessionContext()
     if (!context?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     if (!context.canAccessUserManagement) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    // Workspace si pemanggil, bukan "semua workspace": dua akun NEXUS Demo tidak boleh ikut.
     const me = await prisma.workspaceMember.findFirst({
       where: { userId: context.user.id },
       orderBy: { joinedAt: "asc" },
@@ -33,44 +26,25 @@ export async function GET() {
 
     const rows = await prisma.workspaceMember.findMany({
       where: { workspaceId: me.workspaceId },
-      select: {
-        id: true,
-        role: true,
-        approverId: true,
-        user: { select: { id: true, name: true, email: true, avatar: true } },
-      },
+      select: { id: true, role: true, approverId: true, user: { select: { id: true, name: true, email: true, avatar: true } } },
       orderBy: { user: { name: "asc" } },
     })
-
-    const person = (r: (typeof rows)[number]): Person => ({
+    const ids = new Set(rows.map((r) => r.user.id))
+    const people = rows.map((r) => ({
       userId: r.user.id, memberId: r.id, name: r.user.name, email: r.user.email, avatar: r.user.avatar, role: r.role,
-    })
-
-    const oaa = rows.filter((r) => r.role === "ONE_ABOVE_ALL").map(person)
-    const bod = rows.filter((r) => r.role === "BOD").map(person)
-    const managers = rows
-      .filter((r) => r.role === "MANAGER")
-      .map((m) => ({
-        ...person(m),
-        reports: rows.filter((r) => r.role === "STAFF" && r.approverId === m.user.id).map(person),
-      }))
-    const managerIds = new Set(managers.map((m) => m.userId))
-    // "Belum ditaruh" termasuk staff yang approverId-nya menunjuk orang yang sudah bukan Manager —
-    // tepi seperti itu tidak berarti apa-apa untuk routing, dan menyembunyikannya di bawah kartu
-    // yang tidak ada berarti staff itu hilang dari bagan.
-    const unassigned = rows
-      .filter((r) => r.role === "STAFF" && (!r.approverId || !managerIds.has(r.approverId)))
-      .map(person)
+      // Tepi ke orang yang sudah keluar workspace tidak berarti apa-apa; tampilkan sebagai kosong.
+      approverId: r.approverId && ids.has(r.approverId) ? r.approverId : null,
+    }))
+    const unassigned = people.filter((p) => !p.approverId && (p.role === "STAFF" || p.role === "MANAGER"))
 
     return NextResponse.json({
       workspaceId: me.workspaceId,
-      oaa, bod, managers, unassigned,
+      people,
       stats: {
-        staff: rows.filter((r) => r.role === "STAFF").length,
-        assigned: rows.filter((r) => r.role === "STAFF").length - unassigned.length,
+        total: people.length,
+        withApprover: people.filter((p) => !!p.approverId).length,
         unassigned: unassigned.length,
-        managers: managers.length,
-        bod: bod.length + oaa.length,
+        bod: people.filter((p) => p.role === "BOD" || p.role === "ONE_ABOVE_ALL").length,
       },
     })
   } catch (error) {
