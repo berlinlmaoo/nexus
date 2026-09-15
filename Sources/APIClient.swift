@@ -821,10 +821,14 @@ struct APIClient {
         try await run(makeRequest("/api/workspaces/members" + (includeRegistered ? "?includeRegistered=1" : "")), decode: WorkspaceRoster.self)
     }
     @discardableResult
-    func inviteWorkspaceMember(email: String, role: String, workspaceId: String) async throws -> Bool {
+    /// `absorbPersonalWorkspace`: daftar tanpa kode = dapat workspace pribadi, dan workspace aktif
+    /// dipilih dari joinedAt tertua. Tanpa memindahkannya, dia "masuk" tapi tetap mendarat di
+    /// workspace pribadinya. Server menghapus yang kosong saja.
+    func inviteWorkspaceMember(email: String, role: String, workspaceId: String, absorbPersonalWorkspace: Bool = false) async throws -> Bool {
         var req = makeRequest("/api/workspaces/members", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["email": email, "role": role, "workspaceId": workspaceId])
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["email": email, "role": role, "workspaceId": workspaceId,
+                                                                   "absorbPersonalWorkspace": absorbPersonalWorkspace])
         _ = try await run(req, decode: SuccessResponse.self)
         return true
     }

@@ -612,7 +612,7 @@ struct AdminUsersSection: View {
     private func join(_ r: WorkspaceRoster.Registered, _ wsId: String) async {
         joining.insert(r.id)
         defer { joining.remove(r.id) }
-        try? await APIClient.shared.inviteWorkspaceMember(email: r.email, role: "STAFF", workspaceId: wsId)
+        try? await APIClient.shared.inviteWorkspaceMember(email: r.email, role: "STAFF", workspaceId: wsId, absorbPersonalWorkspace: true)
         await load()
     }
     private func load() async {
