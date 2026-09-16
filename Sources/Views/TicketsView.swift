@@ -246,16 +246,15 @@ struct TicketsView: View {
         default: return T("All")
         }
     }
-    /// A chip picks a QUEUE, not a status to compare against — which is why "Open" carries
-    /// AWAITING_DECISION too. Mirror of COMPLAINT_INBOX_STATUSES in src/lib/complaints.ts and of the
-    /// web's Inbox tab: a ticket GIDEON answered is still work nobody has claimed. A sixth chip
-    /// would have split that one queue in two and pushed the rest off the scroller; the row's own
-    /// status chip already says which of the two a ticket is. Without the widening an answered
-    /// ticket would be reachable from ALL and nowhere else.
+    /// A chip picks a QUEUE. "Open" = nobody has touched it yet. A ticket GIDEON already answered
+    /// (AWAITING_DECISION) sits under "In review" together with the ones a BoD has taken on — the
+    /// BoD's own words on 16 Sep 2026: an answered ticket should not keep sitting in the inbox.
+    /// Mirror of the web's Inbox / In review tabs.
     private var filtered: [Complaint] {
         switch filter {
         case "ALL": return items
-        case "OPEN": return items.filter { $0.isUnclaimed }
+        case "OPEN": return items.filter { $0.statusKey == "OPEN" }
+        case "IN_REVIEW": return items.filter { $0.statusKey == "IN_REVIEW" || $0.statusKey == "AWAITING_DECISION" }
         default: return items.filter { $0.statusKey == filter }
         }
     }
