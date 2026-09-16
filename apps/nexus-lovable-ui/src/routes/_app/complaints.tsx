@@ -645,6 +645,13 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
       {/* No times move here, so the card leads with the number that does: the XP the day cost. The
           recorded clock is shown underneath precisely BECAUSE it is staying — an approver needs to see
           that approving this leaves the attendance history exactly as it stands. */}
+      {/* Koreksi jam juga membalikkan potongan hari itu saat di-approve. Disebut di sini, karena
+          kartu yang cuma bilang "ubah jam" membuat BoD mengira jatah day off-nya tidak ikut. */}
+      {!isCancellation && pending && (penaltyXp < 0 || dayOffs > 0) && (
+        <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+          Kalau di-approve, potongan hari itu ikut kembali: {penaltyXp < 0 ? <b>{penaltyXp} XP</b> : null}{penaltyXp < 0 && dayOffs > 0 ? " dan " : ""}{dayOffs > 0 ? <b>{dayOffs} jatah day off</b> : null}.
+        </div>
+      )}
       {isCancellation ? (
         <div className="mt-2.5 rounded-xl border border-border bg-muted/30 p-2.5">
           <div className="flex items-baseline gap-2">
@@ -710,6 +717,9 @@ function AttendanceCorrectionCard({ complaintId, correction, canDecide, onDecide
             {approved ? "Approved" : "Rejected"}{correction.decidedBy ? ` by ${correction.decidedBy.name}` : ""}{correction.decidedAt ? ` · ${fmtWhen(correction.decidedAt)}` : ""}
           </p>
           {approved && !isCancellation && <p className="mt-0.5">The attendance record for {fmtDate(correction.date)} was rewritten to the proposed times.</p>}
+          {approved && !isCancellation && ((correction.refundedXp ?? 0) > 0 || (correction.restoredDayOffs ?? 0) > 0) && (
+            <p className="mt-0.5">Yang ikut kembali: {(correction.refundedXp ?? 0) > 0 ? `+${correction.refundedXp} XP` : ""}{(correction.refundedXp ?? 0) > 0 && (correction.restoredDayOffs ?? 0) > 0 ? " dan " : ""}{(correction.restoredDayOffs ?? 0) > 0 ? `${correction.restoredDayOffs} jatah day off` : ""}.</p>
+          )}
           {approved && isCancellation && (
             <p className="mt-0.5">
               Potongan XP {fmtDate(correction.date)} dibatalkan{typeof correction.refundedXp === "number" && correction.refundedXp > 0 ? <> — <b>+{correction.refundedXp} XP</b> dikembalikan</> : " (ternyata sudah tidak ada potongan yang tersisa)"}.

@@ -445,6 +445,10 @@ export async function proposeAttendanceCorrection(
   // actually typed it, which is the whole point of the separate identity.
   const authorId = proposedById ?? (await getGideonUserId())
 
+  // Approve koreksi jam juga MEMBALIKKAN potongan hari itu (XP + jatah day-off otomatis) — lihat
+  // cancelAttendancePenaltiesForDate di route approve. Disimpan di baris usulan supaya kartunya bisa
+  // menyebutnya; tanpa ini BoD melihat "ubah jam" dan mengira jatah day off-nya tidak ikut.
+  const penaltiesNow = await readAttendancePenaltiesForDate(complaint.reporterId, complaint.workspaceId, attendanceDate, dateKey)
   const created = await prisma.$transaction(async (tx) => {
     const correction = await tx.attendanceCorrection.create({
       data: {
@@ -467,6 +471,8 @@ export async function proposeAttendanceCorrection(
         beforeCheckInAt: record?.checkInAt ?? null,
         beforeCheckOutAt: record?.checkOutAt ?? null,
         beforeStatus: record?.status ?? null,
+        beforePenaltyXp: penaltiesNow.lateXp + penaltiesNow.noCheckoutXp + penaltiesNow.alphaXp,
+        beforeAutoDayOffs: penaltiesNow.autoDayOffs,
       },
       include: ATTENDANCE_CORRECTION_INCLUDE,
     })

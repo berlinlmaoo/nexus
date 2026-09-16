@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { resolveShiftWindowAt, formatAttendanceDateKey } from '@/lib/attendance'
+import { minutesLateAgainstShift, safeAttendanceTimezone, resolveShiftWindowAt, formatAttendanceDateKey } from '@/lib/attendance'
 import { markdownToTipTap, extractTextFromTipTap } from '@/lib/tiptap-utils'
 import { getGideonUserId } from '@/lib/gideon-identity'
 import { authenticateGideonService } from '@/lib/gideon-service-auth'
@@ -567,6 +567,30 @@ async function getAttendanceDay(actor: User, input: Record<string, unknown>) {
   // ---- What the day actually cost, off the XP ledger. ------------------------------------------
   const pen = await readAttendancePenaltiesForDate(actor.id, workspaceId, attendanceDate, raw)
   const totalPenaltyXp = pen.lateXp + pen.noCheckoutXp + pen.alphaXp
+
+  // ---- Telat menurut shift SEKARANG vs penalti yang tercatat. ---------------------------------
+  // Penalti dihitung malam itu dengan shift yang berlaku SAAT ITU. Kalau shift orangnya lalu
+  // diubah (Queen: 15:00 → 19:00), catatan jamnya tetap benar tapi penaltinya jadi salah — dan
+  // obatnya PEMBATALAN POTONGAN, bukan mengganti jam masuk yang memang benar. Tanpa fakta ini
+  // GIDEON pernah mengusulkan mengubah 18:05 menjadi 19:00 pada orang yang memang absen 18:05.
+  let lateAgainstCurrentShift: number | null = null
+  if (record?.checkInAt && office && effectiveShift) {
+    try {
+      const baseline = effectiveShift.flexi ? '15:00' : effectiveShift.shiftStartTime
+      lateAgainstCurrentShift = Math.max(0, minutesLateAgainstShift(record.checkInAt, attendanceDate, baseline, safeAttendanceTimezone(office.timezone)))
+    } catch { lateAgainstCurrentShift = null }
+  }
+  const grace = Math.max(0, office?.lateGraceMinutes ?? 0)
+  const shiftCheck = {
+    recordedLateMinutes: record?.lateMinutes ?? null,
+    lateAgainstCurrentShift,
+    // true = ledger mencatat telat, tapi menurut shift yang berlaku SEKARANG orang ini tidak telat.
+    penaltyContradictsCurrentShift: pen.lateXp < 0 && lateAgainstCurrentShift !== null && lateAgainstCurrentShift <= grace,
+    meaning:
+      'penaltyContradictsCurrentShift=true berarti shift orang ini berubah sesudah penalti dihitung; jam yang tercatat ' +
+      'BENAR, penaltinya yang tidak berlaku lagi → usulkan PEMBATALAN POTONGAN. JANGAN mengusulkan koreksi jam: ' +
+      'jam itu memang jam dia absen.',
+  }
   const waived = await hasAttendanceWaiver(actor.id, raw)
 
   // ---- Was NEXUS down that day? ----------------------------------------------------------------
@@ -702,6 +726,7 @@ async function getAttendanceDay(actor: User, input: Record<string, unknown>) {
     shift,
     outage,
     coveringRequests,
+    shiftCheck,
     // Diajukan lalu dibatalkan/ditolak untuk tanggal ini. Bukan cover; bukti niat. Kosong = memang
     // tidak pernah ada pengajuan.
     cancelledRequests,
