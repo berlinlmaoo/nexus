@@ -206,6 +206,21 @@ const CLIENT_FIX_HELP = [
   `tiketnya tetap butuh koreksi atau pembatalan potongan — bukan cuma tips.`,
 ]
 
+/** Read on a phone, by somebody who wants to know one thing: what happens to my day. Five lines. */
+const REPLY_FORMAT = [
+  `Format balasan — WAJIB. Maksimal 5 baris pendek, Bahasa Indonesia santai, tanpa daftar panjang:`,
+  `  1) Tanggal + apa yang terjadi, satu kalimat. Contoh: "15 Sep: kamu masuk 12:14, lalu nggak bisa check-out`,
+  `     karena NEXUS mati 18:09–23:54."`,
+  `  2) Apa yang kamu temukan di catatan, satu kalimat (angka boleh: jam, XP, day off).`,
+  `  3) Usulanmu, satu kalimat: apa yang diusulkan DAN apa yang kembali kalau disetujui — atau langkah yang`,
+  `     harus pelapor lakukan — atau satu pertanyaan ke BoD.`,
+  `  4) Status, paling banyak satu kalimat: "Nunggu approve BoD." / "Sudah selesai." / "Nunggu jawabanmu."`,
+  `DILARANG: menyalin nama field tool (recordedByNexus, hasPenaltyToCancel, coversShiftStart, dsb.), menyebut`,
+  `ID proposal/tiket, menjelaskan aturan internal, menulis "Bukti foto:" berbaris-baris, atau mengulang isi`,
+  `tiket. Kalau balasanmu lebih dari 5 baris, potong. BoD bilang balasan panjang tidak dibaca siapa pun.`,
+  `Reason di usulan (nexus_propose_*): 1–2 kalimat, maksimal 280 karakter — tanggal, sebab, apa yang diusulkan.`,
+]
+
 /** Nobody's ticket may end in a shrug. */
 const CLOSING_RULES = [
   `Aturan penutup — balasanmu WAJIB berakhir dengan salah satu dari empat ini:`,
@@ -245,11 +260,7 @@ const FRAMING: Record<
       ...REMEDY_RULES,
       `- Kalau catatan absennya ternyata sudah benar DAN tidak ada yang menutupi harinya, katakan begitu.`,
     ],
-    closing: [
-      `Balas ringkas dalam Bahasa Indonesia, maksimal 8 kalimat: apa kata catatan absensinya, apa yang kamu`,
-      `lihat di bukti, dan penyelesaian mana yang kamu pilih beserta alasannya. Kalau kamu mengusulkan`,
-      `sesuatu, sebutkan usulannya dan tegaskan absennya belum berubah sampai BoD menyetujui.`,
-    ],
+    closing: [...REPLY_FORMAT],
   },
 
   EXP: {
@@ -271,11 +282,7 @@ const FRAMING: Record<
       `- Kalau potongannya ternyata bukan dari absensi sama sekali, jangan mengusulkan apa pun — jelaskan`,
       `  apa yang kamu lihat dan eskalasikan ke BoD.`,
     ],
-    closing: [
-      `Balas ringkas dalam Bahasa Indonesia, maksimal 8 kalimat: apa kata catatan absensinya, apakah potongan`,
-      `XP-nya berasal dari situ, dan penyelesaian mana yang kamu pilih. Kalau kamu mengusulkan sesuatu,`,
-      `sebutkan usulannya dan sebutkan bahwa XP-nya baru bergerak setelah BoD menyetujui.`,
-    ],
+    closing: [...REPLY_FORMAT],
   },
 
   DAY_OFF: {
@@ -319,11 +326,7 @@ const FRAMING: Record<
       `- Pembatalan potongan mengembalikan jatah day off HANYA untuk potongan otomatis. Kalau tool menolak`,
       `  karena tidak ada yang bisa dibatalkan, laporkan apa adanya — jangan bilang "sudah saya ajukan".`,
     ],
-    closing: [
-      `Balas ringkas dalam Bahasa Indonesia, maksimal 8 kalimat: apa kata catatan absensinya, apa yang kamu`,
-      `pahami dari keluhannya, dan penyelesaianmu. Kalau kamu mengusulkan pembatalan, sebutkan bahwa jatah`,
-      `day off dan XP-nya baru kembali setelah BoD menyetujui.`,
-    ],
+    closing: [...REPLY_FORMAT],
   },
 }
 
