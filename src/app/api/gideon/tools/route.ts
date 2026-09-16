@@ -551,6 +551,19 @@ async function getAttendanceDay(actor: User, input: Record<string, unknown>) {
   }))
   const realCover = coveringRequests.filter((r) => !r.isAutoDeduction)
 
+  // Request yang DIBATALKAN atau DITOLAK untuk tanggal ini. Bukan cover — tapi bukti niat: Violet
+  // mengajukan izin 13 Sep lalu membatalkannya karena ternyata sakit, dan tool ini dulu melaporkan
+  // "tidak ada pengajuan" seolah dia tidak pernah bilang apa-apa. GIDEON perlu tahu ada yang pernah
+  // diajukan, apa alasannya, dan kapan dibatalkan — lalu menilai buktinya sendiri.
+  const cancelledRows = await prisma.attendanceRequest.findMany({
+    where: { userId: actor.id, workspaceId, status: { in: ['CANCELED', 'REJECTED'] }, startDate: { lte: attendanceDate }, endDate: { gte: attendanceDate } },
+    select: { id: true, type: true, status: true, reason: true, createdAt: true, updatedAt: true, reviewNote: true },
+    orderBy: { createdAt: 'asc' },
+  })
+  const cancelledRequests = cancelledRows.map((r) => ({
+    id: r.id, type: r.type, status: r.status, reason: r.reason, filedAt: r.createdAt, endedAt: r.updatedAt, reviewNote: r.reviewNote,
+  }))
+
   // ---- What the day actually cost, off the XP ledger. ------------------------------------------
   const pen = await readAttendancePenaltiesForDate(actor.id, workspaceId, attendanceDate, raw)
   const totalPenaltyXp = pen.lateXp + pen.noCheckoutXp + pen.alphaXp
@@ -689,6 +702,9 @@ async function getAttendanceDay(actor: User, input: Record<string, unknown>) {
     shift,
     outage,
     coveringRequests,
+    // Diajukan lalu dibatalkan/ditolak untuk tanggal ini. Bukan cover; bukti niat. Kosong = memang
+    // tidak pernah ada pengajuan.
+    cancelledRequests,
     // Pre-chewed because it is the single fact that decides the remedy, and a model that has to derive
     // it from the array above will sometimes derive it wrong.
     coveredByRequest: realCover.length > 0,
