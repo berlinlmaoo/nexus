@@ -60,57 +60,75 @@ const PAGE = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>NEXUS DOWN</title>
+<title>NEXUS tidak bisa dijangkau</title>
 <link rel="icon" href="${ICON}">
 <style>
-  :root { color-scheme: dark; }
+  :root { color-scheme: light; }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
   body {
-    display: grid; place-items: center; padding: 24px;
-    background: #0d1017; color: #e8eaef;
+    background: #f8f9fb; color: #292d34;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, Roboto, sans-serif;
-    background-image: radial-gradient(60% 50% at 50% 0%, rgba(123,104,238,.25), transparent 70%);
+    -webkit-font-smoothing: antialiased;
+    display: flex; flex-direction: column; min-height: 100%;
   }
-  main { max-width: 440px; width: 100%; text-align: center; }
-  img { width: 88px; height: 88px; border-radius: 22px; box-shadow: 0 12px 40px rgba(0,0,0,.45); }
-  .wm { margin: 18px 0 6px; font-size: 13px; font-weight: 700; letter-spacing: .28em; color: #a6b0bd; }
-  h1 { margin: 0; font-size: clamp(40px, 12vw, 64px); font-weight: 900; letter-spacing: -.02em; line-height: 1; }
-  h1 span { color: #ff7f50; }
-  p { margin: 18px 0 0; font-size: 15px; line-height: 1.55; color: #c3c9d3; }
-  .tip { margin-top: 14px; padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,.05);
-         border: 1px solid rgba(255,255,255,.08); font-size: 13.5px; color: #a6b0bd; text-align: left; }
-  .tip b { color: #e8eaef; }
-  .st { margin-top: 22px; font-size: 12px; color: #6f7886; font-variant-numeric: tabular-nums; }
-  .st .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ff7f50; margin-right: 6px;
-             animation: blink 1.6s infinite; vertical-align: 0; }
-  @keyframes blink { 50% { opacity: .25; } }
-  @media (prefers-reduced-motion: reduce) { .st .dot { animation: none; } }
+  header { display: flex; align-items: center; gap: 10px; padding: 18px 22px; }
+  header img { width: 30px; height: 30px; border-radius: 8px; }
+  header b { font-size: 14px; letter-spacing: .14em; }
+  header span { font-size: 12px; color: #656d76; }
+  main { flex: 1; display: grid; place-items: center; padding: 12px 20px 40px; }
+  .box { width: 100%; max-width: 420px; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 10px; border-radius: 999px;
+          background: #fff; border: 1px solid #e6e8ec; font-size: 12px; font-weight: 600; color: #656d76; }
+  .pill i { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,.15); }
+  h1 { margin: 18px 0 8px; font-size: 28px; line-height: 1.2; font-weight: 800; letter-spacing: -.01em; text-wrap: balance; }
+  p { margin: 0; font-size: 15px; line-height: 1.55; color: #656d76; }
+  .card { margin-top: 22px; padding: 16px; border-radius: 18px; background: #fff; border: 1px solid #e6e8ec;
+          box-shadow: 0 6px 24px rgba(20,24,40,.05); display: flex; gap: 14px; align-items: flex-start; }
+  .card .ic { flex: none; width: 40px; height: 40px; border-radius: 12px; background: #f1eefe; color: #6247d6;
+              display: grid; place-items: center; }
+  .card h2 { margin: 0 0 4px; font-size: 15px; font-weight: 700; }
+  .card p { font-size: 13.5px; }
+  .foot { margin-top: 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+          font-size: 12px; color: #656d76; font-variant-numeric: tabular-nums; }
+  .foot button { font: inherit; font-weight: 600; color: #6247d6; background: none; border: 0; padding: 6px 0; cursor: pointer; }
+  .foot button:disabled { color: #a6b0bd; cursor: default; }
 </style>
 </head>
 <body>
+<header><img src="${ICON}" alt=""><b>NEXUS</b><span>Z Networks</span></header>
 <main>
-  <img src="${ICON}" alt="">
-  <div class="wm">Z NETWORKS</div>
-  <h1>NEXUS <span>DOWN</span></h1>
-  <p>Server kantor lagi nggak bisa dijangkau. Biasanya karena internet kantor putus, dan biasanya pulih sendiri.</p>
-  <div class="tip"><b>Mau absen?</b> Pakai aplikasi NEXUS di HP. Absen tetap tersimpan di HP dengan jam saat kamu menekan tombol, dan terkirim sendiri begitu NEXUS kembali.</div>
-  <div class="st"><span class="dot"></span><span id="s">Mengecek lagi otomatis…</span></div>
+  <div class="box">
+    <div class="pill"><i></i>Server kantor tidak terjangkau</div>
+    <h1>NEXUS lagi nggak bisa dibuka.</h1>
+    <p>Biasanya karena internet kantor putus, dan biasanya pulih sendiri. Halaman ini memuat ulang otomatis begitu NEXUS kembali.</p>
+    <div class="card">
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg></div>
+      <div>
+        <h2>Absen tetap jalan dari aplikasi</h2>
+        <p>Tekan Presence In/Out seperti biasa. Absennya tersimpan di HP dengan jam saat kamu menekan, lalu terkirim sendiri begitu NEXUS kembali.</p>
+      </div>
+    </div>
+    <div class="foot"><span id="s">Mengecek koneksi…</span><button id="b" type="button">Cek sekarang</button></div>
+  </div>
 </main>
 <script>
-  var n = 0;
+  var n = 0, timer = null, s = document.getElementById("s"), b = document.getElementById("b");
+  function fmt(d) { return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }).replace(".", ":"); }
   function tick() {
-    n++;
+    clearTimeout(timer); n++; b.disabled = true; s.textContent = "Mengecek…";
     fetch("/api/health", { cache: "no-store" }).then(function (r) {
-      if (r.ok && !r.headers.get("x-nexus-down")) { document.getElementById("s").textContent = "NEXUS kembali. Memuat ulang…"; location.reload(); return; }
+      if (r.ok && !r.headers.get("x-nexus-down")) { s.textContent = "NEXUS kembali. Memuat ulang…"; location.reload(); return; }
       throw 0;
     }).catch(function () {
-      var t = new Date();
-      document.getElementById("s").textContent = "Masih down · dicek " + t.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " · coba ke-" + n;
-      setTimeout(tick, 20000);
+      s.textContent = "Masih belum bisa · dicek " + fmt(new Date()) + " · ke-" + n;
+      b.disabled = false;
+      timer = setTimeout(tick, 20000);
     });
   }
-  setTimeout(tick, 5000);
+  b.addEventListener("click", tick);
+  timer = setTimeout(tick, 4000);
 </script>
 </body>
-</html>`;
+</html>
+`;
