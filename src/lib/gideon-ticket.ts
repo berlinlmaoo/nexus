@@ -431,7 +431,14 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
       return
     }
     const reply = ((await res.json()) as { reply?: string }).reply?.trim()
-    if (!reply) return
+    if (!reply) {
+      // Balasan kosong dari shim hampir selalu berarti agen di baliknya gagal (login provider
+      // kedaluwarsa, OOM, dsb.) — bukan "tidak ada yang perlu dijawab". Diam di sini pernah berarti
+      // GIDEON mati berhari-hari tanpa satu baris pun yang menyebutnya. Kalimatnya sengaja mudah
+      // di-grep: "gideon-ticket: balasan kosong".
+      console.error("gideon-ticket: balasan kosong dari shim — agen Hermes kemungkinan gagal (cek journal gideon-shim di VM agents)", { complaintId, category })
+      return
+    }
 
     // Posted under GIDEON's own name, on the reviewer side of the thread — it is answering the
     // reporter, not speaking as them.
