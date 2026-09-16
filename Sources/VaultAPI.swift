@@ -230,7 +230,7 @@ extension APIClient {
            let message = obj["error"] as? String, !message.isEmpty {
             return .transport(message)
         }
-        return .http(status)
+        return .http(status, nil)
     }
 
     private func vaultEnc(_ s: String) -> String {
