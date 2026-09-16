@@ -359,7 +359,7 @@ function buildPrompt(input: {
     `ID tiket: ${input.complaintId}`,
     `Judul: ${input.subject}`,
     `Isi: ${input.body}`,
-    `Tanggal acuan: ${input.filedDateKey} (Asia/Jakarta) — tanggal tiket ini dibuat.`,
+    `Tanggal tiket dibuat: ${input.filedDateKey} (Asia/Jakarta). BUKAN otomatis tanggal acuan — lihat Aturan tanggal.`,
     input.hasImage
       ? `Ada foto bukti terlampir. Baca apa yang terlihat di dalamnya, tapi jangan ambil tanggalnya dari situ.`
       : `Tidak ada foto bukti yang bisa dibaca. Itu tidak mengubah apa pun: catatannya tetap kamu panggil.`,
