@@ -177,23 +177,15 @@ struct AdminUsersSection: View {
     @State private var roster: WorkspaceRoster?
     @State private var loading = true
     @State private var filter = "ALL"
-    @State private var deleteTarget: WorkspaceRoster.Member?
-    @State private var openProfile: ProfileTarget?
-    @State private var linkTarget: GoogleLinkTarget?
+    @State private var query = ""
     @State private var memberships: [String: UserMemberships] = [:]
-    @State private var openMemberships: String?
     @State private var allTeams: [Team] = []
-    @State private var teamBusy = false
-    @State private var addTeamFor: TeamPickTarget?
-    @State private var exitTarget: TeamExitTarget?
-    /// Tim yang sedang dibuka pengaturannya. Pintu yang sama dengan web: dari chip tim di
-    /// baris orangnya, bukan dari halaman daftar tim tersendiri.
-    @State private var openTeamId: String?
-    @State private var approverTarget: ApproverPickTarget?
-    @State private var accountTarget: AccountEditTarget?
     @State private var allProjects: [Project] = []
-    @State private var projectPickFor: ProjectPickTarget?
-    @State private var showChain = false
+    /// userId orang yang detailnya sedang dibuka. Layar detail dibangun ulang dari `members`
+    /// setiap daftar ini dimuat ulang, jadi perubahan di sana langsung terlihat di sana juga.
+    @State private var openUser: String?
+    @State private var showChart = false
+    @State private var joining: Set<String> = []
 
     // A–Z, peka lokal — urutan server adalah urutan bergabung, yang tidak membantu siapa pun
     // mencari nama di daftar 49 orang.
@@ -203,7 +195,6 @@ struct AdminUsersSection: View {
     private var registered: [WorkspaceRoster.Registered] {
         (roster?.availableUsers ?? []).sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
     }
-    @State private var joining: Set<String> = []
     private var viewerRole: String? { roster?.role }
     /// Flexi dan mode Mobile mengubah aturan absensi seseorang, jadi BoD ke atas — aturan
     /// yang sama dengan `canManageShift` di Control Room web, bukan `canEditTier`.
@@ -217,7 +208,12 @@ struct AdminUsersSection: View {
             : "\(n) \(T("belum ditaruh — request-nya masuk ke semua BoD"))"
     }
     private func count(_ r: String) -> Int { members.filter { $0.role == r }.count }
-    private var rows: [WorkspaceRoster.Member] { filter == "ALL" ? members : members.filter { ($0.role ?? "STAFF") == filter } }
+    private var rows: [WorkspaceRoster.Member] {
+        let base = filter == "ALL" ? members : members.filter { ($0.role ?? "STAFF") == filter }
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return base }
+        return base.filter { $0.displayName.lowercased().contains(q) || ($0.emailText ?? "").lowercased().contains(q) }
+    }
 
     var body: some View {
         Group {
@@ -234,7 +230,7 @@ struct AdminUsersSection: View {
                             AdminStat(label: "Staff", value: count("STAFF"), active: filter == "STAFF") { toggle("STAFF") }
                         }
                         if canManageAttendanceFlags {
-                            Button { showChain = true } label: {
+                            Button { showChart = true } label: {
                                 HStack(spacing: 10) {
                                     Image(systemName: "arrow.triangle.branch").font(.system(size: 14, weight: .semibold)).foregroundStyle(NX.violetText)
                                     VStack(alignment: .leading, spacing: 1) {
@@ -250,17 +246,31 @@ struct AdminUsersSection: View {
                             }
                             .buttonStyle(.plain)
                         }
+                        HStack(spacing: 8) {
+                            Image(systemName: "magnifyingglass").font(.system(size: 13, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                            TextField(T("Cari nama atau email…"), text: $query)
+                                .font(NXFont.text(14)).textInputAutocapitalization(.never).autocorrectionDisabled()
+                            if !query.isEmpty {
+                                Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg) }.buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 9)
+                        .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
                         VStack(spacing: 0) {
                             ForEach(Array(rows.enumerated()), id: \.element.idv) { idx, m in
                                 if idx > 0 { Divider().overlay(NX.border) }
                                 row(m)
+                            }
+                            if rows.isEmpty {
+                                Text(T("Nggak ada yang cocok.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).padding(14)
                             }
                         }
                         .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border)).nexusShadowSoft()
 
                         // Akun yang mendaftar sendiri tanpa kode workspace. Satu tombol, langsung
-                        // jadi Staff; perannya bisa diubah sesudahnya dari daftar di atas.
+                        // jadi Staff; perannya bisa diubah sesudahnya dari detail orangnya.
                         if !registered.isEmpty, canManageAttendanceFlags, let wsId = workspaceId {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("\(T("Belum masuk workspace")) · \(registered.count)")
@@ -299,370 +309,70 @@ struct AdminUsersSection: View {
             }
         }
         .task { await load() }
-        .confirmationDialog("\(T("Delete account")) \"\(deleteTarget?.displayName ?? "")\"?", isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }), titleVisibility: .visible) {
-            Button(T("Delete permanently"), role: .destructive) { if let m = deleteTarget { deleteTarget = nil; Task { await deleteUser(m) } } }
-            Button(T("Cancel"), role: .cancel) { deleteTarget = nil }
-        } message: { Text(T("Their tasks/files/quests are reassigned to you. This cannot be undone.")) }
-        .navigationDestination(item: $openProfile) { MemberProfileView(target: $0) }
-        .navigationDestination(item: $openTeamId) { tid in
-            if let t = allTeams.first(where: { $0.id == tid }) {
-                TeamDetailView(team: t) { Task { await load() } }
+        // Satu layar untuk semua pengaturan orang itu — bukan menu yang menempel di chip peran.
+        // Dibangun ulang dari `members` yang segar tiap kali daftar dimuat ulang.
+        .navigationDestination(item: $openUser) { uid in
+            if let m = members.first(where: { $0.userId == uid }) {
+                AdminUserDetailView(
+                    member: m, workspaceId: workspaceId, viewerRole: viewerRole,
+                    memberships: memberships[uid], allTeams: allTeams, allProjects: allProjects,
+                    members: members
+                ) { await load() }
             }
         }
-        // Sheet, bukan Menu. Workspace ini punya 22 akun dan menu sepanjang itu di layar HP tidak
-        // bisa dipakai — tidak bisa dicari, dan separuhnya di luar layar.
-        .sheet(item: $linkTarget) { t in
-            NavigationStack { GoogleLinkSheet(target: t) { linkTarget = nil; Task { await load() } } }
+        // Layar penuh, bukan sheet: bagan butuh setiap piksel yang ada, dan sheet yang bisa ditarik
+        // turun berebut gerakan geser dengan kanvasnya.
+        .fullScreenCover(isPresented: $showChart) {
+            ApprovalChartView(members: members, workspaceId: workspaceId ?? "") { await load() }
         }
-        .sheet(item: $projectPickFor) { t in
-            NavigationStack {
-                ProjectPickSheet(target: t, projects: allProjects.filter { !t.already.contains($0.id) }) { projectId in
-                    projectPickFor = nil
-                    Task { await runTeam { try await APIClient.shared.addProjectMember(projectId: projectId, userId: t.userId) } }
-                }
-            }
-        }
-        .sheet(item: $accountTarget) { t in
-            NavigationStack { AccountEditSheet(target: t) { accountTarget = nil; Task { await load() } } }
-        }
-        .sheet(item: $approverTarget) { t in
-            NavigationStack {
-                ApproverPickSheet(target: t, candidates: members.filter { $0.userId != t.selfUserId }) { approverId in
-                    approverTarget = nil
-                    Task { await runTeam { try await APIClient.shared.setAttendanceApprover(memberId: t.memberId, approverId: approverId, workspaceId: t.workspaceId) } }
-                }
-            }
-        }
-        .sheet(isPresented: $showChain) {
-            NavigationStack {
-                ApprovalChainView(members: members, workspaceId: workspaceId ?? "") { await load() }
-            }
-        }
-        .sheet(item: $addTeamFor) { t in
-            NavigationStack {
-                TeamPickSheet(
-                    target: t,
-                    teams: allTeams.filter { $0.canManage == true && !t.already.contains($0.id) },
-                    onPick: { teamId in
-                        addTeamFor = nil
-                        Task { await runTeam { try await APIClient.shared.teamAddMember(teamId: teamId, userId: t.userId) } }
-                    },
-                    onCreate: { name in
-                        addTeamFor = nil
-                        Task {
-                            teamBusy = true
-                            if let team = try? await APIClient.shared.teamCreate(name: name) {
-                                try? await APIClient.shared.teamAddMember(teamId: team.id, userId: t.userId)
-                                // Muat ulang DULU, baru buka layarnya. Tujuan navigasi mencari
-                                // timnya di `allTeams`; membukanya sebelum daftar itu segar akan
-                                // mendorong layar kosong yang tidak pulih sendiri.
-                                await load()
-                                openTeamId = team.id
+    }
+
+    /// Baris ringkas: siapa, perannya, dan keadaan yang perlu dilihat sekilas. Semua pengaturan
+    /// ada di layar detail — ketuk barisnya.
+    private func row(_ m: WorkspaceRoster.Member) -> some View {
+        Button {
+            if let uid = m.userId { openUser = uid }
+        } label: {
+            HStack(spacing: 12) {
+                AvatarView(url: m.avatarURL, initial: m.initial, size: 40)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(m.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    if let e = m.emailText, !e.isEmpty { Text(e).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }
+                    // Hanya digambar saat MENYALA: 46 dari 49 orang tidak memakai keduanya, dan
+                    // lencana "mati" di tiap baris membuat yang menyala berhenti terlihat.
+                    if (m.flexiTimeEnabled ?? false) || (m.noGeofenceMode ?? false) || (m.googleWorkspaceEmail?.isEmpty == false) {
+                        HStack(spacing: 6) {
+                            if m.flexiTimeEnabled ?? false {
+                                Label(T("Flexi"), systemImage: "bolt.fill").font(NXFont.text(10, .semibold)).foregroundStyle(NX.warning)
                             }
-                            teamBusy = false
-                        }
-                    }
-                )
-            }
-        }
-        // Mengeluarkan orang dari tim MENCABUT akses ke semua project yang ditautkan tim itu
-        // (lihat src/lib/team-sync.ts di server). Sebutkan berapa sebelum ditekan, bukan sesudah.
-        .confirmationDialog(
-            exitTarget.map { "\(T("Keluarkan")) \($0.userName) \(T("dari")) \($0.teamName)?" } ?? "",
-            isPresented: Binding(get: { exitTarget != nil }, set: { if !$0 { exitTarget = nil } }),
-            titleVisibility: .visible
-        ) {
-            Button(T("Keluarkan"), role: .destructive) {
-                if let t = exitTarget {
-                    exitTarget = nil
-                    Task { await runTeam { try await APIClient.shared.teamRemoveMember(teamId: t.teamId, userId: t.userId) } }
-                }
-            }
-            Button(T("Cancel"), role: .cancel) { exitTarget = nil }
-        } message: {
-            Text(exitTarget.map { t in
-                t.losing.isEmpty
-                    ? T("Tim ini tidak menautkan project, jadi tidak ada akses yang hilang.")
-                    : "\(T("Ikut hilang: akses ke")) \(t.losing.count) project — \(t.losing.joined(separator: ", "))"
-            } ?? "")
-        }
-    }
-
-    /// Satu jalur untuk semua perubahan keanggotaan: kunci tombol, jalankan, muat ulang.
-    /// Memuat ulang dari server (bukan menambal state lokal) karena satu klik di sini juga
-    /// mengubah daftar PROJECT orang itu, dan menebak hasilnya di klien akan salah.
-    private func runTeam(_ body: () async throws -> Void) async {
-        teamBusy = true
-        try? await body()
-        await load()
-        teamBusy = false
-    }
-
-    @ViewBuilder private func row(_ m: WorkspaceRoster.Member) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            rowTop(m)
-            if let uid = m.userId, openMemberships == uid {
-                membershipPanel(m, memberships[uid])
-            }
-        }
-    }
-
-    /// Chip tim + project milik satu orang. Dibuat sebagai view terpisah supaya `rowTop` tetap
-    /// muat dalam satu ekspresi — penyusun tipe SwiftUI menyerah pada HStack sepanjang itu.
-    @ViewBuilder private func membershipPanel(_ m: WorkspaceRoster.Member, _ mem: UserMemberships?) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Kedua judul selalu digambar, termasuk saat kosong. Bagian yang kadang ada kadang
-            // hilang membuat dua baris orang yang bersebelahan terlihat seperti dua layar berbeda.
-            Label(T("Projects"), systemImage: "square.stack.3d.up")
-                .font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
-            projectChips(m, mem)
-            Label(T("Teams"), systemImage: "person.3")
-                .font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
-            teamChips(m, mem)
-            if canEditTier(viewerRole, m.role) {
-                Text(T("Masuk tim = otomatis dapat akses ke project yang ditautkan tim itu."))
-                    .font(NXFont.text(10)).foregroundStyle(NX.mutedFg.opacity(0.8))
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 14).padding(.bottom, 12)
-    }
-
-    /// Chip project. Yang LANGSUNG bisa dilepas dari menu; yang lewat tim tidak — sinkronisasi tim
-    /// akan menuliskannya lagi, jadi tombol lepas di sana cuma janji palsu. Plus "+ project".
-    @ViewBuilder private func projectChips(_ m: WorkspaceRoster.Member, _ mem: UserMemberships?) -> some View {
-        let ps = mem?.projects ?? []
-        let canEdit = canEditTier(viewerRole, m.role) && m.userId != nil
-        FlowLayout(spacing: 6) {
-            ForEach(ps) { p in
-                let chip = HStack(spacing: 5) {
-                    Circle().fill(Color(hex: p.color ?? "#94A3B8")).frame(width: 6, height: 6)
-                    Text(p.viaTeam == nil ? p.name : "\(p.name) · via \(p.viaTeam!)")
-                        .font(NXFont.text(11, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                }
-                .padding(.horizontal, 8).padding(.vertical, 5)
-                .background(NX.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
-                if canEdit, p.viaTeam == nil, let uid = m.userId {
-                    Menu {
-                        Button(role: .destructive) {
-                            Task { await runTeam { try await APIClient.shared.removeProjectMember(projectId: p.id, userId: uid) } }
-                        } label: { Label(T("Lepas dari project"), systemImage: "minus.circle") }
-                    } label: { chip }
-                    .disabled(teamBusy)
-                } else {
-                    chip
-                }
-            }
-            if canEdit, let uid = m.userId {
-                Button {
-                    projectPickFor = ProjectPickTarget(id: uid, userId: uid, name: m.displayName, already: Set(ps.map(\.id)))
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: teamBusy ? "hourglass" : "plus").font(.system(size: 9, weight: .bold))
-                        Text(T("project")).font(NXFont.text(11, .semibold))
-                    }
-                    .foregroundStyle(NX.mutedFg)
-                    .padding(.horizontal, 8).padding(.vertical, 5)
-                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [3, 2])))
-                }
-                .buttonStyle(.plain)
-                .disabled(teamBusy)
-            }
-        }
-        if ps.isEmpty && !canEdit {
-            Text(T("Belum masuk project mana pun.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-        }
-    }
-
-    /// Chip tim: ketuk = menu (jadikan/lepas lead, keluarkan). Menu, bukan tombol silang kecil —
-    /// target 12pt di sebelah teks adalah cara mengeluarkan orang dari tim karena salah ketuk.
-    @ViewBuilder private func teamChips(_ m: WorkspaceRoster.Member, _ mem: UserMemberships?) -> some View {
-        let teams = mem?.teams ?? []
-        let canEdit = canEditTier(viewerRole, m.role) && m.userId != nil
-        FlowLayout(spacing: 6) {
-            ForEach(teams) { t in
-                let chip = teamChipLabel(t)
-                if canEdit, let uid = m.userId {
-                    Menu {
-                        // Tidak ada "jadikan lead": lead tim dihapus bersama Bagan Approval.
-                        // Pintu ke pengaturan TIM-nya sendiri: nama, divisi, jam shift, tautan
-                        // project. Sama seperti di web — dari chip tim, bukan dari halaman terpisah.
-                        if let full = allTeams.first(where: { $0.id == t.id }), full.canManage == true {
-                            Button { openTeamId = full.id } label: { Label(T("Atur tim ini"), systemImage: "gearshape") }
-                        }
-                        Button(role: .destructive) {
-                            exitTarget = TeamExitTarget(
-                                id: "\(uid)-\(t.id)", userId: uid, userName: m.displayName,
-                                teamId: t.id, teamName: t.name,
-                                losing: (mem?.projects ?? []).filter { $0.viaTeam == t.name }.map(\.name)
-                            )
-                        } label: { Label(T("Keluarkan dari tim"), systemImage: "person.badge.minus") }
-                    } label: { chip }
-                    .disabled(teamBusy)
-                } else {
-                    chip
-                }
-            }
-            if canEdit, let uid = m.userId {
-                Button {
-                    addTeamFor = TeamPickTarget(id: uid, userId: uid, name: m.displayName, already: Set(teams.map(\.id)))
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: teamBusy ? "hourglass" : "plus").font(.system(size: 9, weight: .bold))
-                        Text(T("tim")).font(NXFont.text(11, .semibold))
-                    }
-                    .foregroundStyle(NX.mutedFg)
-                    .padding(.horizontal, 8).padding(.vertical, 5)
-                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: [3, 2])))
-                }
-                .buttonStyle(.plain)
-                .disabled(teamBusy)
-            }
-        }
-        if teams.isEmpty && !canEdit {
-            Text(T("Belum masuk tim mana pun.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-        }
-
-    }
-
-    private func teamChipLabel(_ t: UserMemberships.TeamRow) -> some View {
-        HStack(spacing: 5) {
-            Circle().fill(Color(hex: t.color ?? "#7B2FBE")).frame(width: 6, height: 6)
-            Text(t.name).font(NXFont.text(11, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-        }
-        .padding(.horizontal, 8).padding(.vertical, 5)
-        .background(NX.background, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(NX.border))
-    }
-
-    private func rowTop(_ m: WorkspaceRoster.Member) -> some View {
-        HStack(spacing: 12) {
-            // Same split as the Tuning Room roster: the name opens the person, the role chip keeps
-            // its menu, and neither swallows the other's tap.
-            Button {
-                if let uid = m.userId {
-                    openProfile = ProfileTarget(userId: uid, name: m.displayName, avatar: m.avatarURL)
-                }
-            } label: {
-                HStack(spacing: 12) {
-                    AvatarView(url: m.avatarURL, initial: m.initial, size: 38)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(m.displayName).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                        if let e = m.emailText, !e.isEmpty { Text(e).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }
-                        // Tenang, bukan menonjol: sebagian besar orang memang belum punya, dan
-                        // ketiadaannya bukan sesuatu yang perlu diteriakkan di tiap baris.
-                        if let g = m.googleWorkspaceEmail, !g.isEmpty {
-                            Label(g, systemImage: "at")
-                                .font(NXFont.text(10))
-                                .foregroundStyle(NX.violetText)
-                                .lineLimit(1)
-                        }
-                        // Dua mode absensi yang mengubah aturan orang ini. Hanya digambar saat
-                        // MENYALA: 46 dari 49 orang tidak memakai keduanya, dan lencana "mati"
-                        // di tiap baris membuat yang menyala berhenti terlihat.
-                        if (m.flexiTimeEnabled ?? false) || (m.noGeofenceMode ?? false) {
-                            HStack(spacing: 5) {
-                                if m.flexiTimeEnabled ?? false {
-                                    Label(T("Flexi"), systemImage: "bolt.fill")
-                                        .font(NXFont.text(10, .semibold)).foregroundStyle(NX.warning)
-                                }
-                                if m.noGeofenceMode ?? false {
-                                    Label(T("Mobile"), systemImage: "iphone")
-                                        .font(NXFont.text(10, .semibold)).foregroundStyle(NX.violetText)
-                                }
+                            if m.noGeofenceMode ?? false {
+                                Label(T("Mobile"), systemImage: "iphone").font(NXFont.text(10, .semibold)).foregroundStyle(NX.violetText)
+                            }
+                            if let g = m.googleWorkspaceEmail, !g.isEmpty {
+                                Image(systemName: "at").font(.system(size: 10, weight: .bold)).foregroundStyle(NX.violetText)
                             }
                         }
-                        // Hanya STAFF yang punya approver. "Belum ditaruh" berwarna peringatan
-                        // karena request orang ini masih jatuh ke BoD — pekerjaan yang belum selesai.
-                        // Rantai bebas: siapa pun bisa punya atasan. Peringatan "belum ditaruh"
-                        // hanya untuk Staff/Manager — BoD tanpa atasan memang puncak.
-                        if let a = m.approver?.name, !a.isEmpty {
-                            Text("\(T("Approver")): \(a)").font(NXFont.text(10)).foregroundStyle(NX.mutedFg).lineLimit(1)
-                        } else if m.role == "STAFF" || m.role == "MANAGER" {
-                            Text(T("Belum ditaruh di Bagan Approval")).font(NXFont.text(10, .semibold)).foregroundStyle(NX.warning)
-                        }
-                        if let uid = m.userId {
-                            // Angkanya digambar walau nol: "0 project" adalah jawaban, dan baris
-                            // yang kadang punya keterangan kadang tidak terbaca seperti rusak.
-                            let mem = memberships[uid]
-                            Text(membershipSummary(mem))
-                                .font(NXFont.text(10, .semibold))
-                                .foregroundStyle(openMemberships == uid ? NX.violetText : NX.mutedFg)
-                        }
                     }
-                    Spacer(minLength: 6)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(m.userId == nil)
-            // Tombol sendiri, BUKAN mengganti tap pada nama: nama membuka profil orangnya, dan
-            // mengambil alih gerakan itu untuk dropdown akan menghilangkan satu-satunya jalan ke sana.
-            if let uid = m.userId {
-                Button {
-                    withAnimation(.snappy(duration: 0.18)) {
-                        openMemberships = (openMemberships == uid) ? nil : uid
+                    // Rantai bebas: siapa pun bisa punya atasan. Peringatan "belum ditaruh" hanya
+                    // untuk Staff/Manager — BoD tanpa atasan memang puncak.
+                    if let a = m.approver?.name, !a.isEmpty {
+                        Text("\(T("Approver")): \(a)").font(NXFont.text(10)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    } else if m.role == "STAFF" || m.role == "MANAGER" {
+                        Text(T("Belum ditaruh di Bagan Approval")).font(NXFont.text(10, .semibold)).foregroundStyle(NX.warning)
                     }
-                } label: {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(openMemberships == uid ? NX.violetText : NX.mutedFg)
-                        .rotationEffect(.degrees(openMemberships == uid ? 180 : 0))
-                        .frame(width: 30, height: 30)
-                        .background(NX.background, in: Circle())
-                        .overlay(Circle().strokeBorder(NX.border))
-                }
-                .buttonStyle(.plain)
-            }
-            if canEditTier(viewerRole, m.role), let wsId = workspaceId {
-                Menu {
-                    ForEach(assignableRoles(viewerRole), id: \.self) { r in Button(orgRoleLabel(r)) { Task { await setRole(m, r, wsId) } } }
-                    Divider()
-                    // Identitas akun: foto, nama, email login, sandi. BoD saja — server menolak sisanya.
-                    if canManageAttendanceFlags, let uid = m.userId, let mid = m.id {
-                        Button {
-                            accountTarget = AccountEditTarget(id: uid, userId: uid, memberId: mid, name: m.displayName, email: m.emailText ?? "", avatar: m.avatarURL)
-                        } label: { Label(T("Edit akun…"), systemImage: "person.text.rectangle") }
-                    }
-                    if canManageAttendanceFlags, let mid = m.id, let wsId = workspaceId {
-                        Button {
-                            approverTarget = ApproverPickTarget(id: mid, memberId: mid, workspaceId: wsId, name: m.displayName, current: m.approverId, selfUserId: m.userId)
-                        } label: {
-                            Label(m.approverId == nil ? T("Taruh di bawah atasan…") : T("Ganti atasan…"), systemImage: "arrow.triangle.branch")
-                        }
-                    }
-                    if canManageAttendanceFlags, let mid = m.id, let wsId = workspaceId {
-                        Button {
-                            Task { await runTeam { try await APIClient.shared.updateWorkspaceMemberAttendanceFlags(
-                                memberId: mid, workspaceId: wsId, flexi: !(m.flexiTimeEnabled ?? false)) } }
-                        } label: {
-                            Label((m.flexiTimeEnabled ?? false) ? T("Matikan Flexi Time") : T("Flexi Time"),
-                                  systemImage: "bolt")
-                        }
-                        Button {
-                            Task { await runTeam { try await APIClient.shared.updateWorkspaceMemberAttendanceFlags(
-                                memberId: mid, workspaceId: wsId, noGeofence: !(m.noGeofenceMode ?? false)) } }
-                        } label: {
-                            Label((m.noGeofenceMode ?? false) ? T("Matikan mode Mobile") : T("Mode Mobile (absen dari mana saja)"),
-                                  systemImage: "iphone")
-                        }
-                    }
-                    Divider()
                     if let uid = m.userId {
-                        Button {
-                            linkTarget = GoogleLinkTarget(id: uid, userId: uid, name: m.displayName, current: m.googleWorkspaceEmail)
-                        } label: {
-                            Label(m.googleWorkspaceEmail == nil ? T("Link Google account") : T("Change Google account"),
-                                  systemImage: "at")
-                        }
+                        Text(membershipSummary(memberships[uid])).font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
                     }
-                    Divider()
-                    Button(role: .destructive) { deleteTarget = m } label: { Label(T("Delete account"), systemImage: "trash") }
-                } label: { RoleChip(role: m.role ?? "STAFF") }
-            } else { RoleChip(role: m.role ?? "STAFF") }
+                }
+                Spacer(minLength: 6)
+                RoleChip(role: m.role ?? "STAFF")
+                Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(NX.mutedFg)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 11)
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 14).padding(.vertical, 11)
+        .buttonStyle(.plain)
+        .disabled(m.userId == nil)
     }
 
     private func toggle(_ r: String) { filter = (filter == r) ? "ALL" : r }
@@ -684,14 +394,6 @@ struct AdminUsersSection: View {
         if let t = try? await APIClient.shared.teams() { allTeams = t }
         if let p = try? await APIClient.shared.projects() { allProjects = p }
         loading = false
-    }
-    private func setRole(_ m: WorkspaceRoster.Member, _ role: String, _ wsId: String) async {
-        guard let id = m.id else { return }
-        try? await APIClient.shared.updateWorkspaceMemberRole(memberId: id, role: role, workspaceId: wsId); await load()
-    }
-    private func deleteUser(_ m: WorkspaceRoster.Member) async {
-        guard let uid = m.userId else { return }
-        try? await APIClient.shared.deleteUser(uid); await load()
     }
 }
 
@@ -1638,127 +1340,6 @@ struct ApproverPickSheet: View {
         .navigationTitle(target.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() } } }
-    }
-}
-
-/// Seluruh rantai approval di HP: bukan bagan yang diseret (layar 6 inci bukan alat yang layak
-/// untuk itu), melainkan daftar bertingkat — tiap manager satu bagian, staff di bawahnya, dan
-/// bagian terakhir "Belum ditaruh". Ketuk staff = pindahkan. Kemampuannya sama dengan bagan web;
-/// bentuknya beda.
-struct ApprovalChainView: View {
-    let members: [WorkspaceRoster.Member]
-    let workspaceId: String
-    var onChanged: () async -> Void
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var pick: ApproverPickTarget?
-    @State private var busy = false
-    @State private var problem: String?
-
-    // Rantai bebas: satu bagian per ATASAN (siapa pun yang punya bawahan), berisi bawahannya.
-    // Bawahan yang juga punya bawahan muncul lagi sebagai bagian sendiri di bawah — bacaannya
-    // "willy → gerro → riri" jadi tiga bagian berurutan, bukan pohon yang harus dilipat.
-    private func reports(of m: WorkspaceRoster.Member) -> [WorkspaceRoster.Member] { members.filter { $0.approverId == m.userId } }
-    private var approvers: [WorkspaceRoster.Member] {
-        let tier: [String: Int] = ["ONE_ABOVE_ALL": 0, "BOD": 1, "MANAGER": 2, "STAFF": 3]
-        return members.filter { !reports(of: $0).isEmpty }
-            .sorted { (tier[$0.role ?? "STAFF"] ?? 4, $0.displayName) < (tier[$1.role ?? "STAFF"] ?? 4, $1.displayName) }
-    }
-    private var unassigned: [WorkspaceRoster.Member] {
-        let ids = Set(members.compactMap(\.userId))
-        return members.filter { ($0.role == "STAFF" || $0.role == "MANAGER") && ($0.approverId == nil || !ids.contains($0.approverId!)) }
-    }
-
-    var body: some View {
-        List {
-            ForEach(approvers, id: \.idv) { m in
-                Section {
-                    ForEach(reports(of: m), id: \.idv) { s in staffRow(s) }
-                } header: {
-                    HStack(spacing: 8) {
-                        AvatarView(url: m.avatarURL, initial: m.initial, size: 22)
-                        Text(m.displayName)
-                        Text(orgRoleLabel(m.role ?? "STAFF")).font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
-                        Spacer()
-                        Text("\(reports(of: m).count)").monospacedDigit()
-                    }
-                }
-            }
-            if approvers.isEmpty {
-                Section { Text(T("Belum ada yang ditaruh di bagan.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
-            }
-
-            Section {
-                if unassigned.isEmpty {
-                    Text(T("Kosong — semua sudah punya atasan.")).font(NXFont.text(12)).foregroundStyle(NX.success)
-                }
-                ForEach(unassigned, id: \.idv) { s in staffRow(s) }
-            } header: {
-                Text("\(T("Belum ditaruh")) · \(unassigned.count) · \(T("masuk ke BoD")))")
-                    .foregroundStyle(unassigned.isEmpty ? NX.mutedFg : NX.warning)
-            }
-
-            if let problem {
-                Section { Text(problem).font(NXFont.text(12)).foregroundStyle(NX.danger) }
-            }
-        }
-        .navigationTitle(T("Bagan Approval"))
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() } }
-            if busy { ToolbarItem(placement: .topBarTrailing) { ProgressView() } }
-        }
-        .sheet(item: $pick) { t in
-            NavigationStack {
-                ApproverPickSheet(target: t, candidates: members.filter { $0.userId != t.selfUserId }) { approverId in
-                    pick = nil
-                    Task {
-                        busy = true
-                        problem = nil
-                        do {
-                            try await APIClient.shared.setAttendanceApprover(memberId: t.memberId, approverId: approverId, workspaceId: t.workspaceId)
-                            await onChanged()
-                        } catch {
-                            problem = (error as? LocalizedError)?.errorDescription ?? T("Gagal memindahkan.")
-                        }
-                        busy = false
-                    }
-                }
-            }
-        }
-    }
-
-    private func staffRow(_ s: WorkspaceRoster.Member) -> some View {
-        Button {
-            if let mid = s.id {
-                pick = ApproverPickTarget(id: mid, memberId: mid, workspaceId: workspaceId, name: s.displayName, current: s.approverId, selfUserId: s.userId)
-            }
-        } label: {
-            HStack(spacing: 10) {
-                AvatarView(url: s.avatarURL, initial: s.initial, size: 28)
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 6) {
-                        Text(s.displayName).font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
-                        Text(orgRoleLabel(s.role ?? "STAFF")).font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
-                    }
-                    // Jam kerja + mode absensi — sama seperti kartu di bagan web. Flexi menggantikan
-                    // jamnya (jam tetap diabaikan saat Flexi menyala); Mobile cuma lencana.
-                    HStack(spacing: 6) {
-                        if s.flexiTimeEnabled ?? false {
-                            Label(T("Flexi"), systemImage: "bolt.fill").font(NXFont.text(10, .semibold)).foregroundStyle(NX.warning)
-                        } else {
-                            Text(s.shiftLabel ?? T("jam kantor")).font(NXFont.text(10)).foregroundStyle(NX.mutedFg).monospacedDigit()
-                        }
-                        if s.noGeofenceMode ?? false {
-                            Label(T("Mobile"), systemImage: "iphone").font(NXFont.text(10, .semibold)).foregroundStyle(NX.violetText)
-                        }
-                    }
-                }
-                Spacer(minLength: 4)
-                Image(systemName: "chevron.up.chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(NX.mutedFg)
-            }
-        }
-        .disabled(busy || s.id == nil)
     }
 }
 
