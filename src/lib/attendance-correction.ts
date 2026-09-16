@@ -41,6 +41,8 @@ export type AttendanceCorrectionKind = (typeof ATTENDANCE_CORRECTION_KINDS)[numb
 
 export const CORRECTION_REASON_MIN = 10
 export const CORRECTION_REASON_MAX = 1000
+/** What a BoD will actually read on the approval card, on a phone. Refused above this, not truncated. */
+const CORRECTION_REASON_READABLE_MAX = 280
 export const CORRECTION_NOTE_MAX = 1000
 
 export const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/
@@ -327,6 +329,11 @@ async function openProposal(
   if (!dateKey || !DATE_KEY_RE.test(dateKey)) throw new Error('date is required as "YYYY-MM-DD"')
   if (!reason || reason.length < CORRECTION_REASON_MIN) {
     throw new Error(`reason is required (min ${CORRECTION_REASON_MIN} chars) — the BoD approves on this sentence alone`)
+  }
+  // The reason is what the BoD reads on the approval card, on a phone. A 900-character essay there
+  // (Farchan, 16 Sep 2026) is skipped, not read — and the model happily writes one unless refused.
+  if (reason.length > CORRECTION_REASON_READABLE_MAX) {
+    throw new Error(`reason terlalu panjang (${reason.length} > ${CORRECTION_REASON_READABLE_MAX} karakter): tulis 1–2 kalimat — tanggal, sebab, apa yang diusulkan`)
   }
 
   // Same visibility rule as GET /api/complaints/[id]: the reporter, or a BoD, inside their own
