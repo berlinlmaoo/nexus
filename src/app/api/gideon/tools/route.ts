@@ -7,7 +7,7 @@ import { markdownToTipTap, extractTextFromTipTap } from '@/lib/tiptap-utils'
 import { getGideonUserId } from '@/lib/gideon-identity'
 import { authenticateGideonService } from '@/lib/gideon-service-auth'
 import { checkProjectAccess } from '@/lib/rbac'
-import { notifyCommentAdded, notifyTaskAssigned, notifyTaskCompleted } from '@/lib/notification-service'
+import { notifyCommentAdded, notifyComplaintStatus, notifyTaskAssigned, notifyTaskCompleted } from '@/lib/notification-service'
 import { normalizeCustomFieldNumberInput, normalizeCustomFieldOptions, normalizeCustomFieldType, serializeCustomFieldValue } from '@/lib/custom-fields'
 import { FLEXI_WINDOW_END, parseDateOnlyToUtc, resolveEffectiveAttendanceShift } from '@/lib/attendance'
 import {
@@ -1288,5 +1288,6 @@ async function resolveTicketByGideon(actor: { id: string }, input: Record<string
       data: { complaintId, action: 'status', fromStatus: complaint.status, toStatus: 'RESOLVED', actorId: gideon?.id ?? actor.id },
     })
   })
+  await notifyComplaintStatus({ reporterId: complaint.reporterId, complaintId, status: 'RESOLVED', detail: note.slice(0, 160) }).catch(() => {})
   return { resolved: true, complaintId, date: dateKey, verified: { xpRemaining: remaining, autoDayOffs: pen.autoDayOffs, pendingProposals: 0 } }
 }

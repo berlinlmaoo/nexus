@@ -6,6 +6,8 @@ import prisma from "@/lib/prisma"
 import { getUserWorkspaceIds } from "@/lib/workspace-scope"
 import { isWorkspaceManagerRole } from "@/lib/rbac"
 import { updateRoomBookingSchema, validateBody } from "@/lib/validations"
+import { createInAppNotification } from "@/lib/notification-service"
+import { formatBookingSlot } from "@/lib/room-booking-format"
 
 /** A booking can be edited/deleted by its creator, or by a workspace MANAGER/BoD/One-Above-All. */
 async function canManageBooking(userId: string, workspaceId: string, createdById: string): Promise<boolean> {
@@ -84,6 +86,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ bo
       include: bookingInclude,
     })
 
+    // Changed by somebody other than the owner (a manager) → the owner is told what happened.
+    if (session.user.id !== existing.createdById) {
+      const cancelled = booking.status !== "ACTIVE"
+      await createInAppNotification({
+        userId: existing.createdById,
+        type: "booking_changed",
+        title: cancelled ? `Booking ${existing.room} dibatalkan` : `Booking ${booking.room} diubah`,
+        message: cancelled
+          ? `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)} dibatalkan oleh manager.`
+          : `${booking.title} sekarang ${formatBookingSlot(booking.startsAt, booking.endsAt)} di ${booking.room}.`,
+        link: "/rooms",
+        push: true,
+      }).catch(() => null)
+    }
     return NextResponse.json({ booking })
   } catch (error) {
     console.error("Room booking PATCH error:", error)
@@ -102,7 +118,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     const workspaceIds = await getUserWorkspaceIds(session.user.id)
     const existing = await prisma.roomBooking.findFirst({
       where: { id: bookingId, workspaceId: { in: workspaceIds } },
-      select: { id: true, workspaceId: true, createdById: true },
+      select: { id: true, workspaceId: true, createdById: true, room: true, title: true, startsAt: true, endsAt: true },
     })
     if (!existing) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 })
@@ -111,6 +127,16 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Cuma pembuat booking atau manager yang bisa hapus booking ini." }, { status: 403 })
     }
 
+    if (session.user.id !== existing.createdById) {
+      await createInAppNotification({
+        userId: existing.createdById,
+        type: "booking_changed",
+        title: `Booking ${existing.room} dihapus`,
+        message: `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)} dihapus oleh manager.`,
+        link: "/rooms",
+        push: true,
+      }).catch(() => null)
+    }
     await prisma.roomBooking.delete({ where: { id: bookingId } })
     return NextResponse.json({ success: true })
   } catch (error) {

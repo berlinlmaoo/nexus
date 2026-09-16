@@ -5,7 +5,7 @@ import { cancelAttendancePenaltiesForDate, cancelAttendancePenaltiesForDateDetai
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
-import { notifyComplaintReply } from "@/lib/notification-service"
+import { notifyComplaintReply, notifyComplaintStatus } from "@/lib/notification-service"
 import {
   buildAttendanceDerivedFields,
   formatAttendanceDateKey,
@@ -288,7 +288,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           reason: correction.reason, note,
         },
       })
-      void notifyComplaintReply({ complaintId: id, workspaceId: complaint.workspaceId, reporterId: complaint.reporterId, fromReviewer: true, replierId: me }).catch(() => {})
+      void notifyComplaintStatus({ reporterId: complaint.reporterId, complaintId: id, status: "RESOLVED", detail: `Usulan pembatalan potongan ${dateKey} disetujui BoD — XP dan jatah day off hari itu sudah kembali.` }).catch(() => {})
       // record: null, and it means it — no AttendanceRecord was read, written or created.
       return NextResponse.json({ correction: serializeAttendanceCorrection(updated), record: null })
     }
@@ -494,7 +494,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         penaltiesReversed,
       },
     })
-    void notifyComplaintReply({ complaintId: id, workspaceId: complaint.workspaceId, reporterId: complaint.reporterId, fromReviewer: true, replierId: me }).catch(() => {})
+    void notifyComplaintStatus({ reporterId: complaint.reporterId, complaintId: id, status: "RESOLVED", detail: `Usulan koreksi absen ${dateKey} disetujui BoD — catatan absen hari itu sudah diperbarui.` }).catch(() => {})
 
     return NextResponse.json({
       correction: serializeAttendanceCorrection(updatedCorrection),

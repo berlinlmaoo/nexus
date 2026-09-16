@@ -4,6 +4,7 @@ import sharp from "sharp"
 import prisma from "@/lib/prisma"
 import { formatAttendanceDateKey } from "@/lib/attendance"
 import { getGideonUserId, GIDEON_EMAIL } from "@/lib/gideon-identity"
+import { notifyComplaintReply } from "@/lib/notification-service"
 
 /**
  * GIDEON's first pass over a support ticket it is allowed to touch.
@@ -499,6 +500,12 @@ export async function reviewSupportTicket(complaintId: string, opts?: { force?: 
         })
       }
     })
+    // The reporter is told on their phone. The answer lands up to a few minutes after they filed,
+    // usually after they have put the phone down — without a push the thread just quietly grows.
+    const owner = await prisma.complaint.findUnique({ where: { id: complaintId }, select: { reporterId: true, workspaceId: true } })
+    if (owner) {
+      await notifyComplaintReply({ complaintId, workspaceId: owner.workspaceId, reporterId: owner.reporterId, fromReviewer: true, replierId: gideonId, byGideon: true }).catch(() => {})
+    }
   } catch (error) {
     console.error("gideon-ticket: review failed", { complaintId, error })
   }
