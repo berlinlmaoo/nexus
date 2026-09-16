@@ -5,6 +5,8 @@ import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { getUserWorkspaceIds } from "@/lib/workspace-scope"
 import { createRoomBookingSchema, validateBody } from "@/lib/validations"
+import { createInAppNotification } from "@/lib/notification-service"
+import { formatBookingSlot } from "@/lib/room-booking-format"
 
 const bookingInclude = {
   createdBy: { select: { id: true, name: true, email: true, avatar: true } },
@@ -113,6 +115,17 @@ export async function POST(req: NextRequest) {
       },
       include: bookingInclude,
     })
+
+    // A booking is a promise about a room; the person who made it gets it in writing on their
+    // phone, and the reminder before it starts (booking_soon) follows from the cron.
+    await createInAppNotification({
+      userId: session.user.id,
+      type: "booking_confirmed",
+      title: `Ruangan dibooking: ${room}`,
+      message: `${title.trim()} · ${formatBookingSlot(start, end)}. Pengingat dikirim sebelum mulai.`,
+      link: "/rooms",
+      push: true,
+    }).catch(() => null)
 
     return NextResponse.json({ booking }, { status: 201 })
   } catch (error) {

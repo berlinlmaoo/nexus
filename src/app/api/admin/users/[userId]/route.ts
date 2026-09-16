@@ -6,6 +6,7 @@ import prisma from "@/lib/prisma"
 import { getAdminSessionContext } from "@/lib/admin-access"
 import { directoryConfigured, getDirectoryAccount } from "@/lib/google-directory"
 import { logAudit } from "@/lib/audit"
+import { createInAppNotification } from "@/lib/notification-service"
 import bcrypt from "bcryptjs"
 import { getUserOrgRole, isBodPlus } from "@/lib/feed"
 
@@ -280,6 +281,19 @@ export async function PATCH(
         ...(wantsPassword ? { passwordReset: true } : {}),
       },
     })
+
+    // Linking is done BY a BoD TO somebody else, who is not in the room. Tell them — otherwise the
+    // first they hear of their company address is a calendar invite they cannot open.
+    if (data.googleWorkspaceEmail && data.googleWorkspaceEmail !== existing.googleWorkspaceEmail) {
+      await createInAppNotification({
+        userId: updated.id,
+        type: "google_workspace_linked",
+        title: "Akun Google Workspace kamu ditautkan",
+        message: `${data.googleWorkspaceEmail} sekarang tersambung ke akun NEXUS kamu. Kalender, Meet, dan email kantor memakai alamat ini.`,
+        link: "/settings",
+        push: true,
+      }).catch(() => null)
+    }
 
     return NextResponse.json({ user: updated })
   } catch (error) {

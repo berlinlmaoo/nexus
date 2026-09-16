@@ -133,6 +133,8 @@ export async function POST(request: NextRequest) {
         title: "Email kantor kamu sudah jadi",
         message: `${created.email} sudah aktif. Sandi sementaranya dikirim ke ${target.email} — cek email pribadimu, lalu ganti sandinya saat login pertama.`,
         link: "/settings",
+        // The password is NOT in this text (see above), so the push is safe on a lock screen.
+        push: true,
       })
       notifyResults.inApp = true
     } catch (error) {

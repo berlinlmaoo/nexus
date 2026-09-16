@@ -3,6 +3,8 @@ export type NexusUser = {
   name?: string | null;
   email?: string | null;
   avatar?: string | null;
+  /** Company Google account a BoD linked in Control Room. null is normal — most people have none. */
+  googleWorkspaceEmail?: string | null;
   phoneNumber?: string | null;
   role?: string | null;
   onboardedAt?: string | null;

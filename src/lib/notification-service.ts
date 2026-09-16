@@ -392,6 +392,7 @@ export async function notifyOffsiteCheckoutPending(data: {
         title: "Checkout di luar — perlu approval",
         message: `${data.staffName} checkout di luar area kantor${reasonSuffix}. Cek & approve di Attendance.`,
         link: "/attendance",
+        push: true,
       }).catch(() => null),
     ),
   )
@@ -494,6 +495,7 @@ export async function notifyMention(data: {
     taskId: data.taskId,
     projectId: data.projectId,
     link: data.projectId ? `/projects/${data.projectId}/tasks/${data.taskId}` : undefined,
+    push: prefs.commentMention,
   })
 
   if (!prefs.commentMention) return
@@ -554,6 +556,7 @@ export async function notifyFeedMention(data: {
     title: "Mentioned on Threads",
     message: `${data.mentionedByName} mentioned you in a post`,
     link,
+    push: prefs.commentMention,
   })
 
   if (!prefs.commentMention) return
@@ -757,6 +760,7 @@ export async function notifyProjectInvite(data: {
     message: `${data.invitedByName} invited you to "${data.projectName}"`,
     projectId: data.projectId,
     link: `/projects/${data.projectId}`,
+    push: prefs.projectInvite,
   })
 
   if (!prefs.projectInvite) return
@@ -818,6 +822,7 @@ export async function notifyStatusUpdate(data: {
       message: `${data.updatedByName} updated "${data.projectName}" status to ${data.status}`,
       projectId: data.projectId,
       link: `/projects/${data.projectId}`,
+      push: prefs.statusUpdate,
     })
 
     if (!prefs.statusUpdate) continue
@@ -1020,6 +1025,7 @@ export async function notifyTaskCompleted(data: {
       taskId: data.taskId,
       projectId: data.projectId,
       link: `/projects/${data.projectId}/tasks/${data.taskId}`,
+      push: true,
     })
   }
 }
@@ -1056,6 +1062,7 @@ export async function notifyCommentAdded(data: {
       taskId: data.taskId,
       projectId: data.projectId,
       link: `/projects/${data.projectId}/tasks/${data.taskId}`,
+      push: true,
     })
   }
 }
@@ -1127,21 +1134,28 @@ export async function notifyComplaintFiled(data: { workspaceId: string; complain
         title: "Keluhan baru masuk",
         message: `Kategori: ${data.categoryLabel}. Buka untuk menanggapi.`,
         link: "/complaints",
+        push: true,
       }),
     ),
   )
 }
 
 /** A reply landed in a complaint thread → ping the other side (BoD reply → reporter; reporter reply → BoD). */
-export async function notifyComplaintReply(data: { complaintId: string; workspaceId: string; reporterId: string; fromReviewer: boolean; replierId: string }) {
+export async function notifyComplaintReply(data: { complaintId: string; workspaceId: string; reporterId: string; fromReviewer: boolean; replierId: string; byGideon?: boolean }) {
   if (data.fromReviewer) {
-    // BoD replied → tell the reporter (the reporter isn't anonymous to themselves).
+    // BoD (or GIDEON) replied → tell the reporter (the reporter isn't anonymous to themselves).
+    // Until 16 Sep 2026 none of the ticket notifications were pushed — the row appeared in the
+    // in-app bell and nowhere else, so an answered ticket looked identical to an ignored one on a
+    // phone in a pocket.
     await createInAppNotification({
       userId: data.reporterId,
       type: "complaint_reply",
-      title: "Balasan untuk keluhan kamu",
-      message: "BoD membalas keluhan yang kamu ajukan.",
+      title: data.byGideon ? "GIDEON membalas tiket kamu" : "Balasan untuk tiket kamu",
+      message: data.byGideon
+        ? "GIDEON sudah mengecek datanya dan menjawab. Kalau ada usulan, tinggal menunggu keputusan BoD."
+        : "BoD membalas tiket yang kamu ajukan.",
       link: "/complaints",
+      push: true,
     }).catch(() => null)
   } else {
     // Reporter replied → tell every BoD (except whoever just posted, if a BoD somehow filed it).
@@ -1157,6 +1171,7 @@ export async function notifyComplaintReply(data: { complaintId: string; workspac
           title: "Balasan di keluhan",
           message: "Ada balasan baru di salah satu keluhan. Buka untuk menanggapi.",
           link: "/complaints",
+          push: true,
         }),
       ),
     )
@@ -1164,16 +1179,17 @@ export async function notifyComplaintReply(data: { complaintId: string; workspac
 }
 
 /** A complaint's status changed → tell the reporter. */
-export async function notifyComplaintStatus(data: { reporterId: string; complaintId: string; status: string }) {
+export async function notifyComplaintStatus(data: { reporterId: string; complaintId: string; status: string; detail?: string }) {
   const label: Record<string, string> = {
     OPEN: "dibuka kembali", AWAITING_DECISION: "nunggu keputusan BoD",
-    IN_REVIEW: "lagi ditangani BoD", RESOLVED: "ditandai selesai", CLOSED: "ditutup",
+    IN_REVIEW: "lagi ditangani BoD", RESOLVED: "selesai", CLOSED: "ditutup",
   }
   await createInAppNotification({
     userId: data.reporterId,
     type: "complaint_status",
-    title: "Update keluhan kamu",
-    message: `Keluhan kamu ${label[data.status] ?? data.status}.`,
+    title: data.status === "RESOLVED" ? "Tiket kamu selesai ✓" : "Update tiket kamu",
+    message: data.detail ? `${data.detail}` : `Tiket kamu ${label[data.status] ?? data.status}.`,
     link: "/complaints",
+    push: true,
   }).catch(() => null)
 }

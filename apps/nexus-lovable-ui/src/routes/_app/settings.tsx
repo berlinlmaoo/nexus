@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
 import { fmtDate, nexusApi, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusWorkspaceMember } from "@/lib/nexus-api";
-import { Settings as SettingsIcon, User, Bell, Lock, Palette, Webhook, Zap, CreditCard, Loader2, Trash2, ImagePlus, Users, UserPlus, ShieldCheck, KeyRound, Copy, Check, X, Plug, Sparkles, AlertTriangle, Globe, Terminal, Monitor, MessageCircle } from "lucide-react";
+import { Settings as SettingsIcon, User, Bell, Lock, Palette, Webhook, Zap, CreditCard, Loader2, Trash2, ImagePlus, Users, UserPlus, ShieldCheck, KeyRound, Copy, Check, X, Plug, Sparkles, AlertTriangle, Globe, Terminal, Monitor, MessageCircle, AtSign } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { passkeysSupported, registerPasskey } from "@/lib/passkey";
@@ -349,6 +349,14 @@ function ProfileSection() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className="block"><span className="text-xs font-medium text-muted-foreground">Full name</span><input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" /></label>
           <EmailChangeField currentEmail={u?.email ?? ""} onChanged={refreshProfile} />
+          <label className="block sm:col-span-2">
+            <span className="text-xs font-medium text-muted-foreground">Google Workspace</span>
+            <div className="mt-1 flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm">
+              {u?.googleWorkspaceEmail
+                ? <><AtSign className="h-4 w-4 shrink-0 text-primary" /><span className="truncate font-medium">{u.googleWorkspaceEmail}</span></>
+                : <span className="text-muted-foreground">No company Google account linked yet. A BoD links it from Control Room.</span>}
+            </div>
+          </label>
           <label className="block sm:col-span-2">
             <span className="text-xs font-medium text-muted-foreground">Phone number (WhatsApp)</span>
             <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="08xxxxxxxxxx · for non-local numbers use + (e.g. +65…)" inputMode="tel" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
