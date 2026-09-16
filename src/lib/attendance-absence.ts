@@ -21,6 +21,17 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000
 // floor stays at the safe go-live date, not an older one. Override via env ABSENCE_DEDUCTION_START_DATE.
 const DEFAULT_START_DATE = "2026-06-07"
 const DEFAULT_LOOKBACK_DAYS = 14
+/**
+ * Berapa hari ke belakang cron masih boleh MEMBUAT penalti baru. Jendela 14 hari di atas tetap
+ * dipakai untuk membatalkan penalti (izin yang baru diajukan), tapi membuat penalti untuk hari yang
+ * lebih tua dari ini dilarang. Sebabnya 16 Sep 2026 02:00: sehari sebelumnya BoD mengubah shift
+ * ±30 orang dan menurunkan satu BoD jadi Manager; cron lalu menghitung ulang 14 hari ke belakang
+ * dengan shift & keanggotaan yang BARU dan membuat 78 potongan day-off + 7.568 XP penalti untuk
+ * hari-hari yang sudah lewat, termasuk orang yang saat itu absen tepat waktu. Idempotensi per
+ * kunci tidak menolong: kuncinya memang belum ada, karena dulu tidak ada yang perlu dihukum.
+ * Dua hari cukup untuk cron yang terlewat semalam; sisanya keputusan manusia (opts.backfill).
+ */
+const PENALTY_LOOKBACK_DAYS = Math.max(0, Number(process.env.ATTENDANCE_PENALTY_LOOKBACK_DAYS ?? 2) || 2)
 
 export function startFloor() {
   const raw = (process.env.ABSENCE_DEDUCTION_START_DATE || "").trim() || DEFAULT_START_DATE
@@ -573,7 +584,7 @@ export interface AbsenceDeductionResult {
  * no monthly cap — over-quota goes "minus"). Idempotent: re-runs skip days already
  * covered by a request. Days before the start floor are never touched.
  */
-export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date }): Promise<AbsenceDeductionResult> {
+export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date; /** izinkan membuat penalti lebih tua dari PENALTY_LOOKBACK_DAYS */ backfill?: boolean }): Promise<AbsenceDeductionResult> {
   const floor = startFloor()
   // Default window: [yesterday - lookback, yesterday] (today isn't over yet, so never processed).
   const yesterday = new Date(getAttendanceDate().getTime() - ONE_DAY_MS)
@@ -581,6 +592,10 @@ export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date }
   let to = opts?.to ?? yesterday
   if (from.getTime() < floor.getTime()) from = floor
   if (to.getTime() > yesterday.getTime()) to = yesterday // never process today or future
+  // Hari yang lebih tua dari ini: penalti boleh dibatalkan, tidak boleh dibuat (lihat PENALTY_LOOKBACK_DAYS).
+  const penaltyFloorKey = opts?.backfill
+    ? formatAttendanceDateKey(floor)
+    : formatAttendanceDateKey(new Date(yesterday.getTime() - PENALTY_LOOKBACK_DAYS * ONE_DAY_MS))
 
   const result: AbsenceDeductionResult = {
     from: formatAttendanceDateKey(from),
@@ -649,9 +664,15 @@ export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date }
           continue
         }
 
+        // Terlalu tua untuk dihukum sekarang. Pembatalan di atas sudah jalan; sisanya bukan urusan cron.
+        if (dateKey < penaltyFloorKey) {
+          result.skipped++
+          continue
+        }
+
         const record = await prisma.attendanceRecord.findUnique({
           where: { userId_workspaceId_attendanceDate: { userId, workspaceId, attendanceDate: date } },
-          select: { checkInAt: true, checkOutAt: true, checkOutApproval: true, correctedAt: true },
+          select: { checkInAt: true, checkOutAt: true, checkOutApproval: true, correctedAt: true, lateMinutes: true },
         })
         // Manually corrected records (BoD "ubah jadi Hadir" / admin correction) are authoritative —
         // don't re-derive penalties from their (possibly synthesized) timestamps.
@@ -670,7 +691,16 @@ export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date }
               // not the window start (12:00), or a flexi person who checked in at 13:30 would be wrongly
               // (and permanently) penalized here.
               const lateBaseline = shift.flexi ? FLEXI_WINDOW_END : shift.shiftStartTime
-              const lateMin = minutesLateAgainstShift(record.checkInAt, date, lateBaseline, safeAttendanceTimezone(office.timezone))
+              const recomputed = minutesLateAgainstShift(record.checkInAt, date, lateBaseline, safeAttendanceTimezone(office.timezone))
+              // `record.lateMinutes` dihitung SAAT check-in, dengan shift yang berlaku waktu itu — itu
+              // fakta hari itu. Hitungan ulang di sini memakai shift yang berlaku SEKARANG, dan shift
+              // bisa diubah belakangan: dibikin lebih pagi (Aji 12:00 → 10:00 pada 15 Sep 2026: check-in
+              // 12:17 yang tepat waktu tiba-tiba "telat 137 menit" + potong day-off) atau lebih siang
+              // (Queen 15:00 → 19:00: penalti lama jadi tidak adil). Ambil yang paling ringan dari
+              // keduanya: perubahan shift tidak pernah menghukum ke belakang, tapi boleh memaafkan.
+              const lateMin = record.lateMinutes != null && record.lateMinutes >= 0
+                ? Math.min(record.lateMinutes, recomputed)
+                : recomputed
               const grace = Math.max(0, office.lateGraceMinutes ?? 0)
               if (lateMin > grace) {
                 // -1 XP/menit, maks 120.
