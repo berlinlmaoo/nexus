@@ -587,7 +587,12 @@ async function getAttendanceDay(actor: User, input: Record<string, unknown>) {
     recordedLateMinutes: record?.lateMinutes ?? null,
     lateAgainstCurrentShift,
     // true = ledger mencatat telat, tapi menurut shift yang berlaku SEKARANG orang ini tidak telat.
-    penaltyContradictsCurrentShift: pen.lateXp < 0 && lateAgainstCurrentShift !== null && lateAgainstCurrentShift <= grace,
+    // Dua bentuk: (1) menurut shift sekarang dia tidak telat sama sekali; (2) jatah day-off ikut
+    // terpotong (itu hukuman telat >120 menit) padahal menurut shift sekarang telatnya ≤120 menit.
+    penaltyContradictsCurrentShift:
+      pen.lateXp < 0 &&
+      lateAgainstCurrentShift !== null &&
+      (lateAgainstCurrentShift <= grace || (pen.autoDayOffs > 0 && lateAgainstCurrentShift <= 120)),
     meaning:
       'penaltyContradictsCurrentShift=true berarti shift orang ini berubah sesudah penalti dihitung; jam yang tercatat ' +
       'BENAR, penaltinya yang tidak berlaku lagi → usulkan PEMBATALAN POTONGAN. JANGAN mengusulkan koreksi jam: ' +
