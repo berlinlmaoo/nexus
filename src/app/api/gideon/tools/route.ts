@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { formatAttendanceDateKey } from '@/lib/attendance'
+import { resolveShiftWindowAt, formatAttendanceDateKey } from '@/lib/attendance'
 import { markdownToTipTap, extractTextFromTipTap } from '@/lib/tiptap-utils'
 import { getGideonUserId } from '@/lib/gideon-identity'
 import { authenticateGideonService } from '@/lib/gideon-service-auth'
@@ -626,12 +626,37 @@ async function getAttendanceDay(actor: User, input: Record<string, unknown>) {
       'false TIDAK menutup kemungkinan gangguan sore/malam: sinyal ini hanya melihat pagi.',
   }
 
+  // Baris register outage untuk tanggal ini, apa pun blocksCheckIn-nya. `recordedByNexus` (di bawah)
+  // hanya true untuk hari amnesti penuh; outage sore/malam yang diprobe otomatis tercatat dengan
+  // blocksCheckIn=false dan dulu TIDAK terlihat di sini sama sekali — pada 15 September 2026 tunnel
+  // mati 18:09–23:54 WIB, tujuh orang shift 19:00 kena alpha, dan GIDEON membaca "tidak tercatat".
+  // Yang menentukan bagi SATU orang bukan harinya, tapi apakah jendela outage menelan jam masuknya.
+  const outageRow = await getOutageRecord(raw)
+  let coversShiftStart: boolean | null = null
+  if (outageRow && office && effectiveShift) {
+    try {
+      const { shiftStartAt } = resolveShiftWindowAt(attendanceDate, office, effectiveShift)
+      const endedAt = outageRow.endedAt ?? new Date()
+      coversShiftStart = shiftStartAt >= outageRow.startedAt && shiftStartAt <= endedAt
+    } catch { coversShiftStart = null }
+  }
+  const wib = (d: Date) => d.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' })
+
   const outage = {
     recordedByNexus: await isOutageDay(raw),
     meaning:
       'recordedByNexus=true berarti tanggal ini SUDAH terdaftar sebagai hari NEXUS down (semua cron melewatinya). ' +
       'recordedByNexus=false berarti BELUM TERCATAT — bukan berarti sistemnya tidak down. Daftar itu diisi otomatis ' +
       'oleh prober sejak 8 September 2026; sebelum tanggal itu ia bergantung pada ada tidaknya orang yang mengetiknya.',
+    // Jendela outage yang tercatat hari itu (kalau ada), dan apakah jendela itu menelan jam MASUK orang
+    // ini. coversShiftStart=true adalah bukti kuat: orang ini memang tidak bisa check-in tepat waktu.
+    window: outageRow
+      ? { startWib: wib(outageRow.startedAt), endWib: outageRow.endedAt ? wib(outageRow.endedAt) : null, minutes: outageRow.minutesDown, source: outageRow.source }
+      : null,
+    coversShiftStart,
+    coversMeaning:
+      'coversShiftStart=true berarti ada outage TERCATAT yang jendelanya menelan jam masuk orang ini di tanggal itu — ' +
+      'usulkan pembatalan potongan, walaupun recordedByNexus=false. null berarti jam masuknya tidak bisa dipastikan.',
     // Anonymous headcounts, for raising a suspected outage to a BoD with a number attached.
     sameDaySignal: {
       workspaceMembers: memberIds.length,

@@ -49,7 +49,11 @@ const statusOf = (key: string) => STATUS[key] ?? { label: statusLabel(key), cls:
 // The BoD inbox = every ticket nobody has claimed. Mirror of COMPLAINT_INBOX_STATUSES in
 // src/lib/complaints.ts. Asked for by name rather than leaning on the server widening a bare "OPEN"
 // (that widening exists for older clients): a ticket GIDEON answered is still unclaimed work.
-const INBOX_STATUS = "OPEN,AWAITING_DECISION";
+// Inbox = yang belum disentuh siapa pun. Tiket yang sudah dijawab GIDEON (AWAITING_DECISION) pindah ke
+// "In review" bersama yang sedang dipegang BoD — permintaan BoD 16 Sep 2026: "kenapa yang udah dibales
+// GIDEON masih di inbox terus".
+const INBOX_STATUS = "OPEN";
+const REVIEW_STATUS = "IN_REVIEW,AWAITING_DECISION";
 const fmtWhen = (iso: string) => new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const CORRECTION_STATUS: Record<string, { label: string; cls: string }> = {
   PENDING: { label: "Awaiting decision", cls: "bg-amber-100 text-amber-700 ring-amber-200" },
@@ -74,7 +78,7 @@ function ComplaintsPage() {
   const viewerIsBod = ["ONE_ABOVE_ALL", "BOD"].includes(roleQ.data?.role ?? "");
 
   // BoD filter by status; staff just see their own thread list.
-  const status = !viewerIsBod ? "ALL" : tab === "open" ? INBOX_STATUS : tab === "review" ? "IN_REVIEW" : "ALL";
+  const status = !viewerIsBod ? "ALL" : tab === "open" ? INBOX_STATUS : tab === "review" ? REVIEW_STATUS : "ALL";
   const listQ = useQuery({ queryKey: ["complaints", viewerIsBod ? status : "MINE"], queryFn: () => nexusApi.complaints(status) });
   // Tickets with a decision waiting float to the top; everything else keeps the server's own
   // lastMessageAt-desc order (Array#sort is stable, so the two orders compose). Tickets GIDEON merely
@@ -107,6 +111,7 @@ function ComplaintsPage() {
               <span className={cn("relative flex items-center gap-1.5", tab === t ? "text-primary-foreground" : "text-muted-foreground")}>
                 {label}
                 {t === "open" && (counts.OPEN ?? 0) > 0 && <span className={cn("rounded-full px-1.5 text-[10px] font-black tabular-nums", tab === t ? "bg-primary-foreground/20" : "bg-amber-100 text-amber-700")}>{counts.OPEN}</span>}
+                {t === "review" && ((counts.IN_REVIEW ?? 0) + (counts.AWAITING_DECISION ?? 0)) > 0 && <span className={cn("rounded-full px-1.5 text-[10px] font-black tabular-nums", tab === t ? "bg-primary-foreground/20" : "bg-violet-100 text-violet-700")}>{(counts.IN_REVIEW ?? 0) + (counts.AWAITING_DECISION ?? 0)}</span>}
               </span>
             </button>
           ))}

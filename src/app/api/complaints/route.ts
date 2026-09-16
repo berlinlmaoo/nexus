@@ -40,8 +40,10 @@ export async function GET(request: NextRequest) {
     const statusParam = request.nextUrl.searchParams.get("status")
     const requested = (statusParam ?? "").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean)
     const filtering = requested.length > 0 && !requested.includes("ALL")
+    // "OPEN" berarti OPEN saja. Pelebaran ke AWAITING_DECISION dicabut (16 Sep 2026): BoD mau tiket
+    // yang sudah dijawab GIDEON keluar dari Inbox dan masuk "In review" — Inbox = yang belum disentuh
+    // siapa pun. Klien yang mau keduanya meminta "OPEN,AWAITING_DECISION" secara eksplisit.
     const wanted = requested
-      .flatMap((s) => (s === "OPEN" ? [...COMPLAINT_INBOX_STATUSES] : [s]))
       .filter((s, i, a) => COMPLAINT_STATUSES.includes(s as ComplaintStatusKey) && a.indexOf(s) === i)
 
     // Workspace-scoped (defense in depth). BoD see all; others only their own.
@@ -61,8 +63,10 @@ export async function GET(request: NextRequest) {
     // two differ only for OPEN, which the inbox filter widens above — and a tab badge that disagreed
     // with the list under it is a worse bug than a documented count. The literal number for the
     // widened half is still here under its own key, so a client can show both.
-    const inbox = COMPLAINT_INBOX_STATUSES.reduce((n, s) => n + (counts[s] ?? 0), 0)
-    if (inbox > 0) counts.OPEN = inbox
+    // counts[k] = jumlah baris yang benar-benar berstatus k. INBOX & REVIEW = jumlah untuk tab-nya.
+    counts.INBOX = counts.OPEN ?? 0
+    counts.REVIEW = (counts.IN_REVIEW ?? 0) + (counts.AWAITING_DECISION ?? 0)
+    void COMPLAINT_INBOX_STATUSES
 
     return NextResponse.json({ complaints: complaints.map((c) => serializeComplaint(c, me, viewerIsBod)), counts, viewerIsBod })
   } catch (error) {
