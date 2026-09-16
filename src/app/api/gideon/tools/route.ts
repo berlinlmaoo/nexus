@@ -677,14 +677,28 @@ async function getAttendanceDay(actor: User, input: Record<string, unknown>) {
   // Yang menentukan bagi SATU orang bukan harinya, tapi apakah jendela outage menelan jam masuknya.
   const outageRow = await getOutageRecord(raw)
   let coversShiftStart: boolean | null = null
+  // Jam PULANG yang diharapkan: shift tetap → akhir shift; Flexi → check-in + 9 jam. Outage sore
+  // yang menelan jam ini membuat orang tidak bisa check-out (Farchan, 15 Sep 2026: masuk 12:14,
+  // pulang seharusnya 21:14, tunnel mati 18:09–23:54, lalu kena −25 "lupa check-out").
+  let expectedCheckoutAt: Date | null = null
+  let coversExpectedCheckout: boolean | null = null
   if (outageRow && office && effectiveShift) {
     try {
-      const { shiftStartAt } = resolveShiftWindowAt(attendanceDate, office, effectiveShift)
+      const { shiftStartAt, shiftEndAt } = resolveShiftWindowAt(attendanceDate, office, effectiveShift)
       const endedAt = outageRow.endedAt ?? new Date()
       coversShiftStart = shiftStartAt >= outageRow.startedAt && shiftStartAt <= endedAt
-    } catch { coversShiftStart = null }
+      expectedCheckoutAt = effectiveShift.flexi && record?.checkInAt
+        ? new Date(record.checkInAt.getTime() + 9 * 60 * 60 * 1000)
+        : shiftEndAt
+      coversExpectedCheckout = expectedCheckoutAt >= outageRow.startedAt && expectedCheckoutAt <= endedAt
+    } catch { coversShiftStart = null; coversExpectedCheckout = null }
   }
   const wib = (d: Date) => d.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' })
+  // Check-out yang jatuh di HARI LAIN adalah penutupan otomatis saat check-in berikutnya ("lupa
+  // check-out"), bukan jam pulang sungguhan. Model membaca checkOutAt terisi = "sudah check-out".
+  const checkOutAutoClosed = Boolean(
+    record?.checkInAt && record?.checkOutAt && formatAttendanceDateKey(record.checkOutAt) !== formatAttendanceDateKey(record.checkInAt),
+  )
 
   const outage = {
     recordedByNexus: await isOutageDay(raw),
@@ -701,6 +715,15 @@ async function getAttendanceDay(actor: User, input: Record<string, unknown>) {
     coversMeaning:
       'coversShiftStart=true berarti ada outage TERCATAT yang jendelanya menelan jam masuk orang ini di tanggal itu — ' +
       'usulkan pembatalan potongan, walaupun recordedByNexus=false. null berarti jam masuknya tidak bisa dipastikan.',
+    expectedCheckoutWib: expectedCheckoutAt ? wib(expectedCheckoutAt) : null,
+    coversExpectedCheckout,
+    checkOutAutoClosed,
+    checkoutMeaning:
+      'coversExpectedCheckout=true berarti outage TERCATAT menelan jam PULANG yang diharapkan (akhir shift, atau ' +
+      'check-in + 9 jam untuk Flexi): orang ini memang tidak bisa check-out. checkOutAutoClosed=true berarti ' +
+      'checkOutAt yang terisi itu penutupan otomatis di hari berikutnya, BUKAN jam pulang sungguhan — hari itu ' +
+      'sebenarnya tanpa check-out, dan penalti "lupa check-out" (−25) mungkin sudah/akan kena. Obatnya koreksi jam: ' +
+      'usulkan check-out = expectedCheckoutWib, check-in tidak diubah.',
     // Anonymous headcounts, for raising a suspected outage to a BoD with a number attached.
     sameDaySignal: {
       workspaceMembers: memberIds.length,
