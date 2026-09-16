@@ -43,7 +43,8 @@ export async function POST(req: NextRequest) {
       // no body → default rolling window
     }
 
-    const result = await processAbsenceDeductions({ from, to })
+    // Pemicu manual BoD dengan rentang eksplisit: satu-satunya jalur yang boleh menghukum hari lama.
+    const result = await processAbsenceDeductions({ from, to, backfill: true })
     return NextResponse.json({ ...result, actor })
   } catch (error) {
     console.error("deduct-absences error:", error)
