@@ -259,10 +259,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             body: `Pembatalan potongan absen di-APPROVE — ${summary}. ${outcome} Jam absen ${dateKey} TIDAK diubah. ${persistenceLine}${note ? ` Catatan: ${note}` : ""}`.slice(0, BODY_MAX),
           },
         })
-        await tx.complaint.update({ where: { id }, data: { lastMessageAt: decidedAt, ...(bumpToReview ? { status: "IN_REVIEW" as const } : {}) } })
+        // APPROVE = tiketnya SELESAI. Yang diminta pelapor sudah dikabulkan dan sudah diterapkan; tidak
+        // ada lagi yang harus diputuskan. Dulu tiket cuma naik ke IN_REVIEW dan BoD harus menekan
+        // "Mark resolved" terpisah — langkah kedua yang tidak menambah keputusan apa pun.
+        const resolveNow = complaint.status !== "RESOLVED" && complaint.status !== "CLOSED"
+        await tx.complaint.update({
+          where: { id },
+          data: { lastMessageAt: decidedAt, ...(resolveNow ? { status: "RESOLVED" as const, resolvedAt: decidedAt, resolvedById: me } : {}) },
+        })
         await tx.complaintEvent.create({ data: { complaintId: id, action: "correction_approved", actorId: me } })
-        if (bumpToReview) {
-          await tx.complaintEvent.create({ data: { complaintId: id, action: "status", fromStatus: complaint.status, toStatus: "IN_REVIEW", actorId: me } })
+        if (resolveNow) {
+          await tx.complaintEvent.create({ data: { complaintId: id, action: "status", fromStatus: complaint.status, toStatus: "RESOLVED", actorId: me } })
         }
         return row
       })

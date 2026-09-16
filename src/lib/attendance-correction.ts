@@ -52,11 +52,17 @@ export const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/
  * the reporter noticed the XP deduction, but the deduction is downstream of a wrong AttendanceRecord,
  * so fixing the record IS the fix and the refund rides along with the approval.
  *
- * DAY_OFF is absent deliberately and permanently. Giving a deducted day-off allowance back is not an
- * attendance write, and GIDEON must never touch what the person themselves cannot change; that needs
- * its own propose->approve flow, which does not exist yet.
+ * DAY_OFF is absent from THIS list on purpose: a TIME correction never belongs on a day-off ticket.
+ * But a PENALTY CANCELLATION does — the day-off allowance that people complain about losing is, in
+ * every case seen so far, the nightly cron's AUTO deduction (alpha / late >120), and approving a
+ * cancellation already restores that allowance together with the XP (`autoDayOffs`). Keeping DAY_OFF
+ * locked out of that remedy meant Violet's ticket (13 Sep 2026: permit cancelled, sick, one day-off
+ * cut) got an answer and no proposal — the exact "solved but nothing happened" the BoD complained
+ * about. So `openProposal` takes `allowDayOff`, set only by the cancellation remedy. GIDEON still
+ * cannot touch a day off the person CHOSE: a cancellation with nothing auto-deducted is refused below.
  */
 export const CORRECTABLE_COMPLAINT_CATEGORIES: readonly string[] = ['ATTENDANCE', 'EXP']
+const CANCELLATION_COMPLAINT_CATEGORIES: readonly string[] = ['ATTENDANCE', 'EXP', 'DAY_OFF']
 
 // A check-out further than this from its check-in is a typo, not a shift. Night shifts still fit.
 const MAX_SHIFT_MS = 24 * 60 * 60 * 1000
@@ -309,6 +315,7 @@ async function attachProposalToThread(
 async function openProposal(
   actor: { id: string; role?: string | null; name?: string | null },
   input: Record<string, unknown>,
+  opts?: { allowDayOff?: boolean },
 ) {
   const complaintId = asString(input.complaintId)
   const dateKey = asString(input.date) ?? asString(input.attendanceDate)
@@ -338,8 +345,13 @@ async function openProposal(
   if (!actorIsBod && complaint.reporterId !== actor.id) throw new Error('Complaint not found or not accessible')
   // THE gate that keeps DAY_OFF out. The prompt tells GIDEON not to try; this is what makes trying
   // fail, so a model that calls the tool anyway gets an error back instead of filing a proposal.
-  if (!CORRECTABLE_COMPLAINT_CATEGORIES.includes(complaint.category)) {
-    throw new Error(`Ticket ${complaintId} is category ${complaint.category}; an attendance correction only attaches to an ATTENDANCE or EXP ticket.`)
+  const allowedCategories = opts?.allowDayOff ? CANCELLATION_COMPLAINT_CATEGORIES : CORRECTABLE_COMPLAINT_CATEGORIES
+  if (!allowedCategories.includes(complaint.category)) {
+    throw new Error(
+      opts?.allowDayOff
+        ? `Ticket ${complaintId} is category ${complaint.category}; a penalty cancellation only attaches to an ATTENDANCE, EXP, or DAY_OFF ticket.`
+        : `Ticket ${complaintId} is category ${complaint.category}; an attendance correction only attaches to an ATTENDANCE or EXP ticket.`,
+    )
   }
   if (complaint.status === 'CLOSED') throw new Error('Tiket ini udah ditutup, gak bisa diusulin koreksi lagi.')
 
@@ -504,7 +516,7 @@ export async function proposeAttendancePenaltyCancellation(
   /** Whose name it carries — GIDEON when it drafts one, the reporter when they ask for it themselves. */
   proposedById?: string,
 ) {
-  const { complaintId, dateKey, reason, complaint, actorIsBod } = await openProposal(actor, input)
+  const { complaintId, dateKey, reason, complaint, actorIsBod } = await openProposal(actor, input, { allowDayOff: true })
 
   // The target is the ticket's reporter, never an input field — same rule as the time correction, and
   // for the same reason: otherwise any staffer could ask GIDEON to pardon a colleague's day from their
