@@ -13,6 +13,9 @@ struct AppUser: Decodable, Sendable {
     let name: String?
     let email: String?
     let avatar: String?
+    /// Company Google account a BoD linked in Control Room. nil is the normal state — most people
+    /// have none — and older endpoints that never send the key decode to nil as well.
+    var googleWorkspaceEmail: String? = nil
 }
 
 /// One project from GET /api/projects (NexusProject). Mirrors the list response: _count{members,

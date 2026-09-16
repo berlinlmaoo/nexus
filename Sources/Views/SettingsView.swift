@@ -8,6 +8,7 @@ struct SettingsView: View {
     @Environment(AuthStore.self) private var auth
     @State private var name = ""
     @State private var email = ""
+    @State private var googleEmail = ""
     @State private var role: String?
     @State private var workspaceId: String?
     @State private var saving = false
@@ -79,6 +80,21 @@ struct SettingsView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(12)
                                 .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
+                        // Read-only here: a BoD links it from Control Room, and the person only needs
+                        // to know which address the company gave them.
+                        field(T("GOOGLE WORKSPACE")) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "at").font(.system(size: 13, weight: .bold))
+                                    .foregroundStyle(googleEmail.isEmpty ? NX.mutedFg : NX.violetText)
+                                Text(googleEmail.isEmpty ? T("No company Google account linked yet.") : googleEmail)
+                                    .font(NXFont.text(googleEmail.isEmpty ? 12 : 15))
+                                    .foregroundStyle(googleEmail.isEmpty ? NX.mutedFg : NX.foreground)
+                                    .lineLimit(1).truncationMode(.middle)
+                                Spacer(minLength: 0)
+                            }
+                            .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                            .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
                         Button { Task { await save() } } label: {
                             HStack(spacing: 8) {
                                 if saving { ProgressView().tint(.white) }
@@ -135,6 +151,7 @@ struct SettingsView: View {
             name = p.user.name ?? name
             email = p.user.email ?? email
             avatarURL = p.user.avatar
+            googleEmail = p.user.googleWorkspaceEmail ?? ""
         }
         if let info = try? await APIClient.shared.workspaceInfo() { role = info.role; workspaceId = info.workspaceId }
         loading = false
