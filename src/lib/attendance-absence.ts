@@ -9,6 +9,7 @@ import {
   isWorkdayForAttendanceDate,
   minutesLateAgainstShift,
   resolveEffectiveAttendanceShift,
+  resolveShiftWindowAt,
   safeAttendanceTimezone,
 } from "@/lib/attendance"
 import { awardXpOnce, setLatePenalty, clearLatePenalty, refundXpByReason, refundXpByReasonTx } from "@/lib/gamification"
@@ -700,6 +701,30 @@ export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date }
           // Only the cron's own auto-deduction day-off covers this date → already deducted; idempotent skip.
           result.skipped++
           continue
+        }
+
+        // Outage TERCATAT (register, otomatis dari prober) yang menelan JAM MASUK orang ini: bukan
+        // bolos. `isOutageDay` di atas hanya berlaku untuk hari yang blocksCheckIn=true (amnesti
+        // seluruh hari); ini pelengkapnya per orang — outage 18:09–23:54 WIB pada 15 September tidak
+        // memblokir shift 12:00, tapi memblokir seluruh jendela shift 19:00, dan tujuh orang shift
+        // itu kena potong 150 XP + satu token day-off yang harus dikembalikan manual. Aturannya sama
+        // dengan yang dipakai saat refund 8 September: jam MULAI shift ada di dalam jendela outage.
+        try {
+          const outage = await getOutageRecord(dateKey)
+          if (outage) {
+            const shiftForDay = await resolveEffectiveAttendanceShift({ userId, workspaceId, office, date })
+            const { shiftStartAt } = resolveShiftWindowAt(date, office, shiftForDay)
+            const endedAt = outage.endedAt ?? new Date()
+            if (shiftStartAt >= outage.startedAt && shiftStartAt <= endedAt) {
+              result.skipped++
+              console.log("[deduct-absences] dikecualikan: jam masuk di dalam outage", { userId, dateKey, shiftStartAt, outage: outage.id })
+              continue
+            }
+          }
+        } catch (e) {
+          // Kalau pemeriksaan ini gagal, jatuh ke perilaku lama (memotong) — lebih baik refund
+          // manual daripada cron yang berhenti memotong siapa pun karena satu galat.
+          console.error("[deduct-absences] cek outage per orang gagal", e)
         }
 
         // Alpha (tanpa absen & tanpa kabar) → -150 XP/hari (selain potong day-off di bawah).
