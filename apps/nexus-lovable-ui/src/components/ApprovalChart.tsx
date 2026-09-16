@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, Maximize2, Minimize2, Scan, Search, Smartphone, X, Zap, ZoomIn, ZoomOut } from "lucide-react";
+import { Download, Loader2, Maximize2, Minimize2, Scan, Search, Smartphone, X, Zap, ZoomIn, ZoomOut } from "lucide-react";
+import { toPng } from "html-to-image";
 import { ApiError, nexusApi, ORG_ROLE_LABEL, type ApprovalChartPerson } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 
@@ -68,7 +69,19 @@ export function ApprovalChart() {
   // geser-kanvas hanya dimulai dari pointerdown yang bukan di kartu.
   const wrapRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
-  const [view, setView] = useState({ x: 0, y: 0, s: 1 });
+  // Posisi & zoom TIDAK di React state. Tiap pointermove memanggil setState = seluruh 47 kartu
+  // dirender ulang per piksel — itu lag-nya. Sekarang transform ditulis langsung ke elemen, dan
+  // React cuma diberi tahu angka zoom untuk label, di-throttle satu kali per frame.
+  const viewRef = useRef({ x: 0, y: 0, s: 1 });
+  const [zoomLabel, setZoomLabel] = useState(100);
+  const labelRaf = useRef(0);
+  const applyView = useCallback((v: { x: number; y: number; s: number }) => {
+    viewRef.current = v;
+    const el = innerRef.current;
+    if (el) el.style.transform = `translate(${v.x}px, ${v.y}px) scale(${v.s})`;
+    cancelAnimationFrame(labelRaf.current);
+    labelRaf.current = requestAnimationFrame(() => setZoomLabel(Math.round(v.s * 100)));
+  }, []);
   const [full, setFull] = useState(false);
   const MIN_S = 0.3, MAX_S = 2.5;
   const clampS = (v: number) => Math.min(MAX_S, Math.max(MIN_S, v));
@@ -79,8 +92,8 @@ export function ApprovalChart() {
     const nw = innerRef.current?.scrollWidth ?? 0, nh = innerRef.current?.scrollHeight ?? 0;
     if (!w || !h || !nw || !nh) return;
     const s = clampS(Math.min((w - 32) / nw, (h - 32) / nh, 1.2));
-    setView({ s, x: (w - nw * s) / 2, y: Math.max(16, (h - nh * s) / 2) });
-  }, []);
+    applyView({ s, x: (w - nw * s) / 2, y: Math.max(16, (h - nh * s) / 2) });
+  }, [applyView]); // eslint-disable-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
     fitView();
     const ro = new ResizeObserver(fitView);
@@ -89,11 +102,12 @@ export function ApprovalChart() {
   }, [fitView, full, people.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Zoom di sekitar satu titik layar (koordinat relatif ke wadah), supaya yang di bawah kursor diam. */
-  const zoomAt = (factor: number, cx: number, cy: number) => setView((v) => {
+  const zoomAt = (factor: number, cx: number, cy: number) => {
+    const v = viewRef.current;
     const s = clampS(v.s * factor);
     const k = s / v.s;
-    return { s, x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k };
-  });
+    applyView({ s, x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k });
+  };
   const zoomCenter = (factor: number) => {
     const w = wrapRef.current?.clientWidth ?? 0, h = wrapRef.current?.clientHeight ?? 0;
     zoomAt(factor, w / 2, h / 2);
@@ -109,8 +123,9 @@ export function ApprovalChart() {
     const el = wrapRef.current; if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      const v = viewRef.current;
       if (e.ctrlKey || e.metaKey) { const p = localPoint(e); zoomAt(Math.exp(-e.deltaY * 0.01), p.x, p.y); }
-      else setView((v) => ({ ...v, x: v.x - e.deltaX, y: v.y - e.deltaY }));
+      else applyView({ ...v, x: v.x - e.deltaX, y: v.y - e.deltaY });
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
@@ -126,10 +141,11 @@ export function ApprovalChart() {
     const p = localPoint(e);
     pointers.current.set(e.pointerId, p);
     const pts = [...pointers.current.values()];
-    if (pts.length === 1) { gesture.current = { x: p.x, y: p.y, vx: view.x, vy: view.y, dist: 0, s: view.s }; setPanning(true); }
+    const v = viewRef.current;
+    if (pts.length === 1) { gesture.current = { x: p.x, y: p.y, vx: v.x, vy: v.y, dist: 0, s: v.s }; setPanning(true); }
     else if (pts.length === 2) {
       const [a, b] = pts;
-      gesture.current = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, vx: view.x, vy: view.y, dist: Math.hypot(a.x - b.x, a.y - b.y), s: view.s };
+      gesture.current = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, vx: v.x, vy: v.y, dist: Math.hypot(a.x - b.x, a.y - b.y), s: v.s };
     }
   };
   const onPointerMove = (e: React.PointerEvent) => {
@@ -138,7 +154,7 @@ export function ApprovalChart() {
     const pts = [...pointers.current.values()];
     const g = gesture.current;
     if (pts.length === 1) {
-      setView((v) => ({ ...v, x: g.vx + (pts[0].x - g.x), y: g.vy + (pts[0].y - g.y) }));
+      applyView({ s: viewRef.current.s, x: g.vx + (pts[0].x - g.x), y: g.vy + (pts[0].y - g.y) });
     } else if (pts.length >= 2 && g.dist > 0) {
       const [a, b] = pts;
       const dist = Math.hypot(a.x - b.x, a.y - b.y);
@@ -146,13 +162,34 @@ export function ApprovalChart() {
       const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
       // Titik di bawah tengah-jepitan tetap diam: hitung dari view awal gerakan, bukan view sekarang.
       const k = s / g.s;
-      setView({ s, x: cx - (g.x - g.vx) * k, y: cy - (g.y - g.vy) * k });
+      applyView({ s, x: cx - (g.x - g.vx) * k, y: cy - (g.y - g.vy) * k });
     }
   };
   const onPointerUp = (e: React.PointerEvent) => {
     pointers.current.delete(e.pointerId);
+    const v = viewRef.current;
     if (pointers.current.size === 0) { gesture.current = null; setPanning(false); }
-    else if (pointers.current.size === 1) { const [p] = [...pointers.current.values()]; gesture.current = { x: p.x, y: p.y, vx: view.x, vy: view.y, dist: 0, s: view.s }; }
+    else if (pointers.current.size === 1) { const [p] = [...pointers.current.values()]; gesture.current = { x: p.x, y: p.y, vx: v.x, vy: v.y, dist: 0, s: v.s }; }
+  };
+
+  // Unduh PNG tajam: bagan digambar ulang pada ukuran ASLI (transform dilepas) dengan 2x piksel,
+  // apa pun zoom di layar. Screenshot layar cuma memotret hasil zoom CSS — itu sebabnya buram.
+  const [exporting, setExporting] = useState(false);
+  const exportPng = async () => {
+    const el = innerRef.current; if (!el || exporting) return;
+    setExporting(true);
+    try {
+      const dataUrl = await toPng(el, { pixelRatio: 2, backgroundColor: "#ffffff", cacheBust: true, style: { transform: "none" } });
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = `bagan-approval-${new Date().toISOString().slice(0, 10)}.png`;
+      a.click();
+    } catch (e) {
+      console.error(e);
+      toast.error("Gagal membuat PNG", { description: "Coba lagi. Kalau terus gagal, ada foto profil yang tidak bisa dimuat." });
+    } finally {
+      setExporting(false);
+    }
   };
 
   useEffect(() => {
@@ -188,42 +225,6 @@ export function ApprovalChart() {
     onDragStart: () => setDragId(p.userId), onDragEnd: () => { setDragId(null); setOverId(null); }, onClick: () => setPicker(p),
     drop: dropProps(p.userId),
   });
-
-  /**
-   * Satu orang beserta seluruh bawahannya — bagan organisasi ala Corpnet, dengan satu trik supaya
-   * muat: bawahan yang PUNYA bawahan lagi (cabang) dijejer ke samping, bawahan yang tidak punya
-   * (daun) DITUMPUK ke bawah dalam satu kolom. Tujuh staff di bawah satu manager jadi satu kolom
-   * setinggi tujuh kartu, bukan tujuh kolom — dan lebar bagan ditentukan jumlah cabang, yang sedikit.
-   * Garisnya CSS (.oc-*), lihat <style>.
-   */
-  const Node = ({ p }: { p: ApprovalChartPerson }) => {
-    const kids = children.get(p.userId) ?? [];
-    // Hanya STAFF tanpa bawahan yang ditumpuk. Manager/BoD tanpa bawahan dapat kolom sendiri —
-    // kalau ikut ditumpuk di atas staff, dia terbaca seperti atasan mereka, padahal bukan.
-    const isLeaf = (k: ApprovalChartPerson) => (children.get(k.userId)?.length ?? 0) === 0 && k.role === "STAFF";
-    const branches = kids.filter((k) => !isLeaf(k));
-    const leaves = kids.filter(isLeaf);
-    return (
-      <div className="oc-node">
-        <PersonCard {...cardProps(p)} />
-        {kids.length > 0 && (
-          <div className="oc-kids">
-            {branches.map((k) => <div key={k.userId} className="oc-kid"><Node p={k} /></div>)}
-            {leaves.length > 0 && (
-              <div className="oc-kid">
-                {/* Kotak grup, bukan rantai: satu stub dari palang ke kotak, di dalamnya kartu-kartu
-                    sejajar. Rel tegak yang menembus kartu (versi lama) terbaca seperti hierarki. */}
-                <div className="oc-leaves">
-                  <div className="oc-leaves-label">{leaves.length} staff</div>
-                  {leaves.map((k) => <PersonCard key={k.userId} {...cardProps(k)} />)}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  };
 
   return (
     <div className="space-y-4">
@@ -262,9 +263,12 @@ export function ApprovalChart() {
             </div>
             <div className="ml-auto flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <button type="button" onClick={() => zoomCenter(1 / 1.2)} className="rounded-md border border-border p-1 hover:bg-accent" aria-label="Perkecil"><ZoomOut className="h-3.5 w-3.5" /></button>
-              <span className="w-10 text-center tabular-nums">{Math.round(view.s * 100)}%</span>
+              <span className="w-10 text-center tabular-nums">{zoomLabel}%</span>
               <button type="button" onClick={() => zoomCenter(1.2)} className="rounded-md border border-border p-1 hover:bg-accent" aria-label="Perbesar"><ZoomIn className="h-3.5 w-3.5" /></button>
               <button type="button" onClick={fitView} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-semibold hover:bg-accent"><Scan className="h-3.5 w-3.5" /> Pas layar</button>
+              <button type="button" onClick={exportPng} disabled={exporting} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-semibold hover:bg-accent disabled:opacity-50" title="Unduh bagan sebagai PNG tajam (2x), apa pun zoom di layar">
+                {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} PNG
+              </button>
               <button type="button" onClick={() => setFull((f) => !f)} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-semibold hover:bg-accent">
                 {full ? <><Minimize2 className="h-3.5 w-3.5" /> Tutup</> : <><Maximize2 className="h-3.5 w-3.5" /> Layar penuh</>}
               </button>
@@ -277,11 +281,11 @@ export function ApprovalChart() {
             className={cn("relative w-full select-none overflow-hidden bg-[radial-gradient(circle,rgba(0,0,0,.06)_1px,transparent_1px)] [background-size:18px_18px]", full ? "min-h-0 flex-1" : "h-[min(72vh,820px)]", panning ? "cursor-grabbing" : "cursor-grab")}
             style={{ touchAction: "none" }}
           >
-            <div ref={innerRef} className="absolute left-0 top-0 w-max" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.s})`, transformOrigin: "0 0" }}>
+            <div ref={innerRef} className="absolute left-0 top-0 w-max" style={{ transformOrigin: "0 0", willChange: "transform" }}>
               {/* Tanpa kotak Board di puncak: tiap pohon berdiri sendiri, berdampingan. BoD tanpa
                   bawahan ikut di baris ini sebagai kartu tunggal. */}
               <div className="flex items-start gap-8 p-4">
-                {trees.map((p) => <Node key={p.userId} p={p} />)}
+                {trees.map((p) => <TreeNode key={p.userId} p={p} childrenMap={children} cardProps={cardProps} />)}
               </div>
             </div>
             {trees.length === 0 && <div className="absolute inset-x-0 top-24 text-center text-xs text-muted-foreground">Belum ada yang ditaruh di bawah siapa pun.</div>}
@@ -316,6 +320,44 @@ export function ApprovalChart() {
 }
 
 const tier = (r: string) => ({ ONE_ABOVE_ALL: 0, BOD: 1, MANAGER: 2, STAFF: 3 }[r] ?? 4);
+
+/**
+ * Satu orang beserta seluruh bawahannya — bagan organisasi ala Corpnet, dengan satu trik supaya
+ * muat: bawahan yang PUNYA bawahan lagi (cabang) dijejer ke samping, bawahan yang tidak punya
+ * (daun) DITUMPUK ke bawah dalam satu kotak. Garisnya CSS (.oc-*).
+ *
+ * Di tingkat MODUL, bukan di dalam komponen induk: komponen yang didefinisikan ulang tiap render
+ * dianggap React sebagai tipe baru, jadi seluruh pohon di-unmount dan di-mount lagi setiap kali
+ * induknya render — itu yang membuat bagan ini pernah tersendat di setiap gerakan.
+ */
+function TreeNode({ p, childrenMap, cardProps }: { p: ApprovalChartPerson; childrenMap: Map<string, ApprovalChartPerson[]>; cardProps: (p: ApprovalChartPerson) => CardProps }) {
+  const kids = childrenMap.get(p.userId) ?? [];
+  // Hanya STAFF tanpa bawahan yang ditumpuk. Manager/BoD tanpa bawahan dapat kolom sendiri —
+  // kalau ikut ditumpuk di atas staff, dia terbaca seperti atasan mereka, padahal bukan.
+  const isLeaf = (k: ApprovalChartPerson) => (childrenMap.get(k.userId)?.length ?? 0) === 0 && k.role === "STAFF";
+  const branches = kids.filter((k) => !isLeaf(k));
+  const leaves = kids.filter(isLeaf);
+  return (
+    <div className="oc-node">
+      <PersonCard {...cardProps(p)} />
+      {kids.length > 0 && (
+        <div className="oc-kids">
+          {branches.map((k) => <div key={k.userId} className="oc-kid"><TreeNode p={k} childrenMap={childrenMap} cardProps={cardProps} /></div>)}
+          {leaves.length > 0 && (
+            <div className="oc-kid">
+              {/* Kotak grup, bukan rantai: satu stub dari palang ke kotak, di dalamnya kartu-kartu
+                  sejajar. Rel tegak yang menembus kartu (versi lama) terbaca seperti hierarki. */}
+              <div className="oc-leaves">
+                <div className="oc-leaves-label">{leaves.length} staff</div>
+                {leaves.map((k) => <PersonCard key={k.userId} {...cardProps(k)} />)}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 /** "09:00" → "9:00 AM" — ringkas, tanpa detik, tanpa nol depan; kartunya cuma 144px. */
 const to12 = (hhmm: string) => { const [h, m] = hhmm.split(":").map(Number); if (Number.isNaN(h)) return hhmm; const ap = h >= 12 ? "PM" : "AM"; return `${((h + 11) % 12) + 1}:${String(m ?? 0).padStart(2, "0")} ${ap}`; };
 const label = (p: ApprovalChartPerson) => p.name ?? p.email;
