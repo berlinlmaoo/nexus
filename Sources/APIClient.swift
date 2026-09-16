@@ -1,5 +1,11 @@
 import Foundation
 
+/// JSON `null` for an absent value. `value ?? NSNull()` does not type-check when `value` is a
+/// `String?` — `??` wants both sides to be the same type, and NSNull is not a String — and
+/// `nil as Any` makes JSONSerialization throw. Widening to `Any?` first is the spelling that works,
+/// and it keeps "clear this field" (explicit null) distinct from "leave it alone" (key omitted).
+func jsonOrNull(_ value: Any?) -> Any { value ?? NSNull() }
+
 /// Bytes as a person reads them. Lives here rather than in a view because the networking layer
 /// names sizes in its own refusals ("this file is 140.2 MB, the limit is 64 MB") — and a view file
 /// that a future refactor deletes must not be able to break uploads.
@@ -783,7 +789,7 @@ struct APIClient {
         // divisi" akan gagal sementara "pindah divisi" berhasil — bentuk kerusakan yang paling
         // sulit dilihat, karena separuh fiturnya jalan.
         try await teamAction(["action": "set-team-division", "teamId": teamId,
-                              "divisionId": divisionId ?? NSNull()])
+                              "divisionId": jsonOrNull(divisionId)])
     }
 
     @discardableResult
@@ -798,8 +804,8 @@ struct APIClient {
     func teamUpdateShift(teamId: String, enabled: Bool, start: String?, end: String?) async throws -> Bool {
         try await teamAction(["action": "update-attendance-shift", "teamId": teamId,
                               "attendanceShiftOverrideEnabled": enabled,
-                              "attendanceShiftStartTime": (enabled ? start : nil) ?? NSNull(),
-                              "attendanceShiftEndTime": (enabled ? end : nil) ?? NSNull()])
+                              "attendanceShiftStartTime": jsonOrNull(enabled ? start : nil),
+                              "attendanceShiftEndTime": jsonOrNull(enabled ? end : nil)])
     }
 
     func teamCreate(name: String) async throws -> Team {
@@ -882,7 +888,7 @@ struct APIClient {
         var req = makeRequest("/api/workspaces/members", method: "PATCH")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "memberId": memberId, "workspaceId": workspaceId, "approverId": approverId ?? NSNull(),
+            "memberId": memberId, "workspaceId": workspaceId, "approverId": jsonOrNull(approverId),
         ])
         _ = try await run(req, decode: SuccessResponse.self)
         return true
@@ -1907,9 +1913,9 @@ struct APIClient {
     @discardableResult
     func setAttendanceShift(memberId: String, workspaceId: String, start: String?, end: String?, byDay: [String: [String: String]]?) async throws -> Bool {
         var body: [String: Any] = ["memberId": memberId, "workspaceId": workspaceId]
-        body["attendanceShiftStartTime"] = start ?? NSNull()
-        body["attendanceShiftEndTime"] = end ?? NSNull()
-        body["attendanceShiftByDay"] = (byDay?.isEmpty == false ? byDay! : NSNull())
+        body["attendanceShiftStartTime"] = jsonOrNull(start)
+        body["attendanceShiftEndTime"] = jsonOrNull(end)
+        body["attendanceShiftByDay"] = jsonOrNull(byDay?.isEmpty == false ? byDay : nil)
         var req = makeRequest("/api/workspaces/members", method: "PATCH")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -1932,7 +1938,7 @@ struct APIClient {
     @discardableResult
     func setDayoffQuota(userId: String, quota: Int?, workspaceId: String) async throws -> Bool {
         var body: [String: Any] = ["userId": userId, "workspaceId": workspaceId]
-        body["quota"] = quota ?? NSNull()
+        body["quota"] = jsonOrNull(quota)
         var req = makeRequest("/api/attendance/dayoffs", method: "PATCH")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)

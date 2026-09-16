@@ -172,7 +172,7 @@ extension APIClient {
         // melempar, sehingga MELEPAS tautan gagal sementara memasangnya berhasil — cacat yang cuma
         // muncul di satu arah dan karenanya mudah lolos dari pengujian.
         req.httpBody = try JSONSerialization.data(
-            withJSONObject: ["googleWorkspaceEmail": email ?? NSNull()])
+            withJSONObject: ["googleWorkspaceEmail": jsonOrNull(email)])
         _ = try await vaultRun(req, decode: GoogleLinkResponse.self)
         return true
     }
