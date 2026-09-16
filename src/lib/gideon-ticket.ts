@@ -85,8 +85,11 @@ async function loadEvidence(url: string | null): Promise<string | null> {
  * on the record, never a reason to skip it.
  */
 const DATE_RULES = (filedDateKey: string) => [
-  `- Tanggal acuan = ${filedDateKey} — tanggal tiket ini dibuat, waktu Jakarta. Mulai dari situ.`,
-  `- Kalau pelapor menyebut tanggal lain secara eksplisit di teks tiketnya, pakai tanggal itu.`,
+  `- Kalau JUDUL atau ISI tiket menyebut tanggal ("15 SEPT 26", "tanggal 21", "kemarin 3 September"), ITULAH`,
+  `  tanggal acuan — selalu, termasuk saat kamu meninjau ulang tiket yang sama. Orang mengajukan tiket`,
+  `  SESUDAH harinya lewat, jadi tanggal pembuatan tiket hampir selalu bukan hari yang dikeluhkan.`,
+  `- Hanya kalau judul dan isi sama sekali tidak menyebut tanggal: tanggal acuan = ${filedDateKey} (tanggal`,
+  `  tiket dibuat, waktu Jakarta). "Kemarin" dihitung dari tanggal itu.`,
   `- Foto TIDAK PERNAH jadi sumber tanggal. Foto itu bukti pendukung, bukan penentu hari.`,
   `- "Tanggal di foto tidak terbaca" BUKAN alasan untuk tidak memanggil tool. Panggil catatannya pakai`,
   `  tanggal acuan dulu, baru nilai apakah fotonya mendukung.`,
