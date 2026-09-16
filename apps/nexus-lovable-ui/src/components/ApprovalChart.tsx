@@ -57,69 +57,9 @@ export function ApprovalChart() {
   const dragged = dragId ? byId.get(dragId) ?? null : null;
   const forbidden = useMemo(() => (dragged ? descendantsOf(dragged.userId).add(dragged.userId) : new Set<string>()), [dragged, children]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (chart.isLoading) return <div className="flex justify-center py-16 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>;
-  if (chart.isError || !chart.data) return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">Bagan tidak bisa dimuat — butuh akses BoD.</div>;
-
-  const roots = people.filter((p) => !p.approverId).sort((a, b) => tier(a.role) - tier(b.role) || label(a).localeCompare(label(b), "id"));
-  const isSenior = (p: ApprovalChartPerson) => p.role === "BOD" || p.role === "ONE_ABOVE_ALL";
-  const hasKids = (p: ApprovalChartPerson) => (children.get(p.userId)?.length ?? 0) > 0;
-  // BoD/OAA tanpa bawahan tetap digambar sebagai kartu tunggal di baris atas, sejajar BoD lain.
-  // Mereka memang tidak punya siapa-siapa untuk disetujui, tapi menghilangkannya dari kanvas
-  // membuat "siapa saja BoD-nya" tidak terjawab — dan itu pertanyaan yang bagan ini harus jawab.
-  const trees = roots.filter((p) => hasKids(p) || isSenior(p));
-  const alone = roots.filter((p) => !isSenior(p) && !hasKids(p));
-  const unplacedCount = roots.filter((p) => !isSenior(p)).length; // pohon tanpa atasan ikut dihitung
-  const busy = setApprover.isPending;
-
-  const dropProps = (targetId: string | null) => ({
-    onDragOver: (e: React.DragEvent) => { if (dragged && !(targetId && forbidden.has(targetId))) { e.preventDefault(); setOverId(targetId ?? "__none__"); } },
-    onDragLeave: () => setOverId((c) => (c === (targetId ?? "__none__") ? null : c)),
-    onDrop: (e: React.DragEvent) => { e.preventDefault(); setOverId(null); if (dragged) move(dragged, targetId); setDragId(null); },
-  });
-
-  const cardProps = (p: ApprovalChartPerson) => ({
-    p, busy, dragging: dragId === p.userId, over: overId === p.userId, droppable: !!dragged && !forbidden.has(p.userId),
-    reports: children.get(p.userId)?.length ?? 0, rootless: !p.approverId && !isSenior(p),
-    onDragStart: () => setDragId(p.userId), onDragEnd: () => { setDragId(null); setOverId(null); }, onClick: () => setPicker(p),
-    drop: dropProps(p.userId),
-  });
-
-  /**
-   * Satu orang beserta seluruh bawahannya — bagan organisasi ala Corpnet, dengan satu trik supaya
-   * muat: bawahan yang PUNYA bawahan lagi (cabang) dijejer ke samping, bawahan yang tidak punya
-   * (daun) DITUMPUK ke bawah dalam satu kolom. Tujuh staff di bawah satu manager jadi satu kolom
-   * setinggi tujuh kartu, bukan tujuh kolom — dan lebar bagan ditentukan jumlah cabang, yang sedikit.
-   * Garisnya CSS (.oc-*), lihat <style>.
-   */
-  const Node = ({ p }: { p: ApprovalChartPerson }) => {
-    const kids = children.get(p.userId) ?? [];
-    // Hanya STAFF tanpa bawahan yang ditumpuk. Manager/BoD tanpa bawahan dapat kolom sendiri —
-    // kalau ikut ditumpuk di atas staff, dia terbaca seperti atasan mereka, padahal bukan.
-    const isLeaf = (k: ApprovalChartPerson) => (children.get(k.userId)?.length ?? 0) === 0 && k.role === "STAFF";
-    const branches = kids.filter((k) => !isLeaf(k));
-    const leaves = kids.filter(isLeaf);
-    return (
-      <div className="oc-node">
-        <PersonCard {...cardProps(p)} />
-        {kids.length > 0 && (
-          <div className="oc-kids">
-            {branches.map((k) => <div key={k.userId} className="oc-kid"><Node p={k} /></div>)}
-            {leaves.length > 0 && (
-              <div className="oc-kid">
-                {/* Kotak grup, bukan rantai: satu stub dari palang ke kotak, di dalamnya kartu-kartu
-                    sejajar. Rel tegak yang menembus kartu (versi lama) terbaca seperti hierarki. */}
-                <div className="oc-leaves">
-                  <div className="oc-leaves-label">{leaves.length} staff</div>
-                  {leaves.map((k) => <PersonCard key={k.userId} {...cardProps(k)} />)}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  };
-
+  // SEMUA hook di atas return awal di bawah. Blok kanvas ini pernah ditaruh sesudahnya: saat data
+  // bagan selesai dimuat jumlah hook berubah dan React melempar #310 — seluruh Control Room jatuh
+  // ke "This page didn't load".
   // ── Kanvas bebas ──────────────────────────────────────────────────────────
   // Bagan digambar pada ukuran aslinya di dalam wadah yang tingginya tetap, lalu dipindah dan
   // diskalakan dengan satu transform: translate(x,y) scale(s). Semua gerakan mengubah tiga angka
@@ -146,7 +86,7 @@ export function ApprovalChart() {
     const ro = new ResizeObserver(fitView);
     if (wrapRef.current) ro.observe(wrapRef.current);
     return () => ro.disconnect();
-  }, [fitView, full, trees.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fitView, full, people.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Zoom di sekitar satu titik layar (koordinat relatif ke wadah), supaya yang di bawah kursor diam. */
   const zoomAt = (factor: number, cx: number, cy: number) => setView((v) => {
@@ -221,6 +161,69 @@ export function ApprovalChart() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [full]);
+
+  if (chart.isLoading) return <div className="flex justify-center py-16 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>;
+  if (chart.isError || !chart.data) return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">Bagan tidak bisa dimuat — butuh akses BoD.</div>;
+
+  const roots = people.filter((p) => !p.approverId).sort((a, b) => tier(a.role) - tier(b.role) || label(a).localeCompare(label(b), "id"));
+  const isSenior = (p: ApprovalChartPerson) => p.role === "BOD" || p.role === "ONE_ABOVE_ALL";
+  const hasKids = (p: ApprovalChartPerson) => (children.get(p.userId)?.length ?? 0) > 0;
+  // BoD/OAA tanpa bawahan tetap digambar sebagai kartu tunggal di baris atas, sejajar BoD lain.
+  // Mereka memang tidak punya siapa-siapa untuk disetujui, tapi menghilangkannya dari kanvas
+  // membuat "siapa saja BoD-nya" tidak terjawab — dan itu pertanyaan yang bagan ini harus jawab.
+  const trees = roots.filter((p) => hasKids(p) || isSenior(p));
+  const alone = roots.filter((p) => !isSenior(p) && !hasKids(p));
+  const unplacedCount = roots.filter((p) => !isSenior(p)).length; // pohon tanpa atasan ikut dihitung
+  const busy = setApprover.isPending;
+
+  const dropProps = (targetId: string | null) => ({
+    onDragOver: (e: React.DragEvent) => { if (dragged && !(targetId && forbidden.has(targetId))) { e.preventDefault(); setOverId(targetId ?? "__none__"); } },
+    onDragLeave: () => setOverId((c) => (c === (targetId ?? "__none__") ? null : c)),
+    onDrop: (e: React.DragEvent) => { e.preventDefault(); setOverId(null); if (dragged) move(dragged, targetId); setDragId(null); },
+  });
+
+  const cardProps = (p: ApprovalChartPerson) => ({
+    p, busy, dragging: dragId === p.userId, over: overId === p.userId, droppable: !!dragged && !forbidden.has(p.userId),
+    reports: children.get(p.userId)?.length ?? 0, rootless: !p.approverId && !isSenior(p),
+    onDragStart: () => setDragId(p.userId), onDragEnd: () => { setDragId(null); setOverId(null); }, onClick: () => setPicker(p),
+    drop: dropProps(p.userId),
+  });
+
+  /**
+   * Satu orang beserta seluruh bawahannya — bagan organisasi ala Corpnet, dengan satu trik supaya
+   * muat: bawahan yang PUNYA bawahan lagi (cabang) dijejer ke samping, bawahan yang tidak punya
+   * (daun) DITUMPUK ke bawah dalam satu kolom. Tujuh staff di bawah satu manager jadi satu kolom
+   * setinggi tujuh kartu, bukan tujuh kolom — dan lebar bagan ditentukan jumlah cabang, yang sedikit.
+   * Garisnya CSS (.oc-*), lihat <style>.
+   */
+  const Node = ({ p }: { p: ApprovalChartPerson }) => {
+    const kids = children.get(p.userId) ?? [];
+    // Hanya STAFF tanpa bawahan yang ditumpuk. Manager/BoD tanpa bawahan dapat kolom sendiri —
+    // kalau ikut ditumpuk di atas staff, dia terbaca seperti atasan mereka, padahal bukan.
+    const isLeaf = (k: ApprovalChartPerson) => (children.get(k.userId)?.length ?? 0) === 0 && k.role === "STAFF";
+    const branches = kids.filter((k) => !isLeaf(k));
+    const leaves = kids.filter(isLeaf);
+    return (
+      <div className="oc-node">
+        <PersonCard {...cardProps(p)} />
+        {kids.length > 0 && (
+          <div className="oc-kids">
+            {branches.map((k) => <div key={k.userId} className="oc-kid"><Node p={k} /></div>)}
+            {leaves.length > 0 && (
+              <div className="oc-kid">
+                {/* Kotak grup, bukan rantai: satu stub dari palang ke kotak, di dalamnya kartu-kartu
+                    sejajar. Rel tegak yang menembus kartu (versi lama) terbaca seperti hierarki. */}
+                <div className="oc-leaves">
+                  <div className="oc-leaves-label">{leaves.length} staff</div>
+                  {leaves.map((k) => <PersonCard key={k.userId} {...cardProps(k)} />)}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-4">
