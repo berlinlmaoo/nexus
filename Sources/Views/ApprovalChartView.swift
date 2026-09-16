@@ -351,7 +351,7 @@ private struct ZoomableCanvas<Content: View>: UIViewRepresentable {
     func makeCoordinator() -> ZoomCanvasCoordinator { ZoomCanvasCoordinator() }
 
     func makeUIView(context: Context) -> ZoomCanvasScrollView {
-        let scroll = CanvasScrollView()
+        let scroll = ZoomCanvasScrollView()
         scroll.delegate = context.coordinator
         scroll.showsVerticalScrollIndicator = false
         scroll.showsHorizontalScrollIndicator = false
