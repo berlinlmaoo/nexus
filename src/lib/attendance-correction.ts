@@ -52,8 +52,10 @@ export const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/
  * the reporter noticed the XP deduction, but the deduction is downstream of a wrong AttendanceRecord,
  * so fixing the record IS the fix and the refund rides along with the approval.
  *
- * DAY_OFF is absent from THIS list on purpose: a TIME correction never belongs on a day-off ticket.
- * But a PENALTY CANCELLATION does — the day-off allowance that people complain about losing is, in
+ * DAY_OFF sits in this list for ONE shape of correction only: recording a day that has NO record at
+ * all (the person was on duty — shooting, an event — and the day still reads as absent after the
+ * penalties were refunded). Moving the times of an existing record is refused on a DAY_OFF ticket in
+ * proposeAttendanceCorrection below; that never restores an allowance. A PENALTY CANCELLATION always does — the day-off allowance that people complain about losing is, in
  * every case seen so far, the nightly cron's AUTO deduction (alpha / late >120), and approving a
  * cancellation already restores that allowance together with the XP (`autoDayOffs`). Keeping DAY_OFF
  * locked out of that remedy meant Violet's ticket (13 Sep 2026: permit cancelled, sick, one day-off
@@ -61,7 +63,7 @@ export const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/
  * about. So `openProposal` takes `allowDayOff`, set only by the cancellation remedy. GIDEON still
  * cannot touch a day off the person CHOSE: a cancellation with nothing auto-deducted is refused below.
  */
-export const CORRECTABLE_COMPLAINT_CATEGORIES: readonly string[] = ['ATTENDANCE', 'EXP']
+export const CORRECTABLE_COMPLAINT_CATEGORIES: readonly string[] = ['ATTENDANCE', 'EXP', 'DAY_OFF']
 const CANCELLATION_COMPLAINT_CATEGORIES: readonly string[] = ['ATTENDANCE', 'EXP', 'DAY_OFF']
 
 // A check-out further than this from its check-in is a typo, not a shift. Night shifts still fit.
@@ -445,6 +447,13 @@ export async function proposeAttendanceCorrection(
   // actually typed it, which is the whole point of the separate identity.
   const authorId = proposedById ?? (await getGideonUserId())
 
+  // Di tiket DAY_OFF, koreksi hanya boleh MENCATAT hari yang belum punya catatan. Menggeser jam catatan
+  // yang sudah ada tidak mengembalikan jatah apa pun — itu urusan pembatalan potongan.
+  if (complaint.category === 'DAY_OFF' && record) {
+    throw new Error(
+      `Ticket ${complaintId} is a DAY_OFF ticket and ${dateKey} already has an attendance record; a time correction there restores nothing. Propose a penalty cancellation instead.`,
+    )
+  }
   // Approve koreksi jam juga MEMBALIKKAN potongan hari itu (XP + jatah day-off otomatis) — lihat
   // cancelAttendancePenaltiesForDate di route approve. Disimpan di baris usulan supaya kartunya bisa
   // menyebutnya; tanpa ini BoD melihat "ubah jam" dan mengira jatah day off-nya tidak ikut.
