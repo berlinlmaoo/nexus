@@ -41,6 +41,7 @@ struct DashboardView: View {
     /// Passkey nudge. Only shown to someone who has none, and only until they dismiss it once —
     /// a prompt that keeps coming back after being answered stops being a prompt and becomes noise.
     @State private var showPasskeyNudge = false
+    @State private var xpRulesOpen = false
     @State private var passkeyBusy = false
     @State private var passkeyNote: String?
     @AppStorage("passkeyNudgeDismissed") private var passkeyNudgeDismissed = false
@@ -602,18 +603,91 @@ struct DashboardView: View {
         .nexusCard()
     }
 
+    // Mirror of the web's XpRulesCard: the same header, and the same three tables underneath once it
+    // is opened. The card shipped as a plain HStack with a chevron drawn on it — a button that was not
+    // a button, which is exactly what the BoD tapped on 16 Sep 2026 and reported. The tables are
+    // literals here, as on the web; the rules live in policy, not in an endpoint.
     private var xpRulesCard: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "gift.fill").font(.system(size: 16)).foregroundStyle(NX.foreground)
-                .frame(width: 40, height: 40).background(NX.muted, in: Circle())
-            VStack(alignment: .leading, spacing: 2) {
-                Text(T("XP / Points Rules")).font(NXFont.text(15, .bold)).foregroundStyle(NX.foreground)
-                Text(T("Deductions, bonuses & monthly reward tiers")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { xpRulesOpen.toggle() }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "gift.fill").font(.system(size: 16)).foregroundStyle(NX.foreground)
+                        .frame(width: 40, height: 40).background(NX.muted, in: Circle())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(T("XP / Points Rules")).font(NXFont.text(15, .bold)).foregroundStyle(NX.foreground)
+                        Text(T("Deductions, bonuses & monthly reward tiers")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.down").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.mutedFg)
+                        .rotationEffect(.degrees(xpRulesOpen ? 180 : 0))
+                }
+                .contentShape(Rectangle())
             }
-            Spacer()
-            Image(systemName: "chevron.down").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.mutedFg)
+            .buttonStyle(.plain)
+            .accessibilityLabel(T("XP / Points Rules"))
+            .accessibilityValue(xpRulesOpen ? T("Expanded") : T("Collapsed"))
+
+            if xpRulesOpen {
+                VStack(alignment: .leading, spacing: 18) {
+                    Divider().overlay(NX.border)
+                    xpRulesSection(title: T("XP Penalties"), icon: "arrow.down.right", tone: NX.danger, rows: XpRules.penalties)
+                    xpRulesSection(title: T("XP Bonuses"), icon: "arrow.up.right", tone: NX.success, rows: XpRules.bonuses)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(T("Tier rewards (end of period)").uppercased())
+                            .font(NXFont.text(11, .bold)).tracking(0.6).foregroundStyle(NX.mutedFg)
+                        ForEach(XpRules.tiers, id: \.label) { t in
+                            HStack(spacing: 10) {
+                                Text(t.range).font(NXFont.text(14, .black)).monospacedDigit()
+                                Text(t.label.uppercased()).font(NXFont.text(11, .bold)).tracking(0.5)
+                                Text(t.reward).font(NXFont.text(13, .semibold)).lineLimit(2)
+                                Spacer(minLength: 0)
+                            }
+                            .foregroundStyle(t.tone)
+                            .padding(.horizontal, 12).padding(.vertical, 8)
+                            .background(t.tone.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(t.tone.opacity(0.25)))
+                        }
+                    }
+                    Text(T("\"Automatic\" is calculated by the system from attendance & end of period. \"Manual\" is awarded by Head/HR/management based on their judgment."))
+                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.top, 14)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
         .nexusCard(padding: 14)
+        .clipped()
+    }
+
+    private func xpRulesSection(title: String, icon: String, tone: Color, rows: [XpRules.Row]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 5) {
+                Image(systemName: icon).font(.system(size: 10, weight: .bold))
+                Text(title.uppercased()).font(NXFont.text(11, .bold)).tracking(0.6)
+            }
+            .foregroundStyle(tone)
+            ForEach(Array(rows.enumerated()), id: \.offset) { i, r in
+                if i > 0 { Divider().overlay(NX.border.opacity(0.6)) }
+                HStack(alignment: .top, spacing: 10) {
+                    Text(r.xp).font(NXFont.text(14, .black)).monospacedDigit().foregroundStyle(tone)
+                        .frame(width: 84, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(T(r.rule)).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
+                        Text(T(r.note)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Text(r.auto ? T("Automatic") : T("Manual"))
+                        .font(NXFont.text(10, .bold))
+                        .foregroundStyle(r.auto ? NX.violetText : NX.mutedFg)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(r.auto ? NX.accentBg : NX.muted, in: Capsule())
+                }
+                .padding(.vertical, 5)
+            }
+        }
     }
 
     // MARK: passkey nudge
@@ -952,4 +1026,29 @@ struct StatCardView: View {
                 .foregroundStyle(.white.opacity(0.5)).padding(10)
         }
     }
+}
+
+/// The XP policy as shown on the web dashboard (apps/nexus-lovable-ui/src/components/XpRulesCard.tsx).
+/// Keep the two in step by hand: there is no rules endpoint, and the numbers are policy, not config.
+enum XpRules {
+    struct Row { let xp: String; let rule: String; let note: String; let auto: Bool }
+    struct Tier { let range: String; let label: String; let reward: String; let tone: Color }
+
+    static let penalties: [Row] = [
+        Row(xp: "-1 XP/min", rule: "Late check-in", note: "Max 120 min. >120 → docks a day off", auto: true),
+        Row(xp: "-25 XP", rule: "No check-out (forgot to log out)", note: "Per incident", auto: true),
+        Row(xp: "-30 XP", rule: "Left the office without manager approval", note: "Per incident", auto: false),
+        Row(xp: "-150 XP", rule: "No-show, no heads-up (absent)", note: "Per day", auto: true),
+    ]
+    static let bonuses: [Row] = [
+        Row(xp: "+50 XP", rule: "Zero absences for a full month", note: "Showing up consistently", auto: true),
+        Row(xp: "+30 XP", rule: "Finish a side quest from your Head", note: "Head's call", auto: false),
+        Row(xp: "+50 XP", rule: "Performance beyond target", note: "Management's call", auto: false),
+        Row(xp: "+20 XP", rule: "Feedback the company adopts", note: "HR's call", auto: false),
+    ]
+    static let tiers: [Tier] = [
+        Tier(range: "1400 – 1500 XP", label: "Excellent", reward: "🎁 1 extra day off", tone: NX.success),
+        Tier(range: "1300 – 1400 XP", label: "Good", reward: "🍾 1 free bottle at a PATS outlet", tone: NX.warning),
+        Tier(range: "< 800 XP", label: "Review", reward: "⚠️ Performance review by Head + HR", tone: NX.danger),
+    ]
 }
