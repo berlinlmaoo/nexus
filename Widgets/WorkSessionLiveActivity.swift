@@ -128,12 +128,12 @@ private func elapsed(_ state: WorkSessionAttributes.ContentState) -> some View {
 
 private func caption(_ state: WorkSessionAttributes.ContentState) -> String {
     if state.isUnconfirmed {
-        return "Saved on this phone — sending when the server is back"
+        return "Saved on your phone. Sends itself when NEXUS is back."
     }
     if state.isPending {
         return state.pendingCount == 1
-            ? "1 tap still to send"
-            : "\(state.pendingCount) taps still to send"
+            ? "1 record waiting to be sent to NEXUS"
+            : "\(state.pendingCount) records waiting to be sent to NEXUS"
     }
     if let out = state.expectedOutAt {
         return "Until \(out.formatted(date: .omitted, time: .shortened))"

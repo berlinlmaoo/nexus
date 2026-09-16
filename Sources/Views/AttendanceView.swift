@@ -15,6 +15,12 @@ struct AttendanceView: View {
     @State private var pendingAction: Action?
     @State private var busy = false
     @State private var banner: Banner?
+    /// `load()` gagal karena NEXUS tidak terjangkau (Cloudflare 52x/530, nginx 502–504, tanpa
+    /// koneksi) — bukan karena server menolak. Dua hal itu butuh dua kartu yang berbeda: yang
+    /// pertama berarti "absen tetap bisa, tersimpan di HP"; yang kedua berarti ada yang salah.
+    @State private var serverDown = false
+    /// Tahap absen yang sedang berjalan, digambar sebagai kartu di atas layar. Nil = tidak ada.
+    @State private var flow: Flow?
 
     @State private var pendingSelfie: Data?
     @State private var pendingCoords: (lat: Double, lng: Double)?
@@ -37,6 +43,23 @@ struct AttendanceView: View {
 
     enum Action { case checkIn, checkOut }
     struct Banner: Identifiable { let id = UUID(); let text: String; let good: Bool }
+    /// Absen adalah satu-satunya ketukan di aplikasi ini yang tidak boleh berakhir dengan "sudah
+    /// belum ya?". Tahapannya digambar sebagai kartu di tengah layar — mencari lokasi, mengirim,
+    /// lalu hasilnya — supaya orang yang menekan tombol melihat prosesnya, bukan cuma tombol yang
+    /// redup sebentar lalu satu baris kecil di bawah.
+    enum Flow: Equatable {
+        case locating(Action)
+        case sending(Action)
+        case done(Action, String)          // jam yang tercatat
+        case savedOffline(Action, String)  // jam yang akan dikreditkan
+        case failed(Action, String)
+        var action: Action {
+            switch self {
+            case .locating(let a), .sending(let a), .done(let a, _), .savedOffline(let a, _), .failed(let a, _): return a
+            }
+        }
+        var isBusy: Bool { if case .locating = self { return true }; if case .sending = self { return true }; return false }
+    }
 
     private var rec: AttendanceRecord? { today?.today }
     /// A PREVIOUS day's open check-in the user forgot to close. While this exists the backend blocks a
@@ -67,7 +90,7 @@ struct AttendanceView: View {
                 VStack(spacing: 12) {
                     hero
                     if loading { loadingRow }
-                    if let error { errorBanner(error) }
+                    if serverDown { downCard } else if let error { errorBanner(error) }
                     if needsReflection { reflectionCard }
                     presenceButtons
                     // Say WHY the button is greyed out, right where the greyed-out button is.
@@ -86,8 +109,8 @@ struct AttendanceView: View {
                     // did not would only find out at payroll.
                     if queue.count > 0 {
                         infoBanner(queue.count == 1
-                                   ? T("1 attendance saved offline — not sent yet.")
-                                   : "\(queue.count) " + T("attendance records saved offline — not sent yet."),
+                                   ? T("1 attendance record is on this phone, waiting to be sent.")
+                                   : "\(queue.count) " + T("attendance records are on this phone, waiting to be sent."),
                                    tone: .warning)
                     }
                     metricsGrid
@@ -108,6 +131,7 @@ struct AttendanceView: View {
                 .padding(16)
             }
         }
+        .overlay { flowOverlay.animation(.easeOut(duration: 0.18), value: flow) }
         .navigationTitle(T("Attendance"))
         .navigationBarTitleDisplayMode(.inline)
         .task {
@@ -383,6 +407,120 @@ struct AttendanceView: View {
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.danger.opacity(0.25)))
     }
 
+    /// NEXUS tidak terjangkau. Bukan kartu merah "Server error (530)": angka itu tidak berarti apa-apa
+    /// bagi orang yang cuma mau absen, dan yang penting justru kalimat keduanya — absen tetap bisa.
+    private var downCard: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "wifi.slash").font(.system(size: 14, weight: .bold)).foregroundStyle(amberTitle)
+                Text(T("NEXUS is down right now")).font(NXFont.text(14, .bold)).foregroundStyle(amberTitle)
+            }
+            Text(T("Offline check-in mode is on. Your check-in and check-out are saved on this phone with the time you tap, and sent by themselves the moment NEXUS is back."))
+                .font(NXFont.text(12)).foregroundStyle(amberBody)
+                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+            Button { Task { await load() } } label: {
+                Text(T("Check again")).font(NXFont.text(12, .bold)).foregroundStyle(amberTitle)
+                    .padding(.horizontal, 14).padding(.vertical, 7)
+                    .background(amberBorder.opacity(0.35), in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 12).padding(.vertical, 12)
+        .background(amberSurface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(amberBorder))
+    }
+
+    /// Kartu proses absen di atas layar: cincin berputar saat mencari lokasi dan mengirim, centang
+    /// saat berhasil, ikon HP saat tersimpan offline. Latar diredupkan supaya tidak ada ketukan
+    /// kedua selama yang pertama belum selesai.
+    @ViewBuilder private var flowOverlay: some View {
+        if let flow {
+            let isIn = flow.action == .checkIn
+            ZStack {
+                Color.black.opacity(0.35).ignoresSafeArea()
+                    .onTapGesture { if !flow.isBusy { self.flow = nil } }
+                VStack(spacing: 14) {
+                    ZStack {
+                        Circle().fill(flowTint(flow).opacity(0.14)).frame(width: 72, height: 72)
+                        switch flow {
+                        case .locating, .sending:
+                            ProgressView().controlSize(.large).tint(flowTint(flow))
+                        case .done:
+                            Image(systemName: "checkmark").font(.system(size: 30, weight: .bold)).foregroundStyle(flowTint(flow))
+                        case .savedOffline:
+                            Image(systemName: "iphone.and.arrow.forward").font(.system(size: 28, weight: .bold)).foregroundStyle(flowTint(flow))
+                        case .failed:
+                            Image(systemName: "xmark").font(.system(size: 30, weight: .bold)).foregroundStyle(flowTint(flow))
+                        }
+                    }
+                    Text(flowTitle(flow)).font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)
+                        .multilineTextAlignment(.center)
+                    Text(flowBody(flow)).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                        .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                    if flow.isBusy {
+                        // Dua tahap, digambar sebagai dua ruas: lokasi lalu kirim.
+                        HStack(spacing: 6) {
+                            Capsule().fill(flowTint(flow)).frame(height: 4)
+                            Capsule().fill({ if case .sending = flow { return flowTint(flow) } else { return NX.muted } }()).frame(height: 4)
+                        }
+                        .frame(width: 160)
+                        HStack(spacing: 14) {
+                            Text(T("Location")).font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
+                            Text(isIn ? T("Check in") : T("Check out")).font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
+                        }
+                    } else {
+                        Button { self.flow = nil } label: {
+                            Text(T("OK")).font(NXFont.text(14, .bold)).foregroundStyle(.white)
+                                .frame(maxWidth: .infinity).padding(.vertical, 11)
+                                .background(flowTint(flow), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(22)
+                .frame(maxWidth: 320)
+                .background(NX.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(NX.border))
+                .shadow(color: .black.opacity(0.25), radius: 30, y: 14)
+                .padding(24)
+            }
+            .transition(.opacity)
+        }
+    }
+
+    private func flowTint(_ f: Flow) -> Color {
+        switch f {
+        case .locating, .sending: return NX.violet
+        case .done: return f.action == .checkIn ? Color(hex: "#10b981") : Color(hex: "#f43f5e")
+        case .savedOffline: return NX.warning
+        case .failed: return NX.danger
+        }
+    }
+    private func flowTitle(_ f: Flow) -> String {
+        let isIn = f.action == .checkIn
+        switch f {
+        case .locating: return T("Getting your location…")
+        case .sending: return isIn ? T("Checking you in…") : T("Checking you out…")
+        case .done(_, let t): return (isIn ? T("Checked in") : T("Checked out")) + " · " + t
+        case .savedOffline: return isIn ? T("Check-in saved on this phone") : T("Check-out saved on this phone")
+        case .failed: return isIn ? T("Check-in failed") : T("Check-out failed")
+        }
+    }
+    private func flowBody(_ f: Flow) -> String {
+        switch f {
+        case .locating: return T("Hold on while the phone finds where you are.")
+        case .sending: return T("Sending your selfie and location to NEXUS.")
+        case .done: return f.action == .checkIn ? T("Have a good one. Don't forget to check out.") : T("Done for today. See you tomorrow.")
+        case .savedOffline(_, let t): return T("NEXUS can't be reached, so this is kept here with the time you tapped") + " (\(t)). " + T("It sends itself once NEXUS is back — keep the app installed.")
+        case .failed(_, let msg): return msg
+        }
+    }
+    private static func clock(_ d: Date = Date()) -> String {
+        let f = DateFormatter(); f.dateFormat = "HH:mm"; f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(identifier: "Asia/Jakarta")
+        return f.string(from: d)
+    }
+
     private func infoBanner(_ text: String, tone: ChipTone) -> some View {
         Text(text).font(NXFont.text(12, .semibold)).foregroundStyle(tone.fg)
             .frame(maxWidth: .infinity).multilineTextAlignment(.center)
@@ -427,10 +565,12 @@ struct AttendanceView: View {
         // claimed time from `deviceAt` and flags a record offline on that field, neither of which a
         // live tap sends. All it buys is the ability to recognise a replay of THIS tap.
         let tapId = UUID().uuidString
+        flow = .locating(action)
         do {
             let fix = try await loc.currentFix()
             pendingCoords = (fix.latitude, fix.longitude)
             pendingFix = fix
+            flow = .sending(action)
             let outcome: AttendanceOutcome = try await {
                 switch action {
                 case .checkIn: return try await APIClient.shared.checkIn(lat: fix.latitude, lng: fix.longitude, selfie: selfie, fix: fix, clientId: tapId)
@@ -440,20 +580,27 @@ struct AttendanceView: View {
             switch outcome {
             case .success:
                 Haptics.success()
+                let at = Self.clock()
+                flow = .done(action, at)
                 banner = Banner(text: action == .checkIn ? T("Check-in successful ✓") : T("Check-out successful ✓"), good: true)
                 if action == .checkOut { reflection = "" }
                 await load()
+                // Kartunya menutup sendiri; tombol OK ada untuk yang tidak mau menunggu.
+                try? await Task.sleep(nanoseconds: 1_600_000_000)
+                if flow == .done(action, at) { flow = nil }
             case .outsideRadius:
                 Haptics.warning()
+                flow = nil
                 offsiteReason = ""; showOffsite = true
             }
-        } catch APIError.unauthorized { auth.logout() }
+        } catch APIError.unauthorized { flow = nil; auth.logout() }
         catch APIError.offline {
             // The server was unreachable, so nothing was recorded there. Keep the tap instead of
             // losing it: attendance is the one thing that cannot be re-created honestly later.
             // Only this error queues — anything the server actually answered must not be replayed.
             guard let fix = pendingCoords else {
                 Haptics.warning()
+                flow = .failed(action, T("No connection, and no location fix to save with."))
                 banner = Banner(text: T("No connection, and no location fix to save with."), good: false)
                 return
             }
@@ -464,10 +611,17 @@ struct AttendanceView: View {
                 reflection: action == .checkOut ? reflection : nil,
                 fix: pendingFix)
             Haptics.success()
-            banner = Banner(text: T("Saved offline — will be sent when the server is back."), good: true)
+            serverDown = true
+            flow = .savedOffline(action, Self.clock())
+            banner = Banner(text: T("Saved on this phone — sends itself when NEXUS is back."), good: true)
             if action == .checkOut { reflection = "" }
         }
-        catch { Haptics.warning(); banner = Banner(text: (error as? LocalizedError)?.errorDescription ?? T("Failed."), good: false) }
+        catch {
+            Haptics.warning()
+            let msg = (error as? LocalizedError)?.errorDescription ?? T("Failed.")
+            flow = .failed(action, msg)
+            banner = Banner(text: msg, good: false)
+        }
     }
 
     private func submitOffsite() async {
@@ -475,17 +629,22 @@ struct AttendanceView: View {
         busy = true; defer { busy = false }
         let tapId = UUID().uuidString
         let reason = offsiteReason.trimmingCharacters(in: .whitespaces)
+        flow = .sending(.checkOut)
         do {
             let outcome = try await APIClient.shared.checkOut(lat: coords.lat, lng: coords.lng, selfie: selfie,
                                                               reflection: reflection, offsite: true,
                                                               reason: reason,
                                                               fix: pendingFix, clientId: tapId)
             if case .success = outcome {
+                let at = Self.clock()
+                flow = .done(.checkOut, at)
                 banner = Banner(text: T("Checkout sent — waiting for BoD approval ⏳"), good: true)
                 reflection = ""
                 await load()
-            }
-        } catch APIError.unauthorized { auth.logout() }
+                try? await Task.sleep(nanoseconds: 1_600_000_000)
+                if flow == .done(.checkOut, at) { flow = nil }
+            } else { flow = nil }
+        } catch APIError.unauthorized { flow = nil; auth.logout() }
         catch APIError.offline {
             // This path had no queue at all, and it is the one an outage hits hardest: the office
             // lost power, everybody went home, and checking out from home IS an offsite check-out.
@@ -498,17 +657,24 @@ struct AttendanceView: View {
                 offsite: true, reason: reason,
                 fix: pendingFix)
             Haptics.success()
-            banner = Banner(text: T("Saved offline — will be sent when the server is back."), good: true)
+            serverDown = true
+            flow = .savedOffline(.checkOut, Self.clock())
+            banner = Banner(text: T("Saved on this phone — sends itself when NEXUS is back."), good: true)
             reflection = ""
             showOffsite = false
         }
-        catch { banner = Banner(text: (error as? LocalizedError)?.errorDescription ?? T("Failed."), good: false) }
+        catch {
+            let msg = (error as? LocalizedError)?.errorDescription ?? T("Failed.")
+            flow = .failed(.checkOut, msg)
+            banner = Banner(text: msg, good: false)
+        }
     }
 
     private func load() async {
         error = nil
-        do { today = try await APIClient.shared.attendanceToday() }
+        do { today = try await APIClient.shared.attendanceToday(); serverDown = false }
         catch APIError.unauthorized { auth.logout() }
+        catch APIError.offline { serverDown = true }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load.") }
         loading = false
         // Drives the Dynamic Island from what the app actually believes, rather than from the tap.

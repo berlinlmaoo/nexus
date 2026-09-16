@@ -46,7 +46,7 @@ enum APIError: LocalizedError {
             return "Server error (\(code))."
         case .unauthorized: return T("Session expired — please log in again.")
         case .decoding: return T("Couldn't read data from the server.")
-        case .offline: return T("No connection to the server.")
+        case .offline: return T("NEXUS can't be reached right now.")
         case .transport(let msg): return msg
         }
     }
