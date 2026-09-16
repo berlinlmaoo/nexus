@@ -214,6 +214,11 @@ struct SectionLabel: View {
 struct NexusPrimaryButton: ButtonStyle {
     var tint: Color = NX.violet
     var fullWidth: Bool = true
+    /// A disabled button used to draw exactly like an enabled one — full violet, white label — so
+    /// a form with a missing required field looked like a button that ignores taps (the BoD hit
+    /// "Post" on an announcement with an empty body, 16 Sep 2026). Dimmed now, like the web's
+    /// `disabled:opacity-40`.
+    @Environment(\.isEnabled) private var isEnabled
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(NXFont.display(16, .bold))
@@ -221,7 +226,7 @@ struct NexusPrimaryButton: ButtonStyle {
             .frame(maxWidth: fullWidth ? .infinity : nil)
             .padding(.vertical, 15)
             .background(tint, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .opacity(configuration.isPressed ? 0.85 : 1)
+            .opacity(!isEnabled ? 0.4 : configuration.isPressed ? 0.85 : 1)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
     }

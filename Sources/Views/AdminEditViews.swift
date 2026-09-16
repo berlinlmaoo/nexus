@@ -593,6 +593,7 @@ struct CreateAnnouncementSheet: View {
     @State private var body_ = ""
     @State private var tone = "info"
     @State private var busy = false
+    @State private var problem: String?
     /// 0 = posted once, which is what every announcement did before repeats existed.
     @State private var repeatDays = 0
     @State private var repeatAt = Self.defaultTime
@@ -653,8 +654,21 @@ struct CreateAnnouncementSheet: View {
                                 }
                             }
                         }
-                        Button { Task { await create() } } label: { HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text("Posting") } }
-                            .buttonStyle(NexusPrimaryButton()).disabled(busy || title.trimmingCharacters(in: .whitespaces).isEmpty || body_.trimmingCharacters(in: .whitespaces).isEmpty)
+                        // Title AND body are required — the server refuses without both ("title &
+                        // body required"), so the button says why it is off instead of just being off.
+                        let missing: String? = title.trimmingCharacters(in: .whitespaces).isEmpty
+                            ? T("Add a title to post.")
+                            : body_.trimmingCharacters(in: .whitespaces).isEmpty ? T("Add the announcement body to post.") : nil
+                        Button { Task { await create() } } label: { HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text(busy ? T("Posting…") : T("Post")) } }
+                            .buttonStyle(NexusPrimaryButton()).disabled(busy || missing != nil)
+                        if let missing {
+                            Text(missing).font(NXFont.text(11, .semibold)).foregroundStyle(NX.warning)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                        }
+                        if let problem {
+                            Text(problem).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                        }
                     }.padding(20)
                 }
             }
@@ -667,10 +681,17 @@ struct CreateAnnouncementSheet: View {
     }
     private func create() async {
         busy = true; defer { busy = false }
-        try? await APIClient.shared.createAnnouncement(
-            title: title.trimmingCharacters(in: .whitespaces),
-            body: body_.trimmingCharacters(in: .whitespaces),
-            tone: tone, repeatDays: repeatDays, repeatAtTime: repeatAtHHmm)
+        problem = nil
+        do {
+            _ = try await APIClient.shared.createAnnouncement(
+                title: title.trimmingCharacters(in: .whitespaces),
+                body: body_.trimmingCharacters(in: .whitespaces),
+                tone: tone, repeatDays: repeatDays, repeatAtTime: repeatAtHHmm)
+        } catch {
+            // Swallowed before: a refused post closed the sheet as if it had worked.
+            problem = (error as? LocalizedError)?.errorDescription ?? T("Couldn't post.")
+            return
+        }
         await onCreated(); dismiss()
     }
 }
