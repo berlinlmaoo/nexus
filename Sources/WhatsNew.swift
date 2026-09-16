@@ -37,10 +37,73 @@ enum WhatsNew {
     @MainActor
     static func entries(for version: String) -> [WhatsNewEntry] {
         switch version {
+        case "0.1.4": return v014
         case "0.1.3": return v013
         default: return []
         }
     }
+
+    @MainActor
+    private static var v014: [WhatsNewEntry] { [
+        // ── headline: things somebody does differently tomorrow ─────────────────────────────
+        WhatsNewEntry(
+            icon: "lock.doc",
+            title: T("Z Vault: the company's files, in one place"),
+            body: T("Logos, decks, brand files — one shared library for the whole office, with folders. Share a file with a link: colleagues open it straight in the app, and people outside the company can preview and download without an account, until the date you set.")
+        ),
+        WhatsNewEntry(
+            icon: "bell",
+            title: T("Reminders before your shift"),
+            body: T("A push 30 and 15 minutes before your check-in time, one at the minute itself, and one when it is time to check out. They follow your own shift, and Flexi Time gets the window instead.")
+        ),
+        WhatsNewEntry(
+            icon: "wifi.slash",
+            title: T("Check in even when the office internet is down"),
+            body: T("If NEXUS cannot be reached, the app keeps your check-in on the phone and sends it the moment the connection is back — with the original time. A server error no longer costs you the day.")
+        ),
+        WhatsNewEntry(
+            icon: "person.2.badge.gearshape",
+            title: T("Your requests go to your own approver"),
+            body: T("Permits, sick days and leave now land with the person set as your approver in the Approval Chart — your manager, not every BoD at once. If nobody answers in two working days, the BoD is told.")
+        ),
+        WhatsNewEntry(
+            icon: "magnifyingglass",
+            title: T("Search inside a project"),
+            body: T("Type to find a task on a board without scrolling every column.")
+        ),
+        WhatsNewEntry(
+            icon: "arrow.triangle.branch",
+            title: T("Approval Chart on the phone"),
+            body: T("The same tree as the web: pinch to zoom, drag to pan, tap a card to change who somebody reports to, and share it as a picture."),
+            bodOnly: true
+        ),
+        WhatsNewEntry(
+            icon: "person.crop.rectangle.stack",
+            title: T("One screen per person in Control Room"),
+            body: T("Tap somebody in Users to see and change everything at once: role, login details and password, approver, Flexi Time and Mobile mode, shift and day-off quota, Google account, teams and projects."),
+            bodOnly: true
+        ),
+        WhatsNewEntry(
+            icon: "at",
+            title: T("Create a Google Workspace mailbox from a profile"),
+            body: T("Link a NEXUS account to its company email, or create the mailbox right there — the temporary password is shown once and sent to the person's private email."),
+            bodOnly: true
+        ),
+
+        // ── also new ─────────────────────────────────────────────────────────────────────────
+        WhatsNewEntry(kind: .also, icon: "gift", title: T("The XP rules card on the Dashboard opens now — penalties, bonuses and tier rewards")),
+        WhatsNewEntry(kind: .also, icon: "arrow.uturn.backward.circle", title: T("A day-off ticket can now get your token back, not only your XP")),
+        WhatsNewEntry(kind: .also, icon: "checkmark.seal", title: T("GIDEON closes a ticket itself when nothing is left to fix, and says so")),
+        WhatsNewEntry(kind: .also, icon: "ticket", title: T("Open tickets and tickets under review are separate tabs"), bodOnly: true),
+        WhatsNewEntry(kind: .also, icon: "bolt", title: T("Flexi Time and Mobile mode are switches on the person, not team settings"), bodOnly: true),
+        WhatsNewEntry(kind: .also, icon: "person.badge.plus", title: T("Accounts that signed up without a workspace code can be pulled into Z Networks with one tap"), bodOnly: true),
+
+        // ── fixed ──────────────────────────────────────────────────────────────────────────
+        WhatsNewEntry(kind: .fix, icon: "checkmark", title: T("Changing somebody's shift no longer re-charges past days — penalties are measured against the shift that applied when they checked in")),
+        WhatsNewEntry(kind: .fix, icon: "checkmark", title: T("Day-off tokens and XP taken on 15 September during the office outage have been given back")),
+        WhatsNewEntry(kind: .fix, icon: "checkmark", title: T("Approving a ticket proposal now resolves the ticket")),
+        WhatsNewEntry(kind: .fix, icon: "checkmark", title: T("Team lead is gone — approvals follow the Approval Chart only")),
+    ] }
 
     @MainActor
     private static var v013: [WhatsNewEntry] { [
