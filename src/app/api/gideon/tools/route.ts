@@ -18,6 +18,7 @@ import {
   describeCorrection, parseProposedTime, serializeAttendanceCorrection, validateCorrectionTimes,
   proposeAttendanceCorrection, proposeAttendancePenaltyCancellation } from '@/lib/attendance-correction'
 import { BODY_MAX, isBodPlus } from '@/lib/complaints'
+import { GIDEON_EMAIL } from '@/lib/gideon-identity'
 import { resolveAutoAssignAssigneeIds } from '@/lib/project-auto-assign'
 import type { Prisma, ProjectStatus, TaskPriority, TaskStatus, User } from '@/generated/prisma/client'
 
@@ -34,6 +35,7 @@ type GideonAction =
   | 'get_attendance_day'
   | 'propose_attendance_correction'
   | 'propose_penalty_cancellation'
+  | 'resolve_ticket'
 
 type ToolBody = {
   action?: GideonAction | string
@@ -1216,6 +1218,11 @@ export async function POST(req: Request) {
       // one, by design and not by omission.
       case 'propose_penalty_cancellation':
         return ok(await proposeAttendancePenaltyCancellation(auth.actor, input))
+      // Menutup tiket yang memang sudah tidak menyisakan apa pun. SERVER yang membuktikan itu (lihat
+      // resolveTicketByGideon); model hanya boleh memintanya. Tiket yang masih punya potongan, jatah
+      // day-off terpotong, atau usulan yang menunggu, ditolak di sini apa pun kata modelnya.
+      case 'resolve_ticket':
+        return ok(await resolveTicketByGideon(auth.actor, input))
       default:
         return error(`Unknown GIDEON tool action: ${body.action}`)
     }
@@ -1223,4 +1230,58 @@ export async function POST(req: Request) {
     const message = err instanceof Error ? err.message : 'NEXUS GIDEON tool failed'
     return error(message, 400)
   }
+}
+
+/**
+ * GIDEON menutup tiketnya sendiri — hanya untuk tiket yang sudah tidak menyisakan apa pun.
+ *
+ * Latar: setelah amnesti 3 September dan refund-refund lain, sejumlah tiket berakhir dengan
+ * "potongannya sudah kembali, yang tersisa cuma BoD menutup tiket ini" — dan BoD membacanya sebagai
+ * "didiamkan". Tiket seperti itu memang selesai; yang kurang cuma statusnya. Tapi "sudah tidak ada
+ * yang tersisa" bukan penilaian model: di sini server memeriksa ledger hari itu, jatah day-off
+ * otomatis, dan usulan yang masih menunggu, lalu menolak kalau salah satunya masih ada.
+ */
+async function resolveTicketByGideon(actor: { id: string }, input: Record<string, unknown>) {
+  const complaintId = asString(input.complaintId)
+  const dateKey = asString(input.date)
+  const note = asString(input.note)
+  if (!complaintId) throw new Error('complaintId is required')
+  if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) throw new Error('date is required as "YYYY-MM-DD"')
+  if (!note || note.length < 10) throw new Error('note is required (min 10 chars) — the one sentence the reporter and the BoD will read as the closing')
+
+  const complaint = await prisma.complaint.findUnique({
+    where: { id: complaintId },
+    select: { id: true, workspaceId: true, reporterId: true, category: true, status: true },
+  })
+  if (!complaint || complaint.reporterId !== actor.id) throw new Error('Complaint not found or not accessible')
+  if (!['ATTENDANCE', 'EXP', 'DAY_OFF'].includes(complaint.category)) throw new Error('resolve_ticket hanya untuk tiket ATTENDANCE, EXP, atau DAY_OFF')
+  if (complaint.status === 'RESOLVED' || complaint.status === 'CLOSED') throw new Error('Tiket ini sudah ditutup.')
+
+  const pendingProposal = await prisma.attendanceCorrection.count({ where: { complaintId, status: 'PENDING' } })
+  if (pendingProposal > 0) throw new Error('Masih ada usulan yang menunggu keputusan BoD di tiket ini — tiketnya belum selesai.')
+
+  const attendanceDate = new Date(`${dateKey}T00:00:00.000Z`)
+  const pen = await readAttendancePenaltiesForDate(actor.id, complaint.workspaceId, attendanceDate, dateKey)
+  const remaining = pen.lateXp + pen.noCheckoutXp + pen.alphaXp
+  if (remaining < 0 || pen.autoDayOffs > 0) {
+    throw new Error(
+      `Masih ada yang tersisa pada ${dateKey}: ${remaining < 0 ? `${remaining} XP` : ''}${remaining < 0 && pen.autoDayOffs > 0 ? ' dan ' : ''}${pen.autoDayOffs > 0 ? `${pen.autoDayOffs} jatah day off terpotong` : ''}. Usulkan pembatalan, jangan tutup.`,
+    )
+  }
+
+  const gideon = await prisma.user.findUnique({ where: { email: GIDEON_EMAIL }, select: { id: true } })
+  const now = new Date()
+  await prisma.$transaction(async (tx) => {
+    await tx.complaintMessage.create({
+      data: { complaintId, authorId: gideon?.id ?? actor.id, fromReviewer: true, body: note.slice(0, BODY_MAX) },
+    })
+    await tx.complaint.update({
+      where: { id: complaintId },
+      data: { status: 'RESOLVED', resolvedAt: now, resolvedById: gideon?.id ?? null, lastMessageAt: now },
+    })
+    await tx.complaintEvent.create({
+      data: { complaintId, action: 'status', fromStatus: complaint.status, toStatus: 'RESOLVED', actorId: gideon?.id ?? actor.id },
+    })
+  })
+  return { resolved: true, complaintId, date: dateKey, verified: { xpRemaining: remaining, autoDayOffs: pen.autoDayOffs, pendingProposals: 0 } }
 }
