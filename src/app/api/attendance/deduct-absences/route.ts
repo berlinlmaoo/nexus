@@ -43,8 +43,11 @@ export async function POST(req: NextRequest) {
       // no body → default rolling window
     }
 
-    // Pemicu manual BoD dengan rentang eksplisit: satu-satunya jalur yang boleh menghukum hari lama.
-    const result = await processAbsenceDeductions({ from, to, backfill: true })
+    // Backfill (menghukum hari lebih tua dari PENALTY_LOOKBACK_DAYS) HANYA untuk BoD yang menyebut
+    // rentang tanggalnya sendiri. Cron malam lewat route ini juga (nexus-absence.timer, tanpa body)
+    // dan dia harus kena pagar 2 hari — itulah yang bikin 16 Sep 02:00 menghukum 14 hari ke belakang.
+    const backfill = actor !== "cron" && Boolean(from || to)
+    const result = await processAbsenceDeductions({ from, to, backfill })
     return NextResponse.json({ ...result, actor })
   } catch (error) {
     console.error("deduct-absences error:", error)
