@@ -290,6 +290,125 @@ async function buildAttendanceWorkbook({
   return workbook.xlsx.writeBuffer()
 }
 
+/**
+ * One person, one row per day. The monthly workbook answers "who was in on the 12th"; this one answers
+ * "what happened to Azra this period" — the sheet a BoD hands to the person, or to payroll, when a
+ * single record is in dispute.
+ */
+async function buildPersonWorkbook({
+  rows,
+  start,
+  end,
+  workspaceName,
+  person,
+}: {
+  rows: HistoryRow[]
+  start: Date
+  end: Date
+  workspaceName: string
+  person: { name: string; email?: string | null }
+}) {
+  const workbook = new ExcelJS.Workbook()
+  workbook.creator = "NEXUS"
+  workbook.created = new Date()
+  const sheet = workbook.addWorksheet(start.toISOString().slice(0, 7), { views: [{ state: "frozen", ySplit: 4 }] })
+
+  const thin = { top: { style: "thin" as const }, left: { style: "thin" as const }, bottom: { style: "thin" as const }, right: { style: "thin" as const } }
+  const wib = (iso?: string | null) =>
+    iso ? new Intl.DateTimeFormat("en-GB", { timeZone: ATTENDANCE_EXPORT_TIMEZONE, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(iso)) : ""
+
+  const headers = ["TANGGAL", "STATUS", "CHECK-IN", "CHECK-OUT", "TELAT (MENIT)", "JAM KERJA", "KETERANGAN"]
+  sheet.mergeCells(1, 1, 1, headers.length)
+  const title = sheet.getCell(1, 1)
+  title.value = `ABSENSI · ${person.name.toUpperCase()}`
+  title.font = { bold: true, size: 16 }
+  title.alignment = { vertical: "middle", horizontal: "center" }
+  title.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD966" } }
+  title.border = thin
+  sheet.getRow(1).height = 26
+  sheet.mergeCells(2, 1, 2, headers.length)
+  const period = sheet.getCell(2, 1)
+  period.value = `${workspaceName.toUpperCase()} • ${formatExportPeriod(start, end)}${person.email ? ` • ${person.email}` : ""}`
+  period.font = { bold: true, size: 11 }
+  period.alignment = { vertical: "middle", horizontal: "center" }
+  period.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD966" } }
+  period.border = thin
+  sheet.getRow(3).height = 8
+  headers.forEach((label, i) => {
+    const c = sheet.getCell(4, i + 1)
+    c.value = label
+    c.font = { bold: true, size: 10 }
+    c.alignment = { horizontal: "center", vertical: "middle", wrapText: true }
+    c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "9DC3E6" } }
+    c.border = thin
+  })
+
+  const rowMap = new Map(rows.map((row) => [row.attendanceDate.slice(0, 10), row]))
+  const counts: Record<string, number> = { H: 0, C: 0, S: 0, DO: 0, TK: 0, TOTAL: 0 }
+  let lateTotal = 0
+  const dates = enumerateAttendanceDates(start, end)
+  dates.forEach((date, i) => {
+    const r = sheet.getRow(5 + i)
+    const row = rowMap.get(date.toISOString().slice(0, 10))
+    const code = getAttendanceExportCode(row)
+    const late = row?.lateMinutes ?? 0
+    const worked = row?.workedMinutes ?? 0
+    const note = row?.isCorrected ? `dikoreksi${row.correctionReason ? `: ${row.correctionReason}` : ""}` : row?.notes ?? ""
+    const values: Array<string | number | null> = [
+      formatExportDateLabel(date),
+      code || null,
+      code === "H" ? wib(row?.checkInAt) : "",
+      code === "H" ? wib(row?.checkOutAt) : "",
+      code === "H" && late > 0 ? late : code === "H" ? 0 : null,
+      code === "H" && worked > 0 ? Math.round((worked / 60) * 10) / 10 : null,
+      note,
+    ]
+    values.forEach((v, col) => {
+      const c = r.getCell(col + 1)
+      c.value = v
+      c.border = thin
+      c.font = { size: 10, bold: col === 1 }
+      c.alignment = { horizontal: col === 0 || col === 6 ? "left" : "center", vertical: "middle" }
+      if (col === 0) c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFCE4D6" } }
+      if (col === 1 && code) c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: getAttendanceExportFill(code) } }
+    })
+    if (code) { counts[code] = (counts[code] ?? 0) + 1; counts.TOTAL += 1; lateTotal += code === "H" ? late : 0 }
+  })
+
+  const summaryStart = 6 + dates.length
+  const summary = [
+    { label: "HADIR", value: counts.H, fill: "7CFC00" },
+    { label: "CUTI", value: counts.C, fill: "F9E27D" },
+    { label: "SAKIT", value: counts.S, fill: "F5B041" },
+    { label: "DAY OFF", value: counts.DO, fill: "C39BD3" },
+    { label: "ABSENT", value: counts.TK, fill: "FF5A36" },
+    { label: "TOTAL HARI KERJA", value: counts.TOTAL, fill: "FFD966" },
+    { label: "TOTAL TELAT (MENIT)", value: lateTotal, fill: "FFD966" },
+  ]
+  summary.forEach((s, i) => {
+    const label = sheet.getCell(summaryStart + i, 1)
+    label.value = s.label
+    label.font = { bold: true, size: 10, color: { argb: "FF3F3F3F" } }
+    label.fill = { type: "pattern", pattern: "solid", fgColor: { argb: s.fill } }
+    label.border = thin
+    const val = sheet.getCell(summaryStart + i, 2)
+    val.value = s.value
+    val.font = { bold: true, size: 10 }
+    val.alignment = { horizontal: "center" }
+    val.fill = { type: "pattern", pattern: "solid", fgColor: { argb: s.fill } }
+    val.border = thin
+  })
+
+  sheet.getColumn(1).width = 30
+  sheet.getColumn(2).width = 10
+  sheet.getColumn(3).width = 11
+  sheet.getColumn(4).width = 11
+  sheet.getColumn(5).width = 14
+  sheet.getColumn(6).width = 11
+  sheet.getColumn(7).width = 40
+  return workbook.xlsx.writeBuffer()
+}
+
 export async function GET(request: NextRequest) {
   try {
     const session = await auth()
@@ -689,6 +808,22 @@ export async function GET(request: NextRequest) {
 
       return true
     })
+
+    if (parsed.data.format === "xlsx" && parsed.data.userId) {
+      const fromRows = rows[0]?.user
+      const person = fromRows
+        ? { name: fromRows.name || fromRows.email || "Crew", email: fromRows.email }
+        : await prisma.user.findUnique({ where: { id: parsed.data.userId }, select: { name: true, email: true } }).then((u) => ({ name: u?.name || u?.email || "Crew", email: u?.email ?? null }))
+      const personBuffer = await buildPersonWorkbook({ rows, start: range.start, end: range.end, workspaceName: context.workspace.name, person })
+      const slug = person.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "crew"
+      return new NextResponse(personBuffer, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="absensi-${slug}-${parsed.data.month ?? range.end.toISOString().slice(0, 7)}.xlsx"`,
+        },
+      })
+    }
 
     if (parsed.data.format === "xlsx") {
       const workbookBuffer = await buildAttendanceWorkbook({

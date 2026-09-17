@@ -539,6 +539,19 @@ function Attendance() {
                                 className={cn(pill, xpTone)}>
                                 {d.xp.score} XP
                               </span>
+                              <button
+                                type="button"
+                                title="Export absensi orang ini (xlsx): satu baris per hari, jam masuk/pulang, telat, keterangan"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const slug = (u.name || "crew").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+                                  void downloadFile(`/api/attendance/history?scope=workspace&month=${monthKey}&userId=${u.id}&format=xlsx`, `absensi-${slug}-${monthKey}.xlsx`)
+                                    .catch((err) => alert(err instanceof ApiError ? err.message : "Export failed — give it another go."));
+                                }}
+                                className={cn(pill, "bg-muted text-muted-foreground ring-border transition hover:bg-accent hover:text-foreground")}
+                              >
+                                <Download className="inline h-3 w-3" />
+                              </button>
                             </div>
                           );
                         })()}
