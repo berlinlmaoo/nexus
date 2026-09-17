@@ -2435,7 +2435,9 @@ export function fmtTime(value?: string | null) {
   if (!value) return "--:--";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "--:--";
-  return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  // 24-hour, Jakarta. Everything else in NEXUS says 12:14 and 21:14; this one helper said 09:14 PM,
+  // and a BoD read a proposed check-out of 21:14 as nine in the morning (16 Sep 2026).
+  return date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Jakarta" });
 }
 
 /** Due date for display: "Jun 3" for date-only tasks, "Jun 3, 02:30 PM" when a real time was set.
