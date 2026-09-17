@@ -14,7 +14,8 @@ import {
   mapRequestTypeToAttendanceDayType,
   serializeAttendanceRecord,
 } from "@/lib/attendance"
-import { isAutoDeduction } from "@/lib/attendance-absence"
+import { getOutageDateKeysForRange, isAutoDeduction } from "@/lib/attendance-absence"
+import { getHolidayKeys } from "@/lib/holidays"
 import { attendanceHistoryQuerySchema } from "@/lib/validations"
 
 const ATTENDANCE_EXPORT_TIMEZONE = "Asia/Jakarta"
@@ -696,10 +697,21 @@ export async function GET(request: NextRequest) {
     }
 
     if (fallbackOffice) {
+      // An "absent" row is a claim, and the board now paints it red — so it is only made for days
+      // that could actually have been missed: past workdays that were neither a public holiday nor a
+      // NEXUS-down day. Today is still open, the future has not happened, and a holiday is nobody's
+      // absence. (Before this the row existed for every date in range and was drawn grey, so the
+      // over-reach never showed.)
+      const todayKey = formatAttendanceDateKey()
+      const [holidayKeys, outageKeys] = await Promise.all([
+        getHolidayKeys(context.workspace.id, range.start, range.end),
+        getOutageDateKeysForRange(range.start, range.end),
+      ])
       for (const member of workspaceMembers) {
         for (const date of enumerateAttendanceDates(range.start, range.end)) {
           if (!isWorkdayForAttendanceDate(date, fallbackOffice)) continue
           const dateKey = date.toISOString().slice(0, 10)
+          if (dateKey >= todayKey || holidayKeys.has(dateKey) || outageKeys.has(dateKey)) continue
           const key = `${member.user.id}:${dateKey}`
           if (rowMap.has(key)) continue
 
