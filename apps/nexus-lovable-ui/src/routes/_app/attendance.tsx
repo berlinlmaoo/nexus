@@ -17,13 +17,17 @@ import { PERIOD_BASELINE_XP } from "@/lib/levels";
 
 type HistRow = NonNullable<NexusAttendanceHistory["rows"]>[number];
 
-function recTone(r: HistRow): "present" | "wfh" | "leave" | "sick" | "dayoff" | "absent" | "none" {
+function recTone(r: HistRow): "present" | "permit" | "wfh" | "leave" | "sick" | "dayoff" | "absent" | "none" {
   // Approved leave/sick/permit/day-off/red-date days are surfaced via attendanceDayType (the request
   // type), NOT `status` (which is "COMPLETED" on those synthetic rows) — check it FIRST.
   const dt = (r.attendanceDayType || "").toUpperCase();
   if (dt === "SICK_APPROVED") return "sick";
   if (dt === "DAY_OFF_APPROVED") return "dayoff"; // covers DAY_OFF + RED_DATE (tanggal merah)
-  if (dt === "LEAVE_APPROVED" || dt === "PERMIT_APPROVED") return "leave";
+  if (dt === "PERMIT_APPROVED") return "permit"; // a working day with the manager's blessing → green, like present
+  if (dt === "LEAVE_APPROVED") return "leave";
+  // The server's synthetic "no record on a workday" row: status INCOMPLETE, no check-in. It used to
+  // fall through to "none" and draw the same grey as a weekend — so an absence looked like nothing.
+  if (dt === "ABSENT") return "absent";
   const s = (r.status || "").toUpperCase();
   if (s.includes("REMOTE") || s.includes("WFH")) return "wfh";
   if (s.includes("LEAVE") || s.includes("SICK") || s.includes("PERMIT") || s.includes("OFF") || s.includes("IZIN") || s.includes("CUTI")) return "leave";
@@ -34,17 +38,20 @@ function recTone(r: HistRow): "present" | "wfh" | "leave" | "sick" | "dayoff" | 
 
 export const Route = createFileRoute("/_app/attendance")({ component: Attendance });
 
+// BoD's palette (17 Sep 2026): absent red, present & permit green, sick orange, day off purple.
+// Leave (cuti) stays yellow so it is not mistaken for a permit; WFH blue.
 const sCls: Record<string, string> = {
-  present: "bg-success/30",
-  wfh: "bg-info/30",
-  leave: "bg-warning/40",
-  sick: "bg-rose-400/50",
-  dayoff: "bg-teal-400/45",
-  absent: "bg-destructive/30",
+  present: "bg-emerald-400/70",
+  permit: "bg-emerald-400/70",
+  wfh: "bg-sky-400/60",
+  leave: "bg-amber-300/80",
+  sick: "bg-orange-400/80",
+  dayoff: "bg-violet-400/70",
+  absent: "bg-rose-500/75",
   none: "bg-muted/40",
 };
 const toneLabel: Record<string, string> = {
-  present: "Present", wfh: "WFH", leave: "Leave/Permit", sick: "Sick", dayoff: "Day off / public holiday", absent: "Absent", none: "",
+  present: "Present", permit: "Permit (counted present)", wfh: "WFH", leave: "Leave", sick: "Sick", dayoff: "Day off / public holiday", absent: "Absent", none: "",
 };
 const REQ_LABEL: Record<string, string> = { LEAVE: "Leave", SICK: "Sick", PERMIT: "Permit", DAY_OFF: "Day Off", RED_DATE: "Public Holiday" };
 
@@ -384,16 +391,16 @@ function Attendance() {
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
             <div>
               <h2 className="text-lg font-semibold tracking-tight">{viewMode === "grid" ? (canSeeBoard ? "Crew streak board" : "Your attendance history") : (canSeeBoard ? "Attendance log" : "Your attendance history")}</h2>
-              <p className="text-sm text-muted-foreground">{viewMode === "grid" ? "Green = present, purple = WFH, yellow = leave/permit, rose = sick, teal = day off / public holiday. Tap a cell for details." : (canSeeBoard ? "Everyone’s attendance history — check-in/out selfie & location. Tap a row for details." : "Your check-in/out history — selfie & location. Tap a row for details.")}</p>
+              <p className="text-sm text-muted-foreground">{viewMode === "grid" ? "Green = present or permit, red = absent, orange = sick, purple = day off / public holiday, yellow = leave. Tap a cell for details." : (canSeeBoard ? "Everyone’s attendance history — check-in/out selfie & location. Tap a row for details." : "Your check-in/out history — selfie & location. Tap a row for details.")}</p>
             </div>
             <div className="flex items-center gap-3">
               {viewMode === "grid" && (
                 <div className="hidden gap-2 text-xs text-muted-foreground sm:flex">
-                  <Legend cls="bg-success/40" label="Present" />
-                  <Legend cls="bg-info/40" label="WFH" />
-                  <Legend cls="bg-warning/40" label="Leave/Permit" />
-                  <Legend cls="bg-rose-400/50" label="Sick" />
-                  <Legend cls="bg-teal-400/45" label="Day off" />
+                  <Legend cls="bg-emerald-400/70" label="Present / Permit" />
+                  <Legend cls="bg-amber-300/80" label="Leave" />
+                  <Legend cls="bg-orange-400/80" label="Sick" />
+                  <Legend cls="bg-violet-400/70" label="Day off" />
+                  <Legend cls="bg-rose-500/75" label="Absent" />
                 </div>
               )}
               <div className="inline-flex rounded-lg border border-border p-0.5">
@@ -563,7 +570,15 @@ function Attendance() {
                       return (
                         <td key={pd.key} className={cn("px-1 py-2.5 text-center", pd.day === 1 && "border-l border-border/70")}>
                           {rec ? (
-                            tone === "leave" || tone === "sick" || tone === "dayoff" ? (
+                            tone === "absent" && canManage ? (
+                              <button
+                                onClick={() => setOverrideTarget({ userId: u.id, name: u.name ?? null, dateKey: pd.key })}
+                                title={`${fmtDate(rec.attendanceDate)} · Absent — no check-in. Tap to set a status (Present/Leave/Sick/Day off).`}
+                                className={cn("inline-block h-5 w-5 rounded-lg transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls.absent)}
+                              />
+                            ) : tone === "absent" ? (
+                              <span title={`${fmtDate(rec.attendanceDate)} · Absent`} className={cn("inline-block h-5 w-5 rounded-lg", sCls.absent)} />
+                            ) : tone === "leave" || tone === "permit" || tone === "sick" || tone === "dayoff" ? (
                               <motion.button
                                 whileHover={reduceMotion ? undefined : { scale: 1.3 }}
                                 whileTap={reduceMotion ? undefined : { scale: 0.85 }}
