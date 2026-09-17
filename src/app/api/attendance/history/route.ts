@@ -497,15 +497,17 @@ export async function GET(request: NextRequest) {
 
     for (const approvedRequest of approvedRequests) {
       const dayType = mapRequestTypeToAttendanceDayType(approvedRequest.type)
-      // The cron's auto-deduction day-off (a penalty, e.g. ">120 min late → −1 token") is filed for a
-      // day the staff was actually PRESENT. It must not hide their real check-in/out: if a present
-      // record already exists for the day, keep it (the token is still deducted via the quota count).
+      // The cron's auto-deduction day-off is a PENALTY row, not a day off the person took. It never
+      // describes the day: ">120 min late" was a day they were present (the record stays), and
+      // "tidak check-in" was a day they were absent — which the ABSENT pass below fills in as TK.
+      // Rendering it as DO (purple) told the BoD somebody took leave when they simply did not show up
+      // (17 Sep 2026). The token is still deducted; that lives in the quota count, not here.
       const isAutoPenalty = isAutoDeduction(approvedRequest)
+      if (isAutoPenalty) continue
       for (const date of enumerateAttendanceDates(approvedRequest.startDate, approvedRequest.endDate)) {
         if (date.getTime() < range.start.getTime() || date.getTime() > range.end.getTime()) continue
         const dateKey = date.toISOString().slice(0, 10)
         const key = `${approvedRequest.userId}:${dateKey}`
-        if (isAutoPenalty && rowMap.get(key)?.recordKind === "ATTENDANCE") continue
         rowMap.set(key, {
           id: `request-${approvedRequest.id}-${dateKey}`,
           attendanceDate: date.toISOString(),
