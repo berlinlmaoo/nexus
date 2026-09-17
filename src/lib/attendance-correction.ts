@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma"
+import { extractExplicitDates } from "@/lib/ticket-dates"
 import type { Prisma } from "@/generated/prisma/client"
 import { getGideonUserId } from "@/lib/gideon-identity"
 import { isBodPlus } from "@/lib/feed"
@@ -319,7 +320,7 @@ async function attachProposalToThread(
 async function openProposal(
   actor: { id: string; role?: string | null; name?: string | null },
   input: Record<string, unknown>,
-  opts?: { allowDayOff?: boolean },
+  opts?: { allowDayOff?: boolean; /** GIDEON: the date must be one the ticket itself names */ enforceTicketDate?: boolean },
 ) {
   const complaintId = asString(input.complaintId)
   const dateKey = asString(input.date) ?? asString(input.attendanceDate)
@@ -348,8 +349,23 @@ async function openProposal(
 
   const complaint = await prisma.complaint.findUnique({
     where: { id: complaintId },
-    select: { id: true, workspaceId: true, reporterId: true, category: true, status: true },
+    select: { id: true, workspaceId: true, reporterId: true, category: true, status: true, subject: true, createdAt: true },
   })
+  if (opts?.enforceTicketDate && complaint) {
+    // The ticket names its own day; the proposal must be for that day. Filing date is a fallback for
+    // the MODEL, never a licence to touch a different day than the one the person complained about.
+    const first = await prisma.complaintMessage.findFirst({
+      where: { complaintId, fromReviewer: false }, orderBy: { createdAt: 'asc' }, select: { body: true },
+    })
+    const filedKey = formatAttendanceDateKey(complaint.createdAt)
+    const named = extractExplicitDates(`${complaint.subject ?? ''} ${first?.body ?? ''}`, filedKey)
+    if (named.length > 0 && !named.includes(dateKey)) {
+      throw new Error(`Tanggal usulan ${dateKey} tidak cocok dengan tanggal yang disebut tiket (${named.join(', ')}). Pakai tanggal dari tiket, atau tanya pelapor dulu.`)
+    }
+    if (named.length === 0 && dateKey > filedKey) {
+      throw new Error(`Tanggal usulan ${dateKey} jatuh SESUDAH tiket dibuat (${filedKey}) — tiket ini tidak mungkin tentang hari itu.`)
+    }
+  }
   if (!complaint || complaint.workspaceId !== membership.workspaceId) throw new Error('Complaint not found or not accessible')
   if (!actorIsBod && complaint.reporterId !== actor.id) throw new Error('Complaint not found or not accessible')
   // THE gate that keeps DAY_OFF out. The prompt tells GIDEON not to try; this is what makes trying
@@ -398,8 +414,9 @@ export async function proposeAttendanceCorrection(
   /** Whose name the proposal carries. GIDEON when it drafts one; the reporter when they ask for it
    *  themselves — an assistant that declines, or is not there, must not be the only way to be heard. */
   proposedById?: string,
+  opts?: { enforceTicketDate?: boolean },
 ) {
-  const { complaintId, dateKey, reason, complaint, actorIsBod } = await openProposal(actor, input)
+  const { complaintId, dateKey, reason, complaint, actorIsBod } = await openProposal(actor, input, { enforceTicketDate: opts?.enforceTicketDate })
 
   const proposedCheckInAt = parseProposedTime(input.checkInAt, dateKey, 'checkInAt') ?? null
   const proposedCheckOutAt = parseProposedTime(input.checkOutAt, dateKey, 'checkOutAt') ?? null
@@ -537,8 +554,9 @@ export async function proposeAttendancePenaltyCancellation(
   input: Record<string, unknown>,
   /** Whose name it carries — GIDEON when it drafts one, the reporter when they ask for it themselves. */
   proposedById?: string,
+  opts?: { enforceTicketDate?: boolean },
 ) {
-  const { complaintId, dateKey, reason, complaint, actorIsBod } = await openProposal(actor, input, { allowDayOff: true })
+  const { complaintId, dateKey, reason, complaint, actorIsBod } = await openProposal(actor, input, { allowDayOff: true, enforceTicketDate: opts?.enforceTicketDate })
 
   // The target is the ticket's reporter, never an input field — same rule as the time correction, and
   // for the same reason: otherwise any staffer could ask GIDEON to pardon a colleague's day from their
