@@ -1240,12 +1240,12 @@ export async function POST(req: Request) {
       case 'get_attendance_day':
         return ok(await getAttendanceDay(auth.actor, input))
       case 'propose_attendance_correction':
-        return ok(await proposeAttendanceCorrection(auth.actor, input))
+        return ok(await proposeAttendanceCorrection(auth.actor, input, undefined, { enforceTicketDate: true }))
       // The second remedy. Still a proposal: it writes an AttendanceCorrection row and a thread
       // message, and no XP moves until a BoD taps approve. There is no tool action here that applies
       // one, by design and not by omission.
       case 'propose_penalty_cancellation':
-        return ok(await proposeAttendancePenaltyCancellation(auth.actor, input))
+        return ok(await proposeAttendancePenaltyCancellation(auth.actor, input, undefined, { enforceTicketDate: true }))
       // Menutup tiket yang memang sudah tidak menyisakan apa pun. SERVER yang membuktikan itu (lihat
       // resolveTicketByGideon); model hanya boleh memintanya. Tiket yang masih punya potongan, jatah
       // day-off terpotong, atau usulan yang menunggu, ditolak di sini apa pun kata modelnya.
