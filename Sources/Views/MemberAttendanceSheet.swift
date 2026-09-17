@@ -18,6 +18,11 @@ struct MemberAttendanceSheet: View {
     @State private var savingShift = false
     @State private var shiftSaved = false
 
+    // export — the same per-person xlsx the web board hands out from the download pill
+    @State private var exporting = false
+    @State private var exportItem: ShareItem?
+    @State private var exportError: String?
+
     // day-off
     @State private var dayoff: DayoffsResponse?
     @State private var quotaText = ""
@@ -37,8 +42,42 @@ struct MemberAttendanceSheet: View {
         }
         .background(NX.background.ignoresSafeArea())
         .navigationTitle("Atur Absensi").navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { Task { await exportXlsx() } } label: {
+                    if exporting { ProgressView() } else { Label(T("Export"), systemImage: "square.and.arrow.up") }
+                }
+                .disabled(exporting || member.userId == nil)
+                .accessibilityLabel(T("Export this person's attendance as a spreadsheet"))
+            }
+        }
+        .sheet(item: $exportItem) { item in ActivityView(items: [item.url]) }
+        .alert(T("Export failed"), isPresented: Binding(get: { exportError != nil }, set: { if !$0 { exportError = nil } })) {
+            Button("OK") { exportError = nil }
+        } message: { Text(exportError ?? "") }
         .onAppear(perform: hydrate)
         .task { await loadDayoff() }
+    }
+
+    /// One row per day for this person, this period — the file lands in the share sheet so it can go
+    /// to Files, WhatsApp, or Mail. Same server route as the web's per-person download pill.
+    private func exportXlsx() async {
+        guard let uid = member.userId else { return }
+        exporting = true; defer { exporting = false }
+        let slug = member.displayName.lowercased().replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression)
+        let dest = FileManager.default.temporaryDirectory.appendingPathComponent("absensi-\(slug)-\(month).xlsx")
+        try? FileManager.default.removeItem(at: dest)
+        let req = APIClient.shared.makeRequest("/api/attendance/history?scope=workspace&month=\(month)&userId=\(uid)&format=xlsx")
+        do {
+            let response = try await APIClient.shared.download(req, to: dest)
+            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                exportError = "Server error (\(http.statusCode))."
+                return
+            }
+            exportItem = ShareItem(url: dest)
+        } catch {
+            exportError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't download the file.")
+        }
     }
 
     private var header: some View {
