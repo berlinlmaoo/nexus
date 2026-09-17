@@ -83,8 +83,10 @@ function getAttendanceExportCode(row: HistoryRow | undefined) {
       return "C"
     case "SICK_APPROVED":
       return "S"
+    // An approved permit is a working day with the manager's blessing, not a kind of absence: the
+    // BoD wants it counted as HADIR on the sheet (17 Sep 2026), not a blue "I".
     case "PERMIT_APPROVED":
-      return "I"
+      return "H"
     case "DAY_OFF_APPROVED":
       return "DO"
     case "ABSENT":
@@ -102,8 +104,6 @@ function getAttendanceExportFill(code: string) {
       return "F9E27D"
     case "S":
       return "F5B041"
-    case "I":
-      return "85C1E9"
     case "DO":
       return "C39BD3"
     case "TK":
@@ -249,7 +249,6 @@ async function buildAttendanceWorkbook({
     { label: "HADIR", code: "H", fill: "7CFC00" },
     { label: "CUTI", code: "C", fill: "F9E27D" },
     { label: "SAKIT", code: "S", fill: "F5B041" },
-    { label: "IZIN", code: "I", fill: "85C1E9" },
     { label: "DAY OFF", code: "DO", fill: "C39BD3" },
     { label: "ABSENT", code: "TK", fill: "FF5A36" },
     { label: "TOTAL HARI KERJA", code: "TOTAL", fill: "FFD966" },
@@ -345,6 +344,19 @@ export async function GET(request: NextRequest) {
           end: new Date(`${parsed.data.dateTo ?? parsed.data.dateFrom ?? formatAttendanceDateKey()}T00:00:00.000Z`),
         }
 
+    // BoD and One Above All are exempt from attendance — the nightly cron never penalises them
+    // (attendance-absence.ts) — so a workspace-wide board and the Sheets export leave them out.
+    // They still see their own history under "me", and can still be asked for by userId.
+    const exemptUserIds =
+      scope === "me" || parsed.data.userId || teamScopeUserIds
+        ? []
+        : (
+            await prisma.workspaceMember.findMany({
+              where: { workspaceId: context.workspace.id, role: { in: ["BOD", "ONE_ABOVE_ALL"] } },
+              select: { userId: true },
+            })
+          ).map((m) => m.userId)
+
     const userWhere: Record<string, unknown> =
       scope === "me"
         ? { userId: session.user.id }
@@ -354,7 +366,9 @@ export async function GET(request: NextRequest) {
               : { userId: { in: teamScopeUserIds } })
           : parsed.data.userId
             ? { userId: parsed.data.userId }
-            : {}
+            : exemptUserIds.length
+              ? { userId: { notIn: exemptUserIds } }
+              : {}
 
     const recordWhere: Record<string, unknown> = {
       workspaceId: context.workspace.id,
