@@ -729,27 +729,30 @@ struct FunMetricCard: View {
 
 // MARK: - Attendance status tone (port of web recTone + sCls)
 
+// BoD's palette (17 Sep 2026), same as the web board: absent red, present & permit green, sick
+// orange, day off purple, leave yellow, WFH blue.
 enum AttTone {
-    case present, wfh, leave, sick, dayoff, absent, none
+    case present, permit, wfh, leave, sick, dayoff, absent, none
     var color: Color {
         switch self {
-        case .present: return NX.success.opacity(0.5)
-        case .wfh:     return NX.blue.opacity(0.45)
-        case .leave:   return NX.warning.opacity(0.55)
-        case .sick:    return Color(hex: "#fb7185").opacity(0.6)
-        case .dayoff:  return Color(hex: "#2dd4bf").opacity(0.6)
-        case .absent:  return NX.danger.opacity(0.45)
+        case .present, .permit: return Color(hex: "#34d399").opacity(0.75)
+        case .wfh:     return NX.blue.opacity(0.5)
+        case .leave:   return Color(hex: "#fcd34d").opacity(0.85)
+        case .sick:    return Color(hex: "#fb923c").opacity(0.85)
+        case .dayoff:  return Color(hex: "#a78bfa").opacity(0.75)
+        case .absent:  return Color(hex: "#f43f5e").opacity(0.8)
         case .none:    return NX.muted.opacity(0.5)
         }
     }
     var label: String {
         switch self {
-        case .present: return T("Present")
+        case .present: return T("Present / Permit")
+        case .permit:  return T("Permit")
         case .wfh:     return "WFH"
-        case .leave:   return T("Leave/Permit")
+        case .leave:   return T("Leave")
         case .sick:    return T("Sick")
         case .dayoff:  return T("Day off")
-        case .absent:  return "Absent"
+        case .absent:  return T("Absent")
         case .none:    return ""
         }
     }
@@ -757,7 +760,11 @@ enum AttTone {
         let dt = (r.attendanceDayType ?? "").uppercased()
         if dt == "SICK_APPROVED" { return .sick }
         if dt == "DAY_OFF_APPROVED" { return .dayoff }   // covers DAY_OFF + RED_DATE
-        if dt == "LEAVE_APPROVED" || dt == "PERMIT_APPROVED" { return .leave }
+        if dt == "PERMIT_APPROVED" { return .permit }     // a working day with the manager's blessing
+        if dt == "LEAVE_APPROVED" { return .leave }
+        // The server's synthetic "no record on a workday" row (status INCOMPLETE, no check-in). It
+        // fell through to .none and drew like a weekend, so an absence was invisible.
+        if dt == "ABSENT" { return .absent }
         let s = (r.status ?? "").uppercased()
         if s.contains("REMOTE") || s.contains("WFH") { return .wfh }
         if s.contains("LEAVE") || s.contains("SICK") || s.contains("PERMIT") || s.contains("OFF") || s.contains("IZIN") || s.contains("CUTI") { return .leave }
@@ -840,7 +847,7 @@ struct StreakBoardCard: View {
 
     private var legend: some View {
         HStack(spacing: 10) {
-            ForEach([AttTone.present, .wfh, .leave, .sick, .dayoff], id: \.label) { t in
+            ForEach([AttTone.present, .leave, .sick, .dayoff, .absent], id: \.label) { t in
                 HStack(spacing: 4) {
                     RoundedRectangle(cornerRadius: 3).fill(t.color).frame(width: 11, height: 11)
                     Text(t.label).font(NXFont.text(9, .medium)).foregroundStyle(NX.mutedFg)
