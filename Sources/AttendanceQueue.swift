@@ -122,21 +122,47 @@ final class AttendanceQueue {
                     fromAccessory: entry.fromAccessory ?? false)
             }
             do {
+                // `.outsideRadius` comes back as a VALUE, not an error — the live screen answers it
+                // with the offsite sheet. Until 0.1.5 the replay discarded it, deleted the entry, and
+                // the person was marked absent that night without a word. The server judges the
+                // coordinates that were stored, so a retry cannot change the answer: a check-out is
+                // re-sent as an offsite one for approval (what the sheet would have offered), and a
+                // check-in — which has no offsite form — is dropped but SAID, on screen and as a
+                // notification.
+                let outcome: AttendanceOutcome
                 switch entry.kind {
                 case .checkIn:
-                    _ = try await APIClient.shared.checkIn(
+                    outcome = try await APIClient.shared.checkIn(
                         lat: entry.lat, lng: entry.lng, selfie: selfie, notes: entry.notes,
                         fix: fix,
                         clientId: entry.id, deviceAt: entry.deviceAt, uptimeSec: entry.uptimeSec)
                 case .checkOut:
-                    _ = try await APIClient.shared.checkOut(
+                    var first = try await APIClient.shared.checkOut(
                         lat: entry.lat, lng: entry.lng, selfie: selfie,
                         reflection: entry.reflection ?? "",
                         offsite: entry.offsite, reason: entry.reason,
                         fix: fix,
                         clientId: entry.id, deviceAt: entry.deviceAt, uptimeSec: entry.uptimeSec)
+                    if case .outsideRadius = first, !entry.offsite {
+                        first = try await APIClient.shared.checkOut(
+                            lat: entry.lat, lng: entry.lng, selfie: selfie,
+                            reflection: entry.reflection ?? "",
+                            offsite: true,
+                            reason: T("Checked out while NEXUS was unreachable; the phone was outside the office radius at the time."),
+                            fix: fix,
+                            clientId: entry.id, deviceAt: entry.deviceAt, uptimeSec: entry.uptimeSec)
+                    }
+                    outcome = first
                 }
                 remove(entry.id)
+                if case .outsideRadius = outcome {
+                    let when = Self.clock(entry.deviceAt)
+                    lastError = entry.kind == .checkIn
+                        ? T("Your check-in at") + " \(when) " + T("was refused when it was sent: the phone was outside the office radius. Ask your approver to record it.")
+                        : T("Your check-out at") + " \(when) " + T("was refused when it was sent: outside the office radius.")
+                    await NotificationManager.shared.reportQueueRefusal(kind: entry.kind, at: entry.deviceAt)
+                    continue
+                }
                 lastError = nil
             } catch APIError.offline {
                 // Still unreachable. Stop here rather than hammering the rest of the queue.
@@ -149,6 +175,23 @@ final class AttendanceQueue {
                 return
             }
         }
+    }
+
+    /// Everything, selfies included. Called on logout: a queued tap belongs to the person who
+    /// made it, and until 0.1.5 it stayed on the phone and was replayed under whoever signed in
+    /// next — their cookie, the previous person's selfie and coordinates.
+    func clearAll() {
+        for entry in pending { try? FileManager.default.removeItem(at: selfieURL(entry.id)) }
+        pending = []
+        lastError = nil
+        try? FileManager.default.removeItem(at: indexURL)
+        AttendancePresence.refresh()
+    }
+
+    /// "09:04" in office time, for the one sentence that names a refused tap.
+    private static func clock(_ date: Date) -> String {
+        let f = DateFormatter(); f.dateFormat = "HH:mm"; f.timeZone = TimeZone(identifier: "Asia/Jakarta")
+        return f.string(from: date)
     }
 
     // MARK: - persistence

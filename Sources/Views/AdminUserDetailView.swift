@@ -275,14 +275,14 @@ struct AdminUserDetailView: View {
                     }
                 } else if member.role == "STAFF" || member.role == "MANAGER" {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(NX.warning)
-                    Text(T("Belum ditaruh di Bagan Approval")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.warning)
+                    Text(T("Not placed on the Approval Chart")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.warning)
                 } else {
                     Image(systemName: "crown.fill").foregroundStyle(NX.violetText)
                     Text(T("Puncak — tidak punya atasan")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
                 }
                 Spacer(minLength: 0)
             }
-            navRow("arrow.triangle.branch", member.approverId == nil ? T("Taruh di bawah atasan…") : T("Ganti atasan…"), nil) {
+            navRow("arrow.triangle.branch", member.approverId == nil ? T("Place under an approver…") : T("Change approver…"), nil) {
                 if let mid = member.id, let wsId = workspaceId {
                     approverTarget = ApproverPickTarget(id: mid, memberId: mid, workspaceId: wsId, name: member.displayName, current: member.approverId, selfUserId: member.userId)
                 }
@@ -340,7 +340,7 @@ struct AdminUserDetailView: View {
     private var workHoursCard: some View {
         card(T("Jam kerja & day off")) {
             navRow("clock", T("Shift & jatah day off"),
-                   (member.flexiTimeEnabled ?? false) ? T("Flexi") : (member.shiftLabel ?? T("ikut tim / kantor"))) {
+                   (member.flexiTimeEnabled ?? false) ? T("Flexi") : (member.shiftLabel ?? T("team / office default"))) {
                 openAttendance = true
             }
         }
@@ -358,7 +358,7 @@ struct AdminUserDetailView: View {
     }
 
     private var membershipCard: some View {
-        card(T("Tim & project"), canEdit ? T("Masuk tim = otomatis dapat akses ke project yang ditautkan tim itu.") : nil) {
+        card(T("Teams & projects"), canEdit ? T("Joining a team grants access to the projects linked to it.") : nil) {
             Label(T("Projects"), systemImage: "square.stack.3d.up").font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
             projectChips
             Label(T("Teams"), systemImage: "person.3").font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
@@ -401,7 +401,7 @@ struct AdminUserDetailView: View {
             }
         }
         if ps.isEmpty && !editable {
-            Text(T("Belum masuk project mana pun.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            Text(T("Not in any project yet.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
         }
     }
 
@@ -420,7 +420,7 @@ struct AdminUserDetailView: View {
                 if editable, let uid = member.userId {
                     Menu {
                         if let full = allTeams.first(where: { $0.id == t.id }), full.canManage == true {
-                            Button { openTeamId = full.id } label: { Label(T("Atur tim ini"), systemImage: "gearshape") }
+                            Button { openTeamId = full.id } label: { Label(T("Manage this team"), systemImage: "gearshape") }
                         }
                         Button(role: .destructive) {
                             exitTarget = TeamExitTarget(
@@ -428,7 +428,7 @@ struct AdminUserDetailView: View {
                                 teamId: t.id, teamName: t.name,
                                 losing: (memberships?.projects ?? []).filter { $0.viaTeam == t.name }.map(\.name)
                             )
-                        } label: { Label(T("Keluarkan dari tim"), systemImage: "person.badge.minus") }
+                        } label: { Label(T("Remove from team"), systemImage: "person.badge.minus") }
                     } label: { chip }
                     .disabled(busy)
                 } else {
@@ -438,13 +438,13 @@ struct AdminUserDetailView: View {
             if editable, let uid = member.userId {
                 Button {
                     addTeamFor = TeamPickTarget(id: uid, userId: uid, name: member.displayName, already: Set(teams.map(\.id)))
-                } label: { addChip(T("tim")) }
+                } label: { addChip(T("team")) }
                 .buttonStyle(.plain)
                 .disabled(busy)
             }
         }
         if teams.isEmpty && !editable {
-            Text(T("Belum masuk tim mana pun.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            Text(T("Not in any team yet.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
         }
     }
 

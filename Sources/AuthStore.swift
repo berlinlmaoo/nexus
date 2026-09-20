@@ -82,6 +82,8 @@ final class AuthStore {
         // the next person to sign in on the same phone opens it onto somebody else's questions —
         // and onto the file they attached to one.
         GideonChat.shared.reset()
+        // Nor a queued check-in: replayed under the next sign-in it would be recorded for them.
+        AttendanceQueue.shared.clearAll()
         AttendancePresence.stop()
         PhoneSessionBridge.shared.publish(nil)
         session = nil

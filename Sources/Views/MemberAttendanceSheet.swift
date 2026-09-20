@@ -22,6 +22,7 @@ struct MemberAttendanceSheet: View {
     @State private var exporting = false
     @State private var exportItem: ShareItem?
     @State private var exportError: String?
+    @State private var dayoffError: String?
 
     // day-off
     @State private var dayoff: DayoffsResponse?
@@ -55,6 +56,9 @@ struct MemberAttendanceSheet: View {
         .alert(T("Export failed"), isPresented: Binding(get: { exportError != nil }, set: { if !$0 { exportError = nil } })) {
             Button("OK") { exportError = nil }
         } message: { Text(exportError ?? "") }
+        .alert(T("Couldn't save"), isPresented: Binding(get: { dayoffError != nil }, set: { if !$0 { dayoffError = nil } })) {
+            Button("OK") { dayoffError = nil }
+        } message: { Text(dayoffError ?? "") }
         .onAppear(perform: hydrate)
         .task { await loadDayoff() }
     }
@@ -266,19 +270,22 @@ struct MemberAttendanceSheet: View {
     private func saveQuota(_ q: Int?) async {
         guard let uid = member.userId, let wsId = workspaceId else { return }
         busyDayoff = true
-        try? await APIClient.shared.setDayoffQuota(userId: uid, quota: q, workspaceId: wsId)
+        do { _ = try await APIClient.shared.setDayoffQuota(userId: uid, quota: q, workspaceId: wsId) }
+        catch { dayoffError = (error as? LocalizedError)?.errorDescription ?? T("The quota wasn't saved.") }
         await loadDayoff(); busyDayoff = false
     }
     private func grant() async {
         guard let uid = member.userId else { return }
         busyDayoff = true
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.locale = Locale(identifier: "en_US_POSIX")
-        try? await APIClient.shared.grantDayoff(userId: uid, date: f.string(from: grantDate), reason: nil)
+        do { _ = try await APIClient.shared.grantDayoff(userId: uid, date: f.string(from: grantDate), reason: nil) }
+        catch { dayoffError = (error as? LocalizedError)?.errorDescription ?? T("The day off wasn't granted.") }
         await loadDayoff(); busyDayoff = false
     }
     private func removeDayoff(_ d: Dayoff) async {
         busyDayoff = true
-        try? await APIClient.shared.deleteDayoff(id: d.id)
+        do { _ = try await APIClient.shared.deleteDayoff(id: d.id) }
+        catch { dayoffError = (error as? LocalizedError)?.errorDescription ?? T("The day off wasn't removed.") }
         await loadDayoff(); busyDayoff = false
     }
 }

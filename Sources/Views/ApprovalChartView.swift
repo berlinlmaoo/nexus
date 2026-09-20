@@ -153,7 +153,7 @@ struct ApprovalChartView: View {
             }
             if !alone.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("\(T("Belum ditaruh")) · \(alone.count) · \(T("request-nya masuk ke semua BoD"))")
+                    Text("\(T("Not placed")) · \(alone.count) · \(T("their requests go to every BoD"))")
                         .font(NXFont.text(11, .bold)).foregroundStyle(NX.warning)
                     FlowLayout(spacing: 8) {
                         ForEach(alone, id: \.idv) { p in

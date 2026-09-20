@@ -70,6 +70,8 @@ struct FeedComment: Decodable, Identifiable, Sendable {
 /// Port of the web /threads page — the company feed. Posts, likes and comments.
 struct ThreadsView: View {
     @Environment(AuthStore.self) private var auth
+    /// The post a notification pointed at (`/threads?post=<id>`, a mention or a comment on yours).
+    @Environment(AppRouter.self) private var router
     @State private var posts: [FeedPost] = []
     @State private var loading = true
     @State private var error: String?
@@ -100,7 +102,8 @@ struct ThreadsView: View {
         }
         .navigationTitle(T("Threads"))
         .navigationBarTitleDisplayMode(.inline)
-        .task { await load() }
+        .task { await load(); claimFocus() }
+        .onChange(of: router.focus) { _, _ in if !loading { claimFocus() } }
         .navigationDestination(item: $openPost) { p in PostThreadView(post: p) }
         .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
         .confirmationDialog(T("Delete this post?"), isPresented: Binding(
@@ -307,6 +310,12 @@ struct ThreadsView: View {
         .onTapGesture { openPost = p }
     }
 
+    private func claimFocus() {
+        guard case .post(let id) = router.focus else { return }
+        router.focus = nil
+        if let p = posts.first(where: { $0.id == id }) { openPost = p }
+    }
+
     private func load() async {
         error = nil
         do { posts = try await APIClient.shared.feedPosts() }
@@ -344,8 +353,14 @@ struct ThreadsView: View {
 
     private func like(_ p: FeedPost) async {
         Haptics.tap()
-        if liked.contains(p.id) { liked.remove(p.id) } else { liked.insert(p.id) }
-        try? await APIClient.shared.likePost(p.id)
+        let wasLiked = liked.contains(p.id)
+        if wasLiked { liked.remove(p.id) } else { liked.insert(p.id) }
+        do { _ = try await APIClient.shared.likePost(p.id) }
+        catch {
+            // Optimistic, so put it back: a heart that stays lit after the server said no is a lie
+            // the next refresh quietly corrects, and the person never learns why.
+            if wasLiked { liked.insert(p.id) } else { liked.remove(p.id) }
+        }
     }
 }
 
@@ -391,6 +406,7 @@ struct PostThreadView: View {
     @State private var loading = true
     @State private var draft = ""
     @State private var sending = false
+    @State private var sendError: String?
     @State private var viewingPhoto: PhotoRef?
     @FocusState private var replying: Bool
 
@@ -461,6 +477,9 @@ struct PostThreadView: View {
         .navigationTitle(T("Thread"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
+        .alert(T("Couldn't post"), isPresented: Binding(get: { sendError != nil }, set: { if !$0 { sendError = nil } })) {
+            Button("OK") { sendError = nil }
+        } message: { Text(sendError ?? "") }
         .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
     }
 
@@ -494,10 +513,14 @@ struct PostThreadView: View {
         let v = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !v.isEmpty else { return }
         sending = true
-        draft = ""
-        try? await APIClient.shared.addPostComment(postId: post.id, text: v)
-        await load()
-        sending = false
+        defer { sending = false }
+        do {
+            _ = try await APIClient.shared.addPostComment(postId: post.id, text: v)
+            draft = ""
+            await load()
+        } catch {
+            sendError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't post the comment. It's still in the box.")
+        }
     }
 }
 

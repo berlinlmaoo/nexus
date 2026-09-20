@@ -27,6 +27,7 @@ struct MessagesView: View {
     /// the split layout simply selects it.
     @Environment(AppRouter.self) private var router
     @State private var pushedConvo: FocusedConversation?
+    @State private var focusMissing = false
 
     /// A chat list and the chat itself are the pair every messaging app puts side by side once
     /// there is room, because the whole job is moving between conversations. Pushing a thread and
@@ -53,6 +54,9 @@ struct MessagesView: View {
         .sheet(isPresented: $showNewChat) {
             NewConversationSheet { _ in Task { await load() } }
         }
+        .alert(T("That chat isn't in your list"), isPresented: $focusMissing) { Button("OK") {} } message: {
+            Text(T("You may have been removed from it, or the list hasn't loaded yet — pull to refresh."))
+        }
         .task {
             await load()
             // An empty right-hand pane on first open is a screen asking to be clicked before it
@@ -73,8 +77,9 @@ struct MessagesView: View {
 
     /// The list on its own — the whole screen on a phone, the left column on an iPad.
     private func claimFocus() {
-        guard case .conversation(let id) = router.focus, let c = convos.first(where: { $0.id == id }) else { return }
+        guard case .conversation(let id) = router.focus else { return }
         router.focus = nil
+        guard let c = convos.first(where: { $0.id == id }) else { focusMissing = true; return }
         if isSplit { selected = c } else { pushedConvo = FocusedConversation(id: c.id) }
     }
 
@@ -873,13 +878,20 @@ struct ChatThreadView: View {
         let mentionedUserIds = pendingMentions.compactMap { v.contains($0.value) ? $0.key : nil }
         let attachment = pendingAttachment
         let replyId = replyingTo?.id
-        sending = true; input = ""; pendingMentions = [:]; pendingAttachment = nil; notice = nil
-        replyingTo = nil
-        try? await APIClient.shared.sendMessage(conversationId, content: v, mentionedUserIds: mentionedUserIds,
-                                                attachmentUrl: attachment?.url, attachmentType: attachment?.type,
-                                                replyToId: replyId)
-        await load()
-        sending = false
+        sending = true; notice = nil
+        defer { sending = false }
+        // The composer is cleared AFTER the server says yes. It used to be cleared before, with the
+        // send behind `try?` — a 403, a 413 or a dead network made the message vanish with nothing
+        // on screen, and the person walked away believing it was delivered.
+        do {
+            try await APIClient.shared.sendMessage(conversationId, content: v, mentionedUserIds: mentionedUserIds,
+                                                   attachmentUrl: attachment?.url, attachmentType: attachment?.type,
+                                                   replyToId: replyId)
+            input = ""; pendingMentions = [:]; pendingAttachment = nil; replyingTo = nil
+            await load()
+        } catch {
+            notice = (error as? LocalizedError)?.errorDescription ?? T("Couldn't send. Your message is still here — try again.")
+        }
     }
 
     /// The library hands back whatever the camera produced - often HEIC, which the server rejects.
@@ -933,8 +945,12 @@ struct ChatThreadView: View {
     private func sendTaskLink(_ t: ChatTaskRef) async {
         sending = true; notice = nil
         defer { sending = false }
-        try? await APIClient.shared.sendMessage(conversationId, content: "📋 Task: \(t.title) [task:\(t.id)]")
-        await load()
+        do {
+            try await APIClient.shared.sendMessage(conversationId, content: "📋 Task: \(t.title) [task:\(t.id)]")
+            await load()
+        } catch {
+            notice = (error as? LocalizedError)?.errorDescription ?? T("Couldn't send the task link.")
+        }
     }
 }
 

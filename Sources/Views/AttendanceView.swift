@@ -107,6 +107,9 @@ struct AttendanceView: View {
                     if let banner { infoBanner(banner.text, tone: banner.good ? .success : .danger) }
                     // A queued tap must never be invisible: someone who thinks they clocked in and
                     // did not would only find out at payroll.
+                    if let refused = queue.lastError, queue.count == 0 {
+                        infoBanner(refused, tone: .danger)
+                    }
                     if queue.count > 0 {
                         infoBanner(queue.count == 1
                                    ? T("1 attendance record is on this phone, waiting to be sent.")

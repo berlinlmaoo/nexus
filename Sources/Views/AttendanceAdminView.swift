@@ -77,6 +77,8 @@ struct AttendanceAdminSection: View {
     private var allowed: Bool { viewerRole == "BOD" || viewerRole == "ONE_ABOVE_ALL" }
     private var effectiveWsId: String? { workspaceId ?? wsId }
 
+    @State private var adminError: String?
+
     var body: some View {
         Group {
             if loading {
@@ -96,6 +98,9 @@ struct AttendanceAdminSection: View {
             }
         }
         .task { await load() }
+        .alert(T("Couldn't save"), isPresented: Binding(get: { adminError != nil }, set: { if !$0 { adminError = nil } })) {
+            Button("OK") { adminError = nil }
+        } message: { Text(adminError ?? "") }
     }
 
     private var monthBar: some View {
@@ -266,21 +271,24 @@ struct RedDateCard: View {
     }
     private func saveQuota() async {
         savingQuota = true
-        try? await APIClient.shared.setRedDateQuota(month: month, quota: quota)
+        do { _ = try await APIClient.shared.setRedDateQuota(month: month, quota: quota) }
+        catch { adminError = (error as? LocalizedError)?.errorDescription ?? T("The quota wasn't saved.") }
         savingQuota = false
     }
     private func addHoliday() async {
         busy = true
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.locale = Locale(identifier: "en_US_POSIX")
         let ds = f.string(from: newDate)
-        if (try? await APIClient.shared.addHoliday(date: ds, name: newName.trimmingCharacters(in: .whitespaces))) != nil {
+        do {
+            _ = try await APIClient.shared.addHoliday(date: ds, name: newName.trimmingCharacters(in: .whitespaces))
             newName = ""; adding = false; await load()
-        }
+        } catch { adminError = (error as? LocalizedError)?.errorDescription ?? T("The holiday wasn't added.") }
         busy = false
     }
     private func deleteHoliday(_ h: Holiday) async {
         busy = true
-        try? await APIClient.shared.deleteHoliday(id: h.id)
+        do { _ = try await APIClient.shared.deleteHoliday(id: h.id) }
+        catch { adminError = (error as? LocalizedError)?.errorDescription ?? T("The holiday wasn't removed.") }
         await load()
         busy = false
     }

@@ -13,10 +13,15 @@ struct ApprovalsView: View {
     @State private var loading = true
     /// Ids currently being sent, so a row cannot be answered twice by an impatient second tap.
     @State private var inFlight: Set<String> = []
+    /// A refused decision. Kept apart from `error`, which is the load error and replaces the list.
+    @State private var actionError: String?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
+                if let actionError {
+                    Text(actionError).font(.caption2).foregroundStyle(.red)
+                }
                 if loading && requests.isEmpty {
                     ProgressView().frame(maxWidth: .infinity)
                 } else if let error {
@@ -63,13 +68,14 @@ struct ApprovalsView: View {
         guard !request.isOwn(viewerId: session.userId) else { return }
         inFlight.insert(request.id)
         defer { inFlight.remove(request.id) }
+        actionError = nil
         do {
             try await WatchAPI.review(session, id: request.id, approve: approve)
             // Drop it immediately. Re-fetching first would leave the row sitting there long enough
             // to be tapped again, and the server answers the second tap with a 409.
             requests.removeAll { $0.id == request.id }
         } catch {
-            self.error = (error as? LocalizedError)?.errorDescription ?? "Failed."
+            actionError = (error as? LocalizedError)?.errorDescription ?? "Failed."
         }
     }
 }

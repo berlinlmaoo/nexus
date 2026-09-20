@@ -105,6 +105,9 @@ struct AttendanceRequestsCard: View {
     @Environment(AppRouter.self) private var router
     @State private var focusEntry: SubmissionEntry?
     @State private var focusMissing = false
+    /// A decision the server refused (403 outside the approval chain, 409 already decided by
+    /// somebody else, 500). It used to be swallowed: the row just stayed pending.
+    @State private var actionError: String?
     /// Settled requests are hidden until somebody asks for them. This list is every request ever
     /// filed, newest last, so the handful that still need a decision sat under months of finished
     /// ones — the reviewer had to scroll past their own history to find any work.
@@ -219,6 +222,9 @@ struct AttendanceRequestsCard: View {
         .alert(T("That request isn't in your list anymore"), isPresented: $focusMissing) {
             Button("OK") {}
         } message: { Text(T("It may already have been decided, or it belongs to someone outside your approval chain.")) }
+        .alert(T("Couldn't record the decision"), isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
+            Button("OK") { actionError = nil }
+        } message: { Text(actionError ?? "") }
     }
 
     /// Hand the record the router is holding to a sheet, once. Filter to "All" so the row is also
@@ -431,7 +437,8 @@ struct AttendanceRequestsCard: View {
 
     private func review(_ r: AttendanceRequest, _ action: String) async {
         busy = r.id; defer { busy = nil }
-        try? await APIClient.shared.reviewAttendanceRequest(id: r.id, action: action)
+        do { _ = try await APIClient.shared.reviewAttendanceRequest(id: r.id, action: action) }
+        catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("The server refused it. Try again.") }
         await load()
     }
 
@@ -440,7 +447,8 @@ struct AttendanceRequestsCard: View {
     /// knows what approving one has to do (the −25 XP on reject, the four-eyes guard, the notify).
     private func reviewOffsite(_ o: OffsiteCheckout, _ action: String) async {
         busy = o.id; defer { busy = nil }
-        try? await APIClient.shared.reviewOffsiteCheckout(id: o.id, action: action)
+        do { _ = try await APIClient.shared.reviewOffsiteCheckout(id: o.id, action: action) }
+        catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("The server refused it. Try again.") }
         await load()
     }
 

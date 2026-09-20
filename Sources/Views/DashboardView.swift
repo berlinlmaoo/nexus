@@ -237,7 +237,8 @@ struct DashboardView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 6) {
                         Text(game?.xp.levelName ?? "—").font(NXFont.display(14, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
-                        Text("Lv.\(game?.xp.level ?? 0)").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
+                        // "…" until the numbers are in. "Lv.0 / 0 XP" looked like a fact.
+                        Text(game.map { "Lv.\($0.xp.level)" } ?? "…").font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg)
                         if (game?.streakCurrent ?? 0) > 0 {
                             HStack(spacing: 2) {
                                 Image(systemName: "flame.fill").font(.system(size: 10))
@@ -267,7 +268,8 @@ struct DashboardView: View {
     }
 
     private var xpLabel: String {
-        (game?.xp.totalXp ?? 0).formatted(.number.grouping(.automatic)) + " XP"
+        guard let game else { return "… XP" }
+        return game.xp.totalXp.formatted(.number.grouping(.automatic)) + " XP"
     }
 
     // MARK: search + bell
@@ -634,7 +636,8 @@ struct DashboardView: View {
                     Divider().overlay(NX.border)
                     xpRulesSection(title: T("XP Penalties"), icon: "arrow.down.right", tone: NX.danger, rows: XpRules.penalties)
                     xpRulesSection(title: T("XP Bonuses"), icon: "arrow.up.right", tone: NX.success, rows: XpRules.bonuses)
-                    VStack(alignment: .leading, spacing: 6) {
+if !XpRules.tiers.isEmpty {
+                                        VStack(alignment: .leading, spacing: 6) {
                         Text(T("Tier rewards (end of period)").uppercased())
                             .font(NXFont.text(11, .bold)).tracking(0.6).foregroundStyle(NX.mutedFg)
                         ForEach(XpRules.tiers, id: \.label) { t in
@@ -649,6 +652,7 @@ struct DashboardView: View {
                             .background(t.tone.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(t.tone.opacity(0.25)))
                         }
+                    }
                     }
                     Text(T("\"Automatic\" is calculated by the system from attendance & end of period. \"Manual\" is awarded by Head/HR/management based on their judgment."))
                         .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
@@ -1037,18 +1041,19 @@ enum XpRules {
     static let penalties: [Row] = [
         Row(xp: "-1 XP/min", rule: "Late check-in", note: "Max 120 min. >120 → docks a day off", auto: true),
         Row(xp: "-25 XP", rule: "No check-out (forgot to log out)", note: "Per incident", auto: true),
-        Row(xp: "-30 XP", rule: "Left the office without manager approval", note: "Per incident", auto: false),
+        // The server's rule (offsite-checkouts/[recordId]: awardXpOnce −25 on reject). The card said
+        // "−30, left without approval" — a number that existed nowhere but here.
+        Row(xp: "-25 XP", rule: "Offsite check-out rejected by your approver", note: "Per incident", auto: true),
         Row(xp: "-150 XP", rule: "No-show, no heads-up (absent)", note: "Per day", auto: true),
     ]
+    // No automatic bonus. The "+50 for a month without absence" and the Excellent/Good/Review tiers
+    // were retired on the server (src/lib/period-rewards.ts: "XP is now 100% quest-only, assigned
+    // by BoD"); the card kept promising them for months.
     static let bonuses: [Row] = [
-        Row(xp: "+50 XP", rule: "Zero absences for a full month", note: "Showing up consistently", auto: true),
         Row(xp: "+30 XP", rule: "Finish a side quest from your Head", note: "Head's call", auto: false),
         Row(xp: "+50 XP", rule: "Performance beyond target", note: "Management's call", auto: false),
         Row(xp: "+20 XP", rule: "Feedback the company adopts", note: "HR's call", auto: false),
     ]
-    static let tiers: [Tier] = [
-        Tier(range: "1400 – 1500 XP", label: "Excellent", reward: "🎁 1 extra day off", tone: NX.success),
-        Tier(range: "1300 – 1400 XP", label: "Good", reward: "🍾 1 free bottle at a PATS outlet", tone: NX.warning),
-        Tier(range: "< 800 XP", label: "Review", reward: "⚠️ Performance review by Head + HR", tone: NX.danger),
-    ]
+    /// Empty on purpose — see `bonuses`. The section that draws these hides itself when there are none.
+    static let tiers: [Tier] = []
 }

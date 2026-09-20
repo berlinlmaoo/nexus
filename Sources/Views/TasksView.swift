@@ -9,6 +9,8 @@ struct TasksView: View {
     @State private var error: String?
     @State private var openTaskId: String?
 
+    @State private var actionError: String?
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -16,6 +18,9 @@ struct TasksView: View {
                 content
             }
             .navigationDestination(item: $openTaskId) { tid in TaskDetailView(taskId: tid) }
+            .alert(T("Couldn't update the task"), isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
+            Button("OK") { actionError = nil }
+        } message: { Text(actionError ?? "") }
             .navigationTitle(T("My Quest Log"))
             .task {
                 if tasks.isEmpty, let myId = auth.session?.userId,
@@ -98,7 +103,8 @@ struct TasksView: View {
 
     private func toggle(_ t: MyTask) async {
         if t.isDone { Haptics.tap() } else { Haptics.success() }
-        try? await APIClient.shared.setTaskStatus(taskId: t.id, status: t.isDone ? "TODO" : "DONE")
+        do { _ = try await APIClient.shared.setTaskStatus(taskId: t.id, status: t.isDone ? "TODO" : "DONE") }
+        catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("The server refused it; the task is unchanged.") }
         await load()
     }
 

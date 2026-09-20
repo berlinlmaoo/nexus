@@ -248,7 +248,7 @@ struct AdminUsersSection: View {
                         }
                         HStack(spacing: 8) {
                             Image(systemName: "magnifyingglass").font(.system(size: 13, weight: .semibold)).foregroundStyle(NX.mutedFg)
-                            TextField(T("Cari nama atau email…"), text: $query)
+                            TextField(T("Search name or email…"), text: $query)
                                 .font(NXFont.text(14)).textInputAutocapitalization(.never).autocorrectionDisabled()
                             if !query.isEmpty {
                                 Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg) }.buttonStyle(.plain)
@@ -273,7 +273,7 @@ struct AdminUsersSection: View {
                         // jadi Staff; perannya bisa diubah sesudahnya dari detail orangnya.
                         if !registered.isEmpty, canManageAttendanceFlags, let wsId = workspaceId {
                             VStack(alignment: .leading, spacing: 6) {
-                                Text("\(T("Belum masuk workspace")) · \(registered.count)")
+                                Text("\(T("Not in the workspace yet")) · \(registered.count)")
                                     .font(NXFont.text(11, .semibold)).foregroundStyle(NX.warning)
                                 VStack(spacing: 0) {
                                     ForEach(Array(registered.enumerated()), id: \.element.id) { idx, r in
@@ -358,7 +358,7 @@ struct AdminUsersSection: View {
                     if let a = m.approver?.name, !a.isEmpty {
                         Text("\(T("Approver")): \(a)").font(NXFont.text(10)).foregroundStyle(NX.mutedFg).lineLimit(1)
                     } else if m.role == "STAFF" || m.role == "MANAGER" {
-                        Text(T("Belum ditaruh di Bagan Approval")).font(NXFont.text(10, .semibold)).foregroundStyle(NX.warning)
+                        Text(T("Not placed on the Approval Chart")).font(NXFont.text(10, .semibold)).foregroundStyle(NX.warning)
                     }
                     if let uid = m.userId {
                         Text(membershipSummary(memberships[uid])).font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
@@ -493,6 +493,7 @@ struct CreateQuestSheet: View {
     @State private var hasDeadline = false
     @State private var deadline = Date()
     @State private var busy = false
+    @State private var err: String?
 
     private let types: [(String, String)] = [("task_count", T("Complete N tasks")), ("overdue_cleared", "Clear N overdue"), ("priority_done", "Complete N Urgent"), ("has_overdue", T("Has ≥N overdue (penalty)"))]
 
@@ -519,6 +520,7 @@ struct CreateQuestSheet: View {
                             Toggle(isOn: $hasDeadline.animation()) { Text("Pakai deadline").font(NXFont.text(14)).foregroundStyle(NX.foreground) }.tint(NX.violetText)
                             if hasDeadline { DatePicker("", selection: $deadline, displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violetText) }
                         }
+                        if let err { Text(err).font(NXFont.text(12)).foregroundStyle(NX.danger) }
                         Button { Task { await create() } } label: { HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text("Assign quest") } }
                             .buttonStyle(NexusPrimaryButton()).disabled(busy || title.trimmingCharacters(in: .whitespaces).isEmpty)
                     }.padding(20)
@@ -534,8 +536,10 @@ struct CreateQuestSheet: View {
     private func create() async {
         busy = true; defer { busy = false }
         let dl: String? = hasDeadline ? { let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = ProjDate.cal.timeZone; return f.string(from: deadline) }() : nil
-        try? await APIClient.shared.createAdminQuest(workspaceId: workspaceId, title: title.trimmingCharacters(in: .whitespaces), requirementType: reqType, requiredCount: Int(count) ?? 5, xpReward: min(50, max(0, Int(xp) ?? 0)), deadline: dl)
-        await onCreated(); dismiss()
+        do {
+            _ = try await APIClient.shared.createAdminQuest(workspaceId: workspaceId, title: title.trimmingCharacters(in: .whitespaces), requirementType: reqType, requiredCount: Int(count) ?? 5, xpReward: min(50, max(0, Int(xp) ?? 0)), deadline: dl)
+            await onCreated(); dismiss()
+        } catch { err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't create the quest.") }
     }
 }
 
@@ -569,16 +573,16 @@ struct AdminAnnouncementsSection: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(a.title).font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground).lineLimit(1)
-                NexusChip(text: (a.active ?? false) ? "Aktif" : "Nonaktif", tone: (a.active ?? false) ? .success : .neutral)
+                NexusChip(text: (a.active ?? false) ? T("Active") : T("Inactive"), tone: (a.active ?? false) ? .success : .neutral)
                 Spacer()
                 Button { Task { try? await APIClient.shared.deleteAnnouncement(a.id); await load() } } label: { Image(systemName: "trash").font(.system(size: 13)).foregroundStyle(NX.danger) }.buttonStyle(.plain)
             }
             if let b = a.body, !b.isEmpty { Text(b).font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(3) }
             HStack {
-                Text("dibaca \(a.seenCount ?? 0) orang").font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
+                Text("\(T("read by")) \(a.seenCount ?? 0) \(T("people"))").font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
                 Spacer()
                 Button { Task { try? await APIClient.shared.updateAnnouncementActive(id: a.id, active: !(a.active ?? false)); await load() } } label: {
-                    Text((a.active ?? false) ? "Nonaktifin" : "Aktifin").font(NXFont.text(12, .bold)).foregroundStyle(NX.violetText)
+                    Text((a.active ?? false) ? T("Deactivate") : T("Activate")).font(NXFont.text(12, .bold)).foregroundStyle(NX.violetText)
                 }.buttonStyle(.plain)
             }
         }.nexusCard(padding: 12)
@@ -930,7 +934,7 @@ struct GoogleLinkSheet: View {
                 List {
                     Section {
                         Button { startMaking() } label: {
-                            Label(T("Bikin email kantor baru"), systemImage: "plus.circle")
+                            Label(T("Create a company mailbox"), systemImage: "plus.circle")
                                 .font(NXFont.text(14, .semibold))
                         }
                         .disabled(busy)
@@ -982,7 +986,7 @@ struct GoogleLinkSheet: View {
                         Section { Text(problem).font(NXFont.text(12)).foregroundStyle(NX.danger) }
                     }
                 }
-                .searchable(text: $query, prompt: T("Cari akun…"))
+                .searchable(text: $query, prompt: T("Search accounts…"))
             }
         }
         .navigationTitle(target.name)
@@ -1019,9 +1023,9 @@ struct GoogleLinkSheet: View {
 
     private var makeForm: some View {
         Form {
-            Section(T("Nama di Google")) {
-                TextField(T("Nama depan"), text: $givenName).textInputAutocapitalization(.words)
-                TextField(T("Nama belakang"), text: $familyName).textInputAutocapitalization(.words)
+            Section(T("Name in Google")) {
+                TextField(T("First name"), text: $givenName).textInputAutocapitalization(.words)
+                TextField(T("Last name"), text: $familyName).textInputAutocapitalization(.words)
             }
             Section {
                 HStack(spacing: 4) {
@@ -1059,7 +1063,7 @@ struct GoogleLinkSheet: View {
                     }
                 }
                 .disabled(!canSubmit)
-                Button(T("Batal"), role: .cancel) { making = false; problem = nil }
+                Button(T("Cancel"), role: .cancel) { making = false; problem = nil }
             }
         }
     }
@@ -1251,7 +1255,7 @@ struct TeamPickSheet: View {
             if teams.isEmpty && query.trimmingCharacters(in: .whitespaces).isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "person.3").font(.system(size: 36)).foregroundStyle(NX.mutedFg)
-                    Text(T("Sudah masuk semua tim yang bisa kamu atur."))
+                    Text(T("Already in every team you can manage."))
                         .font(NXFont.text(13)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity).padding(28)
@@ -1265,7 +1269,7 @@ struct TeamPickSheet: View {
                                 creating = true
                                 onCreate(n)
                             } label: {
-                                Label("\(T("Bikin tim")) \u{201C}\(n)\u{201D}", systemImage: creating ? "hourglass" : "plus.circle")
+                                Label("\(T("Create team")) \u{201C}\(n)\u{201D}", systemImage: creating ? "hourglass" : "plus.circle")
                                     .font(NXFont.text(14, .semibold))
                             }
                             .disabled(creating)
@@ -1284,7 +1288,7 @@ struct TeamPickSheet: View {
                         }
                     }
                 }
-                .searchable(text: $query, prompt: T("Cari tim…"))
+                .searchable(text: $query, prompt: T("Search teams…"))
             }
         }
         .navigationTitle(target.name)
@@ -1357,7 +1361,7 @@ struct ApproverPickSheet: View {
                 }
             }
         }
-        .searchable(text: $query, prompt: T("Cari nama…"))
+        .searchable(text: $query, prompt: T("Search names…"))
         .navigationTitle(target.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() } } }
@@ -1410,17 +1414,17 @@ struct AccountEditSheet: View {
                 HStack(spacing: 14) {
                     AvatarView(url: avatarURL, initial: String(name.first ?? "?").uppercased(), size: 56)
                     PhotosPicker(selection: $pickedPhoto, matching: .images, photoLibrary: .shared()) {
-                        Label(T("Ganti foto"), systemImage: "photo").font(NXFont.text(13, .semibold))
+                        Label(T("Change photo"), systemImage: "photo").font(NXFont.text(13, .semibold))
                     }
                     .disabled(busy)
                 }
             } header: { Text(T("Foto profil")) }
 
             Section {
-                TextField(T("Nama"), text: $name).textInputAutocapitalization(.words)
+                TextField(T("Name"), text: $name).textInputAutocapitalization(.words)
                 TextField(T("Email login"), text: $email).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
                 Button { Task { await saveIdentity() } } label: {
-                    HStack { Text(T("Simpan nama & email")); Spacer(); if busy { ProgressView() } }
+                    HStack { Text(T("Save name & email")); Spacer(); if busy { ProgressView() } }
                 }
                 .disabled(!identityDirty || busy)
             } header: { Text(T("Identitas")) }
@@ -1432,7 +1436,7 @@ struct AccountEditSheet: View {
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
                     .font(.system(.body, design: .monospaced))
                 Button(role: .destructive) { Task { await savePassword() } } label: {
-                    Text(T("Ganti sandi"))
+                    Text(T("Change password"))
                 }
                 .disabled(password.count < 8 || busy)
             } header: { Text(T("Sandi")) } footer: {
@@ -1466,7 +1470,7 @@ struct AccountEditSheet: View {
                 userId: target.userId,
                 name: n != target.name ? n : nil,
                 email: e != target.email.lowercased() ? e : nil)
-        }, done: T("Nama & email disimpan."))
+        }, done: T("Name & email saved."))
     }
 
     private func savePassword() async {
@@ -1535,7 +1539,7 @@ struct ProjectPickSheet: View {
                     .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             }
         }
-        .searchable(text: $query, prompt: T("Cari project…"))
+        .searchable(text: $query, prompt: T("Search projects…"))
         .navigationTitle(target.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() } } }

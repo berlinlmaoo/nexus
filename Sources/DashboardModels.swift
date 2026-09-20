@@ -262,6 +262,8 @@ enum NotificationTarget: Hashable {
     case conversation(String)
     /// One announcement — `/dashboard?announcement=<id>`. Shown even if it was dismissed before.
     case announcement(String)
+    /// One Threads post — `/threads?post=<id>`: a mention, or a comment on something you posted.
+    case post(String)
 
     /// The screen that owns the record, for the router to walk to before the screen claims it.
     var hostScreen: NXScreen? {
@@ -271,6 +273,7 @@ enum NotificationTarget: Hashable {
         case .complaint:                         return .tickets
         case .conversation:                      return .messages
         case .announcement:                      return .dashboard
+        case .post:                              return .threads
         case .submission:                        return .submissions
         case .task, .project:                    return nil
         }
@@ -304,7 +307,8 @@ enum NotificationTarget: Hashable {
             else if let id = Self.queryValue("c", in: path) { self = .conversation(id) }
             else { self = .screen(.messages) }
         case "inbox":                   self = .screen(.inbox)
-        case "threads", "social":       self = .screen(.threads)
+        case "threads", "social":
+            if let id = Self.queryValue("post", in: path) { self = .post(id) } else { self = .screen(.threads) }
         // There is no single-document screen on mobile; the library is as close as it gets.
         case "docs", "folders":         self = .screen(.docs)
         case "forms":                   self = .screen(.forms)

@@ -89,36 +89,37 @@ struct TeamDetailView: View {
             if canManage {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button { nameDraft = team.name; showRename = true } label: { Label(T("Ganti nama"), systemImage: "pencil") }
+                        Button { nameDraft = team.name; showRename = true } label: { Label(T("Rename"), systemImage: "pencil") }
                         Button { showDivisions = true } label: { Label(T("Kelola divisi"), systemImage: "folder") }
                         Divider()
-                        Button(role: .destructive) { showDelete = true } label: { Label(T("Hapus tim"), systemImage: "trash") }
+                        Button(role: .destructive) { showDelete = true } label: { Label(T("Delete team"), systemImage: "trash") }
                     } label: { Image(systemName: "ellipsis.circle") }
                 }
             }
         }
-        .alert(T("Ganti nama tim"), isPresented: $showRename) {
-            TextField(T("Nama tim"), text: $nameDraft)
-            Button(T("Simpan")) {
+        .alert(T("Rename team"), isPresented: $showRename) {
+            TextField(T("Team name"), text: $nameDraft)
+            Button(T("Save")) {
                 let next = nameDraft.trimmingCharacters(in: .whitespaces)
                 guard !next.isEmpty, next != team.name else { return }
                 Task { await act("rename") { try await APIClient.shared.teamRename(teamId: team.id, name: next) } }
             }
             Button(T("Cancel"), role: .cancel) { }
         }
-        .alert(T("Hapus tim ini?"), isPresented: $showDelete) {
-            Button(T("Hapus"), role: .destructive) {
+        .alert(T("Delete this team?"), isPresented: $showDelete) {
+            Button(T("Delete"), role: .destructive) {
                 Task {
-                    try? await APIClient.shared.teamDelete(teamId: team.id)
-                    onChanged()
-                    dismiss()
+                    // Through act(): its catch shows the reason on this screen. Dismiss only when
+                    // nothing went wrong — the sheet used to close over a 403 as if it had worked.
+                    await act("delete") { try await APIClient.shared.teamDelete(teamId: team.id) }
+                    if error == nil { dismiss() }
                 }
             }
             Button(T("Cancel"), role: .cancel) { }
         } message: {
             // Menghapus tim mencabut akses semua anggotanya ke project yang ditautkan tim ini.
             // Angkanya disebut, bukan diperkirakan pemakainya.
-            Text("\(members.count) \(T("orang kehilangan akses ke")) \(links.count) \(T("project yang ditautkan tim ini."))")
+            Text("\(members.count) \(T("people lose access to")) \(links.count) \(T("projects linked to this team."))")
         }
         .sheet(isPresented: $showDivisions) {
             NavigationStack { DivisionManagerSheet(divisions: divisions) { Task { await loadSupporting() } } }
@@ -186,10 +187,10 @@ struct TeamDetailView: View {
     /// Control Room; dinyalakan = jam tim ini menang untuk semuanya.
     private var shiftSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionHeader(T("Jam shift tim"), action: nil)
+            sectionHeader(T("Team shift hours"), action: nil)
             VStack(alignment: .leading, spacing: 12) {
                 Toggle(isOn: Binding(get: { shiftOn }, set: { shiftOn = $0; shiftDirty = true })) {
-                    Text(T("Pakai jam khusus untuk tim ini")).font(NXFont.text(13)).foregroundStyle(NX.foreground)
+                    Text(T("Use custom hours for this team")).font(NXFont.text(13)).foregroundStyle(NX.foreground)
                 }
                 .tint(NX.violet)
                 if shiftOn {
@@ -199,7 +200,7 @@ struct TeamDetailView: View {
                     }
                     .font(NXFont.text(12))
                 } else {
-                    Text(T("Anggota memakai jam masing-masing dari Control Room."))
+                    Text(T("Members keep their own hours from Control Room."))
                         .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 }
                 if shiftDirty {
@@ -213,7 +214,7 @@ struct TeamDetailView: View {
                             shiftDirty = false
                         }
                     } label: {
-                        Text(busy.contains("shift") ? T("Menyimpan…") : T("Simpan jam shift"))
+                        Text(busy.contains("shift") ? T("Saving…") : T("Save shift hours"))
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(NexusPrimaryButton(fullWidth: true))
@@ -304,7 +305,7 @@ struct TeamDetailView: View {
                                     teamId: team.id, userId: uid, isPrimary: !(member.isAttendancePrimary ?? false))
                             } }
                         } label: {
-                            Label((member.isAttendancePrimary ?? false) ? T("Lepas tim absensi utama") : T("Jadikan tim absensi utama"),
+                            Label((member.isAttendancePrimary ?? false) ? T("Unset as main attendance team") : T("Set as main attendance team"),
                                   systemImage: (member.isAttendancePrimary ?? false) ? "star.fill" : "star")
                         }
                     }
@@ -526,14 +527,14 @@ struct DivisionManagerSheet: View {
                         .font(NXFont.text(14))
                         .submitLabel(.done)
                         .onSubmit { create() }
-                    Button(T("Tambah")) { create() }
+                    Button(T("Add")) { create() }
                         .font(NXFont.text(13, .semibold))
                         .disabled(busy || newName.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
             Section(T("Divisi")) {
                 if divisions.isEmpty {
-                    Text(T("Belum ada divisi.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                    Text(T("No divisions yet.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 }
                 ForEach(divisions) { d in
                     HStack(spacing: 8) {
@@ -541,12 +542,12 @@ struct DivisionManagerSheet: View {
                         Text(d.name).font(NXFont.text(14)).foregroundStyle(NX.foreground)
                         Spacer(minLength: 6)
                         Menu {
-                            Button { renaming = d; nameDraft = d.name } label: { Label(T("Ganti nama"), systemImage: "pencil") }
+                            Button { renaming = d; nameDraft = d.name } label: { Label(T("Rename"), systemImage: "pencil") }
                             // Menghapus divisi TIDAK menghapus timnya — mereka jadi tidak
                             // berkelompok. Itu perilaku server (onDelete: SetNull), dan kalimat
                             // ini ada supaya tidak ada yang mengira timnya ikut hilang.
                             Button(role: .destructive) { run { try await APIClient.shared.divisionDelete(divisionId: d.id) } } label: {
-                                Label(T("Hapus (timnya tetap ada)"), systemImage: "trash")
+                                Label(T("Delete (the team stays)"), systemImage: "trash")
                             }
                         } label: { Image(systemName: "ellipsis.circle").foregroundStyle(NX.mutedFg) }
                         .disabled(busy)
@@ -563,9 +564,9 @@ struct DivisionManagerSheet: View {
             ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() } }
             if busy { ToolbarItem(placement: .topBarTrailing) { ProgressView() } }
         }
-        .alert(T("Ganti nama divisi"), isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
-            TextField(T("Nama divisi"), text: $nameDraft)
-            Button(T("Simpan")) {
+        .alert(T("Rename division"), isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField(T("Division name"), text: $nameDraft)
+            Button(T("Save")) {
                 let next = nameDraft.trimmingCharacters(in: .whitespaces)
                 if let d = renaming, !next.isEmpty, next != d.name {
                     run { try await APIClient.shared.divisionRename(divisionId: d.id, name: next) }

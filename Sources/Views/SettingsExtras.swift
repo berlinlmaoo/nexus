@@ -103,7 +103,7 @@ struct WorkspaceMembersCard: View {
                         Button(orgRoleLabel(r)) { Task { await setRole(m, r) } }
                     }
                     Divider()
-                    Button(role: .destructive) { Task { await remove(m) } } label: { Label("Keluarin", systemImage: "person.badge.minus") }
+                    Button(role: .destructive) { Task { await remove(m) } } label: { Label(T("Remove"), systemImage: "person.badge.minus") }
                 } label: { RoleChip(role: m.role ?? "STAFF") }
             } else {
                 RoleChip(role: m.role ?? "STAFF")
@@ -123,11 +123,15 @@ struct WorkspaceMembersCard: View {
     }
     private func setRole(_ m: WorkspaceRoster.Member, _ role: String) async {
         guard let id = m.id else { return }
-        try? await APIClient.shared.updateWorkspaceMemberRole(memberId: id, role: role, workspaceId: workspaceId); await load()
+        do { _ = try await APIClient.shared.updateWorkspaceMemberRole(memberId: id, role: role, workspaceId: workspaceId) }
+        catch { err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't change the role.") }
+        await load()
     }
     private func remove(_ m: WorkspaceRoster.Member) async {
         guard let id = m.id else { return }
-        try? await APIClient.shared.removeWorkspaceMember(memberId: id, workspaceId: workspaceId); await load()
+        do { _ = try await APIClient.shared.removeWorkspaceMember(memberId: id, workspaceId: workspaceId) }
+        catch { err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't remove the member.") }
+        await load()
     }
 }
 

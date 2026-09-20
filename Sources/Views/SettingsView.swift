@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var workspaceId: String?
     @State private var saving = false
     @State private var savedOK = false
+    @State private var saveError: String?
     @State private var loading = true
     @State private var avatarURL: String?
     @State private var pickedPhoto: PhotosPickerItem?
@@ -132,6 +133,9 @@ struct SettingsView: View {
             }
             .opacity(loading ? 0.4 : 1)
         }
+        .alert(T("Couldn't save"), isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+            Button("OK") { saveError = nil }
+        } message: { Text(saveError ?? "") }
         .navigationTitle(T("Tuning Room"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
@@ -200,6 +204,6 @@ struct SettingsView: View {
         saving = true; savedOK = false; defer { saving = false }
         let v = name.trimmingCharacters(in: .whitespaces)
         do { try await APIClient.shared.updateProfile(name: v); savedOK = true }
-        catch {}
+        catch { saveError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't save your profile.") }
     }
 }

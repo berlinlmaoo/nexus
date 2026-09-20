@@ -17,6 +17,7 @@ enum GlancePresence {
     static func refresh(tasks: [MyTask], unread: Int, game: Gamification?) {
         let open = tasks.filter { !$0.isDone }
         let today = AttendanceSnapshot.currentDateKey()
+        let last = NexusGlance.load()
 
         let glance = NexusGlance(
             dateKey: today,
@@ -29,10 +30,12 @@ enum GlancePresence {
                 return due < today
             }.count,
             unreadNotifications: max(0, unread),
-            totalXp: game?.xp.totalXp ?? 0,
-            level: game?.xp.level ?? 0,
-            levelName: game?.xp.levelName,
-            streak: game?.streak?.current,
+            // `game` is nil on the first paint and whenever /gamification failed. Writing zeros then
+            // put "LV 0" on the widget; the last blob is the better guess.
+            totalXp: game?.xp.totalXp ?? last?.totalXp ?? 0,
+            level: game?.xp.level ?? last?.level ?? 0,
+            levelName: game?.xp.levelName ?? last?.levelName,
+            streak: game?.streak?.current ?? last?.streak,
             updatedAt: Date()
         )
         glance.save()

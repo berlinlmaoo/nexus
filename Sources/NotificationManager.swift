@@ -213,6 +213,20 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         )
     }
 
+    /// A queued tap the server answered with a refusal. Delivered at once, because the person is
+    /// usually not looking at the app when the queue drains — and a refused check-in that nobody is
+    /// told about becomes an absence at 02:00.
+    func reportQueueRefusal(kind: PendingAttendance.Kind, at: Date) async {
+        let f = DateFormatter(); f.dateFormat = "HH:mm"; f.timeZone = TimeZone(identifier: "Asia/Jakarta")
+        let content = UNMutableNotificationContent()
+        content.title = kind == .checkIn ? T("Offline check-in refused") : T("Offline check-out refused")
+        content.body = (kind == .checkIn ? T("Your check-in at") : T("Your check-out at")) + " \(f.string(from: at)) "
+            + T("was outside the office radius when it was sent. Open Attendance for what to do next.")
+        content.sound = .default
+        content.userInfo = ["type": "attendance_queue_refused", "link": "/attendance"]
+        try? await center.add(UNNotificationRequest(identifier: "nexus.queue-refused.\(UUID().uuidString)", content: content, trigger: nil))
+    }
+
     private func addNotification(id: String, title: String, body: String, date: Date, userInfo: [String: String]) async {
         let content = UNMutableNotificationContent()
         content.title = title

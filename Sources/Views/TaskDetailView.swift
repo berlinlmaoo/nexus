@@ -23,6 +23,9 @@ struct TaskDetailView: View {
     @State private var isBod = false       // gates the "Make it a quest" button (BoD+)
     @State private var showQuestComposer = false
     @State private var openTaskId: String?   // parent / subtask / dependency hops within the stack
+    /// An action the server refused. Separate from `error` (which replaces the whole screen while
+    /// the task itself cannot load): a comment that failed to post must not blank the task.
+    @State private var actionError: String?
 
     private let statuses = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANCELLED"]
     private let priorities = ["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"]
@@ -69,6 +72,9 @@ struct TaskDetailView: View {
                 } label: { Image(systemName: "ellipsis.circle") }
             }
         }
+        .alert(T("Couldn't do that"), isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
+            Button("OK") { actionError = nil }
+        } message: { Text(actionError ?? "") }
         .confirmationDialog(T("Delete this task?"), isPresented: $confirmDelete, titleVisibility: .visible) {
             Button(T("Delete"), role: .destructive) { Task { await deleteTask() } }
             Button(T("Cancel"), role: .cancel) {}
@@ -359,20 +365,28 @@ struct TaskDetailView: View {
         if st.isDone { Haptics.tap() } else { Haptics.success() }
         try? await APIClient.shared.setTaskStatus(taskId: st.id, status: st.isDone ? "TODO" : "DONE"); await load()
     }
+    // Dismiss only once the server has agreed. Behind `try?` the sheet closed on a 403 too, the
+    // task looked deleted, and it was back on the board at the next refresh.
     private func deleteTask() async {
-        try? await APIClient.shared.deleteTask(taskId); dismiss()
+        do { _ = try await APIClient.shared.deleteTask(taskId); dismiss() }
+        catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't delete the task.") }
     }
+    // The draft is cleared AFTER the post succeeds; on failure it is still in the box.
     private func addComment(_ t: TaskDetail) {
         let v = newComment.trimmingCharacters(in: .whitespaces)
         guard !v.isEmpty else { return }
-        newComment = ""
-        Task { try? await APIClient.shared.addComment(taskId: t.id, content: v); await load() }
+        Task {
+            do { _ = try await APIClient.shared.addComment(taskId: t.id, content: v); newComment = ""; await load() }
+            catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't post the comment. It's still in the box.") }
+        }
     }
     private func addSubtask(_ t: TaskDetail) {
         let v = newSubtask.trimmingCharacters(in: .whitespaces)
         guard !v.isEmpty, let pid = t.projectId, let lid = t.taskListId else { return }
-        newSubtask = ""
-        Task { try? await APIClient.shared.createTask(projectId: pid, taskListId: lid, title: v, parentId: t.id); await load() }
+        Task {
+            do { _ = try await APIClient.shared.createTask(projectId: pid, taskListId: lid, title: v, parentId: t.id); newSubtask = ""; await load() }
+            catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't add the subtask. It's still in the box.") }
+        }
     }
     private func isoDay(_ d: Date) -> String {
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = TimeZone(identifier: "Asia/Jakarta"); return f.string(from: d)

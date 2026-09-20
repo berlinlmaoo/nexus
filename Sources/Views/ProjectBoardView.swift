@@ -106,6 +106,8 @@ struct ProjectDetailView: View {
         }
     }
 
+    @State private var actionError: String?
+
     var body: some View {
         VStack(spacing: 0) {
             Color.clear.frame(height: statusBarTop)   // clear the status bar only (NOT the reserved nav-bar height)
@@ -129,6 +131,9 @@ struct ProjectDetailView: View {
             }
         }
         .task { await load() }
+        .alert(T("Couldn't update the board"), isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
+            Button("OK") { actionError = nil }
+        } message: { Text(actionError ?? "") }
         // Recorded here rather than at each tap site, so a project counts as visited whichever
         // route led in: the projects list, a sidebar shortcut, or a link out of a task.
         .task { if !displayName.isEmpty { ProjectShortcuts.shared.visit(ProjectRef(id: projectId, name: displayName, icon: nil)) } }
@@ -379,12 +384,14 @@ struct ProjectDetailView: View {
     private func addTask(laneId: String, title: String) async {
         let t = title.trimmingCharacters(in: .whitespaces)
         guard !t.isEmpty else { return }
-        try? await APIClient.shared.createTask(projectId: projectId, taskListId: laneId, title: t)
+        do { _ = try await APIClient.shared.createTask(projectId: projectId, taskListId: laneId, title: t) }
+        catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("The task wasn't created.") }
         await load()
     }
 
     private func moveTask(_ taskId: String, to laneId: String) async {
-        try? await APIClient.shared.updateTask(taskId, ["taskListId": laneId])
+        do { _ = try await APIClient.shared.updateTask(taskId, ["taskListId": laneId]) }
+        catch { actionError = (error as? LocalizedError)?.errorDescription ?? T("The task wasn't moved.") }
         await load()
     }
 }
