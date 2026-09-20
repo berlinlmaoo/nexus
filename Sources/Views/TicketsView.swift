@@ -235,8 +235,18 @@ struct TicketsView: View {
     @State private var filter = "ALL"
     @State private var selected: Complaint?
     @State private var showCreate = false
+    /// The ticket a notification pointed at (`AppRouter.focus`): opened as soon as the list is in.
+    @Environment(AppRouter.self) private var router
+    @State private var focusMissing = false
 
     private let filters = ["ALL", "OPEN", "IN_REVIEW", "RESOLVED", "CLOSED"]
+
+    /// "All" first, so the ticket is also in the list under the sheet whatever its status now is.
+    private func claimFocus() {
+        guard case .complaint(let id) = router.focus else { return }
+        router.focus = nil
+        if let hit = items.first(where: { $0.id == id }) { filter = "ALL"; selected = hit } else { focusMissing = true }
+    }
     private func filterLabel(_ f: String) -> String {
         switch f {
         case "OPEN": return T("Open")
@@ -272,7 +282,9 @@ struct TicketsView: View {
                     .accessibilityLabel(T("New ticket"))
             }
         }
-        .task { await load() }
+        .task { await load(); claimFocus() }
+        .onChange(of: router.focus) { _, _ in if !loading { claimFocus() } }
+        .alert(T("That ticket isn't in your list"), isPresented: $focusMissing) { Button("OK") {} }
         .sheet(item: $selected) { t in TicketDetailSheet(ticket: t) { await load() } }
         // Reloads rather than splicing the new ticket in: the server decides the status, the
         // reporter shown (anonymous tickets hide it) and the ordering, so a locally-invented row

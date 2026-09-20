@@ -100,6 +100,11 @@ struct AttendanceRequestsCard: View {
     @State private var busy: String?
     @State private var viewingPhoto: PhotoRef?
     @State private var rejecting: AttendanceRequest?
+    /// The request a notification pointed at (`AppRouter.focus`), shown on its own sheet the moment
+    /// the list is in — with Approve and Reject on it, which is the whole point of tapping the push.
+    @Environment(AppRouter.self) private var router
+    @State private var focusEntry: SubmissionEntry?
+    @State private var focusMissing = false
     /// Settled requests are hidden until somebody asks for them. This list is every request ever
     /// filed, newest last, so the handful that still need a decision sat under months of finished
     /// ones — the reviewer had to scroll past their own history to find any work.
@@ -178,6 +183,12 @@ struct AttendanceRequestsCard: View {
                         .padding(.horizontal, 12).padding(.vertical, 8).background(NX.violet, in: Capsule())
                 }.buttonStyle(.plain)
             }
+            // On the header, not the card: the card already presents the reject sheet, and two
+            // .sheet modifiers on one view is the oldest way to end up with one that never opens.
+            .sheet(item: $focusEntry) { entry in
+                RequestFocusSheet(entry: entry, canReview: canReview, canReviewOffsite: canReviewOffsite,
+                                  viewerId: auth.session?.userId) { await load() }
+            }
             if loading {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
             } else if entries.isEmpty {
@@ -203,6 +214,26 @@ struct AttendanceRequestsCard: View {
         .task(id: permissionKey) { await load() }
         .sheet(isPresented: $showComposer) { RequestComposerSheet(canGrant: canReview) { await load() } }
         .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
+        // A push tapped while this card is already on screen: claim it now rather than on the next load.
+        .onChange(of: router.focus) { _, _ in if !loading { claimFocus() } }
+        .alert(T("That request isn't in your list anymore"), isPresented: $focusMissing) {
+            Button("OK") {}
+        } message: { Text(T("It may already have been decided, or it belongs to someone outside your approval chain.")) }
+    }
+
+    /// Hand the record the router is holding to a sheet, once. Filter to "All" so the row is also
+    /// in the list behind the sheet — a settled request the person was told about would otherwise
+    /// sit hidden behind the Pending chip.
+    private func claimFocus() {
+        guard let f = router.focus else { return }
+        let hit: SubmissionEntry?
+        switch f {
+        case .attendanceRequest(let id): hit = requests.first { $0.id == id }.map { .request($0) }
+        case .offsiteCheckout(let id):   hit = offsite.first { $0.id == id }.map { .offsite($0) }
+        default: return
+        }
+        router.focus = nil
+        if let hit { filter = "ALL"; focusEntry = hit } else { focusMissing = true }
     }
 
     /// The Ticket screen's chip row, same shape and same colours — one filter idiom in the app
@@ -432,6 +463,194 @@ struct AttendanceRequestsCard: View {
             offsite = []
         }
         loading = false
+        claimFocus()
+    }
+}
+
+// MARK: - The request a notification was about
+
+/// One request or offsite check-out, alone on a sheet, with its decision buttons.
+///
+/// This is where a tapped push lands. It repeats the card's row rather than reusing it because the
+/// row's Reject opens a sheet hung on the card — underneath this one, where SwiftUI will not
+/// present it. Here the reason is a field on the same sheet, so the decision is one screen.
+private struct RequestFocusSheet: View {
+    let entry: SubmissionEntry
+    let canReview: Bool
+    let canReviewOffsite: Bool
+    let viewerId: String?
+    /// Runs after a decision has been recorded, so the list behind the sheet is refreshed.
+    let onDone: () async -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var busy = false
+    @State private var rejecting = false
+    @State private var note = ""
+    @State private var err: String?
+    @State private var viewingPhoto: PhotoRef?
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                NX.background.ignoresSafeArea()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        switch entry {
+                        case .request(let r): requestBody(r)
+                        case .offsite(let o): offsiteBody(o)
+                        }
+                        if let err { Text(err).font(NXFont.text(12)).foregroundStyle(NX.danger) }
+                    }
+                    .padding(16)
+                }
+            }
+            .navigationTitle(T("From your notification"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() } } }
+            .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    // MARK: request
+
+    @ViewBuilder private func requestBody(_ r: AttendanceRequest) -> some View {
+        let pending = (r.status ?? "").uppercased() == "PENDING"
+        let mine = r.isOwn(viewerId: viewerId)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(reqLabel(r.type)).font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)
+                Spacer()
+                NexusChip(text: reqStatusLabel(r.status), tone: reqStatusTone(r.status))
+            }
+            if let n = r.user?.name, !n.isEmpty {
+                Label(n, systemImage: "person").font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+            }
+            Label(reqDateRange(r), systemImage: "calendar").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+            if let reason = r.reason, !reason.isEmpty {
+                Text(reason).font(NXFont.text(14)).foregroundStyle(NX.foreground.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let url = r.attachmentURL {
+                if r.attachmentIsPDF {
+                    Label(r.supportingDocumentName ?? T("Attachment"), systemImage: "doc.fill")
+                        .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                    Text(T("PDF · open it on the web")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                } else {
+                    Button { viewingPhoto = PhotoRef(url: url, name: r.supportingDocumentName) } label: {
+                        CachedImage(url: url) { $0.resizable().scaledToFill() } placeholder: { NX.muted }
+                            .frame(height: 160).frame(maxWidth: .infinity)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }.buttonStyle(.plain)
+                }
+            }
+            if let note = r.reviewNoteText {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(r.status?.uppercased() == "REJECTED" ? T("Why it was rejected") : T("Note from the approver"))
+                        .font(NXFont.text(10, .bold)).foregroundStyle(NX.mutedFg)
+                    Text(note).font(NXFont.text(13)).foregroundStyle(NX.foreground.opacity(0.85))
+                    if let by = r.reviewerName, !by.isEmpty { Text("· \(by)").font(NXFont.text(10)).foregroundStyle(NX.mutedFg) }
+                }
+                .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                .background(NX.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
+
+        if pending {
+            if busy {
+                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity)
+            } else if canReview && !mine {
+                if rejecting {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(T("Why is it rejected?")).font(NXFont.text(12, .bold)).foregroundStyle(NX.foreground)
+                        TextField(T("The requester will read this"), text: $note, axis: .vertical)
+                            .lineLimit(2...5).textFieldStyle(.roundedBorder)
+                        HStack(spacing: 8) {
+                            Button(T("Back")) { rejecting = false }.buttonStyle(.bordered)
+                            Button(T("Confirm rejection")) { Task { await decide("reject", note: note) } }
+                                .buttonStyle(NexusPrimaryButton())
+                                .disabled(note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
+                    }
+                } else {
+                    HStack(spacing: 10) {
+                        Button(T("Approve")) { Task { await decide("approve") } }.buttonStyle(NexusPrimaryButton())
+                        Button(T("Reject")) { rejecting = true }.buttonStyle(NexusPrimaryButton(tint: NX.danger))
+                    }
+                }
+            } else if mine {
+                Button(T("Cancel this request")) { Task { await decide("cancel") } }.buttonStyle(.bordered)
+            }
+        }
+    }
+
+    // MARK: offsite
+
+    @ViewBuilder private func offsiteBody(_ o: OffsiteCheckout) -> some View {
+        let mine = o.user?.id != nil && o.user?.id == viewerId
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label(T("Offsite check-out"), systemImage: "location.fill").font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)
+                Spacer()
+                NexusChip(text: reqStatusLabel(o.approval), tone: reqStatusTone(o.approval))
+            }
+            if let n = o.user?.name, !n.isEmpty {
+                Label(n, systemImage: "person").font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+            }
+            Label("\(attDayLabel(o.attendanceDate)) · \(AgendaRange.timeLabel(o.checkOutAt ?? ""))", systemImage: "clock")
+                .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+            if let reason = o.reason, !reason.isEmpty {
+                Text(reason).font(NXFont.text(14)).foregroundStyle(NX.foreground.opacity(0.9)).fixedSize(horizontal: false, vertical: true)
+            }
+            if let addr = o.address, !addr.isEmpty { Text(addr).font(NXFont.text(12)).foregroundStyle(NX.mutedFg) }
+            if let d = o.distanceMeters {
+                Text("±\(Int(d.rounded())) m · \(o.officeName ?? T("office"))").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            }
+            if let url = o.mapURL {
+                Link(destination: url) {
+                    Label(T("View map"), systemImage: "mappin.and.ellipse").font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
+                }
+            }
+            if !o.isPending, let by = o.approverName, !by.isEmpty {
+                Text("· \(by)").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
+
+        if o.isPending {
+            if busy {
+                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity)
+            } else if mine {
+                Text(T("You can't approve your own.")).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+            } else if canReviewOffsite {
+                HStack(spacing: 10) {
+                    Button(T("Approve")) { Task { await decideOffsite("approve") } }.buttonStyle(NexusPrimaryButton())
+                    Button(T("Reject")) { Task { await decideOffsite("reject") } }.buttonStyle(NexusPrimaryButton(tint: NX.danger))
+                }
+            }
+        }
+    }
+
+    // MARK: work
+
+    private func decide(_ action: String, note: String? = nil) async {
+        guard case .request(let r) = entry else { return }
+        busy = true; defer { busy = false }
+        do {
+            _ = try await APIClient.shared.reviewAttendanceRequest(id: r.id, action: action,
+                                                                    reviewNote: note?.trimmingCharacters(in: .whitespacesAndNewlines))
+            await onDone(); dismiss()
+        } catch { err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't record the decision. Try again.") }
+    }
+
+    private func decideOffsite(_ action: String) async {
+        guard case .offsite(let o) = entry else { return }
+        busy = true; defer { busy = false }
+        do {
+            _ = try await APIClient.shared.reviewOffsiteCheckout(id: o.id, action: action)
+            await onDone(); dismiss()
+        } catch { err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't record the decision. Try again.") }
     }
 }
 

@@ -183,11 +183,15 @@ struct NexusNotification: Decodable, Identifiable, Sendable {
     var tapTarget: NotificationTarget? {
         if let taskId, !taskId.isEmpty { return .task(taskId) }
         if let projectId, !projectId.isEmpty { return .project(projectId) }
+        // The link before the type keywords, since 0.1.5 on both clients: the server now puts the
+        // record's id in it (`/attendance?request=…`, `/complaints?id=…`, `/messages?c=…`), and
+        // matching the type first threw that id away — every attendance signal landed on the top of
+        // the Attendance screen instead of on the request it was about.
+        if let link, link.hasPrefix("/"), let target = NotificationTarget(path: link) { return target }
         let t = (type ?? "").lowercased()
         let attendanceWords = ["checkout", "offsite", "attendance", "late", "absen"]
         if attendanceWords.contains(where: { t.contains($0) }) { return .screen(.attendance) }
         if t.contains("message") { return .screen(.messages) }
-        if let link, link.hasPrefix("/") { return NotificationTarget(path: link) }
         return nil
     }
 }
@@ -247,6 +251,30 @@ enum NotificationTarget: Hashable {
     case project(String)
     case submission(String)
     case screen(NXScreen)
+    /// One leave / permit / sick / day-off request — `/attendance?request=<id>`. Lands on the
+    /// request itself, Approve and Reject in front of the reviewer.
+    case attendanceRequest(String)
+    /// One offsite check-out awaiting review — `/attendance?offsite=<record id>`.
+    case offsiteCheckout(String)
+    /// One ticket thread — `/complaints?id=<id>`.
+    case complaint(String)
+    /// One chat — `/messages?c=<id>`, or `/messages/<id>` as rows written before 0.1.5 carry it.
+    case conversation(String)
+    /// One announcement — `/dashboard?announcement=<id>`. Shown even if it was dismissed before.
+    case announcement(String)
+
+    /// The screen that owns the record, for the router to walk to before the screen claims it.
+    var hostScreen: NXScreen? {
+        switch self {
+        case .screen(let s):                     return s
+        case .attendanceRequest, .offsiteCheckout: return .attendance
+        case .complaint:                         return .tickets
+        case .conversation:                      return .messages
+        case .announcement:                      return .dashboard
+        case .submission:                        return .submissions
+        case .task, .project:                    return nil
+        }
+    }
 
     /// Reads a web path ("/tasks/abc123") as an app destination.
     ///
@@ -267,8 +295,14 @@ enum NotificationTarget: Hashable {
             else if let rest { self = .project(rest) }
             else { self = .screen(.projects) }
         case "my-tasks":                self = .screen(.tasks)
-        case "attendance":              self = .screen(.attendance)
-        case "messages":                self = .screen(.messages)
+        case "attendance":
+            if let id = Self.queryValue("request", in: path) { self = .attendanceRequest(id) }
+            else if let id = Self.queryValue("offsite", in: path) { self = .offsiteCheckout(id) }
+            else { self = .screen(.attendance) }
+        case "messages":
+            if let rest, !rest.isEmpty { self = .conversation(rest) }
+            else if let id = Self.queryValue("c", in: path) { self = .conversation(id) }
+            else { self = .screen(.messages) }
         case "inbox":                   self = .screen(.inbox)
         case "threads", "social":       self = .screen(.threads)
         // There is no single-document screen on mobile; the library is as close as it gets.
@@ -287,10 +321,12 @@ enum NotificationTarget: Hashable {
             if let id = Self.queryValue("id", in: path) { self = .submission(id) } else { self = .screen(.submissions) }
         case "room-booking":            self = .screen(.roomBooking)
         case "master-calendar":         self = .screen(.teamCalendar)
-        case "complaints":              self = .screen(.tickets)
+        case "complaints":
+            if let id = Self.queryValue("id", in: path) { self = .complaint(id) } else { self = .screen(.tickets) }
         case "settings":                self = .screen(.settings)
         case "admin":                   self = .screen(.admin)
-        case "dashboard":               self = .screen(.dashboard)
+        case "dashboard":
+            if let id = Self.queryValue("announcement", in: path) { self = .announcement(id) } else { self = .screen(.dashboard) }
         default:                        return nil
         }
     }

@@ -263,11 +263,22 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         completionHandler([.banner, .sound, .badge])
     }
 
+    /// A tap on a notification. Until 0.1.5 this did nothing at all — the app opened on whatever it
+    /// was last showing, and the person went looking for the request the push was about.
+    ///
+    /// Only the string values are kept: that is all the server sends (src/lib/apns.ts) and all the
+    /// router reads, and `[String: String]` crosses to the main actor without a warning where the
+    /// raw `[AnyHashable: Any]` would not.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
+        var info: [String: String] = [:]
+        for (key, value) in response.notification.request.content.userInfo {
+            if let key = key as? String, let value = value as? String { info[key] = value }
+        }
+        Task { @MainActor in AppRouter.shared.openNotification(info) }
         completionHandler()
     }
 }

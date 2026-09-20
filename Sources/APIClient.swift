@@ -1251,6 +1251,12 @@ struct APIClient {
         (try await run(makeRequest("/api/announcements/active"), decode: AnnouncementsResponse.self)).announcements ?? []
     }
 
+    /// One announcement by id, seen or not — what a tapped announcement push resolves against.
+    func announcement(_ id: String) async throws -> AdminAnnouncement {
+        struct One: Decodable { let announcement: AdminAnnouncement }
+        return try await run(makeRequest("/api/announcements/\(id)"), decode: One.self).announcement
+    }
+
     @discardableResult
     func markAnnouncementSeen(_ id: String) async throws -> Bool {
         _ = try await run(makeRequest("/api/announcements/\(id)/seen", method: "POST"), decode: SuccessResponse.self)

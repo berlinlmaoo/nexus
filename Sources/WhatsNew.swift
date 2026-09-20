@@ -37,11 +37,48 @@ enum WhatsNew {
     @MainActor
     static func entries(for version: String) -> [WhatsNewEntry] {
         switch version {
+        case "0.1.5": return v015
         case "0.1.4": return v014
         case "0.1.3": return v013
         default: return []
         }
     }
+
+    @MainActor
+    private static var v015: [WhatsNewEntry] { [
+        WhatsNewEntry(
+            icon: "bell.badge",
+            title: T("Notifications open the thing itself"),
+            body: T("Tap a push about a leave request and that request opens, with Approve and Reject right there. A ticket reply opens the ticket, a chat opens the chat, an announcement opens the announcement. The Inbox rows do the same.")
+        ),
+        WhatsNewEntry(
+            icon: "person.text.rectangle",
+            title: T("Every notification says who"),
+            body: T("Who filed the request, who replied to your ticket, who posted the announcement — it is the first thing you read on the lock screen now, not something you open the app to find out.")
+        ),
+        WhatsNewEntry(
+            icon: "square.and.arrow.up",
+            title: T("Export one person's attendance"),
+            body: T("From a crew member's attendance sheet: one row per day, check-in and check-out, minutes late, notes, and totals — the same spreadsheet the web hands out."),
+            bodOnly: true
+        ),
+        WhatsNewEntry(
+            icon: "circle.grid.2x2",
+            title: T("Attendance colours that mean one thing"),
+            body: T("Red is absent, green is present or on permit, orange is sick, purple is a day off. On the board, in the calendar, and in the export.")
+        ),
+        WhatsNewEntry(
+            icon: "envelope.badge.person.crop",
+            title: T("Your Google Workspace account, in Tuning Room"),
+            body: T("If the company gave you a Google Workspace mailbox, its address now shows on your profile.")
+        ),
+        WhatsNewEntry(
+            icon: "person.crop.rectangle.stack",
+            title: T("One screen per person in Control Room"),
+            body: T("Tap a crew member and everything about them is in one place: role, team, shift, approver, day-off quota, Google account."),
+            bodOnly: true
+        ),
+    ] }
 
     @MainActor
     private static var v014: [WhatsNewEntry] { [

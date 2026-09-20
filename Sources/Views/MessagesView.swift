@@ -22,6 +22,11 @@ struct MessagesView: View {
     /// Which conversation the right-hand pane is showing. Only meaningful in the split layout —
     /// on a phone the thread is pushed, and the stack itself remembers where you are.
     @State private var selected: Conversation?
+    /// The chat a notification pointed at (`AppRouter.focus`). On the phone it is pushed as a
+    /// value — the rows are view-based NavigationLinks, which nothing can trigger from code — and
+    /// the split layout simply selects it.
+    @Environment(AppRouter.self) private var router
+    @State private var pushedConvo: FocusedConversation?
 
     /// A chat list and the chat itself are the pair every messaging app puts side by side once
     /// there is room, because the whole job is moving between conversations. Pushing a thread and
@@ -53,7 +58,9 @@ struct MessagesView: View {
             // An empty right-hand pane on first open is a screen asking to be clicked before it
             // shows anything. The phone has no equivalent: there, nothing is open yet by design.
             if isSplit, selected == nil { selected = convos.first }
+            claimFocus()
         }
+        .onChange(of: router.focus) { _, _ in if !loading { claimFocus() } }
         // Same reason as the thread, at a calmer pace: this only moves badges and previews.
         .task {
             while !Task.isCancelled {
@@ -65,10 +72,23 @@ struct MessagesView: View {
     }
 
     /// The list on its own — the whole screen on a phone, the left column on an iPad.
+    private func claimFocus() {
+        guard case .conversation(let id) = router.focus, let c = convos.first(where: { $0.id == id }) else { return }
+        router.focus = nil
+        if isSplit { selected = c } else { pushedConvo = FocusedConversation(id: c.id) }
+    }
+
     private var listPane: some View {
         ZStack {
             NX.background.ignoresSafeArea()
             content
+        }
+        // Inside the stack, whichever stack that is: this pane is pushed into Home's, More's, or its own.
+        .navigationDestination(item: $pushedConvo) { f in
+            if let c = convos.first(where: { $0.id == f.id }) {
+                ChatThreadView(conversationId: c.id, title: c.title(meId: meId),
+                               members: c.members ?? [], projectId: c.projectId, type: c.type)
+            }
         }
         .navigationTitle(T("Messages"))
         .navigationBarTitleDisplayMode(.inline)
@@ -244,6 +264,9 @@ struct MessagesView: View {
         loading = false
     }
 }
+
+/// The chat a notification asked for, as a value the phone's stack can push.
+struct FocusedConversation: Identifiable, Hashable { let id: String }
 
 struct ConvoRow: View {
     let convo: Conversation

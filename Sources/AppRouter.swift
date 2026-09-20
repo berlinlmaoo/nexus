@@ -29,6 +29,19 @@ struct NXVaultRequest: Identifiable, Hashable {
     let id: String
 }
 
+/// A record to draw as a sheet above whichever shape is mounted — see `AppRouter.detail`.
+struct NXDetailRequest: Identifiable, Hashable {
+    let target: NotificationTarget
+    var id: String {
+        switch target {
+        case .task(let id):       return "task-" + id
+        case .project(let id):    return "project-" + id
+        case .submission(let id): return "submission-" + id
+        default:                  return "other"
+        }
+    }
+}
+
 /// Where the app should go, when the instruction comes from outside the screen you are standing on.
 ///
 /// Siri, a Shortcut, a tap on the Live Activity, a tap on a widget and a tap on a notification all
@@ -89,6 +102,50 @@ final class AppRouter {
     /// respect, including the one that matters most: it is NOT cleared when the app is signed out,
     /// so a link tapped by somebody who has to log in first still opens once they are in.
     var vaultRequest: NXVaultRequest?
+
+    /// A record a notification pointed at, waiting for the screen that owns it to mount and claim it.
+    ///
+    /// A push about a leave request has to open THAT request, with Approve and Reject on it — not
+    /// the Attendance screen with the request somewhere below the fold. The router walks to the
+    /// screen (`go`) and leaves the id here; the screen reads it once its data is in, presents the
+    /// record, and clears it. Held rather than fired, for the same reason as `formRequest`: a push
+    /// tapped on a cold start arrives before any screen exists, and one tapped while signed out
+    /// must survive the login it caused.
+    var focus: NotificationTarget?
+
+    /// A task, project or submission opened from a notification, drawn as a sheet above either
+    /// shape. These three are not screens in the More launcher and have no tab of their own, so
+    /// there is no stack to push them onto from here — the Inbox pushes them inside its own stack,
+    /// and a push tap has no such stack in hand.
+    var detail: NXDetailRequest?
+
+    /// One notification, wherever it was tapped: the Inbox row and the lock screen land in the same place.
+    func open(_ target: NotificationTarget) {
+        switch target {
+        case .screen(let screen):
+            go(screen)
+        case .task, .project, .submission:
+            detail = NXDetailRequest(target: target)
+        case .attendanceRequest, .offsiteCheckout, .complaint, .conversation, .announcement:
+            focus = target
+            if let screen = target.hostScreen { go(screen) }
+        }
+    }
+
+    /// A tapped push. The payload is the server's notification row without its id: `link`, `type`,
+    /// `taskId`, `projectId` (src/lib/apns.ts) — plus the two the app schedules itself.
+    func openNotification(_ info: [String: String]) {
+        let value = { (k: String) -> String? in info[k].flatMap { $0.isEmpty ? nil : $0 } }
+        if let id = value("taskId") { open(.task(id)); return }
+        if let id = value("projectId") { open(.project(id)); return }
+        if let link = value("link"), let target = NotificationTarget(path: link) { open(target); return }
+        let t = (value("type") ?? "").lowercased()
+        if t.contains("attendance") || t.contains("offsite") || t.contains("checkout") { go(.attendance) }
+        else if t.contains("message") { go(.messages) }
+        else if t.contains("complaint") { go(.tickets) }
+        else if t.contains("announcement") { go(.dashboard) }
+        else { go(.inbox) }
+    }
 
     /// The phone tab that IS this screen, or nil when the screen lives behind the More launcher.
     private func tabRoot(for screen: NXScreen) -> PhoneTab? {

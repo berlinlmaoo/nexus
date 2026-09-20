@@ -66,6 +66,26 @@ struct RootView: View {
                             }
                     }
                 }
+                // A task, project or submission a notification pointed at. A sheet for the same
+                // reason the form is one: it arrives from outside, it has no list behind it, and it
+                // has to work under the tab bar and the sidebar alike.
+                .sheet(item: $router.detail) { request in
+                    NavigationStack {
+                        Group {
+                            switch request.target {
+                            case .task(let id):       TaskDetailView(taskId: id)
+                            case .project(let id):    ProjectDetailView(projectId: id, projectName: "")
+                            case .submission(let id): SubmissionDetailSheet(submissionId: id)
+                            default:                  EmptyView()
+                            }
+                        }
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button(T("Close")) { router.detail = nil }
+                            }
+                        }
+                    }
+                }
         } else {
             // LoginView forces `.light` itself, and MUST stay outside that modifier.
             // `preferredColorScheme` is a preference, and a preference written by an ancestor

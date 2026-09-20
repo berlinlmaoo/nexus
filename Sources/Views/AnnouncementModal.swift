@@ -9,6 +9,10 @@ import SwiftUI
 struct AnnouncementModal: View {
     @Environment(AuthStore.self) private var auth
     @Environment(\.scenePhase) private var scenePhase
+    /// The announcement a notification pointed at (`AppRouter.focus`). Fetched by id and put at the
+    /// front of the queue even if it was dismissed before — the active list would hide it, and a
+    /// tap that shows nothing reads as broken.
+    @Environment(AppRouter.self) private var router
 
     @State private var queue: [AdminAnnouncement] = []
     @State private var dismissing = false
@@ -29,6 +33,7 @@ struct AnnouncementModal: View {
         }
         .animation(.spring(response: 0.34, dampingFraction: 0.86), value: current?.id)
         .task { await load() }
+        .onChange(of: router.focus) { _, _ in Task { await load() } }
         .onChange(of: scenePhase) { _, phase in
             // Coming back to the app is the moment a new announcement should appear — the same
             // moment the push that announced it was probably tapped.
@@ -104,6 +109,13 @@ struct AnnouncementModal: View {
 
     private func load() async {
         guard auth.isAuthenticated else { return }
+        if case .announcement(let id) = router.focus {
+            router.focus = nil
+            if let one = try? await APIClient.shared.announcement(id) {
+                queue.removeAll { $0.id == one.id }
+                queue.insert(one, at: 0)
+            }
+        }
         guard let rows = try? await APIClient.shared.activeAnnouncements() else { return }
         // Only replace the queue when it is empty. Refreshing mid-read would swap the card out from
         // under somebody halfway through a sentence.

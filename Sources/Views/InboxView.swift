@@ -40,7 +40,7 @@ struct InboxView: View {
                 case .project(let id): ProjectDetailView(projectId: id, projectName: "")
                 // Never stored: a whole screen goes through the router, and a submission opens as a
                 // sheet over this one — neither travels through this stack.
-                case .screen, .submission: EmptyView()
+                default: EmptyView()
                 }
             }
             .sheet(item: $openSubmission) { SubmissionDetailSheet(submissionId: $0.id, preview: $0.preview) }
@@ -148,7 +148,12 @@ struct InboxView: View {
         // that would be a tab change plus a push plus a sheet to read three lines, so the sheet is
         // opened here instead — same destination, one step.
         if case .submission(let id) = target { openSubmission = SubmissionRef(id: id); return }
-        openTarget = target
+        switch target {
+        case .task, .project: openTarget = target
+        // A record on another screen: the router walks there and hands the id over, exactly as a
+        // tapped push does. One path, so the Inbox row and the lock screen cannot drift apart.
+        default: router.open(target)
+        }
     }
 
     private func markRead(_ n: NexusNotification) async {
