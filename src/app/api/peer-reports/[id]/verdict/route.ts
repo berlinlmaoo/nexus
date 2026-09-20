@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { createInAppNotification, notifyAnnouncement } from "@/lib/notification-service"
 import { logAudit } from "@/lib/audit"
 import { verifyPeerReportWithXp } from "@/lib/gamification"
 import {
@@ -54,9 +55,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // On a verified violation → company-wide POP-UP announcement (same mechanism as Control Room),
     // shown once per user. Best-effort: never fail the verdict if the announcement insert errors.
+    // Both sides are told the outcome. Until 20 Sep 2026 neither was: the reported person found out
+    // from the company-wide pop-up (if they opened the app), the reporter never.
+    if (updated) {
+      const label = categoryLabel(updated.category)
+      const verified = updated.status === "VERIFIED"
+      const tell = (userId: string, title: string, message: string) =>
+        createInAppNotification({ userId, type: "peer_report_decided", title, message, link: "/peer-reports", push: true }).catch(() => null)
+      void tell(updated.reportedUserId,
+        verified ? "Laporan tentang kamu terbukti" : "Laporan tentang kamu ditolak",
+        verified ? `Soal: ${label}.${peerReportXpEnabled() ? ` −${DEFAULT_PENALTY_XP} XP.` : ""}${reviewNote ? ` Catatan BoD: "${reviewNote}"` : ""}`
+                 : `Soal: ${label}. Tidak ada tindakan.${reviewNote ? ` Catatan BoD: "${reviewNote}"` : ""}`)
+      if (updated.reporterId !== me) {
+        void tell(updated.reporterId,
+          verified ? "Laporan kamu terbukti" : "Laporan kamu ditolak",
+          `Laporan soal ${label} sudah diputus BoD.${reviewNote ? ` Catatan: "${reviewNote}"` : ""}`)
+      }
+    }
+
     if (action === "verify" && updated?.status === "VERIFIED") {
       try {
-        await prisma.announcement.create({
+        const created = await prisma.announcement.create({
           data: {
             title: "⚠️ Pelanggaran terbukti",
             body: `${updated.reportedUser.name} terbukti melanggar: ${categoryLabel(updated.category)}.`,
@@ -66,6 +85,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             createdById: me,
           },
         })
+        // Through the same delivery as a Control Room announcement, so it is pushed — a row alone
+        // is only seen by whoever happens to open NEXUS.
+        await notifyAnnouncement(created.id).catch((e) => console.error("violation announcement push failed:", e))
       } catch (e) {
         console.error("violation announcement failed:", e)
       }

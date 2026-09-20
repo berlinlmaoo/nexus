@@ -97,8 +97,8 @@ function NotificationRow({ notification, idx }: { notification: NexusNotificatio
   const navigate = useNavigate();
   const Icon = iconMap[idx % iconMap.length];
   const refresh = () => qc.invalidateQueries({ queryKey: ["nexus", "notifications"] });
-  const markRead = useMutation({ mutationFn: () => nexusApi.markNotificationRead(notification.id), onSuccess: refresh });
-  const remove = useMutation({ mutationFn: () => nexusApi.deleteNotification(notification.id), onSuccess: () => { refresh(); celebrate("Signal archived 🧹"); } });
+  const markRead = useMutation({ mutationFn: () => nexusApi.markNotificationRead(notification.id), onSuccess: refresh, onError: (e: unknown) => alert(e instanceof Error ? e.message : "Couldn't mark it read."), });
+  const remove = useMutation({ mutationFn: () => nexusApi.deleteNotification(notification.id), onSuccess: () => { refresh(); celebrate("Signal archived 🧹"); }, onError: (e: unknown) => alert(e instanceof Error ? e.message : "Couldn't archive it."), });
   const busy = markRead.isPending || remove.isPending;
   const target = notificationTarget(notification);
 

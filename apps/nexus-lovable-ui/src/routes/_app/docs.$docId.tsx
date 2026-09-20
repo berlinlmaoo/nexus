@@ -28,10 +28,10 @@ function DocEditor() {
 
   const save = useMutation({
     mutationFn: () => nexusApi.updateDoc(docId, { title: title.trim() || "Untitled", content: textToTiptap(body) }),
-    onSuccess: () => { setDirty(false); setSavedAt(new Date().toLocaleTimeString()); qc.invalidateQueries({ queryKey: ["nexus", "doc", docId] }); qc.invalidateQueries({ queryKey: ["nexus", "docs"] }); },
+    onSuccess: () => { setDirty(false); setSavedAt(new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" })); qc.invalidateQueries({ queryKey: ["nexus", "doc", docId] }); qc.invalidateQueries({ queryKey: ["nexus", "docs"] }); },
   });
-  const duplicate = useMutation({ mutationFn: () => nexusApi.duplicateDoc(docId), onSuccess: (res) => { qc.invalidateQueries({ queryKey: ["nexus", "docs"] }); if (res.doc?.id) navigate({ to: "/docs/$docId", params: { docId: res.doc.id } }); } });
-  const del = useMutation({ mutationFn: () => nexusApi.deleteDoc(docId), onSuccess: () => { qc.invalidateQueries({ queryKey: ["nexus", "docs"] }); navigate({ to: "/docs" }); } });
+  const duplicate = useMutation({ mutationFn: () => nexusApi.duplicateDoc(docId), onError: (e: unknown) => alert(e instanceof Error ? e.message : "Couldn't duplicate the doc."), onSuccess: (res) => { qc.invalidateQueries({ queryKey: ["nexus", "docs"] }); if (res.doc?.id) navigate({ to: "/docs/$docId", params: { docId: res.doc.id } }); } });
+  const del = useMutation({ mutationFn: () => nexusApi.deleteDoc(docId), onError: (e: unknown) => alert(e instanceof Error ? e.message : "Couldn't delete the doc."), onSuccess: () => { qc.invalidateQueries({ queryKey: ["nexus", "docs"] }); navigate({ to: "/docs" }); } });
 
   return (
     <div className="mx-auto w-full max-w-3xl px-5 py-6 md:px-8 md:py-10">

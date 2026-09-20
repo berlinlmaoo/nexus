@@ -427,8 +427,9 @@ export async function notifyTaskAssigned(data: {
   await createInAppNotification({
     userId: data.assigneeId,
     type: "task_assigned",
-    title: "Task Assigned",
-    message: `${data.assignedByName} assigned you "${data.taskTitle}"`,
+    // The lock screen shows the title and little else; "Task Assigned" said nothing 1,193 times.
+    title: `${data.assignedByName} assigned you: ${data.taskTitle}`,
+    message: data.projectName ? `In ${data.projectName}` : `${data.assignedByName} assigned you "${data.taskTitle}"`,
     taskId: data.taskId,
     projectId: data.projectId,
     link: `/projects/${data.projectId}/tasks/${data.taskId}`,
@@ -496,8 +497,8 @@ export async function notifyMention(data: {
   await createInAppNotification({
     userId: data.mentionedUserId,
     type: "comment_mention",
-    title: "Mentioned in Comment",
-    message: `${data.mentionedByName} mentioned you on "${data.taskTitle}"`,
+    title: `${data.mentionedByName} mentioned you on: ${data.taskTitle}`,
+    message: data.commentSnippet ? data.commentSnippet.slice(0, 140) : `${data.mentionedByName} mentioned you on "${data.taskTitle}"`,
     taskId: data.taskId,
     projectId: data.projectId,
     link: data.projectId ? `/projects/${data.projectId}/tasks/${data.taskId}` : undefined,
@@ -593,9 +594,10 @@ export async function notifyFeedComment(data: {
   await createInAppNotification({
     userId: data.recipientUserId,
     type: "feed_comment",
-    title: data.reason === "author" ? "New comment on your post" : "Mentioned in a comment",
-    message: `${data.commenterName} ${data.reason === "author" ? "commented on your post" : "mentioned you in a comment"}`,
+    title: data.reason === "author" ? `${data.commenterName} commented on your post` : `${data.commenterName} mentioned you`,
+    message: data.snippet ? data.snippet.slice(0, 140) : (data.reason === "author" ? "New comment on your post" : "Mentioned in a comment on Threads"),
     link,
+    push: prefs.commentMention,
   })
 
   if (!prefs.commentMention) return
@@ -625,6 +627,8 @@ export async function notifyPeerReportFiled(data: { reportedUserId: string; cate
     title: "Ada laporan tentang kamu",
     message: `Soal: ${data.categoryLabel}. Kamu bisa kasih bantahan sebelum BoD memutuskan.`,
     link,
+    // The only chance to rebut, and it sat in the in-app bell alone.
+    push: true,
   })
   const waRecipient = prefs.waPhone || user.phoneNumber
   if (waRecipient && (prefs.waEnabled || envFlagEnabled("NEXUS_WA_MENTIONS_DEFAULT_ENABLED", true))) {
@@ -711,8 +715,8 @@ export async function notifyDueSoon(data: {
   const prefs = await getUserPrefs(data.userId)
   const type = data.stage === "due" ? "task_due_now" : `task_due_${data.stage}`
   const title = data.stage === "due"
-    ? "Task due now"
-    : data.stage === "1d" ? "Task due tomorrow" : "Task due in 2 days"
+    ? `Due now: ${data.taskTitle}`
+    : data.stage === "1d" ? `Due tomorrow: ${data.taskTitle}` : `Due in 2 days: ${data.taskTitle}`
 
   await createInAppNotification({
     userId: data.userId,
@@ -769,8 +773,8 @@ export async function notifyProjectInvite(data: {
   await createInAppNotification({
     userId: data.userId,
     type: "project_invite",
-    title: "Project Invitation",
-    message: `${data.invitedByName} invited you to "${data.projectName}"`,
+    title: `${data.invitedByName} invited you to ${data.projectName}`,
+    message: `You're now ${data.role ? `a ${data.role.toLowerCase()}` : "a member"} of "${data.projectName}".`,
     projectId: data.projectId,
     link: `/projects/${data.projectId}`,
     push: prefs.projectInvite,
@@ -1033,8 +1037,8 @@ export async function notifyTaskCompleted(data: {
     await createInAppNotification({
       userId,
       type: "task_completed",
-      title: "Task Completed",
-      message: `${data.completedByName} completed "${data.taskTitle}"`,
+      title: `${data.completedByName} completed: ${data.taskTitle}`,
+      message: data.projectName ? `In ${data.projectName}` : `${data.completedByName} completed "${data.taskTitle}"`,
       taskId: data.taskId,
       projectId: data.projectId,
       link: `/projects/${data.projectId}/tasks/${data.taskId}`,
@@ -1070,8 +1074,8 @@ export async function notifyCommentAdded(data: {
     await createInAppNotification({
       userId,
       type: "comment_added",
-      title: "New Comment",
-      message: `${data.commentByName} commented on "${data.taskTitle}"`,
+      title: `${data.commentByName} commented on: ${data.taskTitle}`,
+      message: data.commentSnippet ? data.commentSnippet.slice(0, 140) : `${data.commentByName} commented on "${data.taskTitle}"`,
       taskId: data.taskId,
       projectId: data.projectId,
       link: `/projects/${data.projectId}/tasks/${data.taskId}`,

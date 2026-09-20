@@ -309,7 +309,7 @@ function ReportDetail({ report, viewerIsBod, onClose, onChanged }: { report: Pee
   const cat = catOf(report.category);
 
   const verdict = useMutation({ mutationFn: (action: "verify" | "reject") => nexusApi.peerReportVerdict(report.id, { action, reviewNote: note.trim() || undefined }), onSuccess: onChanged });
-  const withdraw = useMutation({ mutationFn: () => nexusApi.withdrawPeerReport(report.id), onSuccess: onChanged });
+  const withdraw = useMutation({ mutationFn: () => nexusApi.withdrawPeerReport(report.id), onSuccess: onChanged, onError: (e: unknown) => alert(e instanceof Error ? e.message : "Couldn't withdraw the report."), });
   const rebut = useMutation({ mutationFn: () => nexusApi.rebutPeerReport(report.id, rebuttal.trim()), onSuccess: onChanged });
   const busy = verdict.isPending || withdraw.isPending || rebut.isPending;
 

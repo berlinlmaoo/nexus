@@ -32,7 +32,7 @@ const moreGroups = [
       { title: "Threads", url: "/threads", icon: AtSign },
       { title: "Z Vault", url: "/vault", icon: HardDrive },
       { title: "My Mission", url: "/my-tasks", icon: CheckSquare },
-      { title: "Pengajuan Saya", url: "/submissions", icon: FileText },
+      { title: "My Submissions", url: "/submissions", icon: FileText },
       { title: "Team Calendar", url: "/master-calendar", icon: Calendar },
       { title: "Room Booking", url: "/room-booking", icon: CalendarClock },
     ],

@@ -13,6 +13,7 @@ SECRET="$(cat "$SECRET_FILE")"
 
 # 127.0.0.1:3002 = backend NEXUS di VM ini (port yang sama seperti di Mac, sengaja dipertahankan
 # biar endpoint dan skrip lama tetap cocok).
+rm -f /tmp/nexus-cron-out   # a failed curl must not log the previous run's body next to HTTP 000
 CODE=$(curl -s -o /tmp/nexus-cron-out -w %{http_code} -m 120 -X POST \
   "http://127.0.0.1:3002/api/${ENDPOINT}" \
   -H "Authorization: Bearer ${SECRET}" \

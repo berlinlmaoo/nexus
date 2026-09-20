@@ -96,7 +96,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ bo
         message: cancelled
           ? `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)} dibatalkan oleh manager.`
           : `${booking.title} sekarang ${formatBookingSlot(booking.startsAt, booking.endsAt)} di ${booking.room}.`,
-        link: "/rooms",
+        link: "/room-booking",
         push: true,
       }).catch(() => null)
     }
@@ -133,7 +133,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
         type: "booking_changed",
         title: `Booking ${existing.room} dihapus`,
         message: `${existing.title} · ${formatBookingSlot(existing.startsAt, existing.endsAt)} dihapus oleh manager.`,
-        link: "/rooms",
+        link: "/room-booking",
         push: true,
       }).catch(() => null)
     }

@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { createInAppNotification } from "@/lib/notification-service"
 import { logAudit } from "@/lib/audit"
 import { getUserOrgRole, isBodPlus, REBUTTAL_MAX, REPORT_INCLUDE, serializeReport } from "@/lib/peer-reports"
 
@@ -33,6 +34,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     logAudit({ action: "update", entityType: "peer_report", entityId: id, userId: me, request, metadata: { rebuttal: true } })
     const updated = await prisma.peerReport.findUnique({ where: { id }, include: REPORT_INCLUDE })
+
+    // The BoD deciding this report is told a rebuttal arrived — otherwise it is read only if they
+    // reopen the report before deciding.
+    try {
+      const mine = await prisma.workspaceMember.findFirst({ where: { userId: me }, select: { workspaceId: true } })
+      if (mine) {
+        const bod = await prisma.workspaceMember.findMany({
+          where: { workspaceId: mine.workspaceId, role: { in: ["BOD", "ONE_ABOVE_ALL"] } }, select: { userId: true },
+        })
+        const who = updated?.reportedUser?.name ?? "Yang dilaporkan"
+        await Promise.allSettled(bod.map((b) => createInAppNotification({
+          userId: b.userId, type: "peer_report_rebuttal",
+          title: `${who} membantah laporan`,
+          message: rebuttal.length > 140 ? `${rebuttal.slice(0, 137)}…` : rebuttal,
+          link: "/peer-reports", push: true,
+        })))
+      }
+    } catch (e) { console.error("rebuttal notify failed:", e) }
     return NextResponse.json(updated ? serializeReport(updated, me, isBodPlus(role)) : { ok: true })
   } catch (error) {
     console.error("Error submitting rebuttal:", error)

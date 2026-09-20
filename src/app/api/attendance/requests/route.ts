@@ -8,7 +8,7 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
 import { notifyApproversOfRequest } from "@/lib/wa-bot"
-import { notifyAttendanceRequestPending } from "@/lib/notification-service"
+import { notifyAttendanceRequestPending , createInAppNotification } from "@/lib/notification-service"
 import {
   attendanceMonthRange,
   attendancePeriodKey,
@@ -311,6 +311,11 @@ export async function POST(request: NextRequest) {
           status: { in: ["PENDING", "APPROVED"] },
           startDate: { lte: parsedEndDate },
           endDate: { gte: parsedStartDate },
+          // The cron's own auto-deduction row is not a request the person made. Counting it here
+          // answered "overlaps with another active request" to anyone filing sick leave for a day
+          // the cron had already cut — the exact day they most need to file for — and the refund
+          // below was never reached. 1,070 such rows exist.
+          ...NOT_AUTO_DEDUCTION,
         },
         select: {
           id: true,
@@ -593,6 +598,21 @@ export async function POST(request: NextRequest) {
     if (!isGrant && attendanceRequest.status === "PENDING") {
       notifyApproversOfRequest(attendanceRequest.id).catch((e) => console.error("[wa] notifyApproversOfRequest failed", e))
       notifyAttendanceRequestPending(attendanceRequest.id).catch((e) => console.error("notifyAttendanceRequestPending failed", e))
+    }
+    // A grant is a decision about somebody else's day, made without them. Until 20 Sep 2026 the
+    // person it was made for was the one party never told.
+    if (isGrant && effectiveUserId !== session.user.id) {
+      const labels: Record<string, string> = { DAY_OFF: "day off", SICK: "sakit", PERMIT: "izin", LEAVE: "cuti", RED_DATE: "tanggal merah" }
+      const fmt = (d: Date) => d.toLocaleDateString("id-ID", { day: "numeric", month: "short", timeZone: "Asia/Jakarta" })
+      const start = fmt(attendanceRequest.startDate), end = fmt(attendanceRequest.endDate)
+      createInAppNotification({
+        userId: effectiveUserId,
+        type: "attendance_request_reviewed",
+        title: `${context.user?.name ?? "BoD"} mencatat ${labels[attendanceRequest.type] ?? attendanceRequest.type.toLowerCase()} untukmu`,
+        message: `${start === end ? start : `${start} – ${end}`} sudah disetujui langsung. Kalau ini keliru, hubungi approver kamu.`,
+        link: `/attendance?request=${attendanceRequest.id}`,
+        push: true,
+      }).catch((e) => console.error("grant notify failed", e))
     }
 
     return NextResponse.json({ request: serializeAttendanceRequest(attendanceRequest) }, { status: 201 })

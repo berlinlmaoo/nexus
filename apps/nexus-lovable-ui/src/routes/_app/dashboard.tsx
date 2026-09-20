@@ -743,7 +743,7 @@ function YourQuests() {
   const [showAll, setShowAll] = useState(false);
   const [detail, setDetail] = useState<NexusQuest | null>(null);
   const claim = useMutation({
-    mutationFn: (key: string) => nexusApi.claimQuest(key),
+    mutationFn: (key: string) => nexusApi.claimQuest(key), onError: (e: unknown) => alert(e instanceof Error ? e.message : "Couldn't claim the quest."),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["gamification", "me"] }),
   });
   return (

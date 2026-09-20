@@ -61,14 +61,16 @@ export async function POST(req: NextRequest) {
           workspaceId: member.workspaceId,
           type: { in: ["DAY_OFF", "RED_DATE"] },
           status: { in: ["PENDING", "APPROVED"] },
-          startDate: { lte: monthEnd },
-          endDate: { gte: monthStart },
+          // Wide enough for BOTH windows: day-offs count on the 28→27 period, red dates on the
+          // calendar month. The per-kind loop below narrows to its own range.
+          startDate: { lte: new Date(Math.max(monthEnd.getTime(), dayOffPeriod.end.getTime())) },
+          endDate: { gte: new Date(Math.min(monthStart.getTime(), dayOffPeriod.start.getTime())) },
         },
         select: { type: true, startDate: true, endDate: true },
       })
 
       const kinds: { kind: "dayoff" | "red_date"; type: string; quota: number; start: Date; end: Date; notifType: string }[] = [
-        { kind: "dayoff", type: "DAY_OFF", quota: member.dayOffQuota ?? 0, start: dayOffPeriod.start, end: dayOffPeriod.end, notifType: "dayoff_quota_low" },
+        { kind: "dayoff", type: "DAY_OFF", quota: member.dayOffQuota ?? 4 /* the default everywhere else (dayoffs/route.ts); 0 skipped 42 of 48 members */, start: dayOffPeriod.start, end: dayOffPeriod.end, notifType: "dayoff_quota_low" },
         { kind: "red_date", type: "RED_DATE", quota: redDateQuotas.get(member.workspaceId) ?? 0, start: monthStart, end: monthEnd, notifType: "red_date_quota_low" },
       ]
 
