@@ -362,12 +362,16 @@ export async function notifyAttendanceRequestPending(requestId: string) {
 
   await Promise.all(
     targets.map((userId) =>
+      // The name leads the title and the request's id rides in the link: on a lock screen the first
+      // line is all anybody reads, and a tap has to land ON this request with Approve/Reject in
+      // front of the reviewer — both clients resolve `?request=` (web RequestsSection, iOS
+      // AttendanceRequestsCard) — not on the top of a list they then scroll.
       createInAppNotification({
         userId,
         type: "attendance_request_pending",
-        title: `${typeLabel} perlu approval`,
-        message: `${who} mengajukan ${typeLabel.toLowerCase()} ${when}${reasonSuffix}. Cek & approve di Attendance.`,
-        link: "/attendance",
+        title: `${who} mengajukan ${typeLabel.toLowerCase()}`,
+        message: `${when}${reasonSuffix}. Approve atau tolak di Attendance.`,
+        link: `/attendance?request=${requestId}`,
         push: true,
       }).catch(() => null),
     ),
@@ -379,6 +383,8 @@ export async function notifyOffsiteCheckoutPending(data: {
   staffUserId: string
   staffName: string
   reason?: string | null
+  /** The attendance record the check-out belongs to — what `?offsite=` opens on both clients. */
+  recordId?: string | null
 }) {
   // Jalur yang sama dengan request cuti/izin. Dulu blok ini hanya menyebut BoD, jadi manager
   // TIDAK PERNAH diberi tahu checkout luar kantor anak buahnya — padahal dialah yang menyetujuinya.
@@ -389,9 +395,9 @@ export async function notifyOffsiteCheckoutPending(data: {
       createInAppNotification({
         userId,
         type: "offsite_checkout_pending",
-        title: "Checkout di luar — perlu approval",
-        message: `${data.staffName} checkout di luar area kantor${reasonSuffix}. Cek & approve di Attendance.`,
-        link: "/attendance",
+        title: `${data.staffName} check-out di luar kantor`,
+        message: `Perlu approval${reasonSuffix}. Approve atau tolak di Attendance.`,
+        link: data.recordId ? `/attendance?offsite=${data.recordId}` : "/attendance",
         push: true,
       }).catch(() => null),
     ),
@@ -647,6 +653,10 @@ export async function notifyAnnouncement(announcementId: string) {
     select: { id: true, title: true, body: true, active: true, targetUserIds: true, createdById: true },
   })
   if (!announcement || !announcement.active) return
+  // No relation on the model — `createdById` is a bare column — so the name is one extra lookup.
+  const author = announcement.createdById
+    ? (await prisma.user.findUnique({ where: { id: announcement.createdById }, select: { name: true } }))?.name?.trim() || null
+    : null
 
   // Audience mirrors /api/announcements/active exactly — an empty target list means everyone. The
   // two must agree: a push nobody can then open, or a pop-up nobody was told about, is worse than
@@ -666,11 +676,14 @@ export async function notifyAnnouncement(announcementId: string) {
 
   await Promise.allSettled(
     recipients.map((userId) =>
+      // `?announcement=<id>` opens THIS announcement on tap even after it was dismissed — the
+      // pop-up only ever shows unseen ones, so without the id a tapped push could land on nothing.
       createInAppNotification({
         userId,
         type: "announcement",
         title: `📣 ${announcement.title}`,
-        message,
+        message: author ? `${author}: ${message}` : message,
+        link: `/dashboard?announcement=${announcement.id}`,
         push: true,
       }),
     ),
@@ -1121,19 +1134,31 @@ export async function checkDueSoonTasks() {
 // ── Complaint & Escalation channel ───────────────────────────────────────────────
 
 /** A new complaint was filed → ping every BoD (reporter identity is never included, anon or not). */
+/** Who a ticket is from, the way a BoD is allowed to see it: the name, or nothing when it was filed anonymously. */
+async function complaintHeadline(complaintId: string) {
+  const c = await prisma.complaint.findUnique({
+    where: { id: complaintId },
+    select: { subject: true, anonymous: true, reporter: { select: { name: true, email: true } } },
+  })
+  if (!c) return null
+  const reporter = c.anonymous ? "Pelapor anonim" : (c.reporter?.name || c.reporter?.email || "Seseorang")
+  return { subject: c.subject, reporter, anonymous: c.anonymous }
+}
+
 export async function notifyComplaintFiled(data: { workspaceId: string; complaintId: string; categoryLabel: string }) {
   const bod = await prisma.workspaceMember.findMany({
     where: { workspaceId: data.workspaceId, role: { in: ["BOD", "ONE_ABOVE_ALL"] } },
     select: { userId: true },
   })
+  const head = await complaintHeadline(data.complaintId)
   await Promise.allSettled(
     bod.map((b) =>
       createInAppNotification({
         userId: b.userId,
         type: "complaint_filed",
-        title: "Keluhan baru masuk",
-        message: `Kategori: ${data.categoryLabel}. Buka untuk menanggapi.`,
-        link: "/complaints",
+        title: head ? `Tiket baru dari ${head.reporter}` : "Keluhan baru masuk",
+        message: head ? `${head.subject} · ${data.categoryLabel}` : `Kategori: ${data.categoryLabel}. Buka untuk menanggapi.`,
+        link: `/complaints?id=${data.complaintId}`,
         push: true,
       }),
     ),
@@ -1141,8 +1166,13 @@ export async function notifyComplaintFiled(data: { workspaceId: string; complain
 }
 
 /** A reply landed in a complaint thread → ping the other side (BoD reply → reporter; reporter reply → BoD). */
-export async function notifyComplaintReply(data: { complaintId: string; workspaceId: string; reporterId: string; fromReviewer: boolean; replierId: string; byGideon?: boolean }) {
+export async function notifyComplaintReply(data: { complaintId: string; workspaceId: string; reporterId: string; fromReviewer: boolean; replierId: string; byGideon?: boolean; preview?: string | null }) {
+  const head = await complaintHeadline(data.complaintId)
+  const subject = head ? `“${head.subject}”` : "tiket"
+  const snippet = data.preview?.trim() ? ` — ${data.preview.trim().length > 120 ? data.preview.trim().slice(0, 117) + "…" : data.preview.trim()}` : ""
+  const link = `/complaints?id=${data.complaintId}`
   if (data.fromReviewer) {
+    const replier = data.byGideon ? "GIDEON" : ((await prisma.user.findUnique({ where: { id: data.replierId }, select: { name: true } }))?.name || "BoD")
     // BoD (or GIDEON) replied → tell the reporter (the reporter isn't anonymous to themselves).
     // Until 16 Sep 2026 none of the ticket notifications were pushed — the row appeared in the
     // in-app bell and nowhere else, so an answered ticket looked identical to an ignored one on a
@@ -1150,11 +1180,11 @@ export async function notifyComplaintReply(data: { complaintId: string; workspac
     await createInAppNotification({
       userId: data.reporterId,
       type: "complaint_reply",
-      title: data.byGideon ? "GIDEON membalas tiket kamu" : "Balasan untuk tiket kamu",
+      title: `${replier} membalas tiket kamu`,
       message: data.byGideon
-        ? "GIDEON sudah mengecek datanya dan menjawab. Kalau ada usulan, tinggal menunggu keputusan BoD."
-        : "BoD membalas tiket yang kamu ajukan.",
-      link: "/complaints",
+        ? `${subject}: GIDEON sudah mengecek datanya dan menjawab. Kalau ada usulan, tinggal menunggu keputusan BoD.`
+        : `${subject}${snippet || " — buka untuk membaca balasannya."}`,
+      link,
       push: true,
     }).catch(() => null)
   } else {
@@ -1168,9 +1198,9 @@ export async function notifyComplaintReply(data: { complaintId: string; workspac
         createInAppNotification({
           userId: b.userId,
           type: "complaint_reply",
-          title: "Balasan di keluhan",
-          message: "Ada balasan baru di salah satu keluhan. Buka untuk menanggapi.",
-          link: "/complaints",
+          title: `${head?.reporter ?? "Pelapor"} membalas tiket`,
+          message: `${subject}${snippet || " — buka untuk menanggapi."}`,
+          link,
           push: true,
         }),
       ),
@@ -1184,12 +1214,14 @@ export async function notifyComplaintStatus(data: { reporterId: string; complain
     OPEN: "dibuka kembali", AWAITING_DECISION: "nunggu keputusan BoD",
     IN_REVIEW: "lagi ditangani BoD", RESOLVED: "selesai", CLOSED: "ditutup",
   }
+  const head = await complaintHeadline(data.complaintId)
+  const subject = head ? `“${head.subject}”` : "kamu"
   await createInAppNotification({
     userId: data.reporterId,
     type: "complaint_status",
-    title: data.status === "RESOLVED" ? "Tiket kamu selesai ✓" : "Update tiket kamu",
-    message: data.detail ? `${data.detail}` : `Tiket kamu ${label[data.status] ?? data.status}.`,
-    link: "/complaints",
+    title: data.status === "RESOLVED" ? `Tiket ${subject} selesai ✓` : `Update tiket ${subject}`,
+    message: data.detail ? `${data.detail}` : `Tiket ${subject} ${label[data.status] ?? data.status}.`,
+    link: `/complaints?id=${data.complaintId}`,
     push: true,
   }).catch(() => null)
 }

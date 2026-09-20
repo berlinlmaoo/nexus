@@ -36,7 +36,16 @@ function recTone(r: HistRow): "present" | "permit" | "wfh" | "leave" | "sick" | 
   return "none";
 }
 
-export const Route = createFileRoute("/_app/attendance")({ component: Attendance });
+export const Route = createFileRoute("/_app/attendance")({
+  component: Attendance,
+  // `?request=<id>` / `?offsite=<id>` is what a notification links to: the row is shown even if it
+  // is settled, scrolled into view and highlighted, so the tap lands on THE request and not on the
+  // page. iOS reads the same two keys (AttendanceRequestsCard).
+  validateSearch: (s: Record<string, unknown>): { request?: string; offsite?: string } => ({
+    request: typeof s.request === "string" ? s.request : undefined,
+    offsite: typeof s.offsite === "string" ? s.offsite : undefined,
+  }),
+});
 
 // BoD's palette (17 Sep 2026): absent red, present & permit green, sick orange, day off purple.
 // Leave (cuti) stays yellow so it is not mistaken for a permit; WFH blue.
@@ -1033,6 +1042,11 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
   // Settled (approved / rejected / canceled) rows are collapsed behind "Show settled" — see the
   // split further down. Everything still awaiting a decision is what this list is FOR.
   const [showSettled, setShowSettled] = useState(false);
+  // The row a notification pointed at. Highlighted for a few seconds after it scrolls into view;
+  // the highlight is state rather than a CSS animation so it survives a re-render mid-scroll.
+  const search = Route.useSearch();
+  const focusKey = search.request ? `req-${search.request}` : search.offsite ? `offsite-${search.offsite}` : null;
+  const [highlighted, setHighlighted] = useState<string | null>(null);
   // Rejecting is a two-step: click Reject → a reason box opens on that row → Confirm. The server
   // refuses a reason-less rejection, so we collect it before the request is ever sent.
   const [rejectingId, setRejectingId] = useState<string | null>(null);
@@ -1114,6 +1128,20 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
   const settledHiddenCount = settledHiddenEntries.length;
   const alwaysVisibleCount = visibleEntries.length;
 
+  // Once the data is in: unfold the settled rows if the target is one of them, then scroll to it.
+  const focusInSettled = Boolean(focusKey) && settledHiddenEntries.some((e) => (e.kind === "request" ? `req-${e.row.id}` : `offsite-${e.item.id}`) === focusKey);
+  useEffect(() => {
+    if (!focusKey) return;
+    if (focusInSettled && !showSettled) { setShowSettled(true); return; }
+    const el = document.getElementById(`focus-${focusKey}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlighted(focusKey);
+    const t = window.setTimeout(() => setHighlighted(null), 6000);
+    return () => window.clearTimeout(t);
+  }, [focusKey, focusInSettled, showSettled, entries.length]);
+  const focusClass = (key: string) => (highlighted === key ? " rounded-xl ring-2 ring-primary bg-primary/5 transition-shadow" : "");
+
   const renderOffsite = (it: (typeof offsiteItems)[number]) => {
     const isPending = it.approval === "PENDING";
     // Offsite checkouts have had a four-eyes guard server-side all along; hide the buttons to match
@@ -1121,7 +1149,7 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
     const isMine = Boolean(viewerId && it.user?.id === viewerId);
     const mapUrl = it.lat != null && it.lng != null ? `https://www.google.com/maps?q=${it.lat},${it.lng}` : null;
     return (
-      <div key={`offsite-${it.id}`} className="flex flex-wrap items-center gap-3 px-5 py-3">
+      <div key={`offsite-${it.id}`} id={`focus-offsite-${it.id}`} className={"flex flex-wrap items-center gap-3 px-5 py-3" + focusClass(`offsite-${it.id}`)}>
         <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusTone(it.approval)}`}>{offsiteStatusLabel(it.approval)}</span>
         <div className="min-w-0 flex-1">
           {/* The kind badge is what keeps the merged queue readable: these rows sit shoulder to
@@ -1156,7 +1184,7 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
     // showing the buttons would only produce a 403 nobody can act on.
     const isMine = Boolean(viewerId && r.user?.id === viewerId);
     return (
-      <div key={r.id} className="flex flex-wrap items-center gap-3 px-5 py-3">
+      <div key={r.id} id={`focus-req-${r.id}`} className={"flex flex-wrap items-center gap-3 px-5 py-3" + focusClass(`req-${r.id}`)}>
         <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusTone(r.status)}`}>{statusLabel(r.status)}</span>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold">{statusLabel(r.type)} {r.user?.name ? <span className="font-normal text-muted-foreground">· {r.user.name}</span> : null}</div>

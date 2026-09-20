@@ -441,7 +441,7 @@ export async function notifyAttendanceRequestReviewed(input: {
       type: "attendance_request_reviewed",
       title: input.approved ? "Permintaan absen di-approve" : "Permintaan absen ditolak",
       message: `${label} kamu (${range}) di-${verb} sama ${who}.${noteSuffix}${refundSuffix}`,
-      link: "/attendance",
+      link: `/attendance?request=${input.requestId}`,
       // Push too: a decision is exactly the kind of thing you shouldn't have to open the app to learn.
       // (The matching "perlu approval" ping to approvers has always pushed; this one never did.)
       push: true,
@@ -524,7 +524,7 @@ export async function notifyOffsiteCheckoutReviewed(input: {
       type: "offsite_checkout_reviewed",
       title: input.approved ? "Checkout di luar di-approve" : "Checkout di luar ditolak",
       message: `Check-out di luar (${dateStr}) di-${verb} sama ${who}.`,
-      link: "/attendance",
+      link: `/attendance?offsite=${input.recordId}`,
     }).catch(() => {})
     if (waOn) {
       const c = recipientChatId(rec.user)

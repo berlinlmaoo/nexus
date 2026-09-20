@@ -42,7 +42,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     })
 
     // Notify the other side: a BoD reply pings the reporter; a reporter reply pings the BoD.
-    void notifyComplaintReply({ complaintId: id, workspaceId: membership.workspaceId, reporterId: complaint.reporterId, fromReviewer: viewerIsBod, replierId: me }).catch(() => {})
+    void notifyComplaintReply({ complaintId: id, workspaceId: membership.workspaceId, reporterId: complaint.reporterId, fromReviewer: viewerIsBod, replierId: me, preview: text }).catch(() => {})
 
     // GIDEON answers the reporter, not the reviewers: a BoD reply is a human taking over, and an
     // assistant talking back over them is noise. Its own two brakes — never answer itself, and never

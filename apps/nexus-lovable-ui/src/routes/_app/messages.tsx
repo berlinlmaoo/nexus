@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, MessageCircle, Pencil, Plus, UserPlus, Users as UsersIcon, X } from "lucide-react";
@@ -7,7 +7,13 @@ import { ChatThread } from "@/components/messages/ChatThread";
 import { nexusApi, type NexusConversation, type NexusUser } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/_app/messages")({ component: Messages });
+export const Route = createFileRoute("/_app/messages")({
+  component: Messages,
+  // `?c=<conversationId>` — what a chat notification links to. There is no `/messages/$id` route, and
+  // the old `/messages/<id>` links matched nothing, which is why a tapped "New message from…" opened
+  // the list and not the chat.
+  validateSearch: (s: Record<string, unknown>): { c?: string } => ({ c: typeof s.c === "string" ? s.c : undefined }),
+});
 
 function initialsOf(name?: string | null) {
   if (!name) return "?";
@@ -31,7 +37,9 @@ function Messages() {
   const meId = me.data?.user?.id;
   const convos = useQuery({ queryKey: ["conversations"], queryFn: () => nexusApi.conversations(), retry: false });
   const rows = convos.data?.conversations ?? [];
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const search = Route.useSearch();
+  const [activeId, setActiveId] = useState<string | null>(search.c ?? null);
+  useEffect(() => { if (search.c) setActiveId(search.c); }, [search.c]);
   const active = rows.find((c) => c.id === activeId) ?? rows[0] ?? null;
   const activeKey = active?.id ?? null;
 
