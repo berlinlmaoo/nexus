@@ -293,7 +293,7 @@ export async function applyAttendanceReviewSideEffects(
 export async function usualOfficeByUser<O extends { id: string }>(workspaceId: string, offices: O[]): Promise<Map<string, O>> {
   const byId = new Map(offices.map((o) => [o.id, o] as const))
   const rows = await prisma.attendanceRecord.findMany({
-    where: { workspaceId, officeLocationId: { not: null }, checkInAt: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) } },
+    where: { workspaceId, checkInAt: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) } },
     distinct: ["userId"],
     orderBy: { checkInAt: "desc" },
     select: { userId: true, officeLocationId: true },
