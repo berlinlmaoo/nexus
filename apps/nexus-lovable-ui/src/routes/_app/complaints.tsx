@@ -10,7 +10,11 @@ import { Avatar } from "@/components/Avatar";
 import { cn } from "@/lib/utils";
 import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, type AttendanceCorrection, type AttendanceCorrectionKind, type Complaint } from "@/lib/nexus-api";
 
-export const Route = createFileRoute("/_app/complaints")({ component: ComplaintsPage });
+export const Route = createFileRoute("/_app/complaints")({
+  component: ComplaintsPage,
+  // `?id=<ticket>` opens that ticket's thread — the link every ticket notification now carries.
+  validateSearch: (s: Record<string, unknown>): { id?: string } => ({ id: typeof s.id === "string" ? s.id : undefined }),
+});
 
 // OPEN TO EVERYONE since 2026-07-29 (was BoD-only behind "Coming Soon"). A grievance channel that
 // only the bosses could open was the wrong way round — staff are the people who need to file.
@@ -73,6 +77,14 @@ function ComplaintsPage() {
   const [tab, setTab] = useState<Tab>("open");
   const [composing, setComposing] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  // A ticket asked for by id: open it, on the tab that is guaranteed to contain it. "All" rather than
+  // guessing the status — a ticket GIDEON just answered is in a different queue from one still open.
+  const search = Route.useSearch();
+  useEffect(() => {
+    if (!search.id) return;
+    setTab("all");
+    setOpenId(search.id);
+  }, [search.id]);
 
   const roleQ = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 });
   const viewerIsBod = ["ONE_ABOVE_ALL", "BOD"].includes(roleQ.data?.role ?? "");

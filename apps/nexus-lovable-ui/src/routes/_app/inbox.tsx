@@ -77,15 +77,18 @@ function InboxPage() {
 function notificationTarget(n: NexusNotification): { to: string; params?: Record<string, string>; search?: Record<string, string> } | null {
   if (n.taskId) return { to: "/tasks/$taskId", params: { taskId: n.taskId } };
   if (n.projectId) return { to: "/projects/$projectId", params: { projectId: n.projectId } };
-  const t = (n.type ?? "").toLowerCase();
-  if (t.includes("checkout") || t.includes("offsite") || t.includes("attendance") || t.includes("late") || t.includes("absen")) return { to: "/attendance" };
-  if (t.includes("message")) return { to: "/messages" };
+  // The link first, the type keywords only as a fallback. The server now puts the record's id in
+  // the link (`/attendance?request=…`, `/complaints?id=…`, `/messages?c=…`); matching on the type
+  // before reading it threw that id away and landed every attendance signal on the top of the page.
   if (n.link && n.link.startsWith("/")) {
     // The router matches on the path alone — a link like `/submissions?id=abc` has to be split, or
     // the query string ends up part of the path and nothing matches.
     const [path, qs] = n.link.split("?");
     return { to: path, search: qs ? Object.fromEntries(new URLSearchParams(qs)) : undefined };
   }
+  const t = (n.type ?? "").toLowerCase();
+  if (t.includes("checkout") || t.includes("offsite") || t.includes("attendance") || t.includes("late") || t.includes("absen")) return { to: "/attendance" };
+  if (t.includes("message")) return { to: "/messages" };
   return null;
 }
 

@@ -1,6 +1,8 @@
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearch } from "@tanstack/react-router";
 import { AlertTriangle, CheckCircle2, Info, Megaphone, X } from "lucide-react";
 import { nexusApi } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
@@ -15,11 +17,27 @@ const TONE: Record<string, { icon: typeof Info; head: string; accent: string }> 
 export function AnnouncementModal() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["announcements-active"], queryFn: () => nexusApi.activeAnnouncements(), retry: 1, staleTime: 30_000 });
+  // `?announcement=<id>` on any route (a tapped notification): that one is shown first, even when it
+  // was dismissed before — the active list would hide it, and a tap that shows nothing reads as broken.
+  const search = useSearch({ strict: false }) as { announcement?: string };
+  const focusId = search.announcement ?? null;
+  const [focusClosed, setFocusClosed] = useState<string | null>(null);
+  const focusQ = useQuery({
+    queryKey: ["announcement", focusId],
+    queryFn: () => nexusApi.announcement(focusId as string),
+    enabled: Boolean(focusId) && focusClosed !== focusId,
+    retry: 1,
+  });
+  useEffect(() => { setFocusClosed(null); }, [focusId]);
+  const focused = focusId && focusClosed !== focusId ? focusQ.data?.announcement : undefined;
   const list = q.data?.announcements ?? [];
-  const current = list[0];
+  const current = focused ?? list[0];
   const dismiss = useMutation({
     mutationFn: (id: string) => nexusApi.dismissAnnouncement(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["announcements-active"] }),
+    onSuccess: (_r, id) => {
+      if (id === focusId) setFocusClosed(id);
+      qc.invalidateQueries({ queryKey: ["announcements-active"] });
+    },
   });
 
   if (typeof document === "undefined" || !current) return null;

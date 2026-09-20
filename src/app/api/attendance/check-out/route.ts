@@ -348,6 +348,7 @@ export async function POST(request: NextRequest) {
         staffUserId: session.user.id,
         staffName: context.user?.name ?? "Staff",
         reason: offsiteReason ?? null,
+        recordId: record.id,
       }).catch((err) => console.error("offsite checkout notify failed:", err))
     }
 

@@ -11,6 +11,32 @@ async function isBoD(userId: string): Promise<boolean> {
   return memberships.some((m) => m.role === "BOD" || m.role === "ONE_ABOVE_ALL")
 }
 
+// One announcement, for whoever it was addressed to. This is what a tapped push resolves against:
+// `/api/announcements/active` hides anything already dismissed, and a person who tapped the
+// notification an hour after closing the pop-up would otherwise be shown nothing at all.
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const { id } = await params
+    const a = await prisma.announcement.findUnique({
+      where: { id },
+      select: { id: true, title: true, body: true, tone: true, imageUrl: true, active: true, createdAt: true, targetUserIds: true, createdById: true },
+    })
+    if (!a) return NextResponse.json({ error: "Not found" }, { status: 404 })
+    const me = session.user.id
+    if (a.targetUserIds.length && !a.targetUserIds.includes(me) && !(await isBoD(me))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 })
+    }
+    const author = a.createdById ? await prisma.user.findUnique({ where: { id: a.createdById }, select: { name: true } }) : null
+    const { targetUserIds: _t, createdById: _c, ...rest } = a
+    return NextResponse.json({ announcement: { ...rest, authorName: author?.name ?? null } })
+  } catch (error) {
+    console.error("announcement get error:", error)
+    return NextResponse.json({ error: "Failed" }, { status: 500 })
+  }
+}
+
 // Toggle active / edit an announcement (BoD+). Set active:false to stop it popping up.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {

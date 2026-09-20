@@ -138,7 +138,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
         ? `${message.user?.name ?? "Someone"} mentioned you`
         : `New message from ${message.user?.name ?? "someone"}`,
       message: preview,
-      link: `/messages/${conversationId}`,
+      // `?c=`, not `/messages/<id>`: the web has no `/messages/$id` route, so the old link opened
+      // the list and lost the conversation. Both clients read the query form (iOS also still
+      // accepts the path form for rows created before this).
+      link: `/messages?c=${conversationId}`,
       // Every message pushes, not just mentions. A chat app where a plain message reaches you
       // only after you happen to open it is not a chat app; the mention still differs in the
       // title and type so a direct @ is distinguishable on the lock screen.

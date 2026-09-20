@@ -2189,6 +2189,8 @@ export const nexusApi = {
 
   // --- Announcements (BoD pop-ups) ---
   activeAnnouncements: () => apiFetch<{ announcements: NexusAnnouncement[] }>("/api/announcements/active"),
+  /** One announcement by id, seen or not — what `?announcement=` on a tapped notification resolves. */
+  announcement: (id: string) => apiFetch<{ announcement: NexusAnnouncement & { authorName?: string | null } }>(`/api/announcements/${id}`),
   dismissAnnouncement: (id: string) => apiFetch<{ ok?: boolean }>(`/api/announcements/${id}/seen`, { method: "POST" }),
   announcements: () => apiFetch<{ announcements: NexusAdminAnnouncement[] }>("/api/announcements"),
   createAnnouncement: (payload: { title: string; body: string; tone?: string; targetUserIds?: string[]; repeatDays?: number; repeatAtTime?: string }) => apiFetch<{ announcement: NexusAdminAnnouncement }>("/api/announcements", { method: "POST", body: JSON.stringify(payload) }),
