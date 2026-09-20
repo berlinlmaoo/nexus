@@ -27,7 +27,7 @@ function jakarta(now: Date) {
   // A real instant, not Jakarta-midnight-as-UTC (which is 07:00 WIB on this UTC container): compared
   // against `lastRepeatedAt`, that offset made an announcement set before 07:00 fire on every run
   // between its time and seven o'clock.
-  const startOfDay = attendanceWallClockToUtc(formatAttendanceDateKey(now), "00:00")
+  const startOfDay = attendanceWallClockToUtc(formatAttendanceDateKey(now), "00:00") ?? new Date(local.getFullYear(), local.getMonth(), local.getDate())
   return { local, startOfDay, minutes: local.getHours() * 60 + local.getMinutes() }
 }
 

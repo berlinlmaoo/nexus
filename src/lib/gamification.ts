@@ -245,7 +245,7 @@ export async function bumpStreak(userId: string) {
   // Jakarta days, like everything else in attendance. On UTC days, activity between 00:00 and
   // 07:00 WIB landed on the previous day: the streak nudge (which counts WIB days) then warned
   // people who had already been active, and two consecutive WIB days could read as a gap.
-  const dayStart = (d: Date) => attendanceWallClockToUtc(formatAttendanceDateKey(d), "00:00")
+  const dayStart = (d: Date): Date => attendanceWallClockToUtc(formatAttendanceDateKey(d), "00:00") ?? new Date(new Date(d).setUTCHours(0, 0, 0, 0))
   const today = dayStart(new Date())
   const streak = await prisma.userStreak.findUnique({ where: { userId } })
   const last = streak?.lastActivityDay ? dayStart(new Date(streak.lastActivityDay)) : null
