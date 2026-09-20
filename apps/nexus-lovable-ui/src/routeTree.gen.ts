@@ -43,6 +43,7 @@ import { Route as AppAdminRouteImport } from './routes/_app/admin'
 import { Route as AppProjectsIndexRouteImport } from './routes/_app/projects/index'
 import { Route as AppTasksTaskIdRouteImport } from './routes/_app/tasks.$taskId'
 import { Route as AppProjectsProjectIdRouteImport } from './routes/_app/projects/$projectId'
+import { Route as AppMessagesConversationIdRouteImport } from './routes/_app/messages.$conversationId'
 import { Route as AppFoldersFolderIdRouteImport } from './routes/_app/folders.$folderId'
 import { Route as AppDocsDocIdRouteImport } from './routes/_app/docs.$docId'
 
@@ -215,6 +216,12 @@ const AppProjectsProjectIdRoute = AppProjectsProjectIdRouteImport.update({
   path: '/projects/$projectId',
   getParentRoute: () => AppRoute,
 } as any)
+const AppMessagesConversationIdRoute =
+  AppMessagesConversationIdRouteImport.update({
+    id: '/$conversationId',
+    path: '/$conversationId',
+    getParentRoute: () => AppMessagesRoute,
+  } as any)
 const AppFoldersFolderIdRoute = AppFoldersFolderIdRouteImport.update({
   id: '/folders/$folderId',
   path: '/folders/$folderId',
@@ -241,7 +248,7 @@ export interface FileRoutesByFullPath {
   '/inbox': typeof AppInboxRoute
   '/leaderboard': typeof AppLeaderboardRoute
   '/master-calendar': typeof AppMasterCalendarRoute
-  '/messages': typeof AppMessagesRoute
+  '/messages': typeof AppMessagesRouteWithChildren
   '/my-tasks': typeof AppMyTasksRoute
   '/peer-reports': typeof AppPeerReportsRoute
   '/reports': typeof AppReportsRoute
@@ -259,6 +266,7 @@ export interface FileRoutesByFullPath {
   '/v/$slug': typeof VSlugRoute
   '/docs/$docId': typeof AppDocsDocIdRoute
   '/folders/$folderId': typeof AppFoldersFolderIdRoute
+  '/messages/$conversationId': typeof AppMessagesConversationIdRoute
   '/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
   '/projects/': typeof AppProjectsIndexRoute
@@ -277,7 +285,7 @@ export interface FileRoutesByTo {
   '/inbox': typeof AppInboxRoute
   '/leaderboard': typeof AppLeaderboardRoute
   '/master-calendar': typeof AppMasterCalendarRoute
-  '/messages': typeof AppMessagesRoute
+  '/messages': typeof AppMessagesRouteWithChildren
   '/my-tasks': typeof AppMyTasksRoute
   '/peer-reports': typeof AppPeerReportsRoute
   '/reports': typeof AppReportsRoute
@@ -296,6 +304,7 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/docs/$docId': typeof AppDocsDocIdRoute
   '/folders/$folderId': typeof AppFoldersFolderIdRoute
+  '/messages/$conversationId': typeof AppMessagesConversationIdRoute
   '/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
   '/projects': typeof AppProjectsIndexRoute
@@ -316,7 +325,7 @@ export interface FileRoutesById {
   '/_app/inbox': typeof AppInboxRoute
   '/_app/leaderboard': typeof AppLeaderboardRoute
   '/_app/master-calendar': typeof AppMasterCalendarRoute
-  '/_app/messages': typeof AppMessagesRoute
+  '/_app/messages': typeof AppMessagesRouteWithChildren
   '/_app/my-tasks': typeof AppMyTasksRoute
   '/_app/peer-reports': typeof AppPeerReportsRoute
   '/_app/reports': typeof AppReportsRoute
@@ -335,6 +344,7 @@ export interface FileRoutesById {
   '/_app/': typeof AppIndexRoute
   '/_app/docs/$docId': typeof AppDocsDocIdRoute
   '/_app/folders/$folderId': typeof AppFoldersFolderIdRoute
+  '/_app/messages/$conversationId': typeof AppMessagesConversationIdRoute
   '/_app/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/_app/tasks/$taskId': typeof AppTasksTaskIdRoute
   '/_app/projects/': typeof AppProjectsIndexRoute
@@ -374,6 +384,7 @@ export interface FileRouteTypes {
     | '/v/$slug'
     | '/docs/$docId'
     | '/folders/$folderId'
+    | '/messages/$conversationId'
     | '/projects/$projectId'
     | '/tasks/$taskId'
     | '/projects/'
@@ -411,6 +422,7 @@ export interface FileRouteTypes {
     | '/'
     | '/docs/$docId'
     | '/folders/$folderId'
+    | '/messages/$conversationId'
     | '/projects/$projectId'
     | '/tasks/$taskId'
     | '/projects'
@@ -449,6 +461,7 @@ export interface FileRouteTypes {
     | '/_app/'
     | '/_app/docs/$docId'
     | '/_app/folders/$folderId'
+    | '/_app/messages/$conversationId'
     | '/_app/projects/$projectId'
     | '/_app/tasks/$taskId'
     | '/_app/projects/'
@@ -707,6 +720,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProjectsProjectIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/messages/$conversationId': {
+      id: '/_app/messages/$conversationId'
+      path: '/$conversationId'
+      fullPath: '/messages/$conversationId'
+      preLoaderRoute: typeof AppMessagesConversationIdRouteImport
+      parentRoute: typeof AppMessagesRoute
+    }
     '/_app/folders/$folderId': {
       id: '/_app/folders/$folderId'
       path: '/folders/$folderId'
@@ -735,6 +755,18 @@ const AppDocsRouteChildren: AppDocsRouteChildren = {
 const AppDocsRouteWithChildren =
   AppDocsRoute._addFileChildren(AppDocsRouteChildren)
 
+interface AppMessagesRouteChildren {
+  AppMessagesConversationIdRoute: typeof AppMessagesConversationIdRoute
+}
+
+const AppMessagesRouteChildren: AppMessagesRouteChildren = {
+  AppMessagesConversationIdRoute: AppMessagesConversationIdRoute,
+}
+
+const AppMessagesRouteWithChildren = AppMessagesRoute._addFileChildren(
+  AppMessagesRouteChildren,
+)
+
 interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRoute
   AppAttendanceRoute: typeof AppAttendanceRoute
@@ -745,7 +777,7 @@ interface AppRouteChildren {
   AppInboxRoute: typeof AppInboxRoute
   AppLeaderboardRoute: typeof AppLeaderboardRoute
   AppMasterCalendarRoute: typeof AppMasterCalendarRoute
-  AppMessagesRoute: typeof AppMessagesRoute
+  AppMessagesRoute: typeof AppMessagesRouteWithChildren
   AppMyTasksRoute: typeof AppMyTasksRoute
   AppPeerReportsRoute: typeof AppPeerReportsRoute
   AppReportsRoute: typeof AppReportsRoute
@@ -773,7 +805,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppInboxRoute: AppInboxRoute,
   AppLeaderboardRoute: AppLeaderboardRoute,
   AppMasterCalendarRoute: AppMasterCalendarRoute,
-  AppMessagesRoute: AppMessagesRoute,
+  AppMessagesRoute: AppMessagesRouteWithChildren,
   AppMyTasksRoute: AppMyTasksRoute,
   AppPeerReportsRoute: AppPeerReportsRoute,
   AppReportsRoute: AppReportsRoute,
