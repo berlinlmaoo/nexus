@@ -497,7 +497,9 @@ export async function notifyAttendanceOverride(input: {
     inApp = `Status absen kamu (${dateStr}) diubah jadi ${sl}${by}.`
     wa = `📝 Status absen kamu (${dateStr}) diubah jadi *${sl}*${by}.${input.note ? `\nCatatan: "${input.note}"` : ""}`
   }
-  await createInAppNotification({ userId: target.id, type: "attendance_override", title, message: inApp, link: "/attendance" }).catch(() => {})
+  // Pushed: a day flipped to Cuti/Sakit/Day-off (which also closes their open record) is not
+  // something to discover by opening the app.
+  await createInAppNotification({ userId: target.id, type: "attendance_override", title, message: inApp, link: "/attendance", push: true }).catch(() => {})
   if (waNotifEnabled("NEXUS_WA_ATTENDANCE_OVERRIDE_ENABLED")) {
     const c = recipientChatId(target)
     if (c) await sendWaChat(c, wa)
@@ -523,8 +525,10 @@ export async function notifyOffsiteCheckoutReviewed(input: {
       userId: rec.userId,
       type: "offsite_checkout_reviewed",
       title: input.approved ? "Checkout di luar di-approve" : "Checkout di luar ditolak",
-      message: `Check-out di luar (${dateStr}) di-${verb} sama ${who}.`,
+      message: `Check-out di luar (${dateStr}) di-${verb} sama ${who}.${input.approved ? "" : " Dihitung seperti tidak check-out (−25 XP)."}`,
       link: `/attendance?offsite=${input.recordId}`,
+      // A rejection costs 25 XP; the sibling request-review notification pushes, this one didn't.
+      push: true,
     }).catch(() => {})
     if (waOn) {
       const c = recipientChatId(rec.user)
@@ -536,11 +540,6 @@ export async function notifyOffsiteCheckoutReviewed(input: {
     }
   }
 
-  await fanOutHandledToApprovers({
-    workspaceId: rec.workspaceId, reviewerId: input.reviewerId, requesterId: rec.userId, waEnabled: waOn,
-    type: "offsite_checkout_handled",
-    title: "Checkout di luar sudah diproses",
-    inApp: `Offsite checkout ${rec.user.name ?? "staff"} (${dateStr}) di-${verb} sama ${who}.`,
-    wa: `ℹ️ Offsite checkout ${rec.user.name ?? "staff"} (${dateStr}) udah di-*${verb}* sama ${who}.`,
-  })
+  // No "sudah diproses" fan-out to the other approvers: the same noise was removed for requests
+  // (4,243 rows, 87 % never read) and 547 of these had piled up for the same reason.
 }

@@ -275,7 +275,7 @@ function VaultPage() {
                         {item.kind === "FOLDER"
                           ? `${item.childCount} item`
                           : humanSize(item.size)}
-                        {item.shareCount > 0 && ` · ${item.shareCount} tautan`}
+                        {item.shareCount > 0 && ` · ${item.shareCount} link${item.shareCount === 1 ? "" : "s"}`}
                         {item.minReadRole && " · terbatas"}
                       </span>
                     </span>
@@ -299,10 +299,10 @@ function VaultPage() {
                             className="text-destructive"
                             disabled={!item.canModify}
                             onClick={() => {
-                              if (window.confirm(`Hapus "${item.name}" permanen?`)) remove.mutate({ id: item.id, purge: true });
+                              if (window.confirm(`Delete "${item.name}" permanently?`)) remove.mutate({ id: item.id, purge: true });
                             }}
                           >
-                            <Trash2 className="h-4 w-4 mr-2" /> Hapus permanen
+                            <Trash2 className="h-4 w-4 mr-2" /> Delete permanently
                           </DropdownMenuItem>
                         </>
                       ) : (
@@ -314,7 +314,7 @@ function VaultPage() {
                               </DropdownMenuItem>
                               <DropdownMenuItem asChild>
                                 <a href={item.downloadUrl ?? "#"}>
-                                  <Download className="h-4 w-4 mr-2" /> Unduh
+                                  <Download className="h-4 w-4 mr-2" /> Download
                                 </a>
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => setSharing(item)}>
@@ -327,7 +327,7 @@ function VaultPage() {
                             disabled={!item.canModify}
                             onClick={() => { setRenaming(item); setRenameValue(item.name); }}
                           >
-                            <Pencil className="h-4 w-4 mr-2" /> Ganti nama
+                            <Pencil className="h-4 w-4 mr-2" /> Rename
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             className="text-destructive"
@@ -352,15 +352,15 @@ function VaultPage() {
 
       <Dialog open={!!renaming} onOpenChange={(o) => !o && setRenaming(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Ganti nama</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Rename</DialogTitle></DialogHeader>
           <Input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} autoFocus />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRenaming(null)}>Batal</Button>
+            <Button variant="outline" onClick={() => setRenaming(null)}>Cancel</Button>
             <Button
               disabled={!renameValue.trim() || rename.isPending}
               onClick={() => renaming && rename.mutate({ id: renaming.id, name: renameValue.trim() })}
             >
-              Simpan
+              Save
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -390,7 +390,7 @@ function PreviewDialog({ item, onClose, onShare }: { item: VaultItem | null; onC
               <iframe src={item.url ?? ""} title={item.name} className="w-full h-[65vh]" />
             ) : (
               <div className="p-10 text-center text-sm text-muted-foreground">
-                Jenis berkas ini tidak bisa dipratinjau. Unduh untuk membukanya.
+                Jenis berkas ini tidak bisa dipratinjau. Download to open it.
               </div>
             )}
           </div>
@@ -404,7 +404,7 @@ function PreviewDialog({ item, onClose, onShare }: { item: VaultItem | null; onC
               <Share2 className="h-4 w-4 mr-1.5" /> Bagikan
             </Button>
             <Button asChild>
-              <a href={item?.downloadUrl ?? "#"}><Download className="h-4 w-4 mr-1.5" /> Unduh</a>
+              <a href={item?.downloadUrl ?? "#"}><Download className="h-4 w-4 mr-1.5" /> Download</a>
             </Button>
           </div>
         </DialogFooter>
@@ -431,17 +431,17 @@ function ShareDialog({ item, onClose }: { item: VaultItem | null; onClose: () =>
     mutationFn: () => nexusApi.vaultCreateShare({ itemId: item!.id, requireAuth, allowDownload, expires }),
     onSuccess: async (s) => {
       await navigator.clipboard.writeText(s.url).catch(() => {});
-      toast.success("Tautan dibuat & disalin");
+      toast.success("Link created & copied");
       void qc.invalidateQueries({ queryKey: ["vault-shares", item?.id] });
       void qc.invalidateQueries({ queryKey: ["vault"] });
     },
-    onError: (e: Error) => toast.error("Gagal membuat tautan", { description: e.message }),
+    onError: (e: Error) => toast.error("Couldn't create the link", { description: e.message }),
   });
 
   const revoke = useMutation({
     mutationFn: (id: string) => nexusApi.vaultRevokeShare(id),
     onSuccess: () => {
-      toast.success("Tautan dicabut — berlaku sekarang juga");
+      toast.success("Link revoked, effective now");
       void qc.invalidateQueries({ queryKey: ["vault-shares", item?.id] });
     },
     onError: (e: Error) => toast.error("Gagal mencabut", { description: e.message }),
@@ -462,19 +462,19 @@ function ShareDialog({ item, onClose }: { item: VaultItem | null; onClose: () =>
               </span>
               <span className="block text-xs text-muted-foreground mt-0.5">
                 {requireAuth
-                  ? "Harus login NEXUS. Di iPhone dan Mac, tautannya membuka aplikasi langsung ke berkas ini."
-                  : "Siapa pun yang punya tautan bisa membuka, tanpa akun. Tautannya sengaja tetap di browser, tidak membuka aplikasi."}
+                  ? "Requires a NEXUS login. On iPhone and Mac the link opens the app straight to this file."
+                  : "Anyone with the link can open it, no account needed. It stays in the browser on purpose and never opens the app."}
               </span>
             </span>
           </label>
 
           <label className="flex items-center gap-3 rounded-lg border border-border p-3 cursor-pointer">
             <Switch checked={allowDownload} onCheckedChange={setAllowDownload} />
-            <span className="text-sm font-medium">Boleh diunduh</span>
+            <span className="text-sm font-medium">Allow download</span>
           </label>
 
           <div>
-            <p className="text-xs text-muted-foreground mb-1.5">Masa berlaku</p>
+            <p className="text-xs text-muted-foreground mb-1.5">Expiry</p>
             <div className="flex flex-wrap gap-1.5">
               {EXPIRY_LABELS.map((e) => (
                 <button
@@ -492,7 +492,7 @@ function ShareDialog({ item, onClose }: { item: VaultItem | null; onClose: () =>
           </div>
 
           <Button className="w-full" disabled={create.isPending} onClick={() => create.mutate()}>
-            {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Link2 className="h-4 w-4 mr-1.5" /> Buat tautan</>}
+            {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Link2 className="h-4 w-4 mr-1.5" /> Create link</>}
           </Button>
         </div>
 
@@ -513,7 +513,7 @@ function ShareDialog({ item, onClose }: { item: VaultItem | null; onClose: () =>
                 <span className="tabular-nums text-muted-foreground shrink-0">{s.viewCount}×</span>
                 <button
                   className="p-1 hover:bg-muted rounded"
-                  title="Salin"
+                  title="Copy"
                   onClick={() => { void navigator.clipboard.writeText(s.url); toast.success("Disalin"); }}
                 >
                   <Copy className="h-3.5 w-3.5" />

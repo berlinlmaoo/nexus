@@ -49,9 +49,12 @@ function MasterCalendar() {
   // Gate canManage on the SAME workspace the create-POST targets (primaryWorkspaceId), so the enable
   // state and the backend's per-workspace role check agree even for multi-workspace users.
   const roleQ = useQuery({ queryKey: ["nexus", "workspace-members", primaryWorkspaceId || "any"], queryFn: () => nexusApi.workspaceMembers(primaryWorkspaceId || undefined), retry: false, staleTime: 60_000, enabled: !!primaryWorkspaceId });
-  const canManage = (ORG_HIERARCHY[roleQ.data?.role ?? ""] ?? 0) >= (ORG_HIERARCHY.MANAGER ?? 2);
+  const roleCanManage = (ORG_HIERARCHY[roleQ.data?.role ?? ""] ?? 0) >= (ORG_HIERARCHY.MANAGER ?? 2);
 
   const active = calendars.find((c) => c.id === activeId) ?? calendars[0];
+  // The server's own answer wins: src/lib/master-calendar.ts grants canManage to a TEAM MEMBER too,
+  // and the role gate alone hid the create/edit buttons from staff the API would have allowed.
+  const canManage = roleCanManage || Boolean((active as { canManage?: boolean } | undefined)?.canManage);
   const activeProjectIds = useMemo(() => active?.projectIds ?? [], [active]);
   const activeRooms = useMemo(() => active?.roomSources ?? [], [active]);
   const roomsKey = activeRooms.join(",");
@@ -350,7 +353,7 @@ const ROOM_COLOR: Record<string, string> = {
   "Studio": "#f59e0b",
 };
 const roomColor = (room: string) => ROOM_COLOR[room] ?? "#64748b";
-const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
 
 function BookingPill({ booking }: { booking: CalendarBookingItem }) {
   const c = roomColor(booking.room);

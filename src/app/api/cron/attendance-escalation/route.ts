@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
           type: "attendance_request_escalated",
           title: `${label} ${name} belum ditanggapi`,
           message: `Diajukan ${fmt(since)}, masih menunggu ${mgr} lewat ${days} hari kerja. Kamu bisa menyetujuinya langsung di Attendance.`,
-          link: "/attendance",
+          link: kind === "request" ? `/attendance?request=${id}` : `/attendance?offsite=${id}`,
           push: true,
         }).catch(() => null)),
         createInAppNotification({
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
           type: "attendance_request_escalated",
           title: `${label} ${name} masih menunggu kamu`,
           message: `Diajukan ${fmt(since)}. BoD sudah diberi tahu karena lewat ${days} hari kerja — tapi keputusannya tetap punyamu.`,
-          link: "/attendance",
+          link: kind === "request" ? `/attendance?request=${id}` : `/attendance?offsite=${id}`,
           push: true,
         }).catch(() => null),
       ])

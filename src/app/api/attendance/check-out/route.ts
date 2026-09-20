@@ -19,7 +19,7 @@ import {
   serializeAttendanceRecord,
 } from "@/lib/attendance"
 import { isHoliday } from "@/lib/holidays"
-import { isAutoDeduction, hasAttendanceWaiver } from "@/lib/attendance-absence"
+import { isAutoDeduction, hasAttendanceWaiver, startFloor, isOutageDay } from "@/lib/attendance-absence"
 import { awardXpOnce } from "@/lib/gamification"
 import { reverseGeocodeCoordinates } from "@/lib/reverse-geocode"
 import { attendanceActionSchema } from "@/lib/validations"
@@ -221,10 +221,16 @@ export async function POST(request: NextRequest) {
       serverNow.getTime() - claimed.getTime() <= OFFLINE_MAX_AGE_MS
     const checkOutAt = claimedUsable ? (claimed as Date) : serverNow
     const checkOutOffline = deviceAtRaw !== null
+    // The day is judged by the office the person CHECKED IN at. Until 20 Sep 2026 this used the
+    // office nearest the check-out point: someone who checked in on time at HQ (15:00) and checked
+    // out near a 09:00 office had their record rewritten to that office, its shift and "LATE 235".
+    const checkInOffice = existingRecord.officeLocationId
+      ? (await prisma.officeLocation.findUnique({ where: { id: existingRecord.officeLocationId } })) ?? nearest.office
+      : nearest.office
     const effectiveShift = await resolveEffectiveAttendanceShift({
       userId: session.user.id,
       workspaceId: context.workspace.id,
-      office: nearest.office,
+      office: checkInOffice,
       date: attendanceDate, // resolve the shift for the day the record belongs to
     })
 
@@ -232,7 +238,7 @@ export async function POST(request: NextRequest) {
       attendanceDate,
       checkInAt: existingRecord.checkInAt,
       checkOutAt,
-      office: nearest.office,
+      office: checkInOffice,
       effectiveShift,
       treatAsNonWorkday: await isHoliday(context.workspace.id, attendanceDate),
     })
@@ -249,16 +255,10 @@ export async function POST(request: NextRequest) {
     const record = await prisma.attendanceRecord.update({
       where: { id: existingRecord.id },
       data: {
-        officeLocationId: nearest.office.id,
+        // Office, shift, check-in status and lateness are facts of the CHECK-IN and stay as written
+        // then. Only the check-out half of the day is derived here.
         checkOutAt,
-        effectiveShiftSource: derived.effectiveShiftSource,
-        effectiveTeamId: derived.effectiveTeamId,
-        effectiveTeamName: derived.effectiveTeamName,
-        effectiveShiftStartTime: derived.effectiveShiftStartTime,
-        effectiveShiftEndTime: derived.effectiveShiftEndTime,
-        checkInStatus: derived.checkInStatus,
         checkOutStatus: derived.checkOutStatus,
-        lateMinutes: derived.lateMinutes,
         earlyLeaveMinutes: derived.earlyLeaveMinutes,
         workedMinutes: derived.workedMinutes,
         attendanceFlexi: derived.attendanceFlexi,
@@ -311,11 +311,18 @@ export async function POST(request: NextRequest) {
     // same-day check-out — however late (lembur/overtime) — is always <24h from the shift start, so it's
     // never penalized. Skips non-workdays / holidays + days a BoD already pardoned. Best-effort.
     try {
-      const { shiftStartAt } = resolveShiftWindowAt(attendanceDate, nearest.office, effectiveShift)
+      const { shiftStartAt } = resolveShiftWindowAt(attendanceDate, checkInOffice, effectiveShift)
       const forgotten = checkOutAt.getTime() >= shiftStartAt.getTime() + 24 * 60 * 60 * 1000
+      // Same exemptions as every other attendance penalty (check-in route, nightly cron): BoD and
+      // One Above All are not required to clock in, nothing before the policy floor counts, and an
+      // outage day is nobody's fault. Five BoD members had been docked −25 here.
+      const exempt =
+        context.workspaceRole === "BOD" || context.workspaceRole === "ONE_ABOVE_ALL" ||
+        attendanceDate.getTime() < startFloor().getTime() ||
+        (await isOutageDay(formatAttendanceDateKey(attendanceDate)))
       if (
-        forgotten &&
-        isWorkdayForAttendanceDate(attendanceDate, nearest.office) &&
+        forgotten && !exempt &&
+        isWorkdayForAttendanceDate(attendanceDate, checkInOffice) &&
         !(await isHoliday(context.workspace.id, attendanceDate))
       ) {
         const dateKey = formatAttendanceDateKey(attendanceDate)

@@ -281,6 +281,46 @@ export async function applyAttendanceReviewSideEffects(
  * Used when the excuse that was holding the penalty back is rejected or withdrawn. Idempotent via
  * awardXpOnce. Returns the XP deducted (negative), or 0 if nothing was owed.
  */
+/**
+ * Which office each member actually attends: the one on their latest check-in (90 days back).
+ *
+ * The crons used to take the workspace's FIRST active office for everybody ("one active office per
+ * workspace" — true when that comment was written, false since the other four were added). HQ opens
+ * at 15:00 and the others at 09:00, so anyone at a 09:00 office was measured against 15:00: three
+ * hours late read as on time, the >120-minute backstop never fired, and the reminders pinged them
+ * at 14:30 for a shift that had ended.
+ */
+export async function usualOfficeByUser<O extends { id: string }>(workspaceId: string, offices: O[]): Promise<Map<string, O>> {
+  const byId = new Map(offices.map((o) => [o.id, o] as const))
+  const rows = await prisma.attendanceRecord.findMany({
+    where: { workspaceId, officeLocationId: { not: null }, checkInAt: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) } },
+    distinct: ["userId"],
+    orderBy: { checkInAt: "desc" },
+    select: { userId: true, officeLocationId: true },
+  })
+  const out = new Map<string, O>()
+  for (const r of rows) {
+    const o = r.officeLocationId ? byId.get(r.officeLocationId) : undefined
+    if (o) out.set(r.userId, o)
+  }
+  return out
+}
+
+/** The office to judge one member-day by: the record's own, else the member's usual, else the first active. */
+async function officeForMemberDate(userId: string, workspaceId: string, date: Date) {
+  const rec = await prisma.attendanceRecord.findUnique({
+    where: { userId_workspaceId_attendanceDate: { userId, workspaceId, attendanceDate: date } },
+    select: { officeLocationId: true },
+  })
+  if (rec?.officeLocationId) {
+    const o = await prisma.officeLocation.findUnique({ where: { id: rec.officeLocationId } })
+    if (o) return o
+  }
+  const offices = await prisma.officeLocation.findMany({ where: { workspaceId, isActive: true } })
+  const usual = await usualOfficeByUser(workspaceId, offices)
+  return usual.get(userId) ?? offices[0] ?? null
+}
+
 export async function rederiveLatePenaltyForDate(userId: string, workspaceId: string, date: Date, dateKey: string): Promise<number> {
   if (date.getTime() < startFloor().getTime()) return 0
   if (await isOutageDay(dateKey)) return 0
@@ -294,7 +334,7 @@ export async function rederiveLatePenaltyForDate(userId: string, workspaceId: st
   const joinKey = formatAttendanceDateKey(member.joinedAt ?? member.user?.createdAt ?? startFloor())
   if (dateKey < joinKey) return 0 // never penalize days before this member joined
 
-  const office = await prisma.officeLocation.findFirst({ where: { workspaceId, isActive: true } })
+  const office = await officeForMemberDate(userId, workspaceId, date)
   if (!office) return 0
   if (!isWorkdayForAttendanceDate(date, office)) return 0
   if (await isHoliday(workspaceId, date)) return 0
@@ -627,6 +667,8 @@ export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date; 
       members.map((m) => [m.userId, formatAttendanceDateKey(m.joinedAt ?? m.user?.createdAt ?? floor)] as const),
     )
 
+    const usualOffice = await usualOfficeByUser(workspaceId, offices.filter((o) => o.workspaceId === workspaceId))
+    const officesById = new Map(offices.map((o) => [o.id, o] as const))
     const holidayKeys = await getHolidayKeys(workspaceId, from, to) // tanggal merah → skip
     // Sekali per run, bukan sekali per tanggal — meniru holidayKeys di atasnya. Termasuk hari
     // yang dicatat otomatis oleh prober, bukan cuma yang sempat diketik orang ke env.
@@ -640,6 +682,7 @@ export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date; 
 
       for (const member of members) {
         const userId = member.userId
+        const memberOffice = usualOffice.get(userId) ?? office
 
         // Pre-join guard: don't penalize days before this member joined the workspace.
         const joinKey = joinKeyByUser.get(userId)
@@ -672,8 +715,10 @@ export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date; 
 
         const record = await prisma.attendanceRecord.findUnique({
           where: { userId_workspaceId_attendanceDate: { userId, workspaceId, attendanceDate: date } },
-          select: { checkInAt: true, checkOutAt: true, checkOutApproval: true, correctedAt: true, lateMinutes: true },
+          select: { checkInAt: true, checkOutAt: true, checkOutApproval: true, correctedAt: true, lateMinutes: true, officeLocationId: true },
         })
+        // The office the record was made at wins; the member's usual one stands in when there is no record.
+        const dayOffice = (record?.officeLocationId && officesById.get(record.officeLocationId)) || memberOffice
         // Manually corrected records (BoD "ubah jadi Hadir" / admin correction) are authoritative —
         // don't re-derive penalties from their (possibly synthesized) timestamps.
         if (record?.correctedAt) {
@@ -684,14 +729,14 @@ export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date; 
           // Hadir → bukan bolos, tapi tetap kena penalti XP: telat masuk & tidak absen keluar.
           try {
             if (record.checkInAt) {
-              const shift = await resolveEffectiveAttendanceShift({ userId, workspaceId, office, date })
+              const shift = await resolveEffectiveAttendanceShift({ userId, workspaceId, office: dayOffice, date })
               // Anchor the late math to the SAME timezone the shift was selected in (office tz), so an
               // office in a non-default tz can't disagree with the shift-window day boundary.
               // Flexi members are on-time until the window END (15:00) — measure lateness against that,
               // not the window start (12:00), or a flexi person who checked in at 13:30 would be wrongly
               // (and permanently) penalized here.
               const lateBaseline = shift.flexi ? FLEXI_WINDOW_END : shift.shiftStartTime
-              const recomputed = minutesLateAgainstShift(record.checkInAt, date, lateBaseline, safeAttendanceTimezone(office.timezone))
+              const recomputed = minutesLateAgainstShift(record.checkInAt, date, lateBaseline, safeAttendanceTimezone(dayOffice.timezone))
               // `record.lateMinutes` dihitung SAAT check-in, dengan shift yang berlaku waktu itu — itu
               // fakta hari itu. Hitungan ulang di sini memakai shift yang berlaku SEKARANG, dan shift
               // bisa diubah belakangan: dibikin lebih pagi (Aji 12:00 → 10:00 pada 15 Sep 2026: check-in
@@ -701,7 +746,7 @@ export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date; 
               const lateMin = record.lateMinutes != null && record.lateMinutes >= 0
                 ? Math.min(record.lateMinutes, recomputed)
                 : recomputed
-              const grace = Math.max(0, office.lateGraceMinutes ?? 0)
+              const grace = Math.max(0, dayOffice.lateGraceMinutes ?? 0)
               if (lateMin > grace) {
                 // -1 XP/menit, maks 120.
                 await awardXpOnce(userId, -Math.min(lateMin, 120), `attendance:late:${dateKey}`)
@@ -742,8 +787,8 @@ export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date; 
         try {
           const outage = await getOutageRecord(dateKey)
           if (outage) {
-            const shiftForDay = await resolveEffectiveAttendanceShift({ userId, workspaceId, office, date })
-            const { shiftStartAt } = resolveShiftWindowAt(date, office, shiftForDay)
+            const shiftForDay = await resolveEffectiveAttendanceShift({ userId, workspaceId, office: memberOffice, date })
+            const { shiftStartAt } = resolveShiftWindowAt(date, memberOffice, shiftForDay)
             const endedAt = outage.endedAt ?? new Date()
             if (shiftStartAt >= outage.startedAt && shiftStartAt <= endedAt) {
               result.skipped++
@@ -834,9 +879,11 @@ export async function accrueLatePenalties(now: Date = new Date()): Promise<LateA
       where: { workspaceId, role: { notIn: ["BOD", "ONE_ABOVE_ALL"] } },
       select: { userId: true },
     })
+    const usualOffice = await usualOfficeByUser(workspaceId, offices.filter((o) => o.workspaceId === workspaceId))
 
     for (const member of members) {
       const userId = member.userId
+      const memberOffice = usualOffice.get(userId) ?? office
 
       // Already checked in/out → penalty is finalized at check-in; don't touch.
       const record = await prisma.attendanceRecord.findUnique({
@@ -859,7 +906,7 @@ export async function accrueLatePenalties(now: Date = new Date()): Promise<LateA
       // BoD pardoned today for this member → no live accrual either.
       if (await hasAttendanceWaiver(userId, dateKey)) continue
 
-      const shift = await resolveEffectiveAttendanceShift({ userId, workspaceId, office, date: today })
+      const shift = await resolveEffectiveAttendanceShift({ userId, workspaceId, office: memberOffice, date: today })
       // Only accrue for users whose shift is EXPLICIT and unambiguous: a per-person override
       // ("USER", set in Control Room → Members) or a team override ("TEAM"). Office-default
       // shift is ambiguous before check-in (workspace has multiple offices with different
@@ -868,14 +915,14 @@ export async function accrueLatePenalties(now: Date = new Date()): Promise<LateA
       if (shift.source !== "USER" && shift.source !== "TEAM") continue
       // Flexi members aren't "late" until the window END (15:00); accrue against that, not the 12:00 start.
       const lateBaseline = shift.flexi ? FLEXI_WINDOW_END : shift.shiftStartTime
-      const elapsed = minutesLateAgainstShift(now, today, lateBaseline, safeAttendanceTimezone(office.timezone))
+      const elapsed = minutesLateAgainstShift(now, today, lateBaseline, safeAttendanceTimezone(memberOffice.timezone))
       if (elapsed <= 0) continue // shift not started / not late yet
 
       // Respect the late grace window: someone still within grace is NOT late yet (check-in would
       // count them ON_TIME), so don't accrue a penalty. Without this, the cron nicked XP from
       // minute 1 even though the policy allows `graceMinutes` of slack → wrongful penalties for
       // people who check in a few minutes late but within grace.
-      const grace = Math.max(0, office.lateGraceMinutes ?? 0)
+      const grace = Math.max(0, memberOffice.lateGraceMinutes ?? 0)
       if (elapsed <= grace) continue // within grace → not late yet, no penalty
 
       const target = -Math.min(elapsed, 120)

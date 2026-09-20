@@ -34,10 +34,10 @@ export function VaultSharePage() {
       <Shell>
         <Lock className="h-10 w-10 text-muted-foreground/40" />
         <h1 className="text-lg font-semibold mt-4">
-          {needsLogin ? "Tautan internal" : "Tautan tidak bisa dibuka"}
+          {needsLogin ? "Internal link" : "This link can't be opened"}
         </h1>
         <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-          {err.message || "Tautan ini sudah tidak berlaku."}
+          {err.message || "This link is no longer valid."}
         </p>
         {needsLogin && (
           <Button className="mt-5" asChild>
@@ -62,7 +62,7 @@ export function VaultSharePage() {
         {data.allowDownload && data.downloadUrl && (
           <Button size="sm" className="ml-auto" asChild>
             <a href={data.downloadUrl}>
-              <Download className="h-4 w-4 mr-1.5" /> Unduh
+              <Download className="h-4 w-4 mr-1.5" /> Download
             </a>
           </Button>
         )}
@@ -83,13 +83,13 @@ export function VaultSharePage() {
               <HardDrive className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
               <p className="text-sm text-muted-foreground">
                 Jenis berkas ini tidak bisa dipratinjau di browser.
-                {data.allowDownload ? " Unduh untuk membukanya." : ""}
+                {data.allowDownload ? " Download to open it." : ""}
               </p>
             </div>
           )}
           {!data.allowDownload && (
             <p className="text-xs text-muted-foreground mt-3 text-center">
-              Tautan ini cuma untuk dilihat. Unduhan dimatikan oleh pengirimnya.
+              This link is view-only. Downloads were turned off by the sender.
             </p>
           )}
         </div>

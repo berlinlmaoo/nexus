@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
       type: "booking_confirmed",
       title: `Ruangan dibooking: ${room}`,
       message: `${title.trim()} · ${formatBookingSlot(start, end)}. Pengingat dikirim sebelum mulai.`,
-      link: "/rooms",
+      link: "/room-booking",
       push: true,
     }).catch(() => null)
 

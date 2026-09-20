@@ -13,7 +13,11 @@ export async function GET(request: NextRequest) {
 
   const context = await getAttendanceWorkspaceContext(session.user.id)
   if (!context.workspace) return NextResponse.json({ error: "No workspace membership found" }, { status: 404 })
-  if (!context.canManageAttendance) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  // Managers are pushed "X check-out di luar kantor" and can decide it (the PATCH route takes
+  // canReviewAttendanceRequests), but this list answered them 403 — the queue was BoD-only while
+  // the decision was not. Managers see their direct reports; BoD sees everyone.
+  const isDirectManager = !context.canManageAttendance && context.canReviewAttendanceRequests && context.directReportIds.length > 0
+  if (!context.canManageAttendance && !isDirectManager) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const statusParam = (request.nextUrl.searchParams.get("status") || "PENDING").toUpperCase()
   const approvalFilter = ["PENDING", "APPROVED", "REJECTED"].includes(statusParam) ? statusParam : null
@@ -23,6 +27,7 @@ export async function GET(request: NextRequest) {
       workspaceId: context.workspace.id,
       checkOutOffsite: true,
       ...(approvalFilter ? { checkOutApproval: approvalFilter } : {}),
+      ...(isDirectManager ? { userId: { in: context.directReportIds } } : {}),
     },
     select: {
       id: true,

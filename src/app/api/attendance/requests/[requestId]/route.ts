@@ -138,8 +138,12 @@ export async function PATCH(
 
     const nextStatus = validation.data.action === "approve" ? "APPROVED" : "REJECTED"
 
-    const updated = await prisma.attendanceRequest.update({
-      where: { id: attendanceRequest.id },
+    // Claim the row only while it is still PENDING. The status check above is a separate read, so
+    // two approvers tapping within the same second both passed it; the second write overwrote the
+    // first decision, the requester was pushed twice, and the XP side effects ran twice. The
+    // offsite-checkout route has always done it this way.
+    const claimed = await prisma.attendanceRequest.updateMany({
+      where: { id: attendanceRequest.id, status: "PENDING" },
       data: {
         status: nextStatus,
         reviewNote: validation.data.reviewNote?.trim() || null,
@@ -147,6 +151,12 @@ export async function PATCH(
         reviewedById: session.user.id,
         approvalSource,
       },
+    })
+    if (claimed.count === 0) {
+      return NextResponse.json({ error: "Only pending attendance requests can be reviewed." }, { status: 409 })
+    }
+    const updated = await prisma.attendanceRequest.findUniqueOrThrow({
+      where: { id: attendanceRequest.id },
       include: {
         user: { select: { id: true, name: true, email: true, avatar: true } },
         reviewedBy: { select: { id: true, name: true, email: true } },

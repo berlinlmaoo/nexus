@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma"
+import { attendanceWallClockToUtc, formatAttendanceDateKey } from "@/lib/attendance"
 import type { Prisma } from "@/generated/prisma/client"
 
 // ===== Levels (mirror apps/nexus-lovable-ui/src/lib/levels.ts) =====
@@ -241,12 +242,15 @@ export async function getPeriodScore(userId: string, periodStart: Date = getLead
 /** Increment the daily streak; awards a small bonus once per UTC day. */
 export async function bumpStreak(userId: string) {
   if (!userId) return
-  const today = new Date(); today.setUTCHours(0, 0, 0, 0)
+  // Jakarta days, like everything else in attendance. On UTC days, activity between 00:00 and
+  // 07:00 WIB landed on the previous day: the streak nudge (which counts WIB days) then warned
+  // people who had already been active, and two consecutive WIB days could read as a gap.
+  const dayStart = (d: Date) => attendanceWallClockToUtc(formatAttendanceDateKey(d), "00:00")
+  const today = dayStart(new Date())
   const streak = await prisma.userStreak.findUnique({ where: { userId } })
-  const last = streak?.lastActivityDay ? new Date(streak.lastActivityDay) : null
-  if (last) last.setUTCHours(0, 0, 0, 0)
+  const last = streak?.lastActivityDay ? dayStart(new Date(streak.lastActivityDay)) : null
   if (last && last.getTime() === today.getTime()) return // already counted today
-  const yesterday = new Date(today); yesterday.setUTCDate(today.getUTCDate() - 1)
+  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
   const current = last && last.getTime() === yesterday.getTime() ? (streak?.currentStreak ?? 0) + 1 : 1
   const longest = Math.max(current, streak?.longestStreak ?? 0)
   await prisma.userStreak.upsert({

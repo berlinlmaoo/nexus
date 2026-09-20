@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { attendanceWallClockToUtc, formatAttendanceDateKey } from "@/lib/attendance"
 import { getUserOrgRole, isBodPlus } from "@/lib/feed"
 import { notifyAnnouncement } from "@/lib/notification-service"
 
@@ -23,8 +24,10 @@ import { notifyAnnouncement } from "@/lib/notification-service"
 /** Wall-clock Jakarta parts of an instant. The DB stores UTC and the schedule is written in WIB. */
 function jakarta(now: Date) {
   const local = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Jakarta" }))
-  const startOfDay = new Date(local)
-  startOfDay.setHours(0, 0, 0, 0)
+  // A real instant, not Jakarta-midnight-as-UTC (which is 07:00 WIB on this UTC container): compared
+  // against `lastRepeatedAt`, that offset made an announcement set before 07:00 fire on every run
+  // between its time and seven o'clock.
+  const startOfDay = attendanceWallClockToUtc(formatAttendanceDateKey(now), "00:00")
   return { local, startOfDay, minutes: local.getHours() * 60 + local.getMinutes() }
 }
 

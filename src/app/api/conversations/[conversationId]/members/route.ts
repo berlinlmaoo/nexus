@@ -81,7 +81,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
             type: "MESSAGE",
             title: `${actor?.name ?? "Someone"} added you to ${label}`,
             message: "Open Messages to see the conversation.",
-            link: `/messages/${conversationId}`,
+            link: `/messages?c=${conversationId}`,
             push: true,
           }),
         ),

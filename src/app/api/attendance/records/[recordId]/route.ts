@@ -14,7 +14,7 @@ import {
   resolveEffectiveAttendanceShift,
   serializeAttendanceRecord,
 } from "@/lib/attendance"
-import { cancelAttendancePenaltiesForDate, grantAttendanceWaiver } from "@/lib/attendance-absence"
+import { cancelAttendancePenaltiesForDate, grantAttendanceWaiver, cancelAttendancePenaltiesForDateDetailed } from "@/lib/attendance-absence"
 import { isHoliday } from "@/lib/holidays"
 import { attendanceCorrectionSchema, validateBody } from "@/lib/validations"
 
@@ -125,6 +125,26 @@ export async function PATCH(
             ).toFixed(2)
           )
         : existingRecord.checkOutDistanceMeters
+
+    // A correction is the BoD saying "this is what the day really was". Until 20 Sep 2026 that
+    // rewrote the record and left the XP ledger where the wrong record had put it: ON_TIME on the
+    // board, −N XP still in the score. The ticket-correction path has always refunded ("the XP the
+    // day cost has to come back, or the correction is only half done"); this one now does the same
+    // when the corrected day is clean — within grace and, if a check-out was written, closed. A day
+    // that is still late after the correction keeps its penalty.
+    let xpRefunded = 0
+    if (!isSilentAdmin) {
+      const grace = Math.max(0, office.lateGraceMinutes ?? 0)
+      const clean = (derived.lateMinutes ?? 0) <= grace && Boolean(nextCheckOutAt)
+      if (clean) {
+        const dateKey = formatAttendanceDateKey(existingRecord.attendanceDate)
+        try {
+          const undone = await cancelAttendancePenaltiesForDateDetailed(existingRecord.userId, context.workspace.id, existingRecord.attendanceDate, dateKey)
+          xpRefunded = undone.xp
+          if (undone.changed) await grantAttendanceWaiver(existingRecord.userId, dateKey)
+        } catch (e) { console.error("correction refund failed:", e) }
+      }
+    }
 
     const updatedRecord = await prisma.attendanceRecord.update({
       where: { id: existingRecord.id },

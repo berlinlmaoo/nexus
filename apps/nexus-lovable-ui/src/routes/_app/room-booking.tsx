@@ -192,6 +192,8 @@ function BookingComposer({ booking, initialDate, onClose }: { booking?: NexusRoo
   const del = useMutation({
     mutationFn: () => nexusApi.deleteRoomBooking(booking!.id),
     onSuccess: () => { invalidate(); onClose(); },
+    // Only the creator or a manager may delete; anyone else got a silent 403 and a dialog that stayed open.
+    onError: (e: unknown) => setErr(e instanceof Error ? e.message : "Couldn't delete the booking."),
   });
 
   const canSave = title.trim() && date && startTime && endTime && endTime > startTime && !save.isPending;

@@ -8,7 +8,7 @@ import {
   safeAttendanceTimezone,
 } from "@/lib/attendance"
 import { isHoliday } from "@/lib/holidays"
-import { isOutageDay } from "@/lib/attendance-absence"
+import { isOutageDay, usualOfficeByUser } from "@/lib/attendance-absence"
 import { notifyAttendanceReminder, sendWA } from "@/lib/notification-service"
 import { publicBaseUrl } from "./public-url"
 
@@ -154,13 +154,16 @@ export async function sendAttendanceReminders(now: Date = new Date(), opts?: { d
       where: { workspaceId, role: { notIn: ["BOD", "ONE_ABOVE_ALL"] } },
       select: { userId: true, user: { select: { id: true, name: true, phoneNumber: true } } },
     })
+    const usualOffice = await usualOfficeByUser(workspaceId, offices.filter((o) => o.workspaceId === workspaceId))
 
     for (const member of members) {
       const phone = member.user?.phoneNumber
+      // Their own office, not the workspace's first: HQ starts at 15:00, the other four at 09:00.
+      const memberOffice = usualOffice.get(member.userId) ?? office
 
       // Resolve TODAY's shift window from the real instant (overnight-aware + tz-safe).
-      const shiftToday = await resolveEffectiveAttendanceShift({ userId: member.userId, workspaceId, office, date: now })
-      const winToday = resolveShiftWindowAt(now, office, shiftToday)
+      const shiftToday = await resolveEffectiveAttendanceShift({ userId: member.userId, workspaceId, office: memberOffice, date: now })
+      const winToday = resolveShiftWindowAt(now, memberOffice, shiftToday)
       const checkinAt = new Date(winToday.shiftStartAt.getTime() - REMINDER_LEAD_MINUTES * 60_000) // label pratinjau
       const checkoutTodayAt = winToday.shiftEndAt
 
@@ -181,8 +184,8 @@ export async function sendAttendanceReminders(now: Date = new Date(), opts?: { d
           shiftEnd: shiftToday.shiftEndTime,
           checkinReminderAt: CHECKIN_OFFSETS.map((o) => zoneParts(new Date(winToday.shiftStartAt.getTime() - o * 60_000), tz).hm).join(" · "),
           checkoutReminderAt: checkoutLabel,
-          office: office.name ?? "—",
-          officeTimezone: office.timezone ?? null,
+          office: memberOffice.name ?? "—",
+          officeTimezone: memberOffice.timezone ?? null,
           resolvedTz: tz,
           onLeave,
           checkedIn: Boolean(record?.checkInAt),
@@ -225,8 +228,8 @@ export async function sendAttendanceReminders(now: Date = new Date(), opts?: { d
         let win = anchor.win
         let shift = anchor.shift
         if (!win || !shift) {
-          shift = await resolveEffectiveAttendanceShift({ userId: member.userId, workspaceId, office, date: anchor.instant })
-          win = resolveShiftWindowAt(anchor.instant, office, shift)
+          shift = await resolveEffectiveAttendanceShift({ userId: member.userId, workspaceId, office: memberOffice, date: anchor.instant })
+          win = resolveShiftWindowAt(anchor.instant, memberOffice, shift)
         }
         for (const off of CHECKOUT_OFFSETS) {
           const checkoutAt = new Date(win.shiftEndAt.getTime() - off * 60_000)

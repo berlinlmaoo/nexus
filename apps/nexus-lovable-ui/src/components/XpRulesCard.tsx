@@ -6,20 +6,18 @@ import { cn } from "@/lib/utils";
 const PENALTIES = [
   { xp: "-1 XP/min", rule: "Late check-in", note: "Max 120 min. >120 → docks a day off", auto: true },
   { xp: "-25 XP", rule: "No check-out (forgot to log out)", note: "Per incident", auto: true },
-  { xp: "-30 XP", rule: "Left the office without manager approval", note: "Per incident", auto: false },
+  // Server rule (offsite-checkouts/[recordId]: −25 on reject). "−30, left without approval" existed nowhere but here.
+  { xp: "-25 XP", rule: "Offsite check-out rejected by your approver", note: "Per incident", auto: true },
   { xp: "-150 XP", rule: "No-show, no heads-up (absent)", note: "Per day", auto: true },
 ];
+// No automatic bonus and no end-of-period tiers: both were retired on the server
+// (src/lib/period-rewards.ts — "XP is now 100% quest-only, assigned by BoD").
 const BONUSES = [
-  { xp: "+50 XP", rule: "Zero absences for a full month", note: "Showing up consistently", auto: true },
   { xp: "+30 XP", rule: "Finish a side quest from your Head", note: "Head's call", auto: false },
   { xp: "+50 XP", rule: "Performance beyond target", note: "Management's call", auto: false },
   { xp: "+20 XP", rule: "Feedback the company adopts", note: "HR's call", auto: false },
 ];
-const TIERS = [
-  { range: "1400 – 1500 XP", label: "Excellent", reward: "🎁 1 extra day off", box: "border-emerald-200 bg-emerald-50 text-emerald-800" },
-  { range: "1300 – 1400 XP", label: "Good", reward: "🍾 1 free bottle at a PATS outlet", box: "border-amber-200 bg-amber-50 text-amber-800" },
-  { range: "< 800 XP", label: "Review", reward: "⚠️ Performance review by Head + HR", box: "border-rose-200 bg-rose-50 text-rose-800" },
-];
+const TIERS: { range: string; label: string; reward: string; box: string }[] = [];
 
 function Row({ xp, rule, note, auto, tone }: { xp: string; rule: string; note: string; auto: boolean; tone: "red" | "green" }) {
   return (
@@ -69,7 +67,9 @@ export function XpRulesCard() {
             <div className="divide-y divide-border/60">{BONUSES.map((b) => <Row key={b.rule} {...b} tone="green" />)}</div>
           </div>
           <div>
+            {TIERS.length > 0 && (
             <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Tier rewards (end of period)</div>
+            )}
             <div className="space-y-1.5">
               {TIERS.map((t) => (
                 <div key={t.label} className={cn("flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-xl border px-3 py-2", t.box)}>
