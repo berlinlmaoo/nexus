@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { fmtDue, nexusApi, statusLabel, type CreateTaskPayload, type NexusProject, type NexusTask } from "@/lib/nexus-api";
-import { Plus, Filter, ArrowUpDown, CheckCircle2, MessageCircle, Sparkles, Loader2, X } from "lucide-react";
+import { Plus, Filter, ArrowUpDown, CheckCircle2, MessageCircle, Sparkles, Loader2, X, Lock, ListChecks } from "lucide-react";
 import { celebrate } from "@/components/Celebration";
 import { TaskDetailPanel } from "@/components/tasks/TaskDetailPanel";
 import { Reveal } from "@/components/motion";
@@ -56,8 +57,12 @@ function MyTasks() {
       } />
       <div className="p-4 md:p-8 space-y-6">
         {loading && <QuestSkeleton />}
-        {sessionLost && <EmptyState title="Quest feed locked" message="You'll need to log in to pull live tasks from core NEXUS." />}
-        {!loading && !sessionLost && rows.length === 0 && <EmptyState title="Quest log empty" message="Nothing's been assigned to you yet. Time to launch a mission." />}
+        {sessionLost && <EmptyState icon={Lock} tone="muted" title="Quest feed locked" message="You'll need to log in to pull live tasks from core NEXUS." />}
+        {!loading && !sessionLost && rows.length === 0 && (
+          <EmptyState icon={ListChecks} title="No quests yet"
+            message="Tasks assigned to you land here, from a mission board or a form. Nothing is waiting on you right now — pick something up from a mission."
+            action={<EmptyAction to="/projects">Browse missions</EmptyAction>} />
+        )}
         {groups.map((g, i) => (
           <Reveal key={g.label} delay={i * 0.08}>
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{g.label} <span className="text-muted-foreground/70">· {g.items.length}</span></h3>
@@ -219,7 +224,7 @@ function QuestSkeleton() {
   );
 }
 
-function EmptyState({ title, message }: { title: string; message: string }) {
+function EmptyStateLegacy({ title, message }: { title: string; message: string }) {
   return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><div className="text-lg font-black">{title}</div><p className="mt-2 text-sm text-muted-foreground">{message}</p></div>;
 }
 

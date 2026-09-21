@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
@@ -11,7 +12,7 @@ import {
   type NotificationGroupId,
 } from "@/lib/nexus-api";
 import { NotificationFilterTabs } from "@/components/NotificationFilterTabs";
-import { AtSign, UserPlus, MessageCircle, AlarmClock, Activity, Check, Trash2, Loader2 } from "lucide-react";
+import { AtSign, UserPlus, MessageCircle, AlarmClock, Activity, Check, Trash2, Loader2, Inbox, Filter, Lock } from "lucide-react";
 import { celebrate } from "@/components/Celebration";
 import { Reveal } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -62,9 +63,16 @@ function InboxPage() {
                 <div className="flex-1 space-y-1.5"><Skeleton className="h-3.5 w-1/3" /><Skeleton className="h-3 w-2/3" /><Skeleton className="h-2.5 w-24" /></div>
               </div>
             ))}
-            {inbox.isError && <Empty title="Signal locked" message="You need to log in to open your live inbox." />}
-            {!inbox.isLoading && !inbox.isError && notifications.length === 0 && <Empty title="Inbox clean" message="No pings. Enjoy the rare silence." />}
-            {!inbox.isLoading && !inbox.isError && notifications.length > 0 && shown.length === 0 && <Empty title="Nothing here" message="No notifications of this kind." />}
+            {inbox.isError && <EmptyState icon={Lock} tone="muted" title="Signal locked" message="You need to log in to open your live inbox." compact />}
+            {!inbox.isLoading && !inbox.isError && notifications.length === 0 && (
+              <EmptyState icon={Inbox} tone="success" title="Inbox clean" compact
+                message="Requests to approve, replies to your tickets, mentions and announcements land here the moment they happen. Nothing needs you right now." />
+            )}
+            {!inbox.isLoading && !inbox.isError && notifications.length > 0 && shown.length === 0 && (
+              <EmptyState icon={Filter} tone="muted" title="Nothing of this kind" compact
+                message="This filter only shows one type of signal. Everything else is still in All."
+                action={<EmptyAction onClick={() => setGroup("all")}>Show all</EmptyAction>} />
+            )}
             {!inbox.isLoading && shown.map((n, idx) => <NotificationRow key={n.id} notification={n} idx={idx} />)}
           </div>
         </Reveal>
@@ -139,10 +147,6 @@ function NotificationRow({ notification, idx }: { notification: NexusNotificatio
       </div>
     </div>
   );
-}
-
-function Empty({ title, message }: { title: string; message: string }) {
-  return <div className="p-8 text-center"><div className="text-lg font-black">{title}</div><p className="mt-2 text-sm text-muted-foreground">{message}</p></div>;
 }
 
 function signalTitle(notification: NexusNotification) {

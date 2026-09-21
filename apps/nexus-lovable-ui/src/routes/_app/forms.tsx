@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { EmptyState } from "@/components/EmptyState";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { FileText, Plus } from "lucide-react";
@@ -75,7 +76,8 @@ function Forms() {
           </div>
         )}
         {!forms.isLoading && rows.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><FileText className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">No forms yet</div><p className="mt-2 text-sm text-muted-foreground">{filter === "all" ? "No forms in any project yet." : "No forms in this project yet."}</p></div>
+          <EmptyState icon={FileText} title="No forms yet"
+            message="A form is an intake page — a request, a reimbursement, a report — that turns into a task the moment it's submitted. Build the first one and it appears here for everyone to fill in." />
         )}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {rows.map((f, i) => <Reveal key={f.id} delay={Math.min(i, 8) * 0.05} className="h-full"><FormCard form={f} projectName={projectName(f.projectId)} onEdit={() => setBuilder({ form: f, projectId: f.projectId ?? builderProjectId })} /></Reveal>)}

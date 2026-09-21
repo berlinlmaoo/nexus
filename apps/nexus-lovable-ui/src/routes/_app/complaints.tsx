@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -133,11 +134,14 @@ function ComplaintsPage() {
       <div className="space-y-2.5">
         {listQ.isLoading && Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-20 animate-pulse rounded-2xl border border-border bg-card" />)}
         {!listQ.isLoading && complaints.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-border bg-card/50 px-6 py-14 text-center">
-            <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary"><InboxIcon className="h-7 w-7" /></div>
-            <div className="text-base font-black">{viewerIsBod ? "No complaints here yet" : "No complaints yet"}</div>
-            <p className="mt-1 text-sm text-muted-foreground">{viewerIsBod ? "Complaints from staff will show up here." : "Got an ops / HR issue? Send it to the BoD here."}</p>
-          </div>
+          <EmptyState icon={InboxIcon}
+            title={viewerIsBod ? (tab === "all" ? "No tickets yet" : "Nothing in this queue") : "No tickets yet"}
+            message={viewerIsBod
+              ? (tab === "all" ? "Tickets staff raise — complaints, questions, attendance records that look wrong — arrive here. GIDEON checks the data first; the decision is yours." : "Only tickets with this status are shown. The rest are still under All.")
+              : "A ticket is how you raise something with BoD — a complaint, a question, or an attendance record that looks wrong. GIDEON checks the data first, BoD decides, and it stays between you and them."}
+            action={viewerIsBod
+              ? (tab !== "all" ? <EmptyAction onClick={() => setTab("all")}>Show all</EmptyAction> : undefined)
+              : <EmptyAction onClick={() => setComposing(true)}><Plus className="h-4 w-4" /> New ticket</EmptyAction>} />
         )}
         {complaints.map((c) => <ComplaintCard key={c.id} c={c} viewerIsBod={viewerIsBod} onOpen={() => setOpenId(c.id)} />)}
       </div>

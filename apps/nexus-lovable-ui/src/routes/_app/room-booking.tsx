@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
+import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
@@ -87,11 +88,9 @@ function RoomBooking() {
         {bookingsQ.isLoading && <div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
         {bookingsQ.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><div className="text-lg font-black">Bookings locked</div><p className="mt-2 text-sm text-muted-foreground">Login/session required. If the bookings table hasn't been pushed to the DB yet, run <code>npm run db:push</code> on the backend first.</p></div>}
         {!bookingsQ.isLoading && !bookingsQ.isError && agenda.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center shadow-soft">
-            <CalendarDays className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
-            <div className="text-lg font-black">Nothing booked</div>
-            <p className="mt-1 text-sm text-muted-foreground">Nothing booked in {viewMonth.toLocaleDateString("en-US", { month: "long" })} yet. Add one with New booking.</p>
-          </div>
+          <EmptyState icon={CalendarDays} title={`Nothing booked in ${viewMonth.toLocaleDateString("en-US", { month: "long" })}`}
+            message="Meeting rooms are booked here so two teams never turn up for the same room. Pick a room, a date and a time, and everyone invited is told."
+            action={<EmptyAction onClick={() => setComposer({ date: todayKey })}>New booking</EmptyAction>} />
         )}
 
         {agenda.length > 0 && (
