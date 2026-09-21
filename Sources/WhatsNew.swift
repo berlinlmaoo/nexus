@@ -436,9 +436,38 @@ struct WhatsNewRow: View {
 /// presented: it is a place in the app, not an interruption.
 struct WhatsNewScreen: View {
     @State private var viewer = Viewer.shared
+    /// What the App Store has right now. When it is ahead of this build the screen says so first —
+    /// the same fact the daily "update NEXUS" push is based on, visible without waiting for the push.
+    @State private var latest: (version: String?, storeUrl: String)?
 
     private var current: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+    }
+    private var updateAvailable: Bool {
+        guard let v = latest?.version else { return false }
+        return Self.isBehind(current, v)
+    }
+    /// "0.1.4" behind "0.1.10": numeric per part, not string order.
+    static func isBehind(_ a: String, _ b: String) -> Bool {
+        let pa = a.split(separator: ".").map { Int($0) ?? 0 }, pb = b.split(separator: ".").map { Int($0) ?? 0 }
+        for i in 0..<max(pa.count, pb.count) {
+            let x = i < pa.count ? pa[i] : 0, y = i < pb.count ? pb[i] : 0
+            if x != y { return x < y }
+        }
+        return false
+    }
+    @ViewBuilder private var updateBanner: some View {
+        if updateAvailable, let latest, let url = URL(string: latest.storeUrl) {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("\(T("NEXUS")) \(latest.version ?? "") \(T("is on the App Store"))", systemImage: "arrow.down.app.fill")
+                    .font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground)
+                Text("\(T("You're on")) \(current). \(T("Update to get the latest fixes and features — it takes a minute."))")
+                    .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+                Button(T("Update in App Store")) { UIApplication.shared.open(url) }
+                    .buttonStyle(NexusPrimaryButton(fullWidth: false))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading).nexusCard(padding: 14)
+        }
     }
     private var entries: [WhatsNewEntry] {
         WhatsNew.entries(for: current).filter { !$0.bodOnly || viewer.isBoD }
@@ -448,6 +477,7 @@ struct WhatsNewScreen: View {
         ZStack {
             NX.background.ignoresSafeArea()
             ScrollView {
+                updateBanner
                 VStack(alignment: .leading, spacing: 18) {
                     Text("NEXUS \(current)").font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     if entries.isEmpty {
@@ -462,6 +492,7 @@ struct WhatsNewScreen: View {
                 .padding(20)
             }
         }
+        .task { latest = try? await APIClient.shared.appLatest() }
         .navigationTitle(T("What's new"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await viewer.loadIfNeeded() }

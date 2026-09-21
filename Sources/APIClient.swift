@@ -1252,6 +1252,13 @@ struct APIClient {
         (try await run(makeRequest("/api/announcements/active"), decode: AnnouncementsResponse.self)).announcements ?? []
     }
 
+    /// The version currently on the App Store, so Tuning Room can say "update available" itself.
+    func appLatest() async throws -> (version: String?, storeUrl: String) {
+        struct R: Decodable { struct IOS: Decodable { let version: String?; let storeUrl: String }; let ios: IOS }
+        let r = try await run(makeRequest("/api/app/latest"), decode: R.self)
+        return (r.ios.version, r.ios.storeUrl)
+    }
+
     /// One announcement by id, seen or not — what a tapped announcement push resolves against.
     func announcement(_ id: String) async throws -> AdminAnnouncement {
         struct One: Decodable { let announcement: AdminAnnouncement }

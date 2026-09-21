@@ -138,6 +138,8 @@ final class AppRouter {
         let value = { (k: String) -> String? in info[k].flatMap { $0.isEmpty ? nil : $0 } }
         if let id = value("taskId") { open(.task(id)); return }
         if let id = value("projectId") { open(.project(id)); return }
+        // An external link — the App Store, for the "update NEXUS" reminder — leaves the app.
+        if let link = value("link"), link.hasPrefix("http"), let url = URL(string: link) { UIApplication.shared.open(url); return }
         if let link = value("link"), let target = NotificationTarget(path: link) { open(target); return }
         let t = (value("type") ?? "").lowercased()
         if t.contains("attendance") || t.contains("offsite") || t.contains("checkout") { go(.attendance) }

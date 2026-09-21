@@ -138,6 +138,7 @@ struct InboxView: View {
     /// would be a regression wearing parity's clothes.
     private func open(_ n: NexusNotification) {
         Task { await markRead(n) }
+        if let link = n.link, link.hasPrefix("http"), let url = URL(string: link) { UIApplication.shared.open(url); return }
         guard let target = n.tapTarget else { return }
         if case .screen(let screen) = target { router.go(screen); return }
         // The web sends the reader to the board with `?id=` and pops the drawer there. On a phone
