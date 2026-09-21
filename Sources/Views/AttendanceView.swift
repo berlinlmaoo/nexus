@@ -792,6 +792,9 @@ struct StreakBoardCard: View {
     @State private var exporting = false
     @State private var exportItem: ShareItem?
     @State private var exportError: String?
+    @State private var showFull = false
+    /// Today's day-of-month while the board shows the current month; nil on earlier months.
+    private var todayDay: Int? { monthOffset == 0 ? ProjDate.cal.component(.day, from: Date()) : nil }
     /// Built once per load, not per read. It used to be a computed property — a `Dictionary(grouping:)`
     /// plus a `localizedCaseInsensitiveCompare` sort (ICU collation, the slowest comparator Foundation
     /// has) — and `body` reads it three times: the empty check, the name column and the cell grid.
@@ -833,10 +836,19 @@ struct StreakBoardCard: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(wide ? T("Crew streak board") : T("Your attendance history")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
-                    Text(monthLabel.capitalized).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    Text(todayDay.map { "\(monthLabel.capitalized) · \(T("today")) \($0)" } ?? monthLabel.capitalized)
+                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer()
                 HStack(spacing: 2) {
+                    Button { showFull = true } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.foreground).frame(width: 30, height: 30)
+                    }
+                    .accessibilityLabel(T("Open the full board"))
+                    .fullScreenCover(isPresented: $showFull) {
+                        FullBoard(members: members, daysInMonth: daysInMonth, monthLabel: monthLabel.capitalized, todayDay: todayDay,
+                                  canManage: canManage, legend: AnyView(legend)) { await load() }
+                    }
                     if wide {
                         Button { Task { await exportMonth() } } label: {
                             if exporting { ProgressView().scaleEffect(0.7).frame(width: 30, height: 30) }
@@ -900,11 +912,16 @@ struct StreakBoardCard: View {
             // even though a dozen columns fit on screen. Each row carries an explicit height — the
             // same height its children already had — because a lazy stack, unlike a plain one, will
             // stretch to fill its container across its axis, and that would blow the row spacing out.
+            ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: gap) {
                     LazyHStack(spacing: gap) {
                         ForEach(1...daysInMonth, id: \.self) { d in
-                            Text("\(d)").font(.system(size: 8)).foregroundStyle(NX.mutedFg).frame(width: cell, height: 14)
+                            let isToday = d == todayDay
+                            Text("\(d)").font(.system(size: 8, weight: isToday ? .bold : .regular))
+                                .foregroundStyle(isToday ? Color.white : NX.mutedFg).frame(width: cell, height: 14)
+                                .background(isToday ? NX.violet : Color.clear, in: Capsule())
+                                .id("day-\(d)")
                         }
                     }
                     .frame(height: 14)
@@ -912,6 +929,7 @@ struct StreakBoardCard: View {
                         LazyHStack(spacing: gap) {
                             ForEach(1...daysInMonth, id: \.self) { d in
                                 let fill = RoundedRectangle(cornerRadius: 5, style: .continuous).fill((m.cells[d] ?? .none).color).frame(width: cell, height: cell)
+                                    .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(d == todayDay ? NX.violet : Color.clear, lineWidth: 1.5))
                                 if canManage, let row = m.rowByDay[d], row.id != nil {
                                     Button { selectedRow = row } label: { fill }.buttonStyle(.plain)
                                 } else {
@@ -923,6 +941,78 @@ struct StreakBoardCard: View {
                     }
                 }
             }
+            // Land on today, not on the 1st: the column that matters is the one being filled in.
+            .onAppear { if let t = todayDay { proxy.scrollTo("day-\(t)", anchor: .center) } }
+            .onChange(of: members.count) { _, _ in if let t = todayDay { proxy.scrollTo("day-\(t)", anchor: .center) } }
+            }
+        }
+    }
+
+    /// The whole month at once, pinch-zoomable — the card shows a few days at a time and hides
+    /// the shape of the month; this is where a BoD reads it in one look.
+    private struct FullBoard: View {
+        let members: [Member]
+        let daysInMonth: Int
+        let monthLabel: String
+        let todayDay: Int?
+        let canManage: Bool
+        let legend: AnyView
+        let onChanged: () async -> Void
+        @Environment(\.dismiss) private var dismiss
+        @State private var selectedRow: AttendanceRow?
+        private let cell: CGFloat = 22
+        private let gap: CGFloat = 3
+        private let nameW: CGFloat = 120
+
+        var body: some View {
+            NavigationStack {
+                ZStack {
+                    NX.background.ignoresSafeArea()
+                    VStack(spacing: 8) {
+                        legend.padding(.horizontal, 16)
+                        ZoomableCanvas(fitTrigger: 0) { grid.padding(16) }
+                    }
+                }
+                .navigationTitle(monthLabel).navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() } } }
+                .sheet(item: $selectedRow) { row in RecordActionsSheet(row: row) { await onChanged() } }
+            }
+        }
+
+        private var grid: some View {
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: gap) {
+                    Color.clear.frame(height: 16)
+                    ForEach(members) { m in
+                        Text(m.name).font(NXFont.text(11, .medium)).foregroundStyle(NX.foreground)
+                            .lineLimit(1).frame(width: nameW, height: cell, alignment: .leading)
+                    }
+                }
+                VStack(alignment: .leading, spacing: gap) {
+                    HStack(spacing: gap) {
+                        ForEach(1...daysInMonth, id: \.self) { d in
+                            let isToday = d == todayDay
+                            Text("\(d)").font(.system(size: 9, weight: isToday ? .bold : .regular))
+                                .foregroundStyle(isToday ? Color.white : NX.mutedFg).frame(width: cell, height: 16)
+                                .background(isToday ? NX.violet : Color.clear, in: Capsule())
+                        }
+                    }
+                    ForEach(members) { m in
+                        HStack(spacing: gap) {
+                            ForEach(1...daysInMonth, id: \.self) { d in
+                                let fill = RoundedRectangle(cornerRadius: 5, style: .continuous).fill((m.cells[d] ?? .none).color).frame(width: cell, height: cell)
+                                    .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(d == todayDay ? NX.violet : Color.clear, lineWidth: 1.5))
+                                if canManage, let row = m.rowByDay[d], row.id != nil {
+                                    Button { selectedRow = row } label: { fill }.buttonStyle(.plain)
+                                } else {
+                                    fill
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
     }
 

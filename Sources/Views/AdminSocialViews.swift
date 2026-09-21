@@ -116,7 +116,7 @@ struct EmptyState: View {
     var subtitle: String = ""
     var tint: Color = NX.violet
     var actionTitle: String? = nil
-    var actionIcon: String = "plus"
+    var actionIcon: String? = "plus"
     var action: (() -> Void)? = nil
     var compact: Bool = false
 
@@ -139,7 +139,9 @@ struct EmptyState: View {
                     .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 360)
             }
             if let actionTitle, let action {
-                Button { action() } label: { Label(actionTitle, systemImage: actionIcon) }
+                Button { action() } label: {
+                    if let actionIcon { Label(actionTitle, systemImage: actionIcon) } else { Text(actionTitle) }
+                }
                     .buttonStyle(NexusPrimaryButton(fullWidth: false)).padding(.top, 6)
             }
         }

@@ -308,7 +308,7 @@ struct TicketsView: View {
                     } else {
                         EmptyState(icon: "line.3.horizontal.decrease.circle", title: T("No tickets in this filter"),
                                    subtitle: T("Only tickets with this status are shown here. The rest are still under All."),
-                                   actionTitle: T("Show all"), actionIcon: "tray.full") { filter = "ALL" }
+                                   actionTitle: T("Show all"), actionIcon: nil) { filter = "ALL" }
                     }
                 } else {
                     ScrollView {

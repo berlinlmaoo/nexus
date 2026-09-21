@@ -344,7 +344,7 @@ private struct OrgPersonCard: View {
 
 /// SwiftUI di dalam UIScrollView: cubit untuk zoom, geser dengan inersia, ketuk dua kali untuk
 /// pas-ke-layar / perbesar. Konten dipusatkan saat lebih kecil dari layar.
-private struct ZoomableCanvas<Content: View>: UIViewRepresentable {
+struct ZoomableCanvas<Content: View>: UIViewRepresentable {
     let fitTrigger: Int
     @ViewBuilder let content: () -> Content
 

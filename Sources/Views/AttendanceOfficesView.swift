@@ -143,7 +143,7 @@ struct OfficeComposerSheet: View {
                             .buttonStyle(.plain).disabled(busy)
                             .confirmationDialog(T("Delete this office?"), isPresented: $confirmDelete, titleVisibility: .visible) {
                                 Button(T("Delete"), role: .destructive) { Task { await remove() } }
-                            } message: { Text(T("Only possible while no attendance has been recorded at it.")) }
+                            } message: { Text(T("It disappears from the list and nobody can check in there anymore. Days already recorded there keep the office's name.")) }
                         }
                     }.padding(20)
                 }

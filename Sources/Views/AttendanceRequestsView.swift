@@ -205,7 +205,7 @@ struct AttendanceRequestsCard: View {
                 if filtered.isEmpty {
                     EmptyState(icon: "line.3.horizontal.decrease.circle", title: T("Nothing in this filter"),
                                subtitle: T("Only requests with this status are shown. The rest are under All."),
-                               actionTitle: T("Show all"), actionIcon: "tray.full", action: { filter = "ALL" }, compact: true)
+                               actionTitle: T("Show all"), actionIcon: nil, action: { filter = "ALL" }, compact: true)
                 } else {
                     ForEach(filtered) { row($0) }
                 }

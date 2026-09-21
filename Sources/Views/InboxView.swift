@@ -81,7 +81,7 @@ struct InboxView: View {
                         if shown.isEmpty {
                             EmptyState(icon: "line.3.horizontal.decrease.circle", title: T("Nothing of this kind"),
                                        subtitle: T("This filter only shows one type of signal. Everything else is still in All."),
-                                       actionTitle: T("Show all"), actionIcon: "tray.full", action: { group = .all }, compact: true)
+                                       actionTitle: T("Show all"), actionIcon: nil, action: { group = .all }, compact: true)
                         } else {
                             VStack(spacing: 0) {
                                 ForEach(Array(shown.enumerated()), id: \.element.id) { idx, n in
