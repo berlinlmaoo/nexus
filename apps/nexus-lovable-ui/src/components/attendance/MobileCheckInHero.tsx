@@ -7,6 +7,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { celebrate } from "@/components/Celebration";
 import { ApiError, fmtTime, nexusApi, type AttendanceActionPayload, type NexusAttendanceToday } from "@/lib/nexus-api";
 import { getAttendanceFix, GeoError } from "@/lib/geo";
+import { LivenessCapture } from "@/components/attendance/LivenessCapture";
 
 type TodayData = NexusAttendanceToday | null;
 
@@ -76,20 +77,29 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
 
   const fileRef = useRef<HTMLInputElement>(null);
   const pendingMode = useRef<"in" | "out" | null>(null);
+  // The selfie is taken by the face check (straight, side, other side, blink). Only when the browser
+  // has no camera API, or the face model cannot be fetched, does it fall back to a plain photo — and
+  // that one is at least checked for a face where the browser can.
+  const [liveness, setLiveness] = useState<"in" | "out" | null>(null);
+  const [fallbackMode, setFallbackMode] = useState<"in" | "out" | null>(null);
+  const startSelfie = (mode: "in" | "out") => {
+    setFallbackMode(null);
+    if (typeof navigator.mediaDevices?.getUserMedia === "function") { setLiveness(mode); return; }
+    pendingMode.current = mode;
+    fileRef.current?.click();
+  };
   // Check-in goes straight to the selfie; check-out asks for the daily reflection first.
   const trigger = (mode: "in" | "out") => {
     if (busy || disabled) return;
     setMsg(null);
     if (mode === "out") { setReflectOpen(true); return; }
-    pendingMode.current = mode;
-    fileRef.current?.click();
+    startSelfie(mode);
   };
   // After the reflection passes ≥200 chars, continue the check-out into the selfie/GPS flow.
   const proceedCheckout = () => {
     if (reflection.trim().length < REFLECTION_MIN) return;
     setReflectOpen(false);
-    pendingMode.current = "out";
-    fileRef.current?.click();
+    startSelfie("out");
   };
   const onSelfie = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
@@ -97,12 +107,14 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
     const mode = pendingMode.current;
     pendingMode.current = null;
     if (!file || !mode) return;
+    proceed(file, mode, false);
+  };
+  const proceed = (file: File, mode: "in" | "out", verified: boolean) => {
     setMsg(null);
     setLocating(true);
-    // A selfie with no face in it is not an attendance photo. Where the browser has a face detector
-    // (Chrome, Android) it is asked before the location fix; elsewhere the check is skipped rather
-    // than blocking everyone — the phone app runs the same guard on-device.
-    hasFace(file)
+    // A selfie with no face in it is not an attendance photo. The face check already proved a live
+    // person; a plain photo is at least asked for a face where the browser has a detector.
+    (verified ? Promise.resolve(true) : hasFace(file))
       .then((ok) => { if (!ok) throw new NoFaceError(); return getAttendanceFix(); })
       .then((fix) => {
         setLocating(false);
@@ -276,6 +288,22 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
       )}
 
       <input ref={fileRef} type="file" accept="image/*" capture="user" onChange={onSelfie} className="hidden" />
+      {fallbackMode && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-800">
+          The live face check isn't available in this browser.{" "}
+          <button type="button" className="underline" onClick={() => { const m = fallbackMode; setFallbackMode(null); pendingMode.current = m; fileRef.current?.click(); }}>Take a plain selfie instead</button>
+        </div>
+      )}
+
+      <AnimatePresence>
+        {liveness && (
+          <LivenessCapture
+            onCancel={() => setLiveness(null)}
+            onCapture={(file) => { const m = liveness; setLiveness(null); proceed(file, m, true); }}
+            onUnavailable={() => { const m = liveness; setLiveness(null); setFallbackMode(m); }}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Daily Reflection — required (≥200 chars) before check-out, captured before the selfie */}
       <AnimatePresence>
