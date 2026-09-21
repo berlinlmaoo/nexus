@@ -53,7 +53,7 @@ struct LivenessCaptureView: View {
                     gauge.position(x: home.midX, y: home.maxY + 46)
                     if flash { Color.white.opacity(0.85) }
                 }
-                .animation(reduceMotion ? nil : .interactiveSpring(response: 0.32, dampingFraction: 0.85), value: engine.faceRect)
+                .animation(reduceMotion ? nil : .interactiveSpring(response: 0.26, dampingFraction: 0.86), value: engine.faceScreenRect)
                 .animation(.easeInOut(duration: 0.3), value: lightOn)
             }
             .ignoresSafeArea()
@@ -92,16 +92,15 @@ struct LivenessCaptureView: View {
     /// The window hugs the detected face (a little room for hair and chin); without a face it rests
     /// at its home position so people know where to put themselves.
     ///
-    /// The face comes as a metadata-output rect and the PREVIEW LAYER converts it to screen points:
-    /// it knows the camera's rotation, the front-camera mirror and the aspect-fill crop, which is
-    /// exactly the arithmetic that put the window on the wrong side of the screen when done by hand.
+    /// The rect is already in screen points: it comes from the camera's own face metadata, turned
+    /// into layer coordinates by the preview layer (`transformedMetadataObject`). No hand-made
+    /// rotation, mirror or crop arithmetic — two attempts at that put the window beside the face
+    /// or stretched it twice as tall as the face.
     private func trackedOval(home: CGRect, in size: CGSize) -> CGRect {
-        guard let face = engine.faceRect, let layer = engine.previewLayer else { return home }
-        let f = layer.layerRectConverted(fromMetadataOutputRect: face)
-        guard f.width > 10, f.height > 10, f.width.isFinite, f.height.isFinite else { return home }
-        let w = min(max(f.width * 1.15, 140), home.width * 1.1)
-        let h = min(max(f.height * 1.25, w * 1.2), home.height * 1.15)
-        return CGRect(x: f.midX - w / 2, y: f.midY - f.height * 0.04 - h / 2, width: w, height: h)
+        guard let f = engine.faceScreenRect, f.width > 10, f.height > 10, f.width.isFinite, f.height.isFinite else { return home }
+        let w = min(max(f.width * 1.3, 150), home.width * 1.15)
+        let h = min(max(f.height * 1.5, w * 1.2), home.height * 1.2)
+        return CGRect(x: f.midX - w / 2, y: f.midY - f.height * 0.08 - h / 2, width: w, height: h)
     }
 
     private var done: Bool { engine.captured != nil }
@@ -324,7 +323,7 @@ private struct CameraFeed: UIViewRepresentable {
 /// orientation and mirroring, and getting it wrong would tell people "left" while waiting for
 /// right. So the first turn may go either way, and the second must go the opposite way — which is
 /// exactly what liveness needs: two distinct poses a photo cannot produce.
-final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
+final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureMetadataOutputObjectsDelegate {
     enum Step: Int, Comparable {
         case center, sideA, sideB, blink, capture
         static func < (a: Step, b: Step) -> Bool { a.rawValue < b.rawValue }
@@ -333,12 +332,13 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
 
     @Published private(set) var step: Step = .center
     @Published private(set) var presence: Presence = .none
-    /// The face in metadata-output coordinates (normalized, top-left origin, camera-native
-    /// orientation) — the form `AVCaptureVideoPreviewLayer.layerRectConverted` understands.
-    @Published private(set) var faceRect: CGRect?
+    /// Where the face is ON SCREEN, in points, from the camera's own face metadata converted by the
+    /// preview layer. Vision still does the landmarks; this only places the window.
+    @Published private(set) var faceScreenRect: CGRect?
     @Published private(set) var bufferSize: CGSize?
-    /// Set by the preview; used only to convert `faceRect` to screen points.
+    /// Set by the preview; converts metadata faces to screen points.
     weak var previewLayer: AVCaptureVideoPreviewLayer?
+    private let metadataOutput = AVCaptureMetadataOutput()
     @Published private(set) var yawDegrees: Double = 0
     @Published private(set) var eyesClosed = false
     @Published private(set) var firstSide: Double = 0
@@ -404,12 +404,35 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
             output.alwaysDiscardsLateVideoFrames = true
             output.setSampleBufferDelegate(self, queue: self.queue)
             if self.session.canAddOutput(output) { self.session.addOutput(output) }
+            // Face rectangles from the camera stack itself, for the window that follows the face.
+            if self.session.canAddOutput(self.metadataOutput) {
+                self.session.addOutput(self.metadataOutput)
+                if self.metadataOutput.availableMetadataObjectTypes.contains(.face) {
+                    self.metadataOutput.metadataObjectTypes = [.face]
+                }
+                self.metadataOutput.setMetadataObjectsDelegate(self, queue: .main)
+            }
             // The buffer stays in the camera's native orientation. Vision is told how it is held
             // (`.leftMirrored`, the front camera in portrait) and the preview layer converts the
             // results to the screen — nothing is rotated or mirrored by hand.
             self.session.commitConfiguration()
             self.session.startRunning()
         }
+    }
+
+    func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput objects: [AVMetadataObject], from connection: AVCaptureConnection) {
+        guard let layer = previewLayer else { return }
+        let faces = objects.compactMap { $0 as? AVMetadataFaceObject }
+        guard let face = faces.max(by: { $0.bounds.width * $0.bounds.height < $1.bounds.width * $1.bounds.height }),
+              let onScreen = layer.transformedMetadataObject(for: face) else {
+            if faceScreenRect != nil { faceScreenRect = nil }
+            return
+        }
+        let r = onScreen.bounds
+        // Sub-2pt wobble is noise, not movement; publishing it only makes the window shiver.
+        if let old = faceScreenRect, abs(old.midX - r.midX) < 2, abs(old.midY - r.midY) < 2,
+           abs(old.width - r.width) < 2, abs(old.height - r.height) < 2 { return }
+        faceScreenRect = r
     }
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
@@ -434,7 +457,7 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
             // Gone for ~1.5 s after the first move: whoever comes back starts over, so a photo
             // cannot be swapped in between moves.
             if lostFrames > 45 && current > .center { reset(T("Face lost. Let's start again.")) }
-            publish(presence: .none, rect: nil, yaw: 0, closed: false)
+            publish(presence: .none, yaw: 0, closed: false)
             holdFrames = 0
             return
         }
@@ -449,7 +472,6 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
         if facePx < 0.30 * min(bw, bh) { presence = .small }
         else if abs(box.midX - 0.5) > 0.2 || abs(box.midY - 0.5) > 0.2 { presence = .offCentre }
         else { presence = .ok }
-        let metaRect = CGRect(x: box.minX, y: 1 - box.maxY, width: box.width, height: box.height)
         let yaw = face.yaw?.doubleValue ?? 0
 
         // Blink reference: the widest the eyes have been in the last ~1.5 s. A blink is a short dip
@@ -459,7 +481,7 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
             openness.append(open); if openness.count > 45 { openness.removeFirst() }
             if let ref = openness.max(), ref > 0.05 { closed = open < ref * 0.70 }
         }
-        publish(presence: presence, rect: metaRect, yaw: yaw, closed: closed)
+        publish(presence: presence, yaw: yaw, closed: closed)
         guard presence == .ok, now >= cooldownUntil else { holdFrames = 0; return }
         if !stalled && now.timeIntervalSince(stepStart) > 15 { DispatchQueue.main.async { self.stalled = true } }
 
@@ -509,7 +531,7 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
         }
     }
 
-    private func publish(presence: Presence, rect: CGRect?, yaw: Double, closed: Bool) {
+    private func publish(presence: Presence, yaw: Double, closed: Bool) {
         let now = Date()
         // Blink state is never throttled — a blink is only a few frames long.
         let deg = yaw * 180 / .pi
@@ -519,7 +541,6 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
             if self.eyesClosed != closed { self.eyesClosed = closed }
             guard !throttled else { return }
             if self.presence != presence { self.presence = presence }
-            if let rect { self.faceRect = rect } else if self.faceRect != nil { self.faceRect = nil }
             if abs(self.yawDegrees - deg) > 0.5 { self.yawDegrees = deg }
         }
     }
