@@ -142,9 +142,12 @@ struct GideonPanel: View {
         // `.item` rather than the accepted UTTypes: several of them (md, yml, log, ipynb) resolve to
         // dynamic UTIs that a document provider need not advertise, so filtering would hide the very
         // file the owner is looking at. `attach` refuses the wrong ones with the reason instead.
-        .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.item],
-                      allowsMultipleSelection: false) { result in
-            if case let .success(urls) = result, let url = urls.first { attach(url) }
+        .sheet(isPresented: $showFilePicker) {
+            DocumentPicker(types: [.item], multiple: false) { urls in
+                let result: Result<[URL], Error> = .success(urls)
+                if case let .success(urls) = result, let url = urls.first { attach(url) }
+            }
+            .ignoresSafeArea()
         }
         .onChange(of: pickedPhoto) { _, item in
             guard let item else { return }

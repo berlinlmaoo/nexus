@@ -178,8 +178,12 @@ struct TaskAttachmentsCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
         .task { await load() }
-        .fileImporter(isPresented: $showImporter, allowedContentTypes: [.item], allowsMultipleSelection: false) { result in
-            if case let .success(urls) = result, let url = urls.first { Task { await upload(url) } }
+        .sheet(isPresented: $showImporter) {
+            DocumentPicker(types: [.item], multiple: false) { urls in
+                let result: Result<[URL], Error> = .success(urls)
+                if case let .success(urls) = result, let url = urls.first { Task { await upload(url) } }
+            }
+            .ignoresSafeArea()
         }
         .sheet(item: $shareItem) { item in ActivityView(items: [item.url]) }
         .fullScreenCover(item: $preview) { AttachmentViewerView(preview: $0) }

@@ -70,15 +70,18 @@ struct FormFillView: View {
         .navigationTitle(form?.name ?? title)
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
-        .fileImporter(isPresented: $showImporter, allowedContentTypes: [.item],
-                      allowsMultipleSelection: true) { result in
-            // In a Task, because reading the picked file is what these do and this closure runs on
-            // the main actor — see `read`. The attachment slot takes the first file only.
-            guard case let .success(urls) = result else { return }
-            switch pickTarget {
-            case .files(let field): Task { await addFiles(urls, to: field) }
-            case .attachment(let field): if let url = urls.first { Task { await addAttachment(url, to: field) } }
+        .sheet(isPresented: $showImporter) {
+            DocumentPicker(types: [.item], multiple: true) { urls in
+                let result: Result<[URL], Error> = .success(urls)
+                // In a Task, because reading the picked file is what these do and this closure runs on
+                // the main actor — see `read`. The attachment slot takes the first file only.
+                guard case let .success(urls) = result else { return }
+                switch pickTarget {
+                case .files(let field): Task { await addFiles(urls, to: field) }
+                case .attachment(let field): if let url = urls.first { Task { await addAttachment(url, to: field) } }
+                }
             }
+            .ignoresSafeArea()
         }
     }
 

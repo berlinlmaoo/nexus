@@ -436,28 +436,32 @@ struct CreateFolderSheet: View {
             .navigationTitle(editing == nil ? T("New folder") : T("Edit folder"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
-            .fileImporter(isPresented: $showImporter, allowedContentTypes: [.image], allowsMultipleSelection: false) { result in
-                if case let .success(urls) = result, let url = urls.first {
-                    let scoped = url.startAccessingSecurityScopedResource()
-                    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-                    // Measured before it is read. This closure runs on the main actor, and the
-                    // picker will happily hand back a 4 GB panorama that /api/upload/folder-icon
-                    // would refuse anyway — reading it first to find that out is a frozen screen
-                    // followed by a refusal.
-                    let size = APIClient.fileSize(of: url)
-                    guard size > 0 else { err = T("Couldn't read that file."); return }
-                    guard size <= APIClient.iconByteLimit else {
-                        err = APIClient.tooBigToSend(size, limit: APIClient.iconByteLimit)
-                            .errorDescription ?? T("Upload failed. Try again.")
-                        return
+            .sheet(isPresented: $showImporter) {
+                DocumentPicker(types: [.image], multiple: false) { urls in
+                    let result: Result<[URL], Error> = .success(urls)
+                    if case let .success(urls) = result, let url = urls.first {
+                        let scoped = url.startAccessingSecurityScopedResource()
+                        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                        // Measured before it is read. This closure runs on the main actor, and the
+                        // picker will happily hand back a 4 GB panorama that /api/upload/folder-icon
+                        // would refuse anyway — reading it first to find that out is a frozen screen
+                        // followed by a refusal.
+                        let size = APIClient.fileSize(of: url)
+                        guard size > 0 else { err = T("Couldn't read that file."); return }
+                        guard size <= APIClient.iconByteLimit else {
+                            err = APIClient.tooBigToSend(size, limit: APIClient.iconByteLimit)
+                                .errorDescription ?? T("Upload failed. Try again.")
+                            return
+                        }
+                        guard let data = try? Data(contentsOf: url) else {
+                            err = T("Couldn't read that file.")
+                            return
+                        }
+                        err = nil
+                        photo = (url.lastPathComponent, data)
                     }
-                    guard let data = try? Data(contentsOf: url) else {
-                        err = T("Couldn't read that file.")
-                        return
-                    }
-                    err = nil
-                    photo = (url.lastPathComponent, data)
                 }
+                .ignoresSafeArea()
             }
         }
     }

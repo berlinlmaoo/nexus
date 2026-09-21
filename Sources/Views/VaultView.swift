@@ -78,8 +78,12 @@ struct VaultView: View {
             }
         }
         .refreshable { await load() }
-        .fileImporter(isPresented: $showImporter, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
-            if case let .success(urls) = result { Task { await upload(urls) } }
+        .sheet(isPresented: $showImporter) {
+            DocumentPicker(types: [.item], multiple: true) { urls in
+                let result: Result<[URL], Error> = .success(urls)
+                if case let .success(urls) = result { Task { await upload(urls) } }
+            }
+            .ignoresSafeArea()
         }
         .fullScreenCover(item: $preview) { AttachmentViewerView(preview: $0) }
         .sheet(item: $shareItem) { ActivityView(items: [$0.url]) }

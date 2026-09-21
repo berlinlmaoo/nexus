@@ -833,24 +833,28 @@ struct RequestComposerSheet: View {
             .navigationTitle(T("New request"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
-            .fileImporter(isPresented: $showImporter, allowedContentTypes: [.image, .pdf], allowsMultipleSelection: false) { result in
-                if case let .success(urls) = result, let url = urls.first {
-                    let scoped = url.startAccessingSecurityScopedResource()
-                    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-                    // Size first, bytes second. The old order read the file and then measured it,
-                    // so picking a two-hour video here locked the main actor for the length of the
-                    // read before saying it was too big — and said "over the 10MB limit" even when
-                    // the real problem was that the file could not be read at all.
-                    let size = APIClient.fileSize(of: url)
-                    guard size > 0 else { err = T("Couldn't read that file."); return }
-                    guard size <= 10 * 1024 * 1024 else { err = T("File is over the 10MB limit."); return }
-                    guard let data = try? Data(contentsOf: url) else {
-                        err = T("Couldn't read that file.")
-                        return
+            .sheet(isPresented: $showImporter) {
+                DocumentPicker(types: [.image, .pdf], multiple: false) { urls in
+                    let result: Result<[URL], Error> = .success(urls)
+                    if case let .success(urls) = result, let url = urls.first {
+                        let scoped = url.startAccessingSecurityScopedResource()
+                        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                        // Size first, bytes second. The old order read the file and then measured it,
+                        // so picking a two-hour video here locked the main actor for the length of the
+                        // read before saying it was too big — and said "over the 10MB limit" even when
+                        // the real problem was that the file could not be read at all.
+                        let size = APIClient.fileSize(of: url)
+                        guard size > 0 else { err = T("Couldn't read that file."); return }
+                        guard size <= 10 * 1024 * 1024 else { err = T("File is over the 10MB limit."); return }
+                        guard let data = try? Data(contentsOf: url) else {
+                            err = T("Couldn't read that file.")
+                            return
+                        }
+                        err = nil
+                        attach = (url.lastPathComponent, data)
                     }
-                    err = nil
-                    attach = (url.lastPathComponent, data)
                 }
+                .ignoresSafeArea()
             }
             // A PhotosPicker nested in a Menu draws its row but never opens, so the menu only
             // flips these flags and the sheets live out here.
