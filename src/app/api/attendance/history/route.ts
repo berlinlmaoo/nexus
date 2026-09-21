@@ -581,6 +581,7 @@ export async function GET(request: NextRequest) {
               name: true,
               email: true,
               avatar: true,
+              createdAt: true,
             },
           },
         },
@@ -696,13 +697,26 @@ export async function GET(request: NextRequest) {
       // absence. (Before this the row existed for every date in range and was drawn grey, so the
       // over-reach never showed.)
       const todayKey = formatAttendanceDateKey()
-      const [holidayKeys, outageKeys] = await Promise.all([
+      const [holidayKeys, outageKeys, firstRecords] = await Promise.all([
         getHolidayKeys(context.workspace.id, range.start, range.end),
         getOutageDateKeysForRange(range.start, range.end),
+        prisma.attendanceRecord.groupBy({ by: ["userId"], where: { workspaceId: context.workspace.id }, _min: { attendanceDate: true } }),
       ])
+      // Nobody is absent before their first day. A hire who started on the 14th used to get a red
+      // cell for every workday since the 28th (and a TK on the sheet): the day they joined the
+      // workspace, or their first check-in if that came earlier, is where their month begins. The
+      // nightly cron has had the same guard for months; the board and the export did not.
+      const firstRecordKey = new Map(firstRecords.map((r) => [r.userId, r._min.attendanceDate ? formatAttendanceDateKey(r._min.attendanceDate) : null] as const))
+      const startKeyOf = (m: (typeof workspaceMembers)[number]) => {
+        const join = formatAttendanceDateKey(m.joinedAt ?? m.user.createdAt ?? new Date(0))
+        const first = firstRecordKey.get(m.user.id) ?? null
+        return first && first < join ? first : join
+      }
       for (const member of workspaceMembers) {
+        const startKey = startKeyOf(member)
         for (const date of enumerateAttendanceDates(range.start, range.end)) {
           if (!isWorkdayForAttendanceDate(date, fallbackOffice)) continue
+          if (formatAttendanceDateKey(date) < startKey) continue
           // Their fixed rest day is not an absence — no red cell, no TK on the sheet.
           if (isRestDayForMember(date, member.restDays, fallbackOffice.timezone)) continue
           const dateKey = date.toISOString().slice(0, 10)
