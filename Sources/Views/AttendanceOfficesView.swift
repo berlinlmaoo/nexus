@@ -130,7 +130,13 @@ struct OfficeComposerSheet: View {
                         }
                         .font(NXFont.text(12, .semibold)).tint(NX.mutedFg)
                         HStack(spacing: 12) {
-                            f("RADIUS (m)") { field($radius, "100").keyboardType(.numberPad) }
+                            f("\(T("RADIUS")) · \(Int(radius) ?? 100) m") {
+                                // A slider, because the number only means something on the map above:
+                                // drag it and watch the circle grow until it covers the entrance and the car park.
+                                Slider(value: Binding(get: { Double(Int(radius) ?? 100) }, set: { radius = String(Int($0.rounded())) }),
+                                       in: 25...500, step: 5)
+                                    .tint(NX.violet)
+                            }
                             f("TOLERANSI TELAT (menit)") { field($grace, "0").keyboardType(.numberPad) }
                         }
                         if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }

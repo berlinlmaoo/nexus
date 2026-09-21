@@ -562,6 +562,18 @@ struct AttendanceView: View {
     private func submit(selfie: Data) async {
         guard let action = pendingAction else { return }
         busy = true; defer { busy = false }
+        // A selfie with no face in it is not an attendance photo. Checked on the phone, before the
+        // location fix and before anything is uploaded, so a photo of the wall costs one retake and
+        // never reaches the record.
+        switch await FaceGuard.check(selfie) {
+        case .ok: break
+        case .noFace:
+            flow = .failed(action, T("No face in the photo. Take the selfie with your face clearly visible, then try again."))
+            return
+        case .unreadable:
+            flow = .failed(action, T("That photo couldn't be read. Take it again."))
+            return
+        }
         // One id for this tap, sent live AND reused if the tap ends up queued, so the two attempts
         // are the same event as far as the server is concerned.
         //
