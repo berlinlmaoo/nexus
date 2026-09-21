@@ -92,14 +92,15 @@ export async function DELETE(
     if (!existing || existing.workspaceId !== context.workspace.id) {
       return NextResponse.json({ error: "Office not found" }, { status: 404 })
     }
+    // Attendance rows point at their office, so one that has ever been checked into is ARCHIVED
+    // rather than removed: gone from every list and picker, no more check-ins there, while every
+    // day already recorded keeps its office name. An office nobody ever used is simply deleted.
     const records = await prisma.attendanceRecord.count({ where: { officeLocationId: officeId } })
     if (records > 0) {
-      return NextResponse.json(
-        { error: `${existing.name} has ${records} attendance record${records === 1 ? "" : "s"}, so it can't be deleted. Switch it off instead; the history keeps its name.`, code: "OFFICE_HAS_RECORDS", records },
-        { status: 409 }
-      )
+      await prisma.officeLocation.update({ where: { id: officeId }, data: { isActive: false, archivedAt: new Date() } })
+    } else {
+      await prisma.officeLocation.delete({ where: { id: officeId } })
     }
-    await prisma.officeLocation.delete({ where: { id: officeId } })
     await logAudit({
       action: "delete",
       entityType: "attendance_office",
@@ -109,7 +110,7 @@ export async function DELETE(
       request,
       metadata: { workspaceId: context.workspace.id },
     })
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, archived: records > 0, records })
   } catch (error) {
     console.error("Error deleting attendance office:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

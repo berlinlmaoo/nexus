@@ -18,7 +18,8 @@ export async function GET() {
     }
 
     const offices = await prisma.officeLocation.findMany({
-      where: { workspaceId: context.workspace.id },
+      where: {
+        archivedAt: null, workspaceId: context.workspace.id },
       orderBy: [{ isActive: "desc" }, { name: "asc" }],
     })
 
