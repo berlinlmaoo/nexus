@@ -125,7 +125,11 @@ struct DashboardView: View {
             toggleBell(false) { openSubmission = SubmissionRef(id: id) }
             return
         }
-        toggleBell(false) { openTarget = target }
+        switch target {
+        case .task, .project: toggleBell(false) { openTarget = target }
+        // A record on another screen: the router walks there and hands the id over, as a push does.
+        default: router.open(target); toggleBell(false)
+        }
     }
 
     /// Struck off here as well as on the server: `load()` refetches the entire dashboard, which is
@@ -179,7 +183,7 @@ struct DashboardView: View {
                 case .project(let id): ProjectDetailView(projectId: id, projectName: "")
                 // Never stored: a whole screen goes through the router, and a submission opens as a
                 // sheet over this one — neither travels through this stack.
-                case .screen, .submission: EmptyView()
+                default: EmptyView()
                 }
             }
             .sheet(item: $openSubmission) { SubmissionDetailSheet(submissionId: $0.id, preview: $0.preview) }

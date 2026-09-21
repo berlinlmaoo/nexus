@@ -77,8 +77,6 @@ struct AttendanceAdminSection: View {
     private var allowed: Bool { viewerRole == "BOD" || viewerRole == "ONE_ABOVE_ALL" }
     private var effectiveWsId: String? { workspaceId ?? wsId }
 
-    @State private var adminError: String?
-
     var body: some View {
         Group {
             if loading {
@@ -98,9 +96,6 @@ struct AttendanceAdminSection: View {
             }
         }
         .task { await load() }
-        .alert(T("Couldn't save"), isPresented: Binding(get: { adminError != nil }, set: { if !$0 { adminError = nil } })) {
-            Button("OK") { adminError = nil }
-        } message: { Text(adminError ?? "") }
     }
 
     private var monthBar: some View {
@@ -179,10 +174,15 @@ struct RedDateCard: View {
     @State private var newDate = Date()
     @State private var newName = ""
     @State private var busy = false
+    /// A refused save (quota, holiday) — shown instead of silently reloading.
+    @State private var adminError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionLabel("\(T("PUBLIC HOLIDAYS")) — \(MonthKey.label(month))")
+                .alert(T("Couldn't save"), isPresented: Binding(get: { adminError != nil }, set: { if !$0 { adminError = nil } })) {
+            Button("OK") { adminError = nil }
+        } message: { Text(adminError ?? "") }
 
             if loading {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 12)
