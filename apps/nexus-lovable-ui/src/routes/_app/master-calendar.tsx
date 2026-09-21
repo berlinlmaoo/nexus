@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { EmptyState } from "@/components/EmptyState";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
@@ -505,12 +506,5 @@ function CenterLoader() {
   return <div className="flex justify-center py-20 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>;
 }
 function Empty({ title, message, action }: { title: string; message: string; action?: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft">
-      <CalendarDays className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
-      <div className="text-lg font-bold">{title}</div>
-      <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">{message}</p>
-      {action}
-    </div>
-  );
+  return <EmptyState icon={CalendarDays} title={title} message={message} action={action} />;
 }

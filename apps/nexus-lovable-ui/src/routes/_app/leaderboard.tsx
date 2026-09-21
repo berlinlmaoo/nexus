@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Trophy } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence } from "framer-motion";
 import { useState } from "react";
@@ -75,10 +77,8 @@ function Leaderboard() {
           )}
 
           {!board.isLoading && !board.isError && ranked.length === 0 && (
-            <div className="rounded-2xl border border-dashed bg-card p-8 text-center shadow-sm">
-              <div className="text-lg font-black">No points yet this month</div>
-              <p className="mt-2 text-sm text-muted-foreground">Finish tasks (+10 & priority bonus), keep a streak, or dodge attendance penalties to rack up XP — this period's ranking shows up here. Points reset on the 1st.</p>
-            </div>
+            <EmptyState icon={Trophy} title="No points yet this month"
+              message="XP comes from quests BoD assigns and is kept by showing up on time; this period's ranking appears as soon as the first points move." />
           )}
 
           {!board.isLoading && !board.isError && ranked.length > 0 && (

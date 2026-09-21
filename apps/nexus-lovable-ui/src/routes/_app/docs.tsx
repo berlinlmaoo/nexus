@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { EmptyState } from "@/components/EmptyState";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
@@ -147,7 +148,7 @@ function DocCard({ doc }: { doc: NexusDoc }) {
 }
 
 function Empty({ title, message }: { title: string; message: string }) {
-  return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft md:col-span-2"><div className="text-lg font-black">{title}</div><p className="mt-2 text-sm text-muted-foreground">{message}</p></div>;
+  return <EmptyState icon={BookOpen} tone="muted" title={title} message={message} className="md:col-span-2" />;
 }
 
 function emojiForDoc(doc: NexusDoc) {

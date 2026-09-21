@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { EmptyState } from "@/components/EmptyState";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card, CardContent as CardBody, Chip, Input } from "@heroui/react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -571,15 +572,8 @@ function ProjectsPage() {
 
           if (visibleProjects.length === 0) {
             return (
-              <div className="rounded-[28px] border border-dashed border-border bg-card p-10 text-center shadow-soft">
-                <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-muted text-muted-foreground">
-                  <Search className="h-5 w-5" />
-                </div>
-                <h3 className="mt-4 font-semibold">No mission matches that signal.</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Reset filters or search another project name, owner, or lane.
-                </p>
-              </div>
+              <EmptyState icon={Search} tone="muted" title="No mission matches that"
+                message="Try another project name, owner or lane — or clear the search to see every mission you're part of." />
             );
           }
 
