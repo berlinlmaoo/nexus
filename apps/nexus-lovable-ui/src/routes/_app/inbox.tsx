@@ -112,6 +112,9 @@ function NotificationRow({ notification, idx }: { notification: NexusNotificatio
 
   const open = () => {
     if (!notification.read) markRead.mutate();
+    // An external link (the App Store, for the "update NEXUS" reminder) opens in a new tab; the
+    // router only knows in-app paths.
+    if (notification.link && /^https?:\/\//.test(notification.link)) { window.open(notification.link, "_blank", "noopener"); return; }
     if (target) {
       // TanStack routes are strictly typed; the path is dynamic here so cast through the navigate call.
       (navigate as unknown as (opts: { to: string; params?: Record<string, string>; search?: Record<string, string> }) => Promise<void>)(target).catch(() => {});
