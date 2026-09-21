@@ -857,8 +857,11 @@ struct StreakBoardCard: View {
             if loading {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 20)
             } else if members.isEmpty {
-                Text(T("No attendance recorded this month.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 12)
+                EmptyState(icon: "calendar", title: T("No attendance this month yet"),
+                           subtitle: wide
+                               ? T("Nobody has checked in this month yet. The first check-in fills the first cell; use the arrows to look at earlier months.")
+                               : T("Your check-ins fill this board day by day — green for present, purple for a day off, red for a missed day. Check in from the card above."),
+                           compact: true)
             } else {
                 grid
             }

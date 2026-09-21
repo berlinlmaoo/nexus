@@ -301,8 +301,15 @@ struct TicketsView: View {
             VStack(spacing: 0) {
                 filterBar
                 if filtered.isEmpty {
-                    EmptyState(icon: "ticket", title: T("No tickets in this filter"),
-                               subtitle: T("Switch the filter above to see other statuses."))
+                    if filter == "ALL" {
+                        EmptyState(icon: "ticket", title: T("No tickets yet"),
+                                   subtitle: T("A ticket is how you raise something with BoD — a complaint, a question, or an attendance record that looks wrong. GIDEON checks the data first, BoD decides, and it stays between you and them."),
+                                   actionTitle: T("New ticket"), actionIcon: "square.and.pencil") { showCreate = true }
+                    } else {
+                        EmptyState(icon: "line.3.horizontal.decrease.circle", title: T("No tickets in this filter"),
+                                   subtitle: T("Only tickets with this status are shown here. The rest are still under All."),
+                                   actionTitle: T("Show all"), actionIcon: "tray.full") { filter = "ALL" }
+                    }
                 } else {
                     ScrollView {
                         NXCardGrid(spacing: 10) {

@@ -190,13 +190,9 @@ struct MessagesView: View {
                 Button(T("Try again")) { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
             }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
         } else if convos.isEmpty {
-            VStack(spacing: 8) {
-                Image(systemName: "bubble.left.and.bubble.right").font(.system(size: 42)).foregroundStyle(NX.mutedFg)
-                Text(T("No chats yet")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
-                Button(T("Start a chat")) { showNewChat = true }
-                    .buttonStyle(NexusPrimaryButton(fullWidth: false))
-                    .padding(.top, 4)
-            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            EmptyState(icon: "bubble.left.and.bubble.right", title: T("No chats yet"),
+                       subtitle: T("Direct messages and group chats with colleagues live here, and every project has a room of its own. Start one and it appears at the top."),
+                       actionTitle: T("Start a chat"), actionIcon: "square.and.pencil") { showNewChat = true }
         } else {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {

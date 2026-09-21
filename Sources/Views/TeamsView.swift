@@ -27,10 +27,8 @@ struct TeamsView: View {
                 Button(T("Try again")) { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
             }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
         } else if teams.isEmpty {
-            VStack(spacing: 8) {
-                Image(systemName: "person.3.fill").font(.system(size: 42)).foregroundStyle(NX.mutedFg)
-                Text(T("No teams yet")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
-            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            EmptyState(icon: "person.3.fill", title: T("No teams yet"),
+                       subtitle: T("A team groups people and hands them access to the projects linked to it. Managers create teams from Control Room; once you're in one, it shows up here."))
         } else {
             ScrollView {
                 // Same as Forms: the note is about the screen, not about the first team.

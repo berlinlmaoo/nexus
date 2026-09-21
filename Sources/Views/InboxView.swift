@@ -73,19 +73,15 @@ struct InboxView: View {
                     .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(NX.violet.opacity(0.12)))
 
                     if items.isEmpty {
-                        VStack(spacing: 8) {
-                            Image(systemName: "tray").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
-                            Text(T("Inbox clean")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
-                            Text(T("No pings. Enjoy the rare silence.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-                        }.padding(.top, 50)
+                        EmptyState(icon: "tray", title: T("Inbox clean"),
+                                   subtitle: T("Requests to approve, replies to your tickets, mentions and announcements land here the moment they happen. Nothing needs you right now."),
+                                   tint: NX.success, compact: true)
                     } else {
                         NotificationFilterBar(tabs: tabs, group: $group)
                         if shown.isEmpty {
-                            VStack(spacing: 8) {
-                                Image(systemName: "line.3.horizontal.decrease.circle").font(.system(size: 34)).foregroundStyle(NX.mutedFg)
-                                Text(T("Nothing here")).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
-                                Text(T("No notifications of this kind.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-                            }.padding(.top, 40)
+                            EmptyState(icon: "line.3.horizontal.decrease.circle", title: T("Nothing of this kind"),
+                                       subtitle: T("This filter only shows one type of signal. Everything else is still in All."),
+                                       actionTitle: T("Show all"), actionIcon: "tray.full", action: { group = .all }, compact: true)
                         } else {
                             VStack(spacing: 0) {
                                 ForEach(Array(shown.enumerated()), id: \.element.id) { idx, n in

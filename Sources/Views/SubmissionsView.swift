@@ -123,6 +123,7 @@ private func subDateText(_ iso: String?) -> String {
 /// Port of submissions.tsx ("Pengajuan Saya"): read-only kanban of your form submissions,
 /// columns driven by the Finance team's status field.
 struct SubmissionsView: View {
+    @Environment(AppRouter.self) private var router
     @Environment(AuthStore.self) private var auth
     @State private var subs: [MySubmission] = []
     @State private var statusColumns: [String] = []
@@ -143,7 +144,8 @@ struct SubmissionsView: View {
                 EmptyState(icon: "wifi.exclamationmark", title: T("Couldn't load"), subtitle: T("Try again later."))
             } else if subs.isEmpty {
                 EmptyState(icon: "tray", title: T("No submissions yet"),
-                           subtitle: T("Forms you submit show up on this board together with their status."))
+                           subtitle: T("Everything you file through a form — a request, a reimbursement, a report — lands on this board with its status, so you never have to ask where it got to. Start with a form."),
+                           actionTitle: T("Open forms"), actionIcon: "doc.text") { router.go(.forms) }
             } else {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 6) {

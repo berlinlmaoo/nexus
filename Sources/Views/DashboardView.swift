@@ -526,7 +526,8 @@ struct DashboardView: View {
             }
             Group {
                 if notifs.isEmpty {
-                    Text(T("No notifications yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).padding(.vertical, 8)
+                    Text(T("Nothing needs you yet. Requests, replies and mentions land here the moment they happen."))
+                        .font(NXFont.text(13)).foregroundStyle(NX.mutedFg).padding(.vertical, 8).fixedSize(horizontal: false, vertical: true)
                 } else {
                     NotificationFilterBar(tabs: bellTabs, group: $bellGroup, compact: true)
                     if bellShown.isEmpty {

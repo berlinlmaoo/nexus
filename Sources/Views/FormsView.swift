@@ -28,11 +28,8 @@ struct FormsView: View {
                 Button(T("Try again")) { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
             }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
         } else if forms.isEmpty {
-            VStack(spacing: 8) {
-                Image(systemName: "doc.text").font(.system(size: 42)).foregroundStyle(NX.mutedFg)
-                Text(T("No forms yet")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
-                Text(T("Intake forms that auto-spawn tasks appear here.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center)
-            }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
+            EmptyState(icon: "doc.text", title: T("No forms yet"),
+                       subtitle: T("A form is an intake page — a request, a reimbursement, a report — that turns into a task the moment it's submitted. BoD builds them on the web; once one is published it appears here for you to fill in."))
         } else {
             ScrollView {
                 // The explanation stays outside the grid: it describes the whole screen, and as a

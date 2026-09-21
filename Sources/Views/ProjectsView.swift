@@ -79,11 +79,9 @@ struct ProjectsView: View {
         } else if let error {
             errorState(error)
         } else if projects.isEmpty {
-            VStack(spacing: 10) {
-                Image(systemName: "rectangle.stack").font(.system(size: 44)).foregroundStyle(NX.mutedFg)
-                Text(T("No missions yet")).font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            EmptyState(icon: "rectangle.stack", title: T("No missions yet"),
+                       subtitle: T("A mission is a project board: its tasks, people and deadlines in one place. You'll see every mission you're part of here — create the first one to get going."),
+                       actionTitle: T("New mission"), actionIcon: "rectangle.stack.badge.plus") { showCreate = true }
         } else {
             ScrollView {
                 LazyVStack(spacing: 16) {

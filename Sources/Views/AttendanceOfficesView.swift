@@ -39,7 +39,9 @@ struct OfficesCard: View {
             if loading {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
             } else if offices.isEmpty {
-                Text(T("No offices yet. Add an office point + geofence radius.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                EmptyState(icon: "mappin.and.ellipse", title: T("No offices yet"),
+                           subtitle: T("An office is a point on the map with a radius around it. Staff can only check in inside that radius, so nothing can be recorded until the first office exists."),
+                           actionTitle: T("Add office"), actionIcon: "plus", action: { editOffice = nil; showComposer = true }, compact: true)
             } else {
                 ForEach(offices) { row($0) }
             }

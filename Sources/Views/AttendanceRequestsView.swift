@@ -195,11 +195,17 @@ struct AttendanceRequestsCard: View {
             if loading {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
             } else if entries.isEmpty {
-                Text(T("No requests yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                EmptyState(icon: "calendar.badge.plus", title: canReview ? T("Nothing to review yet") : T("No requests yet"),
+                           subtitle: canReview
+                               ? T("Leave, sick days, permits and offsite check-outs from your people appear here the moment they're filed, with Approve and Reject right on the row.")
+                               : T("Leave, sick days, permits and day-offs you file show up here with their status, and your approver is told the moment you send one."),
+                           actionTitle: T("File a request"), actionIcon: "plus", action: { showComposer = true }, compact: true)
             } else {
                 filterBar
                 if filtered.isEmpty {
-                    Text(T("Nothing in this filter.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    EmptyState(icon: "line.3.horizontal.decrease.circle", title: T("Nothing in this filter"),
+                               subtitle: T("Only requests with this status are shown. The rest are under All."),
+                               actionTitle: T("Show all"), actionIcon: "tray.full", action: { filter = "ALL" }, compact: true)
                 } else {
                     ForEach(filtered) { row($0) }
                 }

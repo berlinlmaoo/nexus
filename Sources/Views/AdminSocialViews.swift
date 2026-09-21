@@ -103,15 +103,47 @@ struct ErrorState: View {
     }
 }
 
+/// The one empty state in the app.
+///
+/// An empty screen has to answer three things or it reads as broken: WHY there is nothing here
+/// (the subtitle: what this place is for and where its content comes from), WHAT to do next, and
+/// a way to do it right there (the action). "No data" answered none of them, and a grey icon with
+/// a headline answered one. `compact` is for a card inside a scrolling screen, where a full-height
+/// centred block would push everything below it off screen.
 struct EmptyState: View {
     let icon: String
     let title: String
-    let subtitle: String
+    var subtitle: String = ""
+    var tint: Color = NX.violet
+    var actionTitle: String? = nil
+    var actionIcon: String = "plus"
+    var action: (() -> Void)? = nil
+    var compact: Bool = false
+
     var body: some View {
         VStack(spacing: 8) {
-            Image(systemName: icon).font(.system(size: 42)).foregroundStyle(NX.mutedFg.opacity(0.5))
-            Text(title).font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground).multilineTextAlignment(.center)
-            Text(subtitle).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center)
-        }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
+            ZStack {
+                RoundedRectangle(cornerRadius: 18, style: .continuous).fill(tint.opacity(0.08))
+                    .frame(width: 78, height: 78).rotationEffect(.degrees(-9)).offset(x: -12, y: 6)
+                RoundedRectangle(cornerRadius: 18, style: .continuous).fill(tint.opacity(0.13))
+                    .frame(width: 78, height: 78).rotationEffect(.degrees(7)).offset(x: 10, y: 3)
+                RoundedRectangle(cornerRadius: 20, style: .continuous).fill(tint.opacity(0.18))
+                    .frame(width: 78, height: 78)
+                Image(systemName: icon).font(.system(size: 30, weight: .semibold)).foregroundStyle(tint)
+            }
+            .padding(.bottom, 8)
+            .accessibilityHidden(true)
+            Text(title).font(NXFont.display(compact ? 15 : 17, .bold)).foregroundStyle(NX.foreground).multilineTextAlignment(.center)
+            if !subtitle.isEmpty {
+                Text(subtitle).font(NXFont.text(13)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 360)
+            }
+            if let actionTitle, let action {
+                Button { action() } label: { Label(actionTitle, systemImage: actionIcon) }
+                    .buttonStyle(NexusPrimaryButton(fullWidth: false)).padding(.top, 6)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: compact ? nil : .infinity)
+        .padding(.vertical, compact ? 18 : 32).padding(.horizontal, 24)
     }
 }

@@ -10,6 +10,7 @@ struct TasksView: View {
     @State private var openTaskId: String?
 
     @State private var actionError: String?
+    @Environment(AppRouter.self) private var router
 
     var body: some View {
         NavigationStack {
@@ -48,11 +49,9 @@ struct TasksView: View {
         } else if let error {
             errorState(error)
         } else if tasks.isEmpty {
-            VStack(spacing: 8) {
-                Image(systemName: "checklist").font(.system(size: 42)).foregroundStyle(NX.mutedFg)
-                Text(T("No quests yet")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
-                Text(T("Tasks assigned to you show up here.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            EmptyState(icon: "checklist", title: T("No quests yet"),
+                       subtitle: T("Tasks assigned to you land here, from a mission board or a form. Nothing is waiting on you right now — pick something up from a mission."),
+                       actionTitle: T("Browse missions"), actionIcon: "rectangle.stack") { router.go(.projects) }
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 18) {

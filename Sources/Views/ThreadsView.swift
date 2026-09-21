@@ -129,9 +129,9 @@ struct ThreadsView: View {
                 LazyVStack(spacing: 12) {
                     composer
                     if posts.isEmpty {
-                        Text(T("Nothing on the feed yet. Be the first to post."))
-                            .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-                            .frame(maxWidth: .infinity).padding(.vertical, 30)
+                        EmptyState(icon: "bubble.left.and.text.bubble.right", title: T("Nothing on the feed yet"),
+                                   subtitle: T("Threads is the company feed: wins, photos, questions for everyone. Write the first post in the box above and it appears here for the whole office."),
+                                   compact: true)
                     } else {
                         ForEach(posts) { p in postCard(p) }
                     }

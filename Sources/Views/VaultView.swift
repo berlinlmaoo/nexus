@@ -137,7 +137,7 @@ struct VaultView: View {
                             icon: trash ? "trash" : query.isEmpty ? "externaldrive" : "magnifyingglass",
                             title: trash ? T("Trash is empty") : query.isEmpty ? T("Nothing here yet") : T("No matches"),
                             msg: trash ? T("Deleted files show up here first.")
-                                : query.isEmpty ? T("Shared logos, decks and assets live in here.")
+                                : query.isEmpty ? T("Shared logos, decks and assets live in here. Upload the first file from the toolbar, or start with a folder so everything has a place.")
                                 : T("Try another keyword.")
                         )
                         .frame(minHeight: 260)
