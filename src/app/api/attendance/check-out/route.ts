@@ -13,6 +13,8 @@ import { awardXpOnce } from "@/lib/gamification"
 import { reverseGeocodeCoordinates } from "@/lib/reverse-geocode"
 import { attendanceActionSchema } from "@/lib/validations"
 import { notifyOffsiteCheckoutPending } from "@/lib/notification-service"
+import { assessReflection } from "@/lib/reflection-quality"
+import { summarizeReflectionDay } from "@/lib/reflection-summaries"
 
 const MAX_SELFIE_SIZE = 10 * 1024 * 1024
 // Daily Reflection — mandatory recap before a day can be closed out.
@@ -92,6 +94,20 @@ export async function POST(request: NextRequest) {
       )
     }
     const reflectionText = reflection.slice(0, MAX_REFLECTION_CHARS)
+    // Length was the only gate, and length is the easiest thing to fake. Padded, pasted or repeated
+    // text is refused here with a message that says what to change; honest notes pass untouched.
+    const previousReflections = (
+      await prisma.attendanceRecord.findMany({
+        where: { userId: session.user.id, checkOutReflection: { not: null } },
+        orderBy: { attendanceDate: "desc" },
+        take: 10,
+        select: { checkOutReflection: true },
+      })
+    ).map((r) => r.checkOutReflection ?? "").filter(Boolean)
+    const quality = assessReflection(reflectionText, previousReflections)
+    if (!quality.ok) {
+      return NextResponse.json({ error: quality.error, code: quality.code }, { status: 400 })
+    }
 
     // Close the oldest still-open record first — that's either today's check-in,
     // or a previous day the user forgot to check out (must be closed before a new check-in).
@@ -352,6 +368,10 @@ export async function POST(request: NextRequest) {
         recordId: record.id,
       }).catch((err) => console.error("offsite checkout notify failed:", err))
     }
+
+    // GIDEON's two-sentence reading of the reflection, written in the background. Never awaited:
+    // a slow or dead agent must not slow down or fail a check-out.
+    void summarizeReflectionDay(record.id)
 
     return NextResponse.json({ record: serializeAttendanceRecord(record), pendingApproval: isOffsite })
   } catch (error) {

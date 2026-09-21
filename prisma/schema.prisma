@@ -2814,3 +2814,23 @@ model VaultShare {
   @@index([itemId])
   @@index([revokedAt, expiresAt])
 }
+
+// GIDEON's summaries of the daily check-out reflections. kind "day" (periodKey YYYY-MM-DD, written
+// right after check-out) or "month" (periodKey YYYY-MM, written on demand and by the monthly cron).
+// sourceDays is how many reflections the month summary was built from; when it still matches the
+// count in AttendanceRecord the cached text is served instead of asking GIDEON again.
+model ReflectionSummary {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  kind        String
+  periodKey   String
+  summary     String
+  sourceDays  Int      @default(1)
+  model       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  @@unique([userId, kind, periodKey])
+  @@index([workspaceId, kind, periodKey])
+}
