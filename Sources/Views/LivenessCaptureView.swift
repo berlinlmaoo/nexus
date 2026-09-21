@@ -9,19 +9,24 @@ import UIKit
 /// The attendance selfie, taken by the app itself with a liveness check in front of it.
 ///
 /// A still photo proves a camera was pointed at something. This proves a person was in front of it:
-/// look straight, turn to one side, turn to the other, blink — the four moves fintech apps ask for
-/// before they trust a face. Every check runs on the phone with Apple's Vision framework; no frame
-/// leaves the device except the one selfie captured at the end, exactly as before. It does not know
-/// WHOSE face this is: that would need enrolment and a face template kept on the server, which is a
-/// different decision with its own privacy weight.
+/// look straight, turn right, turn left, blink — the four moves fintech apps ask for before they
+/// trust a face. Every check runs on the phone with Apple's Vision framework; no frame leaves the
+/// device except the one selfie captured at the end, exactly as before. It does not know WHOSE face
+/// this is: that would need enrolment and a face template kept on the server, which is a different
+/// decision with its own privacy weight.
 ///
-/// The window is a fixed oval — deliberately. Two attempts at a window that follows the face put
-/// it beside the face or stretched it; a still oval that people move into is what Face ID does,
-/// and it cannot be wrong. Motion is spent on feedback instead: the ring breathes while it waits,
-/// a sweep runs round it while a step is in progress, each finished step fills with a spring, and
-/// the end is the Face ID moment — ring closes green, the check draws itself, one haptic.
-/// In the dark — a club, a warehouse at night — the rest of the screen turns white and the display
-/// goes to full brightness: the phone becomes its own ring light. It also switches on by hand.
+/// The bright window follows the face: the camera's own face metadata, converted to screen points
+/// by the preview layer, so no hand-made rotation or mirror arithmetic is involved. Motion is spent
+/// on feedback — a sweep runs round the ring while a step is in progress, a bar fills as the head
+/// turns, each finished step fills with a spring — and the end is the Face ID moment: ring closes
+/// green, the check draws itself, one haptic. In the dark the rest of the screen turns white and the
+/// display goes to full brightness: the phone becomes its own ring light. It also switches on by hand.
+///
+/// "Right" and "left" are instructions, not requirements. The sign of Vision's yaw depends on the
+/// buffer orientation and mirroring and cannot be trusted blind, so the first turn is accepted
+/// either way and the second must be the opposite — which is what liveness needs, two poses a
+/// photo cannot produce. Someone who follows the words passes; someone who turns the other way
+/// passes too, and the bar fills the same for both.
 struct LivenessCaptureView: View {
     var onCapture: (Data) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -29,6 +34,7 @@ struct LivenessCaptureView: View {
     @StateObject private var engine = LivenessEngine()
     @State private var pulse = false
     @State private var sweep = false
+    @State private var demo = false
     @State private var flash = false
     @State private var finishing = false
     @State private var checkDrawn: CGFloat = 0
@@ -39,6 +45,7 @@ struct LivenessCaptureView: View {
     private var lightOn: Bool { manualLight || engine.dark }
     private var ink: Color { lightOn ? .black : .white }
     private var inkSoft: Color { lightOn ? .black.opacity(0.7) : .white.opacity(0.78) }
+    private var done: Bool { engine.captured != nil }
 
     var body: some View {
         ZStack {
@@ -46,7 +53,7 @@ struct LivenessCaptureView: View {
             CameraFeed(engine: engine).ignoresSafeArea()
             GeometryReader { geo in
                 let home = Self.ovalRect(in: geo.size)
-                let oval = home
+                let oval = trackedOval(home: home)
                 ZStack {
                     // Everything but the face window is dimmed — or lit white when it's dark.
                     Rectangle().fill(lightOn ? Color.white.opacity(0.94) : Color.black.opacity(0.68))
@@ -58,9 +65,10 @@ struct LivenessCaptureView: View {
                         .compositingGroup()
                     ring(oval)
                     if done { successMark.position(x: oval.midX, y: oval.midY) }
-                    gauge.position(x: home.midX, y: home.maxY + 46)
+                    gauge.position(x: home.midX, y: home.maxY + 52)
                     if flash { Color.white.opacity(0.85) }
                 }
+                .animation(reduceMotion ? nil : .interactiveSpring(response: 0.26, dampingFraction: 0.86), value: engine.faceScreenRect)
                 .animation(.easeInOut(duration: 0.3), value: lightOn)
             }
             .ignoresSafeArea()
@@ -72,7 +80,7 @@ struct LivenessCaptureView: View {
             if engine.cameraDenied { deniedCard }
         }
         .preferredColorScheme(.dark)
-        .onAppear { engine.start(); pulse = true; sweep = true }
+        .onAppear { engine.start(); pulse = true; sweep = true; demo = true }
         .onDisappear { engine.stop(); restoreBrightness() }
         .onChange(of: lightOn) { _, on in on ? boostBrightness() : restoreBrightness() }
         .onChange(of: engine.captured) { _, data in
@@ -100,8 +108,17 @@ struct LivenessCaptureView: View {
         return CGRect(x: (size.width - w) / 2, y: size.height * 0.44 - h / 2, width: w, height: h)
     }
 
+    /// The window hugs the detected face (a little room for hair and chin); without a face it rests
+    /// at its home position so people know where to put themselves. The rect is already in screen
+    /// points — the camera's face metadata converted by the preview layer.
+    private func trackedOval(home: CGRect) -> CGRect {
+        guard let f = engine.faceScreenRect, f.width > 10, f.height > 10, f.width.isFinite, f.height.isFinite else { return home }
+        let w = min(max(f.width * 1.3, 150), home.width * 1.15)
+        let h = min(max(f.height * 1.5, w * 1.2), home.height * 1.2)
+        return CGRect(x: f.midX - w / 2, y: f.midY - f.height * 0.08 - h / 2, width: w, height: h)
+    }
 
-    private var done: Bool { engine.captured != nil }
+    // MARK: ring
 
     /// Four arcs around the window, one per move: grey to do, violet in progress, green done.
     /// Starts at the top and goes clockwise; the trim offsets do that without rotating the shape
@@ -109,7 +126,7 @@ struct LivenessCaptureView: View {
     private func ring(_ oval: CGRect) -> some View {
         ZStack {
             // A faint sweep running round the ring while a step is in progress — the "scanning"
-            // feel — and a slow breath of the whole ring while it waits for a face.
+            // feel — dimmer while it waits for a face.
             if !done && !reduceMotion {
                 Ellipse()
                     .stroke(AngularGradient(colors: [.clear, .clear, NX.violet.opacity(0.9), .clear], center: .center),
@@ -124,15 +141,13 @@ struct LivenessCaptureView: View {
                 Ellipse()
                     .trim(from: from + 0.012, to: from + 0.25 - 0.012)
                     .stroke(color(for: state), style: StrokeStyle(lineWidth: state == .current ? 7 : 5, lineCap: .round))
-                    .opacity(state == .current && !reduceMotion ? (pulse ? 1 : 0.55) : 1)
+                    .opacity(done ? 0 : (state == .current && !reduceMotion ? (pulse ? 1 : 0.55) : 1))
                     .animation(state == .current && !reduceMotion ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true) : .spring(response: 0.45, dampingFraction: 0.7), value: pulse)
-                    .opacity(done ? 0 : 1)
             }
             if done {
                 // The four arcs become one closed green ring.
                 Ellipse().trim(from: 0, to: checkDrawn > 0 ? 1 : 0.001)
                     .stroke(NX.success, style: StrokeStyle(lineWidth: 7, lineCap: .round))
-                    .rotationEffect(.degrees(-90))   // rotates a full ellipse: no aspect change when the whole ring is drawn
                     .animation(.easeOut(duration: 0.45), value: checkDrawn)
             } else if engine.presence != .ok && engine.step != .capture {
                 Ellipse().stroke(Color.orange.opacity(0.9), style: StrokeStyle(lineWidth: 3, dash: [8, 10]))
@@ -175,46 +190,59 @@ struct LivenessCaptureView: View {
         }
     }
 
-    /// Live feedback that needs no words: a dot that follows the head, two zones to reach it into.
-    /// For the blink step it becomes an eye that closes with the user's own eyes.
+    // MARK: gauge — what to do, and how far along it is
+
+    /// Under the window: for a turn, an arrow, a head that demonstrates the move, and a bar that
+    /// fills as the head turns; for the blink, an eye that blinks to show what is wanted and closes
+    /// with the person's own eyes; a camera while the picture is taken.
     private var gauge: some View {
         Group {
             switch engine.step {
             case .sideA, .sideB:
-                ZStack {
-                    Capsule().fill(ink.opacity(0.18)).frame(width: 200, height: 10)
-                    HStack {
-                        zone(reached: engine.firstSide == -1, wanted: engine.step == .sideB && engine.firstSide == 1)
-                        Spacer()
-                        zone(reached: engine.firstSide == 1, wanted: engine.step == .sideB && engine.firstSide == -1)
+                let right = engine.step == .sideA
+                VStack(spacing: 10) {
+                    HStack(spacing: 14) {
+                        if !right { arrow("arrow.left", nudge: -1) }
+                        Image(systemName: "face.smiling")
+                            .font(.system(size: 34, weight: .medium)).foregroundStyle(ink)
+                            .rotation3DEffect(.degrees(reduceMotion ? 0 : (demo ? (right ? 38 : -38) : 0)), axis: (x: 0, y: 1, z: 0), perspective: 0.6)
+                            .animation(reduceMotion ? .default : .easeInOut(duration: 1.1).repeatForever(autoreverses: true), value: demo)
+                        if right { arrow("arrow.right", nudge: 1) }
                     }
-                    .frame(width: 200)
-                    Circle().fill(lightOn ? Color.black : Color.white).frame(width: 18, height: 18)
-                        .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
-                        .offset(x: max(-88, min(88, CGFloat(engine.yawDegrees) * 3.2)))
-                        .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.8), value: engine.yawDegrees)
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(ink.opacity(0.18)).frame(width: 200, height: 10)
+                        Capsule().fill(engine.turnProgress >= 1 ? NX.success : NX.violet)
+                            .frame(width: max(10, 200 * engine.turnProgress), height: 10)
+                            .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.8), value: engine.turnProgress)
+                    }
                 }
             case .blink:
-                Image(systemName: engine.eyesClosed ? "eye.slash.fill" : "eye.fill")
-                    .font(.system(size: 30, weight: .semibold)).foregroundStyle(ink)
-                    .contentTransition(.symbolEffect(.replace))
+                VStack(spacing: 6) {
+                    Image(systemName: engine.eyesClosed ? "eye.slash.fill" : (demo ? "eye.fill" : "eye.slash.fill"))
+                        .font(.system(size: 34, weight: .semibold))
+                        .foregroundStyle(engine.eyesClosed ? NX.success : ink)
+                        .contentTransition(.symbolEffect(.replace))
+                        .animation(reduceMotion ? .default : .easeInOut(duration: 0.55).repeatForever(autoreverses: true), value: demo)
+                    Text(T("close · open")).font(NXFont.text(11, .semibold)).foregroundStyle(inkSoft)
+                }
             case .capture:
                 Image(systemName: "camera.fill").font(.system(size: 26, weight: .semibold)).foregroundStyle(ink)
             case .center:
                 Image(systemName: "face.dashed").font(.system(size: 30, weight: .semibold)).foregroundStyle(ink.opacity(0.9))
             }
         }
-        .frame(height: 44)
+        .frame(height: 70)
         .transition(.opacity)
         .animation(.easeInOut(duration: 0.2), value: engine.step)
     }
 
-    private func zone(reached: Bool, wanted: Bool) -> some View {
-        Capsule().fill(reached ? NX.success : (wanted ? NX.violet : ink.opacity(0.35)))
-            .frame(width: 34, height: 18)
-            .opacity(wanted && !reduceMotion ? (pulse ? 1 : 0.5) : 1)
-            .animation(wanted && !reduceMotion ? .easeInOut(duration: 0.7).repeatForever(autoreverses: true) : .default, value: pulse)
+    private func arrow(_ symbol: String, nudge: CGFloat) -> some View {
+        Image(systemName: symbol).font(.system(size: 30, weight: .bold)).foregroundStyle(NX.violet)
+            .offset(x: reduceMotion ? 0 : (demo ? 8 * nudge : 0))
+            .animation(reduceMotion ? .default : .easeInOut(duration: 1.1).repeatForever(autoreverses: true), value: demo)
     }
+
+    // MARK: header, chips, denied
 
     private var header: some View {
         VStack(spacing: 10) {
@@ -252,9 +280,9 @@ struct LivenessCaptureView: View {
         if done { return T("Verified") }
         switch engine.step {
         case .center: return T("Look straight at the camera")
-        case .sideA: return T("Turn your head to one side")
-        case .sideB: return T("Now turn to the other side")
-        case .blink: return T("Blink")
+        case .sideA: return T("Turn your head to the right")
+        case .sideB: return T("Now turn to the left")
+        case .blink: return T("Blink once")
         case .capture: return T("Hold still")
         }
     }
@@ -270,23 +298,23 @@ struct LivenessCaptureView: View {
         }
         if engine.stalled {
             switch engine.step {
-            case .sideA, .sideB: return T("Turn a bit further, until the dot reaches the end.")
+            case .sideA, .sideB: return T("Turn a bit further, until the bar fills up.")
             case .blink: return T("Close your eyes for a moment, then open them. Glasses can make this harder.")
             default: return T("Keep your face inside the window, in good light.")
             }
         }
         switch engine.step {
         case .center: return T("Keep your face inside the window.")
-        case .sideA: return T("Slowly, until the dot reaches the end.")
+        case .sideA: return T("Slowly, like the arrow, until the bar fills up.")
         case .sideB: return T("Same again, the other way.")
-        case .blink: return T("Look straight and blink once.")
+        case .blink: return T("Look straight, close your eyes, then open them.")
         case .capture: return T("Look straight, eyes open.")
         }
     }
 
     private var chips: some View {
         HStack(spacing: 8) {
-            ForEach(Array(zip(0..<4, [T("Straight"), T("Side"), T("Other side"), T("Blink")])), id: \.0) { i, label in
+            ForEach(Array(zip(0..<4, [T("Straight"), T("Right"), T("Left"), T("Blink")])), id: \.0) { i, label in
                 let s = segmentState(i)
                 HStack(spacing: 5) {
                     if s == .done { Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).transition(.scale.combined(with: .opacity)) }
@@ -354,11 +382,15 @@ private struct CameraFeed: UIViewRepresentable {
 
 /// Runs the camera and the face checks on its own queue; publishes only what the screen draws.
 ///
-/// Turning direction is deliberately not prescribed. Vision's yaw sign depends on the buffer
-/// orientation and mirroring, and getting it wrong would tell people "left" while waiting for
-/// right. So the first turn may go either way, and the second must go the opposite way — which is
-/// exactly what liveness needs: two distinct poses a photo cannot produce.
-final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
+/// Two detectors, each doing what it is good at: the camera's own face metadata places the window
+/// (screen points, converted by the preview layer, no geometry of ours); Vision's landmarks give
+/// yaw for the turns and lid separation for the blink.
+///
+/// Older phones — XR, XS, 11 — run the landmark request in 30–50 ms rather than 10. The engine
+/// measures each pass and, when it is slow, lets the next frame go by (never during the blink step,
+/// where a blink is only a few frames long); the camera's own face box keeps the window smooth
+/// regardless, since it costs nothing.
+final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureMetadataOutputObjectsDelegate {
     enum Step: Int, Comparable {
         case center, sideA, sideB, blink, capture
         static func < (a: Step, b: Step) -> Bool { a.rawValue < b.rawValue }
@@ -367,11 +399,12 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
 
     @Published private(set) var step: Step = .center
     @Published private(set) var presence: Presence = .none
-    @Published private(set) var bufferSize: CGSize?
-    weak var previewLayer: AVCaptureVideoPreviewLayer?
+    /// Where the face is ON SCREEN, in points.
+    @Published private(set) var faceScreenRect: CGRect?
     @Published private(set) var yawDegrees: Double = 0
+    /// 0…1: how far the head has turned toward what the current step asks for.
+    @Published private(set) var turnProgress: Double = 0
     @Published private(set) var eyesClosed = false
-    @Published private(set) var firstSide: Double = 0
     @Published private(set) var stalled = false
     @Published private(set) var dark = false
     @Published private(set) var notice: String?
@@ -379,6 +412,8 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
     @Published private(set) var captured: Data?
 
     let session = AVCaptureSession()
+    weak var previewLayer: AVCaptureVideoPreviewLayer?
+    private let metadataOutput = AVCaptureMetadataOutput()
     private let queue = DispatchQueue(label: "id.znetworks.nexus.liveness", qos: .userInitiated)
     private let ciContext = CIContext()
 
@@ -390,6 +425,7 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
     private var blinkSeen = false
     private var lostFrames = 0
     private var frameCount = 0
+    private var skipNext = false
     private var stepStart = Date()
     private var cooldownUntil = Date.distantPast
     private var finished = false
@@ -434,25 +470,46 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
             output.alwaysDiscardsLateVideoFrames = true
             output.setSampleBufferDelegate(self, queue: self.queue)
             if self.session.canAddOutput(output) { self.session.addOutput(output) }
+            // Face rectangles from the camera stack itself, for the window that follows the face.
+            if self.session.canAddOutput(self.metadataOutput) {
+                self.session.addOutput(self.metadataOutput)
+                if self.metadataOutput.availableMetadataObjectTypes.contains(.face) {
+                    self.metadataOutput.metadataObjectTypes = [.face]
+                }
+                self.metadataOutput.setMetadataObjectsDelegate(self, queue: .main)
+            }
             // The buffer stays in the camera's native orientation. Vision is told how it is held
-            // (`.leftMirrored`, the front camera in portrait) and the preview layer converts the
-            // results to the screen — nothing is rotated or mirrored by hand.
+            // (`.leftMirrored`, the front camera in portrait); nothing is rotated or mirrored by hand.
             self.session.commitConfiguration()
             self.session.startRunning()
         }
     }
 
+    func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput objects: [AVMetadataObject], from connection: AVCaptureConnection) {
+        guard let layer = previewLayer else { return }
+        let faces = objects.compactMap { $0 as? AVMetadataFaceObject }
+        guard let face = faces.max(by: { $0.bounds.width * $0.bounds.height < $1.bounds.width * $1.bounds.height }),
+              let onScreen = layer.transformedMetadataObject(for: face) else {
+            if faceScreenRect != nil { faceScreenRect = nil }
+            return
+        }
+        let r = onScreen.bounds
+        // Sub-2pt wobble is noise, not movement; publishing it only makes the window shiver.
+        if let old = faceScreenRect, abs(old.midX - r.midX) < 2, abs(old.midY - r.midY) < 2,
+           abs(old.width - r.width) < 2, abs(old.height - r.height) < 2 { return }
+        faceScreenRect = r
+    }
+
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         guard !finished, let pixel = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         frameCount += 1
-        if frameCount == 1 {
-            let size = CGSize(width: CVPixelBufferGetWidth(pixel), height: CVPixelBufferGetHeight(pixel))
-            DispatchQueue.main.async { self.bufferSize = size }
-        }
         if frameCount % 8 == 0 { measureLight(pixel) }
+        if skipNext && current != .blink { skipNext = false; return }
+        let started = Date()
         let request = VNDetectFaceLandmarksRequest()
         let handler = VNImageRequestHandler(cvPixelBuffer: pixel, orientation: .leftMirrored, options: [:])
         try? handler.perform([request])
+        skipNext = Date().timeIntervalSince(started) > 0.04
         let face = (request.results ?? []).max { $0.boundingBox.width < $1.boundingBox.width }
         evaluate(face, pixel: pixel)
     }
@@ -464,14 +521,14 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
             // Gone for ~1.5 s after the first move: whoever comes back starts over, so a photo
             // cannot be swapped in between moves.
             if lostFrames > 45 && current > .center { reset(T("Face lost. Let's start again.")) }
-            publish(presence: .none, yaw: 0, closed: false)
+            publish(presence: .none, yaw: 0, progress: 0, closed: false)
             holdFrames = 0
             return
         }
         lostFrames = 0
-        // Vision reports the box in the buffer's own (landscape) space, origin bottom-left. Size
-        // and centring are judged there in a way that does not care which way the sensor lies:
-        // the face's longer side in pixels against the frame's shorter side.
+        // Vision reports the box in the buffer's own (landscape) space. Size and centring are judged
+        // in a way that does not care which way the sensor lies: the face's longer side in pixels
+        // against the frame's shorter side.
         let box = face.boundingBox
         let bw = CGFloat(CVPixelBufferGetWidth(pixel)), bh = CGFloat(CVPixelBufferGetHeight(pixel))
         let facePx = max(box.width * bw, box.height * bh)
@@ -488,7 +545,15 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
             openness.append(open); if openness.count > 45 { openness.removeFirst() }
             if let ref = openness.max(), ref > 0.05 { closed = open < ref * 0.70 }
         }
-        publish(presence: presence, yaw: yaw, closed: closed)
+        // How far the head has turned toward what this step wants: any side for the first turn,
+        // the opposite side for the second.
+        var progress = 0.0
+        switch current {
+        case .sideA: progress = min(1, abs(yaw) / Self.turned)
+        case .sideB: progress = (yaw > 0 ? 1.0 : -1.0) == -side ? min(1, abs(yaw) / Self.turned) : 0
+        default: break
+        }
+        publish(presence: presence, yaw: yaw, progress: progress, closed: closed)
         guard presence == .ok, now >= cooldownUntil else { holdFrames = 0; return }
         if !stalled && now.timeIntervalSince(stepStart) > 15 { DispatchQueue.main.async { self.stalled = true } }
 
@@ -499,7 +564,7 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
         case .sideA:
             guard abs(yaw) >= Self.turned else { holdFrames = 0; return }
             side = yaw > 0 ? 1 : -1
-            if held(3) { DispatchQueue.main.async { self.firstSide = self.side }; advance() }
+            if held(3) { advance() }
         case .sideB:
             guard abs(yaw) >= Self.turned, (yaw > 0 ? 1.0 : -1.0) == -side else { holdFrames = 0; return }
             if held(3) { advance() }
@@ -522,7 +587,7 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
         let next = current
         DispatchQueue.main.async {
             Haptics.success()
-            self.stalled = false; self.notice = nil
+            self.stalled = false; self.notice = nil; self.turnProgress = 0
             withAnimation(.spring(response: 0.45, dampingFraction: 0.7)) { self.step = next }
         }
     }
@@ -532,13 +597,13 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
         stepStart = Date(); cooldownUntil = Date().addingTimeInterval(0.5)
         DispatchQueue.main.async {
             Haptics.warning()
-            self.firstSide = 0; self.stalled = false; self.notice = why
+            self.stalled = false; self.notice = why; self.turnProgress = 0
             withAnimation { self.step = .center }
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { if self.notice == why { self.notice = nil } }
         }
     }
 
-    private func publish(presence: Presence, yaw: Double, closed: Bool) {
+    private func publish(presence: Presence, yaw: Double, progress: Double, closed: Bool) {
         let now = Date()
         // Blink state is never throttled — a blink is only a few frames long.
         let deg = yaw * 180 / .pi
@@ -549,6 +614,7 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
             guard !throttled else { return }
             if self.presence != presence { self.presence = presence }
             if abs(self.yawDegrees - deg) > 0.5 { self.yawDegrees = deg }
+            if abs(self.turnProgress - progress) > 0.02 { self.turnProgress = progress }
         }
     }
 
@@ -563,7 +629,6 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
             let dx = b.x - a.x, dy = b.y - a.y
             let width = (dx * dx + dy * dy).squareRoot()
             guard width > 0 else { return nil }
-            // Signed distance of every other point to the corner line: lids above and below.
             var up = 0.0, down = 0.0, nUp = 0, nDown = 0
             for p in pts {
                 let d = ((p.x - a.x) * dy - (p.y - a.y) * dx) / width
@@ -580,12 +645,6 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
     /// the screen light does not flicker on the threshold. When no face has been found for a couple
     /// of seconds, merely dim (below ~100) already counts as dark: if the detector cannot see a
     /// face, more light is the one thing that helps.
-    private static func hasUprightFace(_ cg: CGImage) -> Bool {
-        let request = VNDetectFaceRectanglesRequest()
-        try? VNImageRequestHandler(cgImage: cg, orientation: .up, options: [:]).perform([request])
-        return !(request.results ?? []).isEmpty
-    }
-
     private func measureLight(_ pixel: CVPixelBuffer) {
         CVPixelBufferLockBaseAddress(pixel, .readOnly)
         defer { CVPixelBufferUnlockBaseAddress(pixel, .readOnly) }
@@ -605,6 +664,12 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
         if mean < 55 || (struggling && mean < 100) { isDark = true }
         else if mean > (struggling ? 120 : 75) { isDark = false }
         if isDark != wasDark { let d = isDark; DispatchQueue.main.async { self.dark = d } }
+    }
+
+    private static func hasUprightFace(_ cg: CGImage) -> Bool {
+        let request = VNDetectFaceRectanglesRequest()
+        try? VNImageRequestHandler(cgImage: cg, orientation: .up, options: [:]).perform([request])
+        return !(request.results ?? []).isEmpty
     }
 
     private func capture(_ pixel: CVPixelBuffer) {
