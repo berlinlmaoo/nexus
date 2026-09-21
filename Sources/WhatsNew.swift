@@ -47,6 +47,11 @@ enum WhatsNew {
     @MainActor
     private static var v015: [WhatsNewEntry] { [
         WhatsNewEntry(
+            icon: "faceid",
+            title: T("The selfie now checks it's really you"),
+            body: T("Look straight, turn to one side, then the other, blink — and the app takes the selfie itself. A photo of the office wall doesn't count anymore. It all happens on your phone; nothing is compared with anything.")
+        ),
+        WhatsNewEntry(
             icon: "bell.badge",
             title: T("Notifications open the thing itself"),
             body: T("Tap a push about a leave request and that request opens, with Approve and Reject right there. A ticket reply opens the ticket, a chat opens the chat, an announcement opens the announcement. The Inbox rows do the same.")

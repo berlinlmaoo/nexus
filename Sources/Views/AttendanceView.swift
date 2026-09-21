@@ -146,8 +146,10 @@ struct AttendanceView: View {
         }
         .onAppear { loc.requestPermissionIfNeeded() }
         .refreshable { await load() }
-        .sheet(isPresented: $showCamera) {
-            CameraPicker { data in pendingSelfie = data; Task { await submit(selfie: data) } }.ignoresSafeArea()
+        .fullScreenCover(isPresented: $showCamera) {
+            // Not the stock camera any more: a face check (straight, side, other side, blink) that
+            // takes the selfie itself once it has seen a live person. Chat still uses CameraPicker.
+            LivenessCaptureView { data in pendingSelfie = data; Task { await submit(selfie: data) } }
         }
     }
 

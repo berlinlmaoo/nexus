@@ -21,8 +21,15 @@ struct OfficesCard: View {
     @Environment(AuthStore.self) private var auth
     @State private var offices: [Office] = []
     @State private var loading = true
-    @State private var showComposer = false
-    @State private var editOffice: Office?
+    /// One sheet for both cases. Two `.sheet` modifiers on the same view is unsupported in
+    /// SwiftUI, and in practice the `isPresented` one never presented while the `item` one was
+    /// attached — so "+ Office" did nothing while the pencil worked.
+    private enum Composer: Identifiable {
+        case new, edit(Office)
+        var id: String { if case .edit(let o) = self { return o.id } else { return "new" } }
+        var office: Office? { if case .edit(let o) = self { return o } else { return nil } }
+    }
+    @State private var composer: Composer?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -32,7 +39,7 @@ struct OfficesCard: View {
                     Text("Titik kantor + radius check-in.").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer()
-                Button { editOffice = nil; showComposer = true } label: {
+                Button { composer = .new } label: {
                     Label("Office", systemImage: "plus").font(NXFont.text(12, .bold)).foregroundStyle(.white)
                         .padding(.horizontal, 12).padding(.vertical, 8).background(NX.violet, in: Capsule())
                 }.buttonStyle(.plain)
@@ -42,22 +49,21 @@ struct OfficesCard: View {
             } else if offices.isEmpty {
                 EmptyState(icon: "mappin.and.ellipse", title: T("No offices yet"),
                            subtitle: T("An office is a point on the map with a radius around it. Staff can only check in inside that radius, so nothing can be recorded until the first office exists."),
-                           actionTitle: T("Add office"), actionIcon: "plus", action: { editOffice = nil; showComposer = true }, compact: true)
+                           actionTitle: T("Add office"), actionIcon: "plus", action: { composer = .new }, compact: true)
             } else {
                 ForEach(offices) { row($0) }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
         .task { await load() }
-        .sheet(isPresented: $showComposer) { OfficeComposerSheet(editing: editOffice) { await load() } }
-        .sheet(item: $editOffice) { o in OfficeComposerSheet(editing: o) { await load() } }
+        .sheet(item: $composer) { c in OfficeComposerSheet(editing: c.office) { await load() } }
     }
 
     private func row(_ o: Office) -> some View {
         HStack(spacing: 10) {
             // Everything but the switch opens the composer: the pencil is a 13pt target wedged
             // against a toggle, and the name is what people aim at.
-            Button { editOffice = o } label: {
+            Button { composer = .edit(o) } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "mappin.circle.fill").font(.system(size: 18)).foregroundStyle((o.isActive ?? true) ? NX.violetText : NX.mutedFg)
                     VStack(alignment: .leading, spacing: 2) {
@@ -71,7 +77,7 @@ struct OfficesCard: View {
             .buttonStyle(.plain)
             Toggle("", isOn: Binding(get: { o.isActive ?? true }, set: { on in Task { try? await APIClient.shared.updateOffice(id: o.id, fields: ["isActive": on]); await load() } }))
                 .labelsHidden().tint(NX.violetText)
-            Button { editOffice = o } label: { Image(systemName: "pencil").font(.system(size: 13)).foregroundStyle(NX.mutedFg) }.buttonStyle(.plain)
+            Button { composer = .edit(o) } label: { Image(systemName: "pencil").font(.system(size: 13)).foregroundStyle(NX.mutedFg) }.buttonStyle(.plain)
         }
         .padding(.vertical, 4)
     }
@@ -215,7 +221,7 @@ struct OfficeMapPicker: View {
     /// The phone's own position, if it can be had — the composer owns the LocationManager.
     let locate: () async -> LocationManager.Fix?
 
-    @State private var position: MapCameraPosition = .automatic
+    @State private var position: MapCameraPosition
     @State private var center: CLLocationCoordinate2D?
     @State private var query = ""
     @State private var results: [MKMapItem] = []
@@ -223,6 +229,19 @@ struct OfficeMapPicker: View {
     @State private var settled = false
 
     private static let jakarta = CLLocationCoordinate2D(latitude: -6.2088, longitude: 106.8456)
+
+    init(lat: Binding<String>, lng: Binding<String>, radiusMeters: Double, locate: @escaping () async -> LocationManager.Fix?) {
+        _lat = lat; _lng = lng; self.radiusMeters = radiusMeters; self.locate = locate
+        // Start with a real camera, never `.automatic`: with the circle as the map's only content an
+        // automatic camera re-frames whenever the circle moves, and the circle moves whenever the
+        // camera settles — that loop is what froze the sheet on open.
+        let start: CLLocationCoordinate2D
+        if let la = Double(lat.wrappedValue), let lo = Double(lng.wrappedValue) { start = CLLocationCoordinate2D(latitude: la, longitude: lo) }
+        else { start = Self.jakarta }
+        let span = max(120, radiusMeters * 5)
+        _position = State(initialValue: .region(MKCoordinateRegion(center: start, latitudinalMeters: span, longitudinalMeters: span)))
+        _center = State(initialValue: start)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -301,16 +320,12 @@ struct OfficeMapPicker: View {
                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
         }
         .task {
-            // Start where the office already is; otherwise on the phone; otherwise Jakarta.
-            if let la = Double(lat), let lo = Double(lng) {
-                jump(to: CLLocationCoordinate2D(latitude: la, longitude: lo), animated: false)
-            } else if let fix = await locate() {
+            // A new office starts on the phone if a fix arrives (existing ones already sit on their
+            // point). Only after the first placement does moving the map write coordinates back, so
+            // the initial camera settle cannot overwrite an office's real point with the map default.
+            if Double(lat) == nil, let fix = await locate() {
                 jump(to: CLLocationCoordinate2D(latitude: fix.latitude, longitude: fix.longitude), animated: false)
-            } else {
-                jump(to: Self.jakarta, animated: false)
             }
-            // Only after the first placement does moving the map write coordinates back, so the
-            // initial camera settle cannot overwrite an office's real point with the map's default.
             try? await Task.sleep(for: .milliseconds(600))
             settled = true
         }
