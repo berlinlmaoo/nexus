@@ -1,7 +1,8 @@
 LIHAT LURUS. TOLEH KANAN. TOLEH KIRI. KEDIP.
 
-Selfie absen sekarang lewat cek wajah, seperti buka kunci HP.
-Foto tembok kantor tidak lagi dihitung hadir.
+Absen sekarang butuh beberapa detik lebih. Ini alasannya.
+Terlalu banyak selfie absen yang isinya tembok, plafon, atau meja kosong. Absen yang tidak membuktikan apa-apa tidak adil buat yang benar-benar datang.
+Jadi selfie absen sekarang lewat cek wajah, seperti buka kunci HP: lihat lurus, toleh kanan, toleh kiri, kedip. Selesai.
 Semuanya terjadi di HP kamu. Tidak ada yang dibandingkan dengan siapa pun.
 Ruangan gelap? Layarnya berubah jadi lampu.
 
