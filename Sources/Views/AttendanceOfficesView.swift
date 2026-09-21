@@ -1,4 +1,5 @@
 import SwiftUI
+import MapKit
 
 // MARK: models
 
@@ -117,14 +118,17 @@ struct OfficeComposerSheet: View {
                     VStack(alignment: .leading, spacing: 16) {
                         f(T("OFFICE NAME")) { field($name, "mis. Z Networks HQ") }
                         f("ALAMAT (opsional)") { field($address, "Alamat") }
-                        HStack(spacing: 12) {
-                            f("LATITUDE") { field($lat, "-6.2").keyboardType(.numbersAndPunctuation) }
-                            f("LONGITUDE") { field($lng, "106.8").keyboardType(.numbersAndPunctuation) }
+                        f(T("LOCATION")) {
+                            OfficeMapPicker(lat: $lat, lng: $lng, radiusMeters: Double(radius) ?? 100, locate: { try? await loc.currentFix() })
                         }
-                        Button { Task { await useMyLocation() } } label: {
-                            Label("Pakai lokasi sekarang", systemImage: "location.fill").font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
-                                .padding(.horizontal, 12).padding(.vertical, 8).background(NX.violet.opacity(0.1), in: Capsule())
-                        }.buttonStyle(.plain)
+                        DisclosureGroup(T("Fine-tune coordinates")) {
+                            HStack(spacing: 12) {
+                                f("LATITUDE") { field($lat, "-6.2").keyboardType(.numbersAndPunctuation) }
+                                f("LONGITUDE") { field($lng, "106.8").keyboardType(.numbersAndPunctuation) }
+                            }
+                            .padding(.top, 8)
+                        }
+                        .font(NXFont.text(12, .semibold)).tint(NX.mutedFg)
                         HStack(spacing: 12) {
                             f("RADIUS (m)") { field($radius, "100").keyboardType(.numberPad) }
                             f("TOLERANSI TELAT (menit)") { field($grace, "0").keyboardType(.numberPad) }
@@ -162,9 +166,6 @@ struct OfficeComposerSheet: View {
         TextField(ph, text: text).font(NXFont.text(15)).autocorrectionDisabled().padding(12)
             .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
     }
-    private func useMyLocation() async {
-        if let fix = try? await loc.currentFix() { lat = String(fix.latitude); lng = String(fix.longitude) }
-    }
     private func remove() async {
         guard let editing else { return }
         busy = true; err = nil; defer { busy = false }
@@ -189,5 +190,137 @@ struct OfficeComposerSheet: View {
                    try await APIClient.shared.createOffice(fields: fields) }
             await onSaved(); dismiss()
         } catch { err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't save the office.") }
+    }
+}
+
+
+// MARK: - Map picker
+
+/// Pick the office point on a map instead of typing coordinates.
+///
+/// The map moves under a fixed pin — the pattern people know from ride-hailing apps — so the
+/// point is wherever the map is left, never a tiny marker to drag. The circle is the check-in
+/// radius, drawn from the radius field live, so "is 75 m enough to cover the car park" is answered
+/// by looking. Search jumps the map to an address; the location button jumps it to the phone.
+struct OfficeMapPicker: View {
+    @Binding var lat: String
+    @Binding var lng: String
+    let radiusMeters: Double
+    /// The phone's own position, if it can be had — the composer owns the LocationManager.
+    let locate: () async -> LocationManager.Fix?
+
+    @State private var position: MapCameraPosition = .automatic
+    @State private var center: CLLocationCoordinate2D?
+    @State private var query = ""
+    @State private var results: [MKMapItem] = []
+    @State private var searching = false
+    @State private var settled = false
+
+    private static let jakarta = CLLocationCoordinate2D(latitude: -6.2088, longitude: 106.8456)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundStyle(NX.mutedFg)
+                TextField(T("Search an address or place"), text: $query)
+                    .font(NXFont.text(14)).autocorrectionDisabled().submitLabel(.search)
+                    .onSubmit { Task { await search() } }
+                if searching { ProgressView().scaleEffect(0.8) }
+                else if !query.isEmpty { Button { query = ""; results = [] } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg) }.buttonStyle(.plain) }
+            }
+            .padding(12).background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+            if !results.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(results.prefix(5).enumerated()), id: \.offset) { _, item in
+                        Button { jump(to: item.placemark.coordinate); results = []; query = item.name ?? query } label: {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(item.name ?? "—").font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                                Text(item.placemark.title ?? "").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.vertical, 8)
+                        }.buttonStyle(.plain)
+                        Divider().overlay(NX.border)
+                    }
+                }
+                .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+            }
+            ZStack {
+                Map(position: $position) {
+                    if let center {
+                        MapCircle(center: center, radius: radiusMeters)
+                            .foregroundStyle(NX.violet.opacity(0.14))
+                            .stroke(NX.violet, lineWidth: 2)
+                    }
+                    UserAnnotation()
+                }
+                .mapStyle(.standard(pointsOfInterest: .including([.airport, .publicTransport, .parking])))
+                .mapControls { MapCompass(); MapScaleView() }
+                .onMapCameraChange(frequency: .continuous) { ctx in
+                    center = ctx.camera.centerCoordinate
+                    guard settled else { return }
+                    lat = String(format: "%.6f", ctx.camera.centerCoordinate.latitude)
+                    lng = String(format: "%.6f", ctx.camera.centerCoordinate.longitude)
+                }
+                // The fixed pin: its tip is the point that gets saved.
+                VStack(spacing: 0) {
+                    Image(systemName: "mappin.circle.fill").font(.system(size: 34)).foregroundStyle(NX.violet)
+                        .background(Circle().fill(Color.white).padding(4))
+                    Rectangle().fill(NX.violet).frame(width: 2, height: 12)
+                }
+                .offset(y: -23)
+                .allowsHitTesting(false)
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button {
+                            Task { if let fix = await locate() { jump(to: CLLocationCoordinate2D(latitude: fix.latitude, longitude: fix.longitude)) } }
+                        } label: {
+                            Image(systemName: "location.fill").font(.system(size: 14, weight: .bold)).foregroundStyle(NX.violetText)
+                                .frame(width: 36, height: 36).background(Color.white, in: Circle()).shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+                        }
+                        .buttonStyle(.plain).padding(10)
+                        .accessibilityLabel(T("Use my location"))
+                    }
+                    Spacer()
+                }
+            }
+            .frame(height: 280)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border))
+            Text(T("Drag the map until the pin sits on the office entrance. The circle is where people can check in."))
+                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+        }
+        .task {
+            // Start where the office already is; otherwise on the phone; otherwise Jakarta.
+            if let la = Double(lat), let lo = Double(lng) {
+                jump(to: CLLocationCoordinate2D(latitude: la, longitude: lo), animated: false)
+            } else if let fix = await locate() {
+                jump(to: CLLocationCoordinate2D(latitude: fix.latitude, longitude: fix.longitude), animated: false)
+            } else {
+                jump(to: Self.jakarta, animated: false)
+            }
+            // Only after the first placement does moving the map write coordinates back, so the
+            // initial camera settle cannot overwrite an office's real point with the map's default.
+            try? await Task.sleep(for: .milliseconds(600))
+            settled = true
+        }
+    }
+
+    private func jump(to c: CLLocationCoordinate2D, animated: Bool = true) {
+        let span = max(120, radiusMeters * 5)
+        let region = MKCoordinateRegion(center: c, latitudinalMeters: span, longitudinalMeters: span)
+        if animated { withAnimation(.easeInOut(duration: 0.35)) { position = .region(region) } } else { position = .region(region) }
+        center = c
+        lat = String(format: "%.6f", c.latitude); lng = String(format: "%.6f", c.longitude)
+    }
+
+    private func search() async {
+        let q = query.trimmingCharacters(in: .whitespaces); guard !q.isEmpty else { return }
+        searching = true; defer { searching = false }
+        let req = MKLocalSearch.Request(); req.naturalLanguageQuery = q
+        if let center { req.region = MKCoordinateRegion(center: center, latitudinalMeters: 50_000, longitudinalMeters: 50_000) }
+        results = (try? await MKLocalSearch(request: req).start().mapItems) ?? []
     }
 }
