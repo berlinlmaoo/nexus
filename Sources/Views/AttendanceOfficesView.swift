@@ -253,11 +253,13 @@ struct OfficeMapPicker: View {
                             .foregroundStyle(NX.violet.opacity(0.14))
                             .stroke(NX.violet, lineWidth: 2)
                     }
-                    UserAnnotation()
                 }
                 .mapStyle(.standard(pointsOfInterest: .including([.airport, .publicTransport, .parking])))
                 .mapControls { MapCompass(); MapScaleView() }
-                .onMapCameraChange(frequency: .continuous) { ctx in
+                // `.onEnd`, not `.continuous`: the circle is map CONTENT keyed on `center`, so a
+                // continuous update re-rendered the content on every frame of a drag, which moved
+                // the camera, which updated again — the sheet froze solid on first open.
+                .onMapCameraChange(frequency: .onEnd) { ctx in
                     center = ctx.camera.centerCoordinate
                     guard settled else { return }
                     lat = String(format: "%.6f", ctx.camera.centerCoordinate.latitude)

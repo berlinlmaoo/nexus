@@ -20,6 +20,15 @@ struct AttendanceSnapshot: Codable, Hashable {
     /// Filled for a fixed shift; nil on Flexi, where the end follows from the check-in.
     var expectedOutAt: Date?
 
+    /// The last seven days as dots, oldest first — written by the app from the compact history.
+    /// Optional so a blob saved before this field existed still decodes.
+    var recentDays: [DayDot]?
+    struct DayDot: Codable, Hashable {
+        let dateKey: String
+        /// P present, L late, I permit, C leave, S sick, D day off, A absent, "" nothing.
+        let tone: String
+    }
+
     /// Taps still waiting for a reachable server.
     var pendingCount: Int
     /// When a queued check-in was tapped — the time the person will be credited with.

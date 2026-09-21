@@ -1827,6 +1827,14 @@ struct APIClient {
         try await run(makeRequest("/api/attendance/today"), decode: AttendanceToday.self)
     }
 
+    /// The last `days` days as compact dots — what the widget and the watch draw.
+    func attendanceRecent(scope: String, days: Int = 7) async throws -> [AttendanceCompactDay] {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = TimeZone(identifier: "Asia/Jakarta"); f.locale = Locale(identifier: "en_US_POSIX")
+        let to = Date(), from = Calendar.current.date(byAdding: .day, value: -(days - 1), to: to) ?? to
+        let path = "/api/attendance/history?scope=\(enc(scope))&dateFrom=\(f.string(from: from))&dateTo=\(f.string(from: to))&compact=1"
+        return (try await run(makeRequest(path), decode: AttendanceCompactResponse.self)).records
+    }
+
     func attendanceHistory(scope: String, month: String) async throws -> [AttendanceRow] {
         let path = "/api/attendance/history?scope=\(enc(scope))&month=\(enc(month))"
         return (try await run(makeRequest(path), decode: AttendanceHistoryResponse.self)).all

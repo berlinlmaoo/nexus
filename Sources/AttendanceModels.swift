@@ -230,3 +230,34 @@ enum AttendanceOutcome: Sendable {
     case success
     case outsideRadius          // checkout from beyond the office geofence → needs a reason
 }
+
+
+// MARK: - Compact days (watch faces, widgets, the crew board on the wrist)
+
+/// One person-day from `/api/attendance/history?compact=1`. The server decides the tone so every
+/// surface colours a day the same way: P present, L late, I permit, C leave, S sick, D day off,
+/// A absent, "" nothing recorded.
+struct AttendanceCompactDay: Decodable, Hashable, Sendable {
+    let userId: String?
+    let name: String?
+    let date: String
+    let tone: String
+    let checkInAt: String?
+    let checkOutAt: String?
+    let lateMinutes: Int?
+    let kind: String?
+
+    var label: String {
+        switch tone {
+        case "P": return "Present"
+        case "L": return lateMinutes.map { "Late \($0) min" } ?? "Late"
+        case "I": return "Permit"
+        case "C": return "Leave"
+        case "S": return "Sick"
+        case "D": return "Day off"
+        case "A": return "Absent"
+        default:  return "No record"
+        }
+    }
+}
+struct AttendanceCompactResponse: Decodable, Sendable { let records: [AttendanceCompactDay] }

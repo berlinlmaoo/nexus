@@ -17,6 +17,14 @@ enum AttendancePresence {
 
     /// Call whenever attendance truth might have moved: after a load, after a check-in or
     /// check-out, and after the queue drains. Cheap and idempotent.
+    /// The dots the widget draws. Fetched by the Attendance screen after it loads today; kept here
+    /// so every later `refresh()` (a queue change, a check-in) carries them along.
+    private static var lastRecent: [AttendanceSnapshot.DayDot]?
+    static func updateRecent(_ days: [AttendanceCompactDay]) {
+        lastRecent = days.sorted { $0.date < $1.date }.suffix(7).map { .init(dateKey: $0.date, tone: $0.tone) }
+        refresh()
+    }
+
     static func refresh(today: AttendanceToday? = nil, userName name: String? = nil) {
         if let today { lastToday = today }
         if let name, !name.isEmpty { userName = name }
@@ -35,6 +43,7 @@ enum AttendancePresence {
             checkOutAt: checkOutAt,
             officeName: record?.officeLocation?.name,
             expectedOutAt: expectedOut(from: start, shift: lastToday?.myShift),
+            recentDays: lastRecent,
             pendingCount: queue.count,
             queuedSince: queuedCheckIn?.deviceAt,
             updatedAt: Date()

@@ -14,6 +14,7 @@ struct TodayView: View {
     @State private var today: AttendanceToday?
     @State private var error: String?
     @State private var loading = true
+    @State private var recent: [AttendanceCompactDay] = []
 
     private var record: AttendanceRecord? { today?.today }
 
@@ -27,6 +28,10 @@ struct TodayView: View {
                     Text(error).font(.caption2).foregroundStyle(.secondary)
                 } else {
                     body(for: record)
+                }
+                if !recent.isEmpty {
+                    Text("Last 7 days").font(.caption2.weight(.semibold)).foregroundStyle(.secondary).padding(.top, 6)
+                    DayDots(days: recent)
                 }
             }
             .padding(.horizontal, 4)
@@ -79,6 +84,7 @@ struct TodayView: View {
         do { today = try await WatchAPI.today(session) }
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? "Couldn't load." }
         loading = false
+        recent = (try? await WatchAPI.recent(session, scope: "me")) ?? []
     }
 
     private func parseISO(_ iso: String?) -> Date? {

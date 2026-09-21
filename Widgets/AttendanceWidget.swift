@@ -91,42 +91,67 @@ struct AttendanceWidgetView: View {
 
             Divider()
 
+            // The person's own day: when they came in, when the shift ends and how much is left,
+            // and the last seven days as dots — the strip a BoD reads on the board, for one person.
             VStack(alignment: .leading, spacing: 7) {
-                if let glance, glance.isFresh(), !glance.isEmpty {
-                    if glance.overdue > 0 {
-                        glanceRow("exclamationmark.circle.fill", "\(glance.overdue) overdue", nxAmber)
+                if let snapshot, snapshot.dateKey == AttendanceSnapshot.currentDateKey() {
+                    if let inAt = snapshot.checkInAt {
+                        glanceRow("arrow.right.to.line", "In \(inAt.formatted(date: .omitted, time: .shortened))", nxGreen)
                     }
-                    glanceRow("checklist", glance.dueToday > 0
-                              ? "\(glance.dueToday) due today"
-                              : "\(glance.openTasks) open", .primary)
-                    if glance.unreadNotifications > 0 {
-                        glanceRow("bell.fill", "\(glance.unreadNotifications) unread", nxViolet)
-                    }
-                    Spacer(minLength: 0)
-                    HStack(spacing: 4) {
-                        Text("LV \(glance.level)")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(nxViolet)
-                        if let streak = glance.streak, streak > 1 {
-                            Text("· \(streak)d")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                    if let out = snapshot.checkOutAt {
+                        glanceRow("checkmark.circle.fill", "Out \(out.formatted(date: .omitted, time: .shortened))", nxGreen)
+                    } else if let end = snapshot.expectedOutAt, snapshot.checkInAt != nil || snapshot.queuedSince != nil {
+                        if end > entryDate {
+                            HStack(spacing: 4) {
+                                Image(systemName: "hourglass").font(.caption2).foregroundStyle(nxViolet)
+                                Text(timerInterval: entryDate...end, countsDown: true, showsHours: true)
+                                    .font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(.primary)
+                                Text("left").font(.caption2).foregroundStyle(.secondary)
+                            }
+                        } else {
+                            glanceRow("moon.zzz.fill", "Past \(end.formatted(date: .omitted, time: .shortened)) · check out", nxAmber)
                         }
+                    } else if snapshot.checkInAt == nil {
+                        glanceRow("circle.dashed", "Not checked in", .secondary)
                     }
                 } else {
-                    // Says why there is nothing rather than showing an empty column, which reads as
-                    // a broken widget.
-                    VStack(alignment: .leading, spacing: 4) {
-                        Image(systemName: "arrow.clockwise").font(.caption2).foregroundStyle(.secondary)
-                        Text("Open NEXUS to refresh")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
+                    glanceRow("arrow.clockwise", "Open NEXUS to refresh", .secondary)
+                }
+                Spacer(minLength: 0)
+                if let days = snapshot?.recentDays, !days.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(days, id: \.dateKey) { d in
+                            VStack(spacing: 2) {
+                                Circle().fill(toneColor(d.tone)).frame(width: 10, height: 10)
+                                Text(weekdayLetter(d.dateKey)).font(.system(size: 8)).foregroundStyle(.secondary)
+                            }
+                        }
                     }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    private var entryDate: Date { Date() }
+
+    private func toneColor(_ t: String) -> Color {
+        switch t {
+        case "P", "I": return nxGreen
+        case "L":      return nxAmber
+        case "C":      return Color(red: 0.98, green: 0.80, blue: 0.20)
+        case "S":      return Color(red: 0.97, green: 0.55, blue: 0.20)
+        case "D":      return nxViolet
+        case "A":      return Color(red: 0.94, green: 0.33, blue: 0.40)
+        default:       return Color.secondary.opacity(0.25)
+        }
+    }
+
+    private func weekdayLetter(_ key: String) -> String {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = TimeZone(identifier: "Asia/Jakarta"); f.locale = Locale(identifier: "en_US_POSIX")
+        guard let d = f.date(from: key) else { return "" }
+        let w = DateFormatter(); w.dateFormat = "EEEEE"; w.timeZone = f.timeZone
+        return w.string(from: d)
     }
 
     private func glanceRow(_ symbol: String, _ text: String, _ color: Color) -> some View {

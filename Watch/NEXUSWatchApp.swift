@@ -13,6 +13,7 @@ struct NEXUSWatchApp: App {
             if auth.session != nil {
                 TabView {
                     TodayView()
+                    CrewView()
                     ApprovalsView()
                 }
                 .tabViewStyle(.verticalPage)

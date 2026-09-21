@@ -23,6 +23,15 @@ enum WatchAPI {
 
     /// Only ever the workspace scope: the watch shows approvals, and a list of one's own requests
     /// is not something anybody reaches for on a wrist.
+    /// The last `days` days as compact dots — `scope=me` for the wearer, `scope=workspace` for a
+    /// reviewer's crew (the server narrows a manager to their own people).
+    static func recent(_ session: Session, scope: String, days: Int = 7) async throws -> [AttendanceCompactDay] {
+        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = TimeZone(identifier: "Asia/Jakarta"); f.locale = Locale(identifier: "en_US_POSIX")
+        let to = Date(), from = Calendar.current.date(byAdding: .day, value: -(days - 1), to: to) ?? to
+        return try await get("/api/attendance/history?scope=\(scope)&dateFrom=\(f.string(from: from))&dateTo=\(f.string(from: to))&compact=1",
+                             session: session, as: AttendanceCompactResponse.self).records
+    }
+
     static func pendingRequests(_ session: Session) async throws -> [AttendanceRequest] {
         let response = try await get("/api/attendance/requests?scope=workspace",
                                      session: session, as: AttendanceRequestsResponse.self)

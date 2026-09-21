@@ -685,6 +685,8 @@ struct AttendanceView: View {
         // A check-in made on the web, or one that arrived by replaying the queue, has to move the
         // Island too — and neither of those passes through the buttons on this screen.
         AttendancePresence.refresh(today: today, userName: auth.session?.userName)
+        // The widget's seven dots. Cheap (compact rows, one week), and only ever this person's own.
+        if let days = try? await APIClient.shared.attendanceRecent(scope: "me") { AttendancePresence.updateRecent(days) }
     }
 
     // MARK: formatters
