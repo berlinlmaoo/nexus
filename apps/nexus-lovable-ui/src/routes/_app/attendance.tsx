@@ -1035,7 +1035,9 @@ function OfficeComposer({ office, onClose, onCreated }: { office?: NexusOffice; 
           {/* Shift start/end dihilangkan — jam shift sekarang diatur per orang (Control Room → Members),
               bukan per office. Office cuma nyimpen default fallback (gak ditampilin di sini). */}
           <div className="flex flex-wrap gap-4">
-            <label className="block text-[11px] font-bold text-muted-foreground">Radius (m)<input value={radius} onChange={(e) => setRadius(e.target.value.replace(/[^0-9]/g, ""))} className="mt-1 w-32 rounded-xl border border-border bg-background px-2 py-2 text-sm" /></label>
+            <label className="block text-[11px] font-bold text-muted-foreground">Radius · {Number(radius) || 100} m
+              <input type="range" min={25} max={500} step={5} value={Number(radius) || 100} onChange={(e) => setRadius(e.target.value)} className="mt-1 block w-full accent-primary" />
+            </label>
             <label className="block text-[11px] font-bold text-muted-foreground">Late grace (minutes)<input value={grace} onChange={(e) => setGrace(e.target.value.replace(/[^0-9]/g, ""))} className="mt-1 w-32 rounded-xl border border-border bg-background px-2 py-2 text-sm" /><span className="mt-1 block font-normal text-muted-foreground/70">0 = strict, late from the very first minute</span></label>
           </div>
         </div>

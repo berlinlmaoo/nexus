@@ -99,7 +99,11 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
     if (!file || !mode) return;
     setMsg(null);
     setLocating(true);
-    getAttendanceFix()
+    // A selfie with no face in it is not an attendance photo. Where the browser has a face detector
+    // (Chrome, Android) it is asked before the location fix; elsewhere the check is skipped rather
+    // than blocking everyone — the phone app runs the same guard on-device.
+    hasFace(file)
+      .then((ok) => { if (!ok) throw new NoFaceError(); return getAttendanceFix(); })
       .then((fix) => {
         setLocating(false);
         const payload: AttendanceActionPayload = { lat: fix.lat, lng: fix.lng, selfie: file, ...(mode === "out" ? { reflection: reflection.trim() } : {}) };
@@ -108,6 +112,7 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
       })
       .catch((err) => {
         setLocating(false);
+        if (err instanceof NoFaceError) { setMsg("No face in the photo. Take the selfie with your face clearly visible, then try again."); return; }
         setMsgOk(false);
         setMsg(err instanceof GeoError ? err.message : "Couldn't get your location. Try again.");
       });
@@ -399,4 +404,20 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
       </AnimatePresence>
     </div>
   );
+}
+
+
+class NoFaceError extends Error { constructor() { super("no face"); } }
+
+/** true when a face is found, or when this browser cannot look (no FaceDetector API). */
+async function hasFace(file: File): Promise<boolean> {
+  const FD = (window as unknown as { FaceDetector?: new (o?: { fastMode?: boolean; maxDetectedFaces?: number }) => { detect: (img: ImageBitmap) => Promise<Array<{ boundingBox: DOMRectReadOnly }>> } }).FaceDetector;
+  if (!FD) return true;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const faces = await new FD({ fastMode: true, maxDetectedFaces: 3 }).detect(bitmap);
+    const min = Math.min(bitmap.width, bitmap.height) * 0.12;
+    bitmap.close();
+    return faces.some((f) => Math.min(f.boundingBox.width, f.boundingBox.height) >= min);
+  } catch { return true; }
 }
