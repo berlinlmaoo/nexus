@@ -57,9 +57,11 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
   const [notice, setNotice] = useState<string | null>(null);
   const [flash, setFlash] = useState(false);
   const [dark, setDark] = useState(false);
-  const [manualLight, setManualLight] = useState(false);
+  // null = follow the room, true = forced on, false = forced off — because the automatic light
+  // latches and a plain boolean could then never turn it off.
+  const [manualLight, setManualLight] = useState<boolean | null>(null);
   const [view, setView] = useState({ w: window.innerWidth, h: window.innerHeight, vw: 0, vh: 0 });
-  const lightOn = dark || manualLight;
+  const lightOn = manualLight ?? dark;
 
   useEffect(() => {
     const onResize = () => setView((v) => ({ ...v, w: window.innerWidth, h: window.innerHeight }));
@@ -73,13 +75,19 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
     let stream: MediaStream | null = null;
     let landmarker: { detectForVideo: (v: HTMLVideoElement, t: number) => Result; close?: () => void } | null = null;
     // Loop-confined state; React state is only what the screen draws.
-    const st = { step: 0 as Step, hold: 0, side: 0, blinkSeen: false, lost: 0, stepStart: 0, cooldown: 0, finished: false, lastProgress: 0, stalled: false, frames: 0, dark: false, skipNext: false };
+    const st = { step: 0 as Step, hold: 0, side: 0, blinkSeen: false, lost: 0, stepStart: 0, cooldown: 0, finished: false, lastProgress: 0, stalled: false, frames: 0, dark: false, darkSamples: 0, skipNext: false };
     const lumaCanvas = document.createElement("canvas"); lumaCanvas.width = 24; lumaCanvas.height = 24;
 
     const setStepAnim = (s: Step) => { st.step = s; st.hold = 0; st.blinkSeen = false; st.stepStart = performance.now(); st.cooldown = performance.now() + 500; st.stalled = false; setStalled(false); setNotice(null); setProgress(0); setStep(s); try { navigator.vibrate?.(20); } catch { /* not everywhere */ } };
     const reset = (why: string) => { st.side = 0; setStepAnim(0); setNotice(why); setTimeout(() => setNotice((n) => (n === why ? null : n)), 2500); };
 
+    // The light LATCHES: once on, it stays on for the rest of this check. It cannot be switched off by
+    // what it measures, because what it measures is its own light — a white screen lifts the face
+    // out of the dark, the room reads as bright, the light goes off, the room is dark again: a
+    // strobe. Turning on needs three dark samples in a row (~1.5 s), so a hand over the lens is not
+    // enough. The sun button is there for whoever wants it off.
     const measureLight = (v: HTMLVideoElement) => {
+      if (st.dark) return;
       const ctx = lumaCanvas.getContext("2d", { willReadFrequently: true });
       if (!ctx) return;
       ctx.drawImage(v, 0, 0, 24, 24);
@@ -87,13 +95,13 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
       let sum = 0;
       for (let i = 0; i < d.length; i += 4) sum += (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
       const mean = sum / (d.length / 4);
-      const was = st.dark;
       // Merely dim already counts as dark once no face has been found for a couple of seconds:
       // if the detector cannot see a face, more light is the one thing that helps.
       const struggling = st.lost > 60;
-      if (mean < 55 || (struggling && mean < 100)) st.dark = true;
-      else if (mean > (struggling ? 120 : 75)) st.dark = false;
-      if (st.dark !== was) setDark(st.dark);
+      if (mean < 55 || (struggling && mean < 100)) st.darkSamples += 1; else st.darkSamples = 0;
+      if (st.darkSamples < 3) return;
+      st.dark = true;
+      setDark(true);
     };
 
     const capture = (v: HTMLVideoElement) => {
@@ -340,7 +348,7 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
         <div className="flex items-center">
           <button type="button" onClick={onCancel} aria-label="Cancel" className={`grid h-9 w-9 place-items-center rounded-full ${lightOn ? "bg-black/10" : "bg-white/20"}`}><X className="h-4 w-4" strokeWidth={3} /></button>
           <div className={`flex-1 text-center text-[13px] font-semibold ${inkSoft}`}>Face check</div>
-          <button type="button" onClick={() => setManualLight((m) => !m)} aria-label="Screen light" aria-pressed={lightOn}
+          <button type="button" onClick={() => setManualLight(!lightOn)} aria-label="Screen light" aria-pressed={lightOn}
             className={`grid h-9 w-9 place-items-center rounded-full ${lightOn ? "bg-black/10 text-amber-500" : "bg-white/20"}`}><Sun className="h-4 w-4" strokeWidth={2.5} /></button>
         </div>
         <div className="mx-auto mt-3 max-w-sm text-center">
