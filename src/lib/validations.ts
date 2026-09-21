@@ -101,6 +101,8 @@ export const attendanceHistoryQuerySchema = z.object({
   requestType: z.enum(["LEAVE", "SICK", "PERMIT", "DAY_OFF"]).optional(),
   requestStatus: z.enum(["PENDING", "APPROVED", "REJECTED", "CANCELED"]).optional(),
   format: z.enum(["json", "csv", "xlsx"]).optional(),
+  // Watch and widget: one small object per person-day instead of the full row.
+  compact: z.enum(["1"]).optional(),
 })
 
 export const reverseGeocodeQuerySchema = z.object({
