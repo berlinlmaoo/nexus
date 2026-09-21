@@ -36,7 +36,7 @@ struct LivenessCaptureView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            CameraFeed(session: engine.session).ignoresSafeArea()
+            CameraFeed(engine: engine).ignoresSafeArea()
             GeometryReader { geo in
                 let home = Self.ovalRect(in: geo.size)
                 let oval = trackedOval(home: home, in: geo.size)
@@ -89,20 +89,19 @@ struct LivenessCaptureView: View {
         return CGRect(x: (size.width - w) / 2, y: size.height * 0.44 - h / 2, width: w, height: h)
     }
 
-    /// The window hugs the detected face (with room for hair and chin); without a face it rests at
-    /// its home position so people know where to put themselves.
+    /// The window hugs the detected face (a little room for hair and chin); without a face it rests
+    /// at its home position so people know where to put themselves.
+    ///
+    /// The face comes as a metadata-output rect and the PREVIEW LAYER converts it to screen points:
+    /// it knows the camera's rotation, the front-camera mirror and the aspect-fill crop, which is
+    /// exactly the arithmetic that put the window on the wrong side of the screen when done by hand.
     private func trackedOval(home: CGRect, in size: CGSize) -> CGRect {
-        guard let face = engine.faceRect, let buf = engine.bufferSize, buf.width > 0, buf.height > 0 else { return home }
-        // The preview is aspect-fill; the buffer is upright and mirrored like the preview, so only
-        // the fill scale and Vision's bottom-left origin need undoing.
-        let scale = max(size.width / buf.width, size.height / buf.height)
-        let dw = buf.width * scale, dh = buf.height * scale
-        let ox = (size.width - dw) / 2, oy = (size.height - dh) / 2
-        let fx = ox + face.minX * dw, fy = oy + (1 - face.maxY) * dh
-        let fw = face.width * dw, fh = face.height * dh
-        let w = max(fw * 1.42, home.width * 0.7), h = max(fh * 1.55, w * 1.25)
-        let cx = fx + fw / 2, cy = fy + fh / 2 - fh * 0.06
-        return CGRect(x: cx - w / 2, y: cy - h / 2, width: w, height: h)
+        guard let face = engine.faceRect, let layer = engine.previewLayer else { return home }
+        let f = layer.layerRectConverted(fromMetadataOutputRect: face)
+        guard f.width > 10, f.height > 10, f.width.isFinite, f.height.isFinite else { return home }
+        let w = min(max(f.width * 1.15, 140), home.width * 1.1)
+        let h = min(max(f.height * 1.25, w * 1.2), home.height * 1.15)
+        return CGRect(x: f.midX - w / 2, y: f.midY - f.height * 0.04 - h / 2, width: w, height: h)
     }
 
     private var done: Bool { engine.captured != nil }
@@ -302,11 +301,12 @@ struct LivenessCaptureView: View {
 // MARK: - Camera preview
 
 private struct CameraFeed: UIViewRepresentable {
-    let session: AVCaptureSession
+    let engine: LivenessEngine
     func makeUIView(context: Context) -> PreviewView {
         let v = PreviewView()
-        v.previewLayer.session = session
+        v.previewLayer.session = engine.session
         v.previewLayer.videoGravity = .resizeAspectFill
+        engine.previewLayer = v.previewLayer
         return v
     }
     func updateUIView(_ uiView: PreviewView, context: Context) {}
@@ -333,8 +333,12 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
 
     @Published private(set) var step: Step = .center
     @Published private(set) var presence: Presence = .none
+    /// The face in metadata-output coordinates (normalized, top-left origin, camera-native
+    /// orientation) — the form `AVCaptureVideoPreviewLayer.layerRectConverted` understands.
     @Published private(set) var faceRect: CGRect?
     @Published private(set) var bufferSize: CGSize?
+    /// Set by the preview; used only to convert `faceRect` to screen points.
+    weak var previewLayer: AVCaptureVideoPreviewLayer?
     @Published private(set) var yawDegrees: Double = 0
     @Published private(set) var eyesClosed = false
     @Published private(set) var firstSide: Double = 0
@@ -400,11 +404,9 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
             output.alwaysDiscardsLateVideoFrames = true
             output.setSampleBufferDelegate(self, queue: self.queue)
             if self.session.canAddOutput(output) { self.session.addOutput(output) }
-            if let c = output.connection(with: .video) {
-                // Upright, and mirrored like the preview, so the buffer is what the person sees.
-                if c.isVideoRotationAngleSupported(90) { c.videoRotationAngle = 90 }
-                if c.isVideoMirroringSupported { c.automaticallyAdjustsVideoMirroring = false; c.isVideoMirrored = true }
-            }
+            // The buffer stays in the camera's native orientation. Vision is told how it is held
+            // (`.leftMirrored`, the front camera in portrait) and the preview layer converts the
+            // results to the screen — nothing is rotated or mirrored by hand.
             self.session.commitConfiguration()
             self.session.startRunning()
         }
@@ -419,7 +421,7 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
         }
         if frameCount % 8 == 0 { measureLight(pixel) }
         let request = VNDetectFaceLandmarksRequest()
-        let handler = VNImageRequestHandler(cvPixelBuffer: pixel, orientation: .up, options: [:])
+        let handler = VNImageRequestHandler(cvPixelBuffer: pixel, orientation: .leftMirrored, options: [:])
         try? handler.perform([request])
         let face = (request.results ?? []).max { $0.boundingBox.width < $1.boundingBox.width }
         evaluate(face, pixel: pixel)
@@ -437,11 +439,17 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
             return
         }
         lostFrames = 0
+        // Vision reports the box in the buffer's own (landscape) space, origin bottom-left. Size
+        // and centring are judged there in a way that does not care which way the sensor lies:
+        // the face's longer side in pixels against the frame's shorter side.
         let box = face.boundingBox
+        let bw = CGFloat(CVPixelBufferGetWidth(pixel)), bh = CGFloat(CVPixelBufferGetHeight(pixel))
+        let facePx = max(box.width * bw, box.height * bh)
         let presence: Presence
-        if box.width < 0.30 { presence = .small }
-        else if abs(box.midX - 0.5) > 0.18 || abs(box.midY - 0.5) > 0.2 { presence = .offCentre }
+        if facePx < 0.30 * min(bw, bh) { presence = .small }
+        else if abs(box.midX - 0.5) > 0.2 || abs(box.midY - 0.5) > 0.2 { presence = .offCentre }
         else { presence = .ok }
+        let metaRect = CGRect(x: box.minX, y: 1 - box.maxY, width: box.width, height: box.height)
         let yaw = face.yaw?.doubleValue ?? 0
 
         // Blink reference: the widest the eyes have been in the last ~1.5 s. A blink is a short dip
@@ -451,7 +459,7 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
             openness.append(open); if openness.count > 45 { openness.removeFirst() }
             if let ref = openness.max(), ref > 0.05 { closed = open < ref * 0.70 }
         }
-        publish(presence: presence, rect: box, yaw: yaw, closed: closed)
+        publish(presence: presence, rect: metaRect, yaw: yaw, closed: closed)
         guard presence == .ok, now >= cooldownUntil else { holdFrames = 0; return }
         if !stalled && now.timeIntervalSince(stepStart) > 15 { DispatchQueue.main.async { self.stalled = true } }
 
@@ -541,7 +549,9 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
     }
 
     /// Mean brightness of a coarse grid of pixels. Dark below ~55/255, light again above ~75, so
-    /// the screen light does not flicker on the threshold.
+    /// the screen light does not flicker on the threshold. When no face has been found for a couple
+    /// of seconds, merely dim (below ~100) already counts as dark: if the detector cannot see a
+    /// face, more light is the one thing that helps.
     private func measureLight(_ pixel: CVPixelBuffer) {
         CVPixelBufferLockBaseAddress(pixel, .readOnly)
         defer { CVPixelBufferUnlockBaseAddress(pixel, .readOnly) }
@@ -557,14 +567,16 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
         } }
         let mean = n > 0 ? sum / n : 128
         let wasDark = isDark
-        if mean < 55 { isDark = true } else if mean > 75 { isDark = false }
+        let struggling = lostFrames > 60
+        if mean < 55 || (struggling && mean < 100) { isDark = true }
+        else if mean > (struggling ? 120 : 75) { isDark = false }
         if isDark != wasDark { let d = isDark; DispatchQueue.main.async { self.dark = d } }
     }
 
     private func capture(_ pixel: CVPixelBuffer) {
         finished = true
-        // The buffer is mirrored like a mirror; the record should show the person as others see them.
-        var image = CIImage(cvPixelBuffer: pixel).oriented(.upMirrored)
+        // Native landscape buffer → upright, mirrored like the preview the person just looked at.
+        var image = CIImage(cvPixelBuffer: pixel).oriented(.leftMirrored)
         let maxSide = max(image.extent.width, image.extent.height)
         if maxSide > 1280 { image = image.transformed(by: CGAffineTransform(scaleX: 1280 / maxSide, y: 1280 / maxSide)) }
         guard let cg = ciContext.createCGImage(image, from: image.extent),
