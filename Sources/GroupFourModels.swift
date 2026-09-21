@@ -63,6 +63,8 @@ struct WorkspaceRoster: Decodable, Sendable {
         let flexiTimeEnabled: Bool?
         /// Mode Mobile: absen dari mana saja (geofence mati, checkout luar kantor tanpa approval).
         let noGeofenceMode: Bool?
+        /// Fixed weekly rest days, ISO 1=Mon..7=Sun. Empty/nil = works every office day.
+        let restDays: [Int]?
         /// Atasan langsung di Bagan Approval — hanya bermakna untuk STAFF. nil = belum ditaruh:
         /// request orang ini masih jatuh ke BoD. Itu pekerjaan yang belum selesai, bukan galat.
         let approverId: String?

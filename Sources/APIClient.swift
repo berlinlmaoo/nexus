@@ -899,10 +899,11 @@ struct APIClient {
     /// menulis ulang peran orang itu dengan nilai yang kebetulan sedang ada di layar.
     @discardableResult
     func updateWorkspaceMemberAttendanceFlags(memberId: String, workspaceId: String,
-                                              flexi: Bool? = nil, noGeofence: Bool? = nil) async throws -> Bool {
+                                              flexi: Bool? = nil, noGeofence: Bool? = nil, restDays: [Int]? = nil) async throws -> Bool {
         var body: [String: Any] = ["memberId": memberId, "workspaceId": workspaceId]
         if let flexi { body["flexiTimeEnabled"] = flexi }
         if let noGeofence { body["noGeofenceMode"] = noGeofence }
+        if let restDays { body["restDays"] = restDays }
         var req = makeRequest("/api/workspaces/members", method: "PATCH")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)

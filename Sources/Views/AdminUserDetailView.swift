@@ -56,6 +56,7 @@ struct AdminUserDetailView: View {
                 if isBod { accountCard }
                 if isBod { approvalCard }
                 if isBod { attendanceModeCard }
+                if isBod { restDaysCard }
                 if isBod { workHoursCard }
                 if canEdit { googleCard }
                 membershipCard
@@ -334,6 +335,45 @@ struct AdminUserDetailView: View {
             }
             .tint(NX.violet)
             .disabled(busy)
+        }
+    }
+
+    /// Fixed weekly rest days. The offices run seven days; before this, "Sunday is my day off" had
+    /// to be filed as a day-off request every week, and a forgotten one cost −150 XP and a token.
+    private var restDaysCard: some View {
+        let current = Set(member.restDays ?? [])
+        let names = [1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat", 7: "Sun"]
+        func save(_ days: Set<Int>) {
+            guard let mid = member.id, let wsId = workspaceId else { return }
+            Task { await run { _ = try await APIClient.shared.updateWorkspaceMemberAttendanceFlags(memberId: mid, workspaceId: wsId, restDays: days.sorted()) } }
+        }
+        return card(T("Rest days"), current.isEmpty ? T("Works every office day; a day off must be requested.") : T("No reminder, lateness or absence on these days. No day-off request needed.")) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    ForEach(1...7, id: \.self) { d in
+                        let on = current.contains(d)
+                        Button {
+                            var next = current; if on { next.remove(d) } else { next.insert(d) }
+                            save(next)
+                        } label: {
+                            Text(T(names[d] ?? "")).font(NXFont.text(12, .bold))
+                                .foregroundStyle(on ? Color.white : NX.mutedFg)
+                                .frame(maxWidth: .infinity).padding(.vertical, 7)
+                                .background(on ? NX.violet : NX.card, in: Capsule())
+                                .overlay(Capsule().strokeBorder(on ? Color.clear : NX.border))
+                        }
+                        .buttonStyle(.plain).disabled(!canEdit || busy)
+                    }
+                }
+                if canEdit {
+                    HStack(spacing: 14) {
+                        Button(T("Sunday off")) { save([7]) }
+                        Button(T("Sat + Sun off")) { save([6, 7]) }
+                        Button(T("Works every day")) { save([]) }
+                    }
+                    .font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText).buttonStyle(.plain).disabled(busy)
+                }
+            }
         }
     }
 
