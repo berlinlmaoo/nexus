@@ -92,6 +92,7 @@ struct OfficeComposerSheet: View {
     @State private var grace: String
     @State private var busy = false
     @State private var err: String?
+    @State private var confirmDelete = false
     @State private var loc = LocationManager()
 
     init(editing: Office?, onSaved: @escaping () async -> Void) {
@@ -130,6 +131,18 @@ struct OfficeComposerSheet: View {
                         Button { Task { await save() } } label: {
                             HStack(spacing: 8) { if busy { ProgressView().tint(.white) }; Text(editing == nil ? T("Create office") : T("Save")) }
                         }.buttonStyle(NexusPrimaryButton()).disabled(busy || !canSave)
+                        if editing != nil {
+                            // Refused by the server once anybody has checked in here (the rows point at the
+                            // office); the reason comes back in `err` and says to switch it off instead.
+                            Button(role: .destructive) { confirmDelete = true } label: {
+                                Label(T("Delete office"), systemImage: "trash").font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger)
+                                    .frame(maxWidth: .infinity).padding(.vertical, 10)
+                            }
+                            .buttonStyle(.plain).disabled(busy)
+                            .confirmationDialog(T("Delete this office?"), isPresented: $confirmDelete, titleVisibility: .visible) {
+                                Button(T("Delete"), role: .destructive) { Task { await remove() } }
+                            } message: { Text(T("Only possible while no attendance has been recorded at it.")) }
+                        }
                     }.padding(20)
                 }
             }
@@ -150,6 +163,13 @@ struct OfficeComposerSheet: View {
     private func useMyLocation() async {
         if let fix = try? await loc.currentFix() { lat = String(fix.latitude); lng = String(fix.longitude) }
     }
+    private func remove() async {
+        guard let editing else { return }
+        busy = true; err = nil; defer { busy = false }
+        do { _ = try await APIClient.shared.deleteOffice(id: editing.id); await onSaved(); dismiss() }
+        catch { err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't delete the office.") }
+    }
+
     private func save() async {
         busy = true; err = nil; defer { busy = false }
         var fields: [String: Any] = [
@@ -157,11 +177,13 @@ struct OfficeComposerSheet: View {
             "address": address.isEmpty ? NSNull() : address,
             "latitude": Double(lat) ?? 0, "longitude": Double(lng) ?? 0,
             "radiusMeters": Int(radius) ?? 100, "lateGraceMinutes": min(180, Int(grace) ?? 0),
-            "shiftStartTime": "09:00", "shiftEndTime": "18:00"
         ]
         do {
+            // The shift is only sent on CREATE. On edit it used to send 09:00–18:00 every time, which
+            // silently reset HQ's 15:00 shift whenever somebody fixed its radius.
             if let editing { try await APIClient.shared.updateOffice(id: editing.id, fields: fields) }
             else { fields.removeValue(forKey: "address"); if !address.isEmpty { fields["address"] = address }
+                   fields["shiftStartTime"] = "09:00"; fields["shiftEndTime"] = "18:00"
                    try await APIClient.shared.createOffice(fields: fields) }
             await onSaved(); dismiss()
         } catch { err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't save the office.") }

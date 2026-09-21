@@ -128,7 +128,8 @@ struct AttendanceView: View {
                     // permission got a card that could do nothing but 403.
                     AttendanceRequestsCard(canReview: canReview,
                                            canReviewOffsite: today?.canManageAttendance ?? false)
-                    StreakBoardCard(canManage: today?.canManageAttendance ?? false)
+                    StreakBoardCard(canManage: today?.canManageAttendance ?? false,
+                                    canReview: today?.canReviewAttendanceRequests ?? false)
                     if today?.canManageAttendance == true { OfficesCard() }
                 }
                 .padding(16)
@@ -781,7 +782,16 @@ enum AttTone {
 
 struct StreakBoardCard: View {
     let canManage: Bool
+    /// A manager with direct reports: the server scopes the workspace board to them (and, since
+    /// 21 Sep 2026, to the manager too). Without this the card asked for `scope=me` and a manager
+    /// never saw their people's month on the phone.
+    var canReview: Bool = false
+    private var wide: Bool { canManage || canReview }
     @Environment(AuthStore.self) private var auth
+    // Month export — the same workbook the web's "Export" hands out, one sheet per month, everybody.
+    @State private var exporting = false
+    @State private var exportItem: ShareItem?
+    @State private var exportError: String?
     /// Built once per load, not per read. It used to be a computed property — a `Dictionary(grouping:)`
     /// plus a `localizedCaseInsensitiveCompare` sort (ICU collation, the slowest comparator Foundation
     /// has) — and `body` reads it three times: the empty check, the name column and the cell grid.
@@ -822,11 +832,23 @@ struct StreakBoardCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(canManage ? T("Crew streak board") : T("Your attendance history")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
+                    Text(wide ? T("Crew streak board") : T("Your attendance history")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
                     Text(monthLabel.capitalized).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer()
                 HStack(spacing: 2) {
+                    if wide {
+                        Button { Task { await exportMonth() } } label: {
+                            if exporting { ProgressView().scaleEffect(0.7).frame(width: 30, height: 30) }
+                            else { Image(systemName: "square.and.arrow.up").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.foreground).frame(width: 30, height: 30) }
+                        }
+                        .disabled(exporting)
+                        .accessibilityLabel(T("Export this month as a spreadsheet"))
+                        .sheet(item: $exportItem) { item in ActivityView(items: [item.url]) }
+                        .alert(T("Export failed"), isPresented: Binding(get: { exportError != nil }, set: { if !$0 { exportError = nil } })) {
+                            Button("OK") { exportError = nil }
+                        } message: { Text(exportError ?? "") }
+                    }
                     Button { monthOffset -= 1 } label: { Image(systemName: "chevron.left").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.foreground).frame(width: 30, height: 30) }
                     Button { if monthOffset < 0 { monthOffset += 1 } } label: { Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundStyle(monthOffset < 0 ? NX.foreground : NX.mutedFg.opacity(0.4)).frame(width: 30, height: 30) }.disabled(monthOffset >= 0)
                 }
@@ -842,7 +864,9 @@ struct StreakBoardCard: View {
             }
         }
         .nexusCard()
-        .task(id: monthOffset) { await load() }
+        // Keyed on the permissions too: /attendance/today lands AFTER the first paint, and a board
+        // fetched with `scope=me` before canManage flipped stayed that way until the month changed.
+        .task(id: "\(monthOffset)|\(wide)") { await load() }
         .sheet(item: $selectedRow) { row in
             RecordActionsSheet(row: row) { await load() }
         }
@@ -899,10 +923,23 @@ struct StreakBoardCard: View {
         }
     }
 
+    /// One month, everybody, as xlsx — into the share sheet so it can go to Files, WhatsApp or Mail.
+    private func exportMonth() async {
+        exporting = true; defer { exporting = false }
+        let dest = FileManager.default.temporaryDirectory.appendingPathComponent("absensi-\(monthKey).xlsx")
+        try? FileManager.default.removeItem(at: dest)
+        let req = APIClient.shared.makeRequest("/api/attendance/history?scope=workspace&month=\(monthKey)&format=xlsx")
+        do {
+            let response = try await APIClient.shared.download(req, to: dest)
+            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) { exportError = "Server error (\(http.statusCode))."; return }
+            exportItem = ShareItem(url: dest)
+        } catch { exportError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't download the file.") }
+    }
+
     private func load() async {
         loading = true
         do {
-            let fetched = try await APIClient.shared.attendanceHistory(scope: canManage ? "workspace" : "me", month: monthKey)
+            let fetched = try await APIClient.shared.attendanceHistory(scope: wide ? "workspace" : "me", month: monthKey)
             members = Self.buildMembers(fetched)
         }
         catch APIError.unauthorized { auth.logout() }   // leaves the board as it was, same as before

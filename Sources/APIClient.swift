@@ -1907,6 +1907,12 @@ struct APIClient {
         return true
     }
     @discardableResult
+    func deleteOffice(id: String) async throws -> Bool {
+        _ = try await run(makeRequest("/api/attendance/offices/\(id)", method: "DELETE"), decode: SuccessResponse.self)
+        return true
+    }
+
+    @discardableResult
     func updateOffice(id: String, fields: [String: Any]) async throws -> Bool {
         var req = makeRequest("/api/attendance/offices/\(id)", method: "PATCH")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
