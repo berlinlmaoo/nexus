@@ -39,10 +39,13 @@ struct LivenessCaptureView: View {
     @State private var finishing = false
     @State private var checkDrawn: CGFloat = 0
     @State private var successScale: CGFloat = 0.6
-    @State private var manualLight = false
+    /// nil = follow the room, true = forced on, false = forced off. Three states, because the
+    /// automatic light latches (see `LivenessEngine.measureLight`) and a plain bool could then
+    /// never turn it off again.
+    @State private var manualLight: Bool?
     @State private var savedBrightness: CGFloat?
 
-    private var lightOn: Bool { manualLight || engine.dark }
+    private var lightOn: Bool { manualLight ?? engine.dark }
     private var ink: Color { lightOn ? .black : .white }
     private var inkSoft: Color { lightOn ? .black.opacity(0.7) : .white.opacity(0.78) }
     private var done: Bool { engine.captured != nil }
@@ -82,7 +85,10 @@ struct LivenessCaptureView: View {
         .preferredColorScheme(.dark)
         .onAppear { engine.start(); pulse = true; sweep = true; demo = true }
         .onDisappear { engine.stop(); restoreBrightness() }
-        .onChange(of: lightOn) { _, on in on ? boostBrightness() : restoreBrightness() }
+        .onChange(of: lightOn) { _, on in
+            engine.screenLit = on
+            on ? boostBrightness() : restoreBrightness()
+        }
         .onChange(of: engine.captured) { _, data in
             guard let data, !finishing else { return }
             finishing = true
@@ -255,7 +261,7 @@ struct LivenessCaptureView: View {
                 Spacer()
                 Text(T("Face check")).font(NXFont.text(13, .semibold)).foregroundStyle(inkSoft)
                 Spacer()
-                Button { manualLight.toggle(); Haptics.tap() } label: {
+                Button { manualLight = !lightOn; Haptics.tap() } label: {
                     Image(systemName: lightOn ? "sun.max.fill" : "sun.max").font(.system(size: 15, weight: .bold))
                         .foregroundStyle(lightOn ? Color.orange : ink)
                         .frame(width: 36, height: 36).background(ink.opacity(0.14), in: Circle())
@@ -431,6 +437,8 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
     private var finished = false
     private var lastPublish = Date.distantPast
     private var isDark = false
+    private var darkSamples = 0
+    private var lightBlockedUntil = Date.distantPast
 
     private static let frontal = 0.20   // radians; Vision's yaw
     private static let turned = 0.38
@@ -447,6 +455,12 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
     }
 
     func stop() { queue.async { if self.session.isRunning { self.session.stopRunning() } } }
+
+    /// The screen light is on, so the camera is looking at a face lit by the screen: whatever it
+    /// measures now says nothing about the room. Set by the view.
+    var screenLit = false {
+        didSet { queue.async { self.lightBlockedUntil = Date().addingTimeInterval(0.6) } }
+    }
 
     private func configure() {
         queue.async {
@@ -641,11 +655,20 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
         return (a + b) / 2
     }
 
-    /// Mean brightness of a coarse grid of pixels. Dark below ~55/255, light again above ~75, so
-    /// the screen light does not flicker on the threshold. When no face has been found for a couple
-    /// of seconds, merely dim (below ~100) already counts as dark: if the detector cannot see a
-    /// face, more light is the one thing that helps.
+    /// Mean brightness of a coarse grid of pixels, and the decision to light the screen.
+    ///
+    /// The light LATCHES: once on, it stays on for the rest of this face check. It cannot be
+    /// switched off by what it measures, because what it measures is its own light — a white screen
+    /// lifts the face out of the dark, the room reads as bright, the light goes off, the room is
+    /// dark again. That loop is a strobe in someone's eyes, not a brightness control. A room does
+    /// not get brighter by itself mid-check anyway, and the button in the corner is there for the
+    /// one person who wants it off.
+    ///
+    /// Turning ON still needs three dark samples in a row (~1 s), so a hand passing the lens does
+    /// not trigger it. Merely dim counts as dark once no face has been found for a couple of
+    /// seconds: if the detector cannot see a face, more light is the one thing that helps.
     private func measureLight(_ pixel: CVPixelBuffer) {
+        guard !isDark, !screenLit, Date() >= lightBlockedUntil else { return }
         CVPixelBufferLockBaseAddress(pixel, .readOnly)
         defer { CVPixelBufferUnlockBaseAddress(pixel, .readOnly) }
         guard let base = CVPixelBufferGetBaseAddress(pixel) else { return }
@@ -659,11 +682,11 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
             n += 1
         } }
         let mean = n > 0 ? sum / n : 128
-        let wasDark = isDark
         let struggling = lostFrames > 60
-        if mean < 55 || (struggling && mean < 100) { isDark = true }
-        else if mean > (struggling ? 120 : 75) { isDark = false }
-        if isDark != wasDark { let d = isDark; DispatchQueue.main.async { self.dark = d } }
+        if mean < 55 || (struggling && mean < 100) { darkSamples += 1 } else { darkSamples = 0 }
+        guard darkSamples >= 3 else { return }
+        isDark = true
+        DispatchQueue.main.async { self.dark = true }
     }
 
     private static func hasUprightFace(_ cg: CGImage) -> Bool {
