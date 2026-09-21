@@ -14,8 +14,11 @@ import { Camera, Check, Eye, EyeOff, Loader2, ScanFace, Sun, X } from "lucide-re
  * must go the opposite way, which is what liveness needs — two poses a photo cannot produce — and
  * it cannot be wrong about left and right on a mirrored preview.
  *
- * The bright window follows the detected face. In the dark the rest of the screen turns white, so
- * the phone is its own ring light; it also switches on by hand.
+ * The window is a fixed oval — deliberately, like Face ID: a still oval people move into cannot be
+ * wrong. Motion is spent on feedback: a sweep runs round the ring while a step is in progress, each
+ * finished step fills with a spring, and the end is the Face ID moment — ring closes green and the
+ * check draws itself. In the dark the rest of the screen turns white, so the phone is its own ring
+ * light; it also switches on by hand.
  */
 const CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21";
 const MODEL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
@@ -227,15 +230,7 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
   // and mirrored, so x is flipped and the cover scale/offset undone.
   const homeW = Math.min(view.w * 0.72, 300), homeH = homeW * 1.32;
   const home = { cx: view.w / 2, cy: view.h * 0.44, rx: homeW / 2, ry: homeH / 2 };
-  let oval = home;
-  if (box && view.vw > 0 && view.vh > 0) {
-    const scale = Math.max(view.w / view.vw, view.h / view.vh);
-    const dw = view.vw * scale, dh = view.vh * scale;
-    const ox = (view.w - dw) / 2, oy = (view.h - dh) / 2;
-    const fx = ox + (1 - box.x - box.w) * dw, fy = oy + box.y * dh, fw = box.w * dw, fh = box.h * dh;
-    const w = Math.min(Math.max(fw * 1.15, 140), homeW * 1.1), h = Math.min(Math.max(fh * 1.25, w * 1.2), homeH * 1.15);
-    oval = { cx: fx + fw / 2, cy: fy + fh / 2 - fh * 0.04, rx: w / 2, ry: h / 2 };
-  }
+  const oval = home;
   const spring = reduce ? { duration: 0 } : { type: "spring" as const, stiffness: 320, damping: 32 };
   const dot = Math.max(-92, Math.min(92, yaw * 420));
 
@@ -260,7 +255,7 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
               <motion.ellipse key={i} cx={0} cy={0} fill="none"
                 stroke={segColor[s]} strokeWidth={s === "current" ? 7 : 5} strokeLinecap="round"
                 pathLength={100} strokeDasharray="23.5 76.5" strokeDashoffset={-(75 + i * 25 + 0.75)}
-                animate={{ rx: oval.rx + 10, ry: oval.ry + 10, opacity: s === "current" && !reduce ? [1, 0.45, 1] : 1 }}
+                animate={{ rx: oval.rx + 10, ry: oval.ry + 10, opacity: done ? 0 : s === "current" && !reduce ? [1, 0.55, 1] : 1 }}
                 transition={{ rx: spring, ry: spring, opacity: s === "current" && !reduce ? { duration: 1.8, repeat: Infinity, ease: "easeInOut" } : { duration: 0.2 } }}
               />
             );
@@ -269,9 +264,14 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
             <motion.ellipse cx={0} cy={0} fill="none" stroke="rgba(251,146,60,0.9)" strokeWidth={3} strokeDasharray="8 10"
               animate={{ rx: oval.rx + 22, ry: oval.ry + 22 }} transition={spring} />
           )}
+          {!done && !reduce && (
+            <motion.ellipse cx={0} cy={0} rx={oval.rx + 10} ry={oval.ry + 10} fill="none" stroke="hsl(var(--primary))" strokeWidth={9} strokeLinecap="round"
+              pathLength={100} strokeDasharray="14 86" opacity={presence === "ok" ? 0.9 : 0.35}
+              animate={{ strokeDashoffset: [0, -100] }} transition={{ duration: 2.4, repeat: Infinity, ease: "linear" }} />
+          )}
           {done && (
-            <motion.ellipse cx={0} cy={0} rx={oval.rx + 10} ry={oval.ry + 10} fill="none" stroke="#22c55e" strokeWidth={7}
-              initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 260, damping: 20 }} />
+            <motion.ellipse cx={0} cy={0} rx={oval.rx + 10} ry={oval.ry + 10} fill="none" stroke="#22c55e" strokeWidth={7} strokeLinecap="round"
+              pathLength={100} strokeDasharray="100 100" initial={{ strokeDashoffset: 100 }} animate={{ strokeDashoffset: 0 }} transition={{ duration: 0.45, ease: "easeOut" }} />
           )}
         </motion.g>
       </svg>
@@ -279,7 +279,12 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
       <AnimatePresence>
         {done && (
           <motion.div className="absolute" style={{ left: oval.cx, top: oval.cy, transform: "translate(-50%, -50%)" }} initial={{ scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 300, damping: 18 }}>
-            <div className="grid h-28 w-28 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-emerald-500 text-white shadow-2xl"><Check className="h-16 w-16" strokeWidth={3} /></div>
+            <div className="grid h-28 w-28 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-emerald-500 text-white shadow-[0_0_48px_rgba(34,197,94,0.5)]">
+              <svg viewBox="0 0 100 100" className="h-14 w-14" aria-hidden>
+                <motion.path d="M12 55 L42 84 L90 22" fill="none" stroke="white" strokeWidth={14} strokeLinecap="round" strokeLinejoin="round"
+                  initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.38, delay: 0.12, ease: "easeOut" }} />
+              </svg>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
