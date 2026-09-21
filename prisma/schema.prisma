@@ -1013,6 +1013,9 @@ model OfficeLocation {
   lateGraceMinutes       Int      @default(15)
   earlyLeaveGraceMinutes Int      @default(0)
   isActive               Boolean  @default(true)
+  // Deleted from the list but kept for history: attendance rows point here and must keep the
+  // office's name. Archived offices never appear in pickers, lists or geofence checks.
+  archivedAt DateTime?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
