@@ -1,34 +1,33 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Camera, Check, Eye, EyeOff, Loader2, ScanFace, Sun, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Camera, Check, Eye, EyeOff, Loader2, ScanFace, Sun, X } from "lucide-react";
 
 /**
  * The attendance selfie, taken here with a liveness check in front of it.
  *
  * A still photo proves a camera was pointed at something; this proves a person was in front of it:
- * look straight, turn to one side, turn to the other, blink. Face landmarks come from MediaPipe,
- * running in the browser — no frame leaves the device except the one selfie captured at the end.
- * It does not know WHOSE face this is; that would be enrolment, a different decision.
+ * look straight, turn right, turn left, blink. Face landmarks come from MediaPipe, running in the
+ * browser — no frame leaves the device except the one selfie captured at the end. It does not know
+ * WHOSE face this is; that would be enrolment, a different decision.
  *
- * Turning direction is deliberately not prescribed: the first turn may go either way and the second
- * must go the opposite way, which is what liveness needs — two poses a photo cannot produce — and
- * it cannot be wrong about left and right on a mirrored preview.
+ * "Right" and "left" are instructions, not requirements: the first turn is accepted either way and
+ * the second must be the opposite — what liveness needs, two poses a photo cannot produce — so a
+ * mirrored preview can never make the words fight the check. The bar under the window fills as the
+ * head turns, whichever way it goes.
  *
- * The window is a fixed oval — deliberately, like Face ID: a still oval people move into cannot be
- * wrong. Motion is spent on feedback: a sweep runs round the ring while a step is in progress, each
- * finished step fills with a spring, and the end is the Face ID moment — ring closes green and the
- * check draws itself. In the dark the rest of the screen turns white, so the phone is its own ring
- * light; it also switches on by hand.
+ * The bright window follows the detected face. The end is the Face ID moment: the ring closes green
+ * and the check draws itself. In the dark the rest of the screen turns white, so the phone is its own
+ * ring light; it also switches on by hand.
  */
 const CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21";
 const MODEL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 
-type Step = 0 | 1 | 2 | 3 | 4; // straight, side A, side B, blink, hold still
+type Step = 0 | 1 | 2 | 3 | 4; // straight, right, left, blink, hold still
 type Presence = "none" | "small" | "off" | "ok";
-const CHIPS = ["Straight", "Side", "Other side", "Blink"];
-const TITLES = ["Look straight at the camera", "Turn your head to one side", "Now turn to the other side", "Blink", "Hold still"];
-const SUBS = ["Keep your face inside the window.", "Slowly, until the dot reaches the end.", "Same again, the other way.", "Look straight and blink once.", "Look straight, eyes open."];
-const STALLED = ["Keep your face inside the window, in good light.", "Turn a bit further, until the dot reaches the end.", "Turn a bit further, until the dot reaches the end.", "Close your eyes for a moment, then open them. Glasses can make this harder.", "Keep your face inside the window, in good light."];
+const CHIPS = ["Straight", "Right", "Left", "Blink"];
+const TITLES = ["Look straight at the camera", "Turn your head to the right", "Now turn to the left", "Blink once", "Hold still"];
+const SUBS = ["Keep your face inside the window.", "Slowly, like the arrow, until the bar fills up.", "Same again, the other way.", "Look straight, close your eyes, then open them.", "Look straight, eyes open."];
+const STALLED = ["Keep your face inside the window, in good light.", "Turn a bit further, until the bar fills up.", "Turn a bit further, until the bar fills up.", "Close your eyes for a moment, then open them. Glasses can make this harder.", "Keep your face inside the window, in good light."];
 
 const FRONTAL = 0.07; // nose offset over face width
 const TURNED = 0.18;
@@ -52,9 +51,8 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
   const [done, setDone] = useState(false);
   const [presence, setPresence] = useState<Presence>("none");
   const [box, setBox] = useState<Box | null>(null);
-  const [yaw, setYaw] = useState(0);
+  const [progress, setProgress] = useState(0);
   const [closed, setClosed] = useState(false);
-  const [firstSide, setFirstSide] = useState(0);
   const [stalled, setStalled] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [flash, setFlash] = useState(false);
@@ -75,11 +73,11 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
     let stream: MediaStream | null = null;
     let landmarker: { detectForVideo: (v: HTMLVideoElement, t: number) => Result; close?: () => void } | null = null;
     // Loop-confined state; React state is only what the screen draws.
-    const st = { step: 0 as Step, hold: 0, side: 0, blinkSeen: false, lost: 0, stepStart: 0, cooldown: 0, finished: false, lastYaw: 0, stalled: false, frames: 0, dark: false };
+    const st = { step: 0 as Step, hold: 0, side: 0, blinkSeen: false, lost: 0, stepStart: 0, cooldown: 0, finished: false, lastProgress: 0, stalled: false, frames: 0, dark: false, skipNext: false };
     const lumaCanvas = document.createElement("canvas"); lumaCanvas.width = 24; lumaCanvas.height = 24;
 
-    const setStepAnim = (s: Step) => { st.step = s; st.hold = 0; st.blinkSeen = false; st.stepStart = performance.now(); st.cooldown = performance.now() + 500; st.stalled = false; setStalled(false); setNotice(null); setStep(s); try { navigator.vibrate?.(20); } catch { /* not everywhere */ } };
-    const reset = (why: string) => { st.side = 0; setFirstSide(0); setStepAnim(0); setNotice(why); setTimeout(() => setNotice((n) => (n === why ? null : n)), 2500); };
+    const setStepAnim = (s: Step) => { st.step = s; st.hold = 0; st.blinkSeen = false; st.stepStart = performance.now(); st.cooldown = performance.now() + 500; st.stalled = false; setStalled(false); setNotice(null); setProgress(0); setStep(s); try { navigator.vibrate?.(20); } catch { /* not everywhere */ } };
+    const reset = (why: string) => { st.side = 0; setStepAnim(0); setNotice(why); setTimeout(() => setNotice((n) => (n === why ? null : n)), 2500); };
 
     const measureLight = (v: HTMLVideoElement) => {
       const ctx = lumaCanvas.getContext("2d", { willReadFrequently: true });
@@ -105,12 +103,12 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
       const c = document.createElement("canvas");
       c.width = Math.round(v.videoWidth * scale); c.height = Math.round(v.videoHeight * scale);
       c.getContext("2d")!.drawImage(v, 0, 0, c.width, c.height);
-      setFlash(true); setTimeout(() => setFlash(false), 160);
       setDone(true);
+      setTimeout(() => { setFlash(true); setTimeout(() => setFlash(false), 140); }, 180);
       c.toBlob((blob) => {
         if (!blob) { st.finished = false; setDone(false); return; }
         const file = new File([blob], "selfie.jpg", { type: "image/jpeg" });
-        setTimeout(() => { if (alive) onCapture(file); }, 800);
+        setTimeout(() => { if (alive) onCapture(file); }, 1000);
       }, "image/jpeg", 0.8);
     };
 
@@ -121,7 +119,7 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
         st.lost += 1; st.hold = 0;
         // Gone for ~1.5 s after the first move: whoever comes back starts over.
         if (st.lost > 40 && st.step > 0) reset("Face lost. Let's start again.");
-        setPresence("none"); setBox(null); setYaw(0); setClosed(false);
+        setPresence("none"); setBox(null); setProgress(0); setClosed(false);
         return;
       }
       st.lost = 0;
@@ -132,39 +130,44 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
       let presence: Presence = "ok";
       if (widthPx < 0.26 * Math.min(v.videoWidth, v.videoHeight)) presence = "small";
       else if (Math.abs(cx - 0.5) > 0.19 || Math.abs(cy - 0.5) > 0.22) presence = "off";
-      const yawRatio = (nose.x - cx) / faceW;
+      const yaw = (nose.x - cx) / faceW;
       const cats = res.faceBlendshapes?.[0]?.categories ?? [];
       const blink = (name: string) => cats.find((c) => c.categoryName === name)?.score ?? 0;
       const blinkScore = (blink("eyeBlinkLeft") + blink("eyeBlinkRight")) / 2;
       const eyesClosed = blinkScore > BLINK_CLOSED;
+      // How far the head has turned toward what this step wants: any side for the first turn, the
+      // opposite side for the second.
+      let prog = 0;
+      if (st.step === 1) prog = Math.min(1, Math.abs(yaw) / TURNED);
+      else if (st.step === 2) prog = (yaw > 0 ? 1 : -1) === -st.side ? Math.min(1, Math.abs(yaw) / TURNED) : 0;
       setPresence(presence);
       setBox({ x: Math.min(left.x, right.x), y: top.y, w: faceW, h: faceH });
-      if (Math.abs(yawRatio - st.lastYaw) > 0.005) { st.lastYaw = yawRatio; setYaw(yawRatio); }
+      if (Math.abs(prog - st.lastProgress) > 0.02) { st.lastProgress = prog; setProgress(prog); }
       setClosed(eyesClosed);
       if (presence !== "ok" || now < st.cooldown) { st.hold = 0; return; }
       if (!st.stalled && now - st.stepStart > 15000) { st.stalled = true; setStalled(true); }
       const held = (n: number) => { st.hold += 1; return st.hold >= n; };
       switch (st.step) {
         case 0:
-          if (Math.abs(yawRatio) >= FRONTAL) { st.hold = 0; return; }
+          if (Math.abs(yaw) >= FRONTAL) { st.hold = 0; return; }
           if (held(8)) setStepAnim(1);
           return;
         case 1:
-          if (Math.abs(yawRatio) < TURNED) { st.hold = 0; return; }
-          st.side = yawRatio > 0 ? 1 : -1;
-          if (held(3)) { setFirstSide(st.side); setStepAnim(2); }
+          if (Math.abs(yaw) < TURNED) { st.hold = 0; return; }
+          st.side = yaw > 0 ? 1 : -1;
+          if (held(3)) setStepAnim(2);
           return;
         case 2:
-          if (Math.abs(yawRatio) < TURNED || (yawRatio > 0 ? 1 : -1) !== -st.side) { st.hold = 0; return; }
+          if (Math.abs(yaw) < TURNED || (yaw > 0 ? 1 : -1) !== -st.side) { st.hold = 0; return; }
           if (held(3)) setStepAnim(3);
           return;
         case 3:
-          if (Math.abs(yawRatio) > FRONTAL + 0.06) return;
+          if (Math.abs(yaw) > FRONTAL + 0.06) return;
           if (!st.blinkSeen) { if (blinkScore > BLINK_CLOSED) st.blinkSeen = true; }
           else if (blinkScore < BLINK_OPEN) setStepAnim(4);
           return;
         case 4:
-          if (Math.abs(yawRatio) >= FRONTAL || eyesClosed) { st.hold = 0; return; }
+          if (Math.abs(yaw) >= FRONTAL || eyesClosed) { st.hold = 0; return; }
           if (held(4)) capture(v);
       }
     };
@@ -199,7 +202,12 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
         lastT = t;
         st.frames += 1;
         if (st.frames % 15 === 0) measureLight(v);
+        // Slow devices: when a pass took over 40 ms, let the next frame go by — never during the
+        // blink step, where a blink is only a few frames long.
+        if (st.skipNext && st.step !== 3) { st.skipNext = false; return; }
+        const started = performance.now();
         try { evaluate(landmarker!.detectForVideo(v, t), v); } catch { /* one bad frame */ }
+        st.skipNext = performance.now() - started > 40;
       };
       raf = requestAnimationFrame(loop);
     })();
@@ -230,9 +238,18 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
   // and mirrored, so x is flipped and the cover scale/offset undone.
   const homeW = Math.min(view.w * 0.72, 300), homeH = homeW * 1.32;
   const home = { cx: view.w / 2, cy: view.h * 0.44, rx: homeW / 2, ry: homeH / 2 };
-  const oval = home;
+  let oval = home;
+  if (box && view.vw > 0 && view.vh > 0) {
+    const scale = Math.max(view.w / view.vw, view.h / view.vh);
+    const dw = view.vw * scale, dh = view.vh * scale;
+    const ox = (view.w - dw) / 2, oy = (view.h - dh) / 2;
+    const fx = ox + (1 - box.x - box.w) * dw, fy = oy + box.y * dh, fw = box.w * dw, fh = box.h * dh;
+    const w = Math.min(Math.max(fw * 1.3, 150), homeW * 1.15), h = Math.min(Math.max(fh * 1.5, w * 1.2), homeH * 1.2);
+    oval = { cx: fx + fw / 2, cy: fy + fh / 2 - fh * 0.08, rx: w / 2, ry: h / 2 };
+  }
   const spring = reduce ? { duration: 0 } : { type: "spring" as const, stiffness: 320, damping: 32 };
-  const dot = Math.max(-92, Math.min(92, yaw * 420));
+  const turning = (step === 1 || step === 2) && !done;
+  const rightward = step === 1;
 
   return (
     <motion.div className={`fixed inset-0 z-[80] bg-black ${ink}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -249,6 +266,11 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
         {/* Ring: four arcs, starting at the top and going clockwise (dash offset, not a rotation —
             a rotated ellipse swaps its width and height). */}
         <motion.g animate={{ x: oval.cx, y: oval.cy }} transition={spring}>
+          {!done && !reduce && (
+            <motion.ellipse cx={0} cy={0} rx={oval.rx + 10} ry={oval.ry + 10} fill="none" stroke="hsl(var(--primary))" strokeWidth={9} strokeLinecap="round"
+              pathLength={100} strokeDasharray="14 86" opacity={presence === "ok" ? 0.9 : 0.35}
+              animate={{ strokeDashoffset: [0, -100] }} transition={{ duration: 2.4, repeat: Infinity, ease: "linear" }} />
+          )}
           {[0, 1, 2, 3].map((i) => {
             const s = segState(i);
             return (
@@ -264,11 +286,6 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
             <motion.ellipse cx={0} cy={0} fill="none" stroke="rgba(251,146,60,0.9)" strokeWidth={3} strokeDasharray="8 10"
               animate={{ rx: oval.rx + 22, ry: oval.ry + 22 }} transition={spring} />
           )}
-          {!done && !reduce && (
-            <motion.ellipse cx={0} cy={0} rx={oval.rx + 10} ry={oval.ry + 10} fill="none" stroke="hsl(var(--primary))" strokeWidth={9} strokeLinecap="round"
-              pathLength={100} strokeDasharray="14 86" opacity={presence === "ok" ? 0.9 : 0.35}
-              animate={{ strokeDashoffset: [0, -100] }} transition={{ duration: 2.4, repeat: Infinity, ease: "linear" }} />
-          )}
           {done && (
             <motion.ellipse cx={0} cy={0} rx={oval.rx + 10} ry={oval.ry + 10} fill="none" stroke="#22c55e" strokeWidth={7} strokeLinecap="round"
               pathLength={100} strokeDasharray="100 100" initial={{ strokeDashoffset: 100 }} animate={{ strokeDashoffset: 0 }} transition={{ duration: 0.45, ease: "easeOut" }} />
@@ -278,7 +295,7 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
 
       <AnimatePresence>
         {done && (
-          <motion.div className="absolute" style={{ left: oval.cx, top: oval.cy, transform: "translate(-50%, -50%)" }} initial={{ scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 300, damping: 18 }}>
+          <motion.div className="absolute" style={{ left: oval.cx, top: oval.cy }} initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 300, damping: 18 }}>
             <div className="grid h-28 w-28 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-emerald-500 text-white shadow-[0_0_48px_rgba(34,197,94,0.5)]">
               <svg viewBox="0 0 100 100" className="h-14 w-14" aria-hidden>
                 <motion.path d="M12 55 L42 84 L90 22" fill="none" stroke="white" strokeWidth={14} strokeLinecap="round" strokeLinejoin="round"
@@ -290,24 +307,30 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
       </AnimatePresence>
       {flash && <div className="absolute inset-0 bg-white/85" />}
 
-      {/* Gauge under the home window: a dot that follows the head, two zones to reach; an eye for the blink. */}
-      <div className="absolute left-1/2 -translate-x-1/2" style={{ top: home.cy + home.ry + 30 }}>
-        {(step === 1 || step === 2) && !done && (
-          <div className="relative h-5 w-[200px]">
-            <div className={`absolute inset-x-0 inset-y-1 rounded-full ${lightOn ? "bg-black/15" : "bg-white/20"}`} />
-            {[-1, 1].map((side) => {
-              const reached = firstSide === side;
-              const wanted = step === 2 && firstSide === -side;
-              return (
-                <motion.div key={side} className={`absolute top-0.5 h-4 w-9 rounded-full ${reached ? "bg-emerald-500" : wanted ? "bg-primary" : lightOn ? "bg-black/30" : "bg-white/35"}`}
-                  style={side < 0 ? { left: 0 } : { right: 0 }}
-                  animate={wanted && !reduce ? { opacity: [1, 0.5, 1] } : { opacity: 1 }} transition={wanted && !reduce ? { duration: 1.4, repeat: Infinity } : {}} />
-              );
-            })}
-            <motion.div className={`absolute top-0 h-5 w-5 rounded-full shadow ${lightOn ? "bg-black" : "bg-white"}`} style={{ left: "calc(50% - 10px)" }} animate={{ x: dot }} transition={{ type: "spring", stiffness: 400, damping: 30 }} />
+      {/* Gauge under the home window: what to do, and how far along it is. */}
+      <div className="absolute left-1/2 flex -translate-x-1/2 flex-col items-center gap-2.5" style={{ top: home.cy + home.ry + 34 }}>
+        {turning && (
+          <>
+            <div className="flex items-center gap-3">
+              {!rightward && <motion.div animate={reduce ? {} : { x: [0, -8, 0] }} transition={{ duration: 1.1, repeat: Infinity }}><ArrowLeft className="h-8 w-8 text-primary" strokeWidth={3} /></motion.div>}
+              <motion.div animate={reduce ? {} : { rotateY: rightward ? [0, 38, 0] : [0, -38, 0] }} transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut" }} style={{ transformPerspective: 300 }}>
+                <ScanFace className="h-9 w-9" />
+              </motion.div>
+              {rightward && <motion.div animate={reduce ? {} : { x: [0, 8, 0] }} transition={{ duration: 1.1, repeat: Infinity }}><ArrowRight className="h-8 w-8 text-primary" strokeWidth={3} /></motion.div>}
+            </div>
+            <div className={`relative h-2.5 w-[200px] overflow-hidden rounded-full ${lightOn ? "bg-black/15" : "bg-white/20"}`}>
+              <motion.div className={`absolute inset-y-0 left-0 rounded-full ${progress >= 1 ? "bg-emerald-500" : "bg-primary"}`} animate={{ width: `${Math.max(5, progress * 100)}%` }} transition={{ type: "spring", stiffness: 400, damping: 30 }} />
+            </div>
+          </>
+        )}
+        {step === 3 && !done && (
+          <div className="flex flex-col items-center gap-1">
+            <motion.div animate={reduce ? {} : { opacity: [1, 0.25, 1] }} transition={{ duration: 1.1, repeat: Infinity }} className={closed ? "text-emerald-400" : ""}>
+              {closed ? <EyeOff className="h-9 w-9" /> : <Eye className="h-9 w-9" />}
+            </motion.div>
+            <div className={`text-[11px] font-semibold ${inkSoft}`}>close · open</div>
           </div>
         )}
-        {step === 3 && !done && (closed ? <EyeOff className="h-8 w-8" /> : <Eye className="h-8 w-8" />)}
         {step === 4 && !done && <Camera className="h-7 w-7" />}
         {step === 0 && !done && <ScanFace className="h-8 w-8 opacity-90" />}
       </div>
