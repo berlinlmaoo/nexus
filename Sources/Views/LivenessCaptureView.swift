@@ -15,17 +15,24 @@ import UIKit
 /// WHOSE face this is: that would need enrolment and a face template kept on the server, which is a
 /// different decision with its own privacy weight.
 ///
-/// The bright window follows the detected face, so the person sees what the check sees. In the
-/// dark — a club, a warehouse at night — the rest of the screen turns white and the display goes to
-/// full brightness: the phone becomes its own ring light. It also switches on by hand.
+/// The window is a fixed oval — deliberately. Two attempts at a window that follows the face put
+/// it beside the face or stretched it; a still oval that people move into is what Face ID does,
+/// and it cannot be wrong. Motion is spent on feedback instead: the ring breathes while it waits,
+/// a sweep runs round it while a step is in progress, each finished step fills with a spring, and
+/// the end is the Face ID moment — ring closes green, the check draws itself, one haptic.
+/// In the dark — a club, a warehouse at night — the rest of the screen turns white and the display
+/// goes to full brightness: the phone becomes its own ring light. It also switches on by hand.
 struct LivenessCaptureView: View {
     var onCapture: (Data) -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var engine = LivenessEngine()
     @State private var pulse = false
+    @State private var sweep = false
     @State private var flash = false
     @State private var finishing = false
+    @State private var checkDrawn: CGFloat = 0
+    @State private var successScale: CGFloat = 0.6
     @State private var manualLight = false
     @State private var savedBrightness: CGFloat?
 
@@ -39,7 +46,7 @@ struct LivenessCaptureView: View {
             CameraFeed(engine: engine).ignoresSafeArea()
             GeometryReader { geo in
                 let home = Self.ovalRect(in: geo.size)
-                let oval = trackedOval(home: home, in: geo.size)
+                let oval = home
                 ZStack {
                     // Everything but the face window is dimmed — or lit white when it's dark.
                     Rectangle().fill(lightOn ? Color.white.opacity(0.94) : Color.black.opacity(0.68))
@@ -50,10 +57,10 @@ struct LivenessCaptureView: View {
                         )
                         .compositingGroup()
                     ring(oval)
+                    if done { successMark.position(x: oval.midX, y: oval.midY) }
                     gauge.position(x: home.midX, y: home.maxY + 46)
                     if flash { Color.white.opacity(0.85) }
                 }
-                .animation(reduceMotion ? nil : .interactiveSpring(response: 0.26, dampingFraction: 0.86), value: engine.faceScreenRect)
                 .animation(.easeInOut(duration: 0.3), value: lightOn)
             }
             .ignoresSafeArea()
@@ -65,17 +72,21 @@ struct LivenessCaptureView: View {
             if engine.cameraDenied { deniedCard }
         }
         .preferredColorScheme(.dark)
-        .onAppear { engine.start(); pulse = true }
+        .onAppear { engine.start(); pulse = true; sweep = true }
         .onDisappear { engine.stop(); restoreBrightness() }
         .onChange(of: lightOn) { _, on in on ? boostBrightness() : restoreBrightness() }
         .onChange(of: engine.captured) { _, data in
             guard let data, !finishing else { return }
             finishing = true
-            withAnimation(.easeOut(duration: 0.12)) { flash = true }
+            // The Face ID beat: ring closes, check draws itself, a soft flash, then hand over.
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.72)) { successScale = 1 }
+            withAnimation(.easeOut(duration: 0.38).delay(0.12)) { checkDrawn = 1 }
             Task {
-                try? await Task.sleep(for: .milliseconds(140))
-                withAnimation(.easeIn(duration: 0.25)) { flash = false }
-                try? await Task.sleep(for: .milliseconds(650))
+                try? await Task.sleep(for: .milliseconds(180))
+                withAnimation(.easeOut(duration: 0.1)) { flash = true }
+                try? await Task.sleep(for: .milliseconds(120))
+                withAnimation(.easeIn(duration: 0.3)) { flash = false }
+                try? await Task.sleep(for: .milliseconds(700))
                 onCapture(data)
                 dismiss()
             }
@@ -89,19 +100,6 @@ struct LivenessCaptureView: View {
         return CGRect(x: (size.width - w) / 2, y: size.height * 0.44 - h / 2, width: w, height: h)
     }
 
-    /// The window hugs the detected face (a little room for hair and chin); without a face it rests
-    /// at its home position so people know where to put themselves.
-    ///
-    /// The rect is already in screen points: it comes from the camera's own face metadata, turned
-    /// into layer coordinates by the preview layer (`transformedMetadataObject`). No hand-made
-    /// rotation, mirror or crop arithmetic — two attempts at that put the window beside the face
-    /// or stretched it twice as tall as the face.
-    private func trackedOval(home: CGRect, in size: CGSize) -> CGRect {
-        guard let f = engine.faceScreenRect, f.width > 10, f.height > 10, f.width.isFinite, f.height.isFinite else { return home }
-        let w = min(max(f.width * 1.3, 150), home.width * 1.15)
-        let h = min(max(f.height * 1.5, w * 1.2), home.height * 1.2)
-        return CGRect(x: f.midX - w / 2, y: f.midY - f.height * 0.08 - h / 2, width: w, height: h)
-    }
 
     private var done: Bool { engine.captured != nil }
 
@@ -110,21 +108,32 @@ struct LivenessCaptureView: View {
     /// (a rotated ellipse swaps its width and height — that was the squashed ring).
     private func ring(_ oval: CGRect) -> some View {
         ZStack {
+            // A faint sweep running round the ring while a step is in progress — the "scanning"
+            // feel — and a slow breath of the whole ring while it waits for a face.
+            if !done && !reduceMotion {
+                Ellipse()
+                    .stroke(AngularGradient(colors: [.clear, .clear, NX.violet.opacity(0.9), .clear], center: .center),
+                            style: StrokeStyle(lineWidth: 9, lineCap: .round))
+                    .rotationEffect(.degrees(sweep ? 360 : 0))
+                    .animation(.linear(duration: 2.4).repeatForever(autoreverses: false), value: sweep)
+                    .opacity(engine.presence == .ok ? 0.9 : 0.35)
+            }
             ForEach(0..<4, id: \.self) { i in
                 let state = segmentState(i)
                 let from = CGFloat((i + 3) % 4) / 4
                 Ellipse()
                     .trim(from: from + 0.012, to: from + 0.25 - 0.012)
                     .stroke(color(for: state), style: StrokeStyle(lineWidth: state == .current ? 7 : 5, lineCap: .round))
-                    .opacity(state == .current && !reduceMotion ? (pulse ? 1 : 0.45) : 1)
-                    .animation(state == .current && !reduceMotion ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true) : .default, value: pulse)
+                    .opacity(state == .current && !reduceMotion ? (pulse ? 1 : 0.55) : 1)
+                    .animation(state == .current && !reduceMotion ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true) : .spring(response: 0.45, dampingFraction: 0.7), value: pulse)
+                    .opacity(done ? 0 : 1)
             }
             if done {
-                Ellipse().stroke(NX.success, lineWidth: 7)
-                    .transition(.scale(scale: 0.92).combined(with: .opacity))
-                Image(systemName: "checkmark").font(.system(size: 64, weight: .bold)).foregroundStyle(.white)
-                    .padding(28).background(NX.success, in: Circle())
-                    .transition(.scale(scale: 0.4).combined(with: .opacity))
+                // The four arcs become one closed green ring.
+                Ellipse().trim(from: 0, to: checkDrawn > 0 ? 1 : 0.001)
+                    .stroke(NX.success, style: StrokeStyle(lineWidth: 7, lineCap: .round))
+                    .rotationEffect(.degrees(-90))   // rotates a full ellipse: no aspect change when the whole ring is drawn
+                    .animation(.easeOut(duration: 0.45), value: checkDrawn)
             } else if engine.presence != .ok && engine.step != .capture {
                 Ellipse().stroke(Color.orange.opacity(0.9), style: StrokeStyle(lineWidth: 3, dash: [8, 10]))
                     .padding(-12)
@@ -132,9 +141,24 @@ struct LivenessCaptureView: View {
             }
         }
         .frame(width: oval.width + 20, height: oval.height + 20)
+        .scaleEffect(engine.presence == .ok || done || reduceMotion ? 1 : (pulse ? 1.015 : 0.985))
+        .animation(engine.presence == .ok || done || reduceMotion ? .spring(response: 0.4, dampingFraction: 0.75) : .easeInOut(duration: 1.6).repeatForever(autoreverses: true), value: pulse)
         .position(x: oval.midX, y: oval.midY)
         .animation(.spring(response: 0.45, dampingFraction: 0.7), value: done)
         .animation(.easeInOut(duration: 0.25), value: engine.presence)
+    }
+
+    /// The check that draws itself inside a green disc — the Face ID "done" moment.
+    private var successMark: some View {
+        ZStack {
+            Circle().fill(NX.success).frame(width: 120, height: 120)
+                .shadow(color: NX.success.opacity(0.45), radius: 24)
+            CheckmarkShape().trim(from: 0, to: checkDrawn)
+                .stroke(Color.white, style: StrokeStyle(lineWidth: 9, lineCap: .round, lineJoin: .round))
+                .frame(width: 58, height: 58)
+        }
+        .scaleEffect(successScale)
+        .opacity(successScale > 0.7 ? 1 : 0)
     }
 
     private enum Seg { case todo, current, done }
@@ -297,6 +321,17 @@ struct LivenessCaptureView: View {
     }
 }
 
+/// A check drawn as one stroke, so `.trim` can animate it being written.
+private struct CheckmarkShape: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.minX + r.width * 0.12, y: r.minY + r.height * 0.55))
+        p.addLine(to: CGPoint(x: r.minX + r.width * 0.42, y: r.minY + r.height * 0.84))
+        p.addLine(to: CGPoint(x: r.minX + r.width * 0.90, y: r.minY + r.height * 0.22))
+        return p
+    }
+}
+
 // MARK: - Camera preview
 
 private struct CameraFeed: UIViewRepresentable {
@@ -323,7 +358,7 @@ private struct CameraFeed: UIViewRepresentable {
 /// orientation and mirroring, and getting it wrong would tell people "left" while waiting for
 /// right. So the first turn may go either way, and the second must go the opposite way — which is
 /// exactly what liveness needs: two distinct poses a photo cannot produce.
-final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureMetadataOutputObjectsDelegate {
+final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     enum Step: Int, Comparable {
         case center, sideA, sideB, blink, capture
         static func < (a: Step, b: Step) -> Bool { a.rawValue < b.rawValue }
@@ -332,13 +367,8 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
 
     @Published private(set) var step: Step = .center
     @Published private(set) var presence: Presence = .none
-    /// Where the face is ON SCREEN, in points, from the camera's own face metadata converted by the
-    /// preview layer. Vision still does the landmarks; this only places the window.
-    @Published private(set) var faceScreenRect: CGRect?
     @Published private(set) var bufferSize: CGSize?
-    /// Set by the preview; converts metadata faces to screen points.
     weak var previewLayer: AVCaptureVideoPreviewLayer?
-    private let metadataOutput = AVCaptureMetadataOutput()
     @Published private(set) var yawDegrees: Double = 0
     @Published private(set) var eyesClosed = false
     @Published private(set) var firstSide: Double = 0
@@ -404,35 +434,12 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
             output.alwaysDiscardsLateVideoFrames = true
             output.setSampleBufferDelegate(self, queue: self.queue)
             if self.session.canAddOutput(output) { self.session.addOutput(output) }
-            // Face rectangles from the camera stack itself, for the window that follows the face.
-            if self.session.canAddOutput(self.metadataOutput) {
-                self.session.addOutput(self.metadataOutput)
-                if self.metadataOutput.availableMetadataObjectTypes.contains(.face) {
-                    self.metadataOutput.metadataObjectTypes = [.face]
-                }
-                self.metadataOutput.setMetadataObjectsDelegate(self, queue: .main)
-            }
             // The buffer stays in the camera's native orientation. Vision is told how it is held
             // (`.leftMirrored`, the front camera in portrait) and the preview layer converts the
             // results to the screen — nothing is rotated or mirrored by hand.
             self.session.commitConfiguration()
             self.session.startRunning()
         }
-    }
-
-    func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput objects: [AVMetadataObject], from connection: AVCaptureConnection) {
-        guard let layer = previewLayer else { return }
-        let faces = objects.compactMap { $0 as? AVMetadataFaceObject }
-        guard let face = faces.max(by: { $0.bounds.width * $0.bounds.height < $1.bounds.width * $1.bounds.height }),
-              let onScreen = layer.transformedMetadataObject(for: face) else {
-            if faceScreenRect != nil { faceScreenRect = nil }
-            return
-        }
-        let r = onScreen.bounds
-        // Sub-2pt wobble is noise, not movement; publishing it only makes the window shiver.
-        if let old = faceScreenRect, abs(old.midX - r.midX) < 2, abs(old.midY - r.midY) < 2,
-           abs(old.width - r.width) < 2, abs(old.height - r.height) < 2 { return }
-        faceScreenRect = r
     }
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
