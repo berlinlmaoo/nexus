@@ -1,4 +1,5 @@
 import type React from "react";
+import { OfficeMapPicker } from "@/components/attendance/OfficeMapPicker";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -1015,7 +1016,6 @@ function OfficeComposer({ office, onClose, onCreated }: { office?: NexusOffice; 
     // A refused save used to leave the dialog open and silent — "the edit doesn't work".
     onError: (e: unknown) => alert(e instanceof Error ? e.message : "Couldn't save the office."),
   });
-  const useMyLocation = () => navigator.geolocation?.getCurrentPosition((pos) => { setLat(String(pos.coords.latitude)); setLng(String(pos.coords.longitude)); });
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
@@ -1023,11 +1023,15 @@ function OfficeComposer({ office, onClose, onCreated }: { office?: NexusOffice; 
         <div className="mt-4 space-y-3">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Office name" className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
           <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Address (optional)" className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
-          <div className="grid grid-cols-2 gap-2">
-            <input value={lat} onChange={(e) => setLat(e.target.value)} placeholder="Latitude" className="rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
-            <input value={lng} onChange={(e) => setLng(e.target.value)} placeholder="Longitude" className="rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
-          </div>
-          <button onClick={useMyLocation} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-accent active:scale-[0.98]"><MapPin className="h-3.5 w-3.5" /> Use my location</button>
+          <OfficeMapPicker lat={Number.isFinite(Number(lat)) && lat !== "" ? Number(lat) : null} lng={Number.isFinite(Number(lng)) && lng !== "" ? Number(lng) : null}
+            radiusMeters={Number(radius) || 100} onChange={(la, lo) => { setLat(la.toFixed(6)); setLng(lo.toFixed(6)); }} />
+          <details className="text-[11px] text-muted-foreground">
+            <summary className="cursor-pointer font-semibold">Fine-tune coordinates</summary>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <input value={lat} onChange={(e) => setLat(e.target.value)} placeholder="Latitude" className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary" />
+              <input value={lng} onChange={(e) => setLng(e.target.value)} placeholder="Longitude" className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary" />
+            </div>
+          </details>
           {/* Shift start/end dihilangkan — jam shift sekarang diatur per orang (Control Room → Members),
               bukan per office. Office cuma nyimpen default fallback (gak ditampilin di sini). */}
           <div className="flex flex-wrap gap-4">
