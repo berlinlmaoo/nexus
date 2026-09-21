@@ -1,12 +1,5 @@
 import prisma from "@/lib/prisma"
-import {
-  getAttendanceDate,
-  formatAttendanceDateKey,
-  isWorkdayForAttendanceDate,
-  resolveEffectiveAttendanceShift,
-  resolveShiftWindowAt,
-  safeAttendanceTimezone,
-} from "@/lib/attendance"
+import { getAttendanceDate, formatAttendanceDateKey, isWorkdayForAttendanceDate, resolveEffectiveAttendanceShift, resolveShiftWindowAt, safeAttendanceTimezone, isRestDayForMember } from "@/lib/attendance"
 import { isHoliday } from "@/lib/holidays"
 import { isOutageDay, usualOfficeByUser } from "@/lib/attendance-absence"
 import { notifyAttendanceReminder, sendWA } from "@/lib/notification-service"
@@ -152,7 +145,7 @@ export async function sendAttendanceReminders(now: Date = new Date(), opts?: { d
 
     const members = await prisma.workspaceMember.findMany({
       where: { workspaceId, role: { notIn: ["BOD", "ONE_ABOVE_ALL"] } },
-      select: { userId: true, user: { select: { id: true, name: true, phoneNumber: true } } },
+      select: { userId: true, restDays: true, user: { select: { id: true, name: true, phoneNumber: true } } },
     })
     const usualOffice = await usualOfficeByUser(workspaceId, offices.filter((o) => o.workspaceId === workspaceId))
 
@@ -160,6 +153,8 @@ export async function sendAttendanceReminders(now: Date = new Date(), opts?: { d
       const phone = member.user?.phoneNumber
       // Their own office, not the workspace's first: HQ starts at 15:00, the other four at 09:00.
       const memberOffice = usualOffice.get(member.userId) ?? office
+      // Nothing to remind on their fixed rest day.
+      if (isRestDayForMember(now, member.restDays, tz)) continue
 
       // Resolve TODAY's shift window from the real instant (overnight-aware + tz-safe).
       const shiftToday = await resolveEffectiveAttendanceShift({ userId: member.userId, workspaceId, office: memberOffice, date: now })

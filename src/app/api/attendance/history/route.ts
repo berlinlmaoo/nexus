@@ -4,16 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import ExcelJS from "exceljs"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
-import {
-  AttendanceDayType,
-  attendancePeriodRange,
-  enumerateAttendanceDates,
-  formatAttendanceDateKey,
-  getAttendanceWorkspaceContext,
-  isWorkdayForAttendanceDate,
-  mapRequestTypeToAttendanceDayType,
-  serializeAttendanceRecord,
-} from "@/lib/attendance"
+import { AttendanceDayType, attendancePeriodRange, enumerateAttendanceDates, formatAttendanceDateKey, getAttendanceWorkspaceContext, isWorkdayForAttendanceDate, mapRequestTypeToAttendanceDayType, serializeAttendanceRecord, isRestDayForMember } from "@/lib/attendance"
 import { getOutageDateKeysForRange, isAutoDeduction } from "@/lib/attendance-absence"
 import { getHolidayKeys } from "@/lib/holidays"
 import { attendanceHistoryQuerySchema } from "@/lib/validations"
@@ -710,6 +701,8 @@ export async function GET(request: NextRequest) {
       for (const member of workspaceMembers) {
         for (const date of enumerateAttendanceDates(range.start, range.end)) {
           if (!isWorkdayForAttendanceDate(date, fallbackOffice)) continue
+          // Their fixed rest day is not an absence — no red cell, no TK on the sheet.
+          if (isRestDayForMember(date, member.restDays, fallbackOffice.timezone)) continue
           const dateKey = date.toISOString().slice(0, 10)
           if (dateKey >= todayKey || holidayKeys.has(dateKey) || outageKeys.has(dateKey)) continue
           const key = `${member.user.id}:${dateKey}`

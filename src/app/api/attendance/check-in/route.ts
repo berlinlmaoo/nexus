@@ -6,17 +6,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
-import {
-  buildAttendanceDerivedFields,
-  formatAttendanceDateKey,
-  getAttendanceDate,
-  getAttendanceWorkspaceContext,
-  assessLocationIntegrity,
-  getMemberNoGeofence,
-  resolveNearestOffice,
-  resolveEffectiveAttendanceShift,
-  serializeAttendanceRecord,
-} from "@/lib/attendance"
+import { buildAttendanceDerivedFields, formatAttendanceDateKey, getAttendanceDate, getAttendanceWorkspaceContext, assessLocationIntegrity, getMemberNoGeofence, resolveNearestOffice, resolveEffectiveAttendanceShift, serializeAttendanceRecord, isRestDayForMember } from "@/lib/attendance"
 import { isHoliday } from "@/lib/holidays"
 import { setLatePenalty, clearLatePenalty } from "@/lib/gamification"
 import { startFloor, isOutageDay, isAutoDeduction, hasAttendanceWaiver } from "@/lib/attendance-absence"
@@ -235,13 +225,20 @@ export async function POST(request: NextRequest) {
     })
 
     const holidayToday = await isHoliday(context.workspace.id, attendanceDate)
+    // Their own fixed rest day counts as a non-workday for them: checking in anyway is fine, but it
+    // is never late.
+    const restMember = await prisma.workspaceMember.findUnique({
+      where: { userId_workspaceId: { userId: session.user.id, workspaceId: context.workspace.id } },
+      select: { restDays: true },
+    })
+    const restDayToday = isRestDayForMember(attendanceDate, restMember?.restDays ?? [], nearest.office.timezone)
     const derived = buildAttendanceDerivedFields({
       attendanceDate,
       checkInAt,
       checkOutAt: null,
       office: nearest.office,
       effectiveShift,
-      treatAsNonWorkday: holidayToday, // tanggal merah → no late penalty
+      treatAsNonWorkday: holidayToday || restDayToday, // tanggal merah / hari libur tetap → no late penalty
     })
 
     const integrity = await assessLocationIntegrity({

@@ -565,6 +565,8 @@ export type NexusWorkspaceMember = {
   attendanceShiftEndTime?: string | null;
   attendanceShiftByDay?: Record<string, { start: string; end: string }> | null;
   flexiTimeEnabled?: boolean;
+  /** Fixed weekly rest days, ISO 1=Mon..7=Sun. Empty = works every office day. */
+  restDays?: number[];
   noGeofenceMode?: boolean;
   /** Atasan langsung di Bagan Approval. null = belum ditaruh (request-nya jatuh ke BoD). */
   approverId?: string | null;
@@ -1911,7 +1913,7 @@ export const nexusApi = {
    *  supaya workspace ini benar-benar jadi rumahnya (workspace aktif dipilih dari joinedAt tertua). */
   inviteWorkspaceMember: (payload: { email: string; role?: OrgRole; attendanceRole?: string; workspaceId?: string; absorbPersonalWorkspace?: boolean }) =>
     apiFetch<{ member: NexusWorkspaceMember; absorbed?: string[]; kept?: string[] }>("/api/workspaces/members", { method: "POST", body: JSON.stringify(payload) }),
-  updateWorkspaceMember: (payload: { memberId: string; role?: OrgRole; attendanceRole?: string; workspaceId?: string; attendanceShiftStartTime?: string | null; attendanceShiftEndTime?: string | null; attendanceShiftByDay?: Record<string, { start: string; end: string }> | null; phoneNumber?: string | null; flexiTimeEnabled?: boolean; noGeofenceMode?: boolean; approverId?: string | null }) =>
+  updateWorkspaceMember: (payload: { memberId: string; role?: OrgRole; attendanceRole?: string; workspaceId?: string; attendanceShiftStartTime?: string | null; attendanceShiftEndTime?: string | null; attendanceShiftByDay?: Record<string, { start: string; end: string }> | null; phoneNumber?: string | null; flexiTimeEnabled?: boolean; noGeofenceMode?: boolean; approverId?: string | null; restDays?: number[] }) =>
     apiFetch<{ member: NexusWorkspaceMember; orphaned?: Array<{ id: string; name: string | null }> }>("/api/workspaces/members", { method: "PATCH", body: JSON.stringify(payload) }),
   /** Seluruh Bagan Approval dalam satu panggilan. BoD saja. */
   approvalChart: () => apiFetch<ApprovalChart>("/api/admin/approval-chart"),

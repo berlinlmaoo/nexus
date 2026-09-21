@@ -298,6 +298,12 @@ model WorkspaceMember {
   // Opt-in per person; default off = normal fixed shift.
   flexiTimeEnabled Boolean @default(false)
 
+  // Fixed weekly rest days, ISO weekdays 1=Mon..7=Sun. The offices run seven days, so this is how
+  // "Sunday is my day off" or "I work five days" is said once instead of filed as a day-off request
+  // every week (and cut −150 XP + a token when forgotten). On these days nothing is expected of the
+  // member: no reminder, no lateness, no absence, no forgotten-check-out. Empty = works every office day.
+  restDays Int[] @default([])
+
   // Custom/Mobile attendance — when true, this member may check in/out ANYWHERE (geofence radius is not
   // enforced and a checkout outside the office is NOT routed through offsite-approval). For high-mobility
   // roles. Opt-in per person; default off = normal geofenced attendance.
