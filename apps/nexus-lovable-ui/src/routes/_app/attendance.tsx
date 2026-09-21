@@ -632,6 +632,7 @@ function Attendance() {
           )}
         </div>
 
+        <ReflectionsSection canPickPeople={canSeeBoard} members={allMembers} />
         <RequestsSection canReview={canReview} canManage={canManage} viewerId={today.data?.viewerId ?? null} />
         {canManage && <EmploymentStartSection />}
         {canManage && <OfficesSection />}
@@ -1046,6 +1047,114 @@ function OfficeComposer({ office, onClose, onCreated }: { office?: NexusOffice; 
           <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent">Cancel</button>
           {create.isError && <span className="text-xs font-semibold text-destructive">Failed — supervisor role required.</span>}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Reflections: the daily check-out notes, with GIDEON's read of each day and of the month so far.
+// Everyone sees their own; a manager picks one of their reports, BoD anyone on the board.
+// ---------------------------------------------------------------------------------------------
+function ReflectionsSection({ canPickPeople, members }: { canPickPeople: boolean; members: Array<{ id: string; name?: string | null; email?: string | null }> }) {
+  const [month, setMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; });
+  const [userId, setUserId] = useState<string | undefined>(undefined);
+  const [open, setOpen] = useState<string | null>(null);
+  const qc = useQueryClient();
+  const key = ["attendance-reflections", userId ?? "me", month];
+  const q = useQuery({ queryKey: key, queryFn: () => nexusApi.reflections(userId, month), retry: 1 });
+  const summarize = useMutation({
+    mutationFn: () => nexusApi.summarizeReflections(userId, month),
+    onSuccess: () => qc.invalidateQueries({ queryKey: key }),
+  });
+  const [y, m] = month.split("-").map(Number);
+  const label = new Date(y, m - 1, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  const shift = (d: number) => { const n = new Date(y, m - 1 + d, 1); setMonth(`${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`); setOpen(null); };
+  const isCurrent = (() => { const d = new Date(); return y === d.getFullYear() && m === d.getMonth() + 1; })();
+  const days = q.data?.days ?? [];
+  const monthly = q.data?.monthly ?? null;
+  const upToDate = Boolean(monthly && monthly.sourceDays === days.length);
+  const dayLabel = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+  const summarizeError = summarize.error instanceof ApiError ? ((summarize.error.payload as { error?: string } | null)?.error ?? summarize.error.message) : summarize.error ? "GIDEON didn't answer. Try again in a minute." : null;
+
+  return (
+    <div className="rounded-[28px] border border-border bg-card shadow-soft overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-5 py-4">
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight"><PenLine className="h-4 w-4 text-primary" /> Reflections</h2>
+          <p className="text-sm text-muted-foreground">What was written at check-out, with GIDEON's summary of each day and of the month so far.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {canPickPeople && (
+            <select value={userId ?? ""} onChange={(e) => { setUserId(e.target.value || undefined); setOpen(null); }} className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-semibold outline-none focus:border-primary">
+              <option value="">Me</option>
+              {members.map((u) => <option key={u.id} value={u.id}>{u.name || u.email || u.id}</option>)}
+            </select>
+          )}
+          <div className="inline-flex items-center rounded-lg border border-border">
+            <button type="button" onClick={() => shift(-1)} className="px-2 py-1.5 text-muted-foreground hover:text-foreground" aria-label="Previous month"><ChevronLeft className="h-4 w-4" /></button>
+            <span className="min-w-[120px] text-center text-xs font-semibold">{label}</span>
+            <button type="button" onClick={() => shift(1)} disabled={isCurrent} className="px-2 py-1.5 text-muted-foreground hover:text-foreground disabled:opacity-30" aria-label="Next month"><ChevronRight className="h-4 w-4" /></button>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4 p-5">
+        {q.isLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading reflections…</div>
+        ) : q.isError ? (
+          <div className="text-sm font-semibold text-destructive">{q.error instanceof ApiError ? ((q.error.payload as { error?: string } | null)?.error ?? "Couldn't load reflections.") : "Couldn't load reflections."}</div>
+        ) : days.length === 0 ? (
+          <EmptyState icon={PenLine} compact title={`No reflections in ${label}`}
+            message="A reflection is written at check-out. Once one is checked out with, it shows up here with GIDEON's summary of the day." />
+        ) : (
+          <>
+            {/* Month so far */}
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm font-bold"><Sparkles className="h-4 w-4 text-primary" /> GIDEON's month summary</div>
+                <button type="button" onClick={() => summarize.mutate()} disabled={summarize.isPending}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-soft transition hover:bg-primary/90 disabled:opacity-60">
+                  {summarize.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  {summarize.isPending ? "GIDEON is reading…" : monthly ? (upToDate ? "Summary is current" : "Update the summary") : `Summarize ${days.length} day${days.length === 1 ? "" : "s"} so far`}
+                </button>
+              </div>
+              {monthly ? (
+                <>
+                  <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-foreground">{monthly.summary}</p>
+                  <p className="mt-2 text-[11px] font-medium text-muted-foreground">Built from {monthly.sourceDays} day{monthly.sourceDays === 1 ? "" : "s"} · {fmtDate(monthly.updatedAt)}{!upToDate ? ` · ${days.length - monthly.sourceDays} newer day${days.length - monthly.sourceDays === 1 ? "" : "s"} not included yet` : ""}</p>
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-muted-foreground">Not written yet. GIDEON summarizes whatever has been collected so far — {days.length} day{days.length === 1 ? "" : "s"} in {label}.</p>
+              )}
+              {summarizeError && <p className="mt-2 text-xs font-semibold text-destructive">{summarizeError}</p>}
+            </div>
+
+            {/* Days */}
+            <div className="divide-y divide-border rounded-2xl border border-border">
+              {[...days].reverse().map((d) => {
+                const isOpen = open === d.date;
+                return (
+                  <div key={d.date} className="px-4 py-3">
+                    <button type="button" onClick={() => setOpen(isOpen ? null : d.date)} className="flex w-full items-start gap-3 text-left">
+                      <span className="mt-0.5 w-[92px] shrink-0 text-xs font-bold text-muted-foreground">{dayLabel(d.date)}</span>
+                      <span className="flex-1 text-sm leading-relaxed">
+                        {d.summary ? d.summary : <span className="italic text-muted-foreground">GIDEON hasn't summarized this day yet — the note is below.</span>}
+                      </span>
+                      <ChevronRight className={cn("mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform", isOpen && "rotate-90")} />
+                    </button>
+                    {isOpen && (
+                      <div className="mt-2 ml-[104px] rounded-xl bg-muted/40 px-3 py-2 text-sm leading-relaxed text-foreground whitespace-pre-line">
+                        <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Written at check-out</div>
+                        {d.reflection}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

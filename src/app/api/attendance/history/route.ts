@@ -426,6 +426,9 @@ export async function GET(request: NextRequest) {
       requestType: request.nextUrl.searchParams.get("requestType") ?? undefined,
       requestStatus: request.nextUrl.searchParams.get("requestStatus") ?? undefined,
       format: request.nextUrl.searchParams.get("format") ?? undefined,
+      // Was missing from this list, so `compact=1` never reached the parser: the widget, the watch
+      // and the crew board asked for dots and got full rows their decoder could not read.
+      compact: request.nextUrl.searchParams.get("compact") ?? undefined,
     })
 
     if (!parsed.success) {

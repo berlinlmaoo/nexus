@@ -1557,6 +1557,10 @@ export type CreateTaskPayload = {
   parentId?: string | null;
 };
 
+export type NexusReflectionDay = { date: string; reflection: string; summary: string | null };
+export type NexusReflectionMonthly = { summary: string; sourceDays: number; updatedAt: string };
+export type NexusReflections = { userId: string; month: string; days: NexusReflectionDay[]; monthly: NexusReflectionMonthly | null };
+
 export type AttendanceActionPayload = {
   lat: number;
   lng: number;
@@ -1639,6 +1643,9 @@ export const nexusApi = {
   setEmploymentStartDate: (userId: string, date: string | null) =>
     apiFetch<{ employmentStartDate: string | null; eligibleFrom: string | null; eligible: boolean }>(`/api/attendance/employment-start`, { method: "PATCH", body: JSON.stringify({ userId, date }) }),
   attendanceToday: () => apiFetch<NexusAttendanceToday>("/api/attendance/today"),
+  // Daily check-out reflections + GIDEON's summaries. userId undefined = the viewer's own.
+  reflections: (userId: string | undefined, month: string) => apiFetch<NexusReflections>(`/api/attendance/reflections?month=${encodeURIComponent(month)}${userId ? `&userId=${encodeURIComponent(userId)}` : ""}`),
+  summarizeReflections: (userId: string | undefined, month: string) => apiFetch<NexusReflectionMonthly & { cached?: boolean }>("/api/attendance/reflections/summarize", { method: "POST", body: JSON.stringify({ userId, month }) }),
   // Backend returns { scope, records: [...] }; older callers expect { rows }. Normalize both → { rows }.
   attendanceHistory: async (query = "scope=workspace"): Promise<NexusAttendanceHistory> => {
     const data = await apiFetch<{ records?: NexusAttendanceHistory["rows"]; rows?: NexusAttendanceHistory["rows"] }>(`/api/attendance/history?${query}`);
