@@ -10,6 +10,11 @@ struct AttendanceView: View {
     @State private var error: String?
 
     @State private var loc = LocationManager()
+    @Environment(\.scenePhase) private var scenePhase
+    /// Location switched off for NEXUS: said above the buttons, with the way to Settings, instead of
+    /// discovered as a failure after the selfie.
+    @State private var locationOff = false
+    @State private var deniedPermission: PermissionKind?
     @State private var camera: MapCameraPosition = .userLocation(fallback: .automatic)
     @State private var showCamera = false
     @State private var pendingAction: Action?
@@ -94,6 +99,7 @@ struct AttendanceView: View {
                     if serverDown { downCard } else if let error { errorBanner(error) }
                     if needsReflection { reflectionCard }
                     reflectionsLink
+                    if locationOff { PermissionBanner(kind: .location) }
                     presenceButtons
                     // Say WHY the button is greyed out, right where the greyed-out button is.
                     if needsReflection && !reflectionOK {
@@ -146,7 +152,10 @@ struct AttendanceView: View {
             await AttendanceQueue.shared.flush()
             await load()
         }
-        .onAppear { loc.requestPermissionIfNeeded() }
+        .onAppear { loc.requestPermissionIfNeeded(); locationOff = loc.isDenied }
+        // Coming back from Settings is a scene change, not a reappearance.
+        .onChange(of: scenePhase) { _, phase in if phase == .active { locationOff = loc.isDenied } }
+        .permissionAlert($deniedPermission)
         .refreshable { await load() }
         .fullScreenCover(isPresented: $showCamera) {
             // Not the stock camera any more: a face check (straight, side, other side, blink) that
@@ -637,6 +646,12 @@ struct AttendanceView: View {
                 flow = nil
                 offsiteReason = ""; showOffsite = true
             }
+        } catch LocationManager.LocationError.denied {
+            // Not a failure to retry: nothing will change until the switch in Settings does.
+            Haptics.warning()
+            flow = .failed(action, LocationManager.LocationError.denied.errorDescription ?? T("Location permission denied."))
+            locationOff = true
+            deniedPermission = .location
         } catch APIError.unauthorized { flow = nil; auth.logout() }
         catch APIError.offline {
             // The server was unreachable, so nothing was recorded there. Keep the tap instead of

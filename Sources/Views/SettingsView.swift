@@ -20,6 +20,10 @@ struct SettingsView: View {
     @State private var uploadingPhoto = false
     @State private var photoError: String?
     @State private var uploadProgress = UploadProgress()
+    /// Whatever is switched off for NEXUS, listed at the top with the way to Settings. Empty — the
+    /// normal case — draws nothing.
+    @State private var deniedKinds: [PermissionKind] = []
+    @Environment(\.scenePhase) private var scenePhase
 
     private static let roleLabel: [String: String] = ["ONE_ABOVE_ALL": "One Above All", "BOD": "BoD", "MANAGER": "Manager", "STAFF": "Staff"]
     private var initial: String { String((name.isEmpty ? email : name).first ?? "?").uppercased() }
@@ -29,6 +33,13 @@ struct SettingsView: View {
             NX.background.ignoresSafeArea()
             ScrollView {
                 VStack(spacing: 18) {
+                    Group {
+                        ForEach(deniedKinds) { PermissionBanner(kind: $0) }
+                    }
+                    .task { deniedKinds = await Permissions.denied() }
+                    .onChange(of: scenePhase) { _, phase in
+                        if phase == .active { Task { deniedKinds = await Permissions.denied() } }
+                    }
                     // profile header
                     VStack(spacing: 10) {
                         // Shows the photo already on the account; falls back to the initial while

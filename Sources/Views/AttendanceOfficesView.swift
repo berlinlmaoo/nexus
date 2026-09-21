@@ -230,6 +230,7 @@ struct OfficeMapPicker: View {
     @State private var settled = false
     @State private var locating = false
     @State private var locateError: String?
+    @State private var denied: PermissionKind?
 
     private static let jakarta = CLLocationCoordinate2D(latitude: -6.2088, longitude: 106.8456)
 
@@ -326,6 +327,7 @@ struct OfficeMapPicker: View {
             Text(T("Drag the map until the pin sits on the office entrance. The circle is where people can check in."))
                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
         }
+        .permissionAlert($denied)
         .task {
             // A new office starts on the phone if a fix arrives (existing ones already sit on their
             // point). Only after the first placement does moving the map write coordinates back, so
@@ -344,6 +346,8 @@ struct OfficeMapPicker: View {
         do {
             let fix = try await locate()
             jump(to: CLLocationCoordinate2D(latitude: fix.latitude, longitude: fix.longitude))
+        } catch LocationManager.LocationError.denied {
+            denied = .location
         } catch {
             locateError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't read your location.")
         }

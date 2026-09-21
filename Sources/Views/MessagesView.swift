@@ -381,6 +381,7 @@ struct ChatThreadView: View {
     @State private var loading = true
     @State private var sending = false
     @State private var loc = LocationManager()
+    @State private var deniedPermission: PermissionKind?
     @State private var pendingMentions: [String: String] = [:]
     @State private var showTaskPicker = false
     @State private var showAddPeople = false
@@ -571,6 +572,7 @@ struct ChatThreadView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { loc.requestPermissionIfNeeded() }
+        .permissionAlert($deniedPermission)
         .sheet(isPresented: $showTaskPicker) {
             TaskLinkPicker(projectId: projectId, meId: meId) { t in Task { await sendTaskLink(t) } }
         }
@@ -931,9 +933,11 @@ struct ChatThreadView: View {
         defer { sending = false }
         do {
             let fix = try await loc.currentFix()
-            let text = "📍 Lokasi saya: https://www.google.com/maps?q=\(fix.latitude),\(fix.longitude)"
+            let text = "📍 " + T("My location") + ": https://www.google.com/maps?q=\(fix.latitude),\(fix.longitude)"
             try await APIClient.shared.sendMessage(conversationId, content: text)
             await load()
+        } catch LocationManager.LocationError.denied {
+            deniedPermission = .location
         } catch {
             notice = (error as? LocalizedError)?.errorDescription ?? T("Couldn't send your location.")
         }

@@ -46,6 +46,12 @@ final class LocationManager: NSObject, CLLocationManagerDelegate {
         manager.desiredAccuracy = kCLLocationAccuracyBest
     }
 
+    /// True once the person has said no (or a profile forbids it); the only way back is Settings.
+    var isDenied: Bool {
+        let s = manager.authorizationStatus
+        return s == .denied || s == .restricted
+    }
+
     /// Pre-warm the permission prompt (call when the attendance screen appears).
     func requestPermissionIfNeeded() {
         if manager.authorizationStatus == .notDetermined {
