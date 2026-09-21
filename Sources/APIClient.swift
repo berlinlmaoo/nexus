@@ -1910,6 +1910,20 @@ struct APIClient {
 
     // MARK: - Attendance offices
 
+    /// A month of someone's check-out reflections with GIDEON's summaries; nil userId = the viewer's own.
+    func reflections(userId: String?, month: String) async throws -> ReflectionsResponse {
+        var path = "/api/attendance/reflections?month=\(enc(month))"
+        if let userId { path += "&userId=\(enc(userId))" }
+        return try await run(makeRequest(path), decode: ReflectionsResponse.self)
+    }
+    func summarizeReflections(userId: String?, month: String) async throws -> ReflectionMonthly {
+        var req = makeRequest("/api/attendance/reflections/summarize", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body: [String: Any] = ["month": month]
+        if let userId { body["userId"] = userId }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return try await run(req, decode: ReflectionMonthly.self)
+    }
     func attendanceOffices() async throws -> [Office] {
         (try await run(makeRequest("/api/attendance/offices"), decode: OfficesResponse.self)).offices ?? []
     }

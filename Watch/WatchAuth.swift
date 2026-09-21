@@ -26,9 +26,10 @@ final class WatchAuth {
     func apply(_ incoming: Session?) {
         everHeardFromPhone = true
         guard let incoming else {
-            // The phone logged out. Anything cached here belonged to that session.
+            // The phone logged out. Anything cached here belonged to that session — the face too.
             Keychain.clear()
             session = nil
+            WatchPresence.clear()
             return
         }
         Keychain.save(incoming)

@@ -32,6 +32,7 @@ struct AttendanceView: View {
     @State private var showOffsite = false
     @State private var offsiteReason = ""
     @State private var reflection = ""
+    @State private var showReflections = false
 
     /// The server rejects a check-out whose reflection is shorter than this (mirrors the web's
     /// "Daily Reflection · required before check-out · min 200 characters").
@@ -92,6 +93,7 @@ struct AttendanceView: View {
                     if loading { loadingRow }
                     if serverDown { downCard } else if let error { errorBanner(error) }
                     if needsReflection { reflectionCard }
+                    reflectionsLink
                     presenceButtons
                     // Say WHY the button is greyed out, right where the greyed-out button is.
                     if needsReflection && !reflectionOK {
@@ -360,6 +362,30 @@ struct AttendanceView: View {
 
     /// The daily reflection the server demands before it will accept a check-out. Without this the
     /// native app could never close a shift — the API just kept returning the 200-character error.
+    /// Where the reflections go after check-out: the month's notes with GIDEON's summaries. The
+    /// sheet hangs off this button, not the screen — the screen already presents a fullScreenCover,
+    /// and two presentation modifiers on one view is how "+ Office" died.
+    private var reflectionsLink: some View {
+        Button { showReflections = true } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "sparkles").font(.system(size: 15, weight: .semibold)).foregroundStyle(NX.violetText)
+                    .frame(width: 30, height: 30).background(NX.violet.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(T("Reflections")).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                    Text(T("Your check-out notes, summarized by GIDEON per day and per month.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(2)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(NX.mutedFg)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .nexusCard()
+        .sheet(isPresented: $showReflections) {
+            ReflectionsView(canPickPeople: (today?.canReviewAttendanceRequests ?? false) || (today?.canManageAttendance ?? false))
+        }
+    }
+
     private var reflectionCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {

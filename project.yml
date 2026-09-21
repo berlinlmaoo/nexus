@@ -130,9 +130,15 @@ targets:
       - path: Sources/Config.swift
       - path: Sources/Keychain.swift
       - path: Sources/AttendanceModels.swift
+      # The snapshot the complication draws — the same type the phone's widgets read.
+      - path: Sources/Shared/AttendanceSnapshot.swift
+    dependencies:
+      # The watch-face complication rides inside the watch app.
+      - target: NEXUSWatchWidgets
     settings:
       base:
         INFOPLIST_FILE: Watch/Info.plist
+        CODE_SIGN_ENTITLEMENTS: NEXUSWatch.entitlements
         # Without this the watch app ships with no icon at all, and App Store validation refuses the
         # whole upload — twice over: "CFBundleIconName is missing" and "No icons found for watch
         # application". It builds and runs fine, so nothing says anything until the upload is done.
@@ -144,6 +150,26 @@ targets:
         # 4 = Apple Watch.
         TARGETED_DEVICE_FAMILY: "4"
         SKIP_INSTALL: YES
+
+  # Watch-face complication. Reads the snapshot the watch app writes into the shared container;
+  # never talks to the API, never sees the session.
+  NEXUSWatchWidgets:
+    type: app-extension
+    platform: watchOS
+    deploymentTarget: "10.0"
+    sources:
+      - path: WatchWidgets
+        excludes:
+          - Info.plist
+      - path: Sources/Shared/AttendanceSnapshot.swift
+    settings:
+      base:
+        INFOPLIST_FILE: WatchWidgets/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: id.znetworks.nexus.watchkitapp.widgets
+        PRODUCT_NAME: NEXUSWatchWidgets
+        CODE_SIGN_ENTITLEMENTS: NEXUSWatchWidgets.entitlements
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: "4"
 
 # Default scheme runs RELEASE so a plain ⌘R is the optimized, smooth-on-device build
 # (Debug SwiftUI is dramatically slower on device — the usual cause of on-device lag).

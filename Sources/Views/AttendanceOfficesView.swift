@@ -122,10 +122,10 @@ struct OfficeComposerSheet: View {
                 NX.background.ignoresSafeArea()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        f(T("OFFICE NAME")) { field($name, "mis. Z Networks HQ") }
-                        f("ALAMAT (opsional)") { field($address, "Alamat") }
+                        f(T("OFFICE NAME")) { field($name, T("e.g. Z Networks HQ")) }
+                        f(T("ADDRESS (optional)")) { field($address, T("Address")) }
                         f(T("LOCATION")) {
-                            OfficeMapPicker(lat: $lat, lng: $lng, radiusMeters: Double(radius) ?? 100, locate: { try? await loc.currentFix() })
+                            OfficeMapPicker(lat: $lat, lng: $lng, radiusMeters: Double(radius) ?? 100, locate: { try await loc.currentFix() })
                         }
                         DisclosureGroup(T("Fine-tune coordinates")) {
                             HStack(spacing: 12) {
@@ -143,7 +143,7 @@ struct OfficeComposerSheet: View {
                                        in: 25...500, step: 5)
                                     .tint(NX.violet)
                             }
-                            f("TOLERANSI TELAT (menit)") { field($grace, "0").keyboardType(.numberPad) }
+                            f(T("LATE GRACE (min)")) { field($grace, "0").keyboardType(.numberPad) }
                         }
                         if let err { Text(err).font(NXFont.text(13, .semibold)).foregroundStyle(NX.danger) }
                         Button { Task { await save() } } label: {
@@ -164,7 +164,7 @@ struct OfficeComposerSheet: View {
                     }.padding(20)
                 }
             }
-            .navigationTitle(editing == nil ? "Office baru" : "Edit office").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(editing == nil ? T("New office") : T("Edit office")).navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
             .onAppear { loc.requestPermissionIfNeeded() }
         }
@@ -218,8 +218,9 @@ struct OfficeMapPicker: View {
     @Binding var lat: String
     @Binding var lng: String
     let radiusMeters: Double
-    /// The phone's own position, if it can be had — the composer owns the LocationManager.
-    let locate: () async -> LocationManager.Fix?
+    /// The phone's own position — the composer owns the LocationManager. Throws so the button can
+    /// say why it failed instead of silently doing nothing.
+    let locate: () async throws -> LocationManager.Fix
 
     @State private var position: MapCameraPosition
     @State private var center: CLLocationCoordinate2D?
@@ -227,10 +228,12 @@ struct OfficeMapPicker: View {
     @State private var results: [MKMapItem] = []
     @State private var searching = false
     @State private var settled = false
+    @State private var locating = false
+    @State private var locateError: String?
 
     private static let jakarta = CLLocationCoordinate2D(latitude: -6.2088, longitude: 106.8456)
 
-    init(lat: Binding<String>, lng: Binding<String>, radiusMeters: Double, locate: @escaping () async -> LocationManager.Fix?) {
+    init(lat: Binding<String>, lng: Binding<String>, radiusMeters: Double, locate: @escaping () async throws -> LocationManager.Fix) {
         _lat = lat; _lng = lng; self.radiusMeters = radiusMeters; self.locate = locate
         // Start with a real camera, never `.automatic`: with the circle as the map's only content an
         // automatic camera re-frames whenever the circle moves, and the circle moves whenever the
@@ -301,13 +304,14 @@ struct OfficeMapPicker: View {
                 VStack {
                     HStack {
                         Spacer()
-                        Button {
-                            Task { if let fix = await locate() { jump(to: CLLocationCoordinate2D(latitude: fix.latitude, longitude: fix.longitude)) } }
-                        } label: {
-                            Image(systemName: "location.fill").font(.system(size: 14, weight: .bold)).foregroundStyle(NX.violetText)
-                                .frame(width: 36, height: 36).background(Color.white, in: Circle()).shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+                        Button { Task { await useMyLocation() } } label: {
+                            Group {
+                                if locating { ProgressView().tint(NX.violetText).scaleEffect(0.8) }
+                                else { Image(systemName: "location.fill").font(.system(size: 14, weight: .bold)).foregroundStyle(NX.violetText) }
+                            }
+                            .frame(width: 36, height: 36).background(Color.white, in: Circle()).shadow(color: .black.opacity(0.15), radius: 4, y: 2)
                         }
-                        .buttonStyle(.plain).padding(10)
+                        .buttonStyle(.plain).padding(10).disabled(locating)
                         .accessibilityLabel(T("Use my location"))
                     }
                     Spacer()
@@ -316,6 +320,9 @@ struct OfficeMapPicker: View {
             .frame(height: 280)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border))
+            if let locateError {
+                Text(locateError).font(NXFont.text(11, .semibold)).foregroundStyle(NX.danger).fixedSize(horizontal: false, vertical: true)
+            }
             Text(T("Drag the map until the pin sits on the office entrance. The circle is where people can check in."))
                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
         }
@@ -323,11 +330,22 @@ struct OfficeMapPicker: View {
             // A new office starts on the phone if a fix arrives (existing ones already sit on their
             // point). Only after the first placement does moving the map write coordinates back, so
             // the initial camera settle cannot overwrite an office's real point with the map default.
-            if Double(lat) == nil, let fix = await locate() {
+            if Double(lat) == nil, let fix = try? await locate() {
                 jump(to: CLLocationCoordinate2D(latitude: fix.latitude, longitude: fix.longitude), animated: false)
             }
             try? await Task.sleep(for: .milliseconds(600))
             settled = true
+        }
+    }
+
+    private func useMyLocation() async {
+        locating = true; locateError = nil
+        defer { locating = false }
+        do {
+            let fix = try await locate()
+            jump(to: CLLocationCoordinate2D(latitude: fix.latitude, longitude: fix.longitude))
+        } catch {
+            locateError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't read your location.")
         }
     }
 

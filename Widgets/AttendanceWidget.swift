@@ -69,7 +69,18 @@ struct AttendanceWidgetView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Label(headline, systemImage: symbol).font(.caption.weight(.semibold)).lineLimit(1)
                 clock.font(.system(.title3, design: .rounded).monospacedDigit())
-                Text(detail).font(.caption2).lineLimit(1)
+                if let days = snapshot?.recentDays, !days.isEmpty {
+                    // Lock Screen widgets are drawn in one tint by iOS, so colour cannot carry the
+                    // tone here: a filled dot is a full day, a half dot late, a ring an approved
+                    // day off/leave/sick/permit, a cross an absence, a dotted ring nothing.
+                    HStack(spacing: 4) {
+                        ForEach(days, id: \.dateKey) { d in
+                            Image(systemName: toneSymbol(d.tone)).font(.system(size: 9, weight: .semibold))
+                        }
+                    }
+                } else {
+                    Text(detail).font(.caption2).lineLimit(1)
+                }
             }
         case .systemMedium:
             medium
@@ -134,6 +145,16 @@ struct AttendanceWidgetView: View {
     }
 
     private var entryDate: Date { Date() }
+
+    private func toneSymbol(_ t: String) -> String {
+        switch t {
+        case "P": return "circle.fill"
+        case "L": return "circle.bottomhalf.filled"
+        case "I", "C", "S", "D": return "circle"
+        case "A": return "xmark"
+        default: return "circle.dotted"
+        }
+    }
 
     private func toneColor(_ t: String) -> Color {
         switch t {

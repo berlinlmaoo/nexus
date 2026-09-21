@@ -85,6 +85,8 @@ struct TodayView: View {
         catch { self.error = (error as? LocalizedError)?.errorDescription ?? "Couldn't load." }
         loading = false
         recent = (try? await WatchAPI.recent(session, scope: "me")) ?? []
+        // The complication draws whatever was published last; publish after every load.
+        WatchPresence.publish(today: today, recent: recent)
     }
 
     private func parseISO(_ iso: String?) -> Date? {

@@ -52,6 +52,11 @@ enum WhatsNew {
             body: T("Look straight, turn to one side, then the other, blink — and the app takes the selfie itself. A photo of the office wall doesn't count anymore. It all happens on your phone; nothing is compared with anything.")
         ),
         WhatsNewEntry(
+            icon: "sparkles",
+            title: T("GIDEON reads your reflections"),
+            body: T("Every check-out note now gets a short GIDEON summary, and the month adds up into one. Open Reflections on the Attendance screen to read the month so far. Pasted or repeated text is refused at check-out — a few honest sentences are all it takes.")
+        ),
+        WhatsNewEntry(
             icon: "bell.badge",
             title: T("Notifications open the thing itself"),
             body: T("Tap a push about a leave request and that request opens, with Approve and Reject right there. A ticket reply opens the ticket, a chat opens the chat, an announcement opens the announcement. The Inbox rows do the same.")

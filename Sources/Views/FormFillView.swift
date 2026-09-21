@@ -25,12 +25,13 @@ struct FormFillView: View {
     @State private var actionError: String?
     @State private var done = false
 
-    // One importer can be open at a time, so the two presentation flags share a target. The field
-    // id is deliberately NOT cleared when the sheet closes: the completion handler runs after
-    // `isPresented` has already gone back to false, and would find it empty.
-    @State private var pickTarget = ""
-    @State private var showFilesImporter = false
-    @State private var showAttachImporter = false
+    /// One importer for both buttons. Two `.fileImporter` modifiers on one view is unsupported in
+    /// SwiftUI: the second cancels the first, so "Choose files" opened nothing on most devices while
+    /// it happened to work on one. The target is deliberately NOT cleared when the picker closes:
+    /// the completion handler runs after `isPresented` is already false, and would find it empty.
+    private enum PickTarget { case files(String), attachment(String) }
+    @State private var pickTarget: PickTarget = .files("")
+    @State private var showImporter = false
 
     var body: some View {
         ZStack {
@@ -40,16 +41,14 @@ struct FormFillView: View {
         .navigationTitle(form?.name ?? title)
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
-        .fileImporter(isPresented: $showFilesImporter, allowedContentTypes: [.item],
+        .fileImporter(isPresented: $showImporter, allowedContentTypes: [.item],
                       allowsMultipleSelection: true) { result in
             // In a Task, because reading the picked file is what these do and this closure runs on
-            // the main actor — see `read`.
-            if case let .success(urls) = result { Task { await addFiles(urls, to: pickTarget) } }
-        }
-        .fileImporter(isPresented: $showAttachImporter, allowedContentTypes: [.item],
-                      allowsMultipleSelection: false) { result in
-            if case let .success(urls) = result, let url = urls.first {
-                Task { await addAttachment(url, to: pickTarget) }
+            // the main actor — see `read`. The attachment slot takes the first file only.
+            guard case let .success(urls) = result else { return }
+            switch pickTarget {
+            case .files(let field): Task { await addFiles(urls, to: field) }
+            case .attachment(let field): if let url = urls.first { Task { await addAttachment(url, to: field) } }
             }
         }
     }
@@ -302,8 +301,8 @@ struct FormFillView: View {
         let picked = fileValue(field.id)
         return VStack(alignment: .leading, spacing: 8) {
             Button {
-                pickTarget = field.id
-                showFilesImporter = true
+                pickTarget = .files(field.id)
+                showImporter = true
             } label: {
                 pickerRow(icon: "paperclip",
                           text: picked.isEmpty ? T("Choose files (more than one is fine)")
@@ -323,8 +322,8 @@ struct FormFillView: View {
         let attached = fileValue(key).first
         return VStack(alignment: .leading, spacing: 6) {
             Button {
-                pickTarget = field.id
-                showAttachImporter = true
+                pickTarget = .attachment(field.id)
+                showImporter = true
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "paperclip").font(.system(size: 11))

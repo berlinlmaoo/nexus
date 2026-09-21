@@ -14,6 +14,10 @@ import UIKit
 /// leaves the device except the one selfie captured at the end, exactly as before. It does not know
 /// WHOSE face this is: that would need enrolment and a face template kept on the server, which is a
 /// different decision with its own privacy weight.
+///
+/// The bright window follows the detected face, so the person sees what the check sees. In the
+/// dark — a club, a warehouse at night — the rest of the screen turns white and the display goes to
+/// full brightness: the phone becomes its own ring light. It also switches on by hand.
 struct LivenessCaptureView: View {
     var onCapture: (Data) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -22,22 +26,35 @@ struct LivenessCaptureView: View {
     @State private var pulse = false
     @State private var flash = false
     @State private var finishing = false
+    @State private var manualLight = false
+    @State private var savedBrightness: CGFloat?
+
+    private var lightOn: Bool { manualLight || engine.dark }
+    private var ink: Color { lightOn ? .black : .white }
+    private var inkSoft: Color { lightOn ? .black.opacity(0.7) : .white.opacity(0.78) }
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             CameraFeed(session: engine.session).ignoresSafeArea()
             GeometryReader { geo in
-                let oval = Self.ovalRect(in: geo.size)
+                let home = Self.ovalRect(in: geo.size)
+                let oval = trackedOval(home: home, in: geo.size)
                 ZStack {
-                    // Dim everything but the oval, so the face has one obvious place to be.
-                    Rectangle().fill(Color.black.opacity(0.68))
-                        .overlay(Ellipse().frame(width: oval.width, height: oval.height).position(x: oval.midX, y: oval.midY).blendMode(.destinationOut))
+                    // Everything but the face window is dimmed — or lit white when it's dark.
+                    Rectangle().fill(lightOn ? Color.white.opacity(0.94) : Color.black.opacity(0.68))
+                        .overlay(
+                            Ellipse().frame(width: oval.width, height: oval.height)
+                                .position(x: oval.midX, y: oval.midY)
+                                .blendMode(.destinationOut)
+                        )
                         .compositingGroup()
                     ring(oval)
-                    gauge.position(x: oval.midX, y: oval.maxY + 44)
+                    gauge.position(x: home.midX, y: home.maxY + 46)
                     if flash { Color.white.opacity(0.85) }
                 }
+                .animation(reduceMotion ? nil : .interactiveSpring(response: 0.32, dampingFraction: 0.85), value: engine.faceRect)
+                .animation(.easeInOut(duration: 0.3), value: lightOn)
             }
             .ignoresSafeArea()
             VStack(spacing: 0) {
@@ -49,7 +66,8 @@ struct LivenessCaptureView: View {
         }
         .preferredColorScheme(.dark)
         .onAppear { engine.start(); pulse = true }
-        .onDisappear { engine.stop() }
+        .onDisappear { engine.stop(); restoreBrightness() }
+        .onChange(of: lightOn) { _, on in on ? boostBrightness() : restoreBrightness() }
         .onChange(of: engine.captured) { _, data in
             guard let data, !finishing else { return }
             finishing = true
@@ -64,27 +82,45 @@ struct LivenessCaptureView: View {
         }
     }
 
-    // MARK: pieces
+    // MARK: geometry
 
     private static func ovalRect(in size: CGSize) -> CGRect {
         let w = min(size.width * 0.72, 300), h = w * 1.32
         return CGRect(x: (size.width - w) / 2, y: size.height * 0.44 - h / 2, width: w, height: h)
     }
 
+    /// The window hugs the detected face (with room for hair and chin); without a face it rests at
+    /// its home position so people know where to put themselves.
+    private func trackedOval(home: CGRect, in size: CGSize) -> CGRect {
+        guard let face = engine.faceRect, let buf = engine.bufferSize, buf.width > 0, buf.height > 0 else { return home }
+        // The preview is aspect-fill; the buffer is upright and mirrored like the preview, so only
+        // the fill scale and Vision's bottom-left origin need undoing.
+        let scale = max(size.width / buf.width, size.height / buf.height)
+        let dw = buf.width * scale, dh = buf.height * scale
+        let ox = (size.width - dw) / 2, oy = (size.height - dh) / 2
+        let fx = ox + face.minX * dw, fy = oy + (1 - face.maxY) * dh
+        let fw = face.width * dw, fh = face.height * dh
+        let w = max(fw * 1.42, home.width * 0.7), h = max(fh * 1.55, w * 1.25)
+        let cx = fx + fw / 2, cy = fy + fh / 2 - fh * 0.06
+        return CGRect(x: cx - w / 2, y: cy - h / 2, width: w, height: h)
+    }
+
     private var done: Bool { engine.captured != nil }
 
-    /// Four arcs around the oval, one per move: grey to do, violet in progress, green done.
+    /// Four arcs around the window, one per move: grey to do, violet in progress, green done.
+    /// Starts at the top and goes clockwise; the trim offsets do that without rotating the shape
+    /// (a rotated ellipse swaps its width and height — that was the squashed ring).
     private func ring(_ oval: CGRect) -> some View {
         ZStack {
             ForEach(0..<4, id: \.self) { i in
                 let state = segmentState(i)
+                let from = CGFloat((i + 3) % 4) / 4
                 Ellipse()
-                    .trim(from: CGFloat(i) / 4 + 0.012, to: CGFloat(i + 1) / 4 - 0.012)
+                    .trim(from: from + 0.012, to: from + 0.25 - 0.012)
                     .stroke(color(for: state), style: StrokeStyle(lineWidth: state == .current ? 7 : 5, lineCap: .round))
                     .opacity(state == .current && !reduceMotion ? (pulse ? 1 : 0.45) : 1)
                     .animation(state == .current && !reduceMotion ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true) : .default, value: pulse)
             }
-            .rotationEffect(.degrees(-90))
             if done {
                 Ellipse().stroke(NX.success, lineWidth: 7)
                     .transition(.scale(scale: 0.92).combined(with: .opacity))
@@ -97,8 +133,7 @@ struct LivenessCaptureView: View {
                     .transition(.opacity)
             }
         }
-        .frame(width: oval.width, height: oval.height)
-        .padding(-10)
+        .frame(width: oval.width + 20, height: oval.height + 20)
         .position(x: oval.midX, y: oval.midY)
         .animation(.spring(response: 0.45, dampingFraction: 0.7), value: done)
         .animation(.easeInOut(duration: 0.25), value: engine.presence)
@@ -111,7 +146,11 @@ struct LivenessCaptureView: View {
         return idx == i ? .current : .todo
     }
     private func color(for s: Seg) -> Color {
-        switch s { case .todo: return .white.opacity(0.28); case .current: return NX.violet; case .done: return NX.success }
+        switch s {
+        case .todo: return lightOn ? .black.opacity(0.18) : .white.opacity(0.28)
+        case .current: return NX.violet
+        case .done: return NX.success
+        }
     }
 
     /// Live feedback that needs no words: a dot that follows the head, two zones to reach it into.
@@ -121,28 +160,26 @@ struct LivenessCaptureView: View {
             switch engine.step {
             case .sideA, .sideB:
                 ZStack {
-                    Capsule().fill(Color.white.opacity(0.18)).frame(width: 200, height: 10)
+                    Capsule().fill(ink.opacity(0.18)).frame(width: 200, height: 10)
                     HStack {
                         zone(reached: engine.firstSide == -1, wanted: engine.step == .sideB && engine.firstSide == 1)
                         Spacer()
                         zone(reached: engine.firstSide == 1, wanted: engine.step == .sideB && engine.firstSide == -1)
                     }
                     .frame(width: 200)
-                    Circle().fill(Color.white).frame(width: 18, height: 18)
+                    Circle().fill(lightOn ? Color.black : Color.white).frame(width: 18, height: 18)
                         .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
                         .offset(x: max(-88, min(88, CGFloat(engine.yawDegrees) * 3.2)))
                         .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.8), value: engine.yawDegrees)
                 }
             case .blink:
                 Image(systemName: engine.eyesClosed ? "eye.slash.fill" : "eye.fill")
-                    .font(.system(size: 30, weight: .semibold)).foregroundStyle(.white)
+                    .font(.system(size: 30, weight: .semibold)).foregroundStyle(ink)
                     .contentTransition(.symbolEffect(.replace))
-                    .opacity(reduceMotion ? 1 : (pulse ? 1 : 0.35))
-                    .animation(reduceMotion ? .default : .easeInOut(duration: 0.7).repeatForever(autoreverses: true), value: pulse)
             case .capture:
-                Image(systemName: "camera.fill").font(.system(size: 26, weight: .semibold)).foregroundStyle(.white)
+                Image(systemName: "camera.fill").font(.system(size: 26, weight: .semibold)).foregroundStyle(ink)
             case .center:
-                Image(systemName: "face.dashed").font(.system(size: 30, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
+                Image(systemName: "face.dashed").font(.system(size: 30, weight: .semibold)).foregroundStyle(ink.opacity(0.9))
             }
         }
         .frame(height: 44)
@@ -151,7 +188,7 @@ struct LivenessCaptureView: View {
     }
 
     private func zone(reached: Bool, wanted: Bool) -> some View {
-        Capsule().fill(reached ? NX.success : (wanted ? NX.violet : Color.white.opacity(0.35)))
+        Capsule().fill(reached ? NX.success : (wanted ? NX.violet : ink.opacity(0.35)))
             .frame(width: 34, height: 18)
             .opacity(wanted && !reduceMotion ? (pulse ? 1 : 0.5) : 1)
             .animation(wanted && !reduceMotion ? .easeInOut(duration: 0.7).repeatForever(autoreverses: true) : .default, value: pulse)
@@ -161,20 +198,25 @@ struct LivenessCaptureView: View {
         VStack(spacing: 10) {
             HStack {
                 Button { dismiss() } label: {
-                    Image(systemName: "xmark").font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
-                        .frame(width: 36, height: 36).background(Color.white.opacity(0.18), in: Circle())
+                    Image(systemName: "xmark").font(.system(size: 15, weight: .bold)).foregroundStyle(ink)
+                        .frame(width: 36, height: 36).background(ink.opacity(0.14), in: Circle())
                 }
                 .buttonStyle(.plain).accessibilityLabel(T("Cancel"))
                 Spacer()
-                Text(T("Face check")).font(NXFont.text(13, .semibold)).foregroundStyle(.white.opacity(0.7))
+                Text(T("Face check")).font(NXFont.text(13, .semibold)).foregroundStyle(inkSoft)
                 Spacer()
-                Color.clear.frame(width: 36, height: 36)
+                Button { manualLight.toggle(); Haptics.tap() } label: {
+                    Image(systemName: lightOn ? "sun.max.fill" : "sun.max").font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(lightOn ? Color.orange : ink)
+                        .frame(width: 36, height: 36).background(ink.opacity(0.14), in: Circle())
+                }
+                .buttonStyle(.plain).accessibilityLabel(T("Screen light"))
             }
             .padding(.horizontal, 16)
             VStack(spacing: 6) {
-                Text(title).font(NXFont.display(24, .bold)).foregroundStyle(.white)
+                Text(title).font(NXFont.display(24, .bold)).foregroundStyle(ink)
                     .multilineTextAlignment(.center).contentTransition(.numericText())
-                Text(subtitle).font(NXFont.text(14)).foregroundStyle(.white.opacity(0.78))
+                Text(subtitle).font(NXFont.text(14)).foregroundStyle(inkSoft)
                     .multilineTextAlignment(.center).frame(minHeight: 36, alignment: .top)
             }
             .padding(.horizontal, 28).padding(.top, 6)
@@ -197,21 +239,22 @@ struct LivenessCaptureView: View {
     private var subtitle: String {
         if done { return T("Taking your selfie…") }
         if let n = engine.notice { return n }
+        if engine.presence == .none && engine.dark { return T("It's dark here, so the screen is your light. Hold the phone a little closer.") }
         switch engine.presence {
         case .none: return T("No face yet. Hold the phone at eye level, in good light.")
         case .small: return T("Come a little closer.")
-        case .offCentre: return T("Move your face into the oval.")
+        case .offCentre: return T("Move your face into the window.")
         case .ok: break
         }
         if engine.stalled {
             switch engine.step {
             case .sideA, .sideB: return T("Turn a bit further, until the dot reaches the end.")
-            case .blink: return T("Blink once, slowly. Glasses can make this harder.")
-            default: return T("Keep your face inside the oval, in good light.")
+            case .blink: return T("Close your eyes for a moment, then open them. Glasses can make this harder.")
+            default: return T("Keep your face inside the window, in good light.")
             }
         }
         switch engine.step {
-        case .center: return T("Keep your face inside the oval.")
+        case .center: return T("Keep your face inside the window.")
         case .sideA: return T("Slowly, until the dot reaches the end.")
         case .sideB: return T("Same again, the other way.")
         case .blink: return T("Look straight and blink once.")
@@ -227,9 +270,9 @@ struct LivenessCaptureView: View {
                     if s == .done { Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).transition(.scale.combined(with: .opacity)) }
                     Text(label).font(NXFont.text(11, .semibold))
                 }
-                .foregroundStyle(s == .todo ? Color.white.opacity(0.5) : .white)
+                .foregroundStyle(s == .todo ? ink.opacity(0.5) : .white)
                 .padding(.horizontal, 10).padding(.vertical, 6)
-                .background((s == .done ? NX.success : s == .current ? NX.violet : Color.white.opacity(0.14)), in: Capsule())
+                .background((s == .done ? NX.success : s == .current ? NX.violet : ink.opacity(0.14)), in: Capsule())
                 .animation(.spring(response: 0.4, dampingFraction: 0.7), value: engine.step)
             }
         }
@@ -244,6 +287,15 @@ struct LivenessCaptureView: View {
         }
         .padding(24).background(Color.black.opacity(0.85), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .padding(32)
+    }
+
+    // The screen as a ring light: full brightness while lit, put back exactly as it was after.
+    private func boostBrightness() {
+        if savedBrightness == nil { savedBrightness = UIScreen.main.brightness }
+        UIScreen.main.brightness = 1
+    }
+    private func restoreBrightness() {
+        if let b = savedBrightness { UIScreen.main.brightness = b; savedBrightness = nil }
     }
 }
 
@@ -281,10 +333,13 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
 
     @Published private(set) var step: Step = .center
     @Published private(set) var presence: Presence = .none
+    @Published private(set) var faceRect: CGRect?
+    @Published private(set) var bufferSize: CGSize?
     @Published private(set) var yawDegrees: Double = 0
     @Published private(set) var eyesClosed = false
     @Published private(set) var firstSide: Double = 0
     @Published private(set) var stalled = false
+    @Published private(set) var dark = false
     @Published private(set) var notice: String?
     @Published private(set) var cameraDenied = false
     @Published private(set) var captured: Data?
@@ -297,13 +352,15 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
     private var current: Step = .center
     private var holdFrames = 0
     private var side: Double = 0
-    private var earBaseline: Double?
+    private var openness: [Double] = []       // recent eye openness, for the blink reference
     private var blinkSeen = false
     private var lostFrames = 0
+    private var frameCount = 0
     private var stepStart = Date()
     private var cooldownUntil = Date.distantPast
     private var finished = false
     private var lastPublish = Date.distantPast
+    private var isDark = false
 
     private static let frontal = 0.20   // radians; Vision's yaw
     private static let turned = 0.38
@@ -332,6 +389,11 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
                 DispatchQueue.main.async { self.cameraDenied = true }
                 return
             }
+            // Let the sensor help in the dark before the screen has to.
+            if (try? device.lockForConfiguration()) != nil {
+                if device.isLowLightBoostSupported { device.automaticallyEnablesLowLightBoostWhenAvailable = true }
+                device.unlockForConfiguration()
+            }
             self.session.addInput(input)
             let output = AVCaptureVideoDataOutput()
             output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
@@ -350,6 +412,12 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         guard !finished, let pixel = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        frameCount += 1
+        if frameCount == 1 {
+            let size = CGSize(width: CVPixelBufferGetWidth(pixel), height: CVPixelBufferGetHeight(pixel))
+            DispatchQueue.main.async { self.bufferSize = size }
+        }
+        if frameCount % 8 == 0 { measureLight(pixel) }
         let request = VNDetectFaceLandmarksRequest()
         let handler = VNImageRequestHandler(cvPixelBuffer: pixel, orientation: .up, options: [:])
         try? handler.perform([request])
@@ -364,7 +432,7 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
             // Gone for ~1.5 s after the first move: whoever comes back starts over, so a photo
             // cannot be swapped in between moves.
             if lostFrames > 45 && current > .center { reset(T("Face lost. Let's start again.")) }
-            publish(presence: .none, yaw: 0, closed: false)
+            publish(presence: .none, rect: nil, yaw: 0, closed: false)
             holdFrames = 0
             return
         }
@@ -372,36 +440,39 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
         let box = face.boundingBox
         let presence: Presence
         if box.width < 0.30 { presence = .small }
-        else if abs(box.midX - 0.5) > 0.16 || abs(box.midY - 0.5) > 0.18 { presence = .offCentre }
+        else if abs(box.midX - 0.5) > 0.18 || abs(box.midY - 0.5) > 0.2 { presence = .offCentre }
         else { presence = .ok }
         let yaw = face.yaw?.doubleValue ?? 0
-        let ear = eyeAspectRatio(face)
+
+        // Blink reference: the widest the eyes have been in the last ~1.5 s. A blink is a short dip
+        // well below that, then a recovery — so it works for narrow eyes and wide eyes alike.
         var closed = false
-        if let ear, let base = earBaseline { closed = ear < base * 0.62 }
-        publish(presence: presence, yaw: yaw, closed: closed)
+        if let open = eyeOpenness(face) {
+            openness.append(open); if openness.count > 45 { openness.removeFirst() }
+            if let ref = openness.max(), ref > 0.05 { closed = open < ref * 0.70 }
+        }
+        publish(presence: presence, rect: box, yaw: yaw, closed: closed)
         guard presence == .ok, now >= cooldownUntil else { holdFrames = 0; return }
-        if !stalled && now.timeIntervalSince(stepStart) > 18 { DispatchQueue.main.async { self.stalled = true } }
+        if !stalled && now.timeIntervalSince(stepStart) > 15 { DispatchQueue.main.async { self.stalled = true } }
 
         switch current {
         case .center:
             guard abs(yaw) < Self.frontal else { holdFrames = 0; return }
-            // Open-eye baseline for the blink test, learned from this face in this light.
-            if let ear { earBaseline = earBaseline.map { $0 * 0.8 + ear * 0.2 } ?? ear }
             if held(6) { advance() }
         case .sideA:
             guard abs(yaw) >= Self.turned else { holdFrames = 0; return }
             side = yaw > 0 ? 1 : -1
-            if held(4) { DispatchQueue.main.async { self.firstSide = self.side }; advance() }
+            if held(3) { DispatchQueue.main.async { self.firstSide = self.side }; advance() }
         case .sideB:
             guard abs(yaw) >= Self.turned, (yaw > 0 ? 1.0 : -1.0) == -side else { holdFrames = 0; return }
-            if held(4) { advance() }
+            if held(3) { advance() }
         case .blink:
-            guard abs(yaw) < Self.frontal + 0.1, let ear, let base = earBaseline else { return }
-            if !blinkSeen { if ear < base * 0.62 { blinkSeen = true } }
-            else if ear > base * 0.85 { advance() }
+            guard abs(yaw) < Self.frontal + 0.12, let open = eyeOpenness(face), let ref = openness.max(), ref > 0.05 else { return }
+            if !blinkSeen { if open < ref * 0.70 { blinkSeen = true } }
+            else if open > ref * 0.85 { advance() }
         case .capture:
             guard abs(yaw) < Self.frontal, !closed else { holdFrames = 0; return }
-            if held(5) { capture(pixel) }
+            if held(4) { capture(pixel) }
         }
     }
 
@@ -409,7 +480,7 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
 
     private func advance() {
         holdFrames = 0; blinkSeen = false; stepStart = Date()
-        cooldownUntil = Date().addingTimeInterval(0.7)
+        cooldownUntil = Date().addingTimeInterval(0.5)
         current = Step(rawValue: current.rawValue + 1) ?? .capture
         let next = current
         DispatchQueue.main.async {
@@ -420,7 +491,7 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
     }
 
     private func reset(_ why: String) {
-        current = .center; holdFrames = 0; side = 0; earBaseline = nil; blinkSeen = false
+        current = .center; holdFrames = 0; side = 0; blinkSeen = false; openness.removeAll()
         stepStart = Date(); cooldownUntil = Date().addingTimeInterval(0.5)
         DispatchQueue.main.async {
             Haptics.warning()
@@ -430,31 +501,64 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
         }
     }
 
-    private func publish(presence: Presence, yaw: Double, closed: Bool) {
+    private func publish(presence: Presence, rect: CGRect?, yaw: Double, closed: Bool) {
         let now = Date()
-        guard now.timeIntervalSince(lastPublish) > 0.04 else { return }
-        lastPublish = now
+        // Blink state is never throttled — a blink is only a few frames long.
         let deg = yaw * 180 / .pi
+        let throttled = now.timeIntervalSince(lastPublish) < 0.04
+        if !throttled { lastPublish = now }
         DispatchQueue.main.async {
-            if self.presence != presence { self.presence = presence }
-            if abs(self.yawDegrees - deg) > 0.5 { self.yawDegrees = deg }
             if self.eyesClosed != closed { self.eyesClosed = closed }
+            guard !throttled else { return }
+            if self.presence != presence { self.presence = presence }
+            if let rect { self.faceRect = rect } else if self.faceRect != nil { self.faceRect = nil }
+            if abs(self.yawDegrees - deg) > 0.5 { self.yawDegrees = deg }
         }
     }
 
-    /// Height over width of the eye outline, averaged over both eyes; size-invariant, so only the
-    /// ratio to this person's own open-eye baseline matters.
-    private func eyeAspectRatio(_ face: VNFaceObservation) -> Double? {
+    /// How open the eyes are: mean lid separation over the corner-to-corner width, averaged over
+    /// both eyes. Independent of the landmark order and of face size — only the ratio to the
+    /// person's own recent maximum matters.
+    private func eyeOpenness(_ face: VNFaceObservation) -> Double? {
         guard let l = face.landmarks?.leftEye, let r = face.landmarks?.rightEye else { return nil }
-        func ratio(_ region: VNFaceLandmarkRegion2D) -> Double? {
-            let pts = region.normalizedPoints
-            guard pts.count >= 4 else { return nil }
-            let xs = pts.map(\.x), ys = pts.map(\.y)
-            let w = Double(xs.max()! - xs.min()!), h = Double(ys.max()! - ys.min()!)
-            return w > 0 ? h / w : nil
+        func openness(_ region: VNFaceLandmarkRegion2D) -> Double? {
+            let pts = region.normalizedPoints.map { (x: Double($0.x), y: Double($0.y)) }
+            guard pts.count >= 6, let a = pts.min(by: { $0.x < $1.x }), let b = pts.max(by: { $0.x < $1.x }) else { return nil }
+            let dx = b.x - a.x, dy = b.y - a.y
+            let width = (dx * dx + dy * dy).squareRoot()
+            guard width > 0 else { return nil }
+            // Signed distance of every other point to the corner line: lids above and below.
+            var up = 0.0, down = 0.0, nUp = 0, nDown = 0
+            for p in pts {
+                let d = ((p.x - a.x) * dy - (p.y - a.y) * dx) / width
+                if d > 0 { up += d; nUp += 1 } else if d < 0 { down -= d; nDown += 1 }
+            }
+            let top = nUp > 0 ? up / Double(nUp) : 0, bottom = nDown > 0 ? down / Double(nDown) : 0
+            return (top + bottom) / width
         }
-        guard let a = ratio(l), let b = ratio(r) else { return nil }
+        guard let a = openness(l), let b = openness(r) else { return nil }
         return (a + b) / 2
+    }
+
+    /// Mean brightness of a coarse grid of pixels. Dark below ~55/255, light again above ~75, so
+    /// the screen light does not flicker on the threshold.
+    private func measureLight(_ pixel: CVPixelBuffer) {
+        CVPixelBufferLockBaseAddress(pixel, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixel, .readOnly) }
+        guard let base = CVPixelBufferGetBaseAddress(pixel) else { return }
+        let w = CVPixelBufferGetWidth(pixel), h = CVPixelBufferGetHeight(pixel), stride = CVPixelBufferGetBytesPerRow(pixel)
+        let p = base.assumingMemoryBound(to: UInt8.self)
+        var sum = 0, n = 0
+        for gy in 0..<16 { for gx in 0..<16 {
+            let x = (gx * 2 + 1) * w / 32, y = (gy * 2 + 1) * h / 32
+            let o = y * stride + x * 4
+            sum += (Int(p[o]) * 114 + Int(p[o + 1]) * 587 + Int(p[o + 2]) * 299) / 1000   // BGRA
+            n += 1
+        } }
+        let mean = n > 0 ? sum / n : 128
+        let wasDark = isDark
+        if mean < 55 { isDark = true } else if mean > 75 { isDark = false }
+        if isDark != wasDark { let d = isDark; DispatchQueue.main.async { self.dark = d } }
     }
 
     private func capture(_ pixel: CVPixelBuffer) {

@@ -4,7 +4,8 @@ import CoreLocation
 /// permission, grab a best-accuracy fix, surface a clear error on denial/timeout.
 final class LocationManager: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
-    private var continuation: CheckedContinuation<Fix, Error>?
+    /// Everyone waiting for the next fix; one request serves them all.
+    private var waiters: [CheckedContinuation<Fix, Error>] = []
 
     /// Everything CoreLocation hands over, not just the pair of numbers.
     ///
@@ -60,7 +61,8 @@ final class LocationManager: NSObject, CLLocationManagerDelegate {
             break
         }
         return try await withCheckedThrowingContinuation { cont in
-            self.continuation = cont
+            self.waiters.append(cont)
+            guard self.waiters.count == 1 else { return }   // a request is already in flight
             if manager.authorizationStatus == .notDetermined {
                 self.awaitingAuth = true
                 manager.requestWhenInUseAuthorization()
@@ -78,8 +80,7 @@ final class LocationManager: NSObject, CLLocationManagerDelegate {
             m.requestLocation()
         case .denied, .restricted:
             awaitingAuth = false
-            continuation?.resume(throwing: LocationError.denied)
-            continuation = nil
+            resumeAll(.failure(LocationError.denied))
         default:
             break
         }
@@ -88,7 +89,7 @@ final class LocationManager: NSObject, CLLocationManagerDelegate {
     func locationManager(_ m: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let loc = locations.last else { return }
         let source = loc.sourceInformation
-        continuation?.resume(returning: Fix(
+        resumeAll(.success(Fix(
             latitude: loc.coordinate.latitude,
             longitude: loc.coordinate.longitude,
             accuracyM: loc.horizontalAccuracy,
@@ -98,12 +99,15 @@ final class LocationManager: NSObject, CLLocationManagerDelegate {
             capturedAt: loc.timestamp,
             simulated: source?.isSimulatedBySoftware ?? false,
             fromAccessory: source?.isProducedByAccessory ?? false
-        ))
-        continuation = nil
+        )))
     }
 
     func locationManager(_ m: CLLocationManager, didFailWithError error: Error) {
-        continuation?.resume(throwing: LocationError.unavailable)
-        continuation = nil
+        resumeAll(.failure(LocationError.unavailable))
+    }
+
+    private func resumeAll(_ result: Result<Fix, Error>) {
+        let all = waiters; waiters.removeAll()
+        for w in all { w.resume(with: result) }
     }
 }
