@@ -935,6 +935,30 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    if (parsed.data.compact === "1") {
+      // The dots a watch face or a widget draws: who, which day, what colour, and the two times.
+      // `tone` is decided here so every client colours the same day the same way: P present,
+      // L late, I permit, C leave, S sick, D day off, A absent, blank = nothing that day.
+      const toneOf = (r: HistoryRow) => {
+        switch (r.attendanceDayType) {
+          case "PRESENT": return (r.lateMinutes ?? 0) > 0 ? "L" : "P"
+          case "PERMIT_APPROVED": return "I"
+          case "LEAVE_APPROVED": return "C"
+          case "SICK_APPROVED": return "S"
+          case "DAY_OFF_APPROVED": return "D"
+          case "ABSENT": return "A"
+          default: return r.checkInAt ? "P" : ""
+        }
+      }
+      return NextResponse.json({
+        scope,
+        records: rows.map((r) => ({
+          userId: r.user.id, name: r.user.name, date: r.attendanceDate.slice(0, 10), tone: toneOf(r),
+          checkInAt: r.checkInAt, checkOutAt: r.checkOutAt, lateMinutes: r.lateMinutes ?? 0, kind: r.recordKind,
+        })),
+      })
+    }
+
     return NextResponse.json({
       scope,
       records: rows,
