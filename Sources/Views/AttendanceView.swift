@@ -1050,48 +1050,97 @@ struct RecordActionsSheet: View {
     @State private var busy = false
     @State private var confirmDelete = false
     @State private var err: String?
+    @State private var viewingPhoto: PhotoRef?
 
     private var dateLabel: String { AgendaRange.dayLabel(AgendaRange.dayKey(row.attendanceDate ?? "")) }
     private func timeText(_ iso: String?) -> String {
         guard let d = ProjDate.parse(iso) else { return "—" }
         return ProjDate.fmt("HH:mm").string(from: d)
     }
+    private var isRecord: Bool { (row.recordKind ?? (row.checkInAt != nil ? "ATTENDANCE" : "")) == "ATTENDANCE" }
+    private var tone: AttTone { AttTone.of(row) }
+    /// What the cell colour meant, in words — plus the number that decides the penalty.
+    private var statusLabel: String {
+        switch (row.attendanceDayType ?? "").uppercased() {
+        case "SICK_APPROVED":    return T("Sick")
+        case "PERMIT_APPROVED":  return T("Permit")
+        case "LEAVE_APPROVED":   return T("Leave")
+        case "DAY_OFF_APPROVED": return T("Day off")
+        case "ABSENT":           return T("Absent")
+        default:
+            if let late = row.lateMinutes, late > 0 { return "\(T("Late")) \(late) \(T("min"))" }
+            return row.checkInAt != nil ? T("Present") : T("No record")
+        }
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 6) {
                         Text(row.user?.name ?? "Staff").font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)
-                        Text(dateLabel).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                        HStack(spacing: 8) {
+                            Text(dateLabel).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                            Text(statusLabel).font(NXFont.text(11, .bold)).foregroundStyle(Color.white)
+                                .padding(.horizontal, 9).padding(.vertical, 4).background(tone.color, in: Capsule())
+                        }
                     }
 
-                    VStack(spacing: 0) {
-                        timeRow(T("Check-in"), row.checkInAt, "arrow.right.to.line", NX.success)
-                        Divider().overlay(NX.border)
-                        timeRow(T("Check-out"), row.checkOutAt, "arrow.left.to.line", NX.danger)
+                    if isRecord {
+                        evidence(T("Check-in"), at: row.checkInAt, status: row.checkInStatus, address: row.checkInAddress,
+                                 distance: row.checkInDistanceMeters, photo: row.checkInPhotoUrl, icon: "arrow.right.to.line", tint: NX.success)
+                        evidence(T("Check-out"), at: row.checkOutAt, status: row.checkOutStatus, address: row.checkOutAddress,
+                                 distance: row.checkOutDistanceMeters, photo: row.checkOutPhotoUrl, icon: "arrow.left.to.line", tint: NX.danger)
+                        if row.checkOutOffsite == true {
+                            infoLine("mappin.and.ellipse", "\(T("Offsite check-out")) · \(reqStatusLabel(row.checkOutApproval))" + (row.checkOutReason.map { " · \($0)" } ?? ""))
+                        }
+                        if let office = row.officeLocation?.name {
+                            infoLine("building.2", office + (row.effectiveShiftStartTime.map { " · \(T("shift")) \($0)–\(row.effectiveShiftEndTime ?? "")" } ?? ""))
+                        }
+                        if let w = row.workedMinutes, w > 0 { infoLine("clock", "\(T("Worked")) \(w / 60)h \(w % 60)m") }
+                        if row.isCorrected == true {
+                            infoLine("pencil.and.list.clipboard", "\(T("Corrected by BoD")) · \(row.correctionReason ?? "")")
+                        }
+                        if let notes = row.notes, !notes.isEmpty { infoLine("text.alignleft", notes) }
+                    } else if (row.attendanceDayType ?? "").uppercased() == "ABSENT" {
+                        Text(T("No check-in was recorded that day and no request covered it."))
+                            .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                    } else {
+                        // A request row: the reason, who approved it, and the evidence attached.
+                        infoLine("checkmark.seal", "\(reqLabel(row.requestType)) · \(reqStatusLabel(row.requestStatus))"
+                                 + (row.reviewedBy?.name.map { " · \(T("approved by")) \($0)" } ?? ""))
+                        if let notes = row.notes, !notes.isEmpty { infoLine("text.alignleft", notes) }
+                        if let url = AttendanceRow.fileURL(row.supportingDocumentUrl) {
+                            if (row.supportingDocumentUrl ?? "").lowercased().hasSuffix(".pdf") {
+                                infoLine("doc.fill", (row.supportingDocumentName ?? "PDF") + " · " + T("open it on the web"))
+                            } else {
+                                Button { viewingPhoto = PhotoRef(url: url, name: row.supportingDocumentName) } label: {
+                                    CachedImage(url: url) { $0.resizable().scaledToFill() } placeholder: { NX.muted }
+                                        .frame(height: 160).frame(maxWidth: .infinity)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                }.buttonStyle(.plain)
+                            }
+                        }
                     }
-                    .padding(.horizontal, 12)
-                    .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border))
 
-                    SectionLabel(T("Delete attendance data"))
-                    if row.checkOutAt != nil {
-                        Button { Task { await del(part: "checkout") } } label: {
-                            Label(T("Delete check-out (reopen)"), systemImage: "arrow.uturn.backward")
-                                .font(NXFont.text(14, .bold)).foregroundStyle(NX.danger).frame(maxWidth: .infinity).padding(.vertical, 12)
-                                .background(NX.danger.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.danger.opacity(0.3)))
+                    if isRecord, row.id != nil {
+                        SectionLabel(T("Delete attendance data"))
+                        if row.checkOutAt != nil {
+                            Button { Task { await del(part: "checkout") } } label: {
+                                Label(T("Delete check-out (reopen)"), systemImage: "arrow.uturn.backward")
+                                    .font(NXFont.text(14, .bold)).foregroundStyle(NX.danger).frame(maxWidth: .infinity).padding(.vertical, 12)
+                                    .background(NX.danger.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.danger.opacity(0.3)))
+                            }.buttonStyle(.plain).disabled(busy)
+                        }
+                        Button { confirmDelete = true } label: {
+                            Label(T("Delete this attendance record"), systemImage: "trash.fill")
+                                .font(NXFont.text(14, .bold)).foregroundStyle(.white).frame(maxWidth: .infinity).padding(.vertical, 12)
+                                .background(NX.danger, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }.buttonStyle(.plain).disabled(busy)
+                        Text(T("For cleaning up an accidental check-in. \"Delete this attendance record\" removes the record and shields that day from attendance deductions. It is written to the audit log."))
+                            .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                     }
-                    Button { confirmDelete = true } label: {
-                        Label(T("Delete this attendance record"), systemImage: "trash.fill")
-                            .font(NXFont.text(14, .bold)).foregroundStyle(.white).frame(maxWidth: .infinity).padding(.vertical, 12)
-                            .background(NX.danger, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }.buttonStyle(.plain).disabled(busy)
-
-                    Text(T("For cleaning up an accidental check-in. \"Delete this attendance record\" removes the record and shields that day from attendance deductions. It is written to the audit log."))
-                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
 
                     if let err { Text(err).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger) }
                     if busy { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity) }
@@ -1099,8 +1148,9 @@ struct RecordActionsSheet: View {
                 .padding(16)
             }
             .background(NX.background.ignoresSafeArea())
-            .navigationTitle(T("Manage attendance")).navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(T("Attendance detail")).navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Close")) { dismiss() } } }
+            .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
             .confirmationDialog("\(T("Delete the whole attendance record for")) \(dateLabel)?", isPresented: $confirmDelete, titleVisibility: .visible) {
                 Button(T("Delete"), role: .destructive) { Task { await del(part: nil) } }
                 Button(T("Cancel"), role: .cancel) {}
@@ -1108,14 +1158,45 @@ struct RecordActionsSheet: View {
         }
     }
 
-    private func timeRow(_ label: String, _ iso: String?, _ icon: String, _ tint: Color) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: icon).font(.system(size: 13)).foregroundStyle(tint).frame(width: 26)
-            Text(label).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
-            Spacer()
-            Text(timeText(iso)).font(NXFont.text(14, .bold)).foregroundStyle(iso == nil ? NX.mutedFg : NX.foreground)
+    /// One leg of the day: time and status on the left, the selfie on the right, the place below.
+    private func evidence(_ label: String, at iso: String?, status: String?, address: String?, distance: Double?, photo: String?, icon: String, tint: Color) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(systemName: icon).font(.system(size: 12)).foregroundStyle(tint)
+                    Text(label).font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground)
+                    Spacer()
+                    Text(timeText(iso)).font(NXFont.text(15, .bold)).foregroundStyle(iso == nil ? NX.mutedFg : NX.foreground)
+                }
+                if let status, !status.isEmpty {
+                    Text(status.replacingOccurrences(of: "_", with: " ").capitalized).font(NXFont.text(11, .semibold)).foregroundStyle(status.uppercased().contains("LATE") || status.uppercased().contains("EARLY") ? NX.danger : NX.mutedFg)
+                }
+                if let address, !address.isEmpty {
+                    Text(address).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
+                }
+                if let distance { Text("±\(Int(distance.rounded())) m \(T("from the office"))").font(NXFont.text(11)).foregroundStyle(NX.mutedFg) }
+                if iso == nil { Text(T("Not recorded.")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg) }
+            }
+            if let url = AttendanceRow.fileURL(photo) {
+                Button { viewingPhoto = PhotoRef(url: url, name: label) } label: {
+                    CachedImage(url: url) { $0.resizable().scaledToFill() } placeholder: { NX.muted }
+                        .frame(width: 64, height: 64).clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }.buttonStyle(.plain).accessibilityLabel(T("Selfie"))
+            } else if iso != nil {
+                RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NX.muted).frame(width: 64, height: 64)
+                    .overlay(Image(systemName: "camera").foregroundStyle(NX.mutedFg))
+            }
         }
-        .padding(.vertical, 11)
+        .padding(12)
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.border))
+    }
+
+    private func infoLine(_ icon: String, _ text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: icon).font(.system(size: 12)).foregroundStyle(NX.mutedFg).frame(width: 18)
+            Text(text).font(NXFont.text(12)).foregroundStyle(NX.foreground.opacity(0.85)).fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private func del(part: String?) async {

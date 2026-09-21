@@ -4,13 +4,13 @@ import UniformTypeIdentifiers
 
 // MARK: - shared request helpers
 
-private func reqLabel(_ t: String?) -> String {
+func reqLabel(_ t: String?) -> String {
     switch (t ?? "").uppercased() {
     case "LEAVE": return T("Leave"); case "SICK": return T("Sick"); case "PERMIT": return T("Permit")
     case "DAY_OFF": return "Day Off"; case "RED_DATE": return T("Public Holiday"); default: return (t ?? "—").capitalized
     }
 }
-private func reqStatusLabel(_ s: String?) -> String {
+func reqStatusLabel(_ s: String?) -> String {
     switch (s ?? "").uppercased() {
     case "APPROVED": return T("Approved"); case "REJECTED": return T("Rejected"); case "CANCELED", "CANCELLED": return T("Canceled")
     default: return T("Pending")

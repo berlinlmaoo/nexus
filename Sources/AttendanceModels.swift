@@ -60,6 +60,42 @@ struct AttendanceRow: Decodable, Identifiable, Sendable {
     let user: UserRef?
     struct UserRef: Decodable, Sendable { let id: String?; let name: String?; let avatar: String? }
     var idv: String { id ?? ((user?.id ?? "") + (attendanceDate ?? "")) }
+
+    // The rest of what the history endpoint has always sent and the board never read — the
+    // evidence a BoD taps a cell to see: where, when, how late, and the selfies.
+    let recordKind: String?            // ATTENDANCE | REQUEST | ABSENT
+    let checkInStatus: String?
+    let checkOutStatus: String?
+    let lateMinutes: Int?
+    let earlyLeaveMinutes: Int?
+    let workedMinutes: Int?
+    let checkInAddress: String?
+    let checkOutAddress: String?
+    let checkInPhotoUrl: String?
+    let checkOutPhotoUrl: String?
+    let checkInDistanceMeters: Double?
+    let checkOutDistanceMeters: Double?
+    let checkOutOffsite: Bool?
+    let checkOutApproval: String?
+    let checkOutReason: String?
+    let notes: String?
+    let isCorrected: Bool?
+    let correctionReason: String?
+    let officeLocation: OfficeRef?
+    struct OfficeRef: Decodable, Sendable { let id: String?; let name: String? }
+    let effectiveShiftStartTime: String?
+    let effectiveShiftEndTime: String?
+    let requestType: String?
+    let requestStatus: String?
+    let reviewedBy: UserRef?
+    let supportingDocumentUrl: String?
+    let supportingDocumentName: String?
+
+    /// Files are served by the API behind the session cookie; a relative path needs the base.
+    static func fileURL(_ path: String?) -> URL? {
+        guard let path, !path.isEmpty else { return nil }
+        return URL(string: path.hasPrefix("http") ? path : Config.baseURL.absoluteString + path)
+    }
 }
 
 /// GET /api/attendance/requests?scope= — leave/sick/permit/day-off/red-date requests.

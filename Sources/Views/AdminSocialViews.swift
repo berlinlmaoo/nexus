@@ -139,10 +139,14 @@ struct EmptyState: View {
                     .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 360)
             }
             if let actionTitle, let action {
+                // A compact pill, not the full-size primary button: the empty state is a hint, and the
+                // page's own header already carries the big button.
                 Button { action() } label: {
-                    if let actionIcon { Label(actionTitle, systemImage: actionIcon) } else { Text(actionTitle) }
+                    Group { if let actionIcon { Label(actionTitle, systemImage: actionIcon) } else { Text(actionTitle) } }
+                        .font(NXFont.text(13, .bold)).foregroundStyle(Color.white)
+                        .padding(.horizontal, 16).padding(.vertical, 9).background(tint, in: Capsule())
                 }
-                    .buttonStyle(NexusPrimaryButton(fullWidth: false)).padding(.top, 6)
+                .buttonStyle(.plain).padding(.top, 6)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: compact ? nil : .infinity)
