@@ -552,6 +552,12 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
     /// the screen light does not flicker on the threshold. When no face has been found for a couple
     /// of seconds, merely dim (below ~100) already counts as dark: if the detector cannot see a
     /// face, more light is the one thing that helps.
+    private static func hasUprightFace(_ cg: CGImage) -> Bool {
+        let request = VNDetectFaceRectanglesRequest()
+        try? VNImageRequestHandler(cgImage: cg, orientation: .up, options: [:]).perform([request])
+        return !(request.results ?? []).isEmpty
+    }
+
     private func measureLight(_ pixel: CVPixelBuffer) {
         CVPixelBufferLockBaseAddress(pixel, .readOnly)
         defer { CVPixelBufferUnlockBaseAddress(pixel, .readOnly) }
@@ -576,11 +582,21 @@ final class LivenessEngine: NSObject, ObservableObject, AVCaptureVideoDataOutput
     private func capture(_ pixel: CVPixelBuffer) {
         finished = true
         // Native landscape buffer → upright, mirrored like the preview the person just looked at.
-        var image = CIImage(cvPixelBuffer: pixel).oriented(.leftMirrored)
-        let maxSide = max(image.extent.width, image.extent.height)
-        if maxSide > 1280 { image = image.transformed(by: CGAffineTransform(scaleX: 1280 / maxSide, y: 1280 / maxSide)) }
-        guard let cg = ciContext.createCGImage(image, from: image.extent),
-              let data = UIImage(cgImage: cg).jpegData(compressionQuality: 0.7) else { finished = false; return }
+        // `.leftMirrored` is the front camera held in portrait — and it is what Vision was told, so
+        // the face it just tracked is proof it is right. Verified anyway rather than trusted: the
+        // finished picture is checked for an upright face, and if there is none the other three
+        // ways of holding the sensor are tried. A sideways selfie can never reach the record.
+        let base = CIImage(cvPixelBuffer: pixel)
+        var chosen: CGImage?
+        for orientation in [CGImagePropertyOrientation.leftMirrored, .rightMirrored, .upMirrored, .downMirrored] {
+            var image = base.oriented(orientation)
+            let maxSide = max(image.extent.width, image.extent.height)
+            if maxSide > 1280 { image = image.transformed(by: CGAffineTransform(scaleX: 1280 / maxSide, y: 1280 / maxSide)) }
+            guard let cg = ciContext.createCGImage(image, from: image.extent) else { continue }
+            if chosen == nil { chosen = cg }
+            if Self.hasUprightFace(cg) { chosen = cg; break }
+        }
+        guard let cg = chosen, let data = UIImage(cgImage: cg).jpegData(compressionQuality: 0.7) else { finished = false; return }
         DispatchQueue.main.async {
             Haptics.success()
             withAnimation(.spring(response: 0.45, dampingFraction: 0.7)) { self.captured = data }

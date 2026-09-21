@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 import UniformTypeIdentifiers
 
 /// Port of f.$formId.tsx: the public intake form, filled and submitted in the app.
@@ -32,11 +33,39 @@ struct FormFillView: View {
     private enum PickTarget { case files(String), attachment(String) }
     @State private var pickTarget: PickTarget = .files("")
     @State private var showImporter = false
+    /// Where the file comes from: a fresh photo, the photo library, or Files. A reimbursement is
+    /// usually a receipt in somebody's hand, so the camera has to be one tap away.
+    @State private var showSourceMenu = false
+    @State private var showCamera = false
+    @State private var showPhotos = false
+    @State private var photoItems: [PhotosPickerItem] = []
 
     var body: some View {
         ZStack {
             NX.background.ignoresSafeArea()
             content
+                // Presented from the inner view, the importer from the outer one: one presentation
+                // of each kind per view, which is what SwiftUI actually supports.
+                .sheet(isPresented: $showCamera) {
+                    CameraPicker(cameraDevice: .rear) { data in
+                        addData(data, filename: "photo-\(Self.stamp()).jpg", mime: "image/jpeg")
+                    }
+                    .ignoresSafeArea()
+                }
+                .photosPicker(isPresented: $showPhotos, selection: $photoItems,
+                              maxSelectionCount: { if case .attachment = pickTarget { return 1 } else { return 10 } }(),
+                              matching: .images)
+                .onChange(of: photoItems) { _, items in
+                    guard !items.isEmpty else { return }
+                    photoItems = []
+                    Task { await addPhotos(items) }
+                }
+        }
+        .confirmationDialog(T("Add file"), isPresented: $showSourceMenu, titleVisibility: .visible) {
+            // A beat after the dialog goes, so the next presentation is not swallowed by its exit.
+            Button(T("Take a photo")) { DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showCamera = true } }
+            Button(T("Choose from Photos")) { DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showPhotos = true } }
+            Button(T("Browse files")) { DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showImporter = true } }
         }
         .navigationTitle(form?.name ?? title)
         .navigationBarTitleDisplayMode(.inline)
@@ -302,7 +331,7 @@ struct FormFillView: View {
         return VStack(alignment: .leading, spacing: 8) {
             Button {
                 pickTarget = .files(field.id)
-                showImporter = true
+                showSourceMenu = true
             } label: {
                 pickerRow(icon: "paperclip",
                           text: picked.isEmpty ? T("Choose files (more than one is fine)")
@@ -323,7 +352,7 @@ struct FormFillView: View {
         return VStack(alignment: .leading, spacing: 6) {
             Button {
                 pickTarget = .attachment(field.id)
-                showImporter = true
+                showSourceMenu = true
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "paperclip").font(.system(size: 11))
@@ -463,6 +492,43 @@ struct FormFillView: View {
             picked.append(upload)
         }
         values[fieldId] = .files(picked)
+    }
+
+    /// Photos picked from the library, read one by one; a failure names itself and moves on.
+    private func addPhotos(_ items: [PhotosPickerItem]) async {
+        for (i, item) in items.enumerated() {
+            guard let data = try? await item.loadTransferable(type: Data.self) else {
+                actionError = T("Couldn't read that photo.")
+                continue
+            }
+            let type = item.supportedContentTypes.first
+            addData(data, filename: "photo-\(Self.stamp())-\(i + 1).\(type?.preferredFilenameExtension ?? "jpg")",
+                    mime: type?.preferredMIMEType ?? "image/jpeg")
+        }
+    }
+
+    /// Bytes that did not come from a URL — a photo just taken, or one from the library — added to
+    /// whichever slot the source menu was opened for, under the same ceilings as `read`.
+    private func addData(_ data: Data, filename: String, mime: String) {
+        let key: String, partName: String, carrying: Int
+        switch pickTarget {
+        case .files(let field):
+            key = field; partName = "file:\(field)"; carrying = pickedBytes
+        case .attachment(let field):
+            key = "attachment:\(field)"; partName = key
+            carrying = pickedBytes - fileValue(key).reduce(0) { $0 + $1.data.count }
+        }
+        guard !key.isEmpty, !data.isEmpty else { return }
+        guard data.count <= FormUpload.maxBytes else { actionError = T("That file is over the 50MB limit."); return }
+        guard carrying + data.count <= APIClient.singleRequestCeiling else { actionError = T("These files are too big to send together."); return }
+        let upload = FormUpload(partName: partName, filename: filename, mime: mime, data: data)
+        if case .attachment = pickTarget { values[key] = .files([upload]) }
+        else { values[key] = .files(fileValue(key) + [upload]) }
+    }
+
+    private static func stamp() -> String {
+        let f = DateFormatter(); f.dateFormat = "yyyyMMdd-HHmmss"; f.locale = Locale(identifier: "en_US_POSIX")
+        return f.string(from: Date())
     }
 
     private func addAttachment(_ url: URL, to fieldId: String) async {
