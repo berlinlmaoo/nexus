@@ -72,3 +72,46 @@ export async function PATCH(
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
+
+// Remove an office. Attendance rows point at their office and the relation forbids orphaning them,
+// so an office that has ever been checked into cannot be deleted — only switched off — and the
+// answer says so with the count, instead of a bare 500 from the database.
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ officeId: string }> }
+) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const context = await getAttendanceWorkspaceContext(session.user.id)
+    if (!context.workspace || !context.canManageAttendance) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+    const { officeId } = await params
+    const existing = await prisma.officeLocation.findUnique({ where: { id: officeId } })
+    if (!existing || existing.workspaceId !== context.workspace.id) {
+      return NextResponse.json({ error: "Office not found" }, { status: 404 })
+    }
+    const records = await prisma.attendanceRecord.count({ where: { officeLocationId: officeId } })
+    if (records > 0) {
+      return NextResponse.json(
+        { error: `${existing.name} has ${records} attendance record${records === 1 ? "" : "s"}, so it can't be deleted. Switch it off instead; the history keeps its name.`, code: "OFFICE_HAS_RECORDS", records },
+        { status: 409 }
+      )
+    }
+    await prisma.officeLocation.delete({ where: { id: officeId } })
+    await logAudit({
+      action: "delete",
+      entityType: "attendance_office",
+      entityId: existing.id,
+      entityName: existing.name,
+      userId: session.user.id,
+      request,
+      metadata: { workspaceId: context.workspace.id },
+    })
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    console.error("Error deleting attendance office:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}

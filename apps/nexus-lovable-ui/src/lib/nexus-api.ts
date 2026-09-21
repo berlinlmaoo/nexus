@@ -1696,6 +1696,7 @@ export const nexusApi = {
   },
   attendanceOffices: () => apiFetch<{ offices: NexusOffice[] }>("/api/attendance/offices"),
   createOffice: (payload: OfficePayload) => apiFetch<{ office?: NexusOffice }>("/api/attendance/offices", { method: "POST", body: JSON.stringify(payload) }),
+  deleteOffice: (officeId: string) => apiFetch<{ ok?: boolean }>(`/api/attendance/offices/${officeId}`, { method: "DELETE" }),
   updateOffice: (officeId: string, payload: Partial<OfficePayload>) => apiFetch<{ office?: NexusOffice }>(`/api/attendance/offices/${officeId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   tasks: (query = "") => apiFetch<NexusTask[]>(`/api/tasks${query ? `?${query}` : ""}`),
   createTask: (payload: CreateTaskPayload) => apiFetch<NexusTask>("/api/tasks", { method: "POST", body: JSON.stringify(payload) }),
