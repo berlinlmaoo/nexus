@@ -445,7 +445,9 @@ export async function GET(request: NextRequest) {
 
     let teamScopeUserIds: string[] | null = null
     if (scope === "workspace" && isTeamManager) {
-      teamScopeUserIds = context.directReportIds
+      // Their reports AND themselves. The board is the only place a manager's own history shows,
+      // and scoping it to the reports alone made their own month vanish the day they got one.
+      teamScopeUserIds = [...new Set([...context.directReportIds, session.user.id])]
     }
 
     const range = parsed.data.month

@@ -954,7 +954,12 @@ function OfficesSection() {
   const offices = useQuery({ queryKey: ["attendance-offices"], queryFn: nexusApi.attendanceOffices, retry: 1 });
   const rows = offices.data?.offices ?? [];
   const invalidate = () => qc.invalidateQueries({ queryKey: ["attendance-offices"] });
-  const toggle = useMutation({ mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => nexusApi.updateOffice(id, { isActive }), onSuccess: invalidate });
+  const toggle = useMutation({ mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => nexusApi.updateOffice(id, { isActive }), onSuccess: invalidate,
+    onError: (e: unknown) => alert(e instanceof Error ? e.message : "Couldn't update the office.") });
+  // Deleting is refused by the server for an office that has attendance history (the rows point at
+  // it); the message it sends back says so and suggests switching it off instead.
+  const del = useMutation({ mutationFn: (id: string) => nexusApi.deleteOffice(id), onSuccess: invalidate,
+    onError: (e: unknown) => alert(e instanceof Error ? e.message : "Couldn't delete the office.") });
 
   return (
     <section className="rounded-[28px] border border-border bg-card shadow-soft overflow-hidden">
@@ -975,6 +980,7 @@ function OfficesSection() {
               <div className="text-sm font-semibold">{o.name}</div>
               <div className="text-xs text-muted-foreground">{o.address || `${o.latitude?.toFixed(4)}, ${o.longitude?.toFixed(4)}`} · {o.radiusMeters}m</div>
             </div>
+            <button title="Delete office" disabled={del.isPending} onClick={() => { if (window.confirm(`Delete "${o.name}"? Only possible while no attendance has been recorded at it.`)) del.mutate(o.id); }} className="rounded-lg border border-border p-1.5 text-muted-foreground transition-colors hover:border-rose-300 hover:text-rose-600 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" /></button>
             <button onClick={() => setEditOffice(o)} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><Pencil className="h-3.5 w-3.5" /> Edit</button>
             <button onClick={() => toggle.mutate({ id: o.id, isActive: !o.isActive })} className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold transition-colors ${o.isActive ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}>{o.isActive ? "Active" : "Inactive"}</button>
           </div>
@@ -1005,6 +1011,8 @@ function OfficeComposer({ office, onClose, onCreated }: { office?: NexusOffice; 
       return editing ? nexusApi.updateOffice(office!.id, payload) : nexusApi.createOffice(payload);
     },
     onSuccess: () => { onCreated(); onClose(); },
+    // A refused save used to leave the dialog open and silent — "the edit doesn't work".
+    onError: (e: unknown) => alert(e instanceof Error ? e.message : "Couldn't save the office."),
   });
   const useMyLocation = () => navigator.geolocation?.getCurrentPosition((pos) => { setLat(String(pos.coords.latitude)); setLng(String(pos.coords.longitude)); });
   return (
