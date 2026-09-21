@@ -87,7 +87,11 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
       for (let i = 0; i < d.length; i += 4) sum += (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
       const mean = sum / (d.length / 4);
       const was = st.dark;
-      if (mean < 55) st.dark = true; else if (mean > 75) st.dark = false;
+      // Merely dim already counts as dark once no face has been found for a couple of seconds:
+      // if the detector cannot see a face, more light is the one thing that helps.
+      const struggling = st.lost > 60;
+      if (mean < 55 || (struggling && mean < 100)) st.dark = true;
+      else if (mean > (struggling ? 120 : 75)) st.dark = false;
       if (st.dark !== was) setDark(st.dark);
     };
 
@@ -229,8 +233,8 @@ export function LivenessCapture({ onCapture, onCancel, onUnavailable }: {
     const dw = view.vw * scale, dh = view.vh * scale;
     const ox = (view.w - dw) / 2, oy = (view.h - dh) / 2;
     const fx = ox + (1 - box.x - box.w) * dw, fy = oy + box.y * dh, fw = box.w * dw, fh = box.h * dh;
-    const w = Math.max(fw * 1.42, homeW * 0.7), h = Math.max(fh * 1.55, w * 1.25);
-    oval = { cx: fx + fw / 2, cy: fy + fh / 2 - fh * 0.06, rx: w / 2, ry: h / 2 };
+    const w = Math.min(Math.max(fw * 1.15, 140), homeW * 1.1), h = Math.min(Math.max(fh * 1.25, w * 1.2), homeH * 1.15);
+    oval = { cx: fx + fw / 2, cy: fy + fh / 2 - fh * 0.04, rx: w / 2, ry: h / 2 };
   }
   const spring = reduce ? { duration: 0 } : { type: "spring" as const, stiffness: 320, damping: 32 };
   const dot = Math.max(-92, Math.min(92, yaw * 420));
