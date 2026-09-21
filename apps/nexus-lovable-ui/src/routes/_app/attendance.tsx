@@ -1,4 +1,5 @@
 import type React from "react";
+import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
@@ -1300,7 +1301,15 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
       </div>
       <div className="divide-y divide-border">
         {requestsQuery.isLoading && <div className="px-5 py-4 text-sm text-muted-foreground">Loading requests…</div>}
-        {!requestsQuery.isLoading && entries.length === 0 && <div className="px-5 py-6 text-center text-sm text-muted-foreground">Nothing in the queue yet.</div>}
+        {!requestsQuery.isLoading && entries.length === 0 && (
+          <div className="p-4">
+            <EmptyState icon={ClipboardCheck} compact title={canReview ? "Nothing to review yet" : "No requests yet"}
+              message={canReview
+                ? "Leave, sick days, permits and offsite check-outs from your people appear here the moment they're filed, with Approve and Reject right on the row."
+                : "Leave, sick days, permits and day-offs you file show up here with their status, and your approver is told the moment you send one."}
+              action={<EmptyAction onClick={() => setComposerOpen(true)}>New request</EmptyAction>} />
+          </div>
+        )}
         {!requestsQuery.isLoading && alwaysVisibleCount === 0 && settledHiddenCount > 0 && !showSettled && (
           <div className="px-5 py-6 text-center text-sm text-muted-foreground">Nothing waiting on a decision. {settledHiddenCount} settled item{settledHiddenCount === 1 ? "" : "s"} hidden.</div>
         )}

@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
+import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { FileText, Inbox, Lock, X, Trash2, Loader2, Paperclip, Download } from "lucide-react";
@@ -168,11 +169,9 @@ function MySubmissions() {
         {q.isError && <div className="rounded-2xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground shadow-sm">Couldn't load. You need to log in.</div>}
 
         {!q.isLoading && !q.isError && subs.length === 0 && (
-          <div className="rounded-2xl border border-dashed bg-card p-10 text-center shadow-sm">
-            <Inbox className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
-            <div className="text-base font-black">No submissions yet</div>
-            <p className="mt-1.5 text-sm text-muted-foreground">Forms you submit will show up on this board with their status.</p>
-          </div>
+          <EmptyState icon={Inbox} title="No submissions yet"
+            message="Everything you file through a form — a request, a reimbursement, a report — lands on this board with its status, so you never have to ask where it got to. Start with a form."
+            action={<EmptyAction to="/forms">Open forms</EmptyAction>} />
         )}
 
         {!q.isLoading && !q.isError && subs.length > 0 && (

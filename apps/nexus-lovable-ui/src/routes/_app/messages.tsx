@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, MessageCircle, Pencil, Plus, UserPlus, Users as UsersIcon, X } from "lucide-react";
+import { Loader2, MessageCircle, Pencil, Plus, UserPlus, Users as UsersIcon, X, MessageSquare } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { ChatThread } from "@/components/messages/ChatThread";
 import { nexusApi, type NexusConversation, type NexusUser } from "@/lib/nexus-api";
@@ -63,7 +64,13 @@ function Messages() {
         {/* conversation list */}
         <aside className="overflow-y-auto border-r border-border">
           {convos.isLoading && <div className="flex justify-center py-10 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
-          {!convos.isLoading && rows.length === 0 && <p className="p-4 text-sm text-muted-foreground">No conversations yet.</p>}
+          {!convos.isLoading && rows.length === 0 && (
+            <div className="p-3">
+              <EmptyState icon={MessageSquare} title="No chats yet" compact
+                message="Direct messages and group chats with colleagues live here, and every project has a room of its own."
+                action={<EmptyAction onClick={() => setComposer(true)}>New chat</EmptyAction>} />
+            </div>
+          )}
           {(["DM", "GROUP", "PROJECT"] as const).map((t) => groups[t].length > 0 && (
             <div key={t} className="py-1">
               <div className="px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t === "DM" ? "Direct" : t === "GROUP" ? "Groups" : "Projects"}</div>
