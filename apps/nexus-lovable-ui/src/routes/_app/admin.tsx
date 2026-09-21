@@ -1167,6 +1167,56 @@ function QuotaEditor({ userId, quota, override, defaultQuota }: { userId: string
 }
 
 // Per-user day-off editor (BoD only): set the monthly day-off quota (override the default 4).
+// Fixed weekly rest days for one person. The offices run seven days; before this, "Sunday is my
+// day off" had to be filed as a day-off request every single week, and a forgotten one cost
+// −150 XP plus a token. Saved through the same member PATCH as Flexi Time.
+const REST_WEEKDAYS: { d: number; label: string }[] = [
+  { d: 1, label: "Mon" }, { d: 2, label: "Tue" }, { d: 3, label: "Wed" }, { d: 4, label: "Thu" }, { d: 5, label: "Fri" }, { d: 6, label: "Sat" }, { d: 7, label: "Sun" },
+];
+function RestDaysEditor({ userId, canEdit }: { userId: string; canEdit: boolean }) {
+  const qc = useQueryClient();
+  const membersQ = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 });
+  const me = membersQ.data?.members?.find((m) => m.userId === userId);
+  const current = me?.restDays ?? [];
+  const m = useMutation({
+    mutationFn: (days: number[]) => nexusApi.updateWorkspaceMember({ memberId: me!.id, restDays: days }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["nexus", "workspace-members"] }),
+    onError: (e: unknown) => alert(e instanceof Error ? e.message : "Couldn't save rest days."),
+  });
+  if (!me) return null;
+  const toggle = (d: number) => m.mutate(current.includes(d) ? current.filter((x) => x !== d) : [...current, d].sort((a, b) => a - b));
+  const preset = (days: number[]) => m.mutate(days);
+  return (
+    <div className="mb-3 rounded-xl border border-border bg-muted/30 p-3">
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Rest days</span>
+        {m.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {REST_WEEKDAYS.map((w) => {
+          const on = current.includes(w.d);
+          return (
+            <button key={w.d} type="button" disabled={!canEdit || m.isPending} onClick={() => toggle(w.d)}
+              className={cn("rounded-full px-2.5 py-1 text-xs font-semibold ring-1 transition", on ? "bg-violet-600 text-white ring-violet-600" : "bg-background text-muted-foreground ring-border hover:text-foreground", !canEdit && "opacity-70")}>
+              {w.label}
+            </button>
+          );
+        })}
+      </div>
+      {canEdit && (
+        <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+          <button type="button" onClick={() => preset([7])} className="text-primary hover:underline">Sunday off</button>
+          <button type="button" onClick={() => preset([6, 7])} className="text-primary hover:underline">Sat + Sun off</button>
+          <button type="button" onClick={() => preset([])} className="text-muted-foreground hover:underline">Works every day</button>
+        </div>
+      )}
+      <p className="mt-1.5 text-[11px] text-muted-foreground">
+        {current.length ? "No reminder, lateness or absence on these days — no day-off request needed." : "Works every office day; a day off must be requested."}
+      </p>
+    </div>
+  );
+}
+
 function DayoffModal({ user, canEdit, onClose }: { user: { id: string; name: string }; canEdit: boolean; onClose: () => void }) {
   const q = useQuery({ queryKey: ["nexus", "dayoffs", user.id], queryFn: () => nexusApi.userDayoffs(user.id), retry: false });
   const data = q.data;
@@ -1183,6 +1233,7 @@ function DayoffModal({ user, canEdit, onClose }: { user: { id: string; name: str
 
         {/* Jatah day-off per bulan — bisa diubah dari default (4). */}
         {canEdit && data && <QuotaEditor userId={user.id} quota={data.quota} override={data.quotaOverride} defaultQuota={data.defaultQuota} />}
+        <RestDaysEditor userId={user.id} canEdit={canEdit} />
 
         {data && (
           <p className="text-xs text-muted-foreground">

@@ -131,6 +131,7 @@ export async function GET(req: NextRequest) {
         attendanceShiftByDay: m.attendanceShiftByDay ?? null,
         flexiTimeEnabled: m.flexiTimeEnabled,
         noGeofenceMode: m.noGeofenceMode,
+        restDays: m.restDays ?? [],
         approverId: m.approverId,
         approver: m.approver,
         joinedAt: m.joinedAt,
@@ -301,7 +302,7 @@ export async function PATCH(req: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { memberId, role, attendanceRole, workspaceId, attendanceShiftStartTime, attendanceShiftEndTime, attendanceShiftByDay, phoneNumber, flexiTimeEnabled, noGeofenceMode, approverId } = await req.json()
+    const { memberId, role, attendanceRole, workspaceId, attendanceShiftStartTime, attendanceShiftEndTime, attendanceShiftByDay, phoneNumber, flexiTimeEnabled, noGeofenceMode, approverId, restDays } = await req.json()
 
     // Per-person shift times: "HH:mm", or null/"" to clear (inherit team/office shift).
     const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -382,6 +383,15 @@ export async function PATCH(req: NextRequest) {
     }
     if (noGeofenceMode !== undefined && typeof noGeofenceMode !== 'boolean') {
       return NextResponse.json({ error: 'noGeofenceMode must be boolean' }, { status: 400 })
+    }
+    // Rest days: ISO weekdays 1..7, de-duplicated, sorted. [] clears. Seven would mean "never works".
+    let restDaysClean: number[] | undefined
+    if (restDays !== undefined) {
+      if (!Array.isArray(restDays) || restDays.some((d) => !Number.isInteger(d) || d < 1 || d > 7)) {
+        return NextResponse.json({ error: 'restDays must be an array of weekdays 1 (Mon) to 7 (Sun)' }, { status: 400 })
+      }
+      restDaysClean = [...new Set(restDays as number[])].sort((a, b) => a - b)
+      if (restDaysClean.length >= 7) return NextResponse.json({ error: 'A member cannot rest every day of the week' }, { status: 400 })
     }
     if (approverId !== undefined && approverId !== null && typeof approverId !== 'string') {
       return NextResponse.json({ error: 'approverId must be a string or null' }, { status: 400 })
@@ -467,6 +477,7 @@ export async function PATCH(req: NextRequest) {
         ...(byDay === "skip" ? {} : { attendanceShiftByDay: byDay === "clear" ? Prisma.DbNull : byDay }),
         ...(flexiTimeEnabled !== undefined ? { flexiTimeEnabled } : {}),
         ...(noGeofenceMode !== undefined ? { noGeofenceMode } : {}),
+        ...(restDaysClean !== undefined ? { restDays: restDaysClean } : {}),
         ...(approverId !== undefined ? { approverId } : {}),
       },
       include: {

@@ -3,19 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
-import {
-  attendancePeriodKey,
-  attendancePeriodRange,
-  endOfAttendanceMonth,
-  formatAttendanceDateKey,
-  getAttendanceDate,
-  getAttendanceWorkspaceContext,
-  getMemberNoGeofence,
-  resolveEffectiveAttendanceShift,
-  serializeAttendanceRequest,
-  startOfAttendanceMonth,
-  serializeAttendanceRecord,
-} from "@/lib/attendance"
+import { attendancePeriodKey, attendancePeriodRange, endOfAttendanceMonth, formatAttendanceDateKey, getAttendanceDate, getAttendanceWorkspaceContext, getMemberNoGeofence, resolveEffectiveAttendanceShift, serializeAttendanceRequest, startOfAttendanceMonth, serializeAttendanceRecord, isRestDayForMember } from "@/lib/attendance"
 import { clearLeaveCoveredOpenRecords } from "@/lib/attendance-absence"
 import { ANNUAL_LEAVE_DAYS, checkLeaveEligibility, leaveDaysInYear, leaveYearRange } from "@/lib/annual-leave"
 
@@ -141,7 +129,7 @@ export async function GET() {
 
     const quotaMember = await prisma.workspaceMember.findUnique({
       where: { userId_workspaceId: { userId: session.user.id, workspaceId: context.workspace.id } },
-      select: { dayOffQuota: true },
+      select: { dayOffQuota: true, restDays: true },
     })
 
     // Tanggal merah (RED_DATE): this user's usage + the month's BoD-set quota (same for all staff).
@@ -215,6 +203,10 @@ export async function GET() {
       pendingCheckout: pendingCheckout ? serializeAttendanceRecord(pendingCheckout) : null,
       todayRequest: todayRequest ? serializeAttendanceRequest(todayRequest) : null,
       dayOffQuota: quotaMember?.dayOffQuota ?? 4,
+      // Fixed weekly rest days (ISO 1=Mon..7=Sun) and whether today is one — so a client can say so
+      // instead of showing a check-in button the person does not need.
+      restDays: quotaMember?.restDays ?? [],
+      isRestDayToday: isRestDayForMember(new Date(), quotaMember?.restDays ?? []),
       dayOffUsedThisMonth: dayOffRequests.reduce((count: number, requestItem) => {
         const start = dayOffPeriod.start
         const end = dayOffPeriod.end

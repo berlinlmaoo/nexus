@@ -719,6 +719,12 @@ export function endOfAttendanceMonth(date: Date, timeZone = ATTENDANCE_TIMEZONE)
   return new Date(Date.UTC(year, month, 0))
 }
 
+/** A member's own fixed rest day (WorkspaceMember.restDays, ISO 1=Mon..7=Sun), in the attendance timezone. */
+export function isRestDayForMember(date: Date, restDays: number[] | null | undefined, timeZone?: string | null) {
+  if (!restDays || restDays.length === 0) return false
+  return restDays.includes(getWeekdayInTimezone(date, timeZone || ATTENDANCE_TIMEZONE))
+}
+
 export function isWorkdayForAttendanceDate(date: Date, office: OfficeLocationLike) {
   const policy = buildShiftWindow(date, office)
   const weekday = getWeekdayInTimezone(date, policy.timeZone)

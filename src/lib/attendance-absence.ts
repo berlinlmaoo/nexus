@@ -1,17 +1,6 @@
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
-import {
-  enumerateAttendanceDates,
-  FLEXI_WINDOW_END,
-  formatAttendanceDateKey,
-  getAttendanceDate,
-  getPrimaryAttendanceTeam,
-  isWorkdayForAttendanceDate,
-  minutesLateAgainstShift,
-  resolveEffectiveAttendanceShift,
-  resolveShiftWindowAt,
-  safeAttendanceTimezone,
-} from "@/lib/attendance"
+import { enumerateAttendanceDates, FLEXI_WINDOW_END, formatAttendanceDateKey, getAttendanceDate, getPrimaryAttendanceTeam, isWorkdayForAttendanceDate, minutesLateAgainstShift, resolveEffectiveAttendanceShift, resolveShiftWindowAt, safeAttendanceTimezone, isRestDayForMember } from "@/lib/attendance"
 import { awardXpOnce, setLatePenalty, clearLatePenalty, refundXpByReason, refundXpByReasonTx } from "@/lib/gamification"
 import { getHolidayKeys, isHoliday } from "@/lib/holidays"
 
@@ -327,10 +316,11 @@ export async function rederiveLatePenaltyForDate(userId: string, workspaceId: st
 
   const member = await prisma.workspaceMember.findFirst({
     where: { userId, workspaceId },
-    select: { role: true, joinedAt: true, user: { select: { createdAt: true } } },
+    select: { role: true, joinedAt: true, restDays: true, user: { select: { createdAt: true } } },
   })
   if (!member) return 0
   if (member.role === "BOD" || member.role === "ONE_ABOVE_ALL") return 0 // exempt from all attendance XP penalties
+  if (isRestDayForMember(date, member.restDays)) return 0 // their fixed rest day
   const joinKey = formatAttendanceDateKey(member.joinedAt ?? member.user?.createdAt ?? startFloor())
   if (dateKey < joinKey) return 0 // never penalize days before this member joined
 
@@ -658,7 +648,7 @@ export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date; 
     // BoD & One Above All tidak wajib absen → dikecualiin dari auto-potong day-off.
     const members = await prisma.workspaceMember.findMany({
       where: { workspaceId, role: { notIn: ["BOD", "ONE_ABOVE_ALL"] } },
-      select: { userId: true, joinedAt: true, user: { select: { id: true, name: true, createdAt: true } } },
+      select: { userId: true, joinedAt: true, restDays: true, user: { select: { id: true, name: true, createdAt: true } } },
     })
     // Never penalize a member for workdays BEFORE they joined the workspace. The cron scans a 14-day
     // window floored only at the global go-live, so a new hire created mid-window was getting back-dated
@@ -683,6 +673,9 @@ export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date; 
       for (const member of members) {
         const userId = member.userId
         const memberOffice = usualOffice.get(userId) ?? office
+
+        // Their own fixed rest day: nothing was expected, nothing is cut.
+        if (isRestDayForMember(date, member.restDays, memberOffice.timezone)) { result.skipped++; continue }
 
         // Pre-join guard: don't penalize days before this member joined the workspace.
         const joinKey = joinKeyByUser.get(userId)
@@ -877,13 +870,14 @@ export async function accrueLatePenalties(now: Date = new Date()): Promise<LateA
 
     const members = await prisma.workspaceMember.findMany({
       where: { workspaceId, role: { notIn: ["BOD", "ONE_ABOVE_ALL"] } },
-      select: { userId: true },
+      select: { userId: true, restDays: true },
     })
     const usualOffice = await usualOfficeByUser(workspaceId, offices.filter((o) => o.workspaceId === workspaceId))
 
     for (const member of members) {
       const userId = member.userId
       const memberOffice = usualOffice.get(userId) ?? office
+      if (isRestDayForMember(today, member.restDays, memberOffice.timezone)) continue
 
       // Already checked in/out → penalty is finalized at check-in; don't touch.
       const record = await prisma.attendanceRecord.findUnique({

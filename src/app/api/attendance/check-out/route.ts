@@ -6,18 +6,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
-import {
-  buildAttendanceDerivedFields,
-  formatAttendanceDateKey,
-  getAttendanceWorkspaceContext,
-  assessLocationIntegrity,
-  getMemberNoGeofence,
-  isWorkdayForAttendanceDate,
-  resolveEffectiveAttendanceShift,
-  resolveNearestOffice,
-  resolveShiftWindowAt,
-  serializeAttendanceRecord,
-} from "@/lib/attendance"
+import { buildAttendanceDerivedFields, formatAttendanceDateKey, getAttendanceWorkspaceContext, assessLocationIntegrity, getMemberNoGeofence, isWorkdayForAttendanceDate, resolveEffectiveAttendanceShift, resolveNearestOffice, resolveShiftWindowAt, serializeAttendanceRecord, isRestDayForMember } from "@/lib/attendance"
 import { isHoliday } from "@/lib/holidays"
 import { isAutoDeduction, hasAttendanceWaiver, startFloor, isOutageDay } from "@/lib/attendance-absence"
 import { awardXpOnce } from "@/lib/gamification"
@@ -316,8 +305,13 @@ export async function POST(request: NextRequest) {
       // Same exemptions as every other attendance penalty (check-in route, nightly cron): BoD and
       // One Above All are not required to clock in, nothing before the policy floor counts, and an
       // outage day is nobody's fault. Five BoD members had been docked −25 here.
+      const restMember = await prisma.workspaceMember.findUnique({
+        where: { userId_workspaceId: { userId: session.user.id, workspaceId: context.workspace.id } },
+        select: { restDays: true },
+      })
       const exempt =
         context.workspaceRole === "BOD" || context.workspaceRole === "ONE_ABOVE_ALL" ||
+        isRestDayForMember(attendanceDate, restMember?.restDays ?? [], checkInOffice.timezone) ||
         attendanceDate.getTime() < startFloor().getTime() ||
         (await isOutageDay(formatAttendanceDateKey(attendanceDate)))
       if (
