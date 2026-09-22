@@ -35,6 +35,18 @@ import { isBackdated, reportDelayMinutes } from "@/lib/permit-rules"
 const MAX_SUPPORTING_DOCUMENT_SIZE = 10 * 1024 * 1024
 
 /**
+ * One date per sakit/izin, enforced on the server. OFF until iOS 0.1.6 is on the App Store.
+ *
+ * The rule is right, but it only works when the form can obey it. 0.1.4 — what everyone is running
+ * today — has a start-and-until picker and no way to send a single day, so turning this on locked
+ * staff out of filing a multi-day sakit with no way to comply. The 0.1.6 composer sends one date;
+ * flip this back to true once that build is live, and the server and the form agree again.
+ *
+ * Until then the policy lives in the form alone, which is where every updated client already is.
+ */
+const ENFORCE_SINGLE_DAY_REQUESTS = false
+
+/**
  * A sick note or a piece of evidence has to be something a reviewer can actually open: a picture or
  * a PDF. Checked by MIME first and by extension second, because some pickers send an empty type.
  *
@@ -285,7 +297,7 @@ export async function POST(request: NextRequest) {
     // Sakit and izin are filed one day at a time: one date, one piece of evidence, one decision.
     // A multi-day illness goes through a BoD grant, where a human has seen the note and can set the
     // range — which is also the only way a range ever carried any meaning.
-    if (!canGrant && (reqType === "SICK" || reqType === "PERMIT") && parsedEndDate.getTime() !== parsedStartDate.getTime()) {
+    if (ENFORCE_SINGLE_DAY_REQUESTS && !canGrant && (reqType === "SICK" || reqType === "PERMIT") && parsedEndDate.getTime() !== parsedStartDate.getTime()) {
       return NextResponse.json(
         {
           error: reqType === "SICK"
