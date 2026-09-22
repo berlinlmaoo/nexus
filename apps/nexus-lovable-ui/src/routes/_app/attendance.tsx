@@ -552,7 +552,7 @@ function Attendance() {
                                 {d.remaining}/{d.quota} DO
                               </span>
                               <span title={d.redDate.quota === 0
-                                  ? "Jatah tanggal merah bulan ini belum di-set BoD"
+                                  ? "The BoD hasn't set this month's public-holiday allowance yet"
                                   : `Sisa tanggal merah bulan kalender ini: ${d.redDate.remaining} dari ${d.redDate.quota} (kepakai ${d.redDate.used})`}
                                 className={cn(pill, d.redDate.quota === 0 ? "bg-muted/50 text-muted-foreground/70 ring-border" : quotaTone(d.redDate.remaining))}>
                                 {d.redDate.remaining}/{d.redDate.quota} TM
@@ -1362,7 +1362,7 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
               onChange={(e) => setRejectNote(e.target.value)}
               rows={2}
               maxLength={1000}
-              placeholder="e.g. Foto buktinya nggak kebaca — tolong ajukan ulang sama fotonya."
+              placeholder="e.g. The photo is unreadable — please file again with a clearer one."
               className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-destructive"
             />
             <div className="flex flex-wrap items-center gap-2">
@@ -1609,11 +1609,11 @@ function RequestComposer({ onClose, onCreated }: { onClose: () => void; onCreate
   const [geoError, setGeoError] = useState<string | null>(null);
   const [geoBusy, setGeoBusy] = useState(false);
   const askLocation = () => {
-    if (!navigator.geolocation) { setGeoError("Browser kamu nggak support lokasi."); return; }
+    if (!navigator.geolocation) { setGeoError("This browser can't read your location."); return; }
     setGeoBusy(true); setGeoError(null);
     navigator.geolocation.getCurrentPosition(
       (pos) => { setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGeoBusy(false); },
-      () => { setGeoError("Lokasi ditolak. Nyalain izin lokasi buat browser ini dulu."); setGeoBusy(false); },
+      () => { setGeoError("Location refused. Turn location on for this browser first."); setGeoBusy(false); },
       { enableHighAccuracy: true, timeout: 15_000 },
     );
   };
@@ -1654,23 +1654,23 @@ function RequestComposer({ onClose, onCreated }: { onClose: () => void; onCreate
           </div>
           {needsLocation && (
             <div className="space-y-1.5 rounded-xl border border-border bg-background/60 px-3 py-2">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Bukti izin</div>
-              <p className="text-xs text-muted-foreground">Izin wajib pakai <b>foto</b> + <b>lokasi</b>, dan sebaiknya diajukan sebelum jam masuk.</p>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Permit evidence</div>
+              <p className="text-xs text-muted-foreground">A permit needs a <b>photo</b> and your <b>location</b>, and is best filed before your shift starts.</p>
               {coords ? (
-                <p className="text-xs font-semibold text-success">Lokasi kekunci ({coords.lat.toFixed(5)}, {coords.lng.toFixed(5)})</p>
+                <p className="text-xs font-semibold text-success">Location locked ({coords.lat.toFixed(5)}, {coords.lng.toFixed(5)})</p>
               ) : (
                 <button type="button" onClick={askLocation} disabled={geoBusy}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs font-semibold transition-colors hover:border-primary disabled:opacity-50">
-                  {geoBusy && <Loader2 className="h-3 w-3 animate-spin" />}{geoBusy ? "Ngambil lokasi…" : "Ambil lokasi saya"}
+                  {geoBusy && <Loader2 className="h-3 w-3 animate-spin" />}{geoBusy ? "Getting your location…" : "Use my location"}
                 </button>
               )}
               {geoError && <p className="text-xs font-semibold text-destructive">{geoError}</p>}
               {permitBackdated && (
-                <p className="text-xs font-semibold text-destructive">Izin nggak bisa buat tanggal yang udah lewat. Minta BoD yang input kalau memang perlu.</p>
+                <p className="text-xs font-semibold text-destructive">A permit can't be filed for a day that has passed. Ask the BoD to enter it if it's genuinely needed.</p>
               )}
               {lateReportPreview != null && !permitBackdated && (
                 <p className="text-xs font-semibold text-warning">
-                  Kamu ngajuin {Math.floor(lateReportPreview / 60) > 0 ? `${Math.floor(lateReportPreview / 60)} jam ` : ""}{lateReportPreview % 60} menit setelah jam masuk ({shiftStart}). Ini kecatat dan kelihatan sama approver.
+                  You're filing {Math.floor(lateReportPreview / 60) > 0 ? `${Math.floor(lateReportPreview / 60)}h ` : ""}{lateReportPreview % 60}m after your shift started ({shiftStart}). This is recorded and your approver sees it.
                 </p>
               )}
             </div>
@@ -1720,7 +1720,7 @@ function RequestComposer({ onClose, onCreated }: { onClose: () => void; onCreate
           {showAttachment && (
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                {type === "SICK" ? `Doctor’s note photo${attachmentRequired ? " (required)" : " (optional)"}` : `Foto bukti${attachmentRequired ? " (wajib)" : " (opsional)"}`}
+                {type === "SICK" ? `Doctor’s note photo${attachmentRequired ? " (required)" : " (optional)"}` : `Supporting photo${attachmentRequired ? " (required)" : " (optional)"}`}
               </label>
               <label className={cn("mt-1 flex cursor-pointer items-center gap-2 rounded-xl border border-dashed px-3 py-2.5 text-sm transition-colors hover:border-primary", attachment ? "border-primary/50 bg-primary/5" : "border-border")}>
                 <Camera className="h-4 w-4 shrink-0 text-muted-foreground" />
