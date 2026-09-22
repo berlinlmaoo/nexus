@@ -9,7 +9,7 @@ import { Avatar } from "@/components/Avatar";
 import { ApiError, downloadFile, fmtDate, fmtTime, nexusApi, statusLabel, type AttendanceActionPayload, type NexusAttendanceHistory, type NexusOffice, type NexusOffsiteCheckout } from "@/lib/nexus-api";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { getAttendanceFix, GeoError } from "@/lib/geo";
-import { AlertTriangle, Calendar, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Clock, Coffee, Download, Loader2, MapPin, Pencil, PenLine, Scale, Search, Sparkles, Trash2, X } from "lucide-react";
+import { AlertTriangle, Calendar, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Clock, Coffee, Download, Flag, Hand, HeartPulse, Info, Loader2, MapPin, Moon, Pencil, PenLine, Scale, Search, Sparkles, Sun, Trash2, X } from "lucide-react";
 import { celebrate } from "@/components/Celebration";
 import { SelfieCapture } from "@/components/attendance/SelfieCapture";
 import { MobileCheckInHero } from "@/components/attendance/MobileCheckInHero";
@@ -1531,11 +1531,53 @@ function RequestComposer({ onClose, onCreated }: { onClose: () => void; onCreate
   const todayQ = useQuery({ queryKey: ["attendance-today"], queryFn: () => nexusApi.attendanceToday(), staleTime: 30_000 });
   const myRole = wsm.data?.role ?? "STAFF";
   const canGrant = myRole === "BOD" || myRole === "ONE_ABOVE_ALL"; // BoD ke atas
-  // Cuti tahunan is offered to everyone now; whether it's usable is decided by tenure + quota, not
-  // by role. Shown-but-disabled rather than hidden — an option that vanishes makes people ask why.
-  const TYPES = ["LEAVE", "SICK", "PERMIT", "DAY_OFF", "RED_DATE"];
   const leave = todayQ.data?.annualLeave;
-  const leaveBlocked = !canGrant && type === "LEAVE" && !(leave?.eligible && (leave?.remaining ?? 0) > 0);
+  const leaveUsable = Boolean(leave?.eligible && (leave?.remaining ?? 0) > 0);
+  const redQuota = todayQ.data?.redDateQuota ?? 0;
+  // Only what this person can actually file. Cuti tahunan needs a year of service AND days left;
+  // a public holiday needs the BoD to have set a quota for the month. Offering either without that
+  // is a button whose only outcome is a refusal, and people read a refusal as the app being broken.
+  const TYPES = [
+    ...(canGrant || leaveUsable ? ["LEAVE"] : []),
+    "SICK", "PERMIT", "DAY_OFF",
+    ...(canGrant || redQuota > 0 ? ["RED_DATE"] : []),
+  ];
+  useEffect(() => { if (!TYPES.includes(type)) setType("DAY_OFF"); }, [TYPES.join(","), type]); // eslint-disable-line react-hooks/exhaustive-deps
+  const leaveBlocked = !canGrant && type === "LEAVE" && !leaveUsable;
+  // Sakit and izin are one day each: one date, one piece of evidence, one decision. The server says
+  // the same, so the form cannot promise something the submit will refuse.
+  const singleDay = !canGrant && (type === "SICK" || type === "PERMIT");
+  const dayCount = (() => {
+    const a = new Date(`${startDate}T00:00:00Z`).getTime();
+    const b = new Date(`${singleDay ? startDate : endDate}T00:00:00Z`).getTime();
+    if (!Number.isFinite(a) || !Number.isFinite(b) || b < a) return 1;
+    return Math.floor((b - a) / 86_400_000) + 1;
+  })();
+  const remainingDays =
+    type === "DAY_OFF" ? Math.max(0, (todayQ.data?.dayOffQuota ?? 0) - (todayQ.data?.dayOffUsedThisMonth ?? 0))
+    : type === "RED_DATE" ? Math.max(0, redQuota - (todayQ.data?.redDateUsedThisMonth ?? 0))
+    : type === "LEAVE" ? (leave?.remaining ?? null)
+    : null;
+  // Said before the submit, not after: asking for four days out of two left is caught here.
+  const quotaProblem = !canGrant && remainingDays != null && dayCount > remainingDays
+    ? `You're asking for ${dayCount} days and only ${remainingDays} is left.`
+    : null;
+  const TYPE_ICON: Record<string, typeof Sun> = { LEAVE: Sun, SICK: HeartPulse, PERMIT: Hand, DAY_OFF: Moon, RED_DATE: Flag };
+  const typeHint =
+    type === "LEAVE" ? (!leave ? "Uses your annual leave." : !leave.eligible ? (leave.reason ?? "Annual leave needs 12 months of service.") : `Annual leave: ${leave.remaining} of ${leave.quota} days left this year.`)
+    : type === "SICK" ? "One day per request, and a photo of the doctor's note is required. A day that has already passed is fine."
+    : type === "PERMIT" ? "One day per request, today or later, with a photo and your location."
+    : type === "DAY_OFF" ? `Day off: ${remainingDays ?? 0} of ${todayQ.data?.dayOffQuota ?? 0} left this period.`
+    : `Public holiday: ${remainingDays ?? 0} of ${redQuota} left this month.`;
+  const pickType = (t: string) => {
+    setType(t);
+    if (t !== "SICK" && t !== "PERMIT") setAttachment(null);
+    // Izin cannot be backdated and the one-day types collapse the range: bring the dates into line
+    // the moment the type changes, rather than at submit time.
+    if (!canGrant && t === "PERMIT" && startDate < today) { setStartDate(today); setEndDate(today); return; }
+    if (!canGrant && (t === "SICK" || t === "PERMIT")) setEndDate(startDate);
+    else if (endDate < startDate) setEndDate(startDate);
+  };
   const leaveNote = !leave
     ? null
     : !leave.eligible
@@ -1589,13 +1631,27 @@ function RequestComposer({ onClose, onCreated }: { onClose: () => void; onCreate
     <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <h2 className="font-display text-lg font-bold tracking-tight">{grantingToUser ? "Grant a permit to a user" : "New attendance request"}</h2>
-        {!canGrant && <p className="mt-1 text-xs text-muted-foreground">Staff can request <b>Permit</b>, <b>Sick</b>, <b>Day Off</b> & <b>Public Holiday</b>. Sick requires a photo of the doctor’s note. <b>Cuti tahunan</b> needs 12 months of service.</p>}
+        {!canGrant && <p className="mt-1 text-xs text-muted-foreground">Only the types you can actually use are listed. Sick and permit are one day each; day off and leave can span several.</p>}
         <div className="mt-4 space-y-3">
-          <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Type
-            <select value={type} onChange={(e) => { const v = e.target.value; setType(v); if (v !== "SICK" && v !== "PERMIT") setAttachment(null); }} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary">
-              {TYPES.map((t) => <option key={t} value={t}>{statusLabel(t)}</option>)}
-            </select>
-          </label>
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Type</div>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {TYPES.map((t) => {
+                const Icon = TYPE_ICON[t] ?? Flag;
+                const on = type === t;
+                return (
+                  <button key={t} type="button" onClick={() => pickType(t)}
+                    className={cn("inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition-all active:scale-[0.97]",
+                      on ? "bg-primary text-primary-foreground ring-primary" : "bg-background text-muted-foreground ring-border hover:text-foreground")}>
+                    <Icon className="h-3.5 w-3.5" />{statusLabel(t)}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2 flex items-start gap-1.5 text-xs text-muted-foreground">
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />{typeHint}
+            </p>
+          </div>
           {needsLocation && (
             <div className="space-y-1.5 rounded-xl border border-border bg-background/60 px-3 py-2">
               <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Bukti izin</div>
@@ -1635,10 +1691,31 @@ function RequestComposer({ onClose, onCreated }: { onClose: () => void; onCreate
               </select>
             </label>
           )}
-          <div className="grid grid-cols-2 gap-2">
-            <label className="text-[11px] font-bold text-muted-foreground">Start<input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-background px-2 py-2 text-sm" /></label>
-            <label className="text-[11px] font-bold text-muted-foreground">End<input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-background px-2 py-2 text-sm" /></label>
-          </div>
+          {singleDay ? (
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Date
+              <input type="date" value={startDate} min={type === "PERMIT" ? today : undefined}
+                onChange={(e) => { setStartDate(e.target.value); setEndDate(e.target.value); }}
+                className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" />
+            </label>
+          ) : (
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-[11px] font-bold text-muted-foreground">Start<input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); if (endDate < e.target.value) setEndDate(e.target.value); }} className="mt-1 w-full rounded-xl border border-border bg-background px-2 py-2 text-sm" /></label>
+                <label className="text-[11px] font-bold text-muted-foreground">End<input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-background px-2 py-2 text-sm" /></label>
+              </div>
+              {remainingDays != null && (
+                <div className="flex items-center gap-2">
+                  <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums", quotaProblem ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary")}>{dayCount} {dayCount === 1 ? "day" : "days"}</span>
+                  <span className="text-xs text-muted-foreground">{remainingDays} left</span>
+                </div>
+              )}
+            </div>
+          )}
+          {quotaProblem && (
+            <p className="flex items-start gap-1.5 rounded-xl bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />{quotaProblem}
+            </p>
+          )}
           <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="Reason / context…" className="w-full resize-y rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
           {showAttachment && (
             <div>
@@ -1656,7 +1733,7 @@ function RequestComposer({ onClose, onCreated }: { onClose: () => void; onCreate
           )}
         </div>
         <div className="mt-5 flex items-center gap-2">
-          <button disabled={!reason.trim() || (attachmentRequired && !attachment) || (needsLocation && !coords) || permitBackdated || leaveBlocked || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {grantingToUser && targetUserId ? "Grant permit" : "Submit request"}</button>
+          <button disabled={!reason.trim() || (attachmentRequired && !attachment) || (needsLocation && !coords) || permitBackdated || leaveBlocked || Boolean(quotaProblem) || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {grantingToUser && targetUserId ? "Grant permit" : "Submit request"}</button>
           <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent">Cancel</button>
           {create.isError && <span className="text-xs font-semibold text-destructive">{(create.error as Error)?.message ?? "Couldn’t send the request."}</span>}
         </div>

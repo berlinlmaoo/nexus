@@ -34,6 +34,22 @@ import { isBackdated, reportDelayMinutes } from "@/lib/permit-rules"
 
 const MAX_SUPPORTING_DOCUMENT_SIZE = 10 * 1024 * 1024
 
+/**
+ * A sick note or a piece of evidence has to be something a reviewer can actually open: a picture or
+ * a PDF. Checked by MIME first and by extension second, because some pickers send an empty type.
+ *
+ * Deliberately NOT a check that the picture IS a doctor's note. Software cannot tell a clinic letter
+ * from a well-lit receipt without reading it, and every rule strict enough to catch a fake would
+ * also refuse a real handwritten note from a puskesmas at six in the morning. The reviewer sees the
+ * photo and decides; that is what the review is for.
+ */
+function isSupportedDocument(file: File): boolean {
+  const mime = (file.type || "").toLowerCase()
+  if (mime.startsWith("image/") || mime === "application/pdf") return true
+  if (mime) return false
+  return /\.(jpe?g|png|heic|heif|webp|gif|pdf)$/i.test(file.name)
+}
+
 function overlapsRange(
   leftStart: Date,
   leftEnd: Date,
@@ -265,6 +281,26 @@ export async function POST(request: NextRequest) {
     // Sick self-requests must include the doctor's note photo (BoD grants are exempt).
     if (!canGrant && reqType === "SICK" && !(supportingDocument instanceof File && supportingDocument.size > 0)) {
       return NextResponse.json({ error: "Request sakit wajib melampirkan foto surat sakit." }, { status: 400 })
+    }
+    // Sakit and izin are filed one day at a time: one date, one piece of evidence, one decision.
+    // A multi-day illness goes through a BoD grant, where a human has seen the note and can set the
+    // range — which is also the only way a range ever carried any meaning.
+    if (!canGrant && (reqType === "SICK" || reqType === "PERMIT") && parsedEndDate.getTime() !== parsedStartDate.getTime()) {
+      return NextResponse.json(
+        {
+          error: reqType === "SICK"
+            ? "Sakit diajukan per hari. Pilih satu tanggal — kalau sakitnya beberapa hari, minta BoD yang input rentangnya."
+            : "Izin diajukan per hari. Pilih satu tanggal.",
+          code: "SINGLE_DAY_ONLY",
+        },
+        { status: 400 }
+      )
+    }
+    if (supportingDocument instanceof File && supportingDocument.size > 0 && !isSupportedDocument(supportingDocument)) {
+      return NextResponse.json(
+        { error: "Lampirannya harus foto atau PDF.", code: "DOCUMENT_TYPE" },
+        { status: 400 }
+      )
     }
     // Izin now demands the same evidence check-in does — photo + coordinates. Without it, izin was
     // strictly cheaper than showing up: no proof, no location, no time.
