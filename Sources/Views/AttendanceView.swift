@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import CoreLocation
 
 /// Native port of the web MobileCheckInHero: map hero + violet gradient time card (live clock,
 /// schedule, IN/OUT) + green "Presence In" / red "Presence Out" + offsite-reason flow.
@@ -15,6 +16,9 @@ struct AttendanceView: View {
     /// discovered as a failure after the selfie.
     @State private var locationOff = false
     @State private var deniedPermission: PermissionKind?
+    /// Offices with their geofences, and which one the person is actually standing in.
+    @State private var offices: [Office] = []
+    @State private var nearby: (office: Office, distance: Double, inside: Bool)?
     @State private var camera: MapCameraPosition = .userLocation(fallback: .automatic)
     @State private var showCamera = false
     @State private var pendingAction: Action?
@@ -281,8 +285,8 @@ struct AttendanceView: View {
         return LazyVGrid(columns: cols, spacing: 12) {
             FunMetricCard(icon: "cup.and.saucer.fill", label: T("Today's status"), value: todayStatusValue,
                           tint: NX.success)
-            FunMetricCard(icon: "mappin.circle.fill", label: T("Office checkpoint"), value: officeValue,
-                          helper: "In \(dispRec?.checkInAt.flatMap(Self.hhmm) ?? "--:--") · Out \(dispRec?.checkOutAt.flatMap(Self.hhmm) ?? "--:--")", tint: NX.violetText)
+            FunMetricCard(icon: nearby?.inside == true && dispRec?.officeLocation?.name == nil ? "checkmark.circle.fill" : "mappin.circle.fill",
+                          label: officeLabel, value: officeValue, helper: officeHelper, tint: officeTint)
             FunMetricCard(icon: "sparkles", label: T("Day-off tokens"), value: Self.quotaValue(today?.dayOffUsedThisMonth, today?.dayOffQuota),
                           helper: T("This month's day-off allowance"), tint: NX.warning)
             FunMetricCard(icon: "calendar", label: T("Public holidays"), value: Self.quotaValue(today?.redDateUsedThisMonth, today?.redDateQuota),
@@ -304,8 +308,58 @@ struct AttendanceView: View {
         if let req = today?.todayRequest, let t = req.type { return "\(Self.humanize(t)) \(Self.humanize(req.status ?? ""))".trimmingCharacters(in: .whitespaces) }
         return "Ready to check in"
     }
+    /// Once checked in this is the office on the record. Before that it used to say "5 active
+    /// offices", which is a fact about the company and not about the person holding the phone —
+    /// so now it answers the question they actually have: which office am I at?
     private var officeValue: String {
-        dispRec?.officeLocation?.name ?? "\(today?.activeOfficeCount ?? 0) active offices"
+        if let name = dispRec?.officeLocation?.name { return name }
+        if let n = nearby { return n.office.name }
+        if locationOff { return T("Location is off") }
+        return T("Finding you…")
+    }
+    private var officeLabel: String {
+        dispRec?.officeLocation?.name != nil ? T("Office checkpoint") : T("Where you are")
+    }
+    private var officeHelper: String {
+        if dispRec?.checkInAt != nil || dispRec?.checkOutAt != nil {
+            return "In \(dispRec?.checkInAt.flatMap(Self.hhmm) ?? "--:--") · Out \(dispRec?.checkOutAt.flatMap(Self.hhmm) ?? "--:--")"
+        }
+        if let n = nearby {
+            return n.inside
+                ? T("You're inside this office area")
+                : String(format: T("%@ from here"), Self.distanceLabel(n.distance))
+        }
+        if locationOff { return T("Turn location on to see which office you're at") }
+        return T("Checking where you are…")
+    }
+    private var officeTint: Color {
+        guard dispRec?.officeLocation?.name == nil else { return NX.violetText }
+        guard let n = nearby else { return NX.mutedFg }
+        return n.inside ? NX.success : NX.warning
+    }
+    private static func distanceLabel(_ metres: Double) -> String {
+        metres < 1000 ? "\(Int(metres.rounded())) m" : String(format: "%.1f km", metres / 1000)
+    }
+
+    /// Which office the person is standing in, if any. Only asked before a check-in, because after
+    /// one the record already names the office and a second GPS fix buys nothing.
+    private func locateWithinOffice() async {
+        #if !targetEnvironment(macCatalyst)
+        guard dispRec?.officeLocation?.name == nil, !loc.isDenied else { return }
+        if offices.isEmpty { offices = (try? await APIClient.shared.attendanceOffices()) ?? [] }
+        guard !offices.isEmpty, let fix = try? await loc.currentFix() else { return }
+        let here = CLLocation(latitude: fix.latitude, longitude: fix.longitude)
+        var best: (office: Office, distance: Double)?
+        for o in offices where (o.isActive ?? true) {
+            guard let la = o.latitude, let lo = o.longitude else { continue }
+            let d = here.distance(from: CLLocation(latitude: la, longitude: lo))
+            if best == nil || d < best!.distance { best = (o, d) }
+        }
+        guard let best else { return }
+        withAnimation(.easeInOut(duration: 0.25)) {
+            nearby = (best.office, best.distance, best.distance <= Double(best.office.radiusMeters ?? 100))
+        }
+        #endif
     }
 
     static func humanize(_ raw: String) -> String {
@@ -782,6 +836,7 @@ struct AttendanceView: View {
         AttendancePresence.refresh(today: today, userName: auth.session?.userName)
         // The widget's seven dots. Cheap (compact rows, one week), and only ever this person's own.
         if let days = try? await APIClient.shared.attendanceRecent(scope: "me") { AttendancePresence.updateRecent(days) }
+        await locateWithinOffice()
     }
 
     // MARK: formatters
@@ -809,22 +864,36 @@ struct FunMetricCard: View {
     var helper: String = ""
     let tint: Color
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
             Image(systemName: icon).font(.system(size: 16, weight: .semibold)).foregroundStyle(tint)
-                .frame(width: 36, height: 36).background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            Text(value).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground).lineLimit(1).minimumScaleFactor(0.65)
-            Text(label).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground)
+                .frame(width: 38, height: 38)
+                .background(
+                    LinearGradient(colors: [tint.opacity(0.22), tint.opacity(0.10)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                    in: RoundedRectangle(cornerRadius: 13, style: .continuous)
+                )
+                .contentTransition(.symbolEffect(.replace))
+            Spacer(minLength: 10)
+            // The label first and small, the answer second and large: the eye lands on the number,
+            // and the word above it says what the number is about.
+            Text(label.uppercased()).font(NXFont.text(10, .bold)).tracking(0.6).foregroundStyle(NX.mutedFg)
+                .lineLimit(1).minimumScaleFactor(0.8)
+            Text(value).font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground)
+                .lineLimit(2).minimumScaleFactor(0.6).fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 2)
             if !helper.isEmpty {
-                Text(helper).font(NXFont.text(10)).foregroundStyle(NX.mutedFg).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                Text(helper).font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true).padding(.top, 3)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
-        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
+        .padding(13)
         .background {
             RoundedRectangle(cornerRadius: 18, style: .continuous).fill(NX.card)
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(tint.opacity(0.045)))
                 .nexusShadowSoft()
                 .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
         }
+        .animation(.easeInOut(duration: 0.2), value: value)
     }
 }
 
