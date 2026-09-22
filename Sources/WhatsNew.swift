@@ -37,6 +37,7 @@ enum WhatsNew {
     @MainActor
     static func entries(for version: String) -> [WhatsNewEntry] {
         switch version {
+        case "0.1.6": return v016
         case "0.1.5": return v015
         case "0.1.4": return v014
         case "0.1.3": return v013
@@ -45,6 +46,16 @@ enum WhatsNew {
     }
 
     @MainActor
+    /// 0.1.6 — the first release that ships iPhone and Mac from one version number. Nothing here
+    /// yet that a phone user would notice; entries go in as the release fills up.
+    private static var v016: [WhatsNewEntry] { [
+        WhatsNewEntry(
+            icon: "desktopcomputer",
+            title: T("NEXUS on your Mac, same version"),
+            body: T("The Mac app and the phone app now carry the same version number, so there is one number to quote when something breaks. On the Mac you can take a photo with the webcam for chats, tickets and forms. Attendance still happens on your phone — it needs the face check.")
+        ),
+    ] }
+
     private static var v015: [WhatsNewEntry] { [
         WhatsNewEntry(
             icon: "faceid",
