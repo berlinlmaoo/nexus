@@ -809,7 +809,7 @@ struct RequestComposerSheet: View {
     private var attachmentRequired: Bool { !canGrant && (type == "SICK" || type == "PERMIT") }
     private var needsLocation: Bool { !canGrant && type == "PERMIT" }
     private var canSubmit: Bool {
-        !reason.trimmingCharacters(in: .whitespaces).isEmpty
+        reason.trimmingCharacters(in: .whitespaces).count >= 3
             && !(attachmentRequired && attach == nil)
             && !(needsLocation && coords == nil)
             && quotaProblem == nil

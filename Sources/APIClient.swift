@@ -2144,6 +2144,11 @@ struct APIClient {
         // Decode the server's { error, code } body for a useful message.
         let payload = try? JSONDecoder().decode(ServerError.self, from: data)
         if http.statusCode == 422, payload?.code == "OUTSIDE_RADIUS" { return .outsideRadius }
+        if http.statusCode == 422, let office = payload?.officeName,
+           let away = payload?.distanceMeters, let radius = payload?.radiusMeters {
+            throw APIError.transport(String(format: T("You're %d m from %@, and check-in works within %d m. Move closer and try again."),
+                                            Int(away.rounded()), office, Int(radius.rounded())))
+        }
         throw APIError.transport(payload?.error ?? "\(T("Failed")) (\(http.statusCode)).")
     }
 }
@@ -2177,6 +2182,12 @@ extension APIClient {
 private struct ServerError: Decodable {
     let error: String?
     let code: String?
+    /// Sent with a 422 from outside the geofence. Check-out carries `code: OUTSIDE_RADIUS` (the
+    /// offsite flow); check-in carries only these, because there is no offsite check-in — the
+    /// answer there is to walk closer, and for that the distance is the whole message.
+    let officeName: String?
+    let distanceMeters: Double?
+    let radiusMeters: Double?
 }
 
 /// Where a fetched attachment sits while somebody is looking at it.

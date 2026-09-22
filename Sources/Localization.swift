@@ -845,6 +845,7 @@ final class AppLanguage {
         "You can't approve your own.": "Punya sendiri nggak bisa di-approve.",
         "View map": "Lihat peta",
         "Approve": "Setujui",
+        "You're %d m from %@, and check-in works within %d m. Move closer and try again.": "Kamu %d m dari %@, sedangkan absen hanya jalan dalam %d m. Mendekat lalu coba lagi.",
         "PERMIT EVIDENCE": "BUKTI IZIN",
         "SUPPORTING PHOTO": "FOTO PENDUKUNG",
         "A permit needs a photo and where you filed it from, the same evidence a check-in carries.": "Izin butuh foto dan lokasi tempat kamu mengajukannya, bukti yang sama seperti absen.",
