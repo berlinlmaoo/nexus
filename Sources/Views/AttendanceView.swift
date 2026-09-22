@@ -97,6 +97,15 @@ struct AttendanceView: View {
                     hero
                     if loading { loadingRow }
                     if serverDown { downCard } else if let error { errorBanner(error) }
+                    // A Mac cannot take attendance: a check-in needs a selfie through the face
+                    // check and the phone's own position, and a Mac has neither in a form anyone
+                    // should trust. Everything that READS attendance stays exactly as it is — the
+                    // card above, the reflections, the history board, the requests — so a manager
+                    // can do their whole review at a desk.
+                    #if targetEnvironment(macCatalyst)
+                    phoneOnlyCard
+                    reflectionsLink
+                    #else
                     if needsReflection { reflectionCard }
                     reflectionsLink
                     if locationOff { PermissionBanner(kind: .location) }
@@ -109,6 +118,7 @@ struct AttendanceView: View {
                             .frame(maxWidth: .infinity)
                     }
                     if showOffsite { offsitePrompt }
+                    #endif
                     if forcePending { infoBanner(forcePendingMessage, tone: .warning) }
                     if pending { infoBanner(T("⏳ Checkout outside the office area — waiting for BoD approval"), tone: .warning) }
                     if rec?.checkOutApproval == "REJECTED" { infoBanner(T("Your out-of-area checkout was rejected by the BoD."), tone: .danger) }
@@ -152,9 +162,19 @@ struct AttendanceView: View {
             await AttendanceQueue.shared.flush()
             await load()
         }
-        .onAppear { loc.requestPermissionIfNeeded(); locationOff = loc.isDenied }
+        .onAppear {
+            // Nothing on a Mac asks for a position, so nothing asks for the permission either.
+            #if !targetEnvironment(macCatalyst)
+            loc.requestPermissionIfNeeded()
+            locationOff = loc.isDenied
+            #endif
+        }
         // Coming back from Settings is a scene change, not a reappearance.
-        .onChange(of: scenePhase) { _, phase in if phase == .active { locationOff = loc.isDenied } }
+        .onChange(of: scenePhase) { _, phase in
+            #if !targetEnvironment(macCatalyst)
+            if phase == .active { locationOff = loc.isDenied }
+            #endif
+        }
         .permissionAlert($deniedPermission)
         .refreshable { await load() }
         .fullScreenCover(isPresented: $showCamera) {
@@ -304,6 +324,26 @@ struct AttendanceView: View {
                            action: .checkOut,
                            disabled: (!checkedIn && !forcePending) || checkedOut || pending || !reflectionOK)
         }
+    }
+
+    /// What a Mac shows where the two big buttons are.
+    ///
+    /// It says what to do and why, rather than greying out a button and leaving the person to work
+    /// it out. The rest of the screen keeps working, so this is a redirection, not a dead end.
+    private var phoneOnlyCard: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "iphone.gen3").font(.system(size: 30, weight: .light)).foregroundStyle(NX.violetText)
+            Text(T("Check in from your phone")).font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground)
+            Text(T("Attendance is taken on the NEXUS app on your phone: it needs the face check and your real position, and a Mac can prove neither."))
+                .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
+                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+            Text(T("Everything else is here: today's status, your reflections, your history, and your team's board."))
+                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg.opacity(0.85))
+                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity).padding(.vertical, 22).padding(.horizontal, 18)
+        .background(NX.violet.opacity(0.07), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(NX.violet.opacity(0.25)))
     }
 
     private func presenceButton(title: String, system: String, tint: Color, action: Action, disabled: Bool) -> some View {
