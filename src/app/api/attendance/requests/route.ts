@@ -47,6 +47,22 @@ const MAX_SUPPORTING_DOCUMENT_SIZE = 10 * 1024 * 1024
 const ENFORCE_SINGLE_DAY_REQUESTS = false
 
 /**
+ * Izin must carry the coordinates it was filed from. OFF until iOS 0.1.6 is on the App Store, for
+ * the same reason as the rule above and with one more edge to it: 0.1.4 never sends lat/lng at all,
+ * so this did not merely make izin awkward from an iPhone, it made it impossible. Every permit in
+ * the database since mid-August came from the web; nobody reported it, they just stopped using the
+ * app for izin.
+ *
+ * While this is off, a permit filed without coordinates is still recorded — with no location, which
+ * the approver can see for what it is. The photo requirement stays ON: 0.1.4 can attach one, so a
+ * refusal there is something the person can act on.
+ *
+ * Flip back to true once 0.1.6 is live; that build asks for the fix as soon as izin is picked and
+ * will not submit without it.
+ */
+const ENFORCE_PERMIT_LOCATION = false
+
+/**
  * A sick note or a piece of evidence has to be something a reviewer can actually open: a picture or
  * a PDF. Checked by MIME first and by extension second, because some pickers send an empty type.
  *
@@ -320,7 +336,7 @@ export async function POST(request: NextRequest) {
       if (!(supportingDocument instanceof File && supportingDocument.size > 0)) {
         return NextResponse.json({ error: "Izin wajib melampirkan foto sebagai bukti." }, { status: 400 })
       }
-      if (!Number.isFinite(submittedLat) || !Number.isFinite(submittedLng)) {
+      if (ENFORCE_PERMIT_LOCATION && (!Number.isFinite(submittedLat) || !Number.isFinite(submittedLng))) {
         return NextResponse.json(
           { error: "Izin wajib menyertakan lokasi. Aktifin izin lokasi di browser/HP kamu ya." },
           { status: 400 }
