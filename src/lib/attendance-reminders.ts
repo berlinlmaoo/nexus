@@ -1,5 +1,5 @@
 import prisma from "@/lib/prisma"
-import { getAttendanceDate, formatAttendanceDateKey, isWorkdayForAttendanceDate, resolveEffectiveAttendanceShift, resolveShiftWindowAt, safeAttendanceTimezone, isRestDayForMember } from "@/lib/attendance"
+import { getAttendanceDate, formatAttendanceDateKey, isWorkdayForAttendanceDate, resolveEffectiveAttendanceShift, resolveShiftWindowAt, safeAttendanceTimezone, isRestDayForMember, FLEXI_WORK_HOURS } from "@/lib/attendance"
 import { isHoliday } from "@/lib/holidays"
 import { isOutageDay, usualOfficeByUser } from "@/lib/attendance-absence"
 import { notifyAttendanceReminder, sendWA } from "@/lib/notification-service"
@@ -167,7 +167,13 @@ export async function sendAttendanceReminders(now: Date = new Date(), opts?: { d
           coveredByLeave(member.userId, workspaceId, todayDate),
           dayRecord(member.userId, workspaceId, todayDate),
         ])
-        const coParts = zoneParts(checkoutTodayAt, tz)
+        const flexiPreviewRecord = shiftToday.flexi ? await dayRecord(member.userId, workspaceId, todayDate) : null
+        const coParts = zoneParts(
+          shiftToday.flexi && flexiPreviewRecord?.checkInAt
+            ? new Date(flexiPreviewRecord.checkInAt.getTime() + FLEXI_WORK_HOURS * 60 * 60 * 1000)
+            : checkoutTodayAt,
+          tz,
+        )
         const checkoutLabel = coParts.ymd === zoneParts(now, tz).ymd ? coParts.hm : `${coParts.hm} (+1)`
         result.eligible = (result.eligible ?? 0) + 1
         result.preview!.push({
@@ -176,7 +182,9 @@ export async function sendAttendanceReminders(now: Date = new Date(), opts?: { d
           phone: phone ? maskPhone(phone) : "—",
           shiftSource: shiftToday.source,
           shiftStart: shiftToday.shiftStartTime,
-          shiftEnd: shiftToday.shiftEndTime,
+          shiftEnd: shiftToday.flexi
+            ? (flexiPreviewRecord?.checkInAt ? `${zoneParts(new Date(flexiPreviewRecord.checkInAt.getTime() + FLEXI_WORK_HOURS * 60 * 60 * 1000), tz).hm} (flexi)` : "flexi — belum check-in")
+            : shiftToday.shiftEndTime,
           checkinReminderAt: CHECKIN_OFFSETS.map((o) => zoneParts(new Date(winToday.shiftStartAt.getTime() - o * 60_000), tz).hm).join(" · "),
           checkoutReminderAt: checkoutLabel,
           office: memberOffice.name ?? "—",
@@ -226,24 +234,36 @@ export async function sendAttendanceReminders(now: Date = new Date(), opts?: { d
           shift = await resolveEffectiveAttendanceShift({ userId: member.userId, workspaceId, office: memberOffice, date: anchor.instant })
           win = resolveShiftWindowAt(anchor.instant, memberOffice, shift)
         }
+        // Flexi has no fixed end: `shiftEndTime` is the end of the check-IN WINDOW (15:00), and
+        // reading it as a going-home time told seven people to clock out at three in the afternoon.
+        // Their day ends nine hours after they actually checked in, so the record has to be read
+        // BEFORE the clock is compared — and someone who has not checked in has no end to remind
+        // about at all.
+        const flexiRecord = shift.flexi ? await dayRecord(member.userId, workspaceId, anchor.date) : null
+        if (shift.flexi && !flexiRecord?.checkInAt) continue
+        const endAt = shift.flexi && flexiRecord?.checkInAt
+          ? new Date(flexiRecord.checkInAt.getTime() + FLEXI_WORK_HOURS * 60 * 60 * 1000)
+          : win.shiftEndAt
+        const endLabel = shift.flexi ? zoneParts(endAt, tz).hm : shift.shiftEndTime
+
         for (const off of CHECKOUT_OFFSETS) {
-          const checkoutAt = new Date(win.shiftEndAt.getTime() - off * 60_000)
+          const checkoutAt = new Date(endAt.getTime() - off * 60_000)
           if (zoneParts(checkoutAt, tz).key !== nowKey) continue
           if (await coveredByLeave(member.userId, workspaceId, anchor.date)) break
-          const record = await dayRecord(member.userId, workspaceId, anchor.date)
+          const record = flexiRecord ?? await dayRecord(member.userId, workspaceId, anchor.date)
           if (!(record?.checkInAt && !record?.checkOutAt)) break
           const anchorDateKey = formatAttendanceDateKey(anchor.instant)
           const shouldSend = await notifyAttendanceReminder({
             userId: member.userId,
             kind: "checkout",
             attendanceDate: anchorDateKey,
-            shiftTime: shift.shiftEndTime,
+            shiftTime: endLabel,
             offsetMinutes: off,
           })
           if (shouldSend) {
             if (phone) await sendWA(phone, off > 0
-              ? `🔔 *Reminder Absen Pulang*\nHai ${firstName(member.user?.name)}, ${off} menit lagi jam pulang (${shift.shiftEndTime}). Jangan lupa check-out di NEXUS ya ✅${url ? `\n${url}` : ""}`
-              : `⏰ *Waktunya Absen Pulang*\nHai ${firstName(member.user?.name)}, sudah jam ${shift.shiftEndTime}. Jangan lupa check-out ya ✅${url ? `\n${url}` : ""}`)
+              ? `🔔 *Reminder Absen Pulang*\nHai ${firstName(member.user?.name)}, ${off} menit lagi jam pulang (${endLabel}). Jangan lupa check-out di NEXUS ya ✅${url ? `\n${url}` : ""}`
+              : `⏰ *Waktunya Absen Pulang*\nHai ${firstName(member.user?.name)}, sudah jam ${endLabel}. Jangan lupa check-out ya ✅${url ? `\n${url}` : ""}`)
             result.checkoutSent++
           }
         }
