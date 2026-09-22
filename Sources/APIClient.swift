@@ -1851,8 +1851,12 @@ struct APIClient {
         (try await run(makeRequest("/api/attendance/requests?scope=\(enc(scope))"), decode: AttendanceRequestsResponse.self)).requests
     }
     @discardableResult
+    /// `lat`/`lng` are required by the server for a self-filed PERMIT — the same evidence a
+    /// check-in carries. The app never sent them, so every permit filed from an iPhone was refused
+    /// with "Izin wajib menyertakan lokasi" and staff quietly moved to the web to file one.
     func createAttendanceRequest(type: String, startDate: String, endDate: String, reason: String,
                                  attachment: (name: String, data: Data)? = nil,
+                                 lat: Double? = nil, lng: Double? = nil,
                                  progress: UploadProgress? = nil) async throws -> Bool {
         let boundary = "Boundary-\(UUID().uuidString)"
         var req = makeRequest("/api/attendance/requests", method: "POST")
@@ -1862,6 +1866,7 @@ struct APIClient {
             body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".data(using: .utf8)!)
         }
         field("type", type); field("startDate", startDate); field("endDate", endDate); field("reason", reason)
+        if let lat, let lng { field("lat", String(lat)); field("lng", String(lng)) }
         if let a = attachment {
             body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"supportingDocument\"; filename=\"\(a.name)\"\r\nContent-Type: application/octet-stream\r\n\r\n".data(using: .utf8)!)
             body.append(a.data)

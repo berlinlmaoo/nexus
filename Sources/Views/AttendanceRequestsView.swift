@@ -758,6 +758,11 @@ struct RequestComposerSheet: View {
     @State private var uploadProgress = UploadProgress()
     /// Quotas and eligibility, so a type nobody can use is never offered in the first place.
     @State private var quota: AttendanceToday?
+    /// Izin carries the same evidence a check-in does: a photo AND where it was filed from.
+    @State private var loc = LocationManager()
+    @State private var coords: (lat: Double, lng: Double)?
+    @State private var geoBusy = false
+    @State private var geoError: String?
 
     /// Only what this person can actually file. Leave needs a year of service AND days left; public
     /// holiday needs the BoD to have set a quota for the month. Offering either without that is a
@@ -799,10 +804,14 @@ struct RequestComposerSheet: View {
         return String(format: T("You're asking for %d days and only %d is left."), dayCount, left)
     }
     private var showAttachment: Bool { type == "SICK" || type == "PERMIT" }
-    private var attachmentRequired: Bool { !canGrant && type == "SICK" }
+    /// The server demands a photo for a self-filed izin too, not only for sakit. The form said
+    /// "(OPTIONAL)" and the submit was then refused — so the label lied and the person had no idea why.
+    private var attachmentRequired: Bool { !canGrant && (type == "SICK" || type == "PERMIT") }
+    private var needsLocation: Bool { !canGrant && type == "PERMIT" }
     private var canSubmit: Bool {
         !reason.trimmingCharacters(in: .whitespaces).isEmpty
             && !(attachmentRequired && attach == nil)
+            && !(needsLocation && coords == nil)
             && quotaProblem == nil
     }
     /// What the picked photo is called once it reaches the reviewer's screen. It used to be
@@ -911,6 +920,39 @@ struct RequestComposerSheet: View {
                             .background(NX.danger.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.danger.opacity(0.3)))
                         }
+                        if needsLocation {
+                            field(T("PERMIT EVIDENCE")) {
+                                VStack(alignment: .leading, spacing: 7) {
+                                    Text(T("A permit needs a photo and where you filed it from, the same evidence a check-in carries."))
+                                        .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    if let coords {
+                                        Label(String(format: T("Location locked (%.5f, %.5f)"), coords.lat, coords.lng),
+                                              systemImage: "checkmark.circle.fill")
+                                            .font(NXFont.text(12, .semibold)).foregroundStyle(NX.success)
+                                    } else {
+                                        Button { Task { await askLocation() } } label: {
+                                            HStack(spacing: 6) {
+                                                if geoBusy { ProgressView().scaleEffect(0.7) } else { Image(systemName: "location.fill").font(.system(size: 11, weight: .bold)) }
+                                                Text(geoBusy ? T("Getting your location…") : T("Use my location")).font(NXFont.text(12, .bold))
+                                            }
+                                            .padding(.horizontal, 12).padding(.vertical, 7)
+                                            .background(NX.violet.opacity(0.12), in: Capsule())
+                                            .foregroundStyle(NX.violetText)
+                                        }
+                                        .buttonStyle(.plain).disabled(geoBusy)
+                                    }
+                                    if let geoError {
+                                        Text(geoError).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(11)
+                                .background(NX.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
+                            }
+                        }
                         field(T("REASON")) {
                             TextField(T("Reason / context…"), text: $reason, axis: .vertical)
                                 .font(NXFont.text(15)).lineLimit(3...6).padding(12)
@@ -918,9 +960,8 @@ struct RequestComposerSheet: View {
                                 .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.border))
                         }
                         if showAttachment {
-                            field(type == "SICK"
-                                  ? T("SICK NOTE PHOTO") + (attachmentRequired ? T(" (REQUIRED)") : T(" (OPTIONAL)"))
-                                  : T("SUPPORTING PHOTO (OPTIONAL)")) {
+                            field((type == "SICK" ? T("SICK NOTE PHOTO") : T("SUPPORTING PHOTO"))
+                                  + (attachmentRequired ? T(" (REQUIRED)") : T(" (OPTIONAL)"))) {
                                 // The file picker alone meant a sick note had to already exist as
                                 // a file. Same three sources as the chat composer.
                                 Menu {
@@ -957,6 +998,7 @@ struct RequestComposerSheet: View {
             .navigationTitle(T("New request"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
+            .onAppear { loc.requestPermissionIfNeeded() }
             .task {
                 quota = try? await APIClient.shared.attendanceToday()
                 // The list can shrink once the answer arrives; never leave a vanished type selected.
@@ -1025,9 +1067,24 @@ struct RequestComposerSheet: View {
     private func pick(_ t: String) {
         type = t
         err = nil
+        geoError = nil
         if !showAttachment { attach = nil }
+        // Asked the moment izin is picked, not at submit: a permission prompt on the last tap is
+        // where people give up.
+        if needsLocation && coords == nil { Task { await askLocation() } }
         if let floor = earliest, start < floor { start = floor }
         if singleDay || end < start { end = start }
+    }
+
+    private func askLocation() async {
+        geoBusy = true; geoError = nil
+        defer { geoBusy = false }
+        do {
+            let fix = try await loc.currentFix()
+            coords = (fix.latitude, fix.longitude)
+        } catch {
+            geoError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't read your location.")
+        }
     }
 
     /// Dates a range may start on. Only izin has a floor, and izin is never a range.
@@ -1039,8 +1096,10 @@ struct RequestComposerSheet: View {
         busy = true; err = nil; defer { busy = false }
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = ProjDate.cal.timeZone
         do {
-            try await APIClient.shared.createAttendanceRequest(type: type, startDate: f.string(from: start), endDate: f.string(from: end),
+            try await APIClient.shared.createAttendanceRequest(type: type, startDate: f.string(from: start),
+                                                               endDate: f.string(from: singleDay ? start : end),
                                                                reason: reason.trimmingCharacters(in: .whitespaces), attachment: attach,
+                                                               lat: coords?.lat, lng: coords?.lng,
                                                                progress: uploadProgress)
             await onCreated()
             dismiss()
