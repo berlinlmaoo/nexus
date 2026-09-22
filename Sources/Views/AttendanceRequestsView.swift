@@ -756,11 +756,86 @@ struct RequestComposerSheet: View {
     @State private var busy = false
     @State private var err: String?
     @State private var uploadProgress = UploadProgress()
+    /// Quotas and eligibility, so a type nobody can use is never offered in the first place.
+    @State private var quota: AttendanceToday?
 
-    private var types: [String] { canGrant ? ["LEAVE", "SICK", "PERMIT", "DAY_OFF", "RED_DATE"] : ["PERMIT", "SICK", "DAY_OFF", "RED_DATE"] }
+    /// Only what this person can actually file. Leave needs a year of service AND days left; public
+    /// holiday needs the BoD to have set a quota for the month. Offering either without that is a
+    /// button whose only outcome is a refusal, and people read a refusal as the app being broken.
+    private var types: [String] {
+        var out: [String] = []
+        if canGrant || leaveUsable { out.append("LEAVE") }
+        out.append(contentsOf: ["SICK", "PERMIT", "DAY_OFF"])
+        if canGrant || (quota?.redDateQuota ?? 0) > 0 { out.append("RED_DATE") }
+        return out
+    }
+    private var leaveUsable: Bool {
+        guard let l = quota?.annualLeave else { return false }
+        return l.eligible && (l.remaining ?? 0) > 0
+    }
+    /// Sakit and izin are one day each: one date, one piece of evidence, one decision. The server
+    /// says the same, so the form cannot promise something the submit will refuse.
+    private var singleDay: Bool { !canGrant && (type == "SICK" || type == "PERMIT") }
+    /// Izin is today or later; sakit may be filed for a day that has already happened.
+    private var earliest: Date? { type == "PERMIT" && !canGrant ? Calendar.current.startOfDay(for: Date()) : nil }
+    private var dayCount: Int {
+        let cal = Calendar.current
+        let a = cal.startOfDay(for: start)
+        let b = cal.startOfDay(for: singleDay ? start : end)
+        return max(1, (cal.dateComponents([.day], from: a, to: b).day ?? 0) + 1)
+    }
+    /// Days left in the bucket this type draws from, if it draws from one.
+    private var remainingDays: Int? {
+        switch type {
+        case "DAY_OFF": return max(0, (quota?.dayOffQuota ?? 0) - (quota?.dayOffUsedThisMonth ?? 0))
+        case "RED_DATE": return max(0, (quota?.redDateQuota ?? 0) - (quota?.redDateUsedThisMonth ?? 0))
+        case "LEAVE": return quota?.annualLeave?.remaining
+        default: return nil
+        }
+    }
+    /// Said before the submit, not after: asking for four days out of two left is caught here.
+    private var quotaProblem: String? {
+        guard !canGrant, quota != nil, let left = remainingDays, dayCount > left else { return nil }
+        return String(format: T("You're asking for %d days and only %d is left."), dayCount, left)
+    }
     private var showAttachment: Bool { type == "SICK" || type == "PERMIT" }
     private var attachmentRequired: Bool { !canGrant && type == "SICK" }
-    private var canSubmit: Bool { !reason.trimmingCharacters(in: .whitespaces).isEmpty && !(attachmentRequired && attach == nil) }
+    private var canSubmit: Bool {
+        !reason.trimmingCharacters(in: .whitespaces).isEmpty
+            && !(attachmentRequired && attach == nil)
+            && quotaProblem == nil
+    }
+    /// What the picked photo is called once it reaches the reviewer's screen. It used to be
+    /// "sick-note.jpg" for every type, so an izin arrived carrying a sick note's name.
+    private var attachmentName: String { type == "SICK" ? "sick-note.jpg" : "permit-photo.jpg" }
+    private func icon(_ t: String) -> String {
+        switch t {
+        case "LEAVE": return "sun.max.fill"
+        case "SICK": return "cross.case.fill"
+        case "PERMIT": return "hand.raised.fill"
+        case "DAY_OFF": return "moon.zzz.fill"
+        default: return "flag.fill"
+        }
+    }
+    /// One line under the chips saying what this type costs and what it needs.
+    private var typeHint: String {
+        switch type {
+        case "LEAVE":
+            guard let l = quota?.annualLeave else { return T("Uses your annual leave.") }
+            if !l.eligible { return l.reason ?? T("Annual leave needs 12 months of service.") }
+            return String(format: T("Annual leave: %d of %d days left this year."), l.remaining ?? 0, l.quota ?? 12)
+        case "SICK":
+            return T("One day per request, and a photo of the doctor's note is required. A day that has already passed is fine.")
+        case "PERMIT":
+            return T("One day per request, today or later, with a photo and your location.")
+        case "DAY_OFF":
+            guard let left = remainingDays else { return T("Uses your day-off quota.") }
+            return String(format: T("Day off: %d of %d left this period."), left, quota?.dayOffQuota ?? 0)
+        default:
+            guard let left = remainingDays else { return T("Uses this month's public-holiday quota.") }
+            return String(format: T("Public holiday: %d of %d left this month."), left, quota?.redDateQuota ?? 0)
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -768,24 +843,73 @@ struct RequestComposerSheet: View {
                 NX.background.ignoresSafeArea()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        field("TIPE") {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 8) {
-                                    ForEach(types, id: \.self) { t in
-                                        Button { type = t; if !showAttachment { attach = nil } } label: {
-                                            Text(reqLabel(t)).font(NXFont.text(13, .semibold))
+                        field(T("TYPE")) {
+                            VStack(alignment: .leading, spacing: 10) {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 8) {
+                                        ForEach(types, id: \.self) { t in
+                                            Button { pick(t) } label: {
+                                                HStack(spacing: 6) {
+                                                    Image(systemName: icon(t)).font(.system(size: 11, weight: .bold))
+                                                    Text(reqLabel(t)).font(NXFont.text(13, .semibold))
+                                                }
                                                 .padding(.horizontal, 14).padding(.vertical, 9)
                                                 .foregroundStyle(type == t ? .white : NX.mutedFg)
                                                 .background(type == t ? NX.violet : NX.card, in: Capsule())
                                                 .overlay(Capsule().strokeBorder(type == t ? .clear : NX.border))
-                                        }.buttonStyle(.plain)
+                                            }.buttonStyle(.plain)
+                                        }
                                     }
+                                    .padding(.vertical, 1)
+                                }
+                                HStack(alignment: .top, spacing: 7) {
+                                    Image(systemName: "info.circle").font(.system(size: 11)).foregroundStyle(NX.mutedFg).padding(.top, 1)
+                                    Text(typeHint).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                .animation(.easeInOut(duration: 0.15), value: typeHint)
+                            }
+                        }
+                        if singleDay {
+                            field(T("DATE")) {
+                                DatePicker("", selection: $start, displayedComponents: .date)
+                                    .datePickerStyle(.compact).labelsHidden().tint(NX.violetText)
+                                    .onChange(of: start) { _, v in end = v }
+                            }
+                        } else {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack(spacing: 12) {
+                                    field(T("START")) {
+                                        DatePicker("", selection: $start, in: dateRange, displayedComponents: .date)
+                                            .datePickerStyle(.compact).labelsHidden().tint(NX.violetText)
+                                    }
+                                    field(T("UNTIL")) {
+                                        DatePicker("", selection: $end, in: start..., displayedComponents: .date)
+                                            .datePickerStyle(.compact).labelsHidden().tint(NX.violetText)
+                                    }
+                                }
+                                if let left = remainingDays {
+                                    HStack(spacing: 6) {
+                                        Text(String(format: T("%d days"), dayCount))
+                                            .font(NXFont.text(12, .bold))
+                                            .padding(.horizontal, 9).padding(.vertical, 4)
+                                            .background(quotaProblem == nil ? NX.violet.opacity(0.12) : NX.danger.opacity(0.14), in: Capsule())
+                                            .foregroundStyle(quotaProblem == nil ? NX.violetText : NX.danger)
+                                        Text(String(format: T("%d left"), left)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                                    }
+                                    .animation(.easeInOut(duration: 0.15), value: dayCount)
                                 }
                             }
                         }
-                        HStack(spacing: 12) {
-                            field(T("START")) { DatePicker("", selection: $start, displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violetText) }
-                            field(T("UNTIL")) { DatePicker("", selection: $end, in: start..., displayedComponents: .date).datePickerStyle(.compact).labelsHidden().tint(NX.violetText) }
+                        if let quotaProblem {
+                            HStack(alignment: .top, spacing: 7) {
+                                Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 12)).foregroundStyle(NX.danger)
+                                Text(quotaProblem).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(10)
+                            .background(NX.danger.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(NX.danger.opacity(0.3)))
                         }
                         field(T("REASON")) {
                             TextField(T("Reason / context…"), text: $reason, axis: .vertical)
@@ -833,6 +957,11 @@ struct RequestComposerSheet: View {
             .navigationTitle(T("New request"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
+            .task {
+                quota = try? await APIClient.shared.attendanceToday()
+                // The list can shrink once the answer arrives; never leave a vanished type selected.
+                if !types.contains(type) { pick(types.first ?? "DAY_OFF") }
+            }
             .sheet(isPresented: $showImporter) {
                 DocumentPicker(types: [.image, .pdf], multiple: false) { urls in
                     let result: Result<[URL], Error> = .success(urls)
@@ -864,7 +993,7 @@ struct RequestComposerSheet: View {
                 guard let item else { return }
                 Task {
                     if let data = try? await item.loadTransferable(type: Data.self) {
-                        if data.count <= 10 * 1024 * 1024 { attach = ("sick-note.jpg", data) }
+                        if data.count <= 10 * 1024 * 1024 { attach = (attachmentName, data) }
                         else { err = T("File is over the 10MB limit.") }
                     }
                     pickedPhoto = nil
@@ -875,7 +1004,7 @@ struct RequestComposerSheet: View {
                 // reliably dismiss itself, so whoever presented it closes it.
                 CameraPicker(cameraDevice: .rear) { data in
                     showCamera = false
-                    attach = ("sick-note.jpg", data)
+                    attach = (attachmentName, data)
                 }
                 .ignoresSafeArea()
             }
@@ -888,6 +1017,22 @@ struct RequestComposerSheet: View {
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Switching type is not only a label: izin cannot be backdated and the one-day types collapse
+    /// the range, so the dates are brought into line the moment the type changes rather than at
+    /// submit time.
+    private func pick(_ t: String) {
+        type = t
+        err = nil
+        if !showAttachment { attach = nil }
+        if let floor = earliest, start < floor { start = floor }
+        if singleDay || end < start { end = start }
+    }
+
+    /// Dates a range may start on. Only izin has a floor, and izin is never a range.
+    private var dateRange: PartialRangeFrom<Date> {
+        (earliest ?? Date.distantPast)...
     }
 
     private func submit() async {

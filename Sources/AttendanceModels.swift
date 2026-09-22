@@ -27,6 +27,18 @@ struct AttendanceToday: Decodable, Sendable {
         let flexi: Bool?
     }
     struct TodayRequest: Decodable, Sendable { let type: String?; let status: String? }
+
+    /// Cuti tahunan: 12 months of service before it exists at all, then 12 days a calendar year.
+    /// Sent by GET /api/attendance/today; optional so an older server still decodes.
+    struct AnnualLeave: Decodable, Sendable {
+        let eligible: Bool
+        let reason: String?
+        let year: Int?
+        let quota: Int?
+        let used: Int?
+        let remaining: Int?
+    }
+    let annualLeave: AnnualLeave?
 }
 
 struct AttendanceRecord: Decodable, Sendable {
