@@ -485,10 +485,14 @@ function Attendance() {
             </div>
           ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            {/* `min-w-max`: with a plain `w-full` the 31 day columns and the member column were
+                squeezed into the phone's width, so the name, the pills and the dots all landed on
+                top of each other. Now the table keeps its natural width and this container scrolls,
+                with the member column pinned to the left so you always know whose row you are on. */}
+            <table className="w-full min-w-max text-sm">
               <thead className="bg-muted/40 border-b border-border">
                 <tr>
-                  <th className="text-left px-4 py-2 font-medium text-xs text-muted-foreground uppercase">Member</th>
+                  <th className="sticky left-0 z-20 w-[15rem] min-w-[15rem] bg-muted px-3 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_hsl(var(--border))] sm:w-[20rem] sm:min-w-[20rem] sm:px-4">Member</th>
                   {periodDays.map((pd) => (
                     <th key={pd.key} className={cn("px-1 py-2 font-medium text-[10px] text-muted-foreground", pd.day === 1 && "border-l border-border/70")}>{pd.day}</th>
                   ))}
@@ -504,26 +508,26 @@ function Attendance() {
                 )}
                 {memberRows.map((u) => (
                   <tr key={u.id} className="border-b border-border last:border-0 hover:bg-muted/20">
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center gap-2">
+                    <td className="sticky left-0 z-10 w-[15rem] min-w-[15rem] bg-card px-3 py-2.5 shadow-[1px_0_0_0_hsl(var(--border))] sm:w-[20rem] sm:min-w-[20rem] sm:px-4">
+                      <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
                         {canManage ? (
                           <button
                             onClick={() => setDeductionsFor({ id: u.id, name: u.name ?? null })}
                             title={`Lihat log potongan XP & day-off ${u.name ?? "orang ini"}`}
-                            className="flex items-center gap-2 rounded-lg px-1 py-0.5 text-left transition hover:bg-primary/10"
+                            className="flex min-w-0 items-center gap-2 rounded-lg px-1 py-0.5 text-left transition hover:bg-primary/10"
                           >
                             <MemberAvatar user={u} />
-                            <div>
-                              <div className="font-medium">{u.name || "PATS Crew"}</div>
-                              <div className="text-[10px] text-muted-foreground">{memberSubtitle(u)}</div>
+                            <div className="min-w-0">
+                              <div className="truncate font-medium">{u.name || "PATS Crew"}</div>
+                              <div className="truncate text-[10px] text-muted-foreground">{memberSubtitle(u)}</div>
                             </div>
                           </button>
                         ) : (
                           <>
                             <MemberAvatar user={u} />
-                            <div>
-                              <div className="font-medium">{u.name || "PATS Crew"}</div>
-                              <div className="text-[10px] text-muted-foreground">{memberSubtitle(u)}</div>
+                            <div className="min-w-0">
+                              <div className="truncate font-medium">{u.name || "PATS Crew"}</div>
+                              <div className="truncate text-[10px] text-muted-foreground">{memberSubtitle(u)}</div>
                             </div>
                           </>
                         )}
@@ -542,7 +546,7 @@ function Attendance() {
                             : "bg-muted text-muted-foreground ring-border";
                           const pill = "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ring-1";
                           return (
-                            <div className="ml-1 flex shrink-0 flex-wrap items-center gap-1">
+                            <div className="flex flex-wrap items-center gap-1 sm:ml-1">
                               <span title={`Sisa day off periode absensi ini: ${d.remaining} dari ${d.quota} (kepakai ${d.used})`}
                                 className={cn(pill, quotaTone(d.remaining))}>
                                 {d.remaining}/{d.quota} DO
