@@ -74,7 +74,11 @@ const ENFORCE_PERMIT_LOCATION = false
 function isSupportedDocument(file: File): boolean {
   const mime = (file.type || "").toLowerCase()
   if (mime.startsWith("image/") || mime === "application/pdf") return true
-  if (mime) return false
+  // The iOS app labels every attachment `application/octet-stream` — it never looks the type up —
+  // so a plain JPEG arrived and was refused as "harus foto atau PDF". A generic binary type is the
+  // absence of an answer, not a wrong one: fall through to the filename, same as an empty type.
+  const unknown = !mime || mime === "application/octet-stream" || mime === "binary/octet-stream"
+  if (!unknown) return false
   return /\.(jpe?g|png|heic|heif|webp|gif|pdf)$/i.test(file.name)
 }
 
@@ -296,10 +300,14 @@ export async function POST(request: NextRequest) {
     }
 
     const parsedStartDate = parseDateOnlyToUtc(validation.data.startDate)
-    const parsedEndDate = parseDateOnlyToUtc(validation.data.endDate)
-    if (parsedEndDate.getTime() < parsedStartDate.getTime()) {
-      return NextResponse.json({ error: "End date cannot be earlier than start date." }, { status: 400 })
-    }
+    // An end BEFORE the start is never something a person chose: both pickers clamp the end to the
+    // start, so the only way to send one is a form whose "until" still holds today while "start"
+    // has moved forward — 0.1.4 does exactly that, and displayed 23 Sep in both fields while
+    // sending the 22nd as the end. Refusing it told staff their own screen was wrong. Take the day
+    // the form was showing instead: a single day, starting where they said.
+    const parsedEndDate = parseDateOnlyToUtc(validation.data.endDate) < parsedStartDate
+      ? parsedStartDate
+      : parseDateOnlyToUtc(validation.data.endDate)
 
     // Permission model: Staff may self-submit DAY_OFF / SICK / PERMIT / RED_DATE (all go in as
     // PENDING for review). LEAVE is granted by BoD (canManageAttendance) — optionally on behalf
