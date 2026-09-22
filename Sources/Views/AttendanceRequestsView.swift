@@ -891,6 +891,10 @@ struct RequestComposerSheet: View {
                                     field(T("START")) {
                                         DatePicker("", selection: $start, in: dateRange, displayedComponents: .date)
                                             .datePickerStyle(.compact).labelsHidden().tint(NX.violetText)
+                                            // The UNTIL picker only CLAMPS its display to the start;
+                                            // its value stays where it was. Without this it shows the
+                                            // new start and sends the old date.
+                                            .onChange(of: start) { _, v in if end < v { end = v } }
                                     }
                                     field(T("UNTIL")) {
                                         DatePicker("", selection: $end, in: start..., displayedComponents: .date)
