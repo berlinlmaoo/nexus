@@ -7,12 +7,19 @@ import UIKit
 /// Presenting the system picker with camera access denied shows a black screen and nothing else —
 /// no reason, no way out but Cancel — so the answer is checked before the picker is built. Never
 /// asked: ask now. Refused: say why it matters here and offer Settings. Allowed: the camera.
+///
+/// Only where there IS a camera to authorise. Mac Catalyst has no capture camera for
+/// `UIImagePickerController`, and the sandbox has no camera entitlement, so asking there produces a
+/// refusal and a card pointing at a switch that would not help. On a Mac this goes straight to the
+/// picker, which opens the photo library instead — the behaviour the Mac build has always had.
 struct CameraPicker: View {
     /// Attendance wants the selfie lens; chat wants the one people point at things.
     var cameraDevice: UIImagePickerController.CameraDevice = .front
     var onCapture: (Data) -> Void
     @Environment(\.dismiss) private var dismiss
-    @State private var status = AVCaptureDevice.authorizationStatus(for: .video)
+    @State private var status: AVAuthorizationStatus = UIImagePickerController.isSourceTypeAvailable(.camera)
+        ? AVCaptureDevice.authorizationStatus(for: .video)
+        : .authorized
 
     var body: some View {
         switch status {
