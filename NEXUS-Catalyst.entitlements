@@ -44,6 +44,13 @@
 	<key>com.apple.security.personal-information.location</key>
 	<true/>
 
+	<!-- The webcam, for "Take a photo" in chat, tickets, forms and GIDEON. UIImagePickerController
+	     has no camera source on Mac Catalyst, so DeskCameraCapture drives an AVCaptureSession
+	     directly — which the sandbox denies without this, with no visible reason. Attendance is
+	     deliberately NOT part of this: a check-in still happens on the phone. -->
+	<key>com.apple.security.device.camera</key>
+	<true/>
+
 	<!-- Photos chosen for a chat message or an avatar. PhotosPicker runs out of process, but the
 	     file it hands back still has to be readable. -->
 	<key>com.apple.security.files.user-selected.read-only</key>
