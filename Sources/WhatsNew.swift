@@ -46,13 +46,33 @@ enum WhatsNew {
     }
 
     @MainActor
-    /// 0.1.6 — the first release that ships iPhone and Mac from one version number. Nothing here
-    /// yet that a phone user would notice; entries go in as the release fills up.
+    /// 0.1.6 — the release that made filing a request work from the phone again, and the first to
+    /// ship iPhone and Mac from one version number.
     private static var v016: [WhatsNewEntry] { [
+        WhatsNewEntry(
+            icon: "hand.raised.fill",
+            title: T("Filing a permit works from your phone again"),
+            body: T("A permit needs to know where you filed it from, and the app never sent that — so every permit from an iPhone was refused and people quietly moved to the web. It now asks for your location the moment you pick Permit, shows it locked, and won't let you send without it.")
+        ),
+        WhatsNewEntry(
+            icon: "checklist",
+            title: T("The request form only offers what you can actually use"),
+            body: T("Annual leave appears when you have days left, public holiday when there is an allowance this month. Sick and permit are a single date — sick can be backdated, permit cannot. Ask for more day-off days than you have left and it says so before you send, not after.")
+        ),
+        WhatsNewEntry(
+            icon: "mappin.circle.fill",
+            title: T("Your attendance card says which office you're at"),
+            body: T("Where it used to count the company's offices, it now finds the nearest one and tells you whether you're inside its check-in area or how far off you are.")
+        ),
         WhatsNewEntry(
             icon: "desktopcomputer",
             title: T("NEXUS on your Mac, same version"),
             body: T("The Mac app and the phone app now carry the same version number, so there is one number to quote when something breaks. On the Mac you can take a photo with the webcam for chats, tickets and forms. Attendance still happens on your phone — it needs the face check.")
+        ),
+        WhatsNewEntry(
+            icon: "paperclip",
+            title: T("Attachments open everywhere"),
+            body: T("Choose files did nothing on iPad and on most phones; now it opens, and a form or a sick note can come straight from the camera or your photos. A permit's photo is no longer filed under a sick note's name.")
         ),
     ] }
 
