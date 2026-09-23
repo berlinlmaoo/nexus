@@ -998,7 +998,12 @@ struct StreakBoardCard: View {
     }
     /// Payroll's cut-off: a day after the 27th belongs to the next month's period.
     private static let cutoffDay = 27
-    private var periodDays: [PeriodDay] {
+    /// Built once per month. `buildPeriodDays` allocates ~31 dates every call and the header reads
+    /// it again through `periodLabel`; rebuilding that on every body pass also kept resetting the
+    /// horizontal scroll, which is what stopped the board landing on today.
+    @State private var periodDays: [PeriodDay] = []
+
+    private func buildPeriodDays() -> [PeriodDay] {
         let cal = ProjDate.cal
         guard let firstOfMonth = cal.date(from: cal.dateComponents([.year, .month], from: monthDate)),
               let end = cal.date(byAdding: .day, value: Self.cutoffDay - 1, to: firstOfMonth),
@@ -1094,9 +1099,25 @@ struct StreakBoardCard: View {
         .nexusCard()
         // Keyed on the permissions too: /attendance/today lands AFTER the first paint, and a board
         // fetched with `scope=me` before canManage flipped stayed that way until the month changed.
-        .task(id: "\(monthOffset)|\(wide)") { await load() }
+        .task(id: "\(monthOffset)|\(wide)") {
+            periodDays = buildPeriodDays()
+            await load()
+        }
         .sheet(item: $selectedRow) { row in
             RecordActionsSheet(row: row) { await load() }
+        }
+    }
+
+    /// A `LazyHStack` only registers the ids of columns it has actually built, and today is ~27
+    /// columns off-screen — so a single call made at the wrong moment scrolls nowhere and says
+    /// nothing. Tried again as the layout settles.
+    private func scrollToToday(_ proxy: ScrollViewProxy) {
+        guard let t = todayKey else { return }
+        Task { @MainActor in
+            for delay in [0, 150, 500] {
+                if delay > 0 { try? await Task.sleep(for: .milliseconds(delay)) }
+                proxy.scrollTo("day-\(t)", anchor: .center)
+            }
         }
     }
 
@@ -1162,9 +1183,10 @@ struct StreakBoardCard: View {
                     }
                 }
             }
-            // Land on today, not on the 1st: the column that matters is the one being filled in.
-            .onAppear { if let t = todayKey { proxy.scrollTo("day-\(t)", anchor: .center) } }
-            .onChange(of: members.count) { _, _ in if let t = todayKey { proxy.scrollTo("day-\(t)", anchor: .center) } }
+            // Land on today, not on the 28th: the column that matters is the one being filled in.
+            .onAppear { scrollToToday(proxy) }
+            .onChange(of: members.count) { _, _ in scrollToToday(proxy) }
+            .onChange(of: periodDays.count) { _, _ in scrollToToday(proxy) }
             }
         }
     }
