@@ -59,7 +59,13 @@ export function compareVersions(a: string, b: string): number {
   return 0
 }
 
-export async function remindOutdatedApps(opts: { dryRun?: boolean } = {}) {
+/**
+ * `userIds` reminds those people whatever version they are on, and ignores the weekly dedupe — for
+ * reading the notification back after a release without waiting to fall behind one. Everyone else
+ * is still judged on their version, so a normal run is unchanged.
+ */
+export async function remindOutdatedApps(opts: { dryRun?: boolean; userIds?: string[] } = {}) {
+  const forced = new Set(opts.userIds ?? [])
   const latest = await fetchLatestIosVersion()
   if (!latest) return { latest: null, checked: 0, behind: 0, reminded: 0, note: "App Store version unknown" }
   const devices = await prisma.deviceInstallation.findMany({
@@ -76,9 +82,13 @@ export async function remindOutdatedApps(opts: { dryRun?: boolean } = {}) {
   }
   let behind = 0, reminded = 0
   const behindUsers: Array<{ userId: string; version: string | null }> = []
+  // Somebody asked for by name is reminded even if their phone is up to date, and even if they
+  // were reminded this week.
+  for (const id of forced) if (!newest.has(id)) newest.set(id, null)
   for (const [userId, version] of newest) {
+    const force = forced.has(userId)
     const isBehind = !version || compareVersions(version, latest) < 0
-    if (!isBehind) continue
+    if (!isBehind && !force) continue
     behind++
     behindUsers.push({ userId, version })
     if (opts.dryRun) continue
@@ -86,13 +96,15 @@ export async function remindOutdatedApps(opts: { dryRun?: boolean } = {}) {
       userId,
       type: "app_update",
       title: `NEXUS ${latest} is on the App Store`,
-      message: version
-        ? `You're on ${version}. Update to get the latest fixes and features — it takes a minute.`
-        : `Your NEXUS is an older version. Update to get the latest fixes and features — it takes a minute.`,
+      message: !version
+        ? `Your NEXUS is an older version. Update to get the latest fixes and features — it takes a minute.`
+        : compareVersions(version, latest) < 0
+          ? `You're on ${version}. Update to get the latest fixes and features — it takes a minute.`
+          : `You're already on ${version} — nothing to do. This is what the reminder looks like.`,
       // The version rides in the link so the weekly dedupe is per release: a new release is a new reminder.
       link: `${APP_STORE_URL}?v=${latest}`,
       push: true,
-      dedupeWindowMs: REMIND_EVERY_MS,
+      dedupeWindowMs: force ? 0 : REMIND_EVERY_MS,
     }).catch(() => null)
     if (created) reminded++
   }
