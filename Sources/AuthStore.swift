@@ -75,6 +75,9 @@ final class AuthStore {
         Keychain.clear()
         // A cached roster or task list must not outlive the session that fetched it.
         ResponseCache.clearAll()
+        // Including the files downloaded for offline use: those are somebody's project documents
+        // and attendance selfies, and they are the last thing that should survive a handover.
+        OfflineSync.shared.reset()
         // Nor may a Live Activity: it would keep counting one person's hours on the Lock Screen of
         // a phone that has already been handed to somebody else.
         Viewer.shared.reset()

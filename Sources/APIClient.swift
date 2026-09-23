@@ -457,13 +457,13 @@ struct APIClient {
     }
 
     func project(_ id: String) async throws -> ProjectDetail {
-        try await run(makeRequest("/api/projects/\(id)"), decode: ProjectDetail.self)
+        try await run(makeRequest("/api/projects/\(id)"), decode: ProjectDetail.self, cache: "project-\(id)")
     }
 
     /// All of a project's tasks INCLUDING subtasks (the project payload is parentId-only). Carries
     /// `parentId`/`taskListId`/`quests` → board & list merge subtasks into their lane + show "+N XP".
     func projectTasks(_ projectId: String) async throws -> [BoardTask] {
-        try await run(makeRequest("/api/tasks?projectId=\(enc(projectId))"), decode: [BoardTask].self)
+        try await run(makeRequest("/api/tasks?projectId=\(enc(projectId))"), decode: [BoardTask].self, cache: "project-tasks-\(projectId)")
     }
 
     func workspaceInfo() async throws -> WorkspaceInfo {
@@ -641,7 +641,7 @@ struct APIClient {
     }
 
     func taskDetail(_ id: String) async throws -> TaskDetail {
-        try await run(makeRequest("/api/tasks/\(id)"), decode: TaskDetail.self)
+        try await run(makeRequest("/api/tasks/\(id)"), decode: TaskDetail.self, cache: "task-\(id)")
     }
 
     // MARK: - Sprints
@@ -693,11 +693,11 @@ struct APIClient {
     // MARK: - Dashboard
 
     func profile() async throws -> ProfileResponse {
-        try await run(makeRequest("/api/user/profile"), decode: ProfileResponse.self)
+        try await run(makeRequest("/api/user/profile"), decode: ProfileResponse.self, cache: "profile")
     }
 
     func gamification() async throws -> Gamification {
-        try await run(makeRequest("/api/gamification/me"), decode: Gamification.self)
+        try await run(makeRequest("/api/gamification/me"), decode: Gamification.self, cache: "gamification")
     }
 
     func myTasks(assigneeId: String) async throws -> [MyTask] {
@@ -733,7 +733,7 @@ struct APIClient {
         try await run(makeRequest("/api/forms?projectId=\(projectId)"), decode: [NexusForm].self)
     }
     func mySubmissions() async throws -> MySubmissionsResponse {
-        try await run(makeRequest("/api/forms/my-submissions"), decode: MySubmissionsResponse.self)
+        try await run(makeRequest("/api/forms/my-submissions"), decode: MySubmissionsResponse.self, cache: "my-submissions")
     }
     /// One of your own submissions in full: the answers that were filled in, plus whatever the
     /// finance team has attached since. The board list carries none of that — there it is a title
@@ -1747,9 +1747,14 @@ struct APIClient {
     /// plain QuickLook fetch — the file has to come through this client, which is also what lets it
     /// take the office LAN like everything else. `url` may be a path or absolute; an attachment row
     /// carries whichever the server wrote.
-    func downloadAttachment(url: String, fileName: String,
+    /// `offline: true` puts the file in the copy that survives the daily sweep — used by the
+    /// prefetch, never by somebody merely opening an attachment.
+    func downloadAttachment(url: String, fileName: String, offline: Bool = false,
                             progress: UploadProgress? = nil) async throws -> URL {
-        let out = AttachmentCache.destination(remote: url, fileName: fileName)
+        if let here = AttachmentCache.existing(remote: url, fileName: fileName), !offline { return here }
+        let out = offline
+            ? AttachmentCache.offlineDestination(remote: url, fileName: fileName)
+            : AttachmentCache.destination(remote: url, fileName: fileName)
         // Already here from an earlier look. One URL is one file permanently — the server writes a
         // random on-disk name per upload and never reuses one — and a partial download never reaches
         // this path, because the file is only moved into place once the transfer has completed.
@@ -1768,7 +1773,7 @@ struct APIClient {
         } else {
             req = makeRequest(url)
         }
-        AttachmentCache.sweep()
+        if offline { AttachmentCache.sweepOffline() } else { AttachmentCache.sweep() }
         let response = try await download(req, to: out, reporting: progress)
         guard let http = response as? HTTPURLResponse else {
             AttachmentCache.discard(out)
@@ -1832,7 +1837,7 @@ struct APIClient {
     // MARK: - Attendance
 
     func attendanceToday() async throws -> AttendanceToday {
-        try await run(makeRequest("/api/attendance/today"), decode: AttendanceToday.self)
+        try await run(makeRequest("/api/attendance/today"), decode: AttendanceToday.self, cache: "attendance-today")
     }
 
     /// The last `days` days as compact dots — what the widget and the watch draw.
@@ -1845,7 +1850,7 @@ struct APIClient {
 
     func attendanceHistory(scope: String, month: String) async throws -> [AttendanceRow] {
         let path = "/api/attendance/history?scope=\(enc(scope))&month=\(enc(month))"
-        return (try await run(makeRequest(path), decode: AttendanceHistoryResponse.self)).all
+        return (try await run(makeRequest(path), decode: AttendanceHistoryResponse.self, cache: "attendance-history-\(scope)-\(month)")).all
     }
     /// BoD cleanup: omit `part` to delete the whole record (e.g. an accidental check-in), or part="checkout" to clear only the check-out (reopen).
     @discardableResult
@@ -1856,7 +1861,7 @@ struct APIClient {
         return true
     }
     func attendanceRequests(scope: String) async throws -> [AttendanceRequest] {
-        (try await run(makeRequest("/api/attendance/requests?scope=\(enc(scope))"), decode: AttendanceRequestsResponse.self)).requests
+        (try await run(makeRequest("/api/attendance/requests?scope=\(enc(scope))"), decode: AttendanceRequestsResponse.self, cache: "attendance-requests-\(scope)")).requests
     }
     @discardableResult
     /// `lat`/`lng` are required by the server for a self-filed PERMIT — the same evidence a
@@ -2225,6 +2230,16 @@ enum AttachmentCache {
     /// Two films' worth. Whatever survives the age sweep is trimmed to this, oldest first.
     private static let maxBytes = 512 << 20
 
+    /// Files kept ON PURPOSE so the app works with no signal, as opposed to files that happen to
+    /// still be here because somebody opened them recently.
+    ///
+    /// A separate folder, not a flag, because the two have opposite rules: the browse cache is
+    /// swept at a day old so a film watched on Monday is not still occupying a phone on Friday,
+    /// while the offline copy exists precisely to survive that. Prefetching into the browse cache
+    /// would have meant everything downloaded for offline use being deleted by the age sweep on the
+    /// second day — exactly the day somebody needs it.
+    private static let offlineBudget = 1_024 << 20   // 1 GB
+
     /// Recomputed rather than stored, because `ResponseCache.clearAll()` deletes the parent and
     /// recreates only its own directory — so this one has to be prepared to find itself gone.
     private static var dir: URL {
@@ -2232,19 +2247,74 @@ enum AttachmentCache {
             .appendingPathComponent("responses", isDirectory: true)
             .appendingPathComponent("attachments", isDirectory: true)
     }
+    private static var offlineDir: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("responses", isDirectory: true)
+            .appendingPathComponent("attachments-offline", isDirectory: true)
+    }
 
     /// One folder per remote file, named from its URL, with the human filename kept inside it.
     /// Two tasks can both hold a "scan.pdf" without one answering for the other, and the share sheet
     /// still offers the name the person recognises rather than a hash.
+    /// Where an offline copy of this file belongs.
+    static func offlineDestination(remote: String, fileName: String) -> URL {
+        destination(remote: remote, fileName: fileName, in: offlineDir)
+    }
+
+    /// A copy already on this device, kept for offline use or merely browsed recently. The offline
+    /// folder is asked first: it is the one that is meant to be there.
+    static func existing(remote: String, fileName: String) -> URL? {
+        for candidate in [offlineDestination(remote: remote, fileName: fileName),
+                          destination(remote: remote, fileName: fileName)] {
+            if (try? candidate.checkResourceIsReachable()) == true { return candidate }
+        }
+        return nil
+    }
+
+    /// How much of the phone the offline copies are using.
+    static func offlineBytes() -> Int {
+        guard let folders = try? FileManager.default.contentsOfDirectory(at: offlineDir, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
+        else { return 0 }
+        return folders.reduce(0) { $0 + bytes(of: $1) }
+    }
+
+    /// Budget only, never age: these files exist to be here when there is no signal, and the day
+    /// they are needed is the day nothing has refreshed them. Least recently used goes first.
+    static func sweepOffline() {
+        let fm = FileManager.default
+        guard let folders = try? fm.contentsOfDirectory(at: offlineDir, includingPropertiesForKeys: [.contentModificationDateKey], options: [.skipsHiddenFiles])
+        else { return }
+        var kept = folders.map { folder -> (url: URL, at: Date, bytes: Int) in
+            let at = (try? folder.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+            return (folder, at, bytes(of: folder))
+        }
+        var total = kept.reduce(0) { $0 + $1.bytes }
+        guard total > offlineBudget else { return }
+        kept.sort { $0.at < $1.at }
+        for entry in kept {
+            try? fm.removeItem(at: entry.url)
+            total -= entry.bytes
+            if total <= offlineBudget { return }
+        }
+    }
+
+    static func clearOffline() {
+        try? FileManager.default.removeItem(at: offlineDir)
+    }
+
     static func destination(remote: String, fileName: String) -> URL {
+        destination(remote: remote, fileName: fileName, in: dir)
+    }
+
+    private static func destination(remote: String, fileName: String, in folder: URL) -> URL {
         // A name that came off a server row rather than out of this app: slashes would make it a
         // path, and a 300-character one is simply refused by the file system. The extension is what
         // both PDFKit and AVPlayer sniff the type from, so the tail is what survives a trim.
         var safe = fileName.replacingOccurrences(of: "/", with: "-")
         if safe.utf8.count > 180 { safe = String(safe.suffix(60)) }
         if safe.isEmpty || safe == "." || safe == ".." { safe = "file" }
-        return dir.appendingPathComponent(fingerprint(remote), isDirectory: true)
-                  .appendingPathComponent(safe)
+        return folder.appendingPathComponent(fingerprint(remote), isDirectory: true)
+                     .appendingPathComponent(safe)
     }
 
     /// Throws away a file and the folder that was made for it — a refusal that landed on disk, or

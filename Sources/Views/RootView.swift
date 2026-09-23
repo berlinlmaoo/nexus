@@ -6,6 +6,14 @@ struct RootView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(AppRouter.self) private var router
     @State private var appearance = AppAppearance.shared
+    @StateObject private var sync = OfflineSync.shared
+    /// Covers the app while the cache is read and the warm-up runs.
+    ///
+    /// Shown on a first sign-in, and again when the app has been closed long enough that everything
+    /// on screen would otherwise be a spinner. NOT on every launch: a splash somebody sees twenty
+    /// times a day is a tax, not a welcome.
+    @State private var showSplash = false
+    @State private var splashDone = false
 
     var body: some View {
         @Bindable var router = router
@@ -13,6 +21,30 @@ struct RootView: View {
             // In-app light/dark override. nil = follow the iOS setting.
             AdaptiveRoot()
                 .preferredColorScheme(appearance.theme.colorScheme)
+                .overlay {
+                    if showSplash {
+                        SplashView(status: sync.status, progress: sync.progress)
+                            .transition(.opacity)
+                            .zIndex(50)
+                    }
+                }
+                .task(id: auth.session?.userId) {
+                    guard let userId = auth.session?.userId, !splashDone else { return }
+                    splashDone = true
+                    // Nothing to show yet, or nothing shown for a while: stand in front. Otherwise
+                    // refresh underneath and let the person straight in.
+                    let cold = sync.isCold
+                    let stale = sync.lastDataSync.map { Date().timeIntervalSince($0) > 30 * 60 } ?? true
+                    if cold || stale { withAnimation(.easeOut(duration: 0.25)) { showSplash = true } }
+                    // The mark takes about a second to draw itself; dismissing before it finishes
+                    // would look like a glitch rather than a greeting.
+                    async let floor: Void = try? await Task.sleep(for: .milliseconds(cold ? 1400 : 900))
+                    await sync.syncData(userId: userId)
+                    _ = await floor
+                    withAnimation(.easeOut(duration: 0.3)) { showSplash = false }
+                    // The files carry on behind the app, and stop themselves on mobile data.
+                    sync.syncMedia(userId: userId)
+                }
                 // GIDEON first, announcements second: the overlay added last draws on top, and an
                 // announcement must never end up behind a floating button.
                 .overlay(alignment: .bottomLeading) { GideonLauncher() }

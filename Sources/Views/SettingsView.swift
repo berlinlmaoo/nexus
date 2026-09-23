@@ -120,6 +120,7 @@ struct SettingsView: View {
 
                     AppearanceCard()
                     LanguageCard()
+                    OfflineCard()
                     if let wsId = workspaceId { WorkspaceMembersCard(workspaceId: wsId) }
                     SecurityCard()
                     PasskeyCard()
