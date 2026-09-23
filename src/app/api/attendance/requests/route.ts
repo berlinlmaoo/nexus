@@ -35,32 +35,36 @@ import { isBackdated, reportDelayMinutes } from "@/lib/permit-rules"
 const MAX_SUPPORTING_DOCUMENT_SIZE = 10 * 1024 * 1024
 
 /**
- * One date per sakit/izin, enforced on the server. OFF until iOS 0.1.6 is on the App Store.
+ * Is this client able to obey the rules introduced with 0.1.6?
  *
- * The rule is right, but it only works when the form can obey it. 0.1.4 — what everyone is running
- * today — has a start-and-until picker and no way to send a single day, so turning this on locked
- * staff out of filing a multi-day sakit with no way to comply. The 0.1.6 composer sends one date;
- * flip this back to true once that build is live, and the server and the form agree again.
+ * Two rules landed on the server before any shipped app could satisfy them — izin must carry the
+ * coordinates it was filed from, and sakit/izin are one date — and the result was staff refused with
+ * nothing they could do about it. Turning the rules off entirely fixed that and lost the policy;
+ * turning them back on the day 0.1.6 appears would break everyone who has not updated yet, and an
+ * App Store rollout takes days.
  *
- * Until then the policy lives in the form alone, which is where every updated client already is.
+ * So the rule follows the client instead of the calendar. The app sends `X-Nexus-Client:
+ * ios/<version>/<build>` on every request; a build that can express a single date and send a
+ * position is held to both rules, an older one is not, and each person starts obeying the moment
+ * their own phone updates. Nothing has to be flipped by hand.
+ *
+ * Anything with no header — the web form, curl, a future client — counts as capable: the web has
+ * sent coordinates and a single date since the day these rules existed. The header is a statement
+ * of capability, not a credential; a forged one only opts the sender INTO stricter checks.
  */
-const ENFORCE_SINGLE_DAY_REQUESTS = false
+const POLICY_0_1_6: readonly [number, number, number] = [0, 1, 6]
 
-/**
- * Izin must carry the coordinates it was filed from. OFF until iOS 0.1.6 is on the App Store, for
- * the same reason as the rule above and with one more edge to it: 0.1.4 never sends lat/lng at all,
- * so this did not merely make izin awkward from an iPhone, it made it impossible. Every permit in
- * the database since mid-August came from the web; nobody reported it, they just stopped using the
- * app for izin.
- *
- * While this is off, a permit filed without coordinates is still recorded — with no location, which
- * the approver can see for what it is. The photo requirement stays ON: 0.1.4 can attach one, so a
- * refusal there is something the person can act on.
- *
- * Flip back to true once 0.1.6 is live; that build asks for the fix as soon as izin is picked and
- * will not submit without it.
- */
-const ENFORCE_PERMIT_LOCATION = false
+function clientCanObeyRequestPolicy(request: NextRequest): boolean {
+  const tag = request.headers.get("x-nexus-client")?.trim()
+  if (!tag) return true
+  const m = /^ios\/(\d+)\.(\d+)\.(\d+)/i.exec(tag)
+  if (!m) return false // an app that names itself but not a version we can read: assume the old one
+  const version: [number, number, number] = [Number(m[1]), Number(m[2]), Number(m[3])]
+  for (let i = 0; i < 3; i++) {
+    if (version[i] !== POLICY_0_1_6[i]) return version[i] > POLICY_0_1_6[i]
+  }
+  return true
+}
 
 /**
  * A sick note or a piece of evidence has to be something a reviewer can actually open: a picture or
@@ -274,6 +278,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No workspace membership found" }, { status: 404 })
     }
 
+    const modernClient = clientCanObeyRequestPolicy(request)
     const formData = await request.formData()
     const type = String(formData.get("type") ?? "")
     const startDate = String(formData.get("startDate") ?? "")
@@ -321,7 +326,7 @@ export async function POST(request: NextRequest) {
     // Sakit and izin are filed one day at a time: one date, one piece of evidence, one decision.
     // A multi-day illness goes through a BoD grant, where a human has seen the note and can set the
     // range — which is also the only way a range ever carried any meaning.
-    if (ENFORCE_SINGLE_DAY_REQUESTS && !canGrant && (reqType === "SICK" || reqType === "PERMIT") && parsedEndDate.getTime() !== parsedStartDate.getTime()) {
+    if (modernClient && !canGrant && (reqType === "SICK" || reqType === "PERMIT") && parsedEndDate.getTime() !== parsedStartDate.getTime()) {
       return NextResponse.json(
         {
           error: reqType === "SICK"
@@ -344,7 +349,7 @@ export async function POST(request: NextRequest) {
       if (!(supportingDocument instanceof File && supportingDocument.size > 0)) {
         return NextResponse.json({ error: "Izin wajib melampirkan foto sebagai bukti." }, { status: 400 })
       }
-      if (ENFORCE_PERMIT_LOCATION && (!Number.isFinite(submittedLat) || !Number.isFinite(submittedLng))) {
+      if (modernClient && (!Number.isFinite(submittedLat) || !Number.isFinite(submittedLng))) {
         return NextResponse.json(
           { error: "Izin wajib menyertakan lokasi. Aktifin izin lokasi di browser/HP kamu ya." },
           { status: 400 }
