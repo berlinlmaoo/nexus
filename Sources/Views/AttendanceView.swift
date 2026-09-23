@@ -959,7 +959,10 @@ struct StreakBoardCard: View {
     @State private var exportItem: ShareItem?
     @State private var exportError: String?
     @State private var showFull = false
-    /// Today's day-of-month while the board shows the current month; nil on earlier months.
+    /// Today as a whole date, so the marker lands on the real day rather than on whichever cell
+    /// happens to share its number.
+    private var todayKey: String? { monthOffset == 0 ? ProjDate.fmt("yyyy-MM-dd").string(from: Date()) : nil }
+    /// Only for the header line ("today 24").
     private var todayDay: Int? { monthOffset == 0 ? ProjDate.cal.component(.day, from: Date()) : nil }
     /// Built once per load, not per read. It used to be a computed property — a `Dictionary(grouping:)`
     /// plus a `localizedCaseInsensitiveCompare` sort (ICU collation, the slowest comparator Foundation
@@ -980,21 +983,61 @@ struct StreakBoardCard: View {
     private var monthDate: Date { ProjDate.cal.date(byAdding: .month, value: monthOffset, to: Date()) ?? Date() }
     private var monthKey: String { ProjDate.fmt("yyyy-MM").string(from: monthDate) }
     private var monthLabel: String { ProjDate.fmt("MMMM yyyy").string(from: monthDate) }
-    private var daysInMonth: Int { ProjDate.cal.range(of: .day, in: .month, for: monthDate)?.count ?? 30 }
+    /// The attendance PERIOD this board covers: the 28th of the previous month through the 27th of
+    /// this one, which is what payroll counts and what the server returns for `month=`.
+    ///
+    /// The board used to draw 1…31 and key every cell by day-of-month alone, so 28–31 August were
+    /// painted into September's 28–31 slots — at the far right, after the 27th, as if they were the
+    /// end of the month rather than the start of the period. Days carry their whole date now, so
+    /// they sit in the order they actually happened.
+    struct PeriodDay: Identifiable, Hashable {
+        let key: String     // yyyy-MM-dd
+        let day: Int
+        let startsMonth: Bool
+        var id: String { key }
+    }
+    /// Payroll's cut-off: a day after the 27th belongs to the next month's period.
+    private static let cutoffDay = 27
+    private var periodDays: [PeriodDay] {
+        let cal = ProjDate.cal
+        guard let firstOfMonth = cal.date(from: cal.dateComponents([.year, .month], from: monthDate)),
+              let end = cal.date(byAdding: .day, value: Self.cutoffDay - 1, to: firstOfMonth),
+              let prevMonth = cal.date(byAdding: .month, value: -1, to: firstOfMonth),
+              let start = cal.date(byAdding: .day, value: Self.cutoffDay, to: prevMonth)
+        else { return [] }
+        let fmt = ProjDate.fmt("yyyy-MM-dd")
+        var out: [PeriodDay] = []
+        var d = start
+        while d <= end {
+            let day = cal.component(.day, from: d)
+            out.append(PeriodDay(key: fmt.string(from: d), day: day, startsMonth: day == 1))
+            guard let next = cal.date(byAdding: .day, value: 1, to: d) else { break }
+            d = next
+        }
+        return out
+    }
+    /// "28 Aug – 27 Sep": the window this board covers, so it is never a guess.
+    private var periodLabel: String {
+        let inFmt = ProjDate.fmt("yyyy-MM-dd"), outFmt = ProjDate.fmt("d MMM")
+        guard let first = periodDays.first, let last = periodDays.last,
+              let a = inFmt.date(from: first.key), let b = inFmt.date(from: last.key) else { return "" }
+        return "\(outFmt.string(from: a)) – \(outFmt.string(from: b))"
+    }
 
-    private struct Member: Identifiable { let id: String; let name: String; let cells: [Int: AttTone]; let rowByDay: [Int: AttendanceRow] }
+    struct Member: Identifiable { let id: String; let name: String; let cells: [String: AttTone]; let rowByDay: [String: AttendanceRow] }
     private static func buildMembers(_ rows: [AttendanceRow]) -> [Member] {
         let groups = Dictionary(grouping: rows) { $0.user?.id ?? "me" }
         return groups.map { uid, rs -> Member in
-            var cells: [Int: AttTone] = [:]
-            var rowByDay: [Int: AttendanceRow] = [:]
-            for r in rs { if let d = Self.dayOf(r.attendanceDate) { cells[d] = AttTone.of(r); rowByDay[d] = r } }
+            var cells: [String: AttTone] = [:]
+            var rowByDay: [String: AttendanceRow] = [:]
+            for r in rs { if let k = Self.dayKey(r.attendanceDate) { cells[k] = AttTone.of(r); rowByDay[k] = r } }
             return Member(id: uid, name: rs.first?.user?.name ?? T("You"), cells: cells, rowByDay: rowByDay)
         }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
-    private static func dayOf(_ iso: String?) -> Int? {
+    /// The whole date, not the day number: the period spans two months and they share numbers.
+    private static func dayKey(_ iso: String?) -> String? {
         guard let iso, iso.count >= 10 else { return nil }
-        return Int(iso.dropFirst(8).prefix(2))   // "yyyy-MM-DD" → DD
+        return String(iso.prefix(10))   // "yyyy-MM-dd"
     }
 
     var body: some View {
@@ -1003,7 +1046,11 @@ struct StreakBoardCard: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(wide ? T("Crew streak board") : T("Your attendance history")).font(NXFont.display(16, .bold)).foregroundStyle(NX.foreground)
                     Text(todayDay.map { "\(monthLabel.capitalized) · \(T("today")) \($0)" } ?? monthLabel.capitalized)
-                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                        .font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    // The window this board actually covers — payroll counts 28→27, and the board
+                    // used to name only the month it ended in.
+                    Text(periodLabel)
+                        .font(NXFont.text(10)).foregroundStyle(NX.mutedFg.opacity(0.85)).lineLimit(1)
                 }
                 Spacer()
                 HStack(spacing: 2) {
@@ -1012,7 +1059,7 @@ struct StreakBoardCard: View {
                     }
                     .accessibilityLabel(T("Open the full board"))
                     .fullScreenCover(isPresented: $showFull) {
-                        FullBoard(members: members, daysInMonth: daysInMonth, monthLabel: monthLabel.capitalized, todayDay: todayDay,
+                        FullBoard(members: members, periodDays: periodDays, monthLabel: "\(monthLabel.capitalized) · \(periodLabel)", todayKey: todayKey,
                                   canManage: canManage, legend: AnyView(legend)) { await load() }
                     }
                     if wide {
@@ -1082,21 +1129,29 @@ struct StreakBoardCard: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: gap) {
                     LazyHStack(spacing: gap) {
-                        ForEach(1...daysInMonth, id: \.self) { d in
-                            let isToday = d == todayDay
-                            Text("\(d)").font(.system(size: 8, weight: isToday ? .bold : .regular))
+                        ForEach(periodDays) { pd in
+                            let isToday = pd.key == todayKey
+                            Text("\(pd.day)").font(.system(size: 8, weight: isToday ? .bold : .regular))
                                 .foregroundStyle(isToday ? Color.white : NX.mutedFg).frame(width: cell, height: 14)
                                 .background(isToday ? NX.violet : Color.clear, in: Capsule())
-                                .id("day-\(d)")
+                                // Where the month turns over, so 31 followed by 1 reads as a new
+                                // month rather than as a gap.
+                                .overlay(alignment: .leading) {
+                                    if pd.startsMonth { Rectangle().fill(NX.border).frame(width: 1, height: 14).offset(x: -gap / 2) }
+                                }
+                                .id("day-\(pd.key)")
                         }
                     }
                     .frame(height: 14)
                     ForEach(members) { m in
                         LazyHStack(spacing: gap) {
-                            ForEach(1...daysInMonth, id: \.self) { d in
-                                let fill = RoundedRectangle(cornerRadius: 5, style: .continuous).fill((m.cells[d] ?? .none).color).frame(width: cell, height: cell)
-                                    .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(d == todayDay ? NX.violet : Color.clear, lineWidth: 1.5))
-                                if canManage, let row = m.rowByDay[d], row.id != nil {
+                            ForEach(periodDays) { pd in
+                                let fill = RoundedRectangle(cornerRadius: 5, style: .continuous).fill((m.cells[pd.key] ?? .none).color).frame(width: cell, height: cell)
+                                    .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(pd.key == todayKey ? NX.violet : Color.clear, lineWidth: 1.5))
+                                    .overlay(alignment: .leading) {
+                                        if pd.startsMonth { Rectangle().fill(NX.border).frame(width: 1, height: cell).offset(x: -gap / 2) }
+                                    }
+                                if canManage, let row = m.rowByDay[pd.key], row.id != nil {
                                     Button { selectedRow = row } label: { fill }.buttonStyle(.plain)
                                 } else {
                                     fill
@@ -1108,8 +1163,8 @@ struct StreakBoardCard: View {
                 }
             }
             // Land on today, not on the 1st: the column that matters is the one being filled in.
-            .onAppear { if let t = todayDay { proxy.scrollTo("day-\(t)", anchor: .center) } }
-            .onChange(of: members.count) { _, _ in if let t = todayDay { proxy.scrollTo("day-\(t)", anchor: .center) } }
+            .onAppear { if let t = todayKey { proxy.scrollTo("day-\(t)", anchor: .center) } }
+            .onChange(of: members.count) { _, _ in if let t = todayKey { proxy.scrollTo("day-\(t)", anchor: .center) } }
             }
         }
     }
@@ -1118,9 +1173,9 @@ struct StreakBoardCard: View {
     /// the shape of the month; this is where a BoD reads it in one look.
     private struct FullBoard: View {
         let members: [Member]
-        let daysInMonth: Int
+        let periodDays: [PeriodDay]
         let monthLabel: String
-        let todayDay: Int?
+        let todayKey: String?
         let canManage: Bool
         let legend: AnyView
         let onChanged: () async -> Void
@@ -1156,19 +1211,25 @@ struct StreakBoardCard: View {
                 }
                 VStack(alignment: .leading, spacing: gap) {
                     HStack(spacing: gap) {
-                        ForEach(1...daysInMonth, id: \.self) { d in
-                            let isToday = d == todayDay
-                            Text("\(d)").font(.system(size: 9, weight: isToday ? .bold : .regular))
+                        ForEach(periodDays) { pd in
+                            let isToday = pd.key == todayKey
+                            Text("\(pd.day)").font(.system(size: 9, weight: isToday ? .bold : .regular))
                                 .foregroundStyle(isToday ? Color.white : NX.mutedFg).frame(width: cell, height: 16)
                                 .background(isToday ? NX.violet : Color.clear, in: Capsule())
+                                .overlay(alignment: .leading) {
+                                    if pd.startsMonth { Rectangle().fill(NX.border).frame(width: 1, height: 16).offset(x: -gap / 2) }
+                                }
                         }
                     }
                     ForEach(members) { m in
                         HStack(spacing: gap) {
-                            ForEach(1...daysInMonth, id: \.self) { d in
-                                let fill = RoundedRectangle(cornerRadius: 5, style: .continuous).fill((m.cells[d] ?? .none).color).frame(width: cell, height: cell)
-                                    .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(d == todayDay ? NX.violet : Color.clear, lineWidth: 1.5))
-                                if canManage, let row = m.rowByDay[d], row.id != nil {
+                            ForEach(periodDays) { pd in
+                                let fill = RoundedRectangle(cornerRadius: 5, style: .continuous).fill((m.cells[pd.key] ?? .none).color).frame(width: cell, height: cell)
+                                    .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(pd.key == todayKey ? NX.violet : Color.clear, lineWidth: 1.5))
+                                    .overlay(alignment: .leading) {
+                                        if pd.startsMonth { Rectangle().fill(NX.border).frame(width: 1, height: cell).offset(x: -gap / 2) }
+                                    }
+                                if canManage, let row = m.rowByDay[pd.key], row.id != nil {
                                     Button { selectedRow = row } label: { fill }.buttonStyle(.plain)
                                 } else {
                                     fill
