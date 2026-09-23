@@ -83,6 +83,14 @@ struct APIClient {
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Accept")
+        // Who is asking, and what this build is capable of obeying.
+        //
+        // Rules on the server kept arriving that the shipped app had no way to satisfy — a permit
+        // that must carry coordinates the app never sent, a single date a start-and-until picker
+        // cannot express — and the only symptom was staff being refused with nothing they could do
+        // about it. A server that knows the client version can hold each build to the rules that
+        // build can actually meet, instead of every rule being a gamble on who has updated.
+        req.setValue(Self.clientTag, forHTTPHeaderField: "X-Nexus-Client")
         if authed, let session = Keychain.load() {
             // Written onto the request itself, so the session travels with whichever host was picked.
             // Nothing here consults a cookie store, so no domain rule can quietly withhold it — and
@@ -2154,6 +2162,15 @@ struct APIClient {
 }
 
 extension APIClient {
+    /// `ios/<marketing version>/<build>`, e.g. `ios/0.1.6/12`. Read once; it cannot change while
+    /// the app is running.
+    static let clientTag: String = {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "0"
+        let build = info?["CFBundleVersion"] as? String ?? "0"
+        return "ios/\(version)/\(build)"
+    }()
+
     /// Statuses that mean the request never reached a decision inside NEXUS.
     ///
     /// Deliberately a list, not `>= 500`: 501 and 505 say the request itself was unacceptable, and

@@ -275,6 +275,68 @@ struct AttendanceRequestsCard: View {
         }
     }
 
+    /// Reasons long enough to be cut off, that the reader has opened. Kept by id so the list can
+    /// reload underneath without collapsing what somebody is in the middle of reading.
+    @State private var expandedReasons: Set<String> = []
+
+    /// A reason, with a way to see the rest of it. It used to be two lines and an ellipsis, and the
+    /// rest existed nowhere in the app — an approver decided on half a sentence.
+    private func reasonText(_ text: String, id: String, collapsedLines: Int) -> some View {
+        let open = expandedReasons.contains(id)
+        let long = text.count > 90 || text.contains("\n")
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(text).font(NXFont.text(12)).foregroundStyle(NX.foreground.opacity(0.85))
+                .lineLimit(open ? nil : collapsedLines)
+                .fixedSize(horizontal: false, vertical: open)
+            if long {
+                Text(open ? T("Show less") : T("Read it all"))
+                    .font(NXFont.text(10, .bold)).foregroundStyle(NX.violetText)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard long else { return }
+            withAnimation(.easeInOut(duration: 0.18)) {
+                if open { expandedReasons.remove(id) } else { expandedReasons.insert(id) }
+            }
+        }
+    }
+
+    /// Who settled this and when — drawn for every decided row, note or no note. Approving without
+    /// typing a note left the row saying only "Approved", so nobody could tell who had done it or
+    /// when, and a question about a decision had nowhere to start.
+    @ViewBuilder private func decisionStamp(_ r: AttendanceRequest) -> some View {
+        let status = (r.status ?? "").uppercased()
+        if status != "PENDING" {
+            let verb = status == "APPROVED" ? T("Approved") : status == "REJECTED" ? T("Rejected") : T("Canceled")
+            let who = r.reviewerName
+            let when = Self.stamp(r.reviewedAt)
+            HStack(spacing: 5) {
+                Image(systemName: status == "APPROVED" ? "checkmark.seal.fill" : status == "REJECTED" ? "xmark.seal.fill" : "slash.circle.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(status == "APPROVED" ? NX.success : status == "REJECTED" ? NX.danger : NX.mutedFg)
+                Text([verb, who.map { "\(T("by")) \($0)" } ?? T("automatically"), when].compactMap { $0 }.joined(separator: " · "))
+                    .font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    /// "23 Sep · 19:04" in Jakarta time, or nil when the server sent no timestamp.
+    static func stamp(_ iso: String?) -> String? {
+        guard let iso else { return nil }
+        let withFraction = ISO8601DateFormatter(); withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let plain = ISO8601DateFormatter(); plain.formatOptions = [.withInternetDateTime]
+        guard let date = withFraction.date(from: iso) ?? plain.date(from: iso) else { return nil }
+        let f = DateFormatter()
+        f.dateFormat = "d MMM · HH:mm"
+        f.timeZone = TimeZone(identifier: "Asia/Jakarta")
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f.string(from: date)
+    }
+
     private func requestRow(_ r: AttendanceRequest) -> some View {
         let pending = (r.status ?? "").uppercased() == "PENDING"
         let working = busy == r.id
@@ -290,9 +352,10 @@ struct AttendanceRequestsCard: View {
                 if canReview, let n = r.user?.name { Text("· \(n)").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }
             }
             if let reason = r.reason, !reason.isEmpty {
-                Text(reason).font(NXFont.text(12)).foregroundStyle(NX.foreground.opacity(0.85)).lineLimit(2)
+                reasonText(reason, id: r.id, collapsedLines: 3)
             }
             if let url = r.attachmentURL { attachment(r, url) }
+            decisionStamp(r)
             if let note = r.reviewNoteText { decisionNote(note, rejected: r.status?.uppercased() == "REJECTED", by: r.reviewerName) }
             if pending {
                 HStack(spacing: 8) {
@@ -404,7 +467,7 @@ struct AttendanceRequestsCard: View {
                 if let n = o.user?.name { Text("· \(n)").font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }
             }
             if let reason = o.reason, !reason.isEmpty {
-                Text(reason).font(NXFont.text(12)).foregroundStyle(NX.foreground.opacity(0.85)).lineLimit(3)
+                reasonText(reason, id: "offsite-\(o.id)", collapsedLines: 3)
             }
             // Where they actually were, in the order a reviewer reads it: the place first, then how
             // far off it is from the office they should have been at.
