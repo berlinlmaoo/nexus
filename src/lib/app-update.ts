@@ -12,7 +12,19 @@ import { createInAppNotification } from "@/lib/notification-service"
  */
 export const APP_STORE_ID = "6807031457"
 export const APP_STORE_URL = `https://apps.apple.com/id/app/id${APP_STORE_ID}`
-const LOOKUP = `https://itunes.apple.com/lookup?id=${APP_STORE_ID}&country=id`
+/**
+ * The store lookup, with a cache-buster.
+ *
+ * Apple serves this endpoint through a CDN that holds the previous answer for hours after a
+ * release. Measured on 24 Sep 2026: the plain URL returned 0.1.4 (released the 16th) from this
+ * server while the same URL with a changing parameter returned 0.1.5 (released the 23rd). Without
+ * it every "update NEXUS" reminder is a day late, silently — the run reports success and simply
+ * compares everyone against the old version. The in-process cache below is what keeps the rate
+ * down; the parameter only stops someone else's cache answering for Apple.
+ */
+function lookupUrl(): string {
+  return `https://itunes.apple.com/lookup?id=${APP_STORE_ID}&country=id&_=${Date.now()}`
+}
 const REMIND_EVERY_MS = 7 * 24 * 60 * 60 * 1000
 const ACTIVE_WITHIN_MS = 60 * 24 * 60 * 60 * 1000
 
@@ -22,7 +34,11 @@ let cache: { version: string; at: number } | null = null
 export async function fetchLatestIosVersion(): Promise<string | null> {
   if (cache && Date.now() - cache.at < 60 * 60 * 1000) return cache.version
   try {
-    const res = await fetch(LOOKUP, { signal: AbortSignal.timeout(10_000), cache: "no-store" })
+    const res = await fetch(lookupUrl(), {
+      signal: AbortSignal.timeout(10_000),
+      cache: "no-store",
+      headers: { "Cache-Control": "no-cache" },
+    })
     if (res.ok) {
       const json = (await res.json()) as { results?: Array<{ version?: string }> }
       const v = json.results?.[0]?.version?.trim()
