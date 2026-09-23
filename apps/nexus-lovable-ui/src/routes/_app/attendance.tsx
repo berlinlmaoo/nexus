@@ -1381,13 +1381,26 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
         )}
 
         {/* Decision, once it's settled — visible to the requester AND to every reviewer. */}
-        {!isPending && (r.reviewNote || r.reviewedBy?.name) && (
+        {/* Who settled this and when — drawn for every decided row, note or no note. Approving
+            without typing a note left the row saying only "Approved", so nobody could tell who had
+            done it or when, and a question about a decision had nowhere to start. */}
+        {!isPending && (
           <div className="w-full rounded-xl border border-border bg-muted/30 px-3 py-2">
             <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              {(r.status || "").toUpperCase() === "REJECTED" ? "Reason for rejection" : "Reviewer note"}
-              {r.reviewedBy?.name ? ` · ${r.reviewedBy.name}` : ""}
+              {(() => {
+                const st = (r.status || "").toUpperCase();
+                const verb = st === "APPROVED" ? "Approved" : st === "REJECTED" ? "Rejected" : "Canceled";
+                const who = r.reviewedBy?.name ? `by ${r.reviewedBy.name}` : "automatically";
+                const when = r.reviewedAt ? fmtDateTime(r.reviewedAt) : null;
+                return [verb, who, when].filter(Boolean).join(" · ");
+              })()}
             </div>
-            {r.reviewNote && <p className="mt-0.5 whitespace-pre-wrap text-xs">“{r.reviewNote}”</p>}
+            {r.reviewNote && (
+              <p className="mt-1 whitespace-pre-wrap text-xs">
+                <span className="font-semibold">{(r.status || "").toUpperCase() === "REJECTED" ? "Reason for rejection: " : "Note: "}</span>
+                “{r.reviewNote}”
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -1748,6 +1761,14 @@ function statusTone(status?: string | null) {
   if (s === "REJECTED" || s === "CANCELED") return "bg-destructive/15 text-destructive";
   return "bg-warning/15 text-warning-foreground";
 }
+/** "23 Sep · 19:04" in Jakarta time, for the moment a request was settled. */
+function fmtDateTime(value?: string | null) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString("en-GB", { timeZone: "Asia/Jakarta", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }).replace(",", " ·");
+}
+
 function fmtDateShort(value?: string | null) {
   if (!value) return "—";
   const d = new Date(value);
