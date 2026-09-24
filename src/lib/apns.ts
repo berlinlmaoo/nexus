@@ -13,6 +13,10 @@ type PushPayload = {
   taskId?: string | null
   projectId?: string | null
   link?: string | null
+  /** aps.category — iOS shows the actions registered for it (NEXUS_OUTSIDE_OFFICE → FILE_PERMIT). */
+  category?: string | null
+  /** Extra top-level custom keys (e.g. recordId). Can never replace aps, type, taskId, projectId or link. */
+  data?: Record<string, string | number | boolean | null> | null
 }
 
 let cachedJWT: { value: string; createdAt: number } | null = null
@@ -87,7 +91,12 @@ async function sendOne(
     })
     request.on("error", (error) => { client.close(); reject(error) })
     request.end(JSON.stringify({
-      aps: { alert: { title: payload.title, body: payload.body }, sound: "default" },
+      ...(payload.data ?? {}),
+      aps: {
+        alert: { title: payload.title, body: payload.body },
+        sound: "default",
+        ...(payload.category ? { category: payload.category } : {}),
+      },
       type: payload.type,
       ...(payload.taskId ? { taskId: payload.taskId } : {}),
       ...(payload.projectId ? { projectId: payload.projectId } : {}),

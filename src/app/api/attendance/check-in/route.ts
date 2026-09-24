@@ -12,6 +12,8 @@ import { setLatePenalty, clearLatePenalty } from "@/lib/gamification"
 import { startFloor, isOutageDay, isAutoDeduction, hasAttendanceWaiver } from "@/lib/attendance-absence"
 import { reverseGeocodeCoordinates } from "@/lib/reverse-geocode"
 import { attendanceActionSchema } from "@/lib/validations"
+import { USE_IOS_APP_ERROR, attendanceClientOf, isIosBrowserWithoutApp } from "@/lib/attendance-outside"
+import { iosBrowserCheckInBlocked } from "@/lib/version-policy"
 
 const MAX_SELFIE_SIZE = 10 * 1024 * 1024
 
@@ -32,6 +34,16 @@ export async function POST(request: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    // An iPhone / iPad browser must use the app (owner, Sep 2026): a browser cannot report the location
+    // trail. Android and desktop browsers, iPadOS desktop mode and every app build (header or legacy
+    // NEXUS/<build> UA) pass — see isIosBrowserWithoutApp in lib/attendance-outside.ts.
+    const userAgent = request.headers.get("user-agent")
+    const clientHeader = request.headers.get("x-nexus-client")
+    if (isIosBrowserWithoutApp(userAgent, clientHeader) && (await iosBrowserCheckInBlocked())) {
+      return NextResponse.json(USE_IOS_APP_ERROR, { status: 403 })
+    }
+    const checkInClient = attendanceClientOf(userAgent, clientHeader)
 
     const context = await getAttendanceWorkspaceContext(session.user.id)
     if (!context.workspace) {
@@ -277,6 +289,9 @@ export async function POST(request: NextRequest) {
         checkInImpliedKmh: integrity.impliedKmh,
         checkInDeviceUptimeSec: checkInOffline ? deviceUptimeSec : null,
         checkInClientId: clientId,
+        checkInClient,
+        // A browser cannot report a location trail; the board shows "Web check-in · location not tracked".
+        locationTrackingState: checkInClient === "web" ? "web" : null,
         checkInLat: validation.data.lat,
         checkInLng: validation.data.lng,
         checkInAddress: reverseGeocode.displayName,
