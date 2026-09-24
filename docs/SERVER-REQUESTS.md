@@ -8,7 +8,7 @@ Status legend: **OPEN** (not started) · **DONE** (live, with commit) · **DROPP
 
 ---
 
-## R1. FCM push: data-only + the PRD channels — OPEN
+## R1. FCM push: data-only + the PRD channels — DONE (server a79796b, live 24 Sep 2026)
 
 **Owner decision (24 Sep 2026):** data-only messages and the channel set from PRD §4.5.
 
@@ -60,7 +60,7 @@ tapping one opens the app on Home instead of the target.
 
 ---
 
-## R2. APK distribution (no Play Store yet) — OPEN
+## R2. APK distribution (no Play Store yet) — DONE (server a79796b). Publish: copy the APK into `nexus-prod:~/nexus-data/android/`, then atomically replace `current.json` = `{versionName, versionCode, file, sha256?, releasedAt?, notes?}` (hand both to the main session). `/download/android` and `GET /api/app/android/apk` (+ `/api/app/android/release`) are live and exempt from 426
 
 **Owner decision (24 Sep 2026):** sideloaded APK, download only for signed-in people.
 
@@ -88,7 +88,7 @@ tapping one opens the app on Home instead of the target.
 
 ---
 
-## R3. Release certificate fingerprint — OPEN (value ready)
+## R3. Release certificate fingerprint — DONE (in the container; `/.well-known/assetlinks.json` serves it)
 
 Set on `nexus-prod`:
 
@@ -103,7 +103,7 @@ edit to `.env.production` will not win over the runtime value.
 
 ---
 
-## R4. Android minimum/latest by env — no change, just the procedure
+## R4. Android minimum/latest by env — DONE: grace window needs `NEXUS_ANDROID_LATEST_RELEASED_AT` (ISO) with `NEXUS_ANDROID_LATEST_VERSION`; main session sets them per release
 
 Owner: "tayang" is set by hand via `NEXUS_ANDROID_LATEST_VERSION`, and the minimum follows the iOS
 rule (new version becomes minimum 3 days after release) via `NEXUS_ANDROID_MIN_VERSION`. The app reads
@@ -115,7 +115,7 @@ you want the once-a-day "Update NEXUS by <date>" warning on Android too, add `ne
 
 ## Found while porting (iOS, for the main session) — not Android work
 
-### I1. Queued check-in refused for distance is retried 5× instead of dropped and said — OPEN
+### I1. Queued check-in refused for distance is retried 5× instead of dropped and said — DONE on iOS (caaca89). Server unchanged: adding `code` would flip live check-in into the offsite prompt on 0.1.4–0.1.6
 
 `POST /api/attendance/check-in` answers an out-of-radius tap with 422
 `{error, officeName, distanceMeters, radiusMeters}` and **no `code`** (`buildOutsideGeofenceResponse`,
@@ -137,3 +137,5 @@ iOS still shows the offsite queue only when `canManageAttendance` (`AttendanceRe
 canReviewOffsite: today?.canManageAttendance)`), so a manager taps the push and finds nothing to
 approve. Android shows it for `canReviewAttendanceRequests || canManageAttendance` and treats a 403
 as an empty list. Suggest iOS does the same.
+
+### I2. Offsite check-out review was BoD-only on iPhone — DONE on iOS (afadd5c): direct managers see and decide their reports' offsite check-outs, as the server already allowed.
