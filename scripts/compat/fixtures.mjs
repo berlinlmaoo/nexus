@@ -309,10 +309,19 @@ export function buildFixtures(profile, world, media) {
   const created = { status: "2xx", check: (j) => need(isStr(j?.request?.id), "request.id missing") }
   const bump = (key) => (j, ctx) => { ctx.flags.created = (ctx.flags.created ?? 0) + 1; if (key) ctx.flags[key] = j?.request?.id }
   const base = (type, s, e, reason) => [["type", type], ["startDate", s], ["endDate", e], ["reason", reason]]
+  // Izin that is really a day off (owner's rule, 24 Sep 2026; src/lib/permit-reason-guard.ts). Sent
+  // complete — photo, and coords where the client sends them — so the reason is the only thing wrong.
+  // Every izin reason in the compat fixtures above must stay unflagged; this one must be refused.
+  const PERMIT_NOT_DAYOFF = {
+    status: 422, code: "PERMIT_NOT_DAYOFF",
+    check: (j) => need(isStr(j?.error), "refusal without an error message"),
+  }
 
   if (p.legacy) {
     req("req-permit", "PERMIT 1 day + photo, no coords (0.1.4-shaped)", "compat",
       base("PERMIT", jktDate(1), jktDate(1), "Urus dokumen di kelurahan"), [libPhoto], created, bump())
+    req("req-permit-dayoff", "PERMIT reason \"ambil day off\" → PERMIT_NOT_DAYOFF", "policy",
+      base("PERMIT", jktDate(2), jktDate(2), "ambil day off"), [libPhoto], PERMIT_NOT_DAYOFF)
   } else if (ios && !modern) {
     // 0.1.4 / 0.1.5 — the regression class of 23–24 Sep: none of these may ever be refused.
     req("req-permit-1d", "PERMIT 1 day + photo, NO lat/lng", "compat",
@@ -330,6 +339,8 @@ export function buildFixtures(profile, world, media) {
     req("req-permit-nophoto", "PERMIT without photo (UI says optional)", "policy",
       base("PERMIT", jktDate(10), jktDate(10), "Keperluan mendadak"), [],
       { status: "4xx", check: (j) => need(isStr(j?.error), "refusal without an error message") })
+    req("req-permit-dayoff", "PERMIT reason \"ambil day off\" → PERMIT_NOT_DAYOFF", "policy",
+      base("PERMIT", jktDate(11), jktDate(11), "ambil day off"), [libPhoto], PERMIT_NOT_DAYOFF)
   } else if (modern) {
     req("req-permit-1d", "PERMIT 1 day + permit-photo.jpg + lat/lng", "compat",
       [...base("PERMIT", jktDate(1), jktDate(1), "Urus dokumen di kelurahan"), ["lat", String(pos.lat)], ["lng", String(pos.lng)]], [permitPhoto016], created, bump())
@@ -343,6 +354,8 @@ export function buildFixtures(profile, world, media) {
     req("req-permit-nocoords", "PERMIT without lat/lng (UI cannot send) → 400", "policy",
       base("PERMIT", jktDate(6), jktDate(6), "Keperluan mendadak"), [permitPhoto016],
       { status: 400, check: (j) => need(isStr(j?.error), "refusal without an error message") })
+    req("req-permit-dayoff", "PERMIT reason \"ambil day off\" → PERMIT_NOT_DAYOFF", "policy",
+      [...base("PERMIT", jktDate(7), jktDate(7), "ambil day off"), ["lat", String(pos.lat)], ["lng", String(pos.lng)]], [permitPhoto016], PERMIT_NOT_DAYOFF)
   } else {
     // web
     req("req-permit-1d", "PERMIT 1 day + photo + lat/lng", "compat",
@@ -354,6 +367,8 @@ export function buildFixtures(profile, world, media) {
     req("req-permit-nocoords", "PERMIT without lat/lng (location denied) → 400", "policy",
       base("PERMIT", jktDate(4), jktDate(4), "Keperluan mendadak"), [webPhoto],
       { status: 400, check: (j) => need(isStr(j?.error), "refusal without an error message") })
+    req("req-permit-dayoff", "PERMIT reason \"ambil day off\" → PERMIT_NOT_DAYOFF", "policy",
+      [...base("PERMIT", jktDate(5), jktDate(5), "ambil day off"), ["lat", String(pos.lat)], ["lng", String(pos.lng)]], [webPhoto], PERMIT_NOT_DAYOFF)
   }
 
   add({

@@ -42,6 +42,7 @@ import { Route as AppAttendanceRouteImport } from './routes/_app/attendance'
 import { Route as AppAdminRouteImport } from './routes/_app/admin'
 import { Route as AppProjectsIndexRouteImport } from './routes/_app/projects/index'
 import { Route as AppTasksTaskIdRouteImport } from './routes/_app/tasks.$taskId'
+import { Route as AppReportsUserIdRouteImport } from './routes/_app/reports.$userId'
 import { Route as AppProjectsProjectIdRouteImport } from './routes/_app/projects/$projectId'
 import { Route as AppMessagesConversationIdRouteImport } from './routes/_app/messages.$conversationId'
 import { Route as AppFoldersFolderIdRouteImport } from './routes/_app/folders.$folderId'
@@ -211,6 +212,11 @@ const AppTasksTaskIdRoute = AppTasksTaskIdRouteImport.update({
   path: '/tasks/$taskId',
   getParentRoute: () => AppRoute,
 } as any)
+const AppReportsUserIdRoute = AppReportsUserIdRouteImport.update({
+  id: '/$userId',
+  path: '/$userId',
+  getParentRoute: () => AppReportsRoute,
+} as any)
 const AppProjectsProjectIdRoute = AppProjectsProjectIdRouteImport.update({
   id: '/projects/$projectId',
   path: '/projects/$projectId',
@@ -251,7 +257,7 @@ export interface FileRoutesByFullPath {
   '/messages': typeof AppMessagesRouteWithChildren
   '/my-tasks': typeof AppMyTasksRoute
   '/peer-reports': typeof AppPeerReportsRoute
-  '/reports': typeof AppReportsRoute
+  '/reports': typeof AppReportsRouteWithChildren
   '/room-booking': typeof AppRoomBookingRoute
   '/settings': typeof AppSettingsRoute
   '/social': typeof AppSocialRoute
@@ -268,6 +274,7 @@ export interface FileRoutesByFullPath {
   '/folders/$folderId': typeof AppFoldersFolderIdRoute
   '/messages/$conversationId': typeof AppMessagesConversationIdRoute
   '/projects/$projectId': typeof AppProjectsProjectIdRoute
+  '/reports/$userId': typeof AppReportsUserIdRoute
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
   '/projects/': typeof AppProjectsIndexRoute
 }
@@ -288,7 +295,7 @@ export interface FileRoutesByTo {
   '/messages': typeof AppMessagesRouteWithChildren
   '/my-tasks': typeof AppMyTasksRoute
   '/peer-reports': typeof AppPeerReportsRoute
-  '/reports': typeof AppReportsRoute
+  '/reports': typeof AppReportsRouteWithChildren
   '/room-booking': typeof AppRoomBookingRoute
   '/settings': typeof AppSettingsRoute
   '/social': typeof AppSocialRoute
@@ -306,6 +313,7 @@ export interface FileRoutesByTo {
   '/folders/$folderId': typeof AppFoldersFolderIdRoute
   '/messages/$conversationId': typeof AppMessagesConversationIdRoute
   '/projects/$projectId': typeof AppProjectsProjectIdRoute
+  '/reports/$userId': typeof AppReportsUserIdRoute
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
   '/projects': typeof AppProjectsIndexRoute
 }
@@ -328,7 +336,7 @@ export interface FileRoutesById {
   '/_app/messages': typeof AppMessagesRouteWithChildren
   '/_app/my-tasks': typeof AppMyTasksRoute
   '/_app/peer-reports': typeof AppPeerReportsRoute
-  '/_app/reports': typeof AppReportsRoute
+  '/_app/reports': typeof AppReportsRouteWithChildren
   '/_app/room-booking': typeof AppRoomBookingRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/social': typeof AppSocialRoute
@@ -346,6 +354,7 @@ export interface FileRoutesById {
   '/_app/folders/$folderId': typeof AppFoldersFolderIdRoute
   '/_app/messages/$conversationId': typeof AppMessagesConversationIdRoute
   '/_app/projects/$projectId': typeof AppProjectsProjectIdRoute
+  '/_app/reports/$userId': typeof AppReportsUserIdRoute
   '/_app/tasks/$taskId': typeof AppTasksTaskIdRoute
   '/_app/projects/': typeof AppProjectsIndexRoute
 }
@@ -386,6 +395,7 @@ export interface FileRouteTypes {
     | '/folders/$folderId'
     | '/messages/$conversationId'
     | '/projects/$projectId'
+    | '/reports/$userId'
     | '/tasks/$taskId'
     | '/projects/'
   fileRoutesByTo: FileRoutesByTo
@@ -424,6 +434,7 @@ export interface FileRouteTypes {
     | '/folders/$folderId'
     | '/messages/$conversationId'
     | '/projects/$projectId'
+    | '/reports/$userId'
     | '/tasks/$taskId'
     | '/projects'
   id:
@@ -463,6 +474,7 @@ export interface FileRouteTypes {
     | '/_app/folders/$folderId'
     | '/_app/messages/$conversationId'
     | '/_app/projects/$projectId'
+    | '/_app/reports/$userId'
     | '/_app/tasks/$taskId'
     | '/_app/projects/'
   fileRoutesById: FileRoutesById
@@ -713,6 +725,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTasksTaskIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/reports/$userId': {
+      id: '/_app/reports/$userId'
+      path: '/$userId'
+      fullPath: '/reports/$userId'
+      preLoaderRoute: typeof AppReportsUserIdRouteImport
+      parentRoute: typeof AppReportsRoute
+    }
     '/_app/projects/$projectId': {
       id: '/_app/projects/$projectId'
       path: '/projects/$projectId'
@@ -767,6 +786,18 @@ const AppMessagesRouteWithChildren = AppMessagesRoute._addFileChildren(
   AppMessagesRouteChildren,
 )
 
+interface AppReportsRouteChildren {
+  AppReportsUserIdRoute: typeof AppReportsUserIdRoute
+}
+
+const AppReportsRouteChildren: AppReportsRouteChildren = {
+  AppReportsUserIdRoute: AppReportsUserIdRoute,
+}
+
+const AppReportsRouteWithChildren = AppReportsRoute._addFileChildren(
+  AppReportsRouteChildren,
+)
+
 interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRoute
   AppAttendanceRoute: typeof AppAttendanceRoute
@@ -780,7 +811,7 @@ interface AppRouteChildren {
   AppMessagesRoute: typeof AppMessagesRouteWithChildren
   AppMyTasksRoute: typeof AppMyTasksRoute
   AppPeerReportsRoute: typeof AppPeerReportsRoute
-  AppReportsRoute: typeof AppReportsRoute
+  AppReportsRoute: typeof AppReportsRouteWithChildren
   AppRoomBookingRoute: typeof AppRoomBookingRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppSocialRoute: typeof AppSocialRoute
@@ -808,7 +839,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppMessagesRoute: AppMessagesRouteWithChildren,
   AppMyTasksRoute: AppMyTasksRoute,
   AppPeerReportsRoute: AppPeerReportsRoute,
-  AppReportsRoute: AppReportsRoute,
+  AppReportsRoute: AppReportsRouteWithChildren,
   AppRoomBookingRoute: AppRoomBookingRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppSocialRoute: AppSocialRoute,

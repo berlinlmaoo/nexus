@@ -32,6 +32,8 @@ import {
 import { ANNUAL_LEAVE_DAYS, checkLeaveEligibility, leaveDaysInYear, leaveYearRange } from "@/lib/annual-leave"
 import { reverseGeocodeCoordinates } from "@/lib/reverse-geocode"
 import { isBackdated, reportDelayMinutes } from "@/lib/permit-rules"
+import { classifyPermitReason } from "@/lib/permit-reason-guard"
+import { dayOffBalances, dayOffPeriodOf, dayOffUsageKey, dayOffUsedByPeriod } from "@/lib/day-off-usage"
 
 const MAX_SUPPORTING_DOCUMENT_SIZE = 10 * 1024 * 1024
 
@@ -267,10 +269,29 @@ export async function GET(request: NextRequest) {
       )
     }, 0)
 
+    // A reviewer deciding an izin sees what the requester has left of day off in that izin's period:
+    // an izin filed by somebody whose quota ran out yesterday reads differently from the same words
+    // from somebody who has not touched it. Same count the DAY_OFF cap uses (lib/day-off-usage),
+    // computed for the whole list in one pass. Additive: clients that do not know the field ignore it,
+    // and `scope=me` (the requester's own list) does not carry it.
+    const requesterDayOff = scope === "me"
+      ? null
+      : await dayOffBalances(
+          context.workspace.id,
+          visibleRequests
+            .filter((r) => r.type === "PERMIT")
+            .map((r) => ({ userId: r.userId, periodKey: dayOffPeriodOf(r.startDate) })),
+        )
+
     return NextResponse.json({
       scope,
       dayOffUsedThisMonth,
-      requests: visibleRequests.map((attendanceRequest) => serializeAttendanceRequest(attendanceRequest)),
+      requests: visibleRequests.map((attendanceRequest) => {
+        const serialized = serializeAttendanceRequest(attendanceRequest)
+        if (!requesterDayOff || attendanceRequest.type !== "PERMIT") return serialized
+        const balance = requesterDayOff.get(dayOffUsageKey(attendanceRequest.userId, dayOffPeriodOf(attendanceRequest.startDate)))
+        return balance ? { ...serialized, requesterDayOff: balance } : serialized
+      }),
     })
   } catch (error) {
     console.error("Error fetching attendance requests:", error)
@@ -339,6 +360,44 @@ export async function POST(request: NextRequest) {
     // of a specific user.
     const canGrant = context.canManageAttendance // BoD / One Above All / system admin
     const reqType = validation.data.type
+    // Izin is for work done away from the desk — shooting, events, rehearsals, venue surveys, client
+    // visits, "masuk siang karena …". It is not a day off and it does not cover a forgotten check-in
+    // (owner, 24 Sep 2026: day off has a quota and when it is gone there is no more; absen itu
+    // kewajiban). Before anything else, so the person hears the reason that actually decides it — not
+    // "lampirkan foto" first and this after they have gone and taken one. Self-filed only: a BoD grant
+    // (canGrant, which every isGrant also is) is a human vouching for the day. Reads the reason and
+    // nothing else, so an older app is held to exactly what the newest one is.
+    if (!canGrant && reqType === "PERMIT") {
+      const verdict = classifyPermitReason(validation.data.reason)
+      if (verdict.kind === "forgot_checkin") {
+        console.info("[permit-guard] refused", { userId: session.user.id, kind: verdict.kind, matched: verdict.matched })
+        return NextResponse.json(
+          {
+            error: "Lupa absen gak bisa ditutup pakai izin. Absen itu wajib — hari yang gak di-absen tercatat tanpa keterangan.",
+            code: "PERMIT_NOT_FORGOT_CHECKIN",
+          },
+          { status: 422 }
+        )
+      }
+      if (verdict.kind === "dayoff") {
+        // The balance the DAY_OFF cap below would act on, for the period the izin's date falls in.
+        const periodKey = dayOffPeriodOf(parsedStartDate)
+        const balance = (await dayOffBalances(context.workspace.id, [{ userId: session.user.id, periodKey }]))
+          .get(dayOffUsageKey(session.user.id, periodKey))
+        const left = Math.max(0, balance?.remaining ?? 0)
+        console.info("[permit-guard] refused", { userId: session.user.id, kind: verdict.kind, matched: verdict.matched, periodKey, left })
+        return NextResponse.json(
+          {
+            error: left > 0
+              ? `Izin bukan untuk libur. Kalau mau libur, ajukan Day Off — sisa jatah kamu periode ini: ${left} hari.`
+              : "Izin bukan untuk libur, dan jatah day off kamu periode ini sudah habis.",
+            code: "PERMIT_NOT_DAYOFF",
+            dayOff: balance ? { period: periodKey, ...balance } : null,
+          },
+          { status: 422 }
+        )
+      }
+    }
     // Sick self-requests must include the doctor's note photo (BoD grants are exempt).
     if (!canGrant && reqType === "SICK" && !(supportingDocument instanceof File && supportingDocument.size > 0)) {
       return NextResponse.json({ error: "Request sakit wajib melampirkan foto surat sakit." }, { status: 400 })
@@ -472,30 +531,43 @@ export async function POST(request: NextRequest) {
         monthCounts.set(monthKey, (monthCounts.get(monthKey) ?? 0) + 1)
       }
 
-      const monthWindows = Array.from(monthCounts.keys()).map((monthKey) => ({
-        monthKey,
-        ...rangeOf(monthKey),
-      }))
-
-      const existingSameType = await prisma.attendanceRequest.findMany({
-        where: {
-          userId: effectiveUserId,
-          type: reqType,
-          status: { in: ["PENDING", "APPROVED"] },
-          OR: monthWindows.map((window) => ({
-            startDate: { lte: window.end },
-            endDate: { gte: window.start },
-          })),
-        },
-        select: { startDate: true, endDate: true },
-      })
-
       const existingMonthCounts = new Map<string, number>()
-      for (const requestItem of existingSameType) {
-        for (const date of enumerateAttendanceDates(requestItem.startDate, requestItem.endDate)) {
-          const monthKey = keyOf(date)
-          if (!monthCounts.has(monthKey)) continue
-          existingMonthCounts.set(monthKey, (existingMonthCounts.get(monthKey) ?? 0) + 1)
+      if (isDayOff) {
+        // DAY_OFF usage lives in lib/day-off-usage — the same rule this block always applied (every
+        // PENDING/APPROVED DAY_OFF of this person, auto-cuts included, charged day by day to its
+        // 28→27 period), moved out so the izin guard, the reviewer queue and the absence push quote
+        // the number this cap acts on instead of re-deriving it.
+        const periodKeys = Array.from(monthCounts.keys())
+        const usedByPeriod = await dayOffUsedByPeriod(periodKeys.map((periodKey) => ({ userId: effectiveUserId, periodKey })))
+        for (const periodKey of periodKeys) {
+          const used = usedByPeriod.get(dayOffUsageKey(effectiveUserId, periodKey)) ?? 0
+          if (used > 0) existingMonthCounts.set(periodKey, used)
+        }
+      } else {
+        const monthWindows = Array.from(monthCounts.keys()).map((monthKey) => ({
+          monthKey,
+          ...rangeOf(monthKey),
+        }))
+
+        const existingSameType = await prisma.attendanceRequest.findMany({
+          where: {
+            userId: effectiveUserId,
+            type: reqType,
+            status: { in: ["PENDING", "APPROVED"] },
+            OR: monthWindows.map((window) => ({
+              startDate: { lte: window.end },
+              endDate: { gte: window.start },
+            })),
+          },
+          select: { startDate: true, endDate: true },
+        })
+
+        for (const requestItem of existingSameType) {
+          for (const date of enumerateAttendanceDates(requestItem.startDate, requestItem.endDate)) {
+            const monthKey = keyOf(date)
+            if (!monthCounts.has(monthKey)) continue
+            existingMonthCounts.set(monthKey, (existingMonthCounts.get(monthKey) ?? 0) + 1)
+          }
         }
       }
 

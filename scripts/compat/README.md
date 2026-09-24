@@ -124,6 +124,7 @@ Requests (dates from tomorrow, Jakarta):
 | 0.1.6 | PERMIT without lat/lng | policy: 400 with message |
 | web | PERMIT 1 day + photo + lat/lng · SICK 1 day · DAY_OFF | 2xx |
 | web | PERMIT without lat/lng | policy: 400 with message |
+| 0.1.3, 0.1.4, 0.1.5, 0.1.6, web | PERMIT with reason "ambil day off" (otherwise complete) | policy: 422 `PERMIT_NOT_DAYOFF` |
 | 0.1.3 | login, profile, projects, tasks, today, history, requests list | 2xx |
 | 0.1.3 | check-in, PERMIT | gate (below) |
 

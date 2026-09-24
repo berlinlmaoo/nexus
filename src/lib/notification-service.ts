@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma"
 import { resolveAttendanceApprovers } from "@/lib/attendance-approvers"
+import { dayOffBalances, dayOffPeriodOf, dayOffUsageKey } from "@/lib/day-off-usage"
 import { sendPushToUser } from "@/lib/apns"
 import { emitNotification } from "@/lib/socket-emitter"
 import { postWaBridge } from "@/lib/wa-bridge"
@@ -311,6 +312,65 @@ export async function notifyAttendanceReminder(data: {
   return true
 }
 
+/**
+ * "Tercatat tanpa keterangan": the absence cron cut a day off because nobody checked in that day.
+ *
+ * The cut itself happens at 02:00 WIB (nexus-absence.timer), and nobody should be woken by it; this
+ * is sent from /api/cron/absence-notify in the morning instead. Until it existed the person found out
+ * — if at all — from a quota counter that had quietly gone down.
+ *
+ * Once per (person, date), forever: the key is the `link`, which carries the date, exactly as
+ * `notifyAttendanceReminder` keys its reminders. The check and the write sit under an advisory lock
+ * on that same pair, so two runs that overlap (a manual re-run while the timer fires) cannot both get
+ * past the check. Do-not-disturb keeps the in-app row and drops only the buzz — this is a record of
+ * something that happened, not a nudge whose moment passes.
+ *
+ * `dryRun` answers what WOULD be sent and never writes, locks or pushes.
+ */
+export async function notifyAttendanceAbsentRecorded(data: {
+  userId: string
+  /** The attendance date that was cut, "YYYY-MM-DD" (Asia/Jakarta). */
+  dateKey: string
+  quota: number
+  used: number
+  dryRun?: boolean
+}): Promise<{ sent: boolean; skipped?: "already_sent" | "dry_run"; title: string; message: string; link: string; push: boolean }> {
+  const type = "attendance_absent_recorded"
+  // Opens Attendance on both clients (iOS NotificationTarget(path:) → .screen(.attendance); web
+  // /attendance). The date rides along as the dedupe key and for a client that later wants to focus it.
+  const link = `/attendance?absent=${data.dateKey}`
+  const title = "Tercatat tanpa keterangan"
+  const day = new Date(`${data.dateKey}T00:00:00.000Z`).toLocaleDateString("id-ID", { day: "numeric", month: "short", timeZone: "UTC" })
+  const remaining = data.quota - data.used
+  const balance = remaining >= 0
+    ? `Jatah periode ini: sisa ${remaining} dari ${data.quota}.`
+    : `Jatah periode ini: sudah lewat ${-remaining} hari.`
+  const message = `Kamu gak absen tanggal ${day} — dipotong 1 day off. ${balance}`
+  const push = !(await isUserDnd(data.userId))
+
+  if (data.dryRun) {
+    const existing = await prisma.notification.findFirst({ where: { userId: data.userId, type, link }, select: { id: true } })
+    return { sent: false, skipped: existing ? "already_sent" : "dry_run", title, message, link, push }
+  }
+
+  const sent = await prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`absentnotify|${data.userId}|${data.dateKey}`})::int8)`
+      const existing = await tx.notification.findFirst({ where: { userId: data.userId, type, link }, select: { id: true } })
+      if (existing) return false
+      // Written through the shared helper (own connection, committed on return) while this
+      // transaction still holds the lock — so a second run waiting on the lock finds the row.
+      await createInAppNotification({ userId: data.userId, type, title, message, link, push })
+      return true
+    },
+    // The push is awaited inside; APNs can take a few seconds per device.
+    { maxWait: 10_000, timeout: 30_000 },
+  )
+  return sent
+    ? { sent: true, title, message, link, push }
+    : { sent: false, skipped: "already_sent", title, message, link, push }
+}
+
 // ── Public methods ──────────────────────────────────────────────
 
 /** Ping every BoD / Super Admin in the workspace that a staff member checked out OFFSITE (pending approval). */
@@ -359,6 +419,24 @@ export async function notifyAttendanceRequestPending(requestId: string) {
   const end = fmt(req.endDate)
   const when = start === end ? start : `${start} – ${end}`
   const reasonSuffix = req.reason ? ` — “${req.reason}”` : ""
+  // Izin: the reviewer is told what the requester has left of day off in that period, the same number
+  // the queue shows as `requesterDayOff`. A hint only — if it cannot be read, the notification still goes.
+  let dayOffNote = ""
+  if (req.type === "PERMIT") {
+    try {
+      const periodKey = dayOffPeriodOf(req.startDate)
+      const b = (await dayOffBalances(req.workspaceId, [{ userId: req.userId, periodKey }])).get(dayOffUsageKey(req.userId, periodKey))
+      if (b) {
+        dayOffNote = b.remaining > 0
+          ? ` Day off-nya periode ini: sisa ${b.remaining} dari ${b.quota}.`
+          : b.remaining === 0
+            ? ` Day off-nya periode ini sudah habis.`
+            : ` Day off-nya periode ini sudah lewat ${-b.remaining} hari.`
+      }
+    } catch (error) {
+      log.error("day-off balance for izin notification failed", { error: String(error) })
+    }
+  }
 
   await Promise.all(
     targets.map((userId) =>
@@ -370,7 +448,7 @@ export async function notifyAttendanceRequestPending(requestId: string) {
         userId,
         type: "attendance_request_pending",
         title: `${who} mengajukan ${typeLabel.toLowerCase()}`,
-        message: `${when}${reasonSuffix}. Approve atau tolak di Attendance.`,
+        message: `${when}${reasonSuffix}.${dayOffNote} Approve atau tolak di Attendance.`,
         link: `/attendance?request=${requestId}`,
         push: true,
       }).catch(() => null),
