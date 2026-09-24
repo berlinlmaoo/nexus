@@ -103,3 +103,21 @@ rule (new version becomes minimum 3 days after release) via `NEXUS_ANDROID_MIN_V
 only the `android` block. It has no grace window today (`nextMinimum`/`graceUntil` absent). If
 you want the once-a-day "Update NEXUS by <date>" warning on Android too, add `nextMinimum` +
 `graceUntil` to the `android` block (the app already handles them).
+
+---
+
+## Found while porting (iOS, for the main session) — not Android work
+
+### I1. Queued check-in refused for distance is retried 5× instead of dropped and said — OPEN
+
+`POST /api/attendance/check-in` answers an out-of-radius tap with 422
+`{error, officeName, distanceMeters, radiusMeters}` and **no `code`** (`buildOutsideGeofenceResponse`,
+check-in/route.ts). iOS `attendanceUpload` maps a 422 to `.outsideRadius` only when
+`code == "OUTSIDE_RADIUS"` (check-out); for check-in it throws `APIError.transport(...)`. In
+`AttendanceQueue.flush` that lands in the generic `catch` → `bumpAttempts`, so a queued check-in
+taken outside the radius is replayed on five activations and then dropped with a generic sentence,
+and the "Your check-in at HH:mm was refused…" line + local notification (REQ-ATT-14) never fire.
+
+Fix (either): iOS treats a check-in 422 carrying `distanceMeters` as `.outsideRadius`; or the server
+adds `code: "OUTSIDE_RADIUS"` to the check-in 422 (additive; the live iOS screen keys on
+`officeName/distanceMeters` for its sentence, so it is unaffected). Android already handles both.
