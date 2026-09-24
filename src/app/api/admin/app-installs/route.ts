@@ -64,17 +64,33 @@ export async function GET() {
     }
     const installs = [...byUser.values()]
 
-    // Members with no active device. "Last active" comes from their sessions (web or app), so a BoD can
-    // tell "uses the web, never installed" from "has not signed in at all".
+    // Members with no active device, and when they were last seen doing anything: the latest sign-in
+    // (every login is audit-logged) or check-in, whichever is newer. NOT UserSession — the web signs in
+    // with a stateless JWT and never writes a session row there, so that table called people who check
+    // in through the web every day "never signed in".
     const missing = members.filter((m) => !byUser.has(m.user.id))
-    const lastActive = missing.length
-      ? await prisma.userSession.groupBy({
-          by: ["userId"],
-          where: { userId: { in: missing.map((m) => m.user.id) } },
-          _max: { lastActiveAt: true },
-        })
-      : []
-    const lastActiveBy = new Map(lastActive.map((r) => [r.userId, r._max.lastActiveAt]))
+    const missingIds = missing.map((m) => m.user.id)
+    const [logins, checkins] = missingIds.length
+      ? await Promise.all([
+          prisma.auditLog.groupBy({
+            by: ["userId"],
+            where: { userId: { in: missingIds }, action: "login" },
+            _max: { createdAt: true },
+          }),
+          prisma.attendanceRecord.groupBy({
+            by: ["userId"],
+            where: { userId: { in: missingIds } },
+            _max: { checkInAt: true },
+          }),
+        ])
+      : [[], []]
+    const lastActiveBy = new Map<string, Date | null>()
+    for (const r of logins) if (r.userId) lastActiveBy.set(r.userId, r._max.createdAt)
+    for (const r of checkins) {
+      const at = r._max.checkInAt
+      const prev = lastActiveBy.get(r.userId)
+      if (at && (!prev || at > prev)) lastActiveBy.set(r.userId, at)
+    }
     const notInstalled = missing
       .map((m) => ({
         id: m.user.id,
