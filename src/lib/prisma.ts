@@ -15,7 +15,9 @@ function createPrismaClient() {
   // Secrets never leave the database by accident: 14 routes use `include: { user: true }` and used to
   // hand every signed-in caller the bcrypt hash of whoever they included. Omitted globally; the two
   // places that must read the hash (credentials-auth, user/password) ask with an explicit `select`.
-  return new PrismaClient({ adapter, omit: { user: { password: true, waLinkCode: true } } })
+  // Typed as the plain client on purpose: helpers across the codebase take `PrismaClient`, and the
+  // omit-specialised type is not assignable to it. The omission still happens at runtime.
+  return new PrismaClient({ adapter, omit: { user: { password: true, waLinkCode: true } } }) as unknown as PrismaClient
 }
 
 const prismaClient = globalForPrisma.prisma ?? createPrismaClient()
