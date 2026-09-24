@@ -112,3 +112,20 @@ Do not ship to staff before those land. Internal testing with Berlin is fine.
 2. Scaffold the project (Gradle KTS, version catalog, `id.znetworks.nexus`, minSdk per PRD).
 3. MVP order: login → today/attendance (selfie + liveness + GPS + offline queue) → requests →
    push → update lock. Then the other phases in PRD.md.
+
+## Server status (updated 24 Sep 2026, server commit 6545d28)
+
+Phase 0 is LIVE on production. The main session deployed it through the gate (compat 163/163, which
+includes 36 android fixtures written from docs/API.md; re-pin them to the real ApiClient once it exists):
+- `X-Nexus-Client: android/<x.y.z>/<code>` is parsed (all three version parts required). Android counts
+  as a modern client for request rules. 426 gate reads env `NEXUS_ANDROID_MIN_VERSION` (default
+  0.0.0 = nobody blocked). `GET /api/app/version-policy` and `/api/app/latest` have an `android` block.
+- Push: `POST /api/push/devices` takes `{platform:"android", token, deviceId, appId, ...}`. The server
+  sends FCM HTTP v1 notification+data messages with channel ids `attendance` / `messages` /
+  `general` (`androidChannelFor` in `src/lib/fcm-payload.ts`). docs/API.md B4 asked for data-only
+  messages and PRD 4.5 lists more channels: if you need that, write it in docs/SERVER-REQUESTS.md.
+  Android push stays OFF until Berlin provides the Firebase service-account key
+  (`NEXUS_FCM_SERVICE_ACCOUNT_JSON`, base64, dedicated key with the FCM role).
+- `/.well-known/assetlinks.json` and passkey `android:apk-key-hash` origins come from env
+  `NEXUS_ANDROID_CERT_SHA256` (Play app-signing SHA-256, comma-separated). Empty until set.
+- Check-ins carrying the android tag are stored with `checkInClient = "android-app"` and are tracked.
