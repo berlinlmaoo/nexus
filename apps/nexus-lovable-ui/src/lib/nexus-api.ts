@@ -933,6 +933,61 @@ export type NexusReports = {
   projects?: Array<{ id: string; name: string; color?: string | null }>;
 };
 
+// --- Reports per crew (/api/reports/people) ---------------------------------------------------------
+// Multi-assignee tasks are split between assignees, so task counts can be fractional (2.5).
+export type ReportRatio = { num: number; den: number };
+export type ReportWorkspaceRole = "ONE_ABOVE_ALL" | "BOD" | "MANAGER" | "STAFF";
+export type ReportPriority = "URGENT" | "HIGH" | "MEDIUM" | "LOW" | "NONE";
+export type ReportViewerScope = "ALL" | "DIRECT_REPORTS" | "SELF";
+export type ReportPeriod = { key: string | null; from: string; to: string; timezone: string; isCurrent: boolean; days: number; daysElapsed: number };
+export type ReportHeadline = {
+  assigned: number; completed: number; onTime: ReportRatio; overdue: number; medianCycleDays: number | null;
+  present: number; late: number; lateMinutes: number; earlyLeave: number; absent: number; leave: number; sick: number; permit: number; dayOff: number;
+  avgWorkedMinutes: number | null; attendanceRate: ReportRatio; lateRate: ReportRatio; reflectionRate: ReportRatio; xpScore: number; xpPenalty: number;
+};
+export type ReportOverdueTask = { id: string; title: string; projectId: string; projectName: string; dueDate: string; dueKey: string; daysOverdue: number; priority: ReportPriority; assigneeCount: number; share: number };
+export type ReportPersonWork = {
+  assigned: number; completed: number; onTime: ReportRatio; dueWithDate: number; overdueNow: number; overdueList: ReportOverdueTask[];
+  openTotal: number; openByPriority: Record<ReportPriority, number>; dueNext7: number;
+  medianCycleDays: number | null; cycleSample: number; weekly: { from: string; to: string; completed: number; onTime: number }[];
+  perProject: { projectId: string; projectName: string; completed: number; open: number; overdue: number }[];
+};
+export type ReportPersonAttendance = {
+  present: number; late: number; lateMinutes: number; earlyLeave: number; absent: number; leave: number; sick: number; permit: number; dayOff: number;
+  avgWorkedMinutes: number | null; workedDays: number; reflections: number; checkouts: number; attendanceRate: ReportRatio; lateRate: ReportRatio; reflectionRate: ReportRatio;
+};
+export type ReportPenaltyKind = "late" | "nocheckout" | "alpha" | "peer" | "penalty" | "admin" | "other";
+export type ReportPersonXp = {
+  periodScore: number; baseline: number;
+  level: { level: number; name: string; floor: number; nextFloor: number | null; pct: number; isMax: boolean };
+  streak: { current: number; longest: number };
+  penalties: { kind: ReportPenaltyKind; count: number; xp: number }[]; penaltyTotal: number;
+};
+export type ReportTeamRef = { id: string; name: string };
+export type PersonReportResponse = {
+  person: { id: string; name: string; email: string; avatar: string | null; role: ReportWorkspaceRole | null; approverId: string | null; teams: ReportTeamRef[]; isSelf: boolean };
+  viewerScope: ReportViewerScope; period: ReportPeriod; previousPeriod: ReportPeriod; headline: ReportHeadline; previous: ReportHeadline;
+  work: ReportPersonWork; attendance: ReportPersonAttendance; xp: ReportPersonXp; generatedAt: string;
+};
+export type ReportRosterRow = {
+  userId: string; name: string; email: string; avatar: string | null; role: ReportWorkspaceRole | null; approverId: string | null; teams: ReportTeamRef[];
+  headline: ReportHeadline; previous: ReportHeadline; flags: { overdue3: boolean; late3: boolean; lowReflections: boolean }; flagCount: number;
+};
+export type ReportRosterResponse = { scope: ReportViewerScope; period: ReportPeriod; previousPeriod: ReportPeriod; team: ReportTeamRef | null; rows: ReportRosterRow[]; generatedAt: string };
+/** "YYYY-MM" attendance period (28→27), or an explicit day range. Omitted = the current period. */
+export type ReportPeriodQuery = string | { from: string; to: string };
+
+function reportPeriodParams(period?: ReportPeriodQuery | null): URLSearchParams {
+  const qs = new URLSearchParams();
+  if (typeof period === "string" && period) qs.set("period", period);
+  else if (period && typeof period === "object") { qs.set("from", period.from); qs.set("to", period.to); }
+  return qs;
+}
+function withQuery(path: string, qs: URLSearchParams): string {
+  const s = qs.toString();
+  return s ? `${path}?${s}` : path;
+}
+
 export type NexusAutomationRule = {
   type: string;
   field?: string;
@@ -2183,6 +2238,15 @@ export const nexusApi = {
 
   // --- Reports ---
   reports: (query = "days=30") => apiFetch<NexusReports>(`/api/reports?${query}`),
+  // Reports per crew. userId may be "me". Scope is enforced server-side (403 REPORT_OUT_OF_SCOPE / REPORT_SELF_ONLY).
+  personReport: (userId: string, period?: ReportPeriodQuery | null) =>
+    apiFetch<PersonReportResponse>(withQuery(`/api/reports/people/${encodeURIComponent(userId)}`, reportPeriodParams(period))),
+  reportRoster: (opts: { period?: ReportPeriodQuery | null; teamId?: string | null; userIds?: string[] | "me" } = {}) => {
+    const qs = reportPeriodParams(opts.period);
+    if (opts.teamId) qs.set("teamId", opts.teamId);
+    if (opts.userIds) qs.set("userIds", opts.userIds === "me" ? "me" : opts.userIds.join(","));
+    return apiFetch<ReportRosterResponse>(withQuery("/api/reports/people", qs));
+  },
 
   // --- Automations ---
   automations: (projectId: string) => apiFetch<{ automations: NexusAutomation[] }>(`/api/automations?projectId=${encodeURIComponent(projectId)}`),

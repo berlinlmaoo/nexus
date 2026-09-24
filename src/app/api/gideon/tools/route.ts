@@ -1107,6 +1107,8 @@ async function updateTask(actor: User, input: Record<string, unknown>) {
   if (title) data.title = title
   if (input.description === null || description !== undefined) data.description = description || null
   if (status) data.status = status
+  // completedAt is stamped by the DB trigger (Task_completion_stamp); this only says who.
+  if (status === 'DONE' && existing.status !== 'DONE') data.completedBy = { connect: { id: actor.id } }
   if (priority) data.priority = priority
   if (dueDate !== undefined) data.dueDate = dueDate
   if (taskListId) {

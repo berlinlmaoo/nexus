@@ -41,6 +41,7 @@ model User {
   workspaceMembers WorkspaceMember[]
   projectMembers   ProjectMember[]
   taskAssignees    TaskAssignee[]
+  tasksCompleted   Task[]           @relation("TaskCompletedBy")
   comments         Comment[]
   activityLogs     ActivityLog[]
   tasksCreated     Task[]           @relation("TaskCreator")
@@ -507,6 +508,14 @@ model Task {
   creatorId   String
   creator     User     @relation("TaskCreator", fields: [creatorId], references: [id])
 
+  /// When the task last became DONE, and by whom (null = unknown: automation, WhatsApp bot, import…).
+  /// Set and cleared by the Postgres trigger "Task_completion_stamp" (reports_people.sql) on EVERY
+  /// write path — do not compute it in app code. App code may pass completedById alongside a status
+  /// change to DONE when it knows the acting user; the trigger keeps the first completion on DONE→DONE.
+  completedAt   DateTime?
+  completedById String?
+  completedBy   User?     @relation("TaskCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
+
   parentId    String?
   parent      Task?    @relation("Subtasks", fields: [parentId], references: [id], onDelete: Cascade)
   subtasks    Task[]   @relation("Subtasks")
@@ -536,6 +545,7 @@ model Task {
   @@index([status])
   @@index([dueDate])
   @@index([priority])
+  @@index([completedAt])
 }
 
 model TaskAssignee {
@@ -549,6 +559,7 @@ model TaskAssignee {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([taskId, userId])
+  @@index([userId])
 }
 
 model Comment {
@@ -2833,4 +2844,16 @@ model ReflectionSummary {
 
   @@unique([userId, kind, periodKey])
   @@index([workspaceId, kind, periodKey])
+}
+
+// When this server first saw the App Store serve each app version (written by lib/app-store.ts on
+// every genuine store lookup). The minimum supported iOS version is derived from it: a version
+// becomes the minimum 3 days after firstSeenAt (lib/version-policy.ts). Append-only — deleting a
+// row or moving firstSeenAt later would lower the minimum. Table: version_policy.sql.
+model AppReleaseSeen {
+  platform    String
+  version     String
+  firstSeenAt DateTime @default(now())
+
+  @@id([platform, version])
 }
