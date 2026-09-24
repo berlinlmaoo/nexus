@@ -845,6 +845,10 @@ final class AppLanguage {
         "Getting your workspace ready": "Menyiapkan workspace kamu",
         "Showing data from %@": "Menampilkan data dari %@",
         "Saved copy from %@": "Salinan tersimpan dari %@",
+        "Not using it": "Belum pakai",
+        "NOT USING THE APP · %d": "BELUM PAKAI APP · %d",
+        "Never signed in": "Belum pernah masuk",
+        "Web only · %@": "Cuma web · %@",
         // Unreachable-server wording (APIError.unreachableText, ErrorState) + change email (ChangeEmailSheet)
         "Can't reach NEXUS right now. Check your connection, or try again in a moment.": "NEXUS belum bisa dihubungi. Cek koneksi kamu, atau coba lagi sebentar lagi.",
         "Can't reach NEXUS right now": "NEXUS belum bisa dihubungi",

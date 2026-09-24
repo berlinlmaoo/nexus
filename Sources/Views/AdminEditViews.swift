@@ -25,7 +25,16 @@ struct AdminQuest: Decodable, Identifiable, Sendable {
 /// GET /api/admin/app-installs — one row per person, their most recently seen device.
 struct AppInstalls: Decodable, Sendable {
     let installs: [Row]?
+    /// Members with no registered device. Optional: older servers never sent it.
+    let notInstalled: [Missing]?
     let totals: Totals?
+
+    struct Missing: Decodable, Sendable {
+        let id: String
+        let name: String?
+        let email: String?
+        let lastActiveAt: String?
+    }
 
     struct Row: Decodable, Sendable {
         let id: String
@@ -44,6 +53,7 @@ struct AppInstalls: Decodable, Sendable {
     struct Totals: Decodable, Sendable {
         let people: Int?
         let devices: Int?
+        let notInstalled: Int?
     }
 }
 
@@ -804,6 +814,7 @@ struct AdminAppInstallsSection: View {
     @State private var error: String?
 
     private var rows: [AppInstalls.Row] { data?.installs ?? [] }
+    private var missing: [AppInstalls.Missing] { data?.notInstalled ?? [] }
 
     var body: some View {
         ScrollView {
@@ -816,6 +827,7 @@ struct AdminAppInstallsSection: View {
                     if let t = data?.totals {
                         HStack(spacing: 10) {
                             stat(T("Using the app"), t.people ?? 0)
+                            stat(T("Not using it"), t.notInstalled ?? missing.count)
                             stat(T("Devices"), t.devices ?? 0)
                         }
                     }
@@ -826,6 +838,20 @@ struct AdminAppInstallsSection: View {
                             ForEach(rows, id: \.id) { row in
                                 personRow(row)
                                 if row.id != rows.last?.id { Divider().overlay(NX.border) }
+                            }
+                        }
+                        .nexusCard(padding: 0)
+                    }
+                    // The people with no phone registered at all. A list of devices cannot show an
+                    // absence, and these are exactly the ones a BoD needs to chase.
+                    if !missing.isEmpty {
+                        Text(String(format: T("NOT USING THE APP · %d"), missing.count))
+                            .font(NXFont.text(11, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
+                            .padding(.top, 6)
+                        VStack(spacing: 0) {
+                            ForEach(missing, id: \.id) { m in
+                                missingRow(m)
+                                if m.id != missing.last?.id { Divider().overlay(NX.border) }
                             }
                         }
                         .nexusCard(padding: 0)
@@ -866,6 +892,30 @@ struct AdminAppInstallsSection: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
     }
+
+    private func missingRow(_ m: AppInstalls.Missing) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(m.name ?? m.email ?? "—").font(NXFont.text(14)).foregroundStyle(NX.foreground).lineLimit(1)
+                if let email = m.email { Text(email).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1) }
+            }
+            Spacer(minLength: 8)
+            Text(Self.activity(m.lastActiveAt)).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                .multilineTextAlignment(.trailing)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+    }
+
+    /// "Web only · 24 Sep" when they sign in somewhere, "Never signed in" when they never have —
+    /// the two need different follow-ups.
+    private static func activity(_ iso: String?) -> String {
+        guard let iso, let d = ProjDate.parse(iso) else { return T("Never signed in") }
+        return String(format: T("Web only · %@"), dayFormatter.string(from: d))
+    }
+    private static let dayFormatter: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "d MMM"; f.timeZone = TimeZone(identifier: "Asia/Jakarta"); return f
+    }()
 
     private func load() async {
         error = nil
