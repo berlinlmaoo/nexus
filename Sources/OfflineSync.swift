@@ -216,6 +216,15 @@ final class OfflineSync: ObservableObject {
 
     func cancelMedia() { mediaTask?.cancel(); mediaTask = nil }
 
+    /// Re-measures the offline folder. Walking it touches every file, so it runs off the main
+    /// thread; the figure is otherwise only set at the end of a file pass.
+    func refreshUsage() {
+        Task.detached(priority: .utility) {
+            let used = AttachmentCache.offlineBytes()
+            await MainActor.run { OfflineSync.shared.offlineBytes = used }
+        }
+    }
+
     /// Each project's board and task list, so any project opens offline — not just the ones
     /// somebody happened to visit. Behind the app, never in front of it: the splash is for what a
     /// person looks at first, and nobody looks at 79 projects first.

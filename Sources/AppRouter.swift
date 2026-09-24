@@ -29,7 +29,7 @@ struct NXVaultRequest: Identifiable, Hashable {
     let id: String
 }
 
-/// A sign-up link somebody's company handed out: `/register?code=83CFF2CEDE1E`.
+/// A sign-up link somebody's company handed out: `/register?code=A1B2C3D4E5F6`.
 ///
 /// The id is fresh per tap rather than the code, so tapping the same link twice still reaches the
 /// login screen's `onChange` — an Equatable request that compares equal to the last one would not.

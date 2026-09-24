@@ -132,7 +132,7 @@ struct SignUpView: View {
                     .onSubmit { focus = .workspace }
             }
             fieldBlock(label: T("WORKSPACE CODE (OPTIONAL)")) {
-                inputField("83CFF2CEDE1E", text: $workspaceCode, field: .workspace, mono: true)
+                inputField("e.g. A1B2C3D4E5F6", text: $workspaceCode, field: .workspace, mono: true)
                     .textInputAutocapitalization(.characters)
                     .autocorrectionDisabled()
                     .submitLabel(.go)

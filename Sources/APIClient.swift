@@ -2341,7 +2341,8 @@ enum AttachmentCache {
     /// while the offline copy exists precisely to survive that. Prefetching into the browse cache
     /// would have meant everything downloaded for offline use being deleted by the age sweep on the
     /// second day — exactly the day somebody needs it.
-    private static let offlineBudget = 1_024 << 20   // 1 GB
+    /// Not private: Tuning Room draws what is used against it.
+    static let offlineBudget = 1_024 << 20   // 1 GB
 
     /// Recomputed rather than stored, because `ResponseCache.clearAll()` deletes the parent and
     /// recreates only its own directory — so this one has to be prepared to find itself gone.
