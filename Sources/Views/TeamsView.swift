@@ -21,11 +21,7 @@ struct TeamsView: View {
         if loading {
             ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let error {
-            VStack(spacing: 12) {
-                Image(systemName: "person.3").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
-                Text(error).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
-                Button(T("Try again")) { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
-            }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
+            ErrorState(message: error, icon: "person.3") { Task { await load() } }
         } else if teams.isEmpty {
             EmptyState(icon: "person.3.fill", title: T("No teams yet"),
                        subtitle: T("A team groups people and hands them access to the projects linked to it. Managers create teams from Control Room; once you're in one, it shows up here."))

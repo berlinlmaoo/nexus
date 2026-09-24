@@ -11,6 +11,9 @@ struct LoginView: View {
     /// the glow behind both stays put and nothing is left presented when a finished sign-up
     /// replaces this whole screen with the app.
     @State private var signUpCode: String?
+    /// Same idea for the password-reset flow: nil draws the sign-in card (unless sign-up is up).
+    /// Only one of the two is ever set — each setter clears the other.
+    @State private var resetRequest: NXPasswordResetRequest?
     @State private var password = ""
     @FocusState private var focus: Field?
 
@@ -41,6 +44,16 @@ struct LoginView: View {
                 // silently keeping the first one (@State only reads initialCode once).
                 .id(code)
                 .transition(.opacity)
+            } else if let reset = resetRequest {
+                ResetPasswordView(email: reset.email, invited: reset.invited) { typedEmail in
+                    // Back to sign-in with the address filled in: after a reset whose automatic
+                    // sign-in failed, only the new password is left to type.
+                    if let typedEmail, !typedEmail.isEmpty { email = typedEmail }
+                    withAnimation(.easeInOut(duration: 0.25)) { resetRequest = nil }
+                }
+                // A second link mid-flow starts over with its own email and title.
+                .id(reset.id)
+                .transition(.opacity)
             } else {
                 card
                     .frame(maxWidth: 460)
@@ -51,15 +64,38 @@ struct LoginView: View {
         .preferredColorScheme(.light)   // login is light-only on web
         // A `/register?code=…` link: on a cold start it is already waiting when this appears; on
         // a warm one it lands while this is on screen.
-        .onAppear(perform: takeSignupRequest)
+        // The invite email's `/forgot-password?email=…&invited=1` arrives the same two ways.
+        .onAppear {
+            takeSignupRequest()
+            takePasswordResetRequest()
+        }
         .onChange(of: router.signupRequest) { _, _ in takeSignupRequest() }
+        .onChange(of: router.passwordResetRequest) { _, _ in takePasswordResetRequest() }
     }
 
     private func takeSignupRequest() {
         guard let request = router.signupRequest else { return }
         router.signupRequest = nil
         auth.loginError = nil
-        withAnimation(.easeInOut(duration: 0.25)) { signUpCode = request.code }
+        withAnimation(.easeInOut(duration: 0.25)) {
+            resetRequest = nil
+            signUpCode = request.code
+        }
+    }
+
+    private func takePasswordResetRequest() {
+        guard let request = router.passwordResetRequest else { return }
+        router.passwordResetRequest = nil
+        auth.loginError = nil
+        openReset(request)
+    }
+
+    private func openReset(_ request: NXPasswordResetRequest) {
+        focus = nil
+        withAnimation(.easeInOut(duration: 0.25)) {
+            signUpCode = nil
+            resetRequest = request
+        }
     }
 
     private var card: some View {
@@ -182,12 +218,22 @@ struct LoginView: View {
                 .disabled(auth.isBusy)
                 .padding(.top, 22)
 
-                // Reset is still not self-serve on mobile, so say what to actually do.
-                Text(T("Forgot your password? Contact your workspace admin."))
-                    .font(NXFont.text(12))
-                    .foregroundStyle(NX.mutedFg)
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 8)
+                // Self-serve now (email code, the web's /forgot-password flow). Carries whatever is
+                // in the email field over, so the first step is usually just "Send code".
+                Button {
+                    auth.loginError = nil
+                    openReset(NXPasswordResetRequest(email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                                                     invited: false))
+                } label: {
+                    Text(T("Forgot password?"))
+                        .font(NXFont.text(13, .semibold))
+                        .foregroundStyle(NX.mutedFg)
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(auth.isBusy)
+                .padding(.top, 2)
             }
             .padding(.horizontal, 30)
             .padding(.vertical, 40)

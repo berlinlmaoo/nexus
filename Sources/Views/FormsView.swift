@@ -22,11 +22,7 @@ struct FormsView: View {
         if loading {
             ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let error {
-            VStack(spacing: 12) {
-                Image(systemName: "doc.text.magnifyingglass").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
-                Text(error).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
-                Button(T("Try again")) { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
-            }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
+            ErrorState(message: error, icon: "doc.text.magnifyingglass") { Task { await load() } }
         } else if forms.isEmpty {
             EmptyState(icon: "doc.text", title: T("No forms yet"),
                        subtitle: T("A form is an intake page — a request, a reimbursement, a report — that turns into a task the moment it's submitted. BoD builds them on the web; once one is published it appears here for you to fill in."))

@@ -184,11 +184,7 @@ struct MessagesView: View {
         if loading {
             SkeletonList()
         } else if let error {
-            VStack(spacing: 12) {
-                Image(systemName: "bubble.left.and.bubble.right").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
-                Text(error).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center)
-                Button(T("Try again")) { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
-            }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
+            ErrorState(message: error, icon: "bubble.left.and.bubble.right") { Task { await load() } }
         } else if convos.isEmpty {
             EmptyState(icon: "bubble.left.and.bubble.right", title: T("No chats yet"),
                        subtitle: T("Direct messages and group chats with colleagues live here, and every project has a room of its own. Start one and it appears at the top."),

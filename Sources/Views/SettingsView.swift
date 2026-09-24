@@ -90,11 +90,9 @@ struct SettingsView: View {
                                 .font(NXFont.text(16)).padding(12)
                                 .background(NX.muted, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
-                        field(T("EMAIL")) {
-                            Text(email.isEmpty ? "—" : email).font(NXFont.text(15)).foregroundStyle(NX.mutedFg)
-                                .frame(maxWidth: .infinity, alignment: .leading).padding(12)
-                                .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        }
+                        // Tappable: opens the change-email sheet (ChangeEmailSheet.swift), which owns
+                        // its own `.sheet` so this view keeps the single one it already has.
+                        field(T("EMAIL")) { EmailChangeRow(email: $email) }
                         // Read-only here: a BoD links it from Control Room, and the person only needs
                         // to know which address the company gave them.
                         field(T("GOOGLE WORKSPACE")) {

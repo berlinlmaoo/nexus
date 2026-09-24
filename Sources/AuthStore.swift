@@ -68,6 +68,18 @@ final class AuthStore {
         session = s
     }
 
+    /// The person changed their sign-in email in Tuning Room. The token stays valid (the server
+    /// keys the session on the account id), but the Keychain copy also carries the address, and
+    /// the sidebar, form autofill and the watch all read it from there — so it is rewritten here
+    /// the same way `persist` writes it, instead of showing the old address until the next login.
+    func updateEmail(_ email: String) {
+        guard var s = session, !email.isEmpty, s.userEmail != email else { return }
+        s.userEmail = email
+        Keychain.save(s)
+        PhoneSessionBridge.shared.publish(s)
+        session = s
+    }
+
     func logout() {
         if let session {
             Task { await NotificationManager.shared.unregister(session: session) }

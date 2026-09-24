@@ -286,11 +286,7 @@ struct ProjectDetailView: View {
             if loading {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error {
-                VStack(spacing: 12) {
-                    Image(systemName: "lock").font(.system(size: 38)).foregroundStyle(NX.mutedFg)
-                    Text(error).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center)
-                    Button(T("Try again")) { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
-                }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
+                ErrorState(message: error, icon: "lock") { Task { await load() } }
             } else if let detail {
                 switch tab {
                 case .overview: OverviewTab(detail: detail, onOpenMember: { openProfile = $0 })

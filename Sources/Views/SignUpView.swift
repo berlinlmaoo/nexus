@@ -42,20 +42,9 @@ struct SignUpView: View {
     }
 
     var body: some View {
-        // Centred while it fits, scrollable once it does not: four fields and a helper line do not
-        // fit an SE with the keyboard up. `minHeight` rather than a fixed height, so a card taller
-        // than the screen grows the scroll content instead of being clipped.
-        GeometryReader { geo in
-            ScrollView {
-                card
-                    .frame(maxWidth: 460)
-                    .padding(.horizontal, 22)
-                    .padding(.vertical, 24)
-                    .frame(maxWidth: .infinity, minHeight: geo.size.height)
-            }
-            .scrollBounceBehavior(.basedOnSize)
-            .scrollDismissesKeyboard(.interactively)
-        }
+        // Shared with the password-reset flow (AuthFormPieces.swift), which LoginView draws the
+        // same way.
+        AuthScrollContainer { card }
     }
 
     private var card: some View {
@@ -95,13 +84,7 @@ struct SignUpView: View {
             .disabled(busy)
             .padding(.top, 24)
         }
-        .padding(.horizontal, 28)
-        .padding(.vertical, 34)
-        .frame(maxWidth: .infinity)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 38, style: .continuous))
-        .background(Color.white.opacity(0.5), in: RoundedRectangle(cornerRadius: 38, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 38, style: .continuous).strokeBorder(.white.opacity(0.65), lineWidth: 1))
-        .shadow(color: .black.opacity(0.10), radius: 40, y: 26)
+        .modifier(AuthCard())
     }
 
     // MARK: step 1
@@ -161,39 +144,11 @@ struct SignUpView: View {
 
     private var codeStep: some View {
         VStack(spacing: 16) {
-            if let info {
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "envelope.badge.fill").font(.system(size: 14, weight: .semibold))
-                    Text(info).frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .font(NXFont.text(13, .semibold))
-                .foregroundStyle(NX.success)
-                .padding(.horizontal, 14).padding(.vertical, 11)
-                .background(Color(hex: "#ecfdf5"), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.success.opacity(0.2)))
-            }
+            if let info { AuthForm.infoBox(info) }
 
             fieldBlock(label: T("VERIFICATION CODE")) {
-                TextField("", text: $otp, prompt: Text("000000").foregroundColor(NX.mutedFg.opacity(0.6)))
-                    // `.oneTimeCode` is what lets iOS lift the code out of the email in Mail and
-                    // offer it above the keyboard; `.numberPad` alone does not.
-                    .textContentType(.oneTimeCode)
-                    .keyboardType(.numberPad)
-                    .font(.system(size: 26, weight: .bold, design: .monospaced))
-                    .tracking(10)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(NX.foreground)
+                OneTimeCodeField(code: $otp, focused: focus == .otp)
                     .focused($focus, equals: .otp)
-                    .padding(.horizontal, 18).padding(.vertical, 14)
-                    .background(Color.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(focus == .otp ? NX.onyx.opacity(0.5) : .white, lineWidth: focus == .otp ? 2 : 1))
-                    // Autofill and paste can bring spaces or a longer string; the server only
-                    // accepts exactly six digits.
-                    .onChange(of: otp) { _, value in
-                        let digits = String(value.filter(\.isASCIIDigit).prefix(6))
-                        if digits != value { otp = digits }
-                    }
             }
 
             if let error { errorBox(error) }
@@ -226,19 +181,7 @@ struct SignUpView: View {
                 .buttonStyle(.plain)
                 .disabled(busy)
                 Spacer()
-                // The countdown is the reason the tap is refused, so it is shown rather than a
-                // button that silently does nothing.
-                TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                    let left = secondsLeft(at: ctx.date)
-                    Button(action: resend) {
-                        Text(left > 0 ? String(format: T("Resend in %ds"), left) : T("Resend code"))
-                            .font(NXFont.text(13, .bold))
-                            .foregroundStyle(left > 0 ? NX.mutedFg : NX.violetText)
-                            .monospacedDigit()
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(busy || left > 0)
-                }
+                ResendCodeButton(busy: busy, cooldownUntil: cooldownUntil, action: resend)
             }
             .padding(.top, 4)
         }
@@ -249,46 +192,13 @@ struct SignUpView: View {
     /// The onyx CTA with the server's cooldown folded in: while it runs the label counts down and
     /// the button is off, instead of inviting a tap the server has already said it will refuse.
     private func cooldownButton(idle: String, busyLabel: String, action: @escaping () -> Void) -> some View {
-        TimelineView(.periodic(from: .now, by: 1)) { ctx in
-            let left = secondsLeft(at: ctx.date)
-            Button(action: action) {
-                HStack(spacing: 8) {
-                    if busy {
-                        ProgressView().tint(.white)
-                        Text(busyLabel)
-                    } else if left > 0 {
-                        Text(String(format: T("Try again in %ds"), left)).monospacedDigit()
-                    } else {
-                        Text(idle)
-                        Image(systemName: "arrow.right").font(.system(size: 14, weight: .bold))
-                    }
-                }
-                .modifier(OnyxCTA())
-            }
-            .buttonStyle(.plain)
-            .disabled(busy || left > 0)
-            .opacity(busy || left > 0 ? 0.7 : 1)
-        }
+        CooldownCTA(idle: idle, busyLabel: busyLabel, busy: busy, cooldownUntil: cooldownUntil, action: action)
     }
 
-    private func errorBox(_ text: String) -> some View {
-        Text(text)
-            .font(NXFont.text(13, .semibold))
-            .foregroundStyle(NX.danger)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 14).padding(.vertical, 11)
-            .background(Color(hex: "#fef2f2"), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.danger.opacity(0.2)))
-    }
+    private func errorBox(_ text: String) -> some View { AuthForm.errorBox(text) }
 
-    @ViewBuilder
     private func fieldBlock<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(label).font(NXFont.text(11, .bold)).tracking(1).foregroundStyle(NX.mutedFg)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, 4)
-            content()
-        }
+        AuthForm.fieldBlock(label: label, content: content)
     }
 
     /// Same field as LoginView's. `mono` is a parameter rather than a `.font` from the caller,
@@ -308,18 +218,7 @@ struct SignUpView: View {
         .foregroundStyle(NX.foreground)
         .focused($focus, equals: field)
         .disabled(busy)
-        .padding(.horizontal, 18).padding(.vertical, 15)
-        .background(Color.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(focus == field ? NX.onyx.opacity(0.5) : .white, lineWidth: focus == field ? 2 : 1)
-        )
-        .shadow(color: .black.opacity(0.03), radius: 4, y: 2)
-    }
-
-    private func secondsLeft(at now: Date) -> Int {
-        guard let cooldownUntil else { return 0 }
-        return max(0, Int(cooldownUntil.timeIntervalSince(now).rounded(.up)))
+        .modifier(AuthFieldChrome(focused: focus == field))
     }
 
     private var trimmedCode: String? {
@@ -423,21 +322,5 @@ struct SignUpView: View {
     }
 }
 
-/// LoginView's onyx CTA, shared by both sign-up buttons so they cannot drift from it.
-private struct OnyxCTA: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .font(NXFont.display(16, .bold))
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(NX.onyx, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .shadow(color: NX.onyx.opacity(0.25), radius: 18, y: 10)
-    }
-}
-
-private extension Character {
-    /// `isNumber` would also let through Arabic-Indic and full-width digits, which the server's
-    /// `^\d{6}$` refuses.
-    var isASCIIDigit: Bool { isASCII && isNumber }
-}
+// OnyxCTA, the countdown buttons, the code field and `Character.isASCIIDigit` moved to
+// AuthFormPieces.swift, shared with ResetPasswordView.

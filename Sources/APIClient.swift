@@ -43,11 +43,53 @@ enum APIError: LocalizedError {
         case .http(let code, let message):
             // The server's own words win. It knows why it refused; this layer does not.
             if let message, !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return message }
+            // No sentence AND a status only nginx or Cloudflare sends when the app is not there (a
+            // deploy restart, a tunnel blip). "Server error (502)." reads as a fault report about
+            // something that is really a 30-second gap, so it gets the same calm line as silence.
+            if Self.isEdgeOnly(code) { return Self.unreachableText }
             return "Server error (\(code))."
         case .unauthorized: return T("Session expired — please log in again.")
         case .decoding: return T("Couldn't read data from the server.")
-        case .offline: return T("NEXUS can't be reached right now.")
+        case .offline: return Self.unreachableText
         case .transport(let msg): return msg
+        }
+    }
+
+    /// The one sentence for "NEXUS did not answer", whichever way that happened. Calm and
+    /// accurate on purpose: most of the time it is a deploy restart or a patchy connection that is
+    /// over in seconds, and the old "NEXUS is down" made a 30-second gap read like an outage.
+    static var unreachableText: String {
+        T("Can't reach NEXUS right now. Check your connection, or try again in a moment.")
+    }
+
+    /// For a failure that happened before any status came back — no route, timeout, TLS, no
+    /// network. `URLError`'s own text ("The network connection was lost.") is system wording in
+    /// the system language, not the app's; this says the same thing in the app's voice. A
+    /// cancellation keeps its own text: that is somebody leaving the screen, not an outage.
+    static func nothingAnswered(_ error: Error) -> APIError {
+        if error is CancellationError || (error as? URLError)?.code == .cancelled {
+            return .transport(error.localizedDescription)
+        }
+        return .transport(unreachableText)
+    }
+
+    /// Statuses only the edge produces when the app itself is not there: nginx 502–504,
+    /// Cloudflare 520–527 and 530. Narrower than `APIClient.meansOriginUnreachable` on purpose —
+    /// that one counts 500 too, which is right for queueing a check-in but wrong for wording: a
+    /// 500 is the app answering, and its body may say why.
+    static func isEdgeOnly(_ code: Int) -> Bool {
+        (502...504).contains(code) || (520...527).contains(code) || code == 530
+    }
+
+    /// True when nothing on NEXUS's side formed an opinion, so a saved copy is the honest thing to
+    /// show instead of an error. Meant for READS through `run`, where `.transport` only ever means
+    /// no response; an edge status only counts when it carried no sentence of its own (the app
+    /// itself sends 502 with a reason, e.g. "Gagal ngirim email", and that is an answer).
+    var nobodyAnswered: Bool {
+        switch self {
+        case .offline, .transport: return true
+        case .http(let code, let message): return message == nil && Self.isEdgeOnly(code)
+        default: return false
         }
     }
 }
@@ -363,7 +405,7 @@ struct APIClient {
         do {
             (data, response) = try await perform(req, reporting: progress)
         } catch {
-            throw APIError.transport(error.localizedDescription)
+            throw APIError.nothingAnswered(error)
         }
         guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
         if http.statusCode == 401 { throw APIError.unauthorized }
@@ -420,6 +462,36 @@ struct APIClient {
 
     func registerResend(email: String) async throws -> SignupCodeResponse {
         try await runSignup("/api/auth/register/resend", body: ["email": email], decode: SignupCodeResponse.self)
+    }
+
+    // MARK: - Password reset (signed out)
+    //
+    // Same bodies as the web's forgot-password page (apps/nexus-lovable-ui/src/lib/nexus-api.ts,
+    // passwordReset*), against src/app/api/auth/password/reset/{request,verify,resend}. They go
+    // through `runSignup` because they fail the same two ways sign-up does: a 429 that names how
+    // long to wait, and "Validation failed" with the useful sentence tucked into `details`.
+
+    /// Emails a 6-digit code. The server answers 200 with the same shape whether or not the
+    /// address has an account (so the endpoint cannot be used to probe who is registered), and
+    /// while a code is still cooling down it answers 200 WITHOUT sending another — the remaining
+    /// wait is then in `resendCooldownSeconds`.
+    func passwordResetRequest(email: String) async throws -> SignupCodeResponse {
+        try await runSignup("/api/auth/password/reset/request", body: ["email": email], decode: SignupCodeResponse.self)
+    }
+
+    /// Checks the code and sets the new password in one call; `{ok:true}` on success.
+    @discardableResult
+    func passwordResetVerify(email: String, code: String, password: String) async throws -> Bool {
+        _ = try await runSignup("/api/auth/password/reset/verify",
+                                body: ["email": email, "code": code, "password": password],
+                                decode: SuccessResponse.self)
+        return true
+    }
+
+    /// Unlike /request, a cooldown here is a 429 with `retryAfterSeconds`, which `runSignup`
+    /// turns into SignupRetryLater.
+    func passwordResetResend(email: String) async throws -> SignupCodeResponse {
+        try await runSignup("/api/auth/password/reset/resend", body: ["email": email], decode: SignupCodeResponse.self)
     }
 
     /// `run` for the sign-up calls, differing in the two places sign-up needs something `run`
@@ -847,7 +919,7 @@ struct APIClient {
         (try await run(makeRequest("/api/docs?projectId=\(enc(projectId))"), decode: DocsResponse.self)).docs ?? []
     }
     func reports(days: Int) async throws -> Reports {
-        try await run(makeRequest("/api/reports?days=\(days)"), decode: Reports.self)
+        try await run(makeRequest("/api/reports?days=\(days)"), decode: Reports.self, cache: "reports-\(days)")
     }
     /// Every team mutation is the same POST with a different `action`. Written as one funnel so a
     /// new action is a line rather than another near-copy of the request plumbing.
@@ -972,13 +1044,12 @@ struct APIClient {
     /// `absorbPersonalWorkspace`: daftar tanpa kode = dapat workspace pribadi, dan workspace aktif
     /// dipilih dari joinedAt tertua. Tanpa memindahkannya, dia "masuk" tapi tetap mendarat di
     /// workspace pribadinya. Server menghapus yang kosong saja.
-    func inviteWorkspaceMember(email: String, role: String, workspaceId: String, absorbPersonalWorkspace: Bool = false) async throws -> Bool {
+    func inviteWorkspaceMember(email: String, role: String, workspaceId: String, absorbPersonalWorkspace: Bool = false) async throws -> WorkspaceInviteResponse {
         var req = makeRequest("/api/workspaces/members", method: "POST")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: ["email": email, "role": role, "workspaceId": workspaceId,
                                                                    "absorbPersonalWorkspace": absorbPersonalWorkspace])
-        _ = try await run(req, decode: SuccessResponse.self)
-        return true
+        return try await run(req, decode: WorkspaceInviteResponse.self)
     }
     @discardableResult
     func updateWorkspaceMemberRole(memberId: String, role: String, workspaceId: String) async throws -> Bool {
@@ -1094,7 +1165,7 @@ struct APIClient {
         do {
             (data, response) = try await perform(req, reporting: progress)
         } catch {
-            throw APIError.transport(error.localizedDescription)
+            throw APIError.nothingAnswered(error)
         }
         guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
         if http.statusCode == 401 { throw APIError.unauthorized }
@@ -1169,7 +1240,7 @@ struct APIClient {
         do {
             (data, response) = try await perform(req, reporting: progress)
         } catch {
-            throw APIError.transport(error.localizedDescription)
+            throw APIError.nothingAnswered(error)
         }
         guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
         if http.statusCode == 401 { throw APIError.unauthorized }
@@ -1204,7 +1275,7 @@ struct APIClient {
         do {
             (data, response) = try await perform(req)
         } catch {
-            throw APIError.transport(error.localizedDescription)
+            throw APIError.nothingAnswered(error)
         }
         guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
         if http.statusCode == 401 { throw APIError.unauthorized }
@@ -1236,7 +1307,7 @@ struct APIClient {
         do {
             (data, response) = try await perform(req)
         } catch {
-            throw APIError.transport(error.localizedDescription)
+            throw APIError.nothingAnswered(error)
         }
         guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
         if http.statusCode == 401 { throw APIError.unauthorized }
@@ -1297,7 +1368,7 @@ struct APIClient {
         do {
             (data, response) = try await perform(req)
         } catch {
-            throw APIError.transport(error.localizedDescription)
+            throw APIError.nothingAnswered(error)
         }
         guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
         if http.statusCode == 401 { throw APIError.unauthorized }
@@ -2298,6 +2369,11 @@ extension APIClient {
     /// the status code rather than throwing something else on the way out.
     static func serverMessage(_ data: Data) -> String? {
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        // The Cloudflare Worker in front of NEXUS (maintenance/nexus-down-worker.js) answers API
+        // calls with {"error":"NEXUS is down","code":"NEXUS_DOWN"} while the origin is unreachable.
+        // That is the edge, not the app, so it is not a server sentence to show verbatim: returning
+        // nil lets the status fall through to `unreachableText` like any other edge page.
+        if (obj["code"] as? String) == "NEXUS_DOWN" || (obj["down"] as? Bool) == true { return nil }
         let text = (obj["error"] as? String) ?? (obj["message"] as? String)
         guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         return text
@@ -2492,6 +2568,18 @@ struct SignupCodeResponse: Decodable, Sendable {
     let email: String?
     let expiresInSeconds: Int?
     let resendCooldownSeconds: Int?
+}
+
+/// POST /api/workspaces/members (201). Only what the Members card reads; every field optional so
+/// a server from before `emailSent` existed still decodes.
+struct WorkspaceInviteResponse: Decodable, Sendable {
+    struct Member: Decodable, Sendable {
+        let email: String?
+    }
+    let member: Member?
+    /// true once the invite email (with its set-your-password link) went out; false when the
+    /// member was added but the mail failed; nil from a server that does not report it yet.
+    let emailSent: Bool?
 }
 
 /// A 429 from the sign-up calls, with the wait the server asked for when it named one.

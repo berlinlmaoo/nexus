@@ -39,6 +39,19 @@ struct NXSignupRequest: Identifiable, Hashable {
     let code: String
 }
 
+/// A password-reset link: `/forgot-password?email=…&invited=1`, the link in the invite email
+/// ("set your password"), or the same page linked by hand without `invited`.
+///
+/// Fresh id per tap for the same reason as NXSignupRequest. LoginView also builds one itself when
+/// "Forgot password?" is tapped, so both ways in draw the same screen.
+struct NXPasswordResetRequest: Identifiable, Hashable {
+    let id = UUID()
+    /// Prefill for the email field; may be empty.
+    let email: String
+    /// From an invite: the person has never had a password, so the screen says "Set your password".
+    let invited: Bool
+}
+
 /// A record to draw as a sheet above whichever shape is mounted — see `AppRouter.detail`.
 struct NXDetailRequest: Identifiable, Hashable {
     let target: NotificationTarget
@@ -121,6 +134,11 @@ final class AppRouter {
     /// sign-up screen on whoever next reaches the login screen — including the person who just
     /// deleted their account.
     var signupRequest: NXSignupRequest?
+
+    /// Password reset opened from a link, consumed (and cleared) by LoginView. Signed-OUT only, for
+    /// the same reasons as `signupRequest`: somebody already in the app who taps an invite link was
+    /// invited into a workspace they can already reach, and has a password already.
+    var passwordResetRequest: NXPasswordResetRequest?
 
     /// A record a notification pointed at, waiting for the screen that owns it to mount and claim it.
     ///
@@ -217,6 +235,7 @@ final class AppRouter {
         let name = url.host ?? url.pathComponents.first { $0 != "/" } ?? ""
         // Not a screen: there is nothing behind the login screen to navigate to while signed out.
         if name.lowercased() == "register" { requestSignup(from: url); return }
+        if name.lowercased() == "forgot-password" { requestPasswordReset(from: url); return }
         guard let screen = NXScreen(rawValue: name) else { return }
         go(screen)
     }
@@ -245,6 +264,10 @@ final class AppRouter {
         // `/register?code=…`, the web's sign-up page. Only reachable here once the AASA claims
         // `/register`; until then Safari opens it on the web, which does the same job.
         if parts == ["register"] { requestSignup(from: url); return }
+        // `/forgot-password?email=…&invited=1`, the invite email's "set your password" link. Same
+        // caveat: the AASA does not claim `/forgot-password` yet, so today only the nexus://
+        // spelling reaches this; the https one opens the web page, which does the same job.
+        if parts == ["forgot-password"] { requestPasswordReset(from: url); return }
         // Exactly two: `/f/<id>` is a single segment on the web too (the SPA route is `/f/$formId`).
         // A deeper path under /f/ is not a form and must not be answered with somebody else's.
         guard parts.count == 2, !parts[1].isEmpty else { return }
@@ -262,5 +285,17 @@ final class AppRouter {
         let raw = URLComponents(url: url, resolvingAgainstBaseURL: false)?
             .queryItems?.first { $0.name == "code" }?.value ?? ""
         signupRequest = NXSignupRequest(code: raw.trimmingCharacters(in: .whitespacesAndNewlines).uppercased())
+    }
+
+    /// Both spellings of the reset / set-your-password link. `invited` is read the way the web
+    /// page's search params would be: "1" (or "true") means yes, anything else or absent means no.
+    private func requestPasswordReset(from url: URL) {
+        guard Keychain.load() == nil else { return }
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        let email = items.first { $0.name == "email" }?.value ?? ""
+        let invitedRaw = items.first { $0.name == "invited" }?.value?.lowercased() ?? ""
+        let invited = invitedRaw == "1" || invitedRaw == "true"
+        passwordResetRequest = NXPasswordResetRequest(email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                                                      invited: invited)
     }
 }

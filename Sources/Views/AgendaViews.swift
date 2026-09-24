@@ -261,11 +261,7 @@ struct AgendaScaffold<Content: View>: View {
             if loading {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error {
-                VStack(spacing: 12) {
-                    Image(systemName: "wifi.exclamationmark").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
-                    Text(error).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
-                    Button(T("Try again")) { Task { await retry() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
-                }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
+                ErrorState(message: error) { Task { await retry() } }
             } else if isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: emptyIcon).font(.system(size: 42)).foregroundStyle(NX.mutedFg)

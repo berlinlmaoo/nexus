@@ -55,11 +55,7 @@ struct LeaderboardView: View {
         if loading {
             SkeletonList()
         } else if let error {
-            VStack(spacing: 12) {
-                Image(systemName: "trophy").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
-                Text(error).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
-                Button(T("Try again")) { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
-            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            ErrorState(message: error, icon: "trophy") { Task { await load() } }
         } else {
             ScrollView {
                 VStack(spacing: 16) {

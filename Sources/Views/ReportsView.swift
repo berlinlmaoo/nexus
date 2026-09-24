@@ -7,6 +7,9 @@ struct ReportsView: View {
     @State private var days = 30
     @State private var loading = true
     @State private var error: String?
+    /// Set while the screen shows the copy saved on the last good load, because NEXUS did not
+    /// answer this time. Drives the `OfflineNotice` so the numbers never pass for live ones.
+    @State private var savedAt: Date?
 
     private static let statusColor: [String: String] = ["TODO": "#94a3b8", "IN_PROGRESS": "#0091ff", "IN_REVIEW": "#f59e0b", "DONE": "#16a34a", "CANCELLED": "#ef4444"]
     private static let prioColor: [String: String] = ["URGENT": "#ef4444", "HIGH": "#f59e0b", "MEDIUM": "#0091ff", "LOW": "#94a3b8", "NONE": "#cbd5e1"]
@@ -32,14 +35,11 @@ struct ReportsView: View {
         if loading {
             ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let error {
-            VStack(spacing: 12) {
-                Image(systemName: "chart.bar.xaxis").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
-                Text(error).font(NXFont.text(14)).foregroundStyle(NX.mutedFg)
-                Button(T("Try again")) { Task { await load() } }.buttonStyle(NexusPrimaryButton(fullWidth: false))
-            }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
+            ErrorState(message: error, icon: "chart.bar.xaxis") { Task { await load() } }
         } else if let r = report {
             ScrollView {
                 VStack(spacing: 16) {
+                    if let savedAt { OfflineNotice(savedAt: savedAt) }
                     let m = r.metrics
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                         metric("Total tasks", "\(m?.totalTasks ?? 0)", tone: .neutral)
@@ -121,9 +121,30 @@ struct ReportsView: View {
 
     private func load() async {
         error = nil
-        do { report = try await APIClient.shared.reports(days: days) }
+        do {
+            report = try await APIClient.shared.reports(days: days)
+            savedAt = nil
+        }
         catch APIError.unauthorized { auth.logout() }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? "Login/session diperlukan." }
+        catch let failure as APIError where failure.nobodyAnswered {
+            // Nothing answered (no network, a deploy restart, the tunnel): the last good copy for
+            // THIS range is a better screen than an error. Only then — a refusal the server did
+            // make is shown as it is, never papered over with old numbers.
+            if let hit = ResponseCache.decoded("reports-\(days)", as: Reports.self) {
+                report = hit.value
+                savedAt = hit.savedAt
+            } else {
+                // No copy for this range: drop whatever range was on screen rather than let it
+                // pass for the one just picked.
+                report = nil
+                savedAt = nil
+                self.error = failure.errorDescription ?? APIError.unreachableText
+            }
+        }
+        catch {
+            savedAt = nil
+            self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load this")
+        }
         loading = false
     }
 }

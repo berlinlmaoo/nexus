@@ -119,7 +119,7 @@ extension APIClient {
         do {
             (data, response) = try await perform(req, reporting: progress)
         } catch {
-            throw APIError.transport(error.localizedDescription)
+            throw APIError.nothingAnswered(error)
         }
         guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
         return (data, http)

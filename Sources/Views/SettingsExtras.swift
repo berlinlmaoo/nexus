@@ -35,7 +35,17 @@ struct WorkspaceMembersCard: View {
     @State private var inviteRole = "STAFF"
     @State private var busy = false
     @State private var err: String?
+    /// What the last successful invite did, shown under the invite row. Separate from `err` so a
+    /// later role change failing does not wipe the confirmation, and vice versa.
+    @State private var inviteNotice: InviteNotice?
     @State private var openProfile: ProfileTarget?
+
+    /// Two outcomes worth telling apart: the member is added either way, but only one of them
+    /// means the person actually knows about it.
+    private struct InviteNotice {
+        let text: String
+        let emailFailed: Bool
+    }
 
     private var canInvite: Bool { !assignableRoles(viewerRole).isEmpty }
 
@@ -72,6 +82,15 @@ struct WorkspaceMembersCard: View {
                     .font(NXFont.text(13, .bold)).foregroundStyle(.white)
                     .frame(maxWidth: .infinity).padding(.vertical, 9).background(NX.violet, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }.buttonStyle(.plain).disabled(busy || !inviteEmail.contains("@"))
+            if let inviteNotice {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: inviteNotice.emailFailed ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text(inviteNotice.text).frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .font(NXFont.text(12, .semibold))
+                .foregroundStyle(inviteNotice.emailFailed ? NX.danger : NX.success)
+            }
         }
         .padding(10).background(NX.muted.opacity(0.3), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
@@ -117,9 +136,27 @@ struct WorkspaceMembersCard: View {
         loading = false
     }
     private func invite() async {
-        busy = true; err = nil; defer { busy = false }
-        do { try await APIClient.shared.inviteWorkspaceMember(email: inviteEmail.trimmingCharacters(in: .whitespaces), role: inviteRole, workspaceId: workspaceId); inviteEmail = ""; await load() }
-        catch { err = T("Couldn't invite member.") }
+        busy = true; err = nil; inviteNotice = nil; defer { busy = false }
+        let typed = inviteEmail.trimmingCharacters(in: .whitespaces)
+        do {
+            let res = try await APIClient.shared.inviteWorkspaceMember(email: typed, role: inviteRole, workspaceId: workspaceId)
+            let who = res.member?.email ?? typed
+            // `emailSent` is optional: a server from before it existed says nothing, and the
+            // invite email already went out from those — so only an explicit false is a failure.
+            if res.emailSent == false {
+                inviteNotice = InviteNotice(text: String(format: T("Added %@, but the invite email couldn't be sent."), who),
+                                            emailFailed: true)
+            } else {
+                inviteNotice = InviteNotice(text: String(format: T("Invite sent to %@ — they'll get an email to set their password."), who),
+                                            emailFailed: false)
+            }
+            inviteEmail = ""
+            await load()
+        } catch {
+            // The server's own sentence when it gave one ("User is already a workspace member",
+            // a role above yours), rather than one generic line for every refusal.
+            err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't invite member.")
+        }
     }
     private func setRole(_ m: WorkspaceRoster.Member, _ role: String) async {
         guard let id = m.id else { return }

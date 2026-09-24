@@ -91,15 +91,36 @@ struct NoticeCard: View {
     }
 }
 
+/// A screen that could not load, drawn as an `EmptyState` so it answers the same three things:
+/// what happened (title), what it means (subtitle), and what to do (a real, full-width button —
+/// the compact pill read as an afterthought on a screen that has nothing else on it).
+///
+/// When the message is the "nothing answered" sentence, the title says that calmly and the
+/// subtitle gives the next step; the raw sentence would only repeat it. Anything else is the
+/// server's own words and goes in the subtitle verbatim.
 struct ErrorState: View {
     let message: String
+    /// The screen's own icon, used when the server did answer (a 403, a 404). An unreachable
+    /// server always gets the wifi mark, whichever screen it happened on.
+    var icon: String = "exclamationmark.triangle"
     let retry: () -> Void
+
+    private var unreachable: Bool { message == APIError.unreachableText }
+
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "wifi.exclamationmark").font(.system(size: 40)).foregroundStyle(NX.mutedFg)
-            Text(message).font(NXFont.text(14)).foregroundStyle(NX.mutedFg).multilineTextAlignment(.center)
-            Button(T("Try again"), action: retry).buttonStyle(NexusPrimaryButton(fullWidth: false))
-        }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
+        VStack(spacing: 6) {
+            EmptyState(icon: unreachable ? "wifi.exclamationmark" : icon,
+                       title: unreachable ? T("Can't reach NEXUS right now") : T("Couldn't load this"),
+                       subtitle: unreachable ? T("Check your connection, or try again in a moment.") : message)
+                // EmptyState fills the height when not compact; here it sits above the button, so
+                // it takes only what it needs and the pair stays centred together.
+                .fixedSize(horizontal: false, vertical: true)
+            Button(action: retry) { Label(T("Try again"), systemImage: "arrow.clockwise") }
+                .buttonStyle(NexusPrimaryButton())
+                .frame(maxWidth: 320)
+                .padding(.horizontal, 24)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
