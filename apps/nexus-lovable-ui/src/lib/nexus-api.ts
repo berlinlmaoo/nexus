@@ -1405,6 +1405,9 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     credentials: "include",
     headers: {
       Accept: "application/json",
+      // Who is calling. The attendance-request route reads it to decide which rules this caller
+      // can actually obey — see clientCanObeyRequestPolicy.
+      "X-Nexus-Client": "web/1",
       ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
       ...(init?.headers || {}),
     },
