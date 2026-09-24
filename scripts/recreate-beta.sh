@@ -49,7 +49,8 @@ echo "networks: $NETS(primary: $PRIMARY_NET)"
 #    is how emailed links kept pointing at a retired domain long after it was changed. Keep this list
 #    tiny and non-secret; anything not named here follows the old rule.
 # NEXUS_IOS_MIN_VERSION: floor of the minimum supported iOS version (426 gate) — an edit must take effect.
-OVERRIDABLE="NEXUS_PUBLIC_URL ATTENDANCE_OUTAGE_DATES GOOGLE_DIRECTORY_CLIENT_EMAIL GOOGLE_DIRECTORY_PRIVATE_KEY GOOGLE_DIRECTORY_SUBJECT NEXUS_IOS_MIN_VERSION"
+# NEXUS_ATTENDANCE_SHEET_SHARE: who gets read access to the live attendance sheet — an edit must take effect.
+OVERRIDABLE="NEXUS_PUBLIC_URL ATTENDANCE_OUTAGE_DATES GOOGLE_DIRECTORY_CLIENT_EMAIL GOOGLE_DIRECTORY_PRIVATE_KEY GOOGLE_DIRECTORY_SUBJECT NEXUS_IOS_MIN_VERSION NEXUS_ATTENDANCE_SHEET_SHARE"
 
 # APNS_PRIVATE_KEY_PATH ditambahkan lagi secara eksplisit lewat -e di bawah. Kalau salinan
 # lama ikut terbawa dari container sebelumnya, tiap deploy menambah satu duplikat — sudah

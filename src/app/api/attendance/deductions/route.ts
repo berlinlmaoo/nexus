@@ -13,6 +13,7 @@ import {
 } from "@/lib/attendance"
 import { isAutoDeduction } from "@/lib/attendance-absence"
 import { PERIOD_BASELINE_XP, getLeaderboardPeriodStart, levelForXp } from "@/lib/gamification"
+import { getAttendanceSheetUrl } from "@/lib/attendance-sheet"
 
 const DEFAULT_DAYOFF_QUOTA = 4 // keep in sync with the dayoffs route
 const MONTH_RE = /^\d{4}-\d{2}$/
@@ -107,6 +108,8 @@ export async function GET(req: NextRequest) {
 
       return NextResponse.json({
         month,
+        // The live Google Sheet (POST /api/cron/attendance-sheet); null until the sync has made it.
+        attendanceSheetUrl: await getAttendanceSheetUrl(workspaceId),
         defaultQuota: DEFAULT_DAYOFF_QUOTA,
         redDateQuota: redQuota,
         members: members.map((m) => {
