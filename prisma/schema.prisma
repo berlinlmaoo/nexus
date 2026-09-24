@@ -2857,3 +2857,13 @@ model AppReleaseSeen {
 
   @@id([platform, version])
 }
+
+// Server-side key → JSON value (src/lib/app-setting.ts), for facts the server keeps about itself
+// that belong to no user or workspace. First key: "attendance-sheet" — the Google spreadsheet the
+// attendance sync created (under the drive.file scope the app cannot find it any other way).
+// Table: attendance_sheet.sql.
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @default(now()) @updatedAt
+}

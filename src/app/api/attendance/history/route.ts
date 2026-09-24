@@ -8,8 +8,16 @@ import { AttendanceDayType, attendancePeriodRange, enumerateAttendanceDates, for
 import { getOutageDateKeysForRange, isAutoDeduction } from "@/lib/attendance-absence"
 import { getHolidayKeys } from "@/lib/holidays"
 import { attendanceHistoryQuerySchema } from "@/lib/validations"
-
-const ATTENDANCE_EXPORT_TIMEZONE = "Asia/Jakarta"
+// Letters, colours, summary rows and labels are shared with the live Google Sheet
+// (src/lib/attendance-sheet.ts) so the two can never disagree about a day.
+import {
+  ATTENDANCE_EXPORT_SUMMARY_ROWS,
+  ATTENDANCE_EXPORT_TIMEZONE,
+  attendanceExportCode,
+  attendanceExportFill,
+  formatExportDateLabel,
+  formatExportPeriod,
+} from "@/lib/attendance-export-format"
 
 type HistoryRow = ReturnType<typeof serializeAttendanceRecord> & {
   recordKind: "ATTENDANCE" | "REQUEST" | "ABSENT"
@@ -45,64 +53,13 @@ function sortRows(rows: HistoryRow[]) {
   })
 }
 
-function formatExportPeriod(start: Date, end: Date) {
-  const formatter = new Intl.DateTimeFormat("id-ID", {
-    timeZone: ATTENDANCE_EXPORT_TIMEZONE,
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  })
-
-  return `${formatter.format(start)} - ${formatter.format(end)}`
-}
-
-function formatExportDateLabel(date: Date) {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: ATTENDANCE_EXPORT_TIMEZONE,
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  }).format(date)
-}
-
-function getAttendanceExportCode(row: HistoryRow | undefined) {
-  if (!row) return ""
-  switch (row.attendanceDayType) {
-    case "PRESENT":
-      return "H"
-    case "LEAVE_APPROVED":
-      return "C"
-    case "SICK_APPROVED":
-      return "S"
-    // An approved permit is a working day with the manager's blessing, not a kind of absence: the
-    // BoD wants it counted as HADIR on the sheet (17 Sep 2026), not a blue "I".
-    case "PERMIT_APPROVED":
-      return "H"
-    case "DAY_OFF_APPROVED":
-      return "DO"
-    case "ABSENT":
-      return "TK"
-    default:
-      return ""
-  }
+// PERMIT_APPROVED → "H" and the rest of the mapping live in attendance-export-format.ts.
+function getAttendanceExportCode(row: HistoryRow | undefined): string {
+  return row ? attendanceExportCode(row.attendanceDayType) : ""
 }
 
 function getAttendanceExportFill(code: string) {
-  switch (code) {
-    case "H":
-      return "7CFC00"
-    case "C":
-      return "F9E27D"
-    case "S":
-      return "F5B041"
-    case "DO":
-      return "C39BD3"
-    case "TK":
-      return "FF5A36"
-    default:
-      return "FFFFFF"
-  }
+  return attendanceExportFill(code)
 }
 
 async function buildAttendanceWorkbook({
@@ -237,14 +194,7 @@ async function buildAttendanceWorkbook({
   })
 
   const summaryStartRow = 6 + dates.length
-  const summaryRows = [
-    { label: "HADIR", code: "H", fill: "7CFC00" },
-    { label: "CUTI", code: "C", fill: "F9E27D" },
-    { label: "SAKIT", code: "S", fill: "F5B041" },
-    { label: "DAY OFF", code: "DO", fill: "C39BD3" },
-    { label: "ABSENT", code: "TK", fill: "FF5A36" },
-    { label: "TOTAL HARI KERJA", code: "TOTAL", fill: "FFD966" },
-  ] as const
+  const summaryRows = ATTENDANCE_EXPORT_SUMMARY_ROWS
 
   summaryRows.forEach((summary, index) => {
     const rowNumber = summaryStartRow + index

@@ -13,10 +13,15 @@ SECRET="$(cat "$SECRET_FILE")"
 
 # 127.0.0.1:3002 = backend NEXUS di VM ini (port yang sama seperti di Mac, sengaja dipertahankan
 # biar endpoint dan skrip lama tetap cocok).
-rm -f /tmp/nexus-cron-out   # a failed curl must not log the previous run's body next to HTTP 000
-CODE=$(curl -s -o /tmp/nexus-cron-out -w %{http_code} -m 120 -X POST \
+# One output file per run. A single shared /tmp/nexus-cron-out let two jobs that fire in the same minute
+# log each other's bodies. A failed curl leaves it empty, so HTTP 000 never carries an old body.
+OUT=$(mktemp /tmp/nexus-cron-out.XXXXXX); trap 'rm -f "$OUT"' EXIT
+CODE=$(curl -s -o "$OUT" -w %{http_code} -m 120 -X POST \
   "http://127.0.0.1:3002/api/${ENDPOINT}" \
   -H "Authorization: Bearer ${SECRET}" \
   -H "Content-Type: application/json" \
   --data "{}")
-printf "[%s] %s -> HTTP %s %s\n" "$(date "+%F %T %Z")" "$ENDPOINT" "$CODE" "$(head -c 200 /tmp/nexus-cron-out)" >> "$LOG"
+# NEXUS_CRON_QUIET=1 (every-minute jobs such as the attendance sheet): log only what went wrong, or
+# the log grows by 1,440 identical lines a day.
+if [ "${NEXUS_CRON_QUIET:-0}" = "1" ] && [ "$CODE" = "200" ] && grep -q '"ok":true' "$OUT"; then exit 0; fi
+printf "[%s] %s -> HTTP %s %s\n" "$(date "+%F %T %Z")" "$ENDPOINT" "$CODE" "$(head -c 200 "$OUT")" >> "$LOG"
