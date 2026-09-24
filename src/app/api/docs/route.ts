@@ -2,6 +2,8 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
+import { isWorkspaceMemberOrAdmin } from '@/lib/read-access'
+import { docWriteRefusal } from '@/lib/write-access'
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
 import { extractTextFromTipTap } from '@/lib/tiptap-utils'
@@ -46,12 +48,23 @@ export async function POST(req: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const { title, content, projectId, parentId, templateId } = await req.json()
     if (!title || !projectId) return NextResponse.json({ error: 'Title and projectId required' }, { status: 400 })
+    // Signed in is not enough (writes batch): whoever may open the project's docs (lib/write-access.ts).
+    const refusal = await docWriteRefusal(session.user.id, projectId)
+    if (refusal) return refusal
+    if (parentId) {
+      const parent = await prisma.doc.findUnique({ where: { id: parentId }, select: { projectId: true } })
+      if (!parent || parent.projectId !== projectId) {
+        return NextResponse.json({ error: 'Parent doc not found in this project' }, { status: 400 })
+      }
+    }
 
     // If templateId provided, use template content
     let finalContent = content || null
     if (templateId && !content) {
       const template = await prisma.docTemplate.findUnique({ where: { id: templateId } })
-      if (template?.content) finalContent = template.content
+      if (template?.content && (await isWorkspaceMemberOrAdmin(session.user.id, template.workspaceId))) {
+        finalContent = template.content
+      }
     }
 
     const doc = await prisma.doc.create({

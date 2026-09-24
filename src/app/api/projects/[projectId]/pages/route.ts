@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { projectWriteRefusal } from "@/lib/write-access"
 import { checkProjectAccess } from "@/lib/rbac"
 import { logAudit } from "@/lib/audit"
 
@@ -57,6 +58,9 @@ export async function POST(
     if (!name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 })
     }
+    // Signed in is not enough (writes batch): project work, checkProjectAccess MEMBER (lib/write-access.ts).
+    const refusal = await projectWriteRefusal(session.user.id, projectId)
+    if (refusal) return refusal
 
     // Get next position
     const lastPage = await prisma.projectPage.findFirst({

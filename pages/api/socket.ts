@@ -9,6 +9,7 @@ import { resolveSheetAccess } from "@/lib/project-sheets"
 import { checkProjectAccess } from "@/lib/rbac"
 import prisma from "@/lib/prisma"
 import { isDeletedAccountEmail } from "@/lib/account-deletion"
+import { sessionVersionRejects } from "@/lib/session-version"
 
 const log = createLogger("socket")
 
@@ -151,8 +152,14 @@ export function initializeSocketServer(
       if (!token?.id) return next(new Error("Invalid session"))
       // A deleted account keeps its conversation memberships (chat history stays), so its
       // leftover JWT must not be allowed back into those rooms.
-      const owner = await prisma.user.findUnique({ where: { id: token.id as string }, select: { email: true } })
+      const owner = await prisma.user.findUnique({
+        where: { id: token.id as string },
+        select: { email: true, sessionVersion: true },
+      })
       if (!owner || isDeletedAccountEmail(owner.email)) return next(new Error("Invalid session"))
+      // Revoked (password reset, a password set by a BoD, a change from the web): the same rule as the
+      // jwt callback in lib/auth.ts. A token without the field — issued before revocation existed — stays valid.
+      if (sessionVersionRejects(token.sessionVersion, owner.sessionVersion)) return next(new Error("Invalid session"))
 
       socket.data.userId = token.id as string
       socket.data.userName = token.name as string

@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
+import { taskWriteRefusal } from '@/lib/write-access'
 import { canReadTask, taskReadRefusal } from "@/lib/read-access"
 import prisma from '@/lib/prisma'
 
@@ -50,6 +51,9 @@ export async function POST(
 
     const attachment = await prisma.attachment.findUnique({ where: { id: attachmentId } })
     if (!attachment) return NextResponse.json({ error: 'Attachment not found' }, { status: 404 })
+    // Signed in is not enough (writes batch): whoever may open the attachment's task.
+    const refusal = await taskWriteRefusal(session.user.id, attachment.taskId)
+    if (refusal) return refusal
 
     const annotation = await prisma.proofAnnotation.create({
       data: {
@@ -83,6 +87,15 @@ export async function PATCH(
 
     const annotation = await prisma.proofAnnotation.findUnique({ where: { id } })
     if (!annotation) return NextResponse.json({ error: 'Annotation not found' }, { status: 404 })
+    // Signed in is not enough (writes batch): the annotation must be on the attachment in the path, and
+    // the caller must be able to open that attachment's task.
+    if (annotation.attachmentId !== (await params).attachmentId) {
+      return NextResponse.json({ error: 'Annotation not found' }, { status: 404 })
+    }
+    const annotated = await prisma.attachment.findUnique({ where: { id: annotation.attachmentId }, select: { taskId: true } })
+    if (!annotated) return NextResponse.json({ error: 'Attachment not found' }, { status: 404 })
+    const refusal = await taskWriteRefusal(session.user.id, annotated.taskId)
+    if (refusal) return refusal
 
     const updated = await prisma.proofAnnotation.update({
       where: { id },

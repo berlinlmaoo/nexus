@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { docWriteRefusal } from "@/lib/write-access"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 
@@ -20,6 +21,9 @@ export async function POST(
 
     if (!original)
       return NextResponse.json({ error: "Not found" }, { status: 404 })
+    // Signed in is not enough (writes batch): the copy lands in the same project — the doc page's own rule.
+    const refusal = await docWriteRefusal(session.user.id, original.projectId)
+    if (refusal) return refusal
 
     const duplicate = await prisma.doc.create({
       data: {

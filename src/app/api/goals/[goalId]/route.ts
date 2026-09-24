@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
+import { firstUnlinkableProject, taskWriteRefusal, workspaceItemWriteRefusal } from '@/lib/write-access'
 import { isWorkspaceMemberOrAdmin } from "@/lib/read-access"
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
@@ -90,6 +91,31 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ go
   const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
+
+  // Signed in is not enough (writes batch): members of the goal's workspace (or a system admin), the
+  // rule of GET above. A linked project must be of the goal's workspace (or one the caller can open),
+  // a linked task one the caller can open, a milestone this goal's, a parent goal of the same workspace.
+  const goalRef = await prisma.goal.findUnique({ where: { id: (await params).goalId }, select: { id: true, workspaceId: true } })
+  if (!goalRef) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const refusal = await workspaceItemWriteRefusal(session.user.id, goalRef.workspaceId)
+  if (refusal) return refusal
+  if (body.linkProject && (await firstUnlinkableProject(session.user.id, [String(body.linkProject)], goalRef.workspaceId))) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  if (body.linkTask) {
+    const taskRefusal = await taskWriteRefusal(session.user.id, String(body.linkTask))
+    if (taskRefusal) return taskRefusal
+  }
+  if (body.toggleMilestone) {
+    const milestone = await prisma.goalMilestone.findUnique({ where: { id: String(body.toggleMilestone.id ?? '') }, select: { goalId: true } })
+    if (!milestone || milestone.goalId !== goalRef.id) return NextResponse.json({ error: 'Milestone not found' }, { status: 404 })
+  }
+  if (body.parentId) {
+    const parent = await prisma.goal.findUnique({ where: { id: String(body.parentId) }, select: { id: true, workspaceId: true } })
+    if (!parent || parent.workspaceId !== goalRef.workspaceId || parent.id === goalRef.id) {
+      return NextResponse.json({ error: 'Parent goal not found in this workspace' }, { status: 400 })
+    }
+  }
 
   // Link/unlink project
   if (body.linkProject) {
@@ -195,6 +221,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ g
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // Signed in is not enough (writes batch): members of the goal's workspace (or a system admin).
+    const goalRef = await prisma.goal.findUnique({ where: { id: (await params).goalId }, select: { workspaceId: true } })
+    if (!goalRef) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const refusal = await workspaceItemWriteRefusal(session.user.id, goalRef.workspaceId)
+    if (refusal) return refusal
     await prisma.goal.delete({ where: { id: (await params).goalId } })
     logAudit({ action: 'delete', entityType: 'goal', entityId: (await params).goalId, userId: session.user.id, request: req })
     return NextResponse.json({ success: true })

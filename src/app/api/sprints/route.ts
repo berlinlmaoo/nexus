@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
+import { projectWriteRefusal, taskWriteRefusal } from '@/lib/write-access'
 import { checkProjectAccess } from "@/lib/rbac"
 import prisma from '@/lib/prisma'
 import { executeAutomations } from '@/lib/automation-engine'
@@ -37,6 +38,9 @@ export async function POST(req: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const { name, projectId, startDate, endDate } = await req.json()
     if (!name || !projectId || !startDate || !endDate) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+    // Signed in is not enough (writes batch): project work, checkProjectAccess MEMBER (lib/write-access.ts).
+    const refusal = await projectWriteRefusal(session.user.id, projectId)
+    if (refusal) return refusal
     const sprint = await prisma.sprint.create({
       data: { name, projectId, startDate: new Date(startDate), endDate: new Date(endDate) },
       include: { tasks: { include: { task: { select: { id: true, title: true, status: true } } } } },
@@ -57,6 +61,16 @@ export async function PATCH(req: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const { id, status, addTaskId, removeTaskId, name, startDate, endDate, moveIncompleteTo } = await req.json()
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+    // Signed in is not enough (writes batch): the sprint's project, checkProjectAccess MEMBER; a task put
+    // into it must be one the caller can open.
+    const sprintRef = await prisma.sprint.findUnique({ where: { id }, select: { projectId: true } })
+    if (!sprintRef) return NextResponse.json({ error: 'Sprint not found' }, { status: 404 })
+    const refusal = await projectWriteRefusal(session.user.id, sprintRef.projectId)
+    if (refusal) return refusal
+    if (addTaskId) {
+      const taskRefusal = await taskWriteRefusal(session.user.id, String(addTaskId))
+      if (taskRefusal) return taskRefusal
+    }
     if (addTaskId) await prisma.sprintTask.create({ data: { sprintId: id, taskId: addTaskId } }).catch(() => {})
     if (removeTaskId) await prisma.sprintTask.deleteMany({ where: { sprintId: id, taskId: removeTaskId } })
     const existingSprint = await prisma.sprint.findUnique({ where: { id }, select: { status: true, projectId: true } })

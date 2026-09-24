@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
+import { docWriteRefusal } from '@/lib/write-access'
 import { canReadProjectContent } from "@/lib/read-access"
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
@@ -39,6 +40,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ do
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const body = await req.json()
+
+    // Signed in is not enough (writes batch): the doc page's own rule (GET above) — whoever opens a doc
+    // there can edit it.
+    const target = await prisma.doc.findUnique({ where: { id: (await params).docId }, select: { projectId: true } })
+    if (!target) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const refusal = await docWriteRefusal(session.user.id, target.projectId)
+    if (refusal) return refusal
+    if (body.parentId) {
+      const parent = await prisma.doc.findUnique({ where: { id: String(body.parentId) }, select: { id: true, projectId: true } })
+      if (!parent || parent.projectId !== target.projectId || parent.id === (await params).docId) {
+        return NextResponse.json({ error: 'Parent doc not found in this project' }, { status: 400 })
+      }
+    }
 
     const data: Record<string, unknown> = {}
     if (body.title !== undefined) data.title = body.title
@@ -78,7 +92,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ d
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const existing = await prisma.doc.findUnique({ where: { id: (await params).docId }, select: { title: true } })
+    const existing = await prisma.doc.findUnique({ where: { id: (await params).docId }, select: { title: true, projectId: true } })
+    // Signed in is not enough (writes batch): the doc page's own rule, as for PATCH.
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const refusal = await docWriteRefusal(session.user.id, existing.projectId)
+    if (refusal) return refusal
     logAudit({ action: "delete", entityType: "doc", entityId: (await params).docId, entityName: existing?.title, userId: session.user.id, request: req })
 
     await prisma.doc.delete({ where: { id: (await params).docId } })

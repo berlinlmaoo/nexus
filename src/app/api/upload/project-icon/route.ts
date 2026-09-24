@@ -2,6 +2,8 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { resolveUploadedImageType } from "@/lib/image-sniff"
+import { projectWriteRefusal } from "@/lib/write-access"
 import { logAudit } from "@/lib/audit"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
@@ -27,7 +29,7 @@ const EXT_MAP: Record<string, string> = {
 export async function POST(request: NextRequest) {
   try {
     const session = await auth()
-    if (!session?.user) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -43,7 +45,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No projectId provided" }, { status: 400 })
     }
 
-    if (!ALLOWED_TYPES.includes(file.type)) {
+    // Signed in is not enough (writes batch): the rule of PATCH /api/projects/{id}, which stores the
+    // icon url (checkProjectAccess LEAD). The project must exist — the id is also the file name.
+    const refusal = await projectWriteRefusal(session.user.id, projectId, ["LEAD"])
+    if (refusal) return refusal
+
+    // iOS labels multipart parts application/octet-stream: then the bytes decide (lib/image-sniff.ts).
+    const fileType = await resolveUploadedImageType(file, ALLOWED_TYPES)
+    if (!fileType) {
       return NextResponse.json(
         { error: "Invalid file type. Allowed: PNG, JPG, SVG, WEBP" },
         { status: 400 }
@@ -57,7 +66,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const ext = EXT_MAP[file.type] || "png"
+    const ext = EXT_MAP[fileType] || "png"
     const fileName = `${projectId}.${ext}`
 
     const uploadDir = path.join(process.cwd(), "public", "uploads", "project-icons")

@@ -50,7 +50,12 @@ export async function POST(
     }
 
     const hashed = await bcrypt.hash(password, 12)
-    await prisma.user.update({ where: { id: targetMember.user.id }, data: { password: hashed } })
+    // A BoD set this password, not the owner (resetting your own is refused above): every session the
+    // owner has ends (lib/session-version.ts), as after a reset by email.
+    await prisma.user.update({
+      where: { id: targetMember.user.id },
+      data: { password: hashed, sessionVersion: { increment: 1 } },
+    })
 
     // Log the EVENT (who reset whose password, when, from where) — never the password value.
     const targetLabel = targetMember.user.name ?? targetMember.user.email ?? targetMember.user.id
