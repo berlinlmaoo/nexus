@@ -16,6 +16,7 @@ import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, ORG_ROLE_LABEL, ORG_
 import { TeamCard, DivisionManager } from "./teams";
 import { cn } from "@/lib/utils";
 import { Link } from "@tanstack/react-router";
+import { AuditLogView } from "@/components/audit/AuditLogView";
 
 export const Route = createFileRoute("/_app/admin")({ component: Admin });
 
@@ -1303,40 +1304,9 @@ function DeleteUserModal({ user, onClose }: { user: { id: string; name: string; 
   );
 }
 
+// The audit view lives in components/audit/AuditLogView.tsx (list + detail drawer).
 function AuditLog() {
-  const [q, setQ] = useState("");
-  const logs = useQuery({ queryKey: ["nexus", "audit", q], queryFn: () => nexusApi.auditLogs(q.trim() ? `search=${encodeURIComponent(q.trim())}` : ""), retry: false });
-  const rows = logs.data?.logs ?? [];
-  return (
-    <div className="space-y-4">
-      {logs.isError && <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft"><ScrollText className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" /><div className="text-lg font-bold">Audit access required</div><p className="mt-2 text-sm text-muted-foreground">You need the admin/owner role to view the audit log.</p></div>}
-      {!logs.isError && (
-        <>
-          <div className="relative max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search action, entity…" className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-primary" />
-          </div>
-          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
-            {logs.isLoading && <div className="flex justify-center py-16 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>}
-            <div className="divide-y divide-border">
-              {rows.map((l) => (
-                <div key={l.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                  <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] font-bold text-muted-foreground">{statusLabel(l.action)}</span>
-                  <div className="min-w-0 flex-1">
-                    <span className="font-semibold">{l.entityName || l.entityType}</span>
-                    {l.entityType && l.entityName && <span className="text-muted-foreground"> · {l.entityType}</span>}
-                  </div>
-                  <span className="hidden shrink-0 text-xs text-muted-foreground sm:block">{l.user?.name ?? "system"}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">{fmtDate(l.createdAt)} {fmtTime(l.createdAt)}</span>
-                </div>
-              ))}
-            </div>
-            {!logs.isLoading && rows.length === 0 && <div className="py-10 text-center text-sm text-muted-foreground">No audit entries.</div>}
-          </div>
-        </>
-      )}
-    </div>
-  );
+  return <AuditLogView />;
 }
 
 const REQ_TYPES = [

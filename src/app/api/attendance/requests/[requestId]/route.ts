@@ -106,6 +106,11 @@ export async function PATCH(
         request,
         metadata: {
           status: updated.status,
+          previousStatus: attendanceRequest.status,
+          type: updated.type,
+          startDate: updated.startDate.toISOString(),
+          endDate: updated.endDate.toISOString(),
+          targetUserId: updated.userId,
         },
       })
 
@@ -182,6 +187,13 @@ export async function PATCH(
       request,
       metadata: {
         status: updated.status,
+        // Always PENDING here (the claim above only matches PENDING), recorded so the trail reads
+        // "Pending → Approved" on its own.
+        previousStatus: attendanceRequest.status,
+        type: updated.type,
+        startDate: updated.startDate.toISOString(),
+        endDate: updated.endDate.toISOString(),
+        targetUserId: updated.userId,
         approvalSource,
         // How much XP the approval actually handed back, so "why did my score jump" is answerable
         // from the audit trail and not only from the ledger.

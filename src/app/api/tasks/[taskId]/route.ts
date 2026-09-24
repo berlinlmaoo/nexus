@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
+import { auditDiff } from "@/lib/audit-describe"
 import { checkProjectAccess } from "@/lib/rbac"
 import { executeAutomations } from "@/lib/automation-engine"
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher"
@@ -378,10 +379,48 @@ export async function PATCH(
         }
       }
 
+    // Old AND new value of exactly the fields this request changed, taken from `existing` (already
+    // loaded above — no extra read). This used to log the raw body: new values only, unchanged fields
+    // included, so the audit trail could say what a title became but never what it was.
+    const linkedPlacementBefore = isLinkedProjectContext
+      ? existing.taskProjects.find((taskProject) => taskProject.projectId === effectiveProjectId)
+      : undefined
     logAudit({
       action: "update", entityType: "task", entityId: taskId, entityName: task.title,
       userId: session.user.id!, request,
-      metadata: { changes: body },
+      metadata: {
+        projectId: effectiveProjectId,
+        changes: auditDiff(
+          {
+            title: existing.title,
+            description: existing.description,
+            status: existing.status,
+            priority: existing.priority,
+            dueDate: existing.dueDate,
+            tags: existing.tags,
+            isRecurring: existing.isRecurring,
+            recurPattern: existing.recurPattern,
+            taskType: existing.taskType,
+            taskListId: isLinkedProjectContext ? linkedPlacementBefore?.taskListId ?? null : existing.taskListId,
+            position: isLinkedProjectContext ? linkedPlacementBefore?.position ?? null : existing.position,
+            assigneeIds: existing.assignees.map((assignee) => assignee.userId).sort(),
+          },
+          {
+            title,
+            description,
+            status,
+            priority,
+            dueDate: dueDate === undefined ? undefined : dueDate ? new Date(dueDate) : null,
+            tags,
+            isRecurring,
+            recurPattern,
+            taskType,
+            taskListId,
+            position,
+            assigneeIds: assigneeIds === undefined ? undefined : [...assigneeIds].sort(),
+          },
+        ),
+      },
     })
 
     // Fire automations for status changes
@@ -512,7 +551,7 @@ export async function DELETE(
     const existing = await prisma.task.findUnique({
       where: { id: taskId },
       include: {
-        taskList: true,
+        taskList: { include: { project: { select: { name: true } } } },
         taskProjects: {
           select: { projectId: true },
         },
@@ -540,6 +579,12 @@ export async function DELETE(
     logAudit({
       action: "delete", entityType: "task", entityId: taskId, entityName: existing.title,
       userId: session.user.id!, request,
+      // The task is gone after this; keep enough to say what it was and where it lived.
+      metadata: {
+        title: existing.title,
+        projectId: existing.taskList.projectId,
+        projectName: existing.taskList.project?.name ?? null,
+      },
     })
 
     await prisma.task.delete({

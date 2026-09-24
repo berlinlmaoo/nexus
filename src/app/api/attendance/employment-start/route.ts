@@ -88,7 +88,7 @@ export async function PATCH(req: NextRequest) {
 
     const target = await prisma.workspaceMember.findUnique({
       where: { userId_workspaceId: { userId, workspaceId: g.workspaceId } },
-      select: { id: true },
+      select: { id: true, employmentStartDate: true },
     })
     if (!target) return NextResponse.json({ error: "User bukan member workspace ini." }, { status: 404 })
 
@@ -105,7 +105,17 @@ export async function PATCH(req: NextRequest) {
         entityName: `employment-start:${userId}`,
         userId: g.session.user.id,
         request: req,
-        metadata: { reason: "admin_employment_start", date: date ? date.toISOString() : null },
+        metadata: {
+          reason: "admin_employment_start",
+          date: date ? date.toISOString() : null,
+          targetUserId: userId,
+          changes: {
+            employmentStartDate: {
+              from: target.employmentStartDate ? target.employmentStartDate.toISOString() : null,
+              to: date ? date.toISOString() : null,
+            },
+          },
+        },
       })
     } catch { /* audit best-effort */ }
 

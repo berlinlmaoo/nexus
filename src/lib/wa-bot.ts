@@ -271,7 +271,7 @@ export async function handleWaInbound(input: { chatId: string; senderId: string;
       entityId: targetId,
       entityName: `${updated.type}:${updated.user.name}`,
       userId: user.id,
-      metadata: { status: nextStatus, approvalSource: "ADMIN", via: "whatsapp" },
+      metadata: { status: nextStatus, previousStatus: "PENDING", type: updated.type, targetUserId: updated.userId, approvalSource: "ADMIN", via: "whatsapp" },
     }).catch((e) => console.error("[wa-bot] audit log failed", e))
 
     const label = REQ_TYPE_LABEL[updated.type] ?? updated.type

@@ -341,6 +341,11 @@ export function buildFixtures(profile, world, media) {
       { status: "4xx", check: (j) => need(isStr(j?.error), "refusal without an error message") })
     req("req-permit-dayoff", "PERMIT reason \"ambil day off\" → PERMIT_NOT_DAYOFF", "policy",
       base("PERMIT", jktDate(11), jktDate(11), "ambil day off"), [libPhoto], PERMIT_NOT_DAYOFF)
+    // One-date-per-request (24 Sep 2026) is NOT applied to these builds: their START–UNTIL picker
+    // offers a range for every type, and refusing it would strand them. 2 days + the 1-day DAY_OFF
+    // above = 3, inside the default quota of 4 whichever payroll periods the dates fall in.
+    req("req-dayoff-multi", "DAY_OFF multi-day (START–UNTIL) — legacy stays exempt", "compat",
+      base("DAY_OFF", jktDate(12), jktDate(13), "Acara keluarga di luar kota"), [], created, bump())
   } else if (modern) {
     req("req-permit-1d", "PERMIT 1 day + permit-photo.jpg + lat/lng", "compat",
       [...base("PERMIT", jktDate(1), jktDate(1), "Urus dokumen di kelurahan"), ["lat", String(pos.lat)], ["lng", String(pos.lng)]], [permitPhoto016], created, bump())
@@ -356,6 +361,12 @@ export function buildFixtures(profile, world, media) {
       { status: 400, check: (j) => need(isStr(j?.error), "refusal without an error message") })
     req("req-permit-dayoff", "PERMIT reason \"ambil day off\" → PERMIT_NOT_DAYOFF", "policy",
       [...base("PERMIT", jktDate(7), jktDate(7), "ambil day off"), ["lat", String(pos.lat)], ["lng", String(pos.lng)]], [permitPhoto016], PERMIT_NOT_DAYOFF)
+    // Policy fixture (owner's rule, 24 Sep 2026): every request type is one date. The 0.1.6 picker
+    // (AttendanceRequestsView.swift `singleDay`) still offers a range for DAY_OFF, so this IS
+    // reachable from the UI — the person gets the SINGLE_DAY_ONLY message and files per date.
+    req("req-dayoff-multi", "DAY_OFF multi-day → SINGLE_DAY_ONLY (one date per request)", "policy",
+      base("DAY_OFF", jktDate(8), jktDate(9), "Acara keluarga di luar kota"), [],
+      { status: 400, code: "SINGLE_DAY_ONLY" })
   } else {
     // web
     req("req-permit-1d", "PERMIT 1 day + photo + lat/lng", "compat",
@@ -369,6 +380,11 @@ export function buildFixtures(profile, world, media) {
       { status: 400, check: (j) => need(isStr(j?.error), "refusal without an error message") })
     req("req-permit-dayoff", "PERMIT reason \"ambil day off\" → PERMIT_NOT_DAYOFF", "policy",
       [...base("PERMIT", jktDate(5), jktDate(5), "ambil day off"), ["lat", String(pos.lat)], ["lng", String(pos.lng)]], [webPhoto], PERMIT_NOT_DAYOFF)
+    // Policy fixture (owner's rule, 24 Sep 2026): every request type is one date. The web form
+    // (attendance.tsx `singleDay`) still offers a range for DAY_OFF until it is updated.
+    req("req-dayoff-multi", "DAY_OFF multi-day → SINGLE_DAY_ONLY (one date per request)", "policy",
+      base("DAY_OFF", jktDate(6), jktDate(7), "Acara keluarga di luar kota"), [],
+      { status: 400, code: "SINGLE_DAY_ONLY" })
   }
 
   add({
