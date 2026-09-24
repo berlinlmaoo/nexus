@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
@@ -32,11 +32,14 @@ import { activeNotifications, fmtDate, fmtDue, nexusApi, notificationGroup, stat
 import { NotificationFilterTabs } from "@/components/NotificationFilterTabs";
 import { LEVELS, levelForXp } from "@/lib/levels";
 import { TierBadge } from "@/components/gamification/TierBadge";
-import { QuestIcon } from "@/components/gamification/QuestIcon";
 import { Reveal, AnimatedBar, CountUp } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/_app/dashboard")({
+  // `quest` comes from the quest_claimable notification: "<questKey>:<periodKey>".
+  validateSearch: (s: Record<string, unknown>): { quest?: string } => ({
+    quest: typeof s.quest === "string" && s.quest ? s.quest : undefined,
+  }),
   component: Dashboard,
   head: () => ({ meta: [{ title: "NEXUS Phaëthon — Dashboard" }] }),
 });
@@ -79,11 +82,11 @@ function Dashboard() {
       <TopBar userName={userName} unread={notifications.data?.unreadCount ?? 5} />
 
       <div className="mt-7 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px] 2xl:gap-8">
-        {/* main: stats, quests */}
+        {/* main: stats, XP rules. No "Your Quests" card: the owner dropped it; quests are
+            listed and claimed inside the Quest stat card. */}
         <div className="space-y-6">
           <StatRow data={data} />
-          <Reveal delay={0.1}><YourQuests /></Reveal>
-          <Reveal delay={0.15}><XpRulesCard /></Reveal>
+          <Reveal delay={0.1}><XpRulesCard /></Reveal>
         </div>
 
         {/* right rail */}
@@ -101,7 +104,7 @@ function Dashboard() {
 
 /* ---------- top bar ---------- */
 /* Uses the SAME grid template as the content grid below, so the level chip's
-   right edge (in the main zone) lines up with the stat cards / Monthly Quest,
+   right edge (in the main zone) lines up with the stat cards / Quest card,
    while search + notifications sit in the right-rail zone. */
 function TopBar({ userName, unread }: { userName: string; unread: number }) {
   return (
@@ -316,6 +319,9 @@ function StatRow(_: { data: NexusDashboardResponse }) {
   const projectsQ = useQuery({ queryKey: ["projects"], queryFn: nexusApi.projects, retry: 1, staleTime: 60_000 });
   const myTasks = useMyTasks();
   const g = useGamification();
+  const claim = useClaimQuest();
+  const search = Route.useSearch();
+  const navigate = useNavigate();
   const [active, setActive] = useState<number | null>(null);
 
   const projectList = projectsQ.data ?? [];
@@ -346,11 +352,22 @@ function StatRow(_: { data: NexusDashboardResponse }) {
       detail: <TasksDetail tasks={taskList} />,
     },
     {
-      value: questsDone, total: quests.length, label: "Monthly Quests", Icon: Sparkles,
+      value: questsDone, total: quests.length, label: "Quest", Icon: Sparkles,
       from: "#fcd34d", to: "#ea580c", glow: "#fbbf24",
-      detail: <QuestsDetail quests={quests} />,
+      detail: <QuestsDetail quests={quests} claim={claim} focusKey={search.quest?.split(":")[0]} />,
     },
   ];
+
+  // A quest_claimable notification lands on /dashboard?quest=<key>:<period>: open the Quest card.
+  const questCard = cards.findIndex((c) => c.label === "Quest");
+  useEffect(() => {
+    if (search.quest) setActive(questCard);
+  }, [search.quest, questCard]);
+  const close = () => {
+    setActive(null);
+    // Drop the param so closing sticks (no reopen on re-render / refresh).
+    if (search.quest) navigate({ to: "/dashboard", search: {}, replace: true }).catch(() => {});
+  };
 
   return (
     <>
@@ -359,7 +376,7 @@ function StatRow(_: { data: NexusDashboardResponse }) {
           <StatCardButton key={c.label} card={c} index={i} onOpen={() => setActive(i)} />
         ))}
       </div>
-      <StatCardModal cards={cards} active={active} onClose={() => setActive(null)} />
+      <StatCardModal cards={cards} active={active} onClose={close} />
     </>
   );
 }
@@ -513,21 +530,49 @@ function TasksDetail({ tasks }: { tasks: NexusTask[] }) {
   );
 }
 
-function QuestsDetail({ quests }: { quests: NexusQuest[] }) {
+/** Claiming quest XP. Quest XP is never auto-granted: this is the only way it gets paid out
+ *  (POST /api/gamification/quests/claim), so the Quest card must keep offering it. */
+function useClaimQuest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (key: string) => nexusApi.claimQuest(key), onError: (e: unknown) => alert(e instanceof Error ? e.message : "Couldn't claim the quest."),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["gamification", "me"] }),
+  });
+}
+
+function QuestsDetail({ quests, claim, focusKey }: { quests: NexusQuest[]; claim: ReturnType<typeof useClaimQuest>; focusKey?: string }) {
   if (quests.length === 0) return <StatDetailEmpty text="No active quests right now." />;
   return (
     <div className="space-y-1.5">
       {quests.map((q) => {
         const pct = q.target ? Math.min(100, Math.round((q.progress / q.target) * 100)) : 0;
+        const left = Math.max(0, q.target - q.progress);
+        const claimingThis = claim.isPending && claim.variables === q.key;
         return (
-          <div key={q.key} className="rounded-lg px-2 py-1.5">
+          <div key={q.key} className={cn("rounded-lg px-2 py-1.5", q.key === focusKey && "bg-white/15 ring-2 ring-white/60")}>
             <div className="flex items-center justify-between gap-2 text-xs font-medium">
               <span className="truncate">{q.title}</span>
               <span className="flex shrink-0 items-center gap-1 tabular-nums text-white/80">
                 {q.progress}/{q.target}{q.claimed && <Check className="h-3 w-3" />}
               </span>
             </div>
+            {q.description && <p className="mt-0.5 text-[11px] leading-snug text-white/75">{q.description}</p>}
             <div className="mt-1"><WhiteBar pct={pct} /></div>
+            <div className="mt-1.5 flex items-center justify-between gap-2">
+              <span className="min-w-0 truncate text-[11px] text-white/80">
+                <span className="font-bold text-white">+{q.xpReward} XP</span>
+                {q.deadline && <> · until {fmtDate(q.deadline)}</>}
+              </span>
+              {q.claimed ? (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-white/20 px-2 py-1 text-[11px] font-bold"><Check className="h-3 w-3" /> Claimed</span>
+              ) : q.claimable ? (
+                <button type="button" disabled={claim.isPending} onClick={() => claim.mutate(q.key)} className="shrink-0 cursor-pointer rounded-md bg-white px-2.5 py-1 text-[11px] font-bold text-orange-600 transition-transform active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:cursor-default disabled:opacity-60">{claimingThis ? "Claiming…" : "Claim"}</button>
+              ) : left === 0 && q.eligible === false ? (
+                <span className="shrink-0 text-[11px] text-white/70">Assignees only</span>
+              ) : (
+                <span className="shrink-0 text-[11px] text-white/70">{left} more to go</span>
+              )}
+            </div>
           </div>
         );
       })}
@@ -658,149 +703,6 @@ function LevelModal({ open, onClose, info, totalXp, streak }: { open: boolean; o
       )}
     </AnimatePresence>,
     document.body,
-  );
-}
-
-/* ---------- your quests ---------- */
-const QUEST_REQ_DESC: Record<string, (n: number) => string> = {
-  task_count: (n) => `Finish ${n} task${n === 1 ? "" : "s"} you're working on.`,
-  overdue_cleared: (n) => `Clear ${n} overdue task${n === 1 ? "" : "s"}.`,
-  priority_done: (n) => `Close ${n} Urgent-priority task${n === 1 ? "" : "s"}.`,
-};
-function questReqDesc(q: NexusQuest) {
-  const t = (q as { requirementType?: string }).requirementType ?? "task_count";
-  return (QUEST_REQ_DESC[t] ?? QUEST_REQ_DESC.task_count)(q.target);
-}
-
-function QuestTile({ q, onClaim, claiming, onOpenDetail }: { q: NexusQuest; onClaim: (key: string) => void; claiming: boolean; onOpenDetail?: () => void }) {
-  return (
-    <motion.div onClick={onOpenDetail} className="flex cursor-pointer flex-col rounded-2xl bg-muted/50 p-3 text-center" whileHover={{ y: -3 }} transition={{ type: "spring", stiffness: 400, damping: 18 }}>
-      <QuestIcon questKey={q.key} title={q.title} size={64} className="mx-auto" />
-      <div className="mt-2 truncate text-sm font-semibold" title={q.title}>{q.title}</div>
-      <div className="text-xs text-muted-foreground">{q.progress}/{q.target} · +{q.xpReward} XP</div>
-      {q.deadline && <div className="text-[10px] font-semibold text-amber-600">⏰ until {fmtDate(q.deadline)}</div>}
-      {q.claimed ? (
-        <div className="mt-2.5 inline-flex w-full items-center justify-center gap-1 rounded-lg bg-success/15 py-1.5 text-xs font-bold text-success"><Check className="h-3.5 w-3.5" /> Claimed</div>
-      ) : q.claimable ? (
-        <button disabled={claiming} onClick={(e) => { e.stopPropagation(); onClaim(q.key); }} className="mt-2.5 w-full cursor-pointer rounded-lg bg-warning py-1.5 text-xs font-bold text-warning-foreground transition-transform active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-default disabled:opacity-50">{claiming ? "Claiming…" : "Claim"}</button>
-      ) : null}
-    </motion.div>
-  );
-}
-
-function QuestDetailModal({ q, onClose, onClaim, claiming }: { q: NexusQuest; onClose: () => void; onClaim: (key: string) => void; claiming: boolean }) {
-  const pct = q.target ? Math.min(100, Math.round((q.progress / q.target) * 100)) : 0;
-  return (
-    <div className="fixed inset-0 z-[95] grid place-items-center p-4">
-      <motion.div className="absolute inset-0 bg-black/50 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
-      <motion.div
-        role="dialog" aria-modal="true"
-        initial={{ opacity: 0, scale: 0.92, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }}
-        transition={{ type: "spring", stiffness: 320, damping: 26 }}
-        className="relative w-full max-w-md overflow-hidden rounded-3xl border border-border bg-card shadow-pop"
-      >
-        <div className="flex items-start gap-3 border-b border-border p-5">
-          <QuestIcon questKey={q.key} title={q.title} size={56} className="shrink-0" />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-black leading-tight tracking-tight">{q.title}</h2>
-              {q.source === "admin" && <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">From BoD</span>}
-            </div>
-            {q.description && <p className="mt-0.5 text-sm text-muted-foreground">{q.description}</p>}
-          </div>
-          <button onClick={onClose} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition hover:bg-accent"><X className="h-4 w-4" /></button>
-        </div>
-        <div className="space-y-4 p-5">
-          <div className="rounded-2xl border border-dashed border-border p-3">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">What to do</div>
-            <p className="mt-1 text-sm font-semibold">{questReqDesc(q)}</p>
-          </div>
-          <div>
-            <div className="mb-1 flex items-center justify-between text-sm font-semibold"><span>Progress</span><span>{q.progress}/{q.target} · {pct}%</span></div>
-            <AnimatedBar pct={pct} className="h-2.5 rounded-full bg-muted" barClassName="h-full rounded-full bg-primary" />
-          </div>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-            <span className="font-black text-success">+{q.xpReward} XP</span>
-            {q.deadline && <span className="font-semibold text-amber-600">⏰ Deadline {fmtDate(q.deadline)}</span>}
-          </div>
-          {q.claimed ? (
-            <div className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-success/15 py-2.5 text-sm font-bold text-success"><Check className="h-4 w-4" /> Claimed</div>
-          ) : q.claimable ? (
-            <button disabled={claiming} onClick={() => onClaim(q.key)} className="w-full rounded-xl bg-warning py-2.5 text-sm font-bold text-warning-foreground transition active:scale-[0.98] disabled:opacity-50">{claiming ? "Claiming…" : `Claim +${q.xpReward} XP`}</button>
-          ) : (
-            <div className="rounded-xl bg-muted py-2.5 text-center text-sm font-medium text-muted-foreground">Finish {q.target - q.progress} more task{q.target - q.progress === 1 ? "" : "s"} to claim</div>
-          )}
-        </div>
-      </motion.div>
-    </div>
-  );
-}
-
-function YourQuests() {
-  const qc = useQueryClient();
-  const g = useGamification();
-  const quests = g.data?.quests ?? [];
-  const [showAll, setShowAll] = useState(false);
-  const [detail, setDetail] = useState<NexusQuest | null>(null);
-  const claim = useMutation({
-    mutationFn: (key: string) => nexusApi.claimQuest(key), onError: (e: unknown) => alert(e instanceof Error ? e.message : "Couldn't claim the quest."),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["gamification", "me"] }),
-  });
-  return (
-    <>
-      <Section title="Your Quests" action={<button onClick={() => setShowAll(true)} className="rounded text-xs font-medium text-muted-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">See All</button>}>
-        {g.isLoading && (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="flex flex-col items-center rounded-2xl bg-muted/50 p-3">
-                <Skeleton className="h-16 w-16 rounded-2xl" /><Skeleton className="mt-2 h-3.5 w-3/4" /><Skeleton className="mt-1.5 h-2.5 w-1/2" /><Skeleton className="mt-2 h-1.5 w-full rounded-full" /><Skeleton className="mt-2 h-6 w-full rounded-lg" />
-              </div>
-            ))}
-          </div>
-        )}
-        {!g.isLoading && quests.length === 0 && <p className="text-sm text-muted-foreground">No active quests yet. Your XP still rolls in from tasks, streaks & attendance — check "XP Rules" below.</p>}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {quests.slice(0, 4).map((q) => <QuestTile key={q.key} q={q} onClaim={claim.mutate} claiming={claim.isPending} onOpenDetail={() => setDetail(q)} />)}
-        </div>
-      </Section>
-      {createPortal(
-        <AnimatePresence>
-          {showAll && (
-            <div className="fixed inset-0 z-[90] grid place-items-center p-4">
-              <motion.div className="absolute inset-0 bg-black/50 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowAll(false)} />
-              <motion.div
-                role="dialog"
-                aria-modal="true"
-                initial={{ opacity: 0, scale: 0.94, y: 14 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.96, y: 10 }}
-                transition={{ type: "spring", stiffness: 300, damping: 26 }}
-                className="relative max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-border bg-card p-6 shadow-pop"
-              >
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-lg font-black tracking-tight">All Quests</h2>
-                  <button onClick={() => setShowAll(false)} className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
-                </div>
-                {quests.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-muted-foreground">No active quests yet.</p>
-                ) : (
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-                    {quests.map((q) => <QuestTile key={q.key} q={q} onClaim={claim.mutate} claiming={claim.isPending} onOpenDetail={() => setDetail(q)} />)}
-                  </div>
-                )}
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>,
-        document.body,
-      )}
-      {createPortal(
-        <AnimatePresence>
-          {detail && <QuestDetailModal q={detail} onClose={() => setDetail(null)} onClaim={claim.mutate} claiming={claim.isPending} />}
-        </AnimatePresence>,
-        document.body,
-      )}
-    </>
   );
 }
 
