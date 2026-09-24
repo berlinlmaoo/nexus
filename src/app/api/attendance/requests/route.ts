@@ -48,15 +48,26 @@ const MAX_SUPPORTING_DOCUMENT_SIZE = 10 * 1024 * 1024
  * position is held to both rules, an older one is not, and each person starts obeying the moment
  * their own phone updates. Nothing has to be flipped by hand.
  *
- * Anything with no header — the web form, curl, a future client — counts as capable: the web has
- * sent coordinates and a single date since the day these rules existed. The header is a statement
- * of capability, not a credential; a forged one only opts the sender INTO stricter checks.
+ * A caller with NO header gets the old, looser rules. This line used to read the other way — no
+ * header meant "the web, which has always been capable" — and that was an outage: the header
+ * ships in iOS 0.1.6, 0.1.6 was not released, so every phone in the field was header-less and all
+ * of them were held to rules their build cannot satisfy. Nobody could file an izin from a phone.
+ * The web now says who it is instead of being inferred from silence.
+ *
+ * The direction is the rule for anything added here later: an unknown caller falls to the LOOSER
+ * side. A missing header then costs a review a human was doing anyway; the other way round it
+ * costs somebody the ability to file, with no way to tell it is the server and not them.
+ *
+ * The header is a statement of capability, not a credential — a forged one only opts the sender
+ * INTO stricter checks.
  */
 const POLICY_0_1_6: readonly [number, number, number] = [0, 1, 6]
 
 function clientCanObeyRequestPolicy(request: NextRequest): boolean {
   const tag = request.headers.get("x-nexus-client")?.trim()
-  if (!tag) return true
+  if (!tag) return false
+  // The web sends a single date and a position wherever these rules apply, and always has.
+  if (/^web\//i.test(tag)) return true
   const m = /^ios\/(\d+)\.(\d+)\.(\d+)/i.exec(tag)
   if (!m) return false // an app that names itself but not a version we can read: assume the old one
   const version: [number, number, number] = [Number(m[1]), Number(m[2]), Number(m[3])]
