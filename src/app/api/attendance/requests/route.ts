@@ -74,6 +74,10 @@ function clientCanObeyRequestPolicy(request: NextRequest): boolean {
   if (!client) return false
   // The web sends a single date and a position wherever these rules apply, and always has.
   if (client.platform === "web") return true
+  // Every Android build is written to the 0.1.6 rules (one date per request, izin with its position):
+  // there is no older Android app in anyone's hands to protect. An android tag without a full x.y.z
+  // parsed to null above and gets the looser rules like any unreadable header.
+  if (client.platform === "android") return true
   if (client.platform !== "ios") return false
   return compareVersions(client.version, POLICY_0_1_6) >= 0
 }

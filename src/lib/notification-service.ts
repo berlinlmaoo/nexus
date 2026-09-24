@@ -274,6 +274,7 @@ export async function createInAppNotification(data: {
       link: data.link,
       category: data.pushCategory,
       data: data.pushData,
+      notificationId: notification.id,
     }).catch((error) => log.error("APNs delivery failed", { error: String(error) }))
   }
 

@@ -7,7 +7,7 @@
 #
 # Boots the CANDIDATE image against a fresh, empty Postgres on a docker network that has NO route out
 # (docker network create --internal), seeds a tiny world, and replays what every released client
-# actually sends (iOS 0.1.3 legacy / 0.1.4 / 0.1.5 / 0.1.6, web). Exit non-zero with a table on any
+# actually sends (iOS 0.1.3 legacy / 0.1.4 / 0.1.5 / 0.1.6, web, Android). Exit non-zero with a table on any
 # regression. Everything it creates is torn down on exit, success or not.
 #
 # Never touches: nexus-app-beta, nexus-postgres, nexus-web, their networks or volumes, production
@@ -19,6 +19,9 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 LIVE_CONTAINER="${COMPAT_LIVE_CONTAINER:-nexus-app-beta}"
 PG_IMAGE="${COMPAT_PG_IMAGE:-postgres:16-alpine}"
 NODE_IMAGE="${COMPAT_NODE_IMAGE:-node:20-alpine}"
+# The Android floor every pass runs with. The android-0.1.0 profile sits exactly on it (never gated);
+# its gate fixtures speak as android/0.0.9 (426) and android/0.0 (unreadable, never gated).
+ANDROID_MIN="${COMPAT_ANDROID_MIN_VERSION:-0.1.0}"
 
 usage() { sed -n '2,10p' "$0"; exit 2; }
 [ $# -ge 1 ] || usage
@@ -100,7 +103,7 @@ echo "   schema + prisma@$PRISMA_VER ready ($(t $T))"
 # rules production runs with. Everything else is left out on purpose (see README → Isolation).
 ALLOW_KEYS="ABSENCE_DEDUCTION_START_DATE ATTENDANCE_OUTAGE_DATES APP_TIMEZONE LOG_LEVEL DB_POOL_MAX DB_IDLE_TIMEOUT DB_CONNECT_TIMEOUT"
 # Anything that can reach another system. Must never appear in the candidate's env; checked below.
-DENY_RE='^(SMTP_|APNS_|SLACK_|WA_WEBHOOK|WHATSAPP|HERMES_|GOOGLE_|SENTRY_|BUFFER_|ORACLE_|GIDEON_|NAS_|CF_TUNNEL|REDIS_|FINANCE_|NEXUS_WA_|NEXUS_SSO|NEXUS_GIDEON|CRON_SECRET|POSTGRES_)'
+DENY_RE='^(SMTP_|APNS_|SLACK_|WA_WEBHOOK|WHATSAPP|HERMES_|GOOGLE_|SENTRY_|BUFFER_|ORACLE_|GIDEON_|NAS_|CF_TUNNEL|REDIS_|FINANCE_|NEXUS_WA_|NEXUS_SSO|NEXUS_GIDEON|NEXUS_FCM_|CRON_SECRET|POSTGRES_)'
 LIVE_ENV="$OUT/live-allow.env"; : > "$LIVE_ENV"
 if docker inspect "$LIVE_CONTAINER" >/dev/null 2>&1; then
   # Held in memory only — the live env contains secrets and is never written to disk.
@@ -109,7 +112,7 @@ if docker inspect "$LIVE_CONTAINER" >/dev/null 2>&1; then
   # Report keys that are neither allowed nor known-outward, so a NEW behaviour flag gets classified
   # instead of silently differing between production and this test. Names only, never values.
   UNCLASSIFIED=$(printf '%s\n' "$LIVE_ALL" | cut -d= -f1 | grep -vE "$DENY_RE" \
-    | grep -vxE "$(echo $ALLOW_KEYS | tr ' ' '|')|PATH|HOSTNAME|NODE_VERSION|YARN_VERSION|NODE_ENV|PORT|DATABASE_URL|AUTH_SECRET|AUTH_TRUST_HOST|NEXTAUTH_URL|NEXT_PUBLIC_APP_URL|NEXT_TELEMETRY_DISABLED|NEXUS_PUBLIC_URL|WA_DELIVERY_DISABLED|APP_NAME|APP_PORT|NEXUS_DATA_DIR|BACKUP_DIR|ATTENDANCE_SILENT_CORRECTION_ADMINS|NEXUS_IOS_MIN_VERSION" | tr '\n' ' ')
+    | grep -vxE "$(echo $ALLOW_KEYS | tr ' ' '|')|PATH|HOSTNAME|NODE_VERSION|YARN_VERSION|NODE_ENV|PORT|DATABASE_URL|AUTH_SECRET|AUTH_TRUST_HOST|NEXTAUTH_URL|NEXT_PUBLIC_APP_URL|NEXT_TELEMETRY_DISABLED|NEXUS_PUBLIC_URL|WA_DELIVERY_DISABLED|APP_NAME|APP_PORT|NEXUS_DATA_DIR|BACKUP_DIR|ATTENDANCE_SILENT_CORRECTION_ADMINS|NEXUS_IOS_MIN_VERSION|NEXUS_ANDROID_MIN_VERSION|NEXUS_ANDROID_LATEST_VERSION|NEXUS_ANDROID_CERT_SHA256" | tr '\n' ' ')
   unset LIVE_ALL
   UNCLASSIFIED="$(echo $UNCLASSIFIED)"
   [ -n "$UNCLASSIFIED" ] && echo "   NOTE live env keys not classified by the harness (not passed): $UNCLASSIFIED"
@@ -184,6 +187,7 @@ for MIN in "${MINS[@]}"; do
     echo "NEXUS_PUBLIC_URL=https://nexus.compat.invalid"
     echo "WA_DELIVERY_DISABLED=1"
     echo "NEXUS_IOS_MIN_VERSION=$MIN"
+    echo "NEXUS_ANDROID_MIN_VERSION=$ANDROID_MIN"
     cat "$LIVE_ENV"
   } > "$ENVF"
   grep -E "$DENY_RE" "$ENVF" && die "an outward/secret key reached the candidate env file"
@@ -201,7 +205,7 @@ for MIN in "${MINS[@]}"; do
 
   # ---------- 7. replay fixtures ----------
   docker run --rm --label nexus-compat=1 --network "$NET" --user "$(id -u):$(id -g)" -v "$HERE:/compat:ro" -v "$OUT:/out" \
-    -e COMPAT_BASE=http://app:3000 -e COMPAT_MIN_VERSION="$MIN" -e COMPAT_OUT=/out \
+    -e COMPAT_BASE=http://app:3000 -e COMPAT_MIN_VERSION="$MIN" -e COMPAT_ANDROID_MIN_VERSION="$ANDROID_MIN" -e COMPAT_OUT=/out \
     -e COMPAT_PROFILES_RUN="${COMPAT_PROFILES_RUN:-}" \
     --entrypoint node "$IMG" /compat/runner.mjs
   rc=$?

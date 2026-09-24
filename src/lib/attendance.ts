@@ -1101,8 +1101,8 @@ export function serializeAttendanceRecord(record: AttendanceRecordWithRelations)
     checkOutReflection: record.checkOutReflection ?? null,
     checkOutReflectionAt: record.checkOutReflectionAt?.toISOString() ?? null,
     // Live location (lib/attendance-location.ts). outsideSince is only meaningful while status is
-    // CHECKED_IN; locationTrackingState "on" | "denied" | "web" | null; checkInClient "ios-app" | "web" |
-    // "legacy-app" | null.
+    // CHECKED_IN; locationTrackingState "on" | "denied" | "web" | null; checkInClient "ios-app" | "android-app" |
+    // "web" | "legacy-app" | null.
     outsideSince: record.outsideSince?.toISOString() ?? null,
     locationTrackingState: record.locationTrackingState ?? null,
     checkInClient: record.checkInClient ?? null,

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { logAudit } from "@/lib/audit"
 import { verifyCredentialUser } from "@/lib/credentials-auth"
 import { createLogger } from "@/lib/logger"
+import { nativeAppPlatformOf } from "@/lib/client-version"
 
 export const dynamic = "force-dynamic"
 export const revalidate = 0
@@ -60,7 +61,9 @@ export async function POST(request: NextRequest) {
     entityId: result.user.id,
     entityName: result.user.name || undefined,
     userId: result.user.id,
-    metadata: { provider: "credentials", nativeApp: "ios" },
+    // Which app, from X-Nexus-Client. "ios" when the header is absent or unreadable: every caller of this
+    // route before Android existed was the iOS app, and 0.1.5 and older send no header at all.
+    metadata: { provider: "credentials", nativeApp: nativeAppPlatformOf(request.headers.get("x-nexus-client")) ?? "ios" },
   }).catch((error) => log.error("app login audit failed", { userId: result.user.id, error: String(error) }))
 
   return NextResponse.json(

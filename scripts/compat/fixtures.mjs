@@ -9,6 +9,11 @@
 //              0.1.4. It exists to exercise the minimum-version gate, not to certify 0.1.3 itself.
 //   web        apps/nexus-lovable-ui/src/lib/nexus-api.ts (X-Nexus-Client: web/1, FormData bodies,
 //              session cookie from /api/auth/direct-login)
+//   android-0.1.0  nexus-android docs/API.md (the contract the Android app is being built to; no Android
+//              build has shipped yet — re-pin to the app's own ApiClient once it exists).
+//              X-Nexus-Client: android/0.1.0/1, UA "NEXUS-Android/0.1.0 (1; Android 34)" (never NEXUS/<n>),
+//              cookie login via /api/auth/app-login like iOS, OkHttp multipart (text parts without
+//              Content-Type, files with their REAL MIME type), held to the 0.1.6 rules from day one.
 //
 //   git show 5bb9f5b:Sources/APIClient.swift          — checkIn/checkOut/createAttendanceRequest bodies
 //   git show 5bb9f5b:Sources/Views/AttendanceRequestsView.swift — which types, START–UNTIL picker, photo
@@ -42,7 +47,13 @@ export const PROFILES = [
   { id: "ios-0.1.5", style: "ios", version: "0.1.5", build: 11, header: null },
   { id: "ios-0.1.6", style: "ios", version: "0.1.6", build: 12, header: "ios/0.1.6/12" },
   { id: "web", style: "web", version: null, build: null, header: "web/1" },
+  // The Android app. style "android" = a native client (app-login, token cookie, launch reads, push,
+  // offline queue) like "ios", but with its own header, UA, multipart and version gate.
+  { id: "android-0.1.0", style: "android", version: "0.1.0", build: 1, header: "android/0.1.0/1" },
 ]
+
+/** A native app (iOS or Android) rather than the web: app-login, token cookie, offline queue. */
+export const isNative = (p) => p.style === "ios" || p.style === "android"
 
 // ---------- small helpers ----------
 const isStr = (v) => typeof v === "string" && v.length > 0
@@ -83,6 +94,11 @@ function iosFix() {
   return { accuracyM: "5.0", altitudeM: "12.4", speedMps: "0.0", simulated: "0", fromAccessory: "0" }
 }
 
+// Kotlin's Double.toString() prints "5.0" too. fromAccessory is always "0" on Android (API.md §2.2).
+function androidFix() {
+  return { accuracyM: "4.8", altitudeM: "31.0", speedMps: "0.0", simulated: "0", fromAccessory: "0" }
+}
+
 // ---------- the fixture list ----------
 //
 // step = {
@@ -95,8 +111,12 @@ function iosFix() {
 // }
 export function buildFixtures(profile, world, media) {
   const p = profile
-  const ios = p.style === "ios"
-  const modern = p.id === "ios-0.1.6"
+  const android = p.style === "android"
+  // `ios` below means "a native app": every native step (app-login, launch reads, push, offline queue,
+  // the location fix on check-in/out) applies to Android as it does to iOS 0.1.6.
+  const ios = isNative(p)
+  const modern = p.id === "ios-0.1.6" || android
+  const fix = android ? androidFix : iosFix
   const month = jktDate(0).slice(0, 7)
   const steps = []
   const add = (s) => steps.push(s)
@@ -108,6 +128,11 @@ export function buildFixtures(profile, world, media) {
   const webPhoto = { field: "supportingDocument", filename: "IMG_2041.jpg", type: "image/jpeg", data: media.jpeg }
   // iOS: APIClient.multipartBody; web: LivenessCapture.tsx — both "selfie.jpg", image/jpeg.
   const selfie = { field: "selfie", filename: "selfie.jpg", type: "image/jpeg", data: media.jpeg }
+  // Android sends the real type (API.md E3): a camera photo is image/jpeg, a picked PDF application/pdf.
+  const androidPhoto = { field: "supportingDocument", filename: "permit-photo.jpg", type: "image/jpeg", data: media.jpeg }
+  const androidSickPhoto = { field: "supportingDocument", filename: "sick-note.jpg", type: "image/jpeg", data: media.jpeg }
+  const permitPhotoModern = android ? androidPhoto : permitPhoto016
+  const sickPhotoModern = android ? androidSickPhoto : libPhoto
 
   // ---- login + reads ----
   add({
@@ -189,17 +214,72 @@ export function buildFixtures(profile, world, media) {
     ]) {
       add({ id, title: `GET ${path}`, as: "a", kind: "compat", request: () => ({ method: "GET", path }), expect: { status: "2xx" } })
     }
-    add({
-      id: "push-register", title: "POST /api/push/devices (token only stored)", as: "a", kind: "compat",
-      request: () => ({
-        method: "POST", path: "/api/push/devices",
-        json: {
-          token: "c0ffee".repeat(10) + "abcd", deviceId: `compat-${p.id}`, bundleId: "id.znetworks.nexus",
-          environment: "production", appVersion: p.version, buildNumber: String(p.build), osVersion: "iOS 18.5", deviceModel: "iPhone",
+    if (android) {
+      // An FCM registration token: mixed case, ':' '-' '_', ~160 chars. Nothing is ever sent to it (the
+      // candidate has no NEXUS_FCM_SERVICE_ACCOUNT_JSON and no route out).
+      const fcmToken = "dQw4w9WgXcQ:APA91bH" + "Zx-9_kLmNoPqRsTuVwXyZ0123456789AbCdEfGhIjKlMn".repeat(3) + "_end-Of-Token"
+      add({
+        id: "push-register", title: "POST /api/push/devices (platform android, FCM token)", as: "a", kind: "compat",
+        request: () => ({
+          method: "POST", path: "/api/push/devices",
+          json: {
+            platform: "android", token: fcmToken, deviceId: `compat-${p.id}`, appId: "id.znetworks.nexus",
+            appVersion: p.version, buildNumber: String(p.build), osVersion: "Android 14", deviceModel: "Pixel 7",
+          },
+        }),
+        expect: { status: "2xx" },
+      })
+      add({
+        id: "push-unregister", title: "DELETE /api/push/devices (FCM token, case kept)", as: "a", kind: "compat",
+        request: () => ({ method: "DELETE", path: "/api/push/devices", json: { token: fcmToken } }),
+        expect: { status: "2xx" },
+      })
+      add({
+        id: "policy-android", title: "GET /api/app/version-policy → android block", as: "a", kind: "compat",
+        request: () => ({ method: "GET", path: "/api/app/version-policy" }),
+        expect: {
+          status: 200,
+          check: (j) => firstError(
+            need(isStr(j?.minSupported), "iOS minSupported missing"),
+            need(isStr(j?.android?.minSupported), "android.minSupported missing"),
+            need(/^https:\/\/play\.google\.com\//.test(j?.android?.storeUrl ?? ""), "android.storeUrl is not the Play Store"),
+          ),
         },
-      }),
-      expect: { status: "2xx" },
-    })
+      })
+      // The Android minimum-version gate. The harness runs the candidate with NEXUS_ANDROID_MIN_VERSION
+      // = COMPAT_ANDROID_MIN_VERSION (run.sh); a build below it is refused on every /api call except
+      // the policy endpoint, with the Play link. `clientHeader` overrides the profile's header.
+      add({
+        id: "gate-android-old", title: "android/0.0.9/1 GET /api/user/profile → 426", as: "a", kind: "compat",
+        request: () => ({ method: "GET", path: "/api/user/profile", clientHeader: "android/0.0.9/1" }),
+        expect: {
+          status: 426, code: "UPGRADE_REQUIRED",
+          check: (j) => need(/^https:\/\/play\.google\.com\//.test(j?.storeUrl ?? ""), "426 without the Play Store link"),
+        },
+      })
+      add({
+        id: "gate-android-exempt", title: "android/0.0.9/1 GET /api/app/version-policy → 200", as: "a", kind: "compat",
+        request: () => ({ method: "GET", path: "/api/app/version-policy", clientHeader: "android/0.0.9/1" }),
+        expect: { status: 200 },
+      })
+      add({
+        id: "gate-android-unreadable", title: "android/0.0/1 (no x.y.z) → never gated", as: "a", kind: "compat",
+        request: () => ({ method: "GET", path: "/api/user/profile", clientHeader: "android/0.0/1" }),
+        expect: { status: 200 },
+      })
+    } else {
+      add({
+        id: "push-register", title: "POST /api/push/devices (token only stored)", as: "a", kind: "compat",
+        request: () => ({
+          method: "POST", path: "/api/push/devices",
+          json: {
+            token: "c0ffee".repeat(10) + "abcd", deviceId: `compat-${p.id}`, bundleId: "id.znetworks.nexus",
+            environment: "production", appVersion: p.version, buildNumber: String(p.build), osVersion: "iOS 18.5", deviceModel: "iPhone",
+          },
+        }),
+        expect: { status: "2xx" },
+      })
+    }
   }
 
   // ---- check-in ----
@@ -211,7 +291,7 @@ export function buildFixtures(profile, world, media) {
       method: "POST", path: "/api/attendance/check-in",
       multipart: {
         fields: ios && !p.legacy
-          ? [["lat", String(pos.lat)], ["lng", String(pos.lng)], ...Object.entries(iosFix())]
+          ? [["lat", String(pos.lat)], ["lng", String(pos.lng)], ...Object.entries(fix())]
           : [["lat", String(pos.lat)], ["lng", String(pos.lng)]],
         files: [selfie],
       },
@@ -238,7 +318,7 @@ export function buildFixtures(profile, world, media) {
     const replay = () => ({
       method: "POST", path: "/api/attendance/check-in",
       multipart: {
-        fields: [["lat", String(pos.lat)], ["lng", String(pos.lng)], ...Object.entries(iosFix()), ["clientId", clientId], ["deviceAt", deviceAt], ["uptimeSec", "86400"]],
+        fields: [["lat", String(pos.lat)], ["lng", String(pos.lng)], ...Object.entries(fix()), ["clientId", clientId], ["deviceAt", deviceAt], ["uptimeSec", "86400"]],
         files: [selfie],
       },
     })
@@ -265,7 +345,7 @@ export function buildFixtures(profile, world, media) {
         method: "POST", path: "/api/attendance/check-out",
         multipart: {
           fields: ios
-            ? [["lat", String(pos.lat)], ["lng", String(pos.lng)], ["reflection", reflectionFor(p.id)], ...Object.entries(iosFix())]
+            ? [["lat", String(pos.lat)], ["lng", String(pos.lng)], ["reflection", reflectionFor(p.id)], ...Object.entries(fix())]
             : [["lat", String(pos.lat)], ["lng", String(pos.lng)], ["reflection", reflectionFor(p.id)]],
           files: [selfie],
         },
@@ -347,20 +427,21 @@ export function buildFixtures(profile, world, media) {
     req("req-dayoff-multi", "DAY_OFF multi-day (START–UNTIL) — legacy stays exempt", "compat",
       base("DAY_OFF", jktDate(12), jktDate(13), "Acara keluarga di luar kota"), [], created, bump())
   } else if (modern) {
+    // iOS 0.1.6 and every Android build: the same rules; only the attachment's type differs.
     req("req-permit-1d", "PERMIT 1 day + permit-photo.jpg + lat/lng", "compat",
-      [...base("PERMIT", jktDate(1), jktDate(1), "Urus dokumen di kelurahan"), ["lat", String(pos.lat)], ["lng", String(pos.lng)]], [permitPhoto016], created, bump())
+      [...base("PERMIT", jktDate(1), jktDate(1), "Urus dokumen di kelurahan"), ["lat", String(pos.lat)], ["lng", String(pos.lng)]], [permitPhotoModern], created, bump())
     req("req-sick-1d", "SICK 1 day + photo", "compat",
-      base("SICK", jktDate(2), jktDate(2), "Demam, istirahat dari dokter"), [libPhoto], created, bump())
+      base("SICK", jktDate(2), jktDate(2), "Demam, istirahat dari dokter"), [sickPhotoModern], created, bump())
     req("req-dayoff", "DAY_OFF 1 day", "compat",
       base("DAY_OFF", jktDate(3), jktDate(3), "Libur pribadi"), [], created, bump("dayOffId"))
     req("req-sick-multi", "SICK multi-day (UI cannot send) → SINGLE_DAY_ONLY", "policy",
-      base("SICK", jktDate(4), jktDate(5), "Demam"), [libPhoto],
+      base("SICK", jktDate(4), jktDate(5), "Demam"), [sickPhotoModern],
       { status: 400, code: "SINGLE_DAY_ONLY" })
     req("req-permit-nocoords", "PERMIT without lat/lng (UI cannot send) → 400", "policy",
-      base("PERMIT", jktDate(6), jktDate(6), "Keperluan mendadak"), [permitPhoto016],
+      base("PERMIT", jktDate(6), jktDate(6), "Keperluan mendadak"), [permitPhotoModern],
       { status: 400, check: (j) => need(isStr(j?.error), "refusal without an error message") })
     req("req-permit-dayoff", "PERMIT reason \"ambil day off\" → PERMIT_NOT_DAYOFF", "policy",
-      [...base("PERMIT", jktDate(7), jktDate(7), "ambil day off"), ["lat", String(pos.lat)], ["lng", String(pos.lng)]], [permitPhoto016], PERMIT_NOT_DAYOFF)
+      [...base("PERMIT", jktDate(7), jktDate(7), "ambil day off"), ["lat", String(pos.lat)], ["lng", String(pos.lng)]], [permitPhotoModern], PERMIT_NOT_DAYOFF)
     // Policy fixture (owner's rule, 24 Sep 2026): every request type is one date. The 0.1.6 picker
     // (AttendanceRequestsView.swift `singleDay`) still offers a range for DAY_OFF, so this IS
     // reachable from the UI — the person gets the SINGLE_DAY_ONLY message and files per date.

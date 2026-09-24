@@ -3,10 +3,11 @@ import { createPrivateKey, sign } from "node:crypto"
 import { readFileSync } from "node:fs"
 import prisma from "@/lib/prisma"
 import { createLogger } from "@/lib/logger"
+import { fcmConfigured, sendFcm } from "@/lib/fcm"
 
 const log = createLogger("apns")
 
-type PushPayload = {
+export type PushPayload = {
   title: string
   body: string
   type: string
@@ -17,7 +18,12 @@ type PushPayload = {
   category?: string | null
   /** Extra top-level custom keys (e.g. recordId). Can never replace aps, type, taskId, projectId or link. */
   data?: Record<string, string | number | boolean | null> | null
+  /** The in-app Notification row id. Sent to Android (FCM data) only; the APNs payload is unchanged. */
+  notificationId?: string | null
 }
+
+// Android devices while NEXUS_FCM_SERVICE_ACCOUNT_JSON is unset: said once per process, not per push.
+let fcmMissingLogged = false
 
 let cachedJWT: { value: string; createdAt: number } | null = null
 
@@ -121,7 +127,11 @@ async function sendOne(
  * cukup untuk menjawab "push-nya jalan tidak?" dalam sepuluh detik.
  */
 export async function sendPushToUser(userId: string, payload: PushPayload): Promise<void> {
-  if (!providerJWT()) {
+  // Two providers: APNs for iOS rows, FCM for Android rows (DeviceInstallation.platform). Each is
+  // checked on its own, so a missing FCM key never stops iOS and the other way round.
+  const apnsReady = providerJWT() !== null
+  const fcmReady = fcmConfigured()
+  if (!apnsReady && !fcmReady) {
     // Diam di sini pernah berarti berminggu-minggu mengira push berfungsi.
     log.error("APNs tidak terkonfigurasi — push TIDAK dikirim", { userId, type: payload.type })
     return
@@ -139,9 +149,30 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
   let sent = 0
   let failed = 0
   let disabled = 0
+  let skippedIos = 0
+  let skippedAndroid = 0
   const alasan: string[] = []
 
   const results = await Promise.allSettled(installations.map(async (installation) => {
+    if (installation.platform === "android") {
+      if (!fcmReady) { skippedAndroid++; return }
+      const result = await sendFcm(installation.token, payload)
+      if (result.ok) {
+        sent++
+      } else if (result.invalidToken) {
+        await prisma.deviceInstallation.update({
+          where: { id: installation.id },
+          data: { disabledAt: new Date() },
+        })
+        disabled++
+        alasan.push(`fcm:${result.errorCode ?? result.status}(dimatikan)`)
+      } else {
+        failed++
+        alasan.push(`fcm:${result.status}${result.errorCode ? " " + result.errorCode : ""}`)
+      }
+      return
+    }
+    if (!apnsReady) { skippedIos++; return }
     const result = await sendOne(
       installation.token,
       installation.environment,
@@ -172,7 +203,18 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
     }
   }
 
-  const ringkas = { userId, type: payload.type, perangkat: installations.length, terkirim: sent, gagal: failed, dimatikan: disabled }
+  if (skippedIos > 0) {
+    log.error("APNs tidak terkonfigurasi — push iOS TIDAK dikirim", { userId, type: payload.type, perangkat: skippedIos })
+  }
+  if (skippedAndroid > 0 && !fcmMissingLogged) {
+    fcmMissingLogged = true
+    log.warn("NEXUS_FCM_SERVICE_ACCOUNT_JSON tidak diisi — push ke perangkat Android dilewati (baris ini sekali per proses)")
+  }
+
+  const ringkas = {
+    userId, type: payload.type, perangkat: installations.length, terkirim: sent, gagal: failed, dimatikan: disabled,
+    ...(skippedIos || skippedAndroid ? { dilewati: skippedIos + skippedAndroid } : {}),
+  }
   if (failed > 0 || disabled > 0) {
     log.error("push sebagian/seluruhnya gagal", { ...ringkas, alasan: alasan.slice(0, 5) })
   } else {

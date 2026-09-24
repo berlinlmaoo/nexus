@@ -7,6 +7,7 @@ import { isHoliday } from "@/lib/holidays"
 import { createInAppNotification, notifyOffsiteCheckoutPending } from "@/lib/notification-service"
 import { reverseGeocodeCoordinates } from "@/lib/reverse-geocode"
 import { createLogger } from "@/lib/logger"
+import { getAppSetting } from "@/lib/app-setting"
 import {
   OUTSIDE_PERMIT_LINK,
   OUTSIDE_PUSH_CATEGORY,
@@ -82,8 +83,13 @@ export async function trackingEligibility(record: {
     select: { role: true, noGeofenceMode: true },
   })
   if (!member) return { ok: false, reason: "not_a_member" }
-  if (member.role === "BOD" || member.role === "ONE_ABOVE_ALL") return { ok: false, reason: "exempt_role" }
-  if (member.noGeofenceMode) return { ok: false, reason: "no_geofence" }
+  // Testers (AppSetting "location-tracking-testers": string[] of user ids) are tracked even when their
+  // role or Custom attendance would exempt them — so the owner can walk the whole flow on his own
+  // phone. Everything after these two exemptions still applies to them.
+  const testers = await getAppSetting<string[]>("location-tracking-testers").catch(() => null)
+  const isTester = Array.isArray(testers) && testers.includes(record.userId)
+  if (!isTester && (member.role === "BOD" || member.role === "ONE_ABOVE_ALL")) return { ok: false, reason: "exempt_role" }
+  if (!isTester && member.noGeofenceMode) return { ok: false, reason: "no_geofence" }
   if (!record.checkInPhotoUrl) return { ok: false, reason: "not_self_checkin" }
   if (record.checkInDistanceMeters !== null && record.checkInDistanceMeters > record.officeLocation.radiusMeters) {
     return { ok: false, reason: "not_at_office" }

@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma"
+import { androidPasskeyOrigins } from "@/lib/android-app"
 
 /**
  * Relying-party identity. This must match the domain that serves
@@ -12,9 +13,16 @@ export const RP_ID = process.env.PASSKEY_RP_ID ?? "nexus.znetworks.id"
  * Apple's native flow reports the origin as `https://<rpID>`, the same string a browser sends, so
  * one entry covers web, iPhone, iPad and Mac. Kept as a list because a second origin is exactly
  * what a staging domain would need, and guessing it later is worse than allowing for it now.
+ *
+ * Android's Credential Manager reports the APP, not the site: `android:apk-key-hash:<base64url of the
+ * signing certificate's SHA-256>`. One such origin per fingerprint in NEXUS_ANDROID_CERT_SHA256 (the
+ * same list /.well-known/assetlinks.json publishes, which is what lets Android offer this site's
+ * passkeys to the app at all). Unset → none added: the list is exactly the web origin, as before.
+ * The RP ID stays the site's either way.
  */
 export const EXPECTED_ORIGINS = [
   process.env.PASSKEY_ORIGIN ?? `https://${RP_ID}`,
+  ...androidPasskeyOrigins(),
 ]
 
 /** A challenge is only useful once. Ten minutes is generous for a person fumbling with Face ID. */

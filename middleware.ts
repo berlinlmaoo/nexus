@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { iosUpgradeGate } from "@/lib/version-policy"
+import { appUpgradeGate } from "@/lib/version-policy"
 
 const DASHBOARD_HOSTS = new Set([
   "dashboard.nexus.patsgroup.id",
@@ -10,12 +10,13 @@ export async function middleware(request: NextRequest) {
   // The minimum-version gate (lib/version-policy.ts). iOS builds below the minimum get 426:
   // with the X-Nexus-Client header (0.1.6+) on every /api call except /api/app/version-policy and
   // /api/health; without it (0.1.5 and older, known by `User-Agent: NEXUS/<build>`) only on
-  // attendance writes. Requests with neither — the web (`web/1`), browsers, curl, scripts — are
+  // attendance writes. Android (`X-Nexus-Client: android/x.y.z/…`) below its own minimum
+  // (NEXUS_ANDROID_MIN_VERSION, unset = nobody) gets the same 426 as header iOS. Requests with neither — the web (`web/1`), browsers, curl, scripts — are
   // NEVER blocked: they cannot be told apart safely, and refusing them would lock out people who
   // have no way to tell the server is the problem.
   const { pathname } = request.nextUrl
   if (pathname.startsWith("/api/")) {
-    const upgrade = await iosUpgradeGate(request, pathname)
+    const upgrade = await appUpgradeGate(request, pathname)
     if (upgrade) {
       // 426 is not in the Cloudflare down-worker's UNREACHABLE set (502–504, 520–527, 530), so it
       // reaches the app untouched and never trips the app's offline queue.
@@ -68,6 +69,20 @@ export const config = {
       source: "/api/:path*",
       has: [
         { type: "header", key: "x-nexus-client", value: "[iI][oO][sS]/.*" },
+        { type: "header", key: "content-length", value: "\\d{1,7}" },
+      ],
+      missing: [{ type: "header", key: "transfer-encoding" }],
+    },
+    // Android (every build sends X-Nexus-Client: android/<versionName>/<versionCode>): all of /api.
+    {
+      source: "/api/:path*",
+      has: [{ type: "header", key: "x-nexus-client", value: "[aA][nN][dD][rR][oO][iI][dD]/.*" }],
+      missing: [{ type: "header", key: "content-length" }, { type: "header", key: "transfer-encoding" }],
+    },
+    {
+      source: "/api/:path*",
+      has: [
+        { type: "header", key: "x-nexus-client", value: "[aA][nN][dD][rR][oO][iI][dD]/.*" },
         { type: "header", key: "content-length", value: "\\d{1,7}" },
       ],
       missing: [{ type: "header", key: "transfer-encoding" }],
