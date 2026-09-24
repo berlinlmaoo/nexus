@@ -107,10 +107,14 @@ enum AgendaRange {
         guard let d = inF.date(from: key) else { return key }
         let out = DateFormatter(); out.dateFormat = "EEEE, d MMM"; out.locale = Locale(identifier: "id_ID"); return out.string(from: d)
     }
+    /// Called per row by lists that can run to hundreds (Submissions, tickets, agenda), so the
+    /// formatters are built once instead of three per call. `ProjDate.parse` is the same
+    /// fractional-then-plain ISO parse this used to do inline.
     static func timeLabel(_ iso: String) -> String {
-        let p = ISO8601DateFormatter(); p.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let d = p.date(from: iso) ?? { let q = ISO8601DateFormatter(); q.formatOptions = [.withInternetDateTime]; return q.date(from: iso) }()
-        guard let d else { return "" }
-        let o = DateFormatter(); o.dateFormat = "HH:mm"; o.timeZone = TimeZone(identifier: "Asia/Jakarta"); return o.string(from: d)
+        guard let d = ProjDate.parse(iso) else { return "" }
+        return hhmm.string(from: d)
     }
+    private static let hhmm: DateFormatter = {
+        let o = DateFormatter(); o.dateFormat = "HH:mm"; o.timeZone = TimeZone(identifier: "Asia/Jakarta"); return o
+    }()
 }

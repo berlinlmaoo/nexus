@@ -28,9 +28,13 @@ private func reqDateRange(_ r: AttendanceRequest) -> String {
 private func attDayLabel(_ iso: String?) -> String {
     guard let iso, !iso.isEmpty else { return "" }
     if let d = ProjDate.parse(iso) { return ProjDate.dayLabel(d) }
-    let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = ProjDate.cal.timeZone
-    return f.date(from: String(iso.prefix(10))).map { ProjDate.dayLabel($0) } ?? ""
+    return attDayOnly.date(from: String(iso.prefix(10))).map { ProjDate.dayLabel($0) } ?? ""
 }
+/// Built once: this runs for every row the list draws, and a DateFormatter per call is the most
+/// expensive line in a row.
+private let attDayOnly: DateFormatter = {
+    let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = ProjDate.cal.timeZone; return f
+}()
 
 // MARK: - one queue, two kinds
 
@@ -147,9 +151,15 @@ struct AttendanceRequestsCard: View {
     /// ISO-8601 sorts correctly as a plain string, so neither key needs date parsing. `enumerated()`
     /// breaks the remaining ties: Swift's sort is not stable, so equal keys would otherwise shuffle
     /// on every redraw.
-    private var entries: [SubmissionEntry] {
+    ///
+    /// This is a computed property and body runs on every tap in the card (a "Read it all", a busy
+    /// spinner), so it filters BEFORE it sorts and body reads it exactly once. It used to sort the
+    /// whole history two or three times per pass to show one chip's worth of it. The offsets are
+    /// taken before the filter so the tie-break is the same one the unfiltered list had.
+    private var filtered: [SubmissionEntry] {
+        let f = activeFilter
         let combined = requests.map { SubmissionEntry.request($0) } + offsite.map { SubmissionEntry.offsite($0) }
-        return combined.enumerated().sorted { a, b in
+        return combined.enumerated().filter { f == "ALL" || $0.element.statusKey == f }.sorted { a, b in
             if a.element.isPending != b.element.isPending { return a.element.isPending }
             if !a.element.isPending, a.element.decidedKey != b.element.decidedKey {
                 return a.element.decidedKey > b.element.decidedKey
@@ -157,11 +167,6 @@ struct AttendanceRequestsCard: View {
             if a.element.dayKey != b.element.dayKey { return a.element.dayKey > b.element.dayKey }
             return a.offset < b.offset
         }.map { $0.element }
-    }
-
-    private var filtered: [SubmissionEntry] {
-        let f = activeFilter
-        return f == "ALL" ? entries : entries.filter { $0.statusKey == f }
     }
 
     private var subtitle: String {
@@ -196,7 +201,7 @@ struct AttendanceRequestsCard: View {
             }
             if loading {
                 ProgressView().tint(NX.violetText).frame(maxWidth: .infinity).padding(.vertical, 8)
-            } else if entries.isEmpty {
+            } else if requests.isEmpty && offsite.isEmpty {
                 EmptyState(icon: "calendar.badge.plus", title: canReview ? T("Nothing to review yet") : T("No requests yet"),
                            subtitle: canReview
                                ? T("Leave, sick days, permits and offsite check-outs from your people appear here the moment they're filed, with Approve and Reject right on the row.")
@@ -204,12 +209,20 @@ struct AttendanceRequestsCard: View {
                            actionTitle: T("File a request"), actionIcon: "plus", action: { showComposer = true }, compact: true)
             } else {
                 filterBar
-                if filtered.isEmpty {
+                let shown = filtered
+                if shown.isEmpty {
                     EmptyState(icon: "line.3.horizontal.decrease.circle", title: T("Nothing in this filter"),
                                subtitle: T("Only requests with this status are shown. The rest are under All."),
                                actionTitle: T("Show all"), actionIcon: nil, action: { filter = "ALL" }, compact: true)
                 } else {
-                    ForEach(filtered) { row($0) }
+                    // Lazy, and that is the fix for the scroll. A reviewer's All chip is the whole
+                    // workspace's history — hundreds of rows — and a plain ForEach in this VStack
+                    // built every one of them, and started every thumbnail's fetch, the moment the
+                    // card appeared, then rebuilt them all on each tap. The spacing repeats the
+                    // card's own 12 so the rows sit exactly where they did.
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        ForEach(shown) { row($0) }
+                    }
                 }
             }
             if let cachedFrom { OfflineNotice(savedAt: cachedFrom) }
@@ -328,17 +341,20 @@ struct AttendanceRequestsCard: View {
     }
 
     /// "23 Sep · 19:04" in Jakarta time, or nil when the server sent no timestamp.
+    ///
+    /// Every decided row calls this, and it used to build three formatters per call — for a
+    /// reviewer scrolling the Approved chip that was the bulk of the cost of drawing a row.
     static func stamp(_ iso: String?) -> String? {
-        guard let iso else { return nil }
-        let withFraction = ISO8601DateFormatter(); withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let plain = ISO8601DateFormatter(); plain.formatOptions = [.withInternetDateTime]
-        guard let date = withFraction.date(from: iso) ?? plain.date(from: iso) else { return nil }
+        guard let iso, let date = ProjDate.parse(iso) else { return nil }
+        return stampFormatter.string(from: date)
+    }
+    private static let stampFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "d MMM · HH:mm"
         f.timeZone = TimeZone(identifier: "Asia/Jakarta")
         f.locale = Locale(identifier: "en_US_POSIX")
-        return f.string(from: date)
-    }
+        return f
+    }()
 
     private func requestRow(_ r: AttendanceRequest) -> some View {
         let pending = (r.status ?? "").uppercased() == "PENDING"

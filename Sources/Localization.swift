@@ -191,10 +191,6 @@ final class AppLanguage {
         "Good Morning,": "Selamat Pagi,",
         "Good Afternoon,": "Selamat Siang,",
         "Good Evening,": "Selamat Malam,",
-        "Your Quests": "Quest Kamu",
-        "See All": "Lihat Semua",
-        "No active quests yet. Your XP comes from tasks, streaks & attendance — see \"XP Rules\" below.":
-            "Belum ada quest aktif. XP kamu jalan dari task, streak, & absen — cek \"Aturan XP\" di bawah.",
         "XP / Points Rules": "Aturan XP / Poin",
         "Deductions, bonuses & monthly reward tiers": "Potongan, bonus, & reward tier bulanan",
         "XP Penalties": "Potongan XP",

@@ -159,7 +159,8 @@ struct DashboardView: View {
                     levelCard
                     searchRow
                     statCards
-                    questsCard
+                    // No "Your Quests" card here: the owner dropped it. It only repeated the Monthly
+                    // Quests stat tile above, whose modal still lists every quest with its progress.
                     xpRulesCard
                     if showPasskeyNudge { passkeyNudge }
                     quickActions
@@ -579,36 +580,6 @@ struct DashboardView: View {
     }
 
     // MARK: lower cards
-
-    private var questsCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(T("Your Quests")).font(NXFont.display(17, .bold)).foregroundStyle(NX.foreground)
-                Spacer()
-                // The full list already exists as the Monthly Quests stat card's modal (index 2 in
-                // statData), so this opens that rather than a second screen showing the same rows.
-                Button { toggleStat(2) } label: {
-                    Text(T("See All")).font(NXFont.text(12, .medium)).foregroundStyle(NX.mutedFg)
-                }
-                .buttonStyle(.plain)
-            }
-            if (game?.questList.isEmpty ?? true) {
-                Text("Belum ada quest aktif. XP kamu jalan dari task, streak, & absen — cek \"Aturan XP\" di bawah.")
-                    .font(NXFont.text(14)).foregroundStyle(NX.mutedFg).fixedSize(horizontal: false, vertical: true)
-            } else {
-                ForEach(game!.questList.prefix(3)) { q in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(q.title).font(NXFont.text(14, .semibold)).foregroundStyle(NX.foreground)
-                            Text("\(q.progress)/\(q.target) · +\(q.xpReward) XP").font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                        }
-                        Spacer()
-                    }
-                }
-            }
-        }
-        .nexusCard()
-    }
 
     // Mirror of the web's XpRulesCard: the same header, and the same three tables underneath once it
     // is opened. The card shipped as a plain HStack with a chevron drawn on it — a button that was not
