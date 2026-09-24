@@ -217,6 +217,30 @@ fun SubmissionsCard(vm: RequestsViewModel, onFiled: () -> Unit) {
 
     s.rejecting?.let { RejectDialog(it, busy = s.busyId == it.id, error = s.actionError, onCancel = vm::cancelReject, onSend = { note -> vm.review(it, "reject", note) }) }
     s.composer?.let { ComposerDialog(vm, it, onFiled) }
+    s.focus?.let { entry ->
+        // Decided in place: the push lands on this one row, with its buttons.
+        AlertDialog(
+            onDismissRequest = vm::closeFocus,
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    when (entry) {
+                        is SubmissionEntry.Req -> RequestRow(vm, entry.r, s.busyId == entry.r.id)
+                        is SubmissionEntry.Offsite -> OffsiteRow(vm, entry.o, s.busyId == entry.o.id)
+                    }
+                    s.actionError?.let { Text(it, color = c.danger, fontSize = 12.sp) }
+                }
+            },
+            confirmButton = { TextButton(onClick = vm::closeFocus) { Text(stringResource(R.string.close)) } },
+        )
+    }
+    if (s.focusMissing) {
+        AlertDialog(
+            onDismissRequest = vm::closeFocus,
+            title = { Text(stringResource(R.string.focus_missing_title)) },
+            text = { Text(stringResource(R.string.focus_missing_body)) },
+            confirmButton = { TextButton(onClick = vm::closeFocus) { Text("OK") } },
+        )
+    }
 }
 
 private const val PAGE = 20

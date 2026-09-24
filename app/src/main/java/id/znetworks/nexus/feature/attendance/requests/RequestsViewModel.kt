@@ -49,6 +49,9 @@ data class RequestsUiState(
     val actionError: String? = null,
     val rejecting: AttendanceRequest? = null,
     val composer: ComposerState? = null,
+    /** Opened from a push / inbox row: that one request or offsite check-out, with its actions. */
+    val focus: SubmissionEntry? = null,
+    val focusMissing: Boolean = false,
 )
 
 class RequestsViewModel(app: Application) : AndroidViewModel(app) {
@@ -69,10 +72,14 @@ class RequestsViewModel(app: Application) : AndroidViewModel(app) {
     fun rules() = RequestRules(today, canGrant)
 
     private var loadedFor: Boolean? = null
+    private var wanted: Pair<String?, String?>? = null
+    private var permitWanted = false
+    private var loadedOnce = false
 
     /** Called whenever Attendance has a fresh `today`: the permissions may have just arrived. */
     fun onToday(t: AttendanceToday?) {
         today = t
+        if (t != null && permitWanted) claimFocus()
         if (t != null && loadedFor != canReview) {
             loadedFor = canReview
             load()
@@ -93,7 +100,34 @@ class RequestsViewModel(app: Application) : AndroidViewModel(app) {
         // allows BoD and managers with direct reports (their reports only).
         val offsite = if (canReview) runCatching { api.offsite() }.getOrElse { emptyList() } else emptyList()
         _state.update { it.copy(offsite = offsite) }
+        loadedOnce = true
+        claimFocus()
     }
+
+    /** `/attendance?request=` / `?offsite=`: held until the list is in, then shown or said missing. */
+    fun focus(requestId: String?, offsiteId: String?) {
+        wanted = requestId to offsiteId
+        if (loadedOnce) load() else claimFocus()
+    }
+
+    /** `/attendance?permit=today` ("File a permit" on the outside-office push). */
+    fun openPermitToday() {
+        permitWanted = true
+        if (today != null) { permitWanted = false; openComposer(permitToday = true) }
+    }
+
+    private fun claimFocus() {
+        if (permitWanted && today != null) { permitWanted = false; openComposer(permitToday = true) }
+        val (req, off) = wanted ?: return
+        if (!loadedOnce) return
+        wanted = null
+        val s = _state.value
+        val entry = req?.let { id -> s.requests.firstOrNull { it.id == id }?.let { SubmissionEntry.Req(it) } }
+            ?: off?.let { id -> s.offsite.firstOrNull { it.id == id }?.let { SubmissionEntry.Offsite(it) } }
+        _state.update { it.copy(focus = entry, focusMissing = entry == null) }
+    }
+
+    fun closeFocus() = _state.update { it.copy(focus = null, focusMissing = false) }
 
     fun setFilter(f: String) = _state.update { it.copy(statusFilter = f) }
     fun setWindow(w: SubmissionWindow) = _state.update { it.copy(window = w) }
@@ -109,7 +143,7 @@ class RequestsViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: ApiError) {
             _state.update { it.copy(actionError = e.describe(res)) }
         }
-        _state.update { it.copy(busyId = null) }
+        _state.update { it.copy(busyId = null, focus = null) }
         load()
     }
 
@@ -123,7 +157,7 @@ class RequestsViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: ApiError) {
             _state.update { it.copy(actionError = e.describe(res)) }
         }
-        _state.update { it.copy(busyId = null) }
+        _state.update { it.copy(busyId = null, focus = null) }
         load()
     }
 

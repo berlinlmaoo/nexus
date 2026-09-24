@@ -6,6 +6,9 @@ import id.znetworks.nexus.core.session.SessionStore
 import kotlinx.serialization.Serializable
 
 @Serializable
+data class DeleteBody(val confirm: String)
+
+@Serializable
 data class LoginRequest(val email: String, val password: String)
 
 @Serializable
@@ -76,6 +79,15 @@ class AuthRepository(
         store.save(session)
         listeners.forEach { it.onSignedIn(session) }
         return session
+    }
+
+    /**
+     * Deactivates and anonymises the account (API.md §2.1), then the full logout. A 409 (last owner
+     * of a workspace, last admin) is thrown with the server's sentence.
+     */
+    suspend fun deleteAccount() {
+        api.postJson("/api/user/account/delete", DeleteBody("DELETE"), DeleteBody.serializer(), kotlinx.serialization.json.JsonObject.serializer())
+        signOut()
     }
 
     fun signOut() {

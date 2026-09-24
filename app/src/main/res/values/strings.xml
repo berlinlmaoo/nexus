@@ -315,4 +315,31 @@
     <string name="trail_location_off">Location was off for this day: the person declined location during working hours.</string>
     <string name="trail_span">Outside %1$s – %2$s · %3$s</string>
     <string name="trail_still_out">still out</string>
+
+    <!-- Inbox / announcements / settings -->
+    <string name="inbox_title">Signal Inbox</string>
+    <string name="inbox_unread">%1$d unread</string>
+    <string name="inbox_mark_all">Mark all read</string>
+    <string name="inbox_all">All</string>
+    <string name="inbox_messages">Messages</string>
+    <string name="inbox_tickets">Tickets</string>
+    <string name="inbox_announcements">Announcements</string>
+    <string name="inbox_other">Other</string>
+    <string name="inbox_load_failed">Couldn\'t load the inbox</string>
+    <string name="inbox_clean">Inbox clean</string>
+    <string name="inbox_clean_sub">Approvals, reminders, mentions and announcements land here. Nothing is waiting for you right now.</string>
+    <string name="inbox_nothing_kind">Nothing of this kind</string>
+    <string name="inbox_nothing_kind_sub">Other notifications are under All.</string>
+    <string name="got_it">Got it</string>
+    <string name="close">Close</string>
+    <string name="focus_missing_title">That request isn\'t in your list anymore</string>
+    <string name="focus_missing_body">It may already have been decided, or it belongs to someone outside your approval chain.</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="theme_system">Follow system</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="delete_account">Delete account</string>
+    <string name="delete_account_sub">Deactivate and anonymise your account.</string>
+    <string name="delete_account_body">Your name, email and sign-in are removed and you are signed out everywhere. Attendance, tasks and messages stay as \"Deleted account\". This cannot be undone. Type DELETE to confirm.</string>
+    <string name="delete">Delete</string>
 </resources>

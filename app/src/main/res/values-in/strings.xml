@@ -309,4 +309,31 @@
     <string name="trail_location_off">Lokasi mati untuk hari ini: orangnya menolak lokasi selama jam kerja.</string>
     <string name="trail_span">Di luar %1$s – %2$s · %3$s</string>
     <string name="trail_still_out">masih di luar</string>
+
+    <!-- Inbox / pengumuman / pengaturan -->
+    <string name="inbox_title">Kotak Masuk</string>
+    <string name="inbox_unread">%1$d belum dibaca</string>
+    <string name="inbox_mark_all">Tandai semua dibaca</string>
+    <string name="inbox_all">Semua</string>
+    <string name="inbox_messages">Pesan</string>
+    <string name="inbox_tickets">Tiket</string>
+    <string name="inbox_announcements">Pengumuman</string>
+    <string name="inbox_other">Lainnya</string>
+    <string name="inbox_load_failed">Kotak masuk tidak bisa dimuat</string>
+    <string name="inbox_clean">Kotak masuk bersih</string>
+    <string name="inbox_clean_sub">Persetujuan, pengingat, mention, dan pengumuman masuk ke sini. Tidak ada yang menunggumu sekarang.</string>
+    <string name="inbox_nothing_kind">Tidak ada yang jenis ini</string>
+    <string name="inbox_nothing_kind_sub">Notifikasi lain ada di Semua.</string>
+    <string name="got_it">Oke</string>
+    <string name="close">Tutup</string>
+    <string name="focus_missing_title">Pengajuan itu sudah tidak ada di daftarmu</string>
+    <string name="focus_missing_body">Mungkin sudah diputuskan, atau milik orang di luar rantai persetujuanmu.</string>
+    <string name="settings_appearance">Tampilan</string>
+    <string name="theme_system">Ikuti sistem</string>
+    <string name="theme_light">Terang</string>
+    <string name="theme_dark">Gelap</string>
+    <string name="delete_account">Hapus akun</string>
+    <string name="delete_account_sub">Nonaktifkan dan anonimkan akunmu.</string>
+    <string name="delete_account_body">Nama, email, dan login kamu dihapus dan kamu keluar di semua perangkat. Absen, tugas, dan pesan tetap ada sebagai \"Akun terhapus\". Tidak bisa dibatalkan. Ketik DELETE untuk konfirmasi.</string>
+    <string name="delete">Hapus</string>
 </resources>

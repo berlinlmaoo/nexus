@@ -66,7 +66,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
+import id.znetworks.nexus.core.nav.Target
 import id.znetworks.nexus.core.time.OfficeTime
 import id.znetworks.nexus.feature.attendance.history.BoardViewModel
 import id.znetworks.nexus.feature.attendance.history.CrewBoardCard
@@ -100,8 +102,21 @@ fun AttendanceScreen(
         requests.onToday(s.today)
         board.onToday(s.today)
     }
-    val q by vm.queueState.collectAsStateWithLifecycle()
+    // A push / inbox row about attendance: the request with its buttons, the offsite review, or
+    // the prefilled permit composer. Claimed here, so it survives a cold start and a sign-in.
     val context = LocalContext.current
+    val router = (context.applicationContext as NexusApplication).container.router
+    val pending by router.pending.collectAsStateWithLifecycle()
+    LaunchedEffect(pending) {
+        val t = pending as? Target.Attendance ?: return@LaunchedEffect
+        router.consumed(t)
+        when {
+            t.permitToday -> requests.openPermitToday()
+            t.requestId != null || t.offsiteId != null -> requests.focus(t.requestId, t.offsiteId)
+            else -> vm.load()
+        }
+    }
+    val q by vm.queueState.collectAsStateWithLifecycle()
 
     // Fine location is asked BEFORE the face check, so a refusal never wastes one.
     var wantedKind by remember { mutableStateOf<AttendanceKind?>(null) }

@@ -20,6 +20,13 @@ import id.znetworks.nexus.feature.attendance.QueueFlushWorker
 import id.znetworks.nexus.feature.attendance.ReflectionDrafts
 import id.znetworks.nexus.feature.attendance.TodayCache
 import id.znetworks.nexus.feature.auth.AuthRepository
+import id.znetworks.nexus.core.nav.Router
+import id.znetworks.nexus.feature.inbox.AnnouncementHost
+import id.znetworks.nexus.feature.inbox.InboxApi
+import id.znetworks.nexus.ui.theme.AppTheme
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -58,6 +65,10 @@ class AppContainer(private val context: Context) {
     )
 
     val auth = AuthRepository(api, sessionStore)
+
+    val router = Router()
+    val announcements = AnnouncementHost(InboxApi(api))
+    val appearance = Appearance(context)
 
     val attendanceApi = AttendanceApi(api)
     val location = LocationProvider(context)
@@ -128,5 +139,16 @@ private class PrefsGateStorage(context: Context) : GateStorage {
     // commit(), not apply(): a lock must be on disk before the process can be killed.
     override fun put(key: String, value: String?) {
         prefs.edit().apply { if (value == null) remove(key) else putString(key, value) }.commit()
+    }
+}
+
+/** Light / dark / system, applied at once and kept across launches (iOS AppAppearance). */
+class Appearance(context: Context) {
+    private val prefs = context.getSharedPreferences("nexus.appearance", Context.MODE_PRIVATE)
+    private val _theme = MutableStateFlow(runCatching { AppTheme.valueOf(prefs.getString("theme", "SYSTEM")!!) }.getOrDefault(AppTheme.SYSTEM))
+    val theme: StateFlow<AppTheme> = _theme.asStateFlow()
+    fun set(t: AppTheme) {
+        prefs.edit().putString("theme", t.name).apply()
+        _theme.value = t
     }
 }

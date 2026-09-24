@@ -1,6 +1,8 @@
 package id.znetworks.nexus
 
+import android.content.Intent
 import android.os.Bundle
+import id.znetworks.nexus.core.nav.Links
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
@@ -26,10 +28,12 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         val container = (application as NexusApplication).container
         val gate = container.versionGate
+        route(intent)
         setContent {
             val session by container.sessionStore.session.collectAsStateWithLifecycle()
             val gateState by gate.state.collectAsStateWithLifecycle()
             val queueState by container.attendanceQueue.state.collectAsStateWithLifecycle()
+            val theme by container.appearance.theme.collectAsStateWithLifecycle()
             val scope = rememberCoroutineScope()
             val current = session
 
@@ -38,7 +42,7 @@ class MainActivity : AppCompatActivity() {
 
             when {
                 // The lock wins over everything, signed in or not.
-                gateState.required != null -> NexusTheme {
+                gateState.required != null -> NexusTheme(theme) {
                     UpdateRequiredScreen(
                         gateState,
                         onCheckAgain = { scope.launch { gate.checkPolicy(force = true) } },
@@ -47,7 +51,7 @@ class MainActivity : AppCompatActivity() {
                     )
                 }
                 current == null -> LoginScreen()
-                else -> NexusTheme {
+                else -> NexusTheme(theme) {
                     SignedInShell(session = current, gateState = gateState, onSignOut = container.auth::signOut)
                     val grace = gateState.grace
                     if (gateState.graceNoticeDue && grace != null) {
@@ -56,5 +60,40 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        route(intent)
+    }
+
+    /**
+     * `nexus://…` links and notification taps (extras `type`, `link`, `taskId`, `projectId`).
+     * The router holds the target until its screen claims it, across a sign-in if need be.
+     */
+    private fun route(intent: Intent?) {
+        intent ?: return
+        val router = (application as NexusApplication).container.router
+        val data = intent.data
+        val target = when {
+            data != null -> Links.parse(data.toString())
+            intent.hasExtra(EXTRA_TYPE) || intent.hasExtra(EXTRA_LINK) -> Links.forNotification(
+                intent.getStringExtra(EXTRA_TYPE), intent.getStringExtra(EXTRA_LINK),
+                intent.getStringExtra(EXTRA_TASK_ID), intent.getStringExtra(EXTRA_PROJECT_ID),
+            )
+            else -> null
+        }
+        target?.let(router::open)
+        // Handled once: a configuration change must not replay it.
+        intent.data = null
+        intent.removeExtra(EXTRA_TYPE)
+        intent.removeExtra(EXTRA_LINK)
+    }
+
+    companion object {
+        const val EXTRA_TYPE = "type"
+        const val EXTRA_LINK = "link"
+        const val EXTRA_TASK_ID = "taskId"
+        const val EXTRA_PROJECT_ID = "projectId"
     }
 }
