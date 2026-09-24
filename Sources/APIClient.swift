@@ -427,7 +427,9 @@ struct APIClient {
     /// resend cooldown, `Retry-After` for the rate limiter), and the button has to count that down
     /// rather than invite a tap the server will refuse again. And a schema refusal says only
     /// "Validation failed" with the real sentence in `details`, which is the one worth showing.
-    private func runSignup<T: Decodable>(_ path: String, body: [String: Any], decode: T.Type) async throws -> T {
+    // `Response`, not `T`: inside a generic whose parameter is called T, `T("…")` stops meaning
+    // the localisation function and becomes "construct a T", which failed the build three ways.
+    private func runSignup<Response: Decodable>(_ path: String, body: [String: Any], decode: Response.Type) async throws -> Response {
         var req = makeRequest(path, method: "POST", authed: false)
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -458,7 +460,7 @@ struct APIClient {
             throw APIError.http(http.statusCode, message)
         }
         do {
-            return try JSONDecoder().decode(T.self, from: data)
+            return try JSONDecoder().decode(Response.self, from: data)
         } catch {
             throw APIError.decoding
         }
