@@ -129,3 +129,31 @@ includes 36 android fixtures written from docs/API.md; re-pin them to the real A
 - `/.well-known/assetlinks.json` and passkey `android:apk-key-hash` origins come from env
   `NEXUS_ANDROID_CERT_SHA256` (Play app-signing SHA-256, comma-separated). Empty until set.
 - Check-ins carrying the android tag are stored with `checkInClient = "android-app"` and are tracked.
+
+## Android status (updated 25 Sep 2026, commit 9183a92)
+
+Owner decisions of 24 Sep 2026 (final): versionName follows iOS (0.1.6, code 1); APK sideload, no
+Play yet (download page + login-only APK endpoint requested in docs/SERVER-REQUESTS.md R2; staff
+guide in docs/INSTALL-APK.md); maps are OpenStreetMap (osmdroid, same tiles as the web), not
+Google Maps; no Huawei-without-GMS; tablets read-only; approve/reject only in the app; direct
+battery-optimisation dialog allowed while sideloaded.
+
+Built and unit-tested (107 JVM tests, `./gradlew testDebugUnitTest`):
+- Login, session (Keystore AES-GCM, noBackupFilesDir), logout / 401 semantics, delete account.
+- Version gate: android block of version-policy, persisted lock, 426 from any call, grace notice.
+- Attendance: hero with OSM map, liveness (CameraX + bundled ML Kit, iOS thresholds), FaceGuard,
+  fresh GPS fix with mock flag, check-in/out, offsite, reflection with draft, offline queue
+  (same clientId, deviceAt, 5 attempts, 426 hold, owner scoping), NEXUS-down mode.
+- Requests composer + review queue incl. offsite check-outs (managers too), attachments.
+- Crew board (28->27), day detail with selfies, BoD record actions, xlsx export, trail map.
+- Live location: TrailMachine (port of iOS WorkTrailPolicy), foreground service type location,
+  disclosure, background permission, OEM battery guide.
+- Deep links (router), Inbox, announcements, reflections, appearance, LAN shortcut.
+- Push (FCM) wired but OFF until `~/.nexus-android-secrets/firebase.properties` exists
+  (projectId, applicationId, apiKey, senderId); local check-in reminder while push is off.
+
+Not yet verified end to end: nothing past the login screen has run against production (the
+emulator cannot pass liveness; needs a real phone and Berlin's account). Release key:
+`~/.nexus-android-secrets/nexus-release.jks` (backup host:/mnt/nexus-backup/android-signing),
+SHA-256 53:22:FE:4C:77:ED:CC:73:36:81:76:67:0C:E5:D8:E1:41:C6:58:2D:4B:CD:36:E2:85:E0:EE:30:FF:A6:AD:26.
+Emulator on this VM: start with `setsid --fork`, wait for load to settle (4–15 min).
