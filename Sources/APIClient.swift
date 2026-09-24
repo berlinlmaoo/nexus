@@ -2300,15 +2300,22 @@ struct APIClient {
         return true
     }
 
+    /// `tooFarAsOutcome` is for the offline queue only. The live screen wants a check-in from too
+    /// far away as the server's sentence ("You're 340 m from …"): there is no offsite check-in, so
+    /// the answer is to walk closer and tap again. A replay cannot walk closer — the coordinates
+    /// were stored — so the queue needs the refusal typed (`.outsideRadius`) to drop the entry and
+    /// say so once, instead of reading it as a transient failure and replaying it five times.
     func checkIn(lat: Double, lng: Double, selfie: Data, notes: String? = nil,
                  fix: LocationManager.Fix? = nil,
                  clientId: String? = nil, deviceAt: Date? = nil, uptimeSec: Int? = nil,
+                 tooFarAsOutcome: Bool = false,
                  progress: UploadProgress? = nil) async throws -> AttendanceOutcome {
         var fields = ["lat": String(lat), "lng": String(lng)]
         if let notes, !notes.isEmpty { fields["notes"] = notes }
         Self.applyFixFields(&fields, fix)
         Self.applyOfflineFields(&fields, clientId: clientId, deviceAt: deviceAt, uptimeSec: uptimeSec)
         return try await attendanceUpload("/api/attendance/check-in", fields: fields, selfie: selfie,
+                                          checkInTooFar: tooFarAsOutcome ? .outcome : .sentence,
                                           progress: progress)
     }
 
@@ -2376,9 +2383,15 @@ struct APIClient {
         return body
     }
 
+    /// How a check-in's "too far from the office" 422 comes back (see `checkIn`).
+    private enum CheckInTooFar { case sentence, outcome }
+
     /// Shared multipart upload for check-in/out. Maps the server's OUTSIDE_RADIUS 422 into a typed
     /// outcome so the UI can ask for an offsite reason; surfaces any other error message verbatim.
+    /// `checkInTooFar` is nil for a check-out and says, for a check-in, what its geofence refusal
+    /// becomes.
     private func attendanceUpload(_ path: String, fields: [String: String], selfie: Data,
+                                  checkInTooFar: CheckInTooFar? = nil,
                                   progress: UploadProgress? = nil) async throws -> AttendanceOutcome {
         let boundary = "Boundary-\(UUID().uuidString)"
         var req = makeRequest(path, method: "POST")
@@ -2423,12 +2436,19 @@ struct APIClient {
 
         // Decode the server's { error, code } body for a useful message.
         let payload = try? JSONDecoder().decode(ServerError.self, from: data)
-        if http.statusCode == 422, payload?.code == "OUTSIDE_RADIUS" { return .outsideRadius }
-        if http.statusCode == 422, let office = payload?.officeName,
-           let away = payload?.distanceMeters, let radius = payload?.radiusMeters {
-            throw APIError.transport(String(format: T("You're %d m from %@, and check-in works within %d m. Move closer and try again."),
-                                            Int(away.rounded()), office, Int(radius.rounded())))
+        // A check-in refused for distance: 422 with `distanceMeters` and no `code` today, and
+        // recognised by `code` too should the server add one — which must not open the offsite
+        // sheet on the live screen, since check-in has no offsite form.
+        if http.statusCode == 422, let tooFar = checkInTooFar,
+           payload?.distanceMeters != nil || payload?.code == "OUTSIDE_RADIUS" {
+            if tooFar == .outcome { return .outsideRadius }
+            if let office = payload?.officeName, let away = payload?.distanceMeters, let radius = payload?.radiusMeters {
+                throw APIError.transport(String(format: T("You're %d m from %@, and check-in works within %d m. Move closer and try again."),
+                                                Int(away.rounded()), office, Int(radius.rounded())))
+            }
+            throw APIError.transport(payload?.error ?? "\(T("Failed")) (\(http.statusCode)).")
         }
+        if http.statusCode == 422, payload?.code == "OUTSIDE_RADIUS" { return .outsideRadius }
         throw APIError.transport(payload?.error ?? "\(T("Failed")) (\(http.statusCode)).")
     }
 }

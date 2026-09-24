@@ -184,7 +184,8 @@ final class AttendanceQueue {
                     outcome = try await APIClient.shared.checkIn(
                         lat: entry.lat, lng: entry.lng, selfie: selfie, notes: entry.notes,
                         fix: fix,
-                        clientId: entry.id, deviceAt: entry.deviceAt, uptimeSec: entry.uptimeSec)
+                        clientId: entry.id, deviceAt: entry.deviceAt, uptimeSec: entry.uptimeSec,
+                        tooFarAsOutcome: true)
                 case .checkOut:
                     var first = try await APIClient.shared.checkOut(
                         lat: entry.lat, lng: entry.lng, selfie: selfie,
