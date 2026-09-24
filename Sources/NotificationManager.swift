@@ -269,11 +269,35 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         return fractional.date(from: value) ?? ISO8601DateFormatter().date(from: value)
     }
 
+    // MARK: categories
+
+    nonisolated static let outsideOfficeCategory = "NEXUS_OUTSIDE_OFFICE"
+    nonisolated static let filePermitAction = "FILE_PERMIT"
+
+    /// The 1h30 reminder and the 2h warning arrive with `aps.category = NEXUS_OUTSIDE_OFFICE`. The
+    /// action opens the app (`.foreground`): a permit needs a photo and the person's location,
+    /// neither of which can be supplied from the notification itself.
+    func registerCategories() {
+        let filePermit = UNNotificationAction(identifier: Self.filePermitAction,
+                                              title: T("File a permit"),
+                                              options: [.foreground])
+        let outside = UNNotificationCategory(identifier: Self.outsideOfficeCategory,
+                                             actions: [filePermit],
+                                             intentIdentifiers: [],
+                                             options: [])
+        center.setNotificationCategories([outside])
+    }
+
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        // The server checked this person out while the app was open: the trail must stop now, not
+        // at the next upload. Re-reading today is what stops it (the record now has a check-out).
+        if (notification.request.content.userInfo["type"] as? String) == "attendance_auto_offsite_checkout" {
+            Task { @MainActor in await WorkLocationTracker.shared.reconcileFromServer() }
+        }
         completionHandler([.banner, .sound, .badge])
     }
 
@@ -292,6 +316,12 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         for (key, value) in response.notification.request.content.userInfo {
             if let key = key as? String, let value = value as? String { info[key] = value }
         }
+        // "File a permit" on the outside-office push means exactly one place, whatever `link` the
+        // payload happens to carry: today's permit composer on the Attendance screen.
+        if response.actionIdentifier == Self.filePermitAction { info["link"] = "/attendance?permit=today" }
+        if info["type"] == "attendance_auto_offsite_checkout" {
+            Task { @MainActor in await WorkLocationTracker.shared.reconcileFromServer() }
+        }
         Task { @MainActor in AppRouter.shared.openNotification(info) }
         completionHandler()
     }
@@ -303,9 +333,15 @@ final class NotificationAppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = NotificationManager.shared
+        NotificationManager.shared.registerCategories()
         // Here rather than in NexusApp.init: iOS refuses a handler registered after this method
         // returns, and refuses it by trapping.
         BackgroundRefresh.register()
+        // On EVERY launch, and before this returns. A region crossing relaunches the app into the
+        // background with `launchOptions[.location]` set, and the event is handed to whichever
+        // CLLocationManager has a delegate once launching finishes — so the tracker has to have
+        // rebuilt its manager and its state from disk by then, whatever the launch was for.
+        WorkLocationTracker.shared.bootstrap()
         return true
     }
 

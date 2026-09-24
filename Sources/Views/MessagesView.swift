@@ -859,12 +859,21 @@ struct ChatThreadView: View {
             messages = hit.value.messages ?? []
             loading = false
         }
-        do { messages = try await APIClient.shared.conversationMessages(conversationId) }
+        do {
+            messages = try await APIClient.shared.conversationMessages(conversationId)
+            // Read on screen = read on the server, but only when something new arrived: the thread
+            // polls every 5 s and most polls bring nothing.
+            if let last = messages.last?.id, last != markedReadId {
+                markedReadId = last
+                try? await APIClient.shared.markConversationRead(conversationId)
+            }
+        }
         catch APIError.unauthorized { auth.logout() }
         // A failed refresh leaves whatever was already read on screen rather than blanking it.
         catch {}
         loading = false
     }
+    @State private var markedReadId: String?
     private func send() async {
         let v = input.trimmingCharacters(in: .whitespaces)
         // A picture on its own is a message; text is only required when nothing is attached.

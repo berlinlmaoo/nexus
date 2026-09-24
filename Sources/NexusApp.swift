@@ -66,6 +66,9 @@ struct NexusApp: App {
                                 // The banner promises "sends itself when NEXUS is back". Until 0.1.5 the
                                 // only thing that drained the queue was opening the Attendance screen.
                                 await AttendanceQueue.shared.flush()
+                                // Launch and sign-in: an open check-in from earlier today resumes
+                                // the trail without the Attendance screen having to be opened.
+                                await WorkLocationTracker.shared.reconcileFromServer()
                             }
                         }
                         .onChange(of: scenePhase) { _, phase in
@@ -79,7 +82,14 @@ struct NexusApp: App {
                             guard phase == .active, let userId = auth.session?.userId else { return }
                             Task { await NotificationManager.shared.reconcileReminders(userId: userId) }
                             Task { await AttendanceQueue.shared.flush() }
+                            // Today's record decides whether the work-hours trail runs. Nothing
+                            // else fetches it on a plain return to the app, and a check-in made on
+                            // the web (or a check-out) must start or stop the tracker all the same.
+                            Task { await WorkLocationTracker.shared.reconcileFromServer() }
                         }
+                        // The "why NEXUS wants Always location" sheet, on a host of its own so it
+                        // never shares a view with another `.sheet`.
+                        .background { WorkLocationPromptHost() }
                 }
             }
             .animation(.easeInOut(duration: 0.25), value: versionGate.required)

@@ -4,6 +4,13 @@ Proyek, task, file, absen hari ini, board crew, pengajuan, sampai foto absen —
 Di lokasi tanpa sinyal, semuanya tetap bisa dibuka. Ada keterangan kapan terakhir disimpan, biar kamu tahu itu bukan data barusan.
 File cuma diunduh lewat Wi-Fi. Mau pakai kuota? Nyalakan sendiri di Tuning Room.
 
+LOKASI IKUT TERCATAT. CUMA SELAMA JAM KERJA.
+
+Dari check-in sampai check-out, NEXUS mencatat lokasimu saat kamu keluar area kantor.
+Di dalam kantor, tidak ada yang dikirim. Begitu check-out, pencatatan berhenti.
+Kelamaan di luar? Kamu diingatkan duluan, tombol Ajukan izin sudah siap.
+Lewat 2 jam 30 menit tanpa izin, kamu otomatis check-out offsite.
+
 IZIN DARI HP, SEKARANG LENGKAP BUKTINYA.
 
 Begitu kamu pilih Izin, lokasimu langsung diambil dan terkunci di layar.

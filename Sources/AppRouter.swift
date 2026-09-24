@@ -163,7 +163,7 @@ final class AppRouter {
             go(screen)
         case .task, .project, .submission:
             detail = NXDetailRequest(target: target)
-        case .attendanceRequest, .offsiteCheckout, .complaint, .conversation, .announcement, .post:
+        case .attendanceRequest, .offsiteCheckout, .permitToday, .complaint, .conversation, .announcement, .post:
             focus = target
             if let screen = target.hostScreen { go(screen) }
         }

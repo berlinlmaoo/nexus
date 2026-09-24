@@ -65,6 +65,11 @@ enum WhatsNew {
             body: T("Create an account right here with your company's workspace code. Forgot your password? Reset it from the sign-in screen. Changed email? Update it in Tuning Room with a code sent to the new address.")
         ),
         WhatsNewEntry(
+            icon: "location.circle.fill",
+            title: T("Where you work, only during work hours"),
+            body: T("Between check-in and check-out, NEXUS records where you are when you leave the office area, about once every 15 minutes. Inside the office nothing is sent, and it stops the moment you check out. Out for a while? You get a reminder with a File a permit button. After 2 hours 30 minutes outside without a permit, you are checked out offsite automatically, pending your approver.")
+        ),
+        WhatsNewEntry(
             icon: "hand.raised.fill",
             title: T("Permits carry their proof"),
             body: T("Pick Permit and your location is taken and locked on screen, with a photo from the camera or your library. Your approver sees where and when you filed it, without having to ask.")

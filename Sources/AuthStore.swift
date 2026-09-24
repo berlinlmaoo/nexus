@@ -63,6 +63,8 @@ final class AuthStore {
             userEmail: res.user.email ?? fallbackEmail
         )
         Keychain.save(s)
+        // A check-in queued before the session expired belongs to this person only if it is theirs.
+        AttendanceQueue.shared.keepOnly(owner: s.userId)
         // The watch cannot sign in on its own, so it learns about this one here.
         PhoneSessionBridge.shared.publish(s)
         session = s
@@ -80,7 +82,17 @@ final class AuthStore {
         session = s
     }
 
+    /// The person tapped Logout, or deleted the account: everything goes, queued check-ins too.
+    func signOut() {
+        AttendanceQueue.shared.clearAll()
+        logout()
+    }
+
+    /// The session ENDED, which is what every 401 handler calls. Same wipe as `signOut` except the
+    /// queued check-ins, which are kept for the same person's next sign-in (`holdForSignIn`) and
+    /// deleted if somebody else signs in instead (`persist` → `keepOnly`).
     func logout() {
+        AttendanceQueue.shared.holdForSignIn(owner: session?.userId)
         if let session {
             Task { await NotificationManager.shared.unregister(session: session) }
         }
@@ -97,9 +109,11 @@ final class AuthStore {
         // the next person to sign in on the same phone opens it onto somebody else's questions —
         // and onto the file they attached to one.
         GideonChat.shared.reset()
-        // Nor a queued check-in: replayed under the next sign-in it would be recorded for them.
-        AttendanceQueue.shared.clearAll()
+        // A queued check-in is NOT cleared here: see `signOut` / `holdForSignIn` / `keepOnly`.
         AttendancePresence.stop()
+        // Location stops with the session, and whatever was not uploaded goes with it: the next
+        // person to sign in must not send the last one's positions under their own cookie.
+        WorkLocationTracker.shared.stopForLogout()
         PhoneSessionBridge.shared.publish(nil)
         session = nil
     }

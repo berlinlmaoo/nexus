@@ -138,7 +138,7 @@ struct SettingsView: View {
 
                     // account
                     VStack(spacing: 0) {
-                        Button(role: .destructive) { auth.logout() } label: {
+                        Button(role: .destructive) { auth.signOut() } label: {
                             HStack {
                                 Label(T("Logout"), systemImage: "rectangle.portrait.and.arrow.right")
                                     .font(NXFont.text(15, .semibold)).foregroundStyle(NX.danger)

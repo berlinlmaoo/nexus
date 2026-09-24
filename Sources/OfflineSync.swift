@@ -272,11 +272,17 @@ final class OfflineSync: ObservableObject {
         await MainActor.run { !offline && (!metered || mediaOverCellular) }
     }
 
+    /// The attendance PERIOD key the server uses (`attendancePeriodKey`): the 28th→27th cut-off,
+    /// named after the month it ends in. From the 28th on, today already belongs to next month's
+    /// key — a calendar month here prefetched the period that had just closed.
     static func monthKey(_ date: Date = Date()) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM"
-        f.timeZone = TimeZone(identifier: "Asia/Jakarta")
-        f.locale = Locale(identifier: "en_US_POSIX")
-        return f.string(from: date)
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Jakarta")!
+        var c = cal.dateComponents([.year, .month, .day], from: date)
+        if (c.day ?? 1) >= 28 {
+            c.month = (c.month ?? 1) + 1
+            if c.month! > 12 { c.month = 1; c.year = (c.year ?? 0) + 1 }
+        }
+        return String(format: "%04d-%02d", c.year ?? 0, c.month ?? 1)
     }
 }

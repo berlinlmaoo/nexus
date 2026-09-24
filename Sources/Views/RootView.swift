@@ -299,7 +299,7 @@ struct AccountFooter: View {
                 }
                 .buttonStyle(.plain)
             }
-            Button { auth.logout() } label: {
+            Button { auth.signOut() } label: {
                 Label(T("Logout"), systemImage: "rectangle.portrait.and.arrow.right")
                     .font(NXFont.text(14, .semibold)).foregroundStyle(NX.danger)
                     .frame(maxWidth: .infinity).padding(.vertical, 13)

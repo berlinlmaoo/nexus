@@ -1197,7 +1197,7 @@ struct StreakBoardCard: View {
             await load()
         }
         .sheet(item: $selectedRow) { row in
-            RecordActionsSheet(row: row) { await load() }
+            RecordActionsSheet(row: row, canDelete: canManage) { await load() }
         }
     }
 
@@ -1265,7 +1265,10 @@ struct StreakBoardCard: View {
                                     .overlay(alignment: .leading) {
                                         if pd.startsMonth { Rectangle().fill(NX.border).frame(width: 1, height: cell).offset(x: -gap / 2) }
                                     }
-                                if canManage, let row = m.rowByDay[pd.key], row.id != nil {
+                                // Every cell with a record opens it — a manager reviewing their people
+                                // and staff on their own board need the day's detail and its
+                                // location trail too. Only the BoD's delete buttons stay gated.
+                                if let row = m.rowByDay[pd.key], row.id != nil {
                                     Button { selectedRow = row } label: { fill }.buttonStyle(.plain)
                                 } else {
                                     fill
@@ -1311,7 +1314,7 @@ struct StreakBoardCard: View {
                 }
                 .navigationTitle(monthLabel).navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() } } }
-                .sheet(item: $selectedRow) { row in RecordActionsSheet(row: row) { await onChanged() } }
+                .sheet(item: $selectedRow) { row in RecordActionsSheet(row: row, canDelete: canManage) { await onChanged() } }
             }
         }
 
@@ -1344,7 +1347,10 @@ struct StreakBoardCard: View {
                                     .overlay(alignment: .leading) {
                                         if pd.startsMonth { Rectangle().fill(NX.border).frame(width: 1, height: cell).offset(x: -gap / 2) }
                                     }
-                                if canManage, let row = m.rowByDay[pd.key], row.id != nil {
+                                // Every cell with a record opens it — a manager reviewing their people
+                                // and staff on their own board need the day's detail and its
+                                // location trail too. Only the BoD's delete buttons stay gated.
+                                if let row = m.rowByDay[pd.key], row.id != nil {
                                     Button { selectedRow = row } label: { fill }.buttonStyle(.plain)
                                 } else {
                                     fill
@@ -1403,6 +1409,10 @@ struct StreakBoardCard: View {
 /// record (accidental/"mabok" double check-in) or just the check-out (mis-tapped → reopen).
 struct RecordActionsSheet: View {
     let row: AttendanceRow
+    /// The delete buttons are the BoD's (canManageAttendance). A manager reviewing their people,
+    /// or somebody opening their own day, reads the same sheet without them — declared before
+    /// `onDone` so the existing `RecordActionsSheet(row:) { … }` calls keep their trailing closure.
+    var canDelete: Bool = true
     let onDone: () async -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var busy = false
@@ -1441,6 +1451,13 @@ struct RecordActionsSheet: View {
                             Text(dateLabel).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                             Text(statusLabel).font(NXFont.text(11, .bold)).foregroundStyle(Color.white)
                                 .padding(.horizontal, 9).padding(.vertical, 4).background(tone.color, in: Capsule())
+                            // Always location refused for this day: an empty trail below is the
+                            // phone's permission, not a day spent inside.
+                            if row.locationTrackingState == "denied" {
+                                Label(T("Location off"), systemImage: "location.slash.fill")
+                                    .font(NXFont.text(11, .bold)).foregroundStyle(Color.white)
+                                    .padding(.horizontal, 9).padding(.vertical, 4).background(NX.danger, in: Capsule())
+                            }
                         }
                     }
 
@@ -1460,6 +1477,24 @@ struct RecordActionsSheet: View {
                             infoLine("pencil.and.list.clipboard", "\(T("Corrected by BoD")) · \(row.correctionReason ?? "")")
                         }
                         if let notes = row.notes, !notes.isEmpty { infoLine("text.alignleft", notes) }
+                        // Pushed inside this sheet's own stack rather than presented: the sheet
+                        // already owns a fullScreenCover and a confirmationDialog.
+                        if let id = row.id, row.checkInAt != nil {
+                            NavigationLink {
+                                LocationTrailView(recordId: id, trackingState: row.locationTrackingState)
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "map.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(NX.violetText)
+                                    Text(T("View location trail")).font(NXFont.text(14, .bold)).foregroundStyle(NX.foreground)
+                                    Spacer()
+                                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundStyle(NX.mutedFg)
+                                }
+                                .padding(12)
+                                .background(NX.violet.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.violet.opacity(0.25)))
+                            }
+                            .buttonStyle(.plain)
+                        }
                     } else if (row.attendanceDayType ?? "").uppercased() == "ABSENT" {
                         Text(T("No check-in was recorded that day and no request covered it."))
                             .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
@@ -1475,7 +1510,7 @@ struct RecordActionsSheet: View {
                         }
                     }
 
-                    if isRecord, row.id != nil {
+                    if isRecord, row.id != nil, canDelete {
                         SectionLabel(T("Delete attendance data"))
                         if row.checkOutAt != nil {
                             Button { Task { await del(part: "checkout") } } label: {

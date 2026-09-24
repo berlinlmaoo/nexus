@@ -1570,6 +1570,12 @@ struct APIClient {
                        cache: "conversations")).conversations ?? []
     }
 
+    /// Sets the caller's `lastReadAt` so the conversation's unread count clears everywhere.
+    func markConversationRead(_ id: String) async throws {
+        struct Ack: Decodable { let success: Bool? }
+        _ = try await run(makeRequest("/api/conversations/\(id)/read", method: "POST"), decode: Ack.self)
+    }
+
     func conversationMessages(_ id: String) async throws -> [ChatMessage] {
         // Per conversation: reading one thread must never surface another's messages.
         (try await run(makeRequest("/api/conversations/\(id)/messages"), decode: MessagesResponse.self,
@@ -2067,6 +2073,33 @@ struct APIClient {
 
     func attendanceToday() async throws -> AttendanceToday {
         try await run(makeRequest("/api/attendance/today"), decode: AttendanceToday.self, cache: "attendance-today")
+    }
+
+    // MARK: - Live location while checked in (0.1.6)
+
+    /// One batch of working-hours positions. The reply is the server's verdict on the whole trail
+    /// so far — `tracking:false` is an order to stop, see WorkLocationTracker.
+    func postLocationTrail(recordId: String, points: [WorkTrailPoint]) async throws -> WorkTrailReply {
+        var req = makeRequest("/api/attendance/location-trail", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: WorkTrailWire.body(recordId: recordId, points: points))
+        let r = try await run(req, decode: LocationTrailPostReply.self)
+        return WorkTrailReply(tracking: r.tracking ?? true, stage: r.stage,
+                              outsideSince: WorkTrailWire.parseISO(r.outsideSince),
+                              nextAt: WorkTrailWire.parseISO(r.nextAt))
+    }
+
+    /// "on" when Always was granted for this record, "denied" when it was refused — what puts the
+    /// "location off" badge on the manager's board instead of a trail that is silently empty.
+    func postLocationStatus(recordId: String, state: String) async throws {
+        var req = makeRequest("/api/attendance/location-status", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["recordId": recordId, "state": state])
+        _ = try await run(req, decode: SuccessResponse.self)
+    }
+
+    func locationTrail(recordId: String) async throws -> LocationTrailResponse {
+        try await run(makeRequest("/api/attendance/records/\(recordId)/trail"), decode: LocationTrailResponse.self)
     }
 
     /// The last `days` days as compact dots — what the widget and the watch draw.

@@ -52,6 +52,10 @@ enum AttendancePresence {
         snapshot.save()
         WidgetCenter.shared.reloadAllTimelines()
         LiveActivityController.apply(snapshot, userName: userName)
+        // The work-hours location trail follows the same truth as the Island: it starts on a
+        // check-in the server holds (live, replayed from the queue, or found on launch) and stops on
+        // a check-out — including one still waiting in the queue, which the tracker reads itself.
+        WorkLocationTracker.shared.sync(today: lastToday)
     }
 
     /// Logging out has to erase every trace outside the app. A widget left showing one person's

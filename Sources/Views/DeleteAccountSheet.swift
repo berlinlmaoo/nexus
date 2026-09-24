@@ -117,6 +117,6 @@ struct DeleteAccountSheet: View {
         // Through the ONE logout path, not a local copy of it: that is what wipes the Keychain,
         // the response cache, the offline files, the queued check-ins and GIDEON's transcript.
         // RootView then swaps to the login screen, which takes this sheet down with it.
-        auth.logout()
+        auth.signOut()
     }
 }

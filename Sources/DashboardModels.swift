@@ -273,12 +273,15 @@ enum NotificationTarget: Hashable {
     case announcement(String)
     /// One Threads post — `/threads?post=<id>`: a mention, or a comment on something you posted.
     case post(String)
+    /// `/attendance?permit=today` — the "outside the office" pushes (1h30 reminder, 2h warning)
+    /// and their "File a permit" action: today's permit composer, already filled in.
+    case permitToday
 
     /// The screen that owns the record, for the router to walk to before the screen claims it.
     var hostScreen: NXScreen? {
         switch self {
         case .screen(let s):                     return s
-        case .attendanceRequest, .offsiteCheckout: return .attendance
+        case .attendanceRequest, .offsiteCheckout, .permitToday: return .attendance
         case .complaint:                         return .tickets
         case .conversation:                      return .messages
         case .announcement:                      return .dashboard
@@ -310,6 +313,7 @@ enum NotificationTarget: Hashable {
         case "attendance":
             if let id = Self.queryValue("request", in: path) { self = .attendanceRequest(id) }
             else if let id = Self.queryValue("offsite", in: path) { self = .offsiteCheckout(id) }
+            else if Self.queryValue("permit", in: path) == "today" { self = .permitToday }
             else { self = .screen(.attendance) }
         case "messages":
             if let rest, !rest.isEmpty { self = .conversation(rest) }

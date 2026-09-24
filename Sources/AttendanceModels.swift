@@ -49,8 +49,19 @@ struct AttendanceRecord: Decodable, Sendable {
     let lateMinutes: Int?
     let checkOutApproval: String?   // PENDING | APPROVED | REJECTED | null
     let officeLocation: OfficeRef?
+    /// "on" | "denied" | nil — whether Always location was granted for this record (0.1.6).
+    /// Optional so every server before it still decodes.
+    let locationTrackingState: String?
 
-    struct OfficeRef: Decodable, Sendable { let name: String? }
+    /// The office the check-in was made against. `serializeAttendanceRecord` has always sent the
+    /// geofence too; only the name was decoded until the work-hours trail needed the circle itself.
+    struct OfficeRef: Decodable, Sendable {
+        let name: String?
+        let id: String?
+        let latitude: Double?
+        let longitude: Double?
+        let radiusMeters: Double?   // Double, not Int: an integer decodes into it, a fraction would not decode the other way and would take all of today down with it
+    }
 
     var hasCheckedIn: Bool { checkInAt != nil }
     var hasCheckedOut: Bool { checkOutAt != nil }
@@ -102,6 +113,9 @@ struct AttendanceRow: Decodable, Identifiable, Sendable {
     let reviewedBy: UserRef?
     let supportingDocumentUrl: String?
     let supportingDocumentName: String?
+    /// "denied" when the person refused Always location for this record — drawn as a "location
+    /// off" badge so an empty trail is not mistaken for a day spent inside. Optional (0.1.6).
+    let locationTrackingState: String?
 
     /// Files are served by the API behind the session cookie; a relative path needs the base.
     static func fileURL(_ path: String?) -> URL? {
@@ -275,3 +289,13 @@ struct AttendanceCompactDay: Decodable, Hashable, Sendable {
     }
 }
 struct AttendanceCompactResponse: Decodable, Sendable { let records: [AttendanceCompactDay] }
+
+/// POST /api/attendance/location-trail reply. Lenient: every field optional, because the one that
+/// matters (`tracking`) must be read as "carry on" unless the server explicitly says stop.
+struct LocationTrailPostReply: Decodable, Sendable {
+    let ok: Bool?
+    let tracking: Bool?
+    let outsideSince: String?
+    let stage: String?
+    let nextAt: String?
+}

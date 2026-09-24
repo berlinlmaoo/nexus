@@ -36,6 +36,9 @@ struct PendingAttendance: Codable, Identifiable, Sendable {
     let reason: String?
     /// Retries are bounded: a tap the server keeps refusing must not loop forever.
     var attempts: Int
+    /// Whose tap this is. Optional so queues written by 0.1.5 still decode; those are adopted by
+    /// the session that ends next (`holdForSignIn`) or replayed by the one that is signed in.
+    var ownerId: String? = nil
 }
 
 @MainActor
@@ -124,7 +127,8 @@ final class AttendanceQueue {
             simulated: fix?.simulated, fromAccessory: fix?.fromAccessory,
             notes: notes, reflection: reflection,
             offsite: offsite, reason: reason,
-            attempts: 0
+            attempts: 0,
+            ownerId: Keychain.load()?.userId
         )
         // The selfie is the bulky part, so it lives beside the index rather than inside it.
         try? selfie.write(to: selfieURL(id), options: .atomic)
@@ -144,9 +148,13 @@ final class AttendanceQueue {
         flushing = true
         defer { flushing = false }
 
+        // Only the signed-in person's own taps. `persist` already drops anybody else's at sign-in;
+        // this is the second lock, so a replay can never go out under another person's cookie.
+        let me = Keychain.load()?.userId
         // Oldest first: the order people actually tapped is the order the day has to be rebuilt in,
         // otherwise a check-out can arrive before the check-in it belongs to.
-        for entry in pending.sorted(by: { $0.deviceAt < $1.deviceAt }) {
+        for entry in pending.sorted(by: { $0.deviceAt < $1.deviceAt })
+            where entry.ownerId == nil || entry.ownerId == me {
             guard let selfie = try? Data(contentsOf: selfieURL(entry.id)) else {
                 // No selfie means nothing sendable is left; drop it rather than retry forever.
                 remove(entry.id)
@@ -207,6 +215,9 @@ final class AttendanceQueue {
                 lastError = nil
                 // Anything getting through proves this build is accepted again.
                 releaseHold()
+                // An offline check-in that just landed is the moment the work-hours trail may
+                // start — and nothing else fetches today's record here, so ask for it.
+                if entry.kind == .checkIn { Task { await WorkLocationTracker.shared.reconcileFromServer() } }
             } catch APIError.offline {
                 // Still unreachable. Stop here rather than hammering the rest of the queue.
                 return
@@ -237,6 +248,25 @@ final class AttendanceQueue {
         releaseHold()
         try? FileManager.default.removeItem(at: indexURL)
         AttendancePresence.refresh()
+    }
+
+    /// The session ended without the person asking (a 401: the 30-day token ran out, or the
+    /// password was reset elsewhere). Their queued taps are KEPT: deleting them is a check-in the
+    /// server never sees and a TK the next morning. Entries from before owners were recorded are
+    /// stamped with the session that is ending, so a different person signing in next cannot
+    /// replay them.
+    func holdForSignIn(owner: String?) {
+        guard let owner, pending.contains(where: { $0.ownerId == nil }) else { return }
+        for i in pending.indices where pending[i].ownerId == nil { pending[i].ownerId = owner }
+        save()
+    }
+
+    /// A sign-in succeeded. Taps that belong to somebody else are deleted, selfies included; the
+    /// person's own ones stay and `flush` sends them under their original tap time.
+    func keepOnly(owner: String) {
+        let foreign = pending.filter { $0.ownerId != nil && $0.ownerId != owner }
+        guard !foreign.isEmpty else { return }
+        for entry in foreign { remove(entry.id) }
     }
 
     /// "09:04" in office time, for the one sentence that names a refused tap.

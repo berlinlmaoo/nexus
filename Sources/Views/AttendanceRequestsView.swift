@@ -327,6 +327,10 @@ struct AttendanceRequestsCard: View {
     @State private var cachedFrom: Date?
     @State private var loading = true
     @State private var showComposer = false
+    /// The composer opened from an "outside the office" push: PERMIT, today, reason started.
+    /// A flag on the one composer sheet rather than a second sheet — two `.sheet` on one view and
+    /// one of them never opens.
+    @State private var composerPermit = false
     @State private var busy: String?
     @State private var rejecting: AttendanceRequest?
     /// The request a notification pointed at (`AppRouter.focus`), shown on its own sheet the moment
@@ -432,7 +436,7 @@ struct AttendanceRequestsCard: View {
                         .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                 }
                 Spacer()
-                Button { showComposer = true } label: {
+                Button { composerPermit = false; showComposer = true } label: {
                     Label(T("New"), systemImage: "plus").font(NXFont.text(12, .bold)).foregroundStyle(.white)
                         .padding(.horizontal, 12).padding(.vertical, 8).background(NX.violet, in: Capsule())
                 }.buttonStyle(.plain)
@@ -450,7 +454,7 @@ struct AttendanceRequestsCard: View {
                            subtitle: canReview
                                ? T("Leave, sick days, permits and offsite check-outs from your people appear here the moment they're filed, with Approve and Reject right on the row.")
                                : T("Leave, sick days, permits and day-offs you file show up here with their status, and your approver is told the moment you send one."),
-                           actionTitle: T("File a request"), actionIcon: "plus", action: { showComposer = true }, compact: true)
+                           actionTitle: T("File a request"), actionIcon: "plus", action: { composerPermit = false; showComposer = true }, compact: true)
             } else {
                 filterBar
                 refineBar
@@ -483,9 +487,12 @@ struct AttendanceRequestsCard: View {
         // canReviewOffsite, not canReview: it is canManageAttendance, the same test the server uses for
         // its BoD exemptions. A manager who may REVIEW requests is not exempt from filing rules, and
         // offering them the exemptions only led to a refusal at submit.
-        .sheet(isPresented: $showComposer) { RequestComposerSheet(canGrant: canReviewOffsite) { await load() } }
+        .sheet(isPresented: $showComposer) { RequestComposerSheet(canGrant: canReviewOffsite, prefillPermit: composerPermit) { await load() } }
         // A push tapped while this card is already on screen: claim it now rather than on the next load.
-        .onChange(of: router.focus) { _, _ in if !loading { claimFocus() } }
+        .onChange(of: router.focus) { _, focus in
+            // A permit request never waits for the list; a record does, to be found in it.
+            if case .permitToday = focus { claimFocus() } else if !loading { claimFocus() }
+        }
         .alert(T("That request isn't in your list anymore"), isPresented: $focusMissing) {
             Button("OK") {}
         } message: { Text(T("It may already have been decided, or it belongs to someone outside your approval chain.")) }
@@ -499,6 +506,14 @@ struct AttendanceRequestsCard: View {
     /// sit hidden behind the Pending chip.
     private func claimFocus() {
         guard let f = router.focus else { return }
+        // Not a record in this list: the push asks for a new permit, so the composer opens — and
+        // it does not need the list to have loaded first.
+        if case .permitToday = f {
+            router.focus = nil
+            composerPermit = true
+            showComposer = true
+            return
+        }
         let hit: SubmissionEntry?
         switch f {
         case .attendanceRequest(let id): hit = requests.first { $0.id == id }.map { .request($0) }
@@ -1130,7 +1145,14 @@ struct RejectReasonSheet: View {
 
 struct RequestComposerSheet: View {
     let canGrant: Bool
+    /// Opened from the "outside the office" push: starts on PERMIT for today with the reason begun
+    /// and the location already being fetched. Declared before `onCreated` so every existing
+    /// `RequestComposerSheet(canGrant:) { … }` call keeps its trailing closure.
+    var prefillPermit: Bool = false
     let onCreated: () async -> Void
+    @State private var didPrefill = false
+    /// Started for the person, finished by them: the server wants a reason, not a template.
+    private static var permitReasonPrefix: String { T("Out-of-office activity: ") }
     @Environment(\.dismiss) private var dismiss
     @State private var type: String = "DAY_OFF"
     @State private var start = Date()
@@ -1203,6 +1225,8 @@ struct RequestComposerSheet: View {
     private var needsLocation: Bool { !canGrant && type == "PERMIT" }
     private var canSubmit: Bool {
         reason.trimmingCharacters(in: .whitespaces).count >= 3
+            // The prefilled start alone is not a reason.
+            && !(prefillPermit && reason.trimmingCharacters(in: .whitespaces) == Self.permitReasonPrefix.trimmingCharacters(in: .whitespaces))
             && !(attachmentRequired && attach == nil)
             && !(needsLocation && coords == nil)
             && quotaProblem == nil
@@ -1376,7 +1400,18 @@ struct RequestComposerSheet: View {
             .navigationTitle(T("New request"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button(T("Cancel")) { dismiss() } } }
-            .onAppear { loc.requestPermissionIfNeeded() }
+            .onAppear {
+                loc.requestPermissionIfNeeded()
+                if prefillPermit && !didPrefill {
+                    didPrefill = true
+                    start = Date()
+                    reason = Self.permitReasonPrefix
+                    pick("PERMIT")
+                    // `pick` only fetches a position when the permit rules require one; from this
+                    // push it is always wanted — it is where the person actually is.
+                    if coords == nil && !needsLocation { Task { await askLocation() } }
+                }
+            }
             .task {
                 quota = try? await APIClient.shared.attendanceToday()
                 // The list can shrink once the answer arrives; never leave a vanished type selected.
