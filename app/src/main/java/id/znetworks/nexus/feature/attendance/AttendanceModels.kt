@@ -1,0 +1,122 @@
+package id.znetworks.nexus.feature.attendance
+
+import kotlinx.serialization.Serializable
+
+// Shapes from API.md §2.2. Everything optional: a field the server drops or renames must cost one
+// label, never the whole Attendance screen.
+
+@Serializable
+data class OfficeRef(
+    val id: String? = null,
+    val name: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val radiusMeters: Double? = null,
+    val isActive: Boolean? = null,
+)
+
+@Serializable
+data class AttendanceRecord(
+    val id: String,
+    val attendanceDate: String? = null,
+    val checkInAt: String? = null,
+    val checkOutAt: String? = null,
+    val checkInStatus: String? = null,
+    val checkOutStatus: String? = null,
+    val lateMinutes: Int? = null,
+    val status: String? = null,
+    val checkOutOffsite: Boolean? = null,
+    /** "PENDING" | "APPROVED" | "REJECTED" | null */
+    val checkOutApproval: String? = null,
+    val officeLocation: OfficeRef? = null,
+    val locationTrackingState: String? = null,
+) {
+    val hasCheckedIn: Boolean get() = !checkInAt.isNullOrBlank()
+    val hasCheckedOut: Boolean get() = !checkOutAt.isNullOrBlank()
+}
+
+@Serializable
+data class MyShift(
+    val startTime: String? = null,
+    val endTime: String? = null,
+    val source: String? = null,
+    val flexi: Boolean? = null,
+)
+
+@Serializable
+data class AnnualLeave(
+    val eligible: Boolean? = null,
+    val reason: String? = null,
+    val quota: Int? = null,
+    val used: Int? = null,
+    val remaining: Int? = null,
+)
+
+@Serializable
+data class TodayRequest(
+    val id: String? = null,
+    val type: String? = null,
+    val status: String? = null,
+)
+
+@Serializable
+data class AttendanceToday(
+    val attendanceDateKey: String? = null,
+    val today: AttendanceRecord? = null,
+    /** An EARLIER day still open: the next check-out closes it, and check-in is blocked until then. */
+    val pendingCheckout: AttendanceRecord? = null,
+    val todayRequest: TodayRequest? = null,
+    val dayOffQuota: Int? = null,
+    val dayOffUsedThisMonth: Int? = null,
+    val restDays: List<Int>? = null,
+    val isRestDayToday: Boolean? = null,
+    val redDateQuota: Int? = null,
+    val redDateUsedThisMonth: Int? = null,
+    val myShift: MyShift? = null,
+    val noGeofence: Boolean? = null,
+    val canManageAttendance: Boolean? = null,
+    val canReviewAttendanceRequests: Boolean? = null,
+    val annualLeave: AnnualLeave? = null,
+    val viewerId: String? = null,
+)
+
+@Serializable
+data class OfficesResponse(val offices: List<OfficeRef> = emptyList())
+
+@Serializable
+internal data class CheckResponse(
+    val record: AttendanceRecord? = null,
+    val pendingApproval: Boolean = false,
+    val duplicate: Boolean = false,
+)
+
+/**
+ * One GPS fix with the signals the server's layer-2 check reads (REQ-ATT-09). Honest values only:
+ * the phone reports, the server judges.
+ */
+@Serializable
+data class LocationFix(
+    val lat: Double,
+    val lng: Double,
+    val accuracyM: Double? = null,
+    val altitudeM: Double? = null,
+    val speedMps: Double? = null,
+    val simulated: Boolean = false,
+    val capturedAtMillis: Long = 0,
+)
+
+enum class AttendanceKind { CHECK_IN, CHECK_OUT }
+
+/** What a check-in/out came back with, when the server made a decision about the tap itself. */
+sealed interface AttendanceOutcome {
+    data class Success(val record: AttendanceRecord?, val pendingApproval: Boolean, val duplicate: Boolean) : AttendanceOutcome
+
+    /**
+     * Outside the office radius. On check-out this is `code: OUTSIDE_RADIUS` and opens the offsite
+     * flow. On check-in the server sends no code, only `officeName/distanceMeters/radiusMeters`.
+     */
+    data class OutsideRadius(val officeName: String?, val distanceMeters: Double?, val radiusMeters: Double?) : AttendanceOutcome
+}
+
+/** Replay-only fields: their presence is what marks a record `offline` on the server. */
+data class ReplayStamp(val deviceAtMillis: Long, val uptimeSec: Long)
