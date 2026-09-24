@@ -43,9 +43,14 @@ export async function POST(req: NextRequest) {
 
     logAudit({ action: "update", entityType: "user_password", entityId: session.user.id, userId: session.user.id, request: req })
 
-    return NextResponse.json({ message: 'Password updated successfully' })
+    return NextResponse.json({ success: true, message: 'Password updated successfully' })
   } catch (error) {
     console.error("Error changing password:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
+
+// Both clients have always sent PATCH — the web's changePassword and the iOS app's alike — while
+// this route only answered POST. Every password change from either one came back 405 and changed
+// nothing. Accepting PATCH here fixes the apps already installed, which no client change could.
+export const PATCH = POST
