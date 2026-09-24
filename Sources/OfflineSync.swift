@@ -47,7 +47,11 @@ final class OfflineSync: ObservableObject {
 
     /// Whether the person has allowed the big downloads on mobile data. Off by default: a 1 GB
     /// prefetch on somebody's own quota is not a default anybody would have chosen.
-    var mediaOverCellular: Bool {
+    /// `nonisolated` because it has nothing to do with the main actor: it is two UserDefaults
+    /// calls, which are safe from anywhere. Isolated, it could not be read where a SwiftUI
+    /// `@State` default is evaluated — that expression runs outside any actor — and the toggle in
+    /// Tuning Room would not compile.
+    nonisolated var mediaOverCellular: Bool {
         get { UserDefaults.standard.bool(forKey: Key.mediaOverCellular) }
         set { UserDefaults.standard.set(newValue, forKey: Key.mediaOverCellular) }
     }
@@ -99,6 +103,16 @@ final class OfflineSync: ObservableObject {
                 let month = Self.monthKey()
                 _ = try? await api.attendanceHistory(scope: "me", month: month)
                 _ = try? await api.attendanceRequests(scope: "me")
+                // A manager reads the WORKSPACE board and the workspace queue, and those are
+                // different cache entries from the personal ones. Fetching only "me" left exactly
+                // the people the crew board exists for looking at an empty grid offline.
+                let seen = try? await api.attendanceToday()
+                if seen?.canManageAttendance == true {
+                    _ = try? await api.attendanceHistory(scope: "workspace", month: month)
+                }
+                if seen?.canReviewAttendanceRequests == true {
+                    _ = try? await api.attendanceRequests(scope: "workspace")
+                }
             }),
             (T("Your submissions"), { _ = try? await api.mySubmissions() }),
         ]
@@ -187,6 +201,8 @@ final class OfflineSync: ObservableObject {
             AttachmentCache.sweepOffline()
             let used = AttachmentCache.offlineBytes()
             await MainActor.run {
+                // Released rather than left holding a finished Task until the next pass.
+                self.mediaTask = nil
                 self.offlineBytes = used
                 self.lastMediaSync = Date()
                 UserDefaults.standard.set(self.lastMediaSync, forKey: Key.lastMedia)
@@ -209,7 +225,18 @@ final class OfflineSync: ObservableObject {
     /// Waits for the file pass that was just started. The foreground never does — a person must
     /// not be held behind a gigabyte — but a background window has to stay open for the work it
     /// asked for, or iOS records a run that fetched nothing and offers fewer of them.
-    func waitForMedia() async { await mediaTask?.value }
+    ///
+    /// Awaiting a `Task`'s value is NOT cancellation-aware on its own: cancelling the waiter would
+    /// leave the file pass running and the caller still parked on it. The handler is what turns
+    /// "stop waiting" into "stop working", which is what iOS means when it expires a window.
+    func waitForMedia() async {
+        guard let running = mediaTask else { return }
+        await withTaskCancellationHandler {
+            await running.value
+        } onCancel: {
+            running.cancel()
+        }
+    }
 
     /// Wiped with the session, like every other cache: an offline copy of somebody's project files
     /// must not outlive their login.

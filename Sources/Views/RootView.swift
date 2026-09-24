@@ -13,7 +13,10 @@ struct RootView: View {
     /// on screen would otherwise be a spinner. NOT on every launch: a splash somebody sees twenty
     /// times a day is a tax, not a welcome.
     @State private var showSplash = false
-    @State private var splashDone = false
+    /// WHO was warmed, not whether anybody was. A plain flag survives a logout, so signing in as
+    /// somebody else on the same launch skipped the warm-up entirely and left the new person
+    /// looking at whatever the previous one had not wiped.
+    @State private var warmedUserId: String?
 
     var body: some View {
         @Bindable var router = router
@@ -29,8 +32,8 @@ struct RootView: View {
                     }
                 }
                 .task(id: auth.session?.userId) {
-                    guard let userId = auth.session?.userId, !splashDone else { return }
-                    splashDone = true
+                    guard let userId = auth.session?.userId, warmedUserId != userId else { return }
+                    warmedUserId = userId
                     // Nothing to show yet, or nothing shown for a while: stand in front. Otherwise
                     // refresh underneath and let the person straight in.
                     let cold = sync.isCold
@@ -38,7 +41,10 @@ struct RootView: View {
                     if cold || stale { withAnimation(.easeOut(duration: 0.25)) { showSplash = true } }
                     // The mark takes about a second to draw itself; dismissing before it finishes
                     // would look like a glitch rather than a greeting.
-                    async let floor: Void = try? await Task.sleep(for: .milliseconds(cold ? 1400 : 900))
+                    // `Void?`, not `Void`: `try?` on a throwing call that returns nothing still
+                    // produces an optional, and the mismatch is a compile error rather than a
+                    // warning.
+                    async let floor: Void? = try? await Task.sleep(for: .milliseconds(cold ? 1400 : 900))
                     await sync.syncData(userId: userId)
                     _ = await floor
                     withAnimation(.easeOut(duration: 0.3)) { showSplash = false }

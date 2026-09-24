@@ -847,6 +847,7 @@ final class AppLanguage {
         "Approve": "Setujui",
         "Getting your workspace ready": "Menyiapkan workspace kamu",
         "Showing data from %@": "Menampilkan data dari %@",
+        "Saved copy from %@": "Salinan tersimpan dari %@",
         "Today's attendance": "Absensi hari ini",
         "Your tasks": "Tugas kamu",
         "Your projects": "Proyek kamu",

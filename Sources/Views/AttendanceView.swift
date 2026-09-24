@@ -832,9 +832,17 @@ struct AttendanceView: View {
         do { today = try await APIClient.shared.attendanceToday(); serverDown = false; cachedFrom = nil }
         catch APIError.unauthorized { auth.logout() }
         catch APIError.offline { serverDown = true; restoreTodayFromCache() }
-        catch {
-            self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load.")
+        catch APIError.transport(let why) {
+            // Nothing answered. The saved copy is the best account of today anybody has.
+            self.error = why
             restoreTodayFromCache()
+        }
+        catch {
+            // The server DID answer — a 500, a 403, a body that would not decode. Believe it:
+            // filling the screen from disk here would paper over a refusal. What is already drawn
+            // stays, but it stops claiming to be live.
+            self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load.")
+            markStale()
         }
         loading = false
         // Drives the Dynamic Island from what the app actually believes, rather than from the tap.
@@ -857,12 +865,29 @@ struct AttendanceView: View {
     /// written in AttendanceSnapshot: a value produced here can only ever disagree about the day,
     /// never about the format somebody else writes it in.
     private func restoreTodayFromCache() {
-        guard today == nil,
-              let hit = ResponseCache.decoded("attendance-today", as: AttendanceToday.self),
-              JakartaDay.same(hit.savedAt, Date())
-        else { return }
-        today = hit.value
+        guard let hit = sameDayCache() else { return }
+        // Only fills an empty screen. When a refresh fails over something already drawn, the
+        // payload on screen is no less correct than it was a moment ago — it has simply stopped
+        // being live, and `markStale` is what says so.
+        if today == nil { today = hit.value }
         cachedFrom = hit.savedAt
+    }
+
+    /// Says when what is on screen was last confirmed, without changing it.
+    ///
+    /// Without this the line vanished exactly when it mattered most: a first load that succeeded
+    /// followed by refreshes that fail left hours-old figures on screen with nothing marking them,
+    /// because the restore path had already decided there was nothing to restore.
+    private func markStale() {
+        guard let hit = sameDayCache() else { return }
+        cachedFrom = hit.savedAt
+    }
+
+    private func sameDayCache() -> (value: AttendanceToday, savedAt: Date)? {
+        guard let hit = ResponseCache.decoded("attendance-today", as: AttendanceToday.self),
+              JakartaDay.same(hit.savedAt, Date())
+        else { return nil }
+        return hit
     }
 
     // MARK: formatters
