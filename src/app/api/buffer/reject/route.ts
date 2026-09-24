@@ -27,6 +27,9 @@ export async function POST(request: NextRequest) {
   } catch (e) {
     const msg = e instanceof BufferError ? e.message : "Gagal reject di Buffer."
     console.error("[buffer] reject failed", e)
-    return NextResponse.json({ error: msg }, { status: 502 })
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
+
+// 500, not 502: the Cloudflare down-page Worker treats any 502 as "origin unreachable" and
+// replaces the body with NEXUS_DOWN, so the sentence above never reached the person.

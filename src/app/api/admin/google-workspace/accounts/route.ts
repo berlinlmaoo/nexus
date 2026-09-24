@@ -58,7 +58,10 @@ export async function GET() {
     // menggantinya dengan "gagal memuat" membuang satu-satunya petunjuk yang berguna.
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Gagal membaca direktori Google" },
-      { status: 502 },
+      { status: 500 },
     )
   }
 }
+
+// 500, not 502: the Cloudflare down-page Worker treats any 502 as "origin unreachable" and
+// replaces the body with NEXUS_DOWN, so the sentence above never reached the person.

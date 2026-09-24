@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     // same account that requested the change (see the verify route).
     const { code, verification } = await upsertEmailOtp({ email: newEmail, purpose: OtpPurpose.EMAIL_CHANGE, name: session.user.id })
     const sent = await sendEmail({ ...emailChangeOtpEmail({ recipientName: me.name || "there", otpCode: code, expiresInMinutes: OTP_EXPIRES_IN_MINUTES }), to: newEmail })
-    if (!sent) return NextResponse.json({ error: "Gagal ngirim email. Coba lagi bentar." }, { status: 502 })
+    if (!sent) return NextResponse.json({ error: "Gagal ngirim email. Coba lagi bentar." }, { status: 500 })
     logAudit({ action: "update", entityType: "user", entityId: session.user.id, entityName: "email-change requested", userId: session.user.id, request })
     return NextResponse.json({ ok: true, resendInSeconds: secondsUntil(verification.resendAvailableAt) })
   } catch (error) {
@@ -65,3 +65,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Server error" }, { status: 500 })
   }
 }
+
+// 500, not 502: the Cloudflare down-page Worker treats any 502 as "origin unreachable" and
+// replaces the body with NEXUS_DOWN, so the sentence above never reached the person.
