@@ -8,6 +8,7 @@ import { celebrate } from "@/components/Celebration";
 import { ApiError, fmtTime, nexusApi, type AttendanceActionPayload, type NexusAttendanceToday } from "@/lib/nexus-api";
 import { getAttendanceFix, GeoError } from "@/lib/geo";
 import { LivenessCapture } from "@/components/attendance/LivenessCapture";
+import { IosAppCheckInCard, isUseIosAppError, WebCheckInNote } from "@/components/attendance/IosAppCheckInCard";
 
 type TodayData = NexusAttendanceToday | null;
 
@@ -36,6 +37,9 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
   const refresh = () => { qc.invalidateQueries({ queryKey: ["attendance-today"] }); qc.invalidateQueries({ queryKey: ["attendance-history"] }); qc.invalidateQueries({ queryKey: ["my-penalties"] }); };
   const [msg, setMsg] = useState<string | null>(null);
   const [msgOk, setMsgOk] = useState(false);
+  // iPhone/iPad browsers check in from the app (the server refuses them with USE_IOS_APP).
+  // Shown once the server actually refuses (it only does after the 0.1.6 minimum starts).
+  const [iosOnly, setIosOnly] = useState(false);
   const [locating, setLocating] = useState(false);
   // Offsite checkout (outside the geofence): captured attempt + the reason prompt.
   const lastOut = useRef<AttendanceActionPayload | null>(null);
@@ -55,7 +59,7 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
     if (successTimer.current) clearTimeout(successTimer.current);
     successTimer.current = setTimeout(() => setSuccess(null), 2800);
   };
-  const checkIn = useMutation({ mutationFn: (p: AttendanceActionPayload) => nexusApi.attendanceCheckIn(p), onSuccess: () => { setMsg(null); refresh(); celebrate("Checked in. Let's cook ☕✨"); showSuccess("in"); }, onError: (e) => { setMsgOk(false); setMsg(errOf(e, "Couldn't check in.")); } });
+  const checkIn = useMutation({ mutationFn: (p: AttendanceActionPayload) => nexusApi.attendanceCheckIn(p), onSuccess: () => { setMsg(null); refresh(); celebrate("Checked in. Let's cook ☕✨"); showSuccess("in"); }, onError: (e) => { if (isUseIosAppError(e)) { setIosOnly(true); setMsg(null); return; } setMsgOk(false); setMsg(errOf(e, "Couldn't check in.")); } });
   const checkOut = useMutation({
     mutationFn: (p: AttendanceActionPayload) => nexusApi.attendanceCheckOut(p),
     onSuccess: (data) => {
@@ -64,6 +68,7 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
       else { setMsg(null); celebrate("Checked out. Good run today 🏁"); showSuccess("out"); }
     },
     onError: (e) => {
+      if (isUseIosAppError(e)) { setIosOnly(true); setMsg(null); return; }
       const payload = e instanceof ApiError ? (e.payload as { code?: string; officeName?: string; distanceMeters?: number } | null) : null;
       if (e instanceof ApiError && e.status === 422 && payload?.code === "OUTSIDE_RADIUS") {
         // Outside the geofence → offer an offsite checkout with a reason (pending BoD approval).
@@ -243,6 +248,7 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
       </section>
 
       {/* IN / OUT buttons — in normal flow (below the map) so they never overlap the fixed navbar */}
+      {iosOnly && (!checkedOut || forcePending) ? <IosAppCheckInCard /> : <>
       <div className="grid grid-cols-2 gap-3">
         <button
           onClick={() => trigger("in")}
@@ -259,6 +265,8 @@ export function MobileCheckInHero({ today, disabled }: { today: TodayData; disab
           {busy && pendingMode.current === "out" ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />} Presence Out
         </button>
       </div>
+      {(!checkedOut || forcePending) && <WebCheckInNote />}
+      </>}
 
       {/* Offsite checkout prompt — shown when the user is outside the office geofence on check-out */}
       {offsitePrompt && (

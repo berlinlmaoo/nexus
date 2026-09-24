@@ -435,8 +435,30 @@ export type NexusAttendanceHistory = {
     checkOutApproval?: string | null;
     checkOutReflection?: string | null;
     checkOutReflectionAt?: string | null;
+    // Live location while checked in (0.1.6): "denied" = the phone refused location, "web" = checked
+    // in from a browser (never tracked) — either way there is no trail.
+    locationTrackingState?: "on" | "denied" | "web" | null;
+    checkInClient?: "ios-app" | "web" | "legacy-app" | null;
+    // Set while the person is outside the office radius right now (today's record only).
+    outsideSince?: string | null;
     user?: NexusUser | null;
   }>;
+};
+
+export type NexusTrailPoint = { lat: number; lng: number; accuracy: number | null; at: string; inside: boolean; event: string | null };
+export type NexusAttendanceTrail = {
+  record: {
+    id: string;
+    userId: string;
+    userName: string | null;
+    date: string;
+    checkInAt: string | null;
+    checkOutAt: string | null;
+    checkOutOffsite: boolean | null;
+    office: { name: string; lat: number; lng: number; radiusMeters: number } | null;
+  };
+  points: NexusTrailPoint[];
+  outsideSpans: { from: string; to: string | null }[];
 };
 
 export type NexusOffice = {
@@ -1737,6 +1759,8 @@ export const nexusApi = {
     const data = await apiFetch<{ records?: NexusAttendanceHistory["rows"]; rows?: NexusAttendanceHistory["rows"] }>(`/api/attendance/history?${query}`);
     return { rows: data?.records ?? data?.rows ?? [] };
   },
+  // Where someone was while checked in. 403 outside the viewer's scope (manager = direct reports, BoD = all).
+  attendanceTrail: (recordId: string) => apiFetch<NexusAttendanceTrail>(`/api/attendance/records/${encodeURIComponent(recordId)}/trail`),
   attendanceCheckIn: (payload: AttendanceActionPayload) => apiFetch<{ record: NexusAttendanceToday["today"] }>("/api/attendance/check-in", { method: "POST", body: attendanceFormData(payload) }),
   attendanceCheckOut: (payload: AttendanceActionPayload) => apiFetch<{ record: NexusAttendanceToday["today"]; pendingApproval?: boolean }>("/api/attendance/check-out", { method: "POST", body: attendanceFormData(payload) }),
   // Offsite checkout approval (BoD)

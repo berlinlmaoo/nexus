@@ -60,6 +60,16 @@ export async function POST(req: NextRequest) {
       WHERE NOT t.tgisinternal AND c.relname = 'SheetRow' AND t.tgname = 'sheet_row_revisions'
     `
 
+    // Location trail of checked-in staff (lib/attendance-location.ts): 90 days, no exceptions — the map
+    // is for the day and its review, not an archive of where people were. Same cutoff as above. Its own
+    // try: a failure here must not hide the sheet purge result (and vice versa).
+    let locationPointsDeleted: number | null = null
+    try {
+      locationPointsDeleted = (await prisma.attendanceLocationPoint.deleteMany({ where: { at: { lt: cutoff } } })).count
+    } catch (error) {
+      console.error("Error purging attendance location points:", error)
+    }
+
     const remaining = await prisma.sheetCellRevision.count()
     return NextResponse.json({
       ok: true,
@@ -68,6 +78,7 @@ export async function POST(req: NextRequest) {
       deleted,
       remaining,
       triggerInstalled: Number(n) > 0,
+      locationPointsDeleted,
     })
   } catch (error) {
     console.error("Error purging sheet revisions:", error)

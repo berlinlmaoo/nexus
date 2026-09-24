@@ -26,6 +26,9 @@ export async function POST(request: NextRequest) {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
+    // Check-out is never refused for the browser it comes from: only check-IN from an iPhone browser
+    // is (see check-in). Whoever checked in from a browser must always be able to check out the same way.
+
     const context = await getAttendanceWorkspaceContext(session.user.id)
     if (!context.workspace) {
       return NextResponse.json({ error: "No workspace membership found" }, { status: 404 })

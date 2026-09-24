@@ -178,6 +178,18 @@ function isAttendancePath(pathname: string): boolean {
  * refused. Requests with no X-Nexus-Client and no `NEXUS/<build>` User-Agent (the web, curl,
  * scripts) return null before anything is looked up — they are never blocked.
  */
+/**
+ * Whether an iPhone/iPad BROWSER may still check in. Web check-in on iOS is refused only once the
+ * minimum app version is at least ROLLING_FROM (0.1.6, the first build that tracks location): before
+ * that the app on those phones does not track either, and on 24 Sep 2026 about 23 people had checked
+ * in from an iPhone browser in the previous 30 days, four of them without ever using the app. So the
+ * refusal starts on the same day the 0.1.6 minimum does (App Store release + GRACE_MS), not earlier.
+ */
+export async function iosBrowserCheckInBlocked(now = Date.now()): Promise<boolean> {
+  const policy = await getIosVersionPolicy(now)
+  return compareVersions(policy.minSupported, ROLLING_FROM) >= 0
+}
+
 export async function iosUpgradeGate(
   request: { method: string; headers: { get(name: string): string | null } },
   pathname: string,

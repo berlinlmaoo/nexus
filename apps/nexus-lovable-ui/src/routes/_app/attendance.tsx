@@ -1,5 +1,7 @@
 import type React from "react";
 import { OfficeMapPicker } from "@/components/attendance/OfficeMapPicker";
+import { LocationTrail, LocationTrailDialog } from "@/components/attendance/LocationTrail";
+import { IosAppCheckInCard, isUseIosAppError, WebCheckInNote } from "@/components/attendance/IosAppCheckInCard";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,7 +11,7 @@ import { Avatar } from "@/components/Avatar";
 import { ApiError, downloadFile, fmtDate, fmtTime, nexusApi, statusLabel, type AttendanceActionPayload, type NexusAttendanceHistory, type NexusOffice, type NexusOffsiteCheckout } from "@/lib/nexus-api";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { getAttendanceFix, GeoError } from "@/lib/geo";
-import { AlertTriangle, Calendar, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Clock, Coffee, Download, FileText, Flag, Hand, HeartPulse, Image as ImageIcon, Info, Loader2, MapPin, Moon, Pencil, PenLine, Scale, Search, Sparkles, Sun, Trash2, X } from "lucide-react";
+import { AlertTriangle, Calendar, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Clock, Coffee, Download, FileText, Flag, Globe, Hand, HeartPulse, Image as ImageIcon, Info, Loader2, MapPin, MapPinOff, Moon, Pencil, PenLine, Route as RouteIcon, Scale, Search, Sparkles, Sun, Trash2, X } from "lucide-react";
 import { celebrate } from "@/components/Celebration";
 import { SelfieCapture } from "@/components/attendance/SelfieCapture";
 import { MobileCheckInHero } from "@/components/attendance/MobileCheckInHero";
@@ -64,6 +66,28 @@ const sCls: Record<string, string> = {
 const toneLabel: Record<string, string> = {
   present: "Present", permit: "Permit (counted present)", wfh: "WFH", leave: "Leave", sick: "Sick", dayoff: "Day off / public holiday", absent: "Absent", none: "",
 };
+
+// The WIB calendar day — "outside since" only means something on today's record.
+function jakartaDateKey(d = new Date()) {
+  return new Date(d.getTime() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+// Live-location flags on a record: checked in from the web (never tracked), the phone refused
+// location, and/or they are out of the office right now.
+function TrackingBadges({ rec, isToday, className }: { rec?: HistRow | null; isToday: boolean; className?: string }) {
+  if (!rec) return null;
+  const web = rec.locationTrackingState === "web";
+  const off = rec.locationTrackingState === "denied";
+  const outside = isToday && !!rec.outsideSince && !rec.checkOutAt;
+  if (!web && !off && !outside) return null;
+  return (
+    <span className={cn("inline-flex flex-wrap items-center gap-1", className)}>
+      {web && <span title="Checked in from a browser — the location isn’t tracked during the day" className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700"><Globe className="h-3 w-3" /> Web check-in · location not tracked</span>}
+      {off && <span title="Location access is off on this person’s phone — no trail is recorded" className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600"><MapPinOff className="h-3 w-3" /> Location off</span>}
+      {outside && <span title="Outside the office radius right now" className="inline-flex shrink-0 items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-amber-700">Outside since {fmtTime(rec.outsideSince)}</span>}
+    </span>
+  );
+}
 const REQ_LABEL: Record<string, string> = { LEAVE: "Leave", SICK: "Sick", PERMIT: "Permit", DAY_OFF: "Day Off", RED_DATE: "Public Holiday" };
 
 // A request's supporting document. A PHOTO is never labelled with its file name: the old apps named
@@ -298,6 +322,9 @@ function Attendance() {
     }
   };
   const [correctRecord, setCorrectRecord] = useState<HistRow | null>(null);
+  // The viewer's own trail for today, opened from the office card.
+  const [trailFor, setTrailFor] = useState<{ id: string; title: string; subtitle?: string } | null>(null);
+  const todayKey = today.data?.attendanceDateKey?.slice(0, 10) || jakartaDateKey();
   const [leaveDetail, setLeaveDetail] = useState<HistRow | null>(null);
   // BoD: override a member-day that has NO record/request yet (empty board cell → set status).
   const [overrideTarget, setOverrideTarget] = useState<{ userId: string; name: string | null; dateKey: string } | null>(null);
@@ -414,8 +441,9 @@ function Attendance() {
             icon={<MapPin className="h-5 w-5" />}
             label="Office checkpoint"
             value={today.data?.today?.officeLocation?.name || `${today.data?.activeOfficeCount ?? 0} active offices`}
-            helper={`In ${fmtTime(today.data?.today?.checkInAt)} · Out ${fmtTime(today.data?.today?.checkOutAt)}`}
+            helper={`In ${fmtTime(today.data?.today?.checkInAt)} · Out ${fmtTime(today.data?.today?.checkOutAt)}${today.data?.today?.id && today.data.today.checkInAt ? " · tap for your location trail" : ""}`}
             tone="purple"
+            onClick={today.data?.today?.id && today.data.today.checkInAt ? () => setTrailFor({ id: today.data!.today!.id, title: "Your location trail", subtitle: `Today${today.data?.today?.officeLocation?.name ? ` · ${today.data.today.officeLocation.name}` : ""}` }) : undefined}
           />
           <FunMetric
             icon={<Sparkles className="h-5 w-5" />}
@@ -503,6 +531,7 @@ function Attendance() {
                         <span className="truncate font-medium">{r.user?.name || "PATS Crew"}</span>
                         <span className="text-xs text-muted-foreground">{fmtDate(r.attendanceDate)}</span>
                         {r.checkOutOffsite && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">Offsite</span>}
+                        <TrackingBadges rec={r} isToday={(r.attendanceDate || "").slice(0, 10) === todayKey} />
                       </div>
                       <div className="mt-0.5 truncate text-xs text-muted-foreground">
                         In {fmtTime(r.checkInAt)}{r.checkInAddress ? ` · ${r.checkInAddress}` : r.checkInDistanceMeters != null ? ` · ±${Math.round(r.checkInDistanceMeters)}m` : ""}
@@ -568,6 +597,7 @@ function Attendance() {
                             </div>
                           </>
                         )}
+                        <TrackingBadges rec={recMap.get(`${u.id}:${todayKey}`)} isToday className="sm:ml-1" />
                         {canManage && (() => {
                           const d = dayOffOf(u.id);
                           if (!d) return null;
@@ -620,7 +650,7 @@ function Attendance() {
                       const rec = recMap.get(`${u.id}:${pd.key}`);
                       const tone = rec ? recTone(rec) : "none";
                       return (
-                        <td key={pd.key} className={cn("px-1 py-2.5 text-center", pd.day === 1 && "border-l border-border/70")}>
+                        <td key={pd.key} className={cn("relative px-1 py-2.5 text-center", pd.day === 1 && "border-l border-border/70")}>
                           {rec ? (
                             tone === "absent" && canManage ? (
                               <button
@@ -645,7 +675,7 @@ function Attendance() {
                                 whileTap={reduceMotion ? undefined : { scale: 0.85 }}
                                 transition={{ type: "spring", stiffness: 500, damping: 18 }}
                                 onClick={(e) => { setCorrectOrigin(rectCenter(e.currentTarget)); setCorrectRecord(rec); }}
-                                title={`${fmtDate(rec.attendanceDate)} · ${statusLabel(rec.status || "")} · in ${fmtTime(rec.checkInAt)} / out ${fmtTime(rec.checkOutAt)} — tap to see location & selfie`}
+                                title={`${fmtDate(rec.attendanceDate)} · ${statusLabel(rec.status || "")} · in ${fmtTime(rec.checkInAt)} / out ${fmtTime(rec.checkOutAt)}${rec.locationTrackingState === "denied" ? " · Location off" : rec.locationTrackingState === "web" ? " · Web check-in · location not tracked" : ""} — tap to see location & selfie`}
                                 className={cn("inline-block h-5 w-5 rounded-lg transition-[box-shadow] hover:ring-2 hover:ring-primary/50", sCls[tone])}
                               />
                             )
@@ -657,6 +687,15 @@ function Attendance() {
                             />
                           ) : (
                             <span className="inline-block h-5 w-5 rounded-lg bg-muted/30" />
+                          )}
+                          {rec?.locationTrackingState === "denied" && (
+                            <span title="Location off" aria-label="Location off" className="pointer-events-none absolute right-0 top-1 grid h-3 w-3 place-items-center rounded-full bg-card text-slate-500 ring-1 ring-border"><MapPinOff className="h-2 w-2" /></span>
+                          )}
+                          {rec?.locationTrackingState === "web" && (
+                            <span title="Web check-in · location not tracked" aria-label="Web check-in · location not tracked" className="pointer-events-none absolute right-0 top-1 grid h-3 w-3 place-items-center rounded-full bg-card text-sky-600 ring-1 ring-border"><Globe className="h-2 w-2" /></span>
+                          )}
+                          {pd.key === todayKey && rec?.outsideSince && !rec.checkOutAt && (
+                            <span title={`Outside since ${fmtTime(rec.outsideSince)}`} className="pointer-events-none absolute bottom-0.5 left-1/2 h-1 w-3 -translate-x-1/2 rounded-full bg-amber-500" />
                           )}
                         </td>
                       );
@@ -704,6 +743,7 @@ function Attendance() {
           </div>
         )}
       </AnimatePresence>
+      {trailFor && <LocationTrailDialog recordId={trailFor.id} title={trailFor.title} subtitle={trailFor.subtitle} onClose={() => setTrailFor(null)} />}
       <AnimatePresence>
         {logKind && <DayOffLogModal key={logKind.kind} kind={logKind.kind} origin={logKind.origin} onClose={() => setLogKind(null)} />}
       </AnimatePresence>
@@ -908,6 +948,21 @@ function AttendanceEvidence({ kind, photoUrl, address, lat, lng, distanceMeters,
   );
 }
 
+// "Location trail" in the day detail — collapsed until asked for, so opening a day costs no extra call.
+function TrailSection({ record, recordId }: { record: HistRow; recordId: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-4 rounded-2xl border border-border p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground"><RouteIcon className="h-3.5 w-3.5" /> Location trail</p>
+        <TrackingBadges rec={record} isToday={(record.attendanceDate || "").slice(0, 10) === jakartaDateKey()} />
+        <button type="button" onClick={() => setOpen((v) => !v)} className="ml-auto rounded-lg border border-border px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-accent">{open ? "Hide" : "Show"}</button>
+      </div>
+      {open && <div className="mt-3"><LocationTrail recordId={recordId} compact trackingState={record.locationTrackingState} /></div>}
+    </div>
+  );
+}
+
 function AttendanceCorrectionDrawer({ record, origin, onClose, canOverride }: { record: HistRow; origin?: MorphOrigin; onClose: () => void; canOverride?: boolean }) {
   const qc = useQueryClient();
   const [checkInAt, setCheckInAt] = useState(toLocalInput(record.checkInAt));
@@ -961,6 +1016,7 @@ function AttendanceCorrectionDrawer({ record, origin, onClose, canOverride }: { 
           <AttendanceEvidence kind="in" photoUrl={record.checkInPhotoUrl} address={record.checkInAddress} lat={record.checkInLat} lng={record.checkInLng} distanceMeters={record.checkInDistanceMeters} atIso={record.checkInAt} />
           <AttendanceEvidence kind="out" photoUrl={record.checkOutPhotoUrl} address={record.checkOutAddress} lat={record.checkOutLat} lng={record.checkOutLng} distanceMeters={record.checkOutDistanceMeters} atIso={record.checkOutAt} offsite={record.checkOutOffsite} reason={record.checkOutReason} />
         </div>
+        {record.id && record.checkInAt && <TrailSection record={record} recordId={record.id} />}
         {record.checkOutReflection && (
           <div className="mt-4 rounded-2xl border border-border bg-muted/30 p-3">
             <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground"><PenLine className="h-3.5 w-3.5" /> Daily reflection</p>
@@ -1934,6 +1990,9 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
   const lastOut = useRef<AttendanceActionPayload | null>(null);
   const [offsitePrompt, setOffsitePrompt] = useState<{ officeName: string; distanceMeters: number } | null>(null);
   const [offsiteReason, setOffsiteReason] = useState("");
+  // iPhone/iPad browsers check in from the app (the server refuses them with USE_IOS_APP).
+  // Shown once the server actually refuses (it only does after the 0.1.6 minimum starts).
+  const [iosOnly, setIosOnly] = useState(false);
 
   const pick = (f: File | null) => { setMessage(""); setSelfie(f); };
 
@@ -1942,7 +2001,7 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
     qc.invalidateQueries({ queryKey: ["attendance-history"] });
     qc.invalidateQueries({ queryKey: ["my-penalties"] });
   };
-  const checkIn = useMutation({ mutationFn: (payload: AttendanceActionPayload) => nexusApi.attendanceCheckIn(payload), onSuccess: () => { refresh(); pick(null); celebrate("Checked in. Let’s cook ☕✨"); } });
+  const checkIn = useMutation({ mutationFn: (payload: AttendanceActionPayload) => nexusApi.attendanceCheckIn(payload), onSuccess: () => { refresh(); pick(null); celebrate("Checked in. Let’s cook ☕✨"); }, onError: (e) => { if (isUseIosAppError(e)) { setIosOnly(true); setMessage(""); } } });
   const checkOut = useMutation({
     mutationFn: (payload: AttendanceActionPayload) => nexusApi.attendanceCheckOut(payload),
     onSuccess: (data) => {
@@ -1951,6 +2010,7 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
       else { setOkMessage(""); celebrate("Checked out. Good run today 🏁"); }
     },
     onError: (e) => {
+      if (isUseIosAppError(e)) { setIosOnly(true); setMessage(""); return; }
       const payload = e instanceof ApiError ? (e.payload as { code?: string; officeName?: string; distanceMeters?: number } | null) : null;
       if (e instanceof ApiError && e.status === 422 && payload?.code === "OUTSIDE_RADIUS") {
         setMessage(""); setOffsiteReason("");
@@ -2013,6 +2073,8 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
 
       {mode === "done" ? (
         <div className="mt-4 flex items-center gap-3 rounded-2xl bg-success/10 p-4 text-sm font-semibold text-success"><CheckCircle2 className="h-5 w-5" /> Attendance complete for today. Nice one! 🙌</div>
+      ) : iosOnly ? (
+        <IosAppCheckInCard className="mt-4" />
       ) : (
         <div className="mt-4 grid gap-4 sm:grid-cols-[auto_1fr]">
           {/* selfie (live camera + file fallback) */}
@@ -2038,6 +2100,7 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
             <button disabled={disabled || busy} onClick={submit} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-soft transition-all hover:bg-primary/90 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50">
               {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> {locating ? "Locating…" : "Recording…"}</> : <><Camera className="h-4 w-4" /> {forcePending ? "Check out yesterday" : mode === "check-in" ? "Check in now" : "Check out now"}</>}
             </button>
+            <WebCheckInNote />
           </div>
         </div>
       )}
@@ -2054,7 +2117,7 @@ function AttendanceActionCard({ checkedIn, checkedOut, checkInAt, checkOutAt, of
       )}
       {okMessage && !offsitePrompt && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">{okMessage}</p>}
       {checkOutApproval === "PENDING" && !offsitePrompt && !okMessage && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">⏳ Offsite checkout — waiting for BoD approval</p>}
-      {(message || checkIn.isError) && <p className="mt-3 text-sm font-semibold text-destructive">{message || "Attendance failed — check your session, selfie, GPS, or whether you’re outside the office radius."}</p>}
+      {!iosOnly && (message || checkIn.isError) && <p className="mt-3 text-sm font-semibold text-destructive">{message || "Attendance failed — check your session, selfie, GPS, or whether you’re outside the office radius."}</p>}
     </section>
   );
 }

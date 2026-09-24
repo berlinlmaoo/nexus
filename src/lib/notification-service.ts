@@ -226,6 +226,10 @@ export async function createInAppNotification(data: {
   link?: string
   push?: boolean
   dedupeWindowMs?: number
+  /** APNs aps.category (notification actions on iOS). Push only; the in-app row does not carry it. */
+  pushCategory?: string
+  /** Extra custom keys in the APNs payload. Push only. */
+  pushData?: Record<string, string | number | boolean | null>
 }) {
   if (data.dedupeWindowMs && data.dedupeWindowMs > 0) {
     const since = new Date(Date.now() - data.dedupeWindowMs)
@@ -268,6 +272,8 @@ export async function createInAppNotification(data: {
       taskId: data.taskId,
       projectId: data.projectId,
       link: data.link,
+      category: data.pushCategory,
+      data: data.pushData,
     }).catch((error) => log.error("APNs delivery failed", { error: String(error) }))
   }
 

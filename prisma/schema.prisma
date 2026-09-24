@@ -1115,6 +1115,21 @@ model AttendanceRecord {
   checkInClientId       String?          @unique
   checkOutClientId      String?          @unique
 
+  // Live location while checked in (src/lib/attendance-location.ts). outsideSince = start of the current
+  // outside-the-radius episode (null = inside, or not tracked); outsideStage = what the clock already did
+  // in it: "outside" | "reminded" | "warned" | "auto_checked_out", and outsideStageAt = when. A stage
+  // older than the clock's start (a new episode, or an izin rejected) no longer counts.
+  outsideSince          DateTime?
+  outsideStage          String?
+  outsideStageAt        DateTime?
+  // "on" (points arriving) | "denied" (app refused Always permission) | "web" (web check-in — not
+  // tracked) | null (nothing known yet). Shown on the board.
+  locationTrackingState String?
+  // Where the check-in came from: "ios-app" (X-Nexus-Client ios/…) | "legacy-app" (UA NEXUS/<build>,
+  // no header) | "web" (browser) | null (unknown — records from before this column, scripts).
+  checkInClient         String?
+  locationPoints        AttendanceLocationPoint[]
+
   notes                 String?
   status                AttendanceStatus @default(CHECKED_IN)
   correctedAt           DateTime?
@@ -2866,4 +2881,26 @@ model AppSetting {
   key       String   @id
   value     Json
   updatedAt DateTime @default(now()) @updatedAt
+}
+
+// One location fix from the app while its owner is checked in (src/lib/attendance-location.ts). Only
+// between check-in and check-out, only self check-ins at an office. (userId, at) is unique so a batch the
+// app resends stores nothing twice. `inside` = within some office's radius (or an enter event not clearly
+// outside), as classified when stored. Purged after 90 days (cron/purge-sheet-revisions). Table:
+// loc_server.sql.
+model AttendanceLocationPoint {
+  id        String           @id @default(cuid())
+  userId    String
+  recordId  String
+  record    AttendanceRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  lat       Float
+  lng       Float
+  accuracy  Float?
+  at        DateTime
+  event     String?
+  inside    Boolean
+  createdAt DateTime         @default(now())
+
+  @@unique([userId, at])
+  @@index([recordId, at])
 }
