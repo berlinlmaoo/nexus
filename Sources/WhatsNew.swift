@@ -55,6 +55,16 @@ enum WhatsNew {
             body: T("Your projects, their tasks and files, today's attendance, the crew board, your requests and your selfies are kept on this phone and refreshed in the background. On a site with no bars it all still opens, with a line saying when it was saved. Files download on Wi-Fi only unless you switch it on in Tuning Room.")
         ),
         WhatsNewEntry(
+            icon: "chart.bar.xaxis",
+            title: T("Reports, about you"),
+            body: T("Reports now shows your own period, 28th to 27th: tasks done and done on time, what's overdue, your attendance and your XP, each compared with last period. Managers also see their team, one person at a time.")
+        ),
+        WhatsNewEntry(
+            icon: "person.crop.circle.badge.plus",
+            title: T("Sign up, reset and change email in the app"),
+            body: T("Create an account right here with your company's workspace code. Forgot your password? Reset it from the sign-in screen. Changed email? Update it in Tuning Room with a code sent to the new address.")
+        ),
+        WhatsNewEntry(
             icon: "hand.raised.fill",
             title: T("Filing a permit works from your phone again"),
             body: T("A permit needs to know where you filed it from, and the app never sent that — so every permit from an iPhone was refused and people quietly moved to the web. It now asks for your location the moment you pick Permit, shows it locked, and won't let you send without it.")

@@ -17,9 +17,23 @@ Tanggal merah muncul kalau bulan ini ada jatahnya.
 Sakit dan izin satu tanggal. Sakit boleh mundur, izin tidak.
 Minta day off lebih banyak dari sisa jatah? Diberitahu sebelum dikirim, bukan sesudah.
 
+REPORTS SEKARANG NGOMONGIN KAMU.
+
+Periode 28 sampai 27: task selesai, yang tepat waktu, yang telat, absen, sampai XP.
+Semua dibanding periode lalu. Bukan dibanding orang lain.
+Manager juga bisa lihat timnya, satu per satu.
+
+DAFTAR, LUPA PASSWORD, GANTI EMAIL — SEMUA DARI APP.
+
+Punya kode workspace? Bikin akun langsung di sini.
+Lupa password? Reset dari layar masuk.
+
 Juga di versi ini:
 - Kartu absensi menyebut kamu sedang di kantor mana, bukan menghitung kantor perusahaan.
 - Lampiran bisa dari kamera dan galeri, dan Choose files akhirnya jalan di iPad.
 - Foto izin tidak lagi tersimpan dengan nama surat sakit.
 - Aplikasi Mac kini satu nomor versi dengan HP, dan bisa memotret lewat webcam.
+- Ikon baru: tanda X, hitam di atas putih.
+- Scroll daftar pengajuan jauh lebih mulus.
+- XP quest diklaim langsung dari kartu Quest.
 - Pengingat absen pulang mengikuti jam pulang aslimu, bukan jam yang salah.
