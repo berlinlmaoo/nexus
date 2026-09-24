@@ -20,6 +20,7 @@ import { Route as SSlugRouteImport } from './routes/s.$slug'
 import { Route as RoomDisplayRoomRouteImport } from './routes/room-display.$room'
 import { Route as OauthAuthorizeRouteImport } from './routes/oauth.authorize'
 import { Route as FFormIdRouteImport } from './routes/f.$formId'
+import { Route as DownloadAndroidRouteImport } from './routes/download.android'
 import { Route as AppVaultRouteImport } from './routes/_app/vault'
 import { Route as AppThreadsRouteImport } from './routes/_app/threads'
 import { Route as AppTeamsRouteImport } from './routes/_app/teams'
@@ -100,6 +101,11 @@ const OauthAuthorizeRoute = OauthAuthorizeRouteImport.update({
 const FFormIdRoute = FFormIdRouteImport.update({
   id: '/f/$formId',
   path: '/f/$formId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DownloadAndroidRoute = DownloadAndroidRouteImport.update({
+  id: '/download/android',
+  path: '/download/android',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppVaultRoute = AppVaultRouteImport.update({
@@ -265,6 +271,7 @@ export interface FileRoutesByFullPath {
   '/teams': typeof AppTeamsRoute
   '/threads': typeof AppThreadsRoute
   '/vault': typeof AppVaultRoute
+  '/download/android': typeof DownloadAndroidRoute
   '/f/$formId': typeof FFormIdRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/room-display/$room': typeof RoomDisplayRoomRoute
@@ -303,6 +310,7 @@ export interface FileRoutesByTo {
   '/teams': typeof AppTeamsRoute
   '/threads': typeof AppThreadsRoute
   '/vault': typeof AppVaultRoute
+  '/download/android': typeof DownloadAndroidRoute
   '/f/$formId': typeof FFormIdRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/room-display/$room': typeof RoomDisplayRoomRoute
@@ -344,6 +352,7 @@ export interface FileRoutesById {
   '/_app/teams': typeof AppTeamsRoute
   '/_app/threads': typeof AppThreadsRoute
   '/_app/vault': typeof AppVaultRoute
+  '/download/android': typeof DownloadAndroidRoute
   '/f/$formId': typeof FFormIdRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
   '/room-display/$room': typeof RoomDisplayRoomRoute
@@ -386,6 +395,7 @@ export interface FileRouteTypes {
     | '/teams'
     | '/threads'
     | '/vault'
+    | '/download/android'
     | '/f/$formId'
     | '/oauth/authorize'
     | '/room-display/$room'
@@ -424,6 +434,7 @@ export interface FileRouteTypes {
     | '/teams'
     | '/threads'
     | '/vault'
+    | '/download/android'
     | '/f/$formId'
     | '/oauth/authorize'
     | '/room-display/$room'
@@ -464,6 +475,7 @@ export interface FileRouteTypes {
     | '/_app/teams'
     | '/_app/threads'
     | '/_app/vault'
+    | '/download/android'
     | '/f/$formId'
     | '/oauth/authorize'
     | '/room-display/$room'
@@ -485,6 +497,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   PhaethonRoute: typeof PhaethonRoute
   RegisterRoute: typeof RegisterRoute
+  DownloadAndroidRoute: typeof DownloadAndroidRoute
   FFormIdRoute: typeof FFormIdRoute
   OauthAuthorizeRoute: typeof OauthAuthorizeRoute
   RoomDisplayRoomRoute: typeof RoomDisplayRoomRoute
@@ -569,6 +582,13 @@ declare module '@tanstack/react-router' {
       path: '/f/$formId'
       fullPath: '/f/$formId'
       preLoaderRoute: typeof FFormIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/download/android': {
+      id: '/download/android'
+      path: '/download/android'
+      fullPath: '/download/android'
+      preLoaderRoute: typeof DownloadAndroidRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/vault': {
@@ -862,6 +882,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   PhaethonRoute: PhaethonRoute,
   RegisterRoute: RegisterRoute,
+  DownloadAndroidRoute: DownloadAndroidRoute,
   FFormIdRoute: FFormIdRoute,
   OauthAuthorizeRoute: OauthAuthorizeRoute,
   RoomDisplayRoomRoute: RoomDisplayRoomRoute,

@@ -70,6 +70,12 @@ export interface ServeFileOptions {
   forceInline?: boolean
   /** Override the cache policy. A public share link is not "private" in the CDN sense. */
   cacheControl?: string
+  /** Override the extension-derived Content-Type (e.g. an APK, which MIME_TYPES deliberately lacks). */
+  contentType?: string
+  /** Strong validator. When given, ETag is sent and an `If-Range` that does not match it (nor
+   *  lastModified) turns a Range request into a full 200 — a resumed download never splices two files. */
+  etag?: string
+  lastModified?: Date
 }
 
 /**
@@ -91,7 +97,7 @@ export async function serveFile(
     if (!stats.isFile()) return NextResponse.json({ error: "Not found" }, { status: 404 })
     const fileSize = stats.size
     const ext = extensionOf(filePath)
-    const contentType = MIME_TYPES[ext] || "application/octet-stream"
+    const contentType = opts.contentType || MIME_TYPES[ext] || "application/octet-stream"
     // `?download=<name>` is the app's existing "save this" link. It carries the real name AND means
     // attachment — that second half is load-bearing: today it is the only way to download an image
     // instead of opening it. `opts.filename` is the newer, weaker form: a real name that leaves the
@@ -138,6 +144,9 @@ export async function serveFile(
       "Content-Disposition": contentDisposition,
       "X-Content-Type-Options": "nosniff",
     }
+    const lastModified = opts.lastModified ? opts.lastModified.toUTCString() : null
+    if (opts.etag) common["ETag"] = opts.etag
+    if (lastModified) common["Last-Modified"] = lastModified
 
     if (fileSize === 0) {
       return new NextResponse(null, { status: 200, headers: { ...common, "Content-Length": "0" } })
@@ -145,7 +154,11 @@ export async function serveFile(
 
     // iOS Safari REQUIRES HTTP Range support to play <video>/<audio> and to page through a PDF. Serve
     // 206 Partial Content when a Range header is present (streaming only the requested slice).
-    const rangeHeader = req.headers.get("range")
+    // If-Range (RFC 9110 §13.1.5) is honoured only for callers that supply a validator; everyone else
+    // keeps the old behaviour exactly.
+    const ifRange = opts.etag ? req.headers.get("if-range")?.trim() : null
+    const rangeStillValid = !ifRange || ifRange === opts.etag || (lastModified !== null && ifRange === lastModified)
+    const rangeHeader = rangeStillValid ? req.headers.get("range") : null
     if (rangeHeader) {
       const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim())
       if (match && (match[1] !== "" || match[2] !== "")) {

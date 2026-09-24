@@ -18,9 +18,12 @@ import { getAndroidVersionPolicy, getIosVersionPolicy } from "@/lib/version-poli
  *   graceUntil    only while a newer release is inside its 3-day window: when it becomes the minimum…
  *   nextMinimum   …and which version that is.
  *   android       the Android app's policy, additive (the top-level fields above stay iOS's, so every
- *                 shipped iOS build decodes exactly what it did): { minSupported, latest, storeUrl }.
- *                 minSupported = NEXUS_ANDROID_MIN_VERSION ("0.0.0" = nothing refused), latest =
- *                 NEXUS_ANDROID_LATEST_VERSION or null. No grace window: the owner moves both by hand.
+ *                 shipped iOS build decodes exactly what it did):
+ *                 { minSupported, latest, storeUrl, graceUntil?, nextMinimum? }.
+ *                 minSupported = NEXUS_ANDROID_MIN_VERSION ("0.0.0" = nothing refused), raised to latest
+ *                 3 days after NEXUS_ANDROID_LATEST_RELEASED_AT; latest = NEXUS_ANDROID_LATEST_VERSION or
+ *                 null; storeUrl = NEXUS_ANDROID_STORE_URL, default the /download/android page.
+ *                 graceUntil/nextMinimum only inside that 3-day window, same meaning as iOS's.
  */
 export async function GET() {
   const [policy, latest] = await Promise.all([getIosVersionPolicy(), latestIosVersion(1000)])

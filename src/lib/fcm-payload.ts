@@ -6,28 +6,96 @@
  *
  * The payload carries the same fields the APNs payload does (apns.ts sendOne): title, body, type, and
  * when present taskId, projectId, link, category, plus the caller's extra `data` keys — which, as on
- * iOS, can never replace the fixed ones. It is a notification + data message:
- *   notification     title/body, so the system shows it while the app is in the background or killed;
- *   data             every field as a string (FCM requires string values), for tap routing and for
- *                    onMessageReceived while the app is in the foreground;
- *   android          high priority, and the channel the app files it under (androidChannelFor).
+ * iOS, can never replace the fixed ones. It is a DATA-ONLY message (owner decision 24 Sep 2026,
+ * nexus-android SERVER-REQUESTS R1):
+ *   data             every field as a string (FCM requires string values), plus `channel` — the
+ *                    notification channel the app files it under (androidChannelFor). With no
+ *                    `notification` block the app's onMessageReceived runs in the foreground, the
+ *                    background and when killed, so the app builds every notification itself (the
+ *                    "File a permit" action, tap routing from `link`, marking `notificationId` read).
+ *   android          priority HIGH only: required for delivery while the phone dozes. No
+ *                    android.notification — that would make the system draw it again.
  */
 
-export type AndroidChannelId = "attendance" | "messages" | "general"
+export type AndroidChannelId =
+  | "attendance_reminders"
+  | "attendance_location"
+  | "approvals"
+  | "messages"
+  | "tasks"
+  | "tickets"
+  | "announcements"
+  | "system"
+
+/** The channel ids the Android app creates (PRD §4.5). */
+export const ANDROID_CHANNELS: readonly AndroidChannelId[] = [
+  "attendance_reminders", "attendance_location", "approvals", "messages", "tasks", "tickets", "announcements", "system",
+]
+
+/** Outside-office pushes carry this category (attendance-outside.ts OUTSIDE_PUSH_CATEGORY). */
+const OUTSIDE_OFFICE_CATEGORY = "NEXUS_OUTSIDE_OFFICE"
+
+const EXACT: Record<string, AndroidChannelId> = {
+  attendance_checkin_reminder: "attendance_reminders",
+  attendance_checkout_reminder: "attendance_reminders",
+  attendance_absent_recorded: "attendance_reminders",
+  dayoff_quota_low: "attendance_reminders",
+  red_date_quota_low: "attendance_reminders",
+  attendance_override: "attendance_reminders",
+
+  attendance_outside_reminder: "attendance_location",
+  attendance_outside_warning: "attendance_location",
+  attendance_auto_offsite_checkout: "attendance_location",
+
+  attendance_request_pending: "approvals",
+  attendance_request_reviewed: "approvals",
+  attendance_request_escalated: "approvals",
+  offsite_checkout_pending: "approvals",
+  offsite_checkout_reviewed: "approvals",
+
+  message: "messages",
+  message_mention: "messages",
+  feed_mention: "messages",
+  feed_comment: "messages",
+
+  project_invite: "tasks",
+  status_update: "tasks",
+  automation: "tasks",
+  submission_status: "tasks",
+  streak_at_risk: "tasks",
+  quest_claimable: "tasks",
+
+  system_gideon: "tickets",
+  violation_announcement: "tickets",
+
+  announcement: "announcements",
+
+  app_update: "system",
+  system_disk: "system",
+  test_notification: "system",
+}
+
+const PREFIX: Array<[string, AndroidChannelId]> = [
+  ["task_", "tasks"],
+  ["comment_", "tasks"],
+  ["booking_", "tasks"],
+  ["complaint_", "tickets"],
+  ["peer_report_", "tickets"],
+  ["google_workspace_", "system"],
+]
 
 /**
- * The Android notification channel for a notification type. The Android app must create channels
- * with exactly these ids (a message naming a channel that does not exist falls back to the app's
- * default channel, so an unknown id is not fatal, but the user's per-channel settings would not apply).
- *   attendance_*, attendance, offsite_checkout_*   → "attendance"
- *   MESSAGE, MESSAGE_MENTION (chat)                → "messages"
- *   everything else                                → "general"
+ * The Android notification channel for a push (SERVER-REQUESTS R1 table). The outside-office
+ * category wins over the type; then exact types; then the prefix families; anything else (including a
+ * type added later that nobody mapped) → "system", so it is never lost. Case-insensitive.
  */
-export function androidChannelFor(type: string | null | undefined): AndroidChannelId {
-  const t = (type ?? "").toLowerCase()
-  if (t === "attendance" || t.startsWith("attendance_") || t.startsWith("offsite_checkout_")) return "attendance"
-  if (t === "message" || t.startsWith("message_")) return "messages"
-  return "general"
+export function androidChannelFor(type: string | null | undefined, category?: string | null): AndroidChannelId {
+  if (category === OUTSIDE_OFFICE_CATEGORY) return "attendance_location"
+  const t = (type ?? "").trim().toLowerCase()
+  const exact = EXACT[t]
+  if (exact) return exact
+  for (const [prefix, channel] of PREFIX) if (t.startsWith(prefix)) return channel
+  return "system"
 }
 
 export interface FcmPushInput {
@@ -66,16 +134,13 @@ export function buildFcmMessage(token: string, p: FcmPushInput) {
   if (p.link) data.link = p.link
   if (p.category) data.category = p.category
   if (p.notificationId) data.notificationId = p.notificationId
+  data.channel = androidChannelFor(p.type, p.category)
 
   return {
     message: {
       token,
-      notification: { title: p.title, body: p.body },
       data,
-      android: {
-        priority: "HIGH" as const,
-        notification: { channel_id: androidChannelFor(p.type), sound: "default" },
-      },
+      android: { priority: "HIGH" as const },
     },
   }
 }

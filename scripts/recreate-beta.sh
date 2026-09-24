@@ -7,6 +7,9 @@ C=nexus-app-beta
 IMG=nexus-app:prod
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BASE="$ROOT/var/uploads"
+# The sideloaded Android release (current.json + APK, lib/android-release.ts): next to the repo, not in
+# it and not under uploads, mounted read-only. Derived from ROOT, not $HOME: this script runs under sudo.
+ANDROID_DIR="$(dirname "$ROOT")/nexus-data/android"
 PROD_ENV="$ROOT/.env.production"
 APNS_KEY_FILE="/etc/nexus/secrets/AuthKey_9PTCKVB26P.p8"
 ENVF="$(mktemp /tmp/beta-env.XXXXXX)"
@@ -50,7 +53,9 @@ echo "networks: $NETS(primary: $PRIMARY_NET)"
 #    tiny and non-secret; anything not named here follows the old rule.
 # NEXUS_IOS_MIN_VERSION: floor of the minimum supported iOS version (426 gate) — an edit must take effect.
 # NEXUS_ATTENDANCE_SHEET_SHARE: who gets read access to the live attendance sheet — an edit must take effect.
-OVERRIDABLE="NEXUS_PUBLIC_URL ATTENDANCE_OUTAGE_DATES GOOGLE_DIRECTORY_CLIENT_EMAIL GOOGLE_DIRECTORY_PRIVATE_KEY GOOGLE_DIRECTORY_SUBJECT NEXUS_IOS_MIN_VERSION NEXUS_ATTENDANCE_SHEET_SHARE"
+# NEXUS_ANDROID_*: the Android release facts the owner moves by hand on every release (minimum, latest,
+#   its release moment, where "update" points, the signing-cert fingerprint) — all public, none secret.
+OVERRIDABLE="NEXUS_PUBLIC_URL ATTENDANCE_OUTAGE_DATES GOOGLE_DIRECTORY_CLIENT_EMAIL GOOGLE_DIRECTORY_PRIVATE_KEY GOOGLE_DIRECTORY_SUBJECT NEXUS_IOS_MIN_VERSION NEXUS_ATTENDANCE_SHEET_SHARE NEXUS_ANDROID_CERT_SHA256 NEXUS_ANDROID_MIN_VERSION NEXUS_ANDROID_LATEST_VERSION NEXUS_ANDROID_LATEST_RELEASED_AT NEXUS_ANDROID_STORE_URL"
 
 # APNS_PRIVATE_KEY_PATH ditambahkan lagi secara eksplisit lewat -e di bawah. Kalau salinan
 # lama ikut terbawa dari container sebelumnya, tiap deploy menambah satu duplikat — sudah
@@ -103,6 +108,12 @@ docker run --rm -v "$APNS_KEY_FILE:/k.p8:ro" --entrypoint sh "$IMG" \
   exit 1
 }
 
+# A missing host path would be created by docker as root:root, and the Android session (debian) could
+# then not drop builds into it. Create it owned like the repo instead.
+for d in "$(dirname "$ANDROID_DIR")" "$ANDROID_DIR"; do
+  [ -d "$d" ] || { mkdir "$d" && chown "$(stat -c %u:%g "$ROOT")" "$d"; }
+done
+
 # 2) rename old -> prev + stop (this is the start of the blip)
 docker rename "$C" "${C}-prev" && docker stop "${C}-prev" >/dev/null
 echo "old renamed -> ${C}-prev + stopped"
@@ -128,6 +139,7 @@ docker run -d --name "$C" --restart unless-stopped \
   -v "$BASE/attendance:/app/public/uploads/attendance" \
   -v "$BASE/complaints:/app/public/uploads/complaints" \
   -v "$BASE/chat:/app/public/uploads/chat" \
+  -v "$ANDROID_DIR:/app/data/android:ro" \
   "$IMG" server.js >/dev/null && echo "new container started"
 
 # Re-attach every OTHER network the old container had (docker run only takes one).

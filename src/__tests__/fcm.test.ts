@@ -78,8 +78,10 @@ describe("fcm sender", () => {
     expect((sends[0].init.headers as Record<string, string>).authorization).toBe("Bearer ya29.test")
     const msg = JSON.parse(String(sends[0].init.body)).message
     expect(msg.token).toBe(FCM_TOKEN) // case kept
-    expect(msg.data).toMatchObject({ type: "attendance_request_reviewed", link: "/attendance?request=r1", notificationId: "n1" })
-    expect(msg.android.notification.channel_id).toBe("attendance")
+    expect(msg.data).toMatchObject({ type: "attendance_request_reviewed", link: "/attendance?request=r1", notificationId: "n1", channel: "approvals" })
+    // Data-only (SERVER-REQUESTS R1): no notification block anywhere, high priority kept.
+    expect(msg.notification).toBeUndefined()
+    expect(msg.android).toEqual({ priority: "HIGH" })
   })
 
   it("reports UNREGISTERED as a dead token and a quota error as transient", async () => {

@@ -57,6 +57,10 @@ export const isNative = (p) => p.style === "ios" || p.style === "android"
 
 // ---------- small helpers ----------
 const isStr = (v) => typeof v === "string" && v.length > 0
+// The Android release the harness publishes (run.sh ANDROID_LATEST + a 256 KiB fake APK).
+const ANDROID_LATEST = process.env.COMPAT_ANDROID_LATEST_VERSION || "0.1.1"
+const ANDROID_DOWNLOAD_URL = "https://nexus.znetworks.id/download/android"
+const APK_SIZE = 262144
 const need = (cond, msg) => (cond ? null : msg)
 function firstError(...checks) {
   for (const c of checks) if (c) return c
@@ -242,7 +246,14 @@ export function buildFixtures(profile, world, media) {
           check: (j) => firstError(
             need(isStr(j?.minSupported), "iOS minSupported missing"),
             need(isStr(j?.android?.minSupported), "android.minSupported missing"),
-            need(/^https:\/\/play\.google\.com\//.test(j?.android?.storeUrl ?? ""), "android.storeUrl is not the Play Store"),
+            // NEXUS_ANDROID_STORE_URL is unset in the harness → the sideloaded download page.
+            need(j?.android?.storeUrl === ANDROID_DOWNLOAD_URL, `android.storeUrl ${j?.android?.storeUrl} is not ${ANDROID_DOWNLOAD_URL}`),
+            // run.sh publishes ANDROID_LATEST "now" → its 3-day window is open for the whole run.
+            need(j?.android?.latest === ANDROID_LATEST, `android.latest ${j?.android?.latest} ≠ ${ANDROID_LATEST}`),
+            need(j?.android?.nextMinimum === ANDROID_LATEST, `android.nextMinimum ${j?.android?.nextMinimum} ≠ ${ANDROID_LATEST}`),
+            need(Date.parse(j?.android?.graceUntil ?? "") > Date.now() + 2 * 86400000, `android.graceUntil ${j?.android?.graceUntil} is not ~3 days out`),
+            // The iOS fields must not have picked anything up from Android.
+            need(j?.storeUrl?.startsWith("https://apps.apple.com/"), "iOS storeUrl changed"),
           ),
         },
       })
@@ -254,7 +265,10 @@ export function buildFixtures(profile, world, media) {
         request: () => ({ method: "GET", path: "/api/user/profile", clientHeader: "android/0.0.9/1" }),
         expect: {
           status: 426, code: "UPGRADE_REQUIRED",
-          check: (j) => need(/^https:\/\/play\.google\.com\//.test(j?.storeUrl ?? ""), "426 without the Play Store link"),
+          check: (j) => firstError(
+            need(j?.storeUrl === ANDROID_DOWNLOAD_URL, `426 storeUrl ${j?.storeUrl} is not the download page`),
+            need(/download/i.test(j?.error ?? "") && !/google play/i.test(j?.error ?? ""), "426 text still says Google Play"),
+          ),
         },
       })
       add({
@@ -266,6 +280,76 @@ export function buildFixtures(profile, world, media) {
         id: "gate-android-unreadable", title: "android/0.0/1 (no x.y.z) → never gated", as: "a", kind: "compat",
         request: () => ({ method: "GET", path: "/api/user/profile", clientHeader: "android/0.0/1" }),
         expect: { status: 200 },
+      })
+      // The sideloaded APK (SERVER-REQUESTS R2). run.sh mounts a 256 KiB fake release at
+      // NEXUS_ANDROID_APK_DIR; byte i of it is (i*31+7)&255, so a range can be checked byte for byte.
+      const apkByte = (i) => (i * 31 + 7) & 255
+      const hdr = (r, k) => r?.headers?.get(k) ?? ""
+      add({
+        id: "apk-release", title: "GET /api/app/android/release → the published build", as: "a", kind: "compat",
+        request: () => ({ method: "GET", path: "/api/app/android/release" }),
+        expect: {
+          status: 200,
+          check: (j) => firstError(
+            need(j?.available === true, "available is not true"),
+            need(j?.versionName === ANDROID_LATEST, `versionName ${j?.versionName}`),
+            need(j?.sizeBytes === APK_SIZE, `sizeBytes ${j?.sizeBytes}`),
+            need(j?.downloadUrl === "/api/app/android/apk", "downloadUrl"),
+            need(j?.fileName === `NEXUS-${ANDROID_LATEST}.apk`, `fileName ${j?.fileName}`),
+          ),
+        },
+      })
+      add({
+        id: "apk-full", title: "GET /api/app/android/apk → 200 whole APK", as: "a", kind: "compat",
+        request: () => ({ method: "GET", path: "/api/app/android/apk" }),
+        expect: {
+          status: 200, raw: true,
+          check: (_j, _c, r) => firstError(
+            need(hdr(r, "content-type") === "application/vnd.android.package-archive", `content-type ${hdr(r, "content-type")}`),
+            need(hdr(r, "content-length") === String(APK_SIZE), `content-length ${hdr(r, "content-length")}`),
+            need(hdr(r, "content-disposition").startsWith(`attachment; filename="NEXUS-${ANDROID_LATEST}.apk"`), `disposition ${hdr(r, "content-disposition")}`),
+            need(hdr(r, "accept-ranges") === "bytes", "no Accept-Ranges"),
+            need(/^"apk-/.test(hdr(r, "etag")), "no ETag"),
+            need(/no-store/.test(hdr(r, "cache-control")), `cache-control ${hdr(r, "cache-control")}`),
+            need(r.bytes.length === APK_SIZE && r.bytes[1000] === apkByte(1000), `body ${r.bytes.length} bytes`),
+          ),
+        },
+      })
+      add({
+        id: "apk-range", title: "GET apk Range: bytes=100000-100099 → 206", as: "a", kind: "compat",
+        request: () => ({ method: "GET", path: "/api/app/android/apk", headers: { Range: "bytes=100000-100099" } }),
+        expect: {
+          status: 206, raw: true,
+          check: (_j, _c, r) => firstError(
+            need(hdr(r, "content-range") === `bytes 100000-100099/${APK_SIZE}`, `content-range ${hdr(r, "content-range")}`),
+            need(r.bytes.length === 100 && r.bytes[0] === apkByte(100000) && r.bytes[99] === apkByte(100099), "wrong bytes"),
+          ),
+        },
+      })
+      add({
+        id: "apk-range-stale", title: "GET apk Range + stale If-Range → 200 whole file", as: "a", kind: "compat",
+        request: () => ({ method: "GET", path: "/api/app/android/apk", headers: { Range: "bytes=10-19", "If-Range": '"apk-0-0-0"' } }),
+        expect: { status: 200, raw: true, check: (_j, _c, r) => need(r.bytes.length === APK_SIZE, `body ${r.bytes.length} bytes`) },
+      })
+      add({
+        id: "apk-range-past-end", title: "GET apk Range past the end → 416", as: "a", kind: "compat",
+        request: () => ({ method: "GET", path: "/api/app/android/apk", headers: { Range: `bytes=${APK_SIZE}-` } }),
+        expect: { status: 416, raw: true },
+      })
+      add({
+        id: "apk-locked-build", title: "android/0.0.9/1 (below min) GET apk → 206, not 426", as: "a", kind: "compat",
+        request: () => ({ method: "GET", path: "/api/app/android/apk", clientHeader: "android/0.0.9/1", headers: { Range: "bytes=0-9" } }),
+        expect: { status: 206, raw: true },
+      })
+      add({
+        id: "apk-release-locked", title: "android/0.0.9/1 GET /api/app/android/release → 200", as: "a", kind: "compat",
+        request: () => ({ method: "GET", path: "/api/app/android/release", clientHeader: "android/0.0.9/1" }),
+        expect: { status: 200 },
+      })
+      add({
+        id: "apk-anon", title: "GET apk without a session → 401", as: "anon", kind: "compat",
+        request: () => ({ method: "GET", path: "/api/app/android/apk" }),
+        expect: { status: 401 },
       })
     } else {
       add({
