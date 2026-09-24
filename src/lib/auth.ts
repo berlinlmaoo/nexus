@@ -77,6 +77,9 @@ export const nexusNextAuthConfig = {
           if (dbUser) {
             token.picture = dbUser.avatar
             token.name = dbUser.name
+            // Refreshed like the name: after a change of email the session otherwise kept the old
+            // address until the next sign-in, and everything reading session.user.email used it.
+            token.email = dbUser.email
           }
         } catch (e) {
           log.error('jwt refresh from DB failed', { error: String(e) })

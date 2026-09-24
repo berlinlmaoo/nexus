@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     if (!res.ok) {
       return NextResponse.json(
         { sent: false, reason: "Webhook returned " + res.status },
-        { status: 502 }
+        { status: 500 }
       )
     }
 
@@ -45,3 +45,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
+
+// 500, not 502: the Cloudflare down-page Worker treats any 502 as "origin unreachable" and
+// replaces the body with NEXUS_DOWN, so the sentence above never reached the person.

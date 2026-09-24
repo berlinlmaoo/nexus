@@ -196,6 +196,9 @@ export async function POST(request: NextRequest) {
     // habis adalah tiga hal berbeda, dan mengganti semuanya dengan "gagal" membuang satu-satunya
     // petunjuk yang berguna.
     const message = error instanceof Error ? error.message : "Gagal membuat akun"
-    return NextResponse.json({ error: message }, { status: 502 })
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
+
+// 500, not 502: the Cloudflare down-page Worker treats any 502 as "origin unreachable" and
+// replaces the body with NEXUS_DOWN, so the sentence above never reached the person.
