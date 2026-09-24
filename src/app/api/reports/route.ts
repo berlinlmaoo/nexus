@@ -14,14 +14,49 @@ export async function GET(request: NextRequest) {
     const userId = session.user.id
     const searchParams = request.nextUrl.searchParams
     const projectIds = searchParams.get('projectIds')?.split(',').filter(Boolean) || []
-    const memberIds = searchParams.get('memberIds')?.split(',').filter(Boolean) || []
+    const requestedMemberIds = searchParams.get('memberIds')?.split(',').filter(Boolean) || []
     const from = searchParams.get('from')
     const to = searchParams.get('to')
-    const days = parseInt(searchParams.get('days') || '30')
+    // PHASE0_REPORTS_PATCH: clamp the window to 1..365 days (NaN -> 30).
+    const MAX_DAYS = 365
+    const DAY_MS = 24 * 60 * 60 * 1000
+    const parsedDays = parseInt(searchParams.get('days') || '30', 10)
+    const days = Number.isFinite(parsedDays) ? Math.min(MAX_DAYS, Math.max(1, parsedDays)) : 30
+
+    // memberIds lets the caller slice the report by arbitrary people, so it is only honoured for
+    // system ADMIN or workspace BOD / ONE_ABOVE_ALL — same rule as canManageAttendance in
+    // getAttendanceWorkspaceContext (src/lib/attendance.ts): primary workspace = oldest joinedAt.
+    // Everyone else silently gets the unfiltered report (no 403, so old clients keep working).
+    let memberIds: string[] = []
+    if (requestedMemberIds.length > 0) {
+      const [viewer, primaryMembership] = await prisma.$transaction([
+        prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
+        prisma.workspaceMember.findFirst({
+          where: { userId },
+          select: { role: true },
+          orderBy: { joinedAt: 'asc' },
+        }),
+      ])
+      const canFilterMembers =
+        viewer?.role === 'ADMIN' ||
+        primaryMembership?.role === 'BOD' ||
+        primaryMembership?.role === 'ONE_ABOVE_ALL'
+      if (canFilterMembers) memberIds = requestedMemberIds
+    }
 
     const now = new Date()
-    const dateFrom = from ? new Date(from) : new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
-    const dateTo = to ? new Date(to) : now
+    const parsedTo = to ? new Date(to) : null
+    const dateTo = parsedTo && !Number.isNaN(parsedTo.getTime()) ? parsedTo : now
+    const parsedFrom = from ? new Date(from) : null
+    let dateFrom =
+      parsedFrom && !Number.isNaN(parsedFrom.getTime())
+        ? parsedFrom
+        : new Date(dateTo.getTime() - days * DAY_MS)
+    // Same 365-day cap for explicit from/to (also bounds the per-day timeline loop below).
+    if (dateTo.getTime() - dateFrom.getTime() > MAX_DAYS * DAY_MS) {
+      dateFrom = new Date(dateTo.getTime() - MAX_DAYS * DAY_MS)
+    }
+    if (dateFrom > dateTo) dateFrom = new Date(dateTo.getTime() - DAY_MS)
 
     // Base filter: user's projects
     const userProjects = await prisma.project.findMany({
@@ -38,6 +73,8 @@ export async function GET(request: NextRequest) {
     // Task base filter
     const taskBaseWhere = {
       taskList: { projectId: { in: projectIdList } },
+      // Subtasks are not counted as tasks in any report figure.
+      parentId: null,
       ...(memberIds.length > 0 ? { assignees: { some: { userId: { in: memberIds } } } } : {}),
     }
 
@@ -83,6 +120,7 @@ export async function GET(request: NextRequest) {
     const completionTimeline = Object.entries(completionByDay).map(([date, count]) => ({
       date,
       completed: count,
+      count, // web (reports.tsx) reads `count`
     }))
 
     // 4. Tasks by assignee
@@ -112,6 +150,7 @@ export async function GET(request: NextRequest) {
 
     const tasksByAssignee = Object.entries(assigneeMap).map(([id, data]) => ({
       id,
+      userId: id, // web (reports.tsx) reads `userId`
       name: data.name,
       avatar: data.avatar,
       total: data.total,
@@ -240,13 +279,22 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // 8. Project health scorecard
-    const projectHealth = await Promise.all(
-      userProjects.map(async (project) => {
-        const tasks = await prisma.task.findMany({
-          where: { taskList: { projectId: project.id } },
-          select: { status: true, dueDate: true },
-        })
+    // 8. Project health scorecard (one query for all projects instead of one per project).
+    // Deliberately NOT narrowed by memberIds, as before; only subtasks are now excluded.
+    const healthTasks = await prisma.task.findMany({
+      where: { taskList: { projectId: { in: projectIdList } }, parentId: null },
+      select: { status: true, dueDate: true, taskList: { select: { projectId: true } } },
+    })
+    const healthTasksByProject = new Map<string, { status: string; dueDate: Date | null }[]>()
+    for (const t of healthTasks) {
+      const pid = t.taskList.projectId
+      const bucket = healthTasksByProject.get(pid)
+      if (bucket) bucket.push(t)
+      else healthTasksByProject.set(pid, [t])
+    }
+
+    const projectHealth = userProjects.map((project) => {
+        const tasks = healthTasksByProject.get(project.id) ?? []
 
         const total = tasks.length
         const done = tasks.filter((t) => t.status === 'DONE').length
@@ -266,12 +314,13 @@ export async function GET(request: NextRequest) {
           color: project.color,
           total,
           done,
+          completed: done, // iOS + web read `completed`
           overdue,
           progress,
+          completionRate: progress, // iOS (Int?) + web read `completionRate`, integer 0-100
           health,
         }
       })
-    )
 
     // Metric cards data
     const totalTaskCount = allTasks.length
@@ -290,8 +339,13 @@ export async function GET(request: NextRequest) {
       },
     })
 
+    // Trend = completed in this window vs completed in the previous window of equal length.
+    // (completedCount above is the all-time DONE snapshot that feeds completedTasks/completionRate;
+    // it must not be compared with a single window.) `completedTasks` = DONE with updatedAt in
+    // [dateFrom, dateTo], already fetched for the timeline, already top-level only.
+    const completedInPeriod = completedTasks.length
     const completionTrend = prevCompletedCount > 0
-      ? Math.round(((completedCount - prevCompletedCount) / prevCompletedCount) * 100)
+      ? Math.round(((completedInPeriod - prevCompletedCount) / prevCompletedCount) * 100)
       : 0
 
     // Average completion time (days)
@@ -325,6 +379,8 @@ export async function GET(request: NextRequest) {
         completionRate: totalTaskCount > 0 ? Math.round((completedCount / totalTaskCount) * 100) : 0,
         completionTrend,
         avgCompletionDays: avgCompletionTime,
+        completedInPeriod,
+        completedPrevPeriod: prevCompletedCount,
       },
       tasksByStatus: tasksByStatus.map((g) => ({
         status: g.status,
