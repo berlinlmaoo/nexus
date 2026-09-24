@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
+import { canReadTask, taskReadRefusal } from "@/lib/read-access"
 import prisma from '@/lib/prisma'
 
 export async function GET(
@@ -11,6 +12,11 @@ export async function GET(
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // Signed in is not enough (API.md E5): the annotations of a proof are as private as its task.
+    const annotated = await prisma.attachment.findUnique({ where: { id: (await params).attachmentId }, select: { taskId: true } })
+    if (!annotated) return NextResponse.json({ error: 'Attachment not found' }, { status: 404 })
+    const readable = await canReadTask(session.user.id, annotated.taskId)
+    if (readable !== "ok") return taskReadRefusal(readable)
 
     const { attachmentId } = await params
 

@@ -5,6 +5,8 @@ import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { logAudit } from '@/lib/audit'
+import { isWebClientTag } from '@/lib/session-version'
+import { reissueSessionCookie } from '@/lib/session-issue'
 
 export async function POST(req: NextRequest) {
   try {
@@ -36,14 +38,30 @@ export async function POST(req: NextRequest) {
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 12)
-    await prisma.user.update({
+    // From the web, a password change also ends every OTHER session (lib/session-version.ts) and hands
+    // this browser a fresh cookie at the new version, so the person who changed it stays signed in.
+    // From the app, no bump: no iOS build (0.1.4–0.1.6) reads a new token out of this response, so a
+    // bump would sign out the very person who just changed their password. A password reset always
+    // bumps.
+    const fromWeb = isWebClientTag(req.headers.get('x-nexus-client'))
+    const updated = await prisma.user.update({
       where: { id: session.user.id },
-      data: { password: hashedPassword },
+      data: { password: hashedPassword, ...(fromWeb && { sessionVersion: { increment: 1 } }) },
+      select: { id: true, name: true, email: true, avatar: true, sessionVersion: true },
     })
 
-    logAudit({ action: "update", entityType: "user_password", entityId: session.user.id, userId: session.user.id, request: req })
+    logAudit({ action: "update", entityType: "user_password", entityId: session.user.id, userId: session.user.id, request: req, metadata: { otherSessionsEnded: fromWeb } })
 
-    return NextResponse.json({ success: true, message: 'Password updated successfully' })
+    const res = NextResponse.json({ success: true, message: 'Password updated successfully' })
+    if (fromWeb) {
+      try {
+        await reissueSessionCookie(res, updated, updated.sessionVersion)
+      } catch (error) {
+        // The password IS changed; at worst this browser signs in again with it.
+        console.error('password change: session re-issue failed', error)
+      }
+    }
+    return res
   } catch (error) {
     console.error("Error changing password:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

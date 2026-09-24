@@ -8,6 +8,7 @@ import { EXPECTED_ORIGINS, RP_ID, takeChallenge } from "@/lib/passkey"
 const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
 
 import { getSessionCookieName, shouldUseSecureAuthCookies } from "@/lib/session-cookie"
+import { currentSessionVersion } from "@/lib/session-issue"
 
 /**
  * Step 2: verify the signature and issue exactly the session `app-login` issues, so every existing
@@ -75,6 +76,7 @@ export async function POST(request: NextRequest) {
       name: passkey.user.name,
       email: passkey.user.email,
       picture: passkey.user.avatar,
+      sessionVersion: await currentSessionVersion(passkey.user.id),
     },
   })
 

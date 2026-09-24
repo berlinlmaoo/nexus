@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { canReadTask, taskReadRefusal } from "@/lib/read-access"
 import { logAudit } from "@/lib/audit"
 import { auditDiff } from "@/lib/audit-describe"
 import { checkProjectAccess } from "@/lib/rbac"
@@ -23,6 +24,10 @@ export async function GET(
     const { taskId } = await params
     const session = await auth()
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    // Signed in is not enough (API.md E5) — see lib/read-access.ts for who may open a task.
+    const readable = await canReadTask(session.user.id!, taskId)
+    if (readable !== "ok") return taskReadRefusal(readable)
 
     const [task, likeCount, userLike, taskProjects, questRows] = await Promise.all([
       prisma.task.findUnique({
@@ -117,6 +122,9 @@ export async function PATCH(
       status,
       priority,
       dueDate,
+      startDate,
+      estimatedHours,
+      actualHours,
       tags,
       projectContextId,
       taskListId,
@@ -189,6 +197,17 @@ export async function PATCH(
     if (status === "DONE" && existing.status !== "DONE") updateData.completedById = session.user.id
     if (priority !== undefined) updateData.priority = priority
     if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null
+    // Validated by updateTaskSchema but never written before (API.md E2): iOS "Start date" edits were
+    // answered 200 and dropped. Same date handling as dueDate ("YYYY-MM-DD" or ISO; null clears).
+    if (startDate !== undefined) {
+      const parsedStart = startDate ? new Date(startDate) : null
+      if (parsedStart && Number.isNaN(parsedStart.getTime())) {
+        return NextResponse.json({ error: "Invalid start date" }, { status: 400 })
+      }
+      updateData.startDate = parsedStart
+    }
+    if (estimatedHours !== undefined) updateData.estimatedHours = estimatedHours
+    if (actualHours !== undefined) updateData.actualHours = actualHours
     if (tags !== undefined) updateData.tags = tags
     if (isRecurring !== undefined) updateData.isRecurring = isRecurring
     if (recurPattern !== undefined) updateData.recurPattern = recurPattern
@@ -397,6 +416,9 @@ export async function PATCH(
             status: existing.status,
             priority: existing.priority,
             dueDate: existing.dueDate,
+            startDate: existing.startDate,
+            estimatedHours: existing.estimatedHours,
+            actualHours: existing.actualHours,
             tags: existing.tags,
             isRecurring: existing.isRecurring,
             recurPattern: existing.recurPattern,
@@ -411,6 +433,9 @@ export async function PATCH(
             status,
             priority,
             dueDate: dueDate === undefined ? undefined : dueDate ? new Date(dueDate) : null,
+            startDate: updateData.startDate as Date | null | undefined,
+            estimatedHours,
+            actualHours,
             tags,
             isRecurring,
             recurPattern,

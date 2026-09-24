@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { resolveUploadedImageType } from "@/lib/image-sniff"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { writeFile, mkdir } from "fs/promises"
@@ -41,7 +42,9 @@ export async function POST(request: NextRequest) {
 
     if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 })
     if (!conversationId) return NextResponse.json({ error: "conversationId required" }, { status: 400 })
-    if (!ALLOWED_TYPES.includes(file.type)) {
+    // A part labelled application/octet-stream (or unlabelled) is judged by its bytes.
+    const fileType = await resolveUploadedImageType(file, ALLOWED_TYPES)
+    if (!fileType) {
       return NextResponse.json({ error: "Invalid file type. Allowed: PNG, JPG, WEBP, GIF" }, { status: 400 })
     }
     if (file.size > MAX_SIZE) {
@@ -54,7 +57,7 @@ export async function POST(request: NextRequest) {
     })
     if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    const ext = EXT_MAP[file.type] || "png"
+    const ext = EXT_MAP[fileType] || "png"
     const fileName = `${randomUUID()}.${ext}`
     const uploadDir = path.join(process.cwd(), "public", "uploads", "chat")
     await mkdir(uploadDir, { recursive: true })
@@ -62,7 +65,7 @@ export async function POST(request: NextRequest) {
 
     logAudit({ action: "create", entityType: "chat_attachment", entityId: fileName, userId: session.user.id, request })
 
-    return NextResponse.json({ url: `/api/files/chat/${fileName}`, type: file.type })
+    return NextResponse.json({ url: `/api/files/chat/${fileName}`, type: fileType })
   } catch (error) {
     console.error("chat upload error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

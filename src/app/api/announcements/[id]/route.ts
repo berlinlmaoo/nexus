@@ -56,6 +56,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     })
     return NextResponse.json({ announcement })
   } catch (error) {
+    // Prisma P2025 = no row with this id: the caller asked for something that does not exist.
+    if ((error as { code?: string })?.code === "P2025") {
+      return NextResponse.json({ error: "Not found" }, { status: 404 })
+    }
     console.error("announcement patch error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
@@ -70,6 +74,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     await prisma.announcement.delete({ where: { id } })
     return NextResponse.json({ ok: true })
   } catch (error) {
+    // Prisma P2025 = no row with this id: the caller asked for something that does not exist.
+    if ((error as { code?: string })?.code === "P2025") {
+      return NextResponse.json({ error: "Not found" }, { status: 404 })
+    }
     console.error("announcement delete error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }

@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { checkProjectAccess } from "@/lib/rbac"
 import prisma from "@/lib/prisma"
 
 export async function GET(
@@ -12,6 +13,10 @@ export async function GET(
     const session = await auth()
     if (!session?.user?.id)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // Signed in is not enough (API.md E5): the same check as the project page itself.
+    if (!(await checkProjectAccess(session.user.id, (await params).projectId, ["VIEWER"])).allowed) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
 
     // Get all tasks for this project
     const tasks = await prisma.task.findMany({

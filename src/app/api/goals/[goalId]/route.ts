@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
+import { isWorkspaceMemberOrAdmin } from "@/lib/read-access"
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
 
@@ -51,6 +52,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ goal
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // Signed in is not enough (API.md E5): the goals list shows a workspace's goals to its members.
+    const goalRef = await prisma.goal.findUnique({ where: { id: (await params).goalId }, select: { workspaceId: true } })
+    if (!goalRef) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (!(await isWorkspaceMemberOrAdmin(session.user.id, goalRef.workspaceId))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     const goal = await prisma.goal.findUnique({
       where: { id: (await params).goalId },
       include: goalInclude,

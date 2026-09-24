@@ -6,6 +6,7 @@ import { handlers, nexusNextAuthConfig } from "@/lib/auth"
 import { createLogger } from "@/lib/logger"
 import { verifyCredentialUser, type VerifiedCredentialUser } from "@/lib/credentials-auth"
 import { logAudit } from "@/lib/audit"
+import { currentSessionVersion } from "@/lib/session-issue"
 
 export const dynamic = "force-dynamic"
 export const revalidate = 0
@@ -142,6 +143,7 @@ async function applyDirectSessionCookies(
       name: user.name,
       email: user.email,
       picture: user.image,
+      sessionVersion: await currentSessionVersion(user.id),
     },
   })
 

@@ -6,6 +6,7 @@ import { createLogger } from '@/lib/logger'
 import { verifyCredentialUser } from '@/lib/credentials-auth'
 import prisma from '@/lib/prisma'
 import { isDeletedAccountEmail } from '@/lib/account-deletion'
+import { sessionVersionRejects } from '@/lib/session-version'
 
 const log = createLogger('auth')
 
@@ -66,12 +67,20 @@ export const nexusNextAuthConfig = {
         try {
           const dbUser = await prisma.user.findUnique({
             where: { id: token.id as string },
-            select: { avatar: true, name: true, email: true },
+            select: { avatar: true, name: true, email: true, sessionVersion: true },
           })
           // Sessions are stateless JWTs (web cookie and the iOS app's Keychain copy alike), so
           // deleting an account cannot revoke them. Returning null here makes auth() answer
           // "signed out" and clears the cookie, on the very next request.
           if (dbUser && isDeletedAccountEmail(dbUser.email)) {
+            return null
+          }
+          // Revocation (lib/session-version.ts). A sign-in through NextAuth itself records the version
+          // the token is born with; afterwards a token carrying an older one was revoked (password
+          // reset, or a password change from the web) and is treated like a deleted account's. A token
+          // without the field — every session issued before this existed — is left alone.
+          if (dbUser && user) token.sessionVersion = dbUser.sessionVersion
+          if (dbUser && sessionVersionRejects(token.sessionVersion, dbUser.sessionVersion)) {
             return null
           }
           if (dbUser) {

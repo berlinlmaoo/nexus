@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { isWorkspaceMemberOrAdmin } from "@/lib/read-access"
 import { logAudit } from "@/lib/audit"
 
 export async function GET(
@@ -12,6 +13,12 @@ export async function GET(
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // Signed in is not enough (API.md E5): the portfolios list shows a workspace's portfolios to its members.
+    const portfolioRef = await prisma.portfolio.findUnique({ where: { id: (await params).portfolioId }, select: { workspaceId: true } })
+    if (!portfolioRef) return NextResponse.json({ error: "Portfolio not found" }, { status: 404 })
+    if (!(await isWorkspaceMemberOrAdmin(session.user.id, portfolioRef.workspaceId))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
 
     const { portfolioId } = await params
 

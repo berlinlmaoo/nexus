@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { resolveUploadedImageType } from "@/lib/image-sniff"
 import { logAudit } from "@/lib/audit"
 import { isSystemAdminUser } from "@/lib/rbac"
 import prisma from "@/lib/prisma"
@@ -70,7 +71,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: reason === "Folder not found" ? reason : "Forbidden" }, { status: reason === "Folder not found" ? 404 : 403 })
     }
 
-    if (!ALLOWED_TYPES.includes(file.type)) {
+    // iOS sends this part as application/octet-stream (every build): then the bytes decide.
+    const fileType = await resolveUploadedImageType(file, ALLOWED_TYPES)
+    if (!fileType) {
       return NextResponse.json({ error: "Invalid file type. Allowed: PNG, JPG, SVG, WEBP" }, { status: 400 })
     }
 
@@ -78,7 +81,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "File too large. Maximum size is 5MB" }, { status: 400 })
     }
 
-    const ext = EXT_MAP[file.type] || "png"
+    const ext = EXT_MAP[fileType] || "png"
     // Stored in the project-icons dir (bind-mounted in prod compose) with a "folder-" prefix —
     // the old dedicated folder-icons dir was NOT mounted, so uploads vanished on every rebuild.
     const fileName = `folder-${folderId}.${ext}`
