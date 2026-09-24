@@ -341,10 +341,11 @@ export async function notifyAttendanceAbsentRecorded(data: {
   const link = `/attendance?absent=${data.dateKey}`
   const title = "Tercatat tanpa keterangan"
   const day = new Date(`${data.dateKey}T00:00:00.000Z`).toLocaleDateString("id-ID", { day: "numeric", month: "short", timeZone: "UTC" })
-  const remaining = data.quota - data.used
-  const balance = remaining >= 0
+  // Never "lewat N hari": the allowance reads 4/4 at most, everywhere (see lib/day-off-usage).
+  const remaining = Math.max(0, data.quota - data.used)
+  const balance = remaining > 0
     ? `Jatah periode ini: sisa ${remaining} dari ${data.quota}.`
-    : `Jatah periode ini: sudah lewat ${-remaining} hari.`
+    : `Jatah periode ini sudah habis (${data.quota}/${data.quota}).`
   const message = `Kamu gak absen tanggal ${day} — dipotong 1 day off. ${balance}`
   const push = !(await isUserDnd(data.userId))
 
@@ -429,9 +430,7 @@ export async function notifyAttendanceRequestPending(requestId: string) {
       if (b) {
         dayOffNote = b.remaining > 0
           ? ` Day off-nya periode ini: sisa ${b.remaining} dari ${b.quota}.`
-          : b.remaining === 0
-            ? ` Day off-nya periode ini sudah habis.`
-            : ` Day off-nya periode ini sudah lewat ${-b.remaining} hari.`
+          : ` Day off-nya periode ini sudah habis (${b.quota}/${b.quota}).`
       }
     } catch (error) {
       log.error("day-off balance for izin notification failed", { error: String(error) })
