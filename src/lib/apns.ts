@@ -112,6 +112,30 @@ async function sendOne(
 }
 
 /**
+ * `sendOne` dengan dua kali coba ulang, HANYA saat transport putus sebelum Apple menjawab (koneksi
+ * HTTP/2 ditutup/di-reset, "The pending stream has been canceled"). 24 Sep 2026: pengingat
+ * "Masih di luar kantor" hilang dari iPhone karena satu stream batal dan tidak dicoba lagi.
+ * Jawaban Apple apa pun (200, 400, 410, …) TIDAK diulang — itu keputusan, bukan kecelakaan.
+ */
+async function sendOneWithRetry(
+  token: string,
+  environment: string,
+  bundleId: string,
+  payload: PushPayload,
+): Promise<{ status: number; reason?: string }> {
+  let lastError: unknown
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, attempt * 700))
+    try {
+      return await sendOne(token, environment, bundleId, payload)
+    } catch (error) {
+      lastError = error
+    }
+  }
+  throw lastError
+}
+
+/**
  * Kirim satu push ke SEMUA perangkat aktif milik seseorang.
  *
  * Fungsi ini pernah gagal dalam dua cara yang sama-sama tak berjejak, dan keduanya menghabiskan
@@ -173,7 +197,7 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
       return
     }
     if (!apnsReady) { skippedIos++; return }
-    const result = await sendOne(
+    const result = await sendOneWithRetry(
       installation.token,
       installation.environment,
       installation.bundleId,
