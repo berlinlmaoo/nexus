@@ -80,6 +80,7 @@ struct AttendanceView: View {
     private var pendingRec: AttendanceRecord? { today?.pendingCheckout }
     private var forcePending: Bool { pendingRec != nil }
     private var dispRec: AttendanceRecord? { rec ?? pendingRec }   // what the hero/metrics display
+    @State private var ownTrail: OwnTrailTarget?
     /// Taps that are on this phone and have not reached the server yet.
     ///
     /// While the server is down `load()` fails and `rec` is nil, so asking only the server whether
@@ -292,12 +293,26 @@ struct AttendanceView: View {
         return LazyVGrid(columns: cols, spacing: 12) {
             FunMetricCard(icon: "cup.and.saucer.fill", label: T("Today's status"), value: todayStatusValue,
                           tint: NX.success)
-            FunMetricCard(icon: nearby?.inside == true && dispRec?.officeLocation?.name == nil ? "checkmark.circle.fill" : "mappin.circle.fill",
-                          label: officeLabel, value: officeValue, helper: officeHelper, tint: officeTint)
+            // Tapping it opens today's own location trail, like the web's "Office checkpoint" card. It
+            // is the only way in for anyone the crew board leaves out (BoD / One Above All testers).
+            Button { if let r = rec, r.checkInAt != nil { ownTrail = OwnTrailTarget(id: r.id, state: r.locationTrackingState) } } label: {
+                FunMetricCard(icon: nearby?.inside == true && dispRec?.officeLocation?.name == nil ? "checkmark.circle.fill" : "mappin.circle.fill",
+                              label: officeLabel, value: officeValue, helper: officeHelper, tint: officeTint)
+            }
+            .buttonStyle(.plain)
+            .disabled(rec?.checkInAt == nil)
             FunMetricCard(icon: "sparkles", label: T("Day-off tokens"), value: Self.quotaValue(today?.dayOffUsedThisMonth, today?.dayOffQuota),
                           helper: T("This month's day-off allowance"), tint: NX.warning)
             FunMetricCard(icon: "calendar", label: T("Public holidays"), value: Self.quotaValue(today?.redDateUsedThisMonth, today?.redDateQuota),
                           helper: T("This month's public-holiday allowance"), tint: Color(hex: "#fb7185"))
+        }
+        // On the grid itself, not on the screen: the screen and the reflections card already present
+        // their own sheets, and two on one view means one never opens.
+        .sheet(item: $ownTrail) { t in
+            NavigationStack {
+                LocationTrailView(recordId: t.id, trackingState: t.state)
+                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { ownTrail = nil } } }
+            }
         }
     }
 
@@ -329,7 +344,8 @@ struct AttendanceView: View {
     }
     private var officeHelper: String {
         if dispRec?.checkInAt != nil || dispRec?.checkOutAt != nil {
-            return "In \(dispRec?.checkInAt.flatMap(Self.hhmm) ?? "--:--") · Out \(dispRec?.checkOutAt.flatMap(Self.hhmm) ?? "--:--")"
+            let times = "In \(dispRec?.checkInAt.flatMap(Self.hhmm) ?? "--:--") · Out \(dispRec?.checkOutAt.flatMap(Self.hhmm) ?? "--:--")"
+            return rec?.checkInAt != nil ? times + " · " + T("tap for your location trail") : times
         }
         if let n = nearby {
             return n.inside
@@ -947,6 +963,12 @@ struct AttendanceView: View {
 }
 
 // MARK: - Fun-metric card (web FunMetric)
+
+/// Today's own record, for the location-trail sheet opened from the office card.
+struct OwnTrailTarget: Identifiable {
+    let id: String
+    let state: String?
+}
 
 struct FunMetricCard: View {
     let icon: String
