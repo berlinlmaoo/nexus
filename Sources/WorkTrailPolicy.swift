@@ -112,8 +112,32 @@ struct WorkTrailMachine {
     static let decisiveAccuracy: Double = 100
 
     var state: WorkTrailState
+    /// Set by `resume` when the app comes back from not running while outside: the first fresh
+    /// fix after that goes to the server at once, whatever the 15-minute rhythm says. Deliberately
+    /// NOT part of the persisted state — it describes this process, not the shift, and a stale
+    /// `true` on disk must never make a later launch send a point it has no reason to send.
+    var sendNextFix = false
 
     init(state: WorkTrailState = WorkTrailState()) { self.state = state }
+
+    // MARK: - what CoreLocation should be doing
+
+    /// The location setup the current state calls for, derived from the state alone. The tracker
+    /// makes CoreLocation match this on every launch, return to the foreground, permission change
+    /// and attendance refresh — level-triggered, so a setup that was missed once (permission not
+    /// known yet at launch, a force-quit, a relaunch into the background) is put right the next
+    /// time any of those happens, instead of waiting for a transition that may never come.
+    struct Setup: Equatable {
+        /// The office circle to monitor, or nil for none.
+        var region: WorkTrailFence?
+        /// Continuous background updates plus significant-change monitoring: outside only.
+        var continuous: Bool
+    }
+
+    var setup: Setup {
+        guard state.isActive, let fence = state.fence else { return Setup(region: nil, continuous: false) }
+        return Setup(region: fence, continuous: state.zone == .outside)
+    }
 
     // MARK: - lifecycle
 
@@ -130,6 +154,7 @@ struct WorkTrailMachine {
         if !sameRecord {
             // A new day starts clean. Points of an earlier record stay queued — they carry their
             // own recordId and still go to the record they belong to.
+            sendNextFix = false
             state.zone = .unknown
             state.outsideSince = nil
             state.lastQueuedAt = nil
@@ -148,6 +173,7 @@ struct WorkTrailMachine {
     /// on `tracking:false` (the server has said it does not want them).
     mutating func stop(keepUnsent: Bool) -> [WorkTrailEffect] {
         let wasActive = state.isActive
+        sendNextFix = false
         let pending = keepUnsent ? state.pending : []
         let refused = state.refusedRecordId
         state = WorkTrailState()
@@ -159,6 +185,21 @@ struct WorkTrailMachine {
         return fx
     }
 
+    /// The app is running again after it was not — a launch by hand after a force-quit, or a
+    /// relaunch by iOS. Nothing watched the phone in between, so:
+    ///   • the last fix proves nothing about where the phone is now and must not be re-sent as a
+    ///     heartbeat stamped with the current time — it is dropped unless it is fresh;
+    ///   • one new fix is asked for, which also settles a zone that went stale while nobody looked
+    ///     (a region can report "inside" long after a fix saw the phone leave);
+    ///   • while outside, that first fresh fix is sent at once, so the server's record of the
+    ///     trail resumes the moment the app does rather than up to 15 minutes later.
+    mutating func resume(now: Date) -> [WorkTrailEffect] {
+        guard state.isActive else { return [] }
+        if let p = state.latest, now.timeIntervalSince(p.at) > Self.freshFix { state.latest = nil }
+        sendNextFix = state.zone == .outside
+        return [.requestFix]
+    }
+
     // MARK: - inputs
 
     /// The region said where the phone is (didDetermineState / didEnter / didExit), or a fix did.
@@ -167,8 +208,20 @@ struct WorkTrailMachine {
         guard state.isActive else { return [] }
         let target: WorkTrailZone = inside ? .inside : .outside
         guard state.zone != target else { return [] }
+        // A region answer that a fresh, clear fix contradicts is iOS's stale idea of the region, not
+        // a crossing: iOS only flips a region's state after the phone is well past the edge, so a
+        // phone sitting just outside the circle can be told "inside" by `requestState` for as long
+        // as it stays there. Believing that would switch continuous updates off and leave the
+        // phone outside with nothing watching it. The fix's answer is taken instead (it always
+        // agrees with itself, so this recurses once at most).
+        if let lk = lastKnown, now.timeIntervalSince(lk.at) <= Self.freshFix, let fence = state.fence,
+           let fixSays = Self.decisive(lk, fence: fence), fixSays != inside {
+            return determined(inside: fixSays, lastKnown: lk, now: now)
+        }
         let previous = state.zone
         state.zone = target
+        // The exit/enter point (or, inside, nothing) replaces the point a resume was waiting for.
+        sendNextFix = false
         if inside {
             state.outsideSince = nil
             // First answer after a check-in is "inside": the normal case, nothing to report.
@@ -185,6 +238,10 @@ struct WorkTrailMachine {
     /// A position from continuous updates or a one-shot request.
     mutating func fix(_ raw: WorkTrailPoint, now: Date) -> [WorkTrailEffect] {
         guard let recordId = state.recordId else { return [] }
+        // The first delivery after updates start can be CoreLocation's cached position, possibly
+        // from hours ago or from before the app stopped running. "Where the phone was then" may not
+        // decide the zone, carry an exit/enter tag, or become the heartbeat's position.
+        guard now.timeIntervalSince(raw.at) <= Self.freshFix else { return [] }
         var p = raw
         p.recordId = recordId
         p.event = .point
@@ -201,7 +258,9 @@ struct WorkTrailMachine {
             enqueue(p, now: now)
             return [.flush]
         }
-        if state.zone == .outside && isDue(now) {
+        // Right after a resume the first fresh fix goes out without waiting for the rhythm.
+        if state.zone == .outside && (isDue(now) || sendNextFix) {
+            sendNextFix = false
             enqueue(p, now: now)
             return [.flush]
         }

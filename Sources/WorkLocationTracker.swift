@@ -53,7 +53,12 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
     /// relaunches the app is delivered to whichever manager exists once launching is done, so it
     /// has to exist by then — and on the main thread, which is where its delegate calls arrive.
     private var manager: CLLocationManager?
-    private var continuousOn = false
+    /// What this process has asked CoreLocation for. nil until the first `reconcile`, so that one
+    /// always applies in full: services a previous process started (significant-change monitoring
+    /// outlives the process) are brought in line with the state instead of being assumed off.
+    private enum Updates { case off, background, foreground }
+    private var updates: Updates?
+    private var continuousOn: Bool { updates == .background || updates == .foreground }
     private var flushing = false
     private var ticker: Timer?
     private var awaitingAlwaysAnswer = false
@@ -74,15 +79,20 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
         bootstrapped = true
         machine = WorkTrailMachine(state: Self.loadState())
         let m = CLLocationManager()
-        m.delegate = self
+        // The manager is stored BEFORE it gets a delegate: the "initial authorization" callback that
+        // follows its creation must find it, or everything that callback re-arms is dropped.
         manager = m
+        m.delegate = self
         NotificationCenter.default.addObserver(self, selector: #selector(appDidBecomeActive),
                                                name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(appDidEnterBackground),
                                                name: UIApplication.didEnterBackgroundNotification, object: nil)
-        if machine.state.isActive, let fence = machine.state.fence {
-            apply([.armRegion(fence)])
-            if machine.state.zone == .outside { apply([.startContinuous]) }
+        if machine.state.isActive {
+            // Resumed from disk after the process was gone (force-quit, a crash, a relaunch by iOS).
+            // `reconcile` sets up what the state calls for — and does it again from the
+            // authorization callback if the permission is not readable yet this early.
+            reconcile(refreshRegionState: true)
+            handle(machine.resume(now: Date()))
             startTicker()
         } else {
             // Nothing should be running. A region left behind by a crash or an old build would keep
@@ -120,6 +130,9 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
         guard machine.state.isActive else { return }   // too old to start (shift cap)
         persist()
         apply(fx)
+        // `start` is a no-op for a record already being tracked, so on its own it would never put
+        // back a setup that went missing. This does, every time today's attendance is refreshed.
+        reconcile()
         startTicker()
         ensurePermission(for: rec.id)
     }
@@ -163,7 +176,6 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
             } else if !promptPending && !awaitingAlwaysAnswer {
                 report("denied", recordId: recordId)
             }
-            if status == .authorizedWhenInUse, UIApplication.shared.applicationState == .active { startForegroundUpdates() }
         @unknown default:
             break
         }
@@ -214,21 +226,14 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
         WorkLocationPrompt.shared.isPresented = false
         promptPending = false
         if let id = machine.state.recordId { report("denied", recordId: id) }
-        if status == .authorizedWhenInUse { startForegroundUpdates() }
+        reconcile()
     }
 
     private func settleAlwaysAnswer() {
         awaitingAlwaysAnswer = false
         guard let id = machine.state.recordId else { return }
-        if hasAlways {
-            report("on", recordId: id)
-            stopForegroundUpdatesIfAny()
-            if let fence = machine.state.fence { apply([.armRegion(fence)]) }
-            if machine.state.zone == .outside { apply([.startContinuous]) }
-        } else {
-            report("denied", recordId: id)
-            if status == .authorizedWhenInUse, UIApplication.shared.applicationState == .active { startForegroundUpdates() }
-        }
+        report(hasAlways ? "on" : "denied", recordId: id)
+        reconcile(refreshRegionState: true)
     }
 
     private func report(_ state: String, recordId: String) {
@@ -248,43 +253,25 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
 
     private func apply(_ effects: [WorkTrailEffect]) {
         guard let m = manager else { return }
+        // Region and continuous updates are not switched here one effect at a time: they follow
+        // the state, which the machine has already moved, and `reconcile` makes CoreLocation match
+        // it. An effect only says that the setup may have changed (and, for a new region, that its
+        // current state should be asked for).
+        var setupChanged = false, armed = false
         for effect in effects {
             switch effect {
-            case .armRegion(let fence):
-                // Region monitoring needs Always. Under While Using the foreground updates below
-                // decide inside/outside from fixes instead, for as long as the app is open.
-                guard hasAlways, CLLocationManager.isMonitoringAvailable(for: CLCircularRegion.self) else { continue }
-                // iOS reports crossings of small circles late and unreliably; 100 m is the
-                // practical floor. The server still judges every point against the real radius.
-                let radius = min(max(fence.radius, 100), m.maximumRegionMonitoringDistance)
-                let region = CLCircularRegion(center: CLLocationCoordinate2D(latitude: fence.lat, longitude: fence.lng),
-                                              radius: radius, identifier: Self.regionId)
-                region.notifyOnEntry = true
-                region.notifyOnExit = true
-                m.startMonitoring(for: region)
-                m.requestState(for: region)
-            case .startContinuous:
-                guard hasAlways else { continue }
-                // Outside only. Background-capable with the blue pill showing, so the person can
-                // always see that NEXUS is using location — and only while they are outside.
-                m.allowsBackgroundLocationUpdates = true
-                m.pausesLocationUpdatesAutomatically = false
-                m.showsBackgroundLocationIndicator = true
-                m.desiredAccuracy = kCLLocationAccuracyHundredMeters
-                m.distanceFilter = 50
-                m.activityType = .other
-                m.startUpdatingLocation()
-                // The safety net if iOS or the person kills the app while outside: a significant
-                // move relaunches it, and `bootstrap` resumes from disk.
-                m.startMonitoringSignificantLocationChanges()
-                continuousOn = true
-            case .stopContinuous:
-                guard hasAlways else { continue }
-                m.stopUpdatingLocation()
-                m.stopMonitoringSignificantLocationChanges()
-                m.allowsBackgroundLocationUpdates = false
-                continuousOn = false
+            case .armRegion: setupChanged = true; armed = true
+            case .startContinuous, .stopContinuous: setupChanged = true
+            default: break
+            }
+        }
+        if setupChanged { reconcile(refreshRegionState: armed) }
+        for effect in effects {
+            switch effect {
+            case .armRegion, .startContinuous, .stopContinuous:
+                continue   // done by `reconcile` above
             case .requestFix:
+                // With updates running, a fix is on its way anyway.
                 if !continuousOn { m.desiredAccuracy = kCLLocationAccuracyHundredMeters; m.requestLocation() }
             case .flush:
                 Task { await flush() }
@@ -294,13 +281,97 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
         }
     }
 
+    /// Makes CoreLocation do what the state and the permission call for — no more, no less.
+    /// Idempotent and cheap, so it is called whenever either might have moved: launch, the
+    /// authorization callback, returning to the foreground, going to the background, every
+    /// attendance refresh, and every decision the machine makes.
+    ///   • active, Always → the office region is monitored;
+    ///   • outside, Always → continuous background updates + significant-change monitoring;
+    ///   • active, While Using, app in front → foreground-only updates (fixes decide the zone);
+    ///   • anything else → off.
+    private func reconcile(refreshRegionState: Bool = false) {
+        guard let m = manager else { return }
+        let want = machine.setup
+        let status = m.authorizationStatus
+        guard want.region != nil else { disarm(); return }
+        // Not known yet (read too early after launch): leave whatever is running alone — tearing
+        // down a region iOS relaunched the app for could lose the very event it is delivering. The
+        // authorization callback that follows calls this again with the real answer.
+        guard status != .notDetermined else { return }
+
+        // Region monitoring needs Always. Under While Using the foreground updates below decide
+        // inside/outside from fixes instead, for as long as the app is open.
+        if let fence = want.region, status == .authorizedAlways,
+           CLLocationManager.isMonitoringAvailable(for: CLCircularRegion.self) {
+            // iOS reports crossings of small circles late and unreliably; 100 m is the practical
+            // floor. The server still judges every point against the real radius.
+            let radius = min(max(fence.radius, 100), m.maximumRegionMonitoringDistance)
+            let center = CLLocationCoordinate2D(latitude: fence.lat, longitude: fence.lng)
+            let existing = m.monitoredRegions.first { $0.identifier == Self.regionId } as? CLCircularRegion
+            if let existing, abs(existing.radius - radius) < 1,
+               WorkTrailMachine.distance(existing.center.latitude, existing.center.longitude, center.latitude, center.longitude) < 1 {
+                // Already watching this circle (regions outlive the process). Re-registering it
+                // would only reset what iOS knows about it. Its state is asked for only while the
+                // zone is still unknown: once a zone is known, a fix settles it far more reliably
+                // than `requestState`, whose answer lags well behind a phone standing near the edge.
+                if refreshRegionState && machine.state.zone == .unknown { m.requestState(for: existing) }
+            } else {
+                let region = CLCircularRegion(center: center, radius: radius, identifier: Self.regionId)
+                region.notifyOnEntry = true
+                region.notifyOnExit = true
+                m.startMonitoring(for: region)
+                m.requestState(for: region)
+            }
+        } else {
+            for region in m.monitoredRegions where region.identifier == Self.regionId { m.stopMonitoring(for: region) }
+        }
+
+        let target: Updates
+        if want.continuous && status == .authorizedAlways {
+            target = .background
+        } else if status == .authorizedWhenInUse && UIApplication.shared.applicationState == .active {
+            target = .foreground
+        } else {
+            target = .off
+        }
+        guard target != updates else { return }
+        switch target {
+        case .background:
+            // Outside only. Background-capable with the blue pill showing, so the person can
+            // always see that NEXUS is using location — and only while they are outside.
+            m.allowsBackgroundLocationUpdates = true
+            m.pausesLocationUpdatesAutomatically = false
+            m.showsBackgroundLocationIndicator = true
+            m.desiredAccuracy = kCLLocationAccuracyHundredMeters
+            m.distanceFilter = 50
+            m.activityType = .other
+            m.startUpdatingLocation()
+            // The safety net if iOS kills the app while outside: a significant move relaunches it,
+            // and `bootstrap` resumes from disk. (After a force-quit iOS relaunches nothing until
+            // the person opens the app — then `bootstrap` resumes the same way.)
+            m.startMonitoringSignificantLocationChanges()
+        case .foreground:
+            // While Using only: the app may watch while it is open, and not a moment longer.
+            m.stopMonitoringSignificantLocationChanges()
+            if status == .authorizedAlways { m.allowsBackgroundLocationUpdates = false }
+            m.desiredAccuracy = kCLLocationAccuracyHundredMeters
+            m.distanceFilter = 50
+            m.startUpdatingLocation()
+        case .off:
+            m.stopUpdatingLocation()
+            m.stopMonitoringSignificantLocationChanges()
+            if status == .authorizedAlways { m.allowsBackgroundLocationUpdates = false }
+        }
+        updates = target
+    }
+
     private func disarm() {
         guard let m = manager else { return }
         for region in m.monitoredRegions where region.identifier == Self.regionId { m.stopMonitoring(for: region) }
         m.stopUpdatingLocation()
         m.stopMonitoringSignificantLocationChanges()
         if m.authorizationStatus == .authorizedAlways { m.allowsBackgroundLocationUpdates = false }
-        continuousOn = false
+        updates = .off
         if machine.state.pending.isEmpty { stopTicker() }
     }
 
@@ -311,31 +382,16 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
         if fx.isEmpty { disarm() }
     }
 
-    // While Using only: the app may watch while it is open, and not a moment longer.
-    private var foregroundOnly = false
-    private func startForegroundUpdates() {
-        guard let m = manager, machine.state.isActive, status == .authorizedWhenInUse else { return }
-        foregroundOnly = true
-        m.desiredAccuracy = kCLLocationAccuracyHundredMeters
-        m.distanceFilter = 50
-        m.startUpdatingLocation()
-        continuousOn = true
-    }
-    private func stopForegroundUpdatesIfAny() {
-        guard foregroundOnly, let m = manager else { return }
-        foregroundOnly = false
-        m.stopUpdatingLocation()
-        continuousOn = false
-    }
-
     @objc private func appDidBecomeActive() {
         if awaitingAlwaysAnswer { settleAlwaysAnswer() }
-        if machine.state.isActive, status == .authorizedWhenInUse { startForegroundUpdates() }
+        // Puts back anything that should be running and is not — whatever the reason it is not.
+        if machine.state.isActive { reconcile() }
         tick()
     }
 
     @objc private func appDidEnterBackground() {
-        stopForegroundUpdatesIfAny()
+        // Drops foreground-only (While Using) updates; Always keeps what the state calls for.
+        if machine.state.isActive { reconcile() }
     }
 
     // MARK: - clock
@@ -414,28 +470,21 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
 
     nonisolated func locationManagerDidChangeAuthorization(_ m: CLLocationManager) {
         MainActor.assumeIsolated {
+            // Also the "initial" call iOS makes right after the manager is created, on every launch:
+            // the first moment the permission is reliably known, so the first moment the setup the
+            // saved state calls for can really be put in place.
             if awaitingAlwaysAnswer, m.authorizationStatus != .notDetermined { settleAlwaysAnswer(); return }
             guard let id = machine.state.recordId else { return }
             switch m.authorizationStatus {
             case .authorizedAlways:
                 report("on", recordId: id)
-                stopForegroundUpdatesIfAny()
-                if let fence = machine.state.fence { apply([.armRegion(fence)]) }
-                if machine.state.zone == .outside { apply([.startContinuous]) }
             case .authorizedWhenInUse, .denied, .restricted:
                 // Downgraded in Settings mid-shift: say so, and fall back to what is still allowed.
                 report("denied", recordId: id)
-                for region in m.monitoredRegions where region.identifier == Self.regionId { m.stopMonitoring(for: region) }
-                m.stopMonitoringSignificantLocationChanges()
-                if m.authorizationStatus == .authorizedWhenInUse, UIApplication.shared.applicationState == .active {
-                    startForegroundUpdates()
-                } else {
-                    m.stopUpdatingLocation()
-                    continuousOn = false
-                }
             default:
                 break
             }
+            reconcile(refreshRegionState: true)
         }
     }
 
