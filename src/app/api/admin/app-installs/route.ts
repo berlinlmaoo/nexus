@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { GIDEON_EMAIL } from "@/lib/gideon-identity"
 
 /**
  * Who has the app, and which build they are on.
@@ -24,8 +25,24 @@ export async function GET() {
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     if (!(await isBoD(session.user.id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
+    // Scoped to the viewer's workspace, and the whole roster rather than only phones: the people who
+    // never installed the app are the ones a BoD needs to chase, and a list of devices cannot show an
+    // absence. Primary workspace = oldest membership, as everywhere else.
+    const primary = await prisma.workspaceMember.findFirst({
+      where: { userId: session.user.id },
+      orderBy: { joinedAt: "asc" },
+      select: { workspaceId: true },
+    })
+    const members = primary
+      ? await prisma.workspaceMember.findMany({
+          where: { workspaceId: primary.workspaceId, user: { email: { not: GIDEON_EMAIL } } },
+          select: { role: true, joinedAt: true, user: { select: { id: true, name: true, email: true, avatar: true } } },
+        })
+      : []
+    const memberIds = new Set(members.map((m) => m.user.id))
+
     const rows = await prisma.deviceInstallation.findMany({
-      where: { disabledAt: null },
+      where: { disabledAt: null, ...(primary ? { userId: { in: [...memberIds] } } : {}) },
       orderBy: { lastSeenAt: "desc" },
       select: {
         id: true,
@@ -47,6 +64,29 @@ export async function GET() {
     }
     const installs = [...byUser.values()]
 
+    // Members with no active device. "Last active" comes from their sessions (web or app), so a BoD can
+    // tell "uses the web, never installed" from "has not signed in at all".
+    const missing = members.filter((m) => !byUser.has(m.user.id))
+    const lastActive = missing.length
+      ? await prisma.userSession.groupBy({
+          by: ["userId"],
+          where: { userId: { in: missing.map((m) => m.user.id) } },
+          _max: { lastActiveAt: true },
+        })
+      : []
+    const lastActiveBy = new Map(lastActive.map((r) => [r.userId, r._max.lastActiveAt]))
+    const notInstalled = missing
+      .map((m) => ({
+        id: m.user.id,
+        name: m.user.name,
+        email: m.user.email,
+        avatar: m.user.avatar,
+        role: m.role,
+        joinedAt: m.joinedAt,
+        lastActiveAt: lastActiveBy.get(m.user.id) ?? null,
+      }))
+      .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""))
+
     const versions = new Map<string, number>()
     for (const i of installs) {
       const key = i.appVersion ? `${i.appVersion}${i.buildNumber ? ` (${i.buildNumber})` : ""}` : "unknown"
@@ -55,9 +95,12 @@ export async function GET() {
 
     return NextResponse.json({
       installs,
+      notInstalled,
       totals: {
         people: installs.length,
         devices: rows.length,
+        members: members.length,
+        notInstalled: notInstalled.length,
         versions: [...versions.entries()]
           .map(([version, count]) => ({ version, count }))
           .sort((a, b) => b.count - a.count),

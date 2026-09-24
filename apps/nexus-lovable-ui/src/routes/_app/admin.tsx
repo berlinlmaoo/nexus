@@ -1721,19 +1721,21 @@ function GideonUsage() {
 function AppInstalls() {
   const q = useQuery({ queryKey: ["nexus", "app-installs"], queryFn: nexusApi.appInstalls, retry: false });
   const installs = q.data?.installs ?? [];
+  const notInstalled = q.data?.notInstalled ?? [];
   const totals = q.data?.totals;
 
-  const when = (iso: string) => new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+  const when = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 
-  if (q.isLoading) return <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">Memuat…</div>;
-  if (q.isError) return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">Nggak bisa memuat daftar aplikasi.</div>;
+  if (q.isLoading) return <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">Loading…</div>;
+  if (q.isError) return <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground shadow-soft">Couldn't load the app list.</div>;
 
   return (
     <div className="space-y-4">
       {totals && (
-        <div className="grid grid-cols-2 gap-3">
-          <Stat label="Pakai app" value={totals.people} />
-          <Stat label="Perangkat" value={totals.devices} />
+        <div className="grid grid-cols-3 gap-3">
+          <Stat label="Using the app" value={totals.people} />
+          <Stat label="Not using it" value={totals.notInstalled ?? notInstalled.length} />
+          <Stat label="Devices" value={totals.devices} />
         </div>
       )}
 
@@ -1741,7 +1743,7 @@ function AppInstalls() {
         <div className="flex flex-wrap gap-2">
           {totals.versions.map((v) => (
             <span key={v.version} className="rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold">
-              {v.version === "unknown" ? "Belum dilaporkan" : v.version} · {v.count}
+              {v.version === "unknown" ? "Not reported" : v.version} · {v.count}
             </span>
           ))}
         </div>
@@ -1750,17 +1752,17 @@ function AppInstalls() {
       {installs.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center shadow-soft">
           <Smartphone className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
-          <div className="text-lg font-bold">Belum ada yang pasang app</div>
+          <div className="text-lg font-bold">Nobody has installed the app yet</div>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-soft">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="px-4 py-3 font-semibold">Orang</th>
-                <th className="px-4 py-3 font-semibold">Versi</th>
-                <th className="px-4 py-3 font-semibold">Perangkat</th>
-                <th className="px-4 py-3 font-semibold">Terakhir</th>
+                <th className="px-4 py-3 font-semibold">Person</th>
+                <th className="px-4 py-3 font-semibold">Version</th>
+                <th className="px-4 py-3 font-semibold">Device</th>
+                <th className="px-4 py-3 font-semibold">Last seen</th>
               </tr>
             </thead>
             <tbody>
@@ -1774,7 +1776,7 @@ function AppInstalls() {
                     {i.appVersion ? (
                       <span className="font-semibold tabular-nums">{i.appVersion}{i.buildNumber ? ` (${i.buildNumber})` : ""}</span>
                     ) : (
-                      <span className="text-muted-foreground">Belum dilaporkan</span>
+                      <span className="text-muted-foreground">Not reported</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{i.osVersion ?? i.deviceModel ?? "—"}</td>
@@ -1783,6 +1785,29 @@ function AppInstalls() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {notInstalled.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Not using the app · {notInstalled.length}</div>
+          <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-soft">
+            <table className="w-full text-sm">
+              <tbody>
+                {notInstalled.map((m) => (
+                  <tr key={m.id} className="border-b border-border/60 last:border-0">
+                    <td className="px-4 py-3">
+                      <div className="font-semibold">{m.name}</div>
+                      {m.email && <div className="text-xs text-muted-foreground">{m.email}</div>}
+                    </td>
+                    <td className="px-4 py-3 text-right text-muted-foreground">
+                      {m.lastActiveAt ? `Web only · last active ${when(m.lastActiveAt)}` : "Never signed in"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

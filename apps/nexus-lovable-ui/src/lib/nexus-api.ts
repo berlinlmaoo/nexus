@@ -2440,7 +2440,8 @@ export const nexusApi = {
 
   appInstalls: () => apiFetch<{
     installs: { id: string; appVersion: string | null; buildNumber: string | null; osVersion: string | null; deviceModel: string | null; environment: string; lastSeenAt: string; user: { id: string; name: string; email: string | null; avatar: string | null } }[];
-    totals: { people: number; devices: number; versions: { version: string; count: number }[] };
+    notInstalled?: { id: string; name: string; email: string | null; avatar: string | null; role: string; joinedAt: string; lastActiveAt: string | null }[];
+    totals: { people: number; devices: number; members?: number; notInstalled?: number; versions: { version: string; count: number }[] };
   }>("/api/admin/app-installs"),
 
   // --- Teams + Master Calendar ---
