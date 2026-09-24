@@ -10,6 +10,8 @@ struct ProjectDetailView: View {
     @State private var lanes: [ProjectDetail.Lane] = []   // detail.taskLists + subtasks merged in (board + list)
     @State private var loading = true
     @State private var error: String?
+    /// Set when the board was rebuilt from disk because the server could not be reached.
+    @State private var cachedFrom: Date?
     @State private var openTaskId: String?
     @State private var openProfile: ProfileTarget?
     @State private var tab: ProjectTab = .board
@@ -114,6 +116,7 @@ struct ProjectDetailView: View {
             projectHeader
             tabBar
             Divider().overlay(NX.border)
+            if let cachedFrom { OfflineNotice(savedAt: cachedFrom).padding(.vertical, 4) }
             if searchApplies && !loading && error == nil && !lanes.isEmpty { searchBar }
             content
         }
@@ -344,11 +347,34 @@ struct ProjectDetailView: View {
             }
             // If the selected tab just became hidden (e.g. the flag was turned off), fall back.
             if !visibleTabs.contains(tab) { tab = .board }
+            cachedFrom = nil
         }
         catch APIError.unauthorized { auth.logout() }
+        // Not restored from cache on purpose: 403 is the server saying this person is no longer on
+        // the project, and answering that with the copy they had before is the one case where a
+        // cache would be showing something it has been told not to.
         catch APIError.http(403, _) { error = T("Project locked — you're not a member of this project.") }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load the project.") }
+        catch {
+            if restoreFromCache() {
+                self.error = nil
+            } else {
+                self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load the project.")
+            }
+        }
         loading = false
+    }
+
+    /// The board as it stood the last time the server answered. Lanes and tasks are merged by the
+    /// same function the live path uses, so an offline board is arranged exactly like a live one
+    /// rather than being a second, subtly different reading of the same data.
+    private func restoreFromCache() -> Bool {
+        guard let d = ResponseCache.decoded("project-\(projectId)", as: ProjectDetail.self) else { return false }
+        detail = d.value
+        let all = ResponseCache.decoded("project-tasks-\(projectId)", as: [BoardTask].self)?.value ?? []
+        lanes = Self.mergeSubtasks(into: d.value.taskLists ?? [], all: all)
+        if !visibleTabs.contains(tab) { tab = .board }
+        cachedFrom = d.savedAt
+        return true
     }
 
     /// Merge subtasks into their section lane, placed right under their parent (orphans — parent in

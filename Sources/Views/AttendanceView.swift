@@ -28,6 +28,9 @@ struct AttendanceView: View {
     /// koneksi) — bukan karena server menolak. Dua hal itu butuh dua kartu yang berbeda: yang
     /// pertama berarti "absen tetap bisa, tersimpan di HP"; yang kedua berarti ada yang salah.
     @State private var serverDown = false
+    /// When what is on screen came off the disk instead of the server. Drives one grey line; nil
+    /// whenever the server answered.
+    @State private var cachedFrom: Date?
     /// Tahap absen yang sedang berjalan, digambar sebagai kartu di atas layar. Nil = tidak ada.
     @State private var flow: Flow?
 
@@ -101,6 +104,7 @@ struct AttendanceView: View {
                     hero
                     if loading { loadingRow }
                     if serverDown { downCard } else if let error { errorBanner(error) }
+                    if let cachedFrom { OfflineNotice(savedAt: cachedFrom) }
                     // A Mac cannot take attendance: a check-in needs a selfie through the face
                     // check and the phone's own position, and a Mac has neither in a form anyone
                     // should trust. Everything that READS attendance stays exactly as it is — the
@@ -825,10 +829,13 @@ struct AttendanceView: View {
 
     private func load() async {
         error = nil
-        do { today = try await APIClient.shared.attendanceToday(); serverDown = false }
+        do { today = try await APIClient.shared.attendanceToday(); serverDown = false; cachedFrom = nil }
         catch APIError.unauthorized { auth.logout() }
-        catch APIError.offline { serverDown = true }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load.") }
+        catch APIError.offline { serverDown = true; restoreTodayFromCache() }
+        catch {
+            self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load.")
+            restoreTodayFromCache()
+        }
         loading = false
         // Drives the Dynamic Island from what the app actually believes, rather than from the tap.
         // A check-in made on the web, or one that arrived by replaying the queue, has to move the
@@ -837,6 +844,25 @@ struct AttendanceView: View {
         // The widget's seven dots. Cheap (compact rows, one week), and only ever this person's own.
         if let days = try? await APIClient.shared.attendanceRecent(scope: "me") { AttendancePresence.updateRecent(days) }
         await locateWithinOffice()
+    }
+
+    /// What the server last said — but only if it said it TODAY.
+    ///
+    /// This is the one screen where a stale copy can be actively wrong rather than merely old:
+    /// yesterday's payload says this person checked in at 09:00, and drawn this morning it says
+    /// they already have. So the copy is trusted only while the Jakarta day it was SAVED on is
+    /// still running.
+    ///
+    /// The guard is the save time rather than the server's own `attendanceDateKey` for the reason
+    /// written in AttendanceSnapshot: a value produced here can only ever disagree about the day,
+    /// never about the format somebody else writes it in.
+    private func restoreTodayFromCache() {
+        guard today == nil,
+              let hit = ResponseCache.decoded("attendance-today", as: AttendanceToday.self),
+              JakartaDay.same(hit.savedAt, Date())
+        else { return }
+        today = hit.value
+        cachedFrom = hit.savedAt
     }
 
     // MARK: formatters
@@ -968,6 +994,7 @@ struct StreakBoardCard: View {
     /// plus a `localizedCaseInsensitiveCompare` sort (ICU collation, the slowest comparator Foundation
     /// has) — and `body` reads it three times: the empty check, the name column and the cell grid.
     @State private var members: [Member] = []
+    @State private var cachedFrom: Date?
     @State private var loading = true
     @State private var selectedRow: AttendanceRow?   // BoD taps a cell → record actions (delete / clear check-out)
     @State private var monthOffset = 0               // 0 = this month; ◀ ▶ to reach past months
@@ -1095,6 +1122,7 @@ struct StreakBoardCard: View {
             } else {
                 grid
             }
+            if let cachedFrom { OfflineNotice(savedAt: cachedFrom) }
         }
         .nexusCard()
         // Keyed on the permissions too: /attendance/today lands AFTER the first paint, and a board
@@ -1280,12 +1308,28 @@ struct StreakBoardCard: View {
 
     private func load() async {
         loading = true
+        // Named once: the fetch and the cache key it falls back to have to agree, and a board of
+        // the whole crew restored into a personal board would be a quiet, convincing lie.
+        let scope = wide ? "workspace" : "me"
         do {
-            let fetched = try await APIClient.shared.attendanceHistory(scope: wide ? "workspace" : "me", month: monthKey)
+            let fetched = try await APIClient.shared.attendanceHistory(scope: scope, month: monthKey)
             members = Self.buildMembers(fetched)
+            cachedFrom = nil
         }
         catch APIError.unauthorized { auth.logout() }   // leaves the board as it was, same as before
-        catch { members = [] }
+        catch {
+            // A month already drawn is far more use than an empty grid, and unlike today's card
+            // this cannot be misread as live: a finished day does not change, and the line
+            // underneath says when the copy was taken.
+            if let hit = ResponseCache.decoded("attendance-history-\(scope)-\(monthKey)",
+                                               as: AttendanceHistoryResponse.self) {
+                members = Self.buildMembers(hit.value.all)
+                cachedFrom = hit.savedAt
+            } else {
+                members = []
+                cachedFrom = nil
+            }
+        }
         loading = false
     }
 }

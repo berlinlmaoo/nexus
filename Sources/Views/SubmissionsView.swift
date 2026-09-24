@@ -129,6 +129,8 @@ struct SubmissionsView: View {
     @State private var statusColumns: [String] = []
     @State private var loading = true
     @State private var loadError = false
+    /// Set when the board was drawn from the last saved copy.
+    @State private var cachedFrom: Date?
     @State private var opened: SubmissionRef?
 
     // The first column is ours; the rest are status names straight from the server (and follow
@@ -195,6 +197,7 @@ struct SubmissionsView: View {
             // this: swipe sideways between columns, scroll down inside one.
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 8) {
+                    if let cachedFrom { OfflineNotice(savedAt: cachedFrom) }
                     ForEach(items) { s in
                         Button { opened = SubmissionRef(id: s.id, preview: s) } label: { card(s) }
                             .buttonStyle(.plain)
@@ -258,8 +261,17 @@ struct SubmissionsView: View {
             let r = try await APIClient.shared.mySubmissions()
             subs = r.submissions ?? []
             statusColumns = r.statusColumns ?? []
+            cachedFrom = nil
         } catch APIError.unauthorized { auth.logout() }
-        catch { loadError = true }
+        catch {
+            if let hit = ResponseCache.decoded("my-submissions", as: MySubmissionsResponse.self) {
+                subs = hit.value.submissions ?? []
+                statusColumns = hit.value.statusColumns ?? []
+                cachedFrom = hit.savedAt
+            } else {
+                loadError = true
+            }
+        }
         loading = false
     }
 }

@@ -10,6 +10,8 @@ struct TaskDetailView: View {
     @State private var task: TaskDetail?
     @State private var loading = true
     @State private var error: String?
+    /// Set when the task on screen came off the disk rather than the server.
+    @State private var cachedFrom: Date?
     @State private var editTitle = ""
     @State private var newComment = ""
     @State private var newSubtask = ""
@@ -44,6 +46,7 @@ struct TaskDetailView: View {
             } else if let task {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
+                        if let cachedFrom { OfflineNotice(savedAt: cachedFrom) }
                         header(task)
                         questBanner(task)
                         metaRow(task)
@@ -348,9 +351,22 @@ struct TaskDetailView: View {
             if !isBod, let role = (try? await APIClient.shared.workspaceInfo())?.role {
                 isBod = role == "BOD" || role == "ONE_ABOVE_ALL"
             }
+            cachedFrom = nil
         }
         catch APIError.unauthorized { auth.logout() }
-        catch { self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load.") }
+        catch {
+            // The brief a person walked onto a site to read is worth more than the reason it could
+            // not be refreshed. Editing still goes through the server and still fails loudly.
+            if let hit = ResponseCache.decoded("task-\(taskId)", as: TaskDetail.self) {
+                task = hit.value
+                editTitle = hit.value.title
+                descDraft = blockText(hit.value.description)
+                descOriginal = descDraft
+                cachedFrom = hit.savedAt
+            } else {
+                self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load.")
+            }
+        }
         loading = false
     }
     private func update(_ t: TaskDetail, _ fields: [String: Any]) async {

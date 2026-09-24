@@ -335,7 +335,16 @@ struct TaskAttachmentsCard: View {
     }
 
     private func load() async {
-        items = (try? await APIClient.shared.taskAttachments(taskId)) ?? []
+        if let fresh = try? await APIClient.shared.taskAttachments(taskId) {
+            items = fresh
+        } else if let hit = ResponseCache.decoded("task-attachments-\(taskId)", as: [TaskAttachment].self) {
+            // The files are already on this device — the offline pass walked this very list to
+            // fetch them. Dropping the list would hide bytes that are sitting right there, which
+            // is the most frustrating possible way to be offline.
+            items = hit.value
+        } else {
+            items = []
+        }
         loading = false
     }
 

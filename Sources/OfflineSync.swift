@@ -142,8 +142,17 @@ final class OfflineSync: ObservableObject {
             var files: [(url: String, name: String)] = []
             if let rows = try? await api.attendanceHistory(scope: "me", month: Self.monthKey()) {
                 for r in rows {
-                    if let u = r.checkInPhotoUrl, !u.isEmpty { files.append((u, "checkin-\(r.idv).jpg")) }
-                    if let u = r.checkOutPhotoUrl, !u.isEmpty { files.append((u, "checkout-\(r.idv).jpg")) }
+                    // Stored under the ABSOLUTE url, because that is the string the image loader
+                    // will later look it up by: a selfie is drawn by `CachedImage`, which is handed
+                    // `AttendanceRow.fileURL(...)` — the same relative path with the host already
+                    // glued on. Saving it under the raw path would put the file on the device and
+                    // still leave the board blank, which is the worst of both.
+                    if let u = AttendanceRow.fileURL(r.checkInPhotoUrl)?.absoluteString {
+                        files.append((u, "checkin-\(r.idv).jpg"))
+                    }
+                    if let u = AttendanceRow.fileURL(r.checkOutPhotoUrl)?.absoluteString {
+                        files.append((u, "checkout-\(r.idv).jpg"))
+                    }
                 }
             }
             // 2. Whatever hangs off the tasks of the projects this person is in.

@@ -1606,7 +1606,8 @@ struct APIClient {
     // MARK: - Attachments
 
     func taskAttachments(_ taskId: String) async throws -> [TaskAttachment] {
-        try await run(makeRequest("/api/attachments?taskId=\(enc(taskId))"), decode: [TaskAttachment].self)
+        try await run(makeRequest("/api/attachments?taskId=\(enc(taskId))"), decode: [TaskAttachment].self,
+                      cache: "task-attachments-\(taskId)")
     }
     /// Cloudflare will not carry a request body past roughly 100 MB, and it does not fail politely:
     /// measured against this server, a 120 MB POST is answered 502 at the edge after 2.3 MB and
@@ -2269,6 +2270,19 @@ enum AttachmentCache {
             if (try? candidate.checkResourceIsReachable()) == true { return candidate }
         }
         return nil
+    }
+
+    /// A file kept for offline use, found by its URL and nothing else.
+    ///
+    /// `existing(remote:fileName:)` needs the name the file was saved under, and a picture only
+    /// ever arrives at the image loader as a URL — nothing in an `<img>` knows what the upload was
+    /// called. The folder is named from the URL alone and holds exactly one file, so the name is
+    /// recoverable from the folder rather than from the caller.
+    static func offlineCopy(of remote: String) -> URL? {
+        let folder = offlineDir.appendingPathComponent(fingerprint(remote), isDirectory: true)
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: folder, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) else { return nil }
+        return files.first
     }
 
     /// How much of the phone the offline copies are using.

@@ -95,6 +95,8 @@ struct AttendanceRequestsCard: View {
     @Environment(AuthStore.self) private var auth
     @State private var requests: [AttendanceRequest] = []
     @State private var offsite: [OffsiteCheckout] = []
+    /// Set when the list came off the disk rather than the server.
+    @State private var cachedFrom: Date?
     @State private var loading = true
     @State private var showComposer = false
     @State private var busy: String?
@@ -210,6 +212,7 @@ struct AttendanceRequestsCard: View {
                     ForEach(filtered) { row($0) }
                 }
             }
+            if let cachedFrom { OfflineNotice(savedAt: cachedFrom) }
         }
         // Hung here rather than on the outer chain beside the composer: two .sheet modifiers on one
         // view is the oldest way in SwiftUI to end up with one of them that never opens.
@@ -522,15 +525,29 @@ struct AttendanceRequestsCard: View {
     }
 
     private func load() async {
+        let scope = canReview ? "workspace" : "me"
         do {
-            let all = try await APIClient.shared.attendanceRequests(scope: canReview ? "workspace" : "me")
+            let all = try await APIClient.shared.attendanceRequests(scope: scope)
             // Auto-deductions are the nightly cron's penalties, not something anyone filed, so they
             // do not belong in a list of submissions. The server drops them from this endpoint; we
             // repeat the test rather than trust it, because a build outlives the server it was
             // written against and the alternative is a penalty row wearing an approver's face.
             requests = all.filter { !$0.isAutoDeduction }
+            cachedFrom = nil
         }
-        catch APIError.unauthorized { auth.logout(); loading = false; return } catch { requests = [] }
+        catch APIError.unauthorized { auth.logout(); loading = false; return }
+        catch {
+            // Filed requests and their decisions are exactly what somebody wants to check on a
+            // site with no bars. The same auto-deduction filter is applied to the saved copy —
+            // a cache is not a reason to relax a rule.
+            if let hit = ResponseCache.decoded("attendance-requests-\(scope)", as: AttendanceRequestsResponse.self) {
+                requests = hit.value.requests.filter { !$0.isAutoDeduction }
+                cachedFrom = hit.savedAt
+            } else {
+                requests = []
+                cachedFrom = nil
+            }
+        }
         // Only if this reviewer can actually act on them — see `canReviewOffsite`. Fetched second and
         // separately: a 403 or an outage here must leave the requests already on screen alone.
         if canReviewOffsite {

@@ -451,7 +451,17 @@ actor ImageLoader {
         // actually SENT — 401, 404 — is a response and not a thrown error, so it never reaches the
         // replay at all and cannot loop. Its own session, not the shared one, so the image URLCache
         // this loader exists for is still the thing answering.
-        guard let (data, resp) = try? await APIClient.shared.perform(req, on: ImageLoader.session) else { return nil }
+        guard let (data, resp) = try? await APIClient.shared.perform(req, on: ImageLoader.session) else {
+            // Nothing answered at all — no signal, or neither host is reachable. A picture fetched
+            // ahead of time for exactly this moment is on the disk under its own URL, in the folder
+            // the daily sweep is not allowed to touch. Attendance selfies arrive here.
+            //
+            // Deliberately only on a THROWN failure. A 401 or a 404 is an answer, and answering a
+            // refusal with a copy of the thing refused is the one thing a cache must never do.
+            guard let file = AttachmentCache.offlineCopy(of: url.absoluteString),
+                  let bytes = try? Data(contentsOf: file) else { return nil }
+            return ImageLoader.downsample(bytes, maxPixel: maxPixel) ?? UIImage(data: bytes)
+        }
         if let http = resp as? HTTPURLResponse, !(200..<300).contains(http.statusCode) { return nil }
         // Almost every consumer is a small tile (avatar/icon). Decode AND downsample in one
         // ImageIO pass so we never hold a 1280px bitmap to draw into a 56px frame.
