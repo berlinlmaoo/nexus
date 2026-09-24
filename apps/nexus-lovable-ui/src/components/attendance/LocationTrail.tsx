@@ -96,17 +96,22 @@ function TrailMap({ trail }: { trail: NexusAttendanceTrail }) {
         .addTo(map);
     }
 
-    // Exit / enter pins where the inside flag flips.
-    for (let i = 1; i < points.length; i++) {
-      const prev = points[i - 1], p = points[i];
-      if (prev.inside === p.inside) continue;
-      const left = !p.inside;
+    // Left / Back pins: where the phone reported leaving or re-entering (its exit/enter events), and
+    // wherever the inside flag flips. The phone sends nothing while inside, so the first point of a
+    // day is usually the exit itself — it must read "Left", not "Start".
+    const pinned = new Set<number>();
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i], prev = i > 0 ? points[i - 1] : null;
+      const left = p.event === "exit" || (prev !== null && prev.inside && !p.inside);
+      const back = p.event === "enter" || (prev !== null && !prev.inside && p.inside);
+      if (!left && !back) continue;
+      pinned.add(i);
       L.marker([p.lat, p.lng], { icon: pinIcon(left ? AMBER : GREEN, `${left ? "Left" : "Back"} ${fmtTime(p.at)}`), keyboard: false, zIndexOffset: 500 }).addTo(map);
     }
     if (points.length) {
       const first = points[0], last = points[points.length - 1];
-      L.marker([first.lat, first.lng], { icon: pinIcon("#334155", `Start ${fmtTime(first.at)}`), keyboard: false, zIndexOffset: 400 }).addTo(map);
-      if (points.length > 1) L.marker([last.lat, last.lng], { icon: pinIcon("#334155", `Last ${fmtTime(last.at)}`), keyboard: false, zIndexOffset: 400 }).addTo(map);
+      if (!pinned.has(0)) L.marker([first.lat, first.lng], { icon: pinIcon("#334155", `Start ${fmtTime(first.at)}`), keyboard: false, zIndexOffset: 400 }).addTo(map);
+      if (points.length > 1 && !pinned.has(points.length - 1)) L.marker([last.lat, last.lng], { icon: pinIcon("#334155", `Last ${fmtTime(last.at)}`), keyboard: false, zIndexOffset: 400 }).addTo(map);
     }
 
     const fit = () => {
@@ -173,7 +178,9 @@ export function LocationTrail({ recordId, compact = false, trackingState }: { re
             <p className="max-w-xs text-xs text-muted-foreground">
               {trackingState === "web" ? "Checked in from the web — location isn’t tracked during the day. Tracking starts after check-in in the NEXUS app."
                 : trackingState === "denied" ? "Location access was off on the phone, so nothing was recorded. Tracking starts after check-in in the NEXUS app."
-                : `Tracking starts after check-in in the NEXUS app${record.checkInAt ? "" : " — there’s no check-in on this day yet"}.`}
+                : !record.checkInAt ? "There’s no check-in on this day yet. Tracking starts after check-in in the NEXUS app."
+                : !record.checkOutAt ? "No points yet. The app only sends your location once you leave the office area — inside it, nothing is sent."
+                : "Nothing was sent: stayed inside the office, or the day was checked in without the NEXUS app."}
             </p>
           </div>
         )}
