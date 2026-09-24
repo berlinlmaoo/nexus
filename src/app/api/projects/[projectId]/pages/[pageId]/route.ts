@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { projectWriteRefusal } from "@/lib/write-access"
 import { checkProjectAccess } from "@/lib/rbac"
 import { logAudit } from "@/lib/audit"
 
@@ -66,6 +67,9 @@ export async function PATCH(
     if (!existing || existing.projectId !== (await params).projectId) {
       return NextResponse.json({ error: "Page not found" }, { status: 404 })
     }
+    // Signed in is not enough (writes batch): project work, checkProjectAccess MEMBER (lib/write-access.ts).
+    const refusal = await projectWriteRefusal(session.user.id, existing.projectId)
+    if (refusal) return refusal
 
     const data: Record<string, unknown> = {}
     if (name !== undefined) data.name = name
@@ -106,6 +110,9 @@ export async function DELETE(
     if (!existing || existing.projectId !== (await params).projectId) {
       return NextResponse.json({ error: "Page not found" }, { status: 404 })
     }
+    // Signed in is not enough (writes batch): project work, checkProjectAccess MEMBER (lib/write-access.ts).
+    const refusal = await projectWriteRefusal(session.user.id, existing.projectId)
+    if (refusal) return refusal
 
     await prisma.projectPage.delete({ where: { id: (await params).pageId } })
 

@@ -184,7 +184,14 @@ export async function PATCH(
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    const data: { role?: SystemRole; googleWorkspaceEmail?: string | null; name?: string; email?: string; password?: string } = {}
+    const data: {
+      role?: SystemRole
+      googleWorkspaceEmail?: string | null
+      name?: string
+      email?: string
+      password?: string
+      sessionVersion?: { increment: number }
+    } = {}
     if (role !== undefined) data.role = role
 
     if (wantsName) {
@@ -206,6 +213,9 @@ export async function PATCH(
       // Cost yang sama dengan pendaftaran. Sandi lama tidak diminta: ini BoD mengatur ulang
       // sandi orang lain, dan orang itu memang tidak ada di sini untuk mengetiknya.
       data.password = await bcrypt.hash(pw, 12)
+      // Someone else set this password: every session of the account's owner ends (lib/session-version.ts),
+      // as after a reset by email. Not when the caller sets their own here — that would sign them out.
+      if ((await params).userId !== session.user.id) data.sessionVersion = { increment: 1 }
     }
 
     if (hasWorkspaceEmail) {

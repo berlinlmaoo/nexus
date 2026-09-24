@@ -196,7 +196,14 @@ export async function POST(request: NextRequest) {
     const validation = validateBody(createTaskSchema, body)
     if (!validation.success) return validation.error
 
-    const { title, description, status, priority, taskListId, dueDate, tags, assigneeIds, parentId } = validation.data
+    const { title, description, status, priority, taskListId, dueDate, startDate, estimatedHours, tags, assigneeIds, parentId } =
+      validation.data
+    // Validated by createTaskSchema but never written before. Same handling as PATCH /api/tasks/{id}:
+    // "YYYY-MM-DD" or ISO, 400 on an unparseable date.
+    const parsedStart = startDate ? new Date(startDate) : null
+    if (parsedStart && Number.isNaN(parsedStart.getTime())) {
+      return NextResponse.json({ error: "Invalid start date" }, { status: 400 })
+    }
 
     const taskList = await prisma.taskList.findUnique({
       where: { id: taskListId },
@@ -267,6 +274,8 @@ export async function POST(request: NextRequest) {
         taskListId,
         creatorId: userId,
         dueDate: dueDate ? new Date(dueDate) : undefined,
+        startDate: parsedStart ?? undefined,
+        estimatedHours: estimatedHours ?? undefined,
         tags: tags || [],
         parentId,
         assignees: finalAssigneeIds.length

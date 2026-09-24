@@ -2,6 +2,8 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { taskWriteRefusal } from "@/lib/write-access"
+import { isUniqueViolation } from "@/lib/prisma-errors"
 import { canReadTask, taskReadRefusal } from "@/lib/read-access"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
@@ -93,13 +95,27 @@ export async function POST(
         { status: 400 }
       )
 
-    const relation = await prisma.taskRelation.create({
-      data: {
-        sourceTaskId: (await params).taskId,
-        targetTaskId,
-        type,
-      },
-    })
+    // Signed in is not enough (writes batch): whoever may open the task — and the other task (its
+    // title comes back in the relation list).
+    const refusal =
+      (await taskWriteRefusal(session.user.id, (await params).taskId)) ??
+      (await taskWriteRefusal(session.user.id, String(targetTaskId)))
+    if (refusal) return refusal
+
+    const relation = await prisma.taskRelation
+      .create({
+        data: {
+          sourceTaskId: (await params).taskId,
+          targetTaskId,
+          type,
+        },
+      })
+      .catch((error: unknown) => {
+        if (isUniqueViolation(error)) return null
+        throw error
+      })
+    // Was a 500: TaskRelation @@unique([sourceTaskId, targetTaskId, type]).
+    if (!relation) return NextResponse.json({ error: "This relation already exists" }, { status: 409 })
 
     logAudit({ action: "create", entityType: "task_relation", entityId: relation.id, userId: session.user.id, request: req, metadata: { sourceTaskId: (await params).taskId, targetTaskId, type } })
 

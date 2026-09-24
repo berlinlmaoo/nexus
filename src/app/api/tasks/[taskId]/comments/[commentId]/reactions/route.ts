@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { checkProjectAccess } from "@/lib/rbac"
 
 export async function POST(
   request: NextRequest,
@@ -11,6 +12,20 @@ export async function POST(
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    // Signed in is not enough (writes batch): the comment must be on the task in the path, and the
+    // caller must be able to read that task's comments (GET …/comments: checkProjectAccess VIEWER).
+    // DELETE is untouched: it can only ever remove the caller's own reaction.
+    const commentRef = await prisma.comment.findUnique({
+      where: { id: (await params).commentId },
+      select: { taskId: true, task: { select: { taskList: { select: { projectId: true } } } } },
+    })
+    if (!commentRef || commentRef.taskId !== (await params).taskId) {
+      return NextResponse.json({ error: "Comment not found" }, { status: 404 })
+    }
+    if (!(await checkProjectAccess(session.user.id, commentRef.task.taskList.projectId, ["VIEWER"])).allowed) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
 
     const { emoji } = await request.json()
     if (!emoji) return NextResponse.json({ error: "Emoji is required" }, { status: 400 })

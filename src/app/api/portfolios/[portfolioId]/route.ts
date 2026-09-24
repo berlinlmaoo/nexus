@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { firstUnlinkableProject, workspaceItemWriteRefusal } from "@/lib/write-access"
 import { isWorkspaceMemberOrAdmin } from "@/lib/read-access"
 import { logAudit } from "@/lib/audit"
 
@@ -106,6 +107,24 @@ export async function PATCH(
     if (!existing) {
       return NextResponse.json({ error: "Portfolio not found" }, { status: 404 })
     }
+    // Signed in is not enough (writes batch): members of the portfolio's workspace (or a system admin).
+    const refusal = await workspaceItemWriteRefusal(session.user.id, existing.workspaceId)
+    if (refusal) return refusal
+
+    if (projectIds !== undefined) {
+      if (!Array.isArray(projectIds)) {
+        return NextResponse.json({ error: "projectIds must be an array" }, { status: 400 })
+      }
+      // Only projects ADDED now are checked (same workspace, or one the caller can open); the list is
+      // sent whole, so the ones already in it (perhaps added by a system admin) are kept as they are.
+      const linked = new Set(
+        (await prisma.portfolioProject.findMany({ where: { portfolioId }, select: { projectId: true } })).map((row) => row.projectId),
+      )
+      const added = projectIds.filter((id: unknown): id is string => typeof id === "string" && !linked.has(id))
+      if (await firstUnlinkableProject(session.user.id, added, existing.workspaceId)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      }
+    }
 
     if (projectIds !== undefined) {
       await prisma.portfolioProject.deleteMany({ where: { portfolioId } })
@@ -158,6 +177,9 @@ export async function DELETE(
     if (!existing) {
       return NextResponse.json({ error: "Portfolio not found" }, { status: 404 })
     }
+    // Signed in is not enough (writes batch): members of the portfolio's workspace (or a system admin).
+    const refusal = await workspaceItemWriteRefusal(session.user.id, existing.workspaceId)
+    if (refusal) return refusal
 
     await prisma.portfolio.delete({ where: { id: portfolioId } })
 

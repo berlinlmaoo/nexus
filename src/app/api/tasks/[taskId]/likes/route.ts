@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { taskWriteRefusal } from "@/lib/write-access"
 import { canReadTask, taskReadRefusal } from "@/lib/read-access"
 
 export async function GET(
@@ -37,6 +38,9 @@ export async function POST(
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // Signed in is not enough (writes batch): whoever may open the task (lib/write-access.ts).
+    const refusal = await taskWriteRefusal(session.user.id, (await params).taskId)
+    if (refusal) return refusal
 
     const task = await prisma.task.findUnique({ where: { id: (await params).taskId } })
     if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 })
@@ -79,6 +83,9 @@ export async function DELETE(
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // Signed in is not enough (writes batch): whoever may open the task (lib/write-access.ts).
+    const refusal = await taskWriteRefusal(session.user.id, (await params).taskId)
+    if (refusal) return refusal
 
     const { taskId } = await params
     const task = await prisma.task.findUnique({ where: { id: taskId }, select: { id: true } })
