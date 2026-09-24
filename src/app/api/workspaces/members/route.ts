@@ -6,6 +6,7 @@ import prisma from '@/lib/prisma'
 import { GIDEON_EMAIL } from '@/lib/gideon-identity'
 import bcrypt from 'bcryptjs'
 import { logAudit } from '@/lib/audit'
+import { auditDiff } from '@/lib/audit-describe'
 import { isSystemAdminUser, WORKSPACE_HIERARCHY } from '@/lib/rbac'
 import { isLikelyPhoneNumber, normalizeIndonesianPhoneNumber } from '@/lib/phone-number'
 import { Prisma } from '@/generated/prisma/client'
@@ -519,7 +520,36 @@ export async function PATCH(req: NextRequest) {
       },
     })
 
-    logAudit({ action: "update", entityType: "workspace_member", entityId: memberId, userId: session.user.id, request: req, metadata: { newRole: role, attendanceRole, attendanceShiftStartTime: shiftStart, attendanceShiftEndTime: shiftEnd, ...(approverId !== undefined ? { approverId } : {}), ...(orphaned.length ? { orphanedReports: orphaned.map((o) => o.id) } : {}) } })
+    // Old → new for exactly the fields this request touched (targetMember is the full row read above,
+    // so no extra query). The old metadata logged only new values and, for anything but role/shift/
+    // approver, nothing at all — hence the many `{}` rows. The legacy keys stay for older readers.
+    // The phone number is personal data: recorded as changed, never its value.
+    const memberChanges: Record<string, unknown> = auditDiff(
+      {
+        role: targetMember.role,
+        attendanceRole: targetMember.attendanceRole,
+        attendanceShiftStartTime: targetMember.attendanceShiftStartTime,
+        attendanceShiftEndTime: targetMember.attendanceShiftEndTime,
+        attendanceShiftByDay: targetMember.attendanceShiftByDay,
+        flexiTimeEnabled: targetMember.flexiTimeEnabled,
+        noGeofenceMode: targetMember.noGeofenceMode,
+        restDays: targetMember.restDays,
+        approverId: targetMember.approverId,
+      },
+      {
+        role,
+        attendanceRole,
+        attendanceShiftStartTime: shiftStart,
+        attendanceShiftEndTime: shiftEnd,
+        attendanceShiftByDay: byDay === "skip" ? undefined : byDay === "clear" ? null : byDay,
+        flexiTimeEnabled,
+        noGeofenceMode,
+        restDays: restDaysClean,
+        approverId,
+      },
+    )
+    if (phoneNumber !== undefined) memberChanges.phoneNumber = { redacted: true }
+    logAudit({ action: "update", entityType: "workspace_member", entityId: memberId, entityName: updated.user.name, userId: session.user.id, request: req, metadata: { newRole: role, attendanceRole, attendanceShiftStartTime: shiftStart, attendanceShiftEndTime: shiftEnd, ...(approverId !== undefined ? { approverId } : {}), ...(orphaned.length ? { orphanedReports: orphaned.map((o) => o.id) } : {}), targetUserId: targetMember.userId, changes: memberChanges } })
 
     return NextResponse.json({
       member: {

@@ -17,8 +17,24 @@ import {
   normalizeCustomFieldType,
   parseCustomFieldValue,
   serializeCustomFieldValue,
+  formatCustomFieldNumberValue,
+  formatCustomFieldValueForExport,
 } from "@/lib/custom-fields"
 import { seedTaskCustomFieldValues } from "@/lib/custom-field-sync"
+
+/** A stored custom-field value as a person reads it (option label, "Rp 2.000.000", file names). */
+function auditDisplayValue(type: SupportedCustomFieldType, options: unknown, raw: string | null | undefined): string | null {
+  if (raw === null || raw === undefined || raw === "") return null
+  try {
+    const text = type === "NUMBER"
+      ? formatCustomFieldNumberValue(raw, options as CustomFieldOptionConfig | null)
+      : formatCustomFieldValueForExport(type, raw)
+    if (!text) return null
+    return text.length > 300 ? `${text.slice(0, 300)}…` : text
+  } catch {
+    return raw.slice(0, 300)
+  }
+}
 
 interface CustomFieldResponseItem {
   id: string
@@ -468,11 +484,18 @@ export async function PATCH(req: NextRequest) {
         },
         select: {
           id: true,
+          title: true,
           createdAt: true,
           creator: {
             select: {
               name: true,
             },
+          },
+          // The value before this write, for the audit trail (same query, no extra read).
+          customFieldValues: {
+            where: { customFieldId: id },
+            select: { value: true },
+            take: 1,
           },
         },
       })
@@ -510,7 +533,14 @@ export async function PATCH(req: NextRequest) {
         entityName: existingField.name,
         userId: session.user.id,
         request: req,
-        metadata: { taskId, fieldId: id },
+        metadata: {
+          taskId,
+          fieldId: id,
+          fieldName: existingField.name,
+          taskTitle: task.title,
+          from: auditDisplayValue(normalizedType, existingField.options, task.customFieldValues[0]?.value),
+          to: auditDisplayValue(normalizedType, existingField.options, fieldValue.value),
+        },
       })
 
       return NextResponse.json({

@@ -9,7 +9,7 @@ import { Avatar } from "@/components/Avatar";
 import { ApiError, downloadFile, fmtDate, fmtTime, nexusApi, statusLabel, type AttendanceActionPayload, type NexusAttendanceHistory, type NexusOffice, type NexusOffsiteCheckout } from "@/lib/nexus-api";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { getAttendanceFix, GeoError } from "@/lib/geo";
-import { AlertTriangle, Calendar, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Clock, Coffee, Download, Flag, Hand, HeartPulse, Info, Loader2, MapPin, Moon, Pencil, PenLine, Scale, Search, Sparkles, Sun, Trash2, X } from "lucide-react";
+import { AlertTriangle, Calendar, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Clock, Coffee, Download, FileText, Flag, Hand, HeartPulse, Image as ImageIcon, Info, Loader2, MapPin, Moon, Pencil, PenLine, Scale, Search, Sparkles, Sun, Trash2, X } from "lucide-react";
 import { celebrate } from "@/components/Celebration";
 import { SelfieCapture } from "@/components/attendance/SelfieCapture";
 import { MobileCheckInHero } from "@/components/attendance/MobileCheckInHero";
@@ -66,6 +66,45 @@ const toneLabel: Record<string, string> = {
 };
 const REQ_LABEL: Record<string, string> = { LEAVE: "Leave", SICK: "Sick", PERMIT: "Permit", DAY_OFF: "Day Off", RED_DATE: "Public Holiday" };
 
+// A request's supporting document. A PHOTO is never labelled with its file name: the old apps named
+// every photo "sick-note.jpg" whatever the request was, so a permit arrived calling its own evidence a
+// sick note. The type says what the photo is; the file name only ever said what the app guessed.
+// Anything that isn't an image (a PDF) keeps its name — there, the name is the person's own.
+const PHOTO_EXT = /\.(jpe?g|png|gif|webp|heic|heif|avif|bmp)$/i;
+function isPhotoDocument(url?: string | null, name?: string | null) {
+  const path = (url ?? "").split(/[?#]/)[0];
+  // The stored file keeps the uploaded extension (see POST /api/attendance/requests); the original
+  // name is only consulted when the URL carries none.
+  if (/\.[a-z0-9]{2,5}$/i.test(path)) return PHOTO_EXT.test(path);
+  return PHOTO_EXT.test(name ?? "");
+}
+function photoLabel(type?: string | null) {
+  const t = (type || "").toUpperCase();
+  return t === "PERMIT" ? "Permit photo" : t === "SICK" ? "Sick note" : "Photo";
+}
+function SupportingDocument({ url, name, type, large = false }: { url: string; name?: string | null; type?: string | null; large?: boolean }) {
+  const [broken, setBroken] = useState(false);
+  const box = large ? "h-14 w-14" : "h-10 w-10";
+  if (isPhotoDocument(url, name)) {
+    const label = photoLabel(type);
+    return (
+      <a href={url} target="_blank" rel="noreferrer" title={`Open ${label.toLowerCase()}`}
+        className="inline-flex max-w-full items-center gap-2 rounded-xl border border-border bg-background p-1 pr-3 text-xs font-semibold transition hover:bg-accent">
+        {broken
+          ? <span className={cn("grid shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground", box)}><ImageIcon className="h-4 w-4" /></span>
+          : <img src={url} alt={label} loading="lazy" onError={() => setBroken(true)} className={cn("shrink-0 rounded-lg bg-muted object-cover", box)} />}
+        <span className="truncate">{label}</span>
+      </a>
+    );
+  }
+  return (
+    <a href={url} target="_blank" rel="noreferrer"
+      className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition hover:bg-accent">
+      <FileText className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{name || "View document"}</span>
+    </a>
+  );
+}
+
 // Detail popup for an approved leave/sick/permit/day-off/red-date cell on the streak board.
 function LeaveDetailDrawer({ record, onClose, canOverride }: { record: HistRow; onClose: () => void; canOverride?: boolean }) {
   const typeLabel = REQ_LABEL[(record.requestType || "").toUpperCase()] || "Leave/Permit";
@@ -95,9 +134,7 @@ function LeaveDetailDrawer({ record, onClose, canOverride }: { record: HistRow; 
           </div>
         )}
         {record.supportingDocumentUrl && (
-          <a href={record.supportingDocumentUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold transition hover:bg-accent">
-            <Download className="h-3.5 w-3.5" /> {record.supportingDocumentName || "View attachment"}
-          </a>
+          <div className="mt-3"><SupportingDocument url={record.supportingDocumentUrl} name={record.supportingDocumentName} type={record.requestType} large /></div>
         )}
         {canOverride && record.user?.id && (
           <StatusOverridePanel userId={record.user.id} name={record.user?.name ?? null} dateKey={(record.attendanceDate || "").slice(0, 10)} onDone={onClose} />
@@ -1164,12 +1201,45 @@ function ReflectionsSection({ canPickPeople, members }: { canPickPeople: boolean
   );
 }
 
+// The status chips of the Submissions list, same five and same order as iOS
+// (AttendanceRequestsView.swift → `filters`), so a person switching devices finds the same row.
+const REQUEST_FILTERS = ["PENDING", "APPROVED", "REJECTED", "CANCELED", "ALL"] as const;
+type RequestFilter = (typeof REQUEST_FILTERS)[number];
+const REQUEST_FILTER_LABEL: Record<RequestFilter, string> = { PENDING: "Pending", APPROVED: "Approved", REJECTED: "Rejected", CANCELED: "Canceled", ALL: "All" };
+const RECENT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+const JAKARTA_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+/** Start and end (ms) of the attendance period that contains `nowMs`: the 28th through the 27th,
+ *  on the Jakarta calendar — the same cut-off payroll and the streak board use. */
+function attendancePeriodBounds(nowMs: number) {
+  const j = new Date(nowMs + JAKARTA_OFFSET_MS); // Jakarta wall clock, read through the UTC getters
+  const m = j.getUTCMonth() - (j.getUTCDate() < 28 ? 1 : 0); // Date.UTC normalises -1 → December
+  const y = j.getUTCFullYear();
+  const start = Date.UTC(y, m, 28) - JAKARTA_OFFSET_MS;
+  const end = Date.UTC(y, m + 1, 28) - JAKARTA_OFFSET_MS - 1; // the last millisecond of the 27th
+  const fmt = (ms: number) => new Date(ms).toLocaleDateString("en-GB", { timeZone: "Asia/Jakarta", day: "numeric", month: "short" });
+  return { start, end, label: `${fmt(start)} – ${fmt(end)}` };
+}
+
+/** Lower-case and strip accents, so "rene" finds "René" and "IZIN" finds "izin". */
+function foldText(value?: string | null) {
+  return (value ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
 function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolean; canManage: boolean; viewerId: string | null }) {
   const qc = useQueryClient();
   const [composerOpen, setComposerOpen] = useState(false);
-  // Settled (approved / rejected / canceled) rows are collapsed behind "Show settled" — see the
-  // split further down. Everything still awaiting a decision is what this list is FOR.
-  const [showSettled, setShowSettled] = useState(false);
+  // null means "the user has not picked a chip" — the default then follows `canReview` once the
+  // permission lands, exactly like iOS. A reviewer opens a work queue (Pending); everybody else
+  // opens their own history (All), where a rejection and its reason are the thing they came for.
+  const [statusFilter, setStatusFilter] = useState<RequestFilter | null>(null);
+  const activeFilter: RequestFilter = statusFilter ?? (canReview ? "PENDING" : "ALL");
+  // Settled rows are shown for the last 3 days by default — a reviewer's history is the whole
+  // workspace, and months of approvals buried the handful anyone is actually asking about. "This
+  // period" widens it to the attendance period (28th → 27th). Pending rows are never date-filtered:
+  // an undecided request is work no matter how old it is.
+  const [range, setRange] = useState<"recent" | "period">("recent");
+  const [query, setQuery] = useState("");
   // The row a notification pointed at. Highlighted for a few seconds after it scrolls into view;
   // the highlight is state rather than a CSS animation so it survives a re-render mid-scroll.
   const search = Route.useSearch();
@@ -1209,65 +1279,74 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
   // ── One queue, two kinds ────────────────────────────────────────────────────────────────────
   // An offsite check-out is a genuinely different shape — an AttendanceRecord carrying a
   // checkOutApproval, not an AttendanceRequest — but it is the same JOB: something sitting there
-  // waiting for a reviewer to decide. It used to live in a section of its own, which meant two
-  // places to look and two lists to keep an eye on. So the merge happens HERE, in the list, not in
-  // the database and not in the API: both kinds become entries of one queue, each still approved and
-  // rejected through the endpoint that owns it.
+  // waiting for a reviewer to decide. Both kinds become entries of one queue, each still approved
+  // and rejected through the endpoint that owns it.
+  //   status  — matched against the chips; an offsite approval only ever holds three of the five.
+  //   decided — when it was decided, "" if nobody has (pending, or withdrawn by its own author).
+  //   when    — what the date window reads: the decision if there is one, else when it was filed.
   type QueueEntry =
-    | { kind: "request"; pending: boolean; dateKey: string; row: (typeof rows)[number] }
-    | { kind: "offsite"; pending: boolean; dateKey: string; item: (typeof offsiteItems)[number] };
+    | { kind: "request"; key: string; status: string; pending: boolean; dateKey: string; decided: string; when: string; row: (typeof rows)[number] }
+    | { kind: "offsite"; key: string; status: string; pending: boolean; dateKey: string; decided: string; when: string; item: (typeof offsiteItems)[number] };
 
   const dayKey = (value?: string | null) => (value ?? "").slice(0, 10);
+  const normStatus = (s?: string | null) => { const u = (s || "").toUpperCase(); return u === "CANCELLED" ? "CANCELED" : u; };
   const entries: QueueEntry[] = [
-    ...rows.map((r): QueueEntry => ({
-      kind: "request",
-      pending: (r.status || "").toUpperCase() === "PENDING",
-      dateKey: dayKey(r.startDate),
-      row: r,
-    })),
-    ...offsiteItems.map((it): QueueEntry => ({
-      kind: "offsite",
-      pending: it.approval === "PENDING",
-      dateKey: dayKey(it.attendanceDate),
-      item: it,
-    })),
+    ...rows.map((r): QueueEntry => {
+      const status = normStatus(r.status);
+      return {
+        kind: "request", key: `req-${r.id}`, status, pending: status === "PENDING",
+        dateKey: dayKey(r.startDate), decided: r.reviewedAt ?? "",
+        when: r.reviewedAt ?? r.createdAt ?? r.startDate ?? "", row: r,
+      };
+    }),
+    ...offsiteItems.map((it): QueueEntry => {
+      const status = normStatus(it.approval);
+      return {
+        kind: "offsite", key: `offsite-${it.id}`, status, pending: status === "PENDING",
+        dateKey: dayKey(it.attendanceDate), decided: it.approvedAt ?? "",
+        when: it.approvedAt ?? it.checkOutAt ?? it.attendanceDate ?? "", item: it,
+      };
+    }),
   ];
 
-  // Settled entries are hidden by default for EVERYONE — a BoD and a staff member look at the same
-  // list, and neither of them needs last quarter's approvals in the way of this morning's decision.
-  // One exception, and it exists because of the rejection reason: your OWN request stays on screen
-  // for a week after it was decided, so a rejection doesn't disappear before the person it's about
-  // has read why. Offsite checkouts carry no reason, so they get no grace period.
-  const SETTLED_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
-  const isFreshOwn = (e: QueueEntry) => {
-    if (e.kind !== "request") return false;
-    if (!viewerId || e.row.user?.id !== viewerId) return false;
-    const t = e.row.reviewedAt ? Date.parse(e.row.reviewedAt) : NaN;
-    return Number.isFinite(t) && Date.now() - t < SETTLED_GRACE_MS;
+  const period = attendancePeriodBounds(Date.now());
+  const windowStart = range === "recent" ? Date.now() - RECENT_WINDOW_MS : period.start;
+  const windowed = activeFilter !== "PENDING";
+  const needle = foldText(query.trim());
+  const inWindow = (e: QueueEntry) => {
+    if (!windowed || e.pending) return true;
+    const t = Date.parse(e.when);
+    return !Number.isFinite(t) || t >= windowStart;
   };
-
-  // Anything awaiting a decision floats to the top — otherwise a wall of approved offsite check-outs
-  // (the common case) buries the one thing that needs action — and within that, newest date first.
-  // Both kinds share the comparator, so they interleave: the queue reads as a single list.
+  const matchesQuery = (e: QueueEntry) => {
+    if (!needle) return true;
+    const name = e.kind === "request" ? e.row.user?.name : e.item.user?.name;
+    const reason = e.kind === "request" ? e.row.reason : e.item.reason;
+    return foldText(name).includes(needle) || foldText(reason).includes(needle);
+  };
+  // Pending first — this is a work queue and a settled row is noise — then, within each group, on
+  // the scale the group is read on: a pending row by the day it is ABOUT, a settled one by WHEN IT
+  // WAS DECIDED, newest first (so the check-out you approved ten seconds ago is at the top of
+  // Approved, not wherever its attendance date falls). Same comparator as iOS.
   const byQueueOrder = (a: QueueEntry, b: QueueEntry) =>
-    (a.pending === b.pending ? 0 : a.pending ? -1 : 1) || b.dateKey.localeCompare(a.dateKey);
-  const visibleEntries = entries.filter((e) => e.pending || isFreshOwn(e)).sort(byQueueOrder);
-  const settledHiddenEntries = entries.filter((e) => !e.pending && !isFreshOwn(e)).sort(byQueueOrder);
-  const settledHiddenCount = settledHiddenEntries.length;
-  const alwaysVisibleCount = visibleEntries.length;
+    (a.pending === b.pending ? 0 : a.pending ? -1 : 1)
+    || (!a.pending && a.decided !== b.decided ? b.decided.localeCompare(a.decided) : 0)
+    || b.dateKey.localeCompare(a.dateKey);
+  // The entry a notification pointed at is always shown, whatever the chip, window or search say —
+  // the tap has to land on THE request.
+  const shown = entries
+    .filter((e) => e.key === focusKey || ((activeFilter === "ALL" || e.status === activeFilter) && inWindow(e) && matchesQuery(e)))
+    .sort(byQueueOrder);
 
-  // Once the data is in: unfold the settled rows if the target is one of them, then scroll to it.
-  const focusInSettled = Boolean(focusKey) && settledHiddenEntries.some((e) => (e.kind === "request" ? `req-${e.row.id}` : `offsite-${e.item.id}`) === focusKey);
   useEffect(() => {
     if (!focusKey) return;
-    if (focusInSettled && !showSettled) { setShowSettled(true); return; }
     const el = document.getElementById(`focus-${focusKey}`);
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
     setHighlighted(focusKey);
     const t = window.setTimeout(() => setHighlighted(null), 6000);
     return () => window.clearTimeout(t);
-  }, [focusKey, focusInSettled, showSettled, entries.length]);
+  }, [focusKey, entries.length]);
   const focusClass = (key: string) => (highlighted === key ? " rounded-xl ring-2 ring-primary bg-primary/5 transition-shadow" : "");
 
   const renderOffsite = (it: (typeof offsiteItems)[number]) => {
@@ -1311,34 +1390,36 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
     // Your own request offers Cancel, never Approve/Reject — the server refuses self-review, so
     // showing the buttons would only produce a 403 nobody can act on.
     const isMine = Boolean(viewerId && r.user?.id === viewerId);
+    const typeKey = (r.type || "").toUpperCase();
+    // New requests are one day each; older ones may still span several, so the range is kept for them.
+    const sameDay = dayKey(r.startDate) === dayKey(r.endDate) || !r.endDate;
     return (
       <div key={r.id} id={`focus-req-${r.id}`} className={"flex flex-wrap items-center gap-3 px-5 py-3" + focusClass(`req-${r.id}`)}>
         <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusTone(r.status)}`}>{statusLabel(r.status)}</span>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold">{statusLabel(r.type)} {r.user?.name ? <span className="font-normal text-muted-foreground">· {r.user.name}</span> : null}</div>
-          <div className="text-xs text-muted-foreground">{fmtDateShort(r.startDate)} → {fmtDateShort(r.endDate)}{r.reason ? ` · ${r.reason}` : ""}</div>
-          {/* Izin evidence, right under the reason — this is what separates a real errand from
-              "lupa absen", and it's useless if the approver has to click to find it. */}
-          {(r.submittedAddress || r.submittedLat != null || r.reportDelayMinutes != null || r.supportingDocumentUrl) && (
+          <div className="text-sm font-semibold">{REQ_LABEL[typeKey] ?? statusLabel(r.type)} {r.user?.name ? <span className="font-normal text-muted-foreground">· {r.user.name}</span> : null}</div>
+          <div className="text-xs text-muted-foreground">{fmtDateShort(r.startDate)}{sameDay ? "" : ` → ${fmtDateShort(r.endDate)}`}{r.reason ? ` · ${r.reason}` : ""}</div>
+          {/* Permit evidence, right under the reason — this is what separates a real errand from a
+              forgotten check-in, and it's useless if the approver has to click to find it. */}
+          {(r.submittedAddress || r.submittedLat != null || r.reportDelayMinutes != null) && (
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
               {r.reportDelayMinutes != null && r.reportDelayMinutes > 0 && (
                 <span className="rounded-full bg-destructive/10 px-2 py-0.5 font-bold text-destructive">
-                  Telat lapor {Math.floor(r.reportDelayMinutes / 60) > 0 ? `${Math.floor(r.reportDelayMinutes / 60)}j ` : ""}{r.reportDelayMinutes % 60}m dari jam masuk
+                  Filed {Math.floor(r.reportDelayMinutes / 60) > 0 ? `${Math.floor(r.reportDelayMinutes / 60)}h ` : ""}{r.reportDelayMinutes % 60}m after shift start
                 </span>
               )}
               {r.reportDelayMinutes === 0 && (
-                <span className="rounded-full bg-success/10 px-2 py-0.5 font-bold text-success">Lapor sebelum jam masuk</span>
+                <span className="rounded-full bg-success/10 px-2 py-0.5 font-bold text-success">Filed before shift start</span>
               )}
               {r.submittedAddress && <span className="text-muted-foreground">{r.submittedAddress}</span>}
               {r.submittedLat != null && r.submittedLng != null && (
                 <a href={`https://www.google.com/maps?q=${r.submittedLat},${r.submittedLng}`} target="_blank" rel="noreferrer"
-                   className="font-semibold text-primary underline-offset-2 hover:underline">lihat peta</a>
-              )}
-              {r.supportingDocumentUrl && (
-                <a href={r.supportingDocumentUrl} target="_blank" rel="noreferrer"
-                   className="font-semibold text-primary underline-offset-2 hover:underline">foto bukti</a>
+                   className="font-semibold text-primary underline-offset-2 hover:underline">view map</a>
               )}
             </div>
+          )}
+          {r.supportingDocumentUrl && (
+            <div className="mt-1.5"><SupportingDocument url={r.supportingDocumentUrl} name={r.supportingDocumentName} type={r.type} /></div>
           )}
         </div>
         {canReview && isPending && rejectingId !== r.id && (
@@ -1380,7 +1461,6 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
           </div>
         )}
 
-        {/* Decision, once it's settled — visible to the requester AND to every reviewer. */}
         {/* Who settled this and when — drawn for every decided row, note or no note. Approving
             without typing a note left the row saying only "Approved", so nobody could tell who had
             done it or when, and a question about a decision had nowhere to start. */}
@@ -1408,6 +1488,41 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
   };
 
   const renderEntry = (e: QueueEntry) => (e.kind === "offsite" ? renderOffsite(e.item) : renderRequest(e.row));
+  const rangeLabel = range === "recent" ? "the last 3 days" : `this period (${period.label})`;
+
+  // Why this chip is empty, and the one tap that most likely finds what the person is after.
+  const emptyFiltered = (() => {
+    if (needle) {
+      return {
+        title: "No matches",
+        message: windowed
+          ? `Nobody's name or reason matches “${query.trim()}” in ${rangeLabel}.`
+          : `No pending request matches “${query.trim()}”.`,
+        action: windowed && range === "recent"
+          ? <EmptyAction onClick={() => setRange("period")}>Show this period</EmptyAction>
+          : <EmptyAction onClick={() => setQuery("")}>Clear search</EmptyAction>,
+      };
+    }
+    if (!windowed) {
+      return {
+        title: "Nothing waiting on a decision",
+        message: "Every request has been decided. Settled ones are under the other chips.",
+        action: <EmptyAction onClick={() => setStatusFilter("ALL")}>Show all</EmptyAction>,
+      };
+    }
+    if (range === "recent") {
+      return {
+        title: "Nothing in the last 3 days",
+        message: "Settled requests are shown for the last 3 days, by when they were decided. Older ones are in this period's view.",
+        action: <EmptyAction onClick={() => setRange("period")}>Show this period</EmptyAction>,
+      };
+    }
+    return {
+      title: "Nothing this period",
+      message: `No ${activeFilter === "ALL" ? "" : `${REQUEST_FILTER_LABEL[activeFilter].toLowerCase()} `}requests between ${period.label}.`,
+      action: activeFilter === "ALL" ? undefined : <EmptyAction onClick={() => setStatusFilter("ALL")}>Show all</EmptyAction>,
+    };
+  })();
 
   return (
     <section className="rounded-[28px] border border-border bg-card shadow-soft overflow-hidden">
@@ -1422,15 +1537,45 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
                 : "Submit leave, sick, or permit requests."}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {settledHiddenCount > 0 && (
-            <button onClick={() => setShowSettled((v) => !v)} className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-semibold text-muted-foreground transition-all duration-150 hover:bg-accent active:scale-[0.98]">
-              {showSettled ? "Hide settled" : `Show settled (${settledHiddenCount})`}
-            </button>
-          )}
-          <button onClick={() => setComposerOpen(true)} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><ClipboardCheck className="h-3.5 w-3.5" /> New request</button>
-        </div>
+        <button onClick={() => setComposerOpen(true)} className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-soft transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"><ClipboardCheck className="h-3.5 w-3.5" /> New request</button>
       </div>
+      {entries.length > 0 && (
+        <div className="space-y-2 border-b border-border px-5 py-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {REQUEST_FILTERS.map((f) => {
+              const on = activeFilter === f;
+              return (
+                <button key={f} type="button" onClick={() => setStatusFilter(f)}
+                  className={cn("rounded-full px-3 py-1 text-xs font-semibold ring-1 transition-all active:scale-[0.97]",
+                    on ? "bg-primary text-primary-foreground ring-primary" : "bg-background text-muted-foreground ring-border hover:text-foreground")}>
+                  {REQUEST_FILTER_LABEL[f]}{f === "PENDING" && pendingTotal > 0 ? ` (${pendingTotal})` : ""}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-0 flex-1 basis-48">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name or reason" aria-label="Search requests by name or reason"
+                className="w-full rounded-lg border border-border bg-background py-1.5 pl-8 pr-8 text-sm outline-none focus:border-primary" />
+              {query && (
+                <button type="button" onClick={() => setQuery("")} aria-label="Clear search" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
+              )}
+            </div>
+            {windowed && (
+              <div className="inline-flex shrink-0 rounded-lg border border-border bg-background p-0.5 text-xs font-semibold" role="group" aria-label="Date range">
+                <button type="button" onClick={() => setRange("recent")} className={cn("rounded-md px-2.5 py-1 transition-colors", range === "recent" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>Last 3 days</button>
+                <button type="button" onClick={() => setRange("period")} title={period.label} className={cn("rounded-md px-2.5 py-1 transition-colors", range === "period" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>This period</button>
+              </div>
+            )}
+          </div>
+          {windowed && (
+            <p className="text-[11px] text-muted-foreground">
+              Settled requests from {rangeLabel}, by decision time{activeFilter === "ALL" ? "; pending ones are always listed" : ""}.
+            </p>
+          )}
+        </div>
+      )}
       <div className="divide-y divide-border">
         {requestsQuery.isLoading && <div className="px-5 py-4 text-sm text-muted-foreground">Loading requests…</div>}
         {!requestsQuery.isLoading && entries.length === 0 && (
@@ -1442,15 +1587,16 @@ function RequestsSection({ canReview, canManage, viewerId }: { canReview: boolea
               action={<EmptyAction onClick={() => setComposerOpen(true)}>New request</EmptyAction>} />
           </div>
         )}
-        {!requestsQuery.isLoading && alwaysVisibleCount === 0 && settledHiddenCount > 0 && !showSettled && (
-          <div className="px-5 py-6 text-center text-sm text-muted-foreground">Nothing waiting on a decision. {settledHiddenCount} settled item{settledHiddenCount === 1 ? "" : "s"} hidden.</div>
+        {!requestsQuery.isLoading && entries.length > 0 && shown.length === 0 && (
+          <div className="p-4">
+            <EmptyState icon={Search} compact tone="muted" title={emptyFiltered.title} message={emptyFiltered.message} action={emptyFiltered.action} />
+          </div>
         )}
-        {/* One list: requests and offsite check-outs, pending first and then newest date first. */}
-        {visibleEntries.map(renderEntry)}
-        {showSettled && settledHiddenEntries.map(renderEntry)}
+        {/* One list: requests and offsite check-outs, pending first and then newest decision first. */}
+        {shown.map(renderEntry)}
       </div>
       {canReview && pendingTotal > 0 && <div className="border-t border-border bg-warning/10 px-5 py-2 text-xs font-semibold text-warning-foreground">{pendingTotal} pending review</div>}
-      {composerOpen && <RequestComposer onClose={() => setComposerOpen(false)} onCreated={invalidate} />}
+      {composerOpen && <RequestComposer viewerId={viewerId} onClose={() => setComposerOpen(false)} onCreated={invalidate} />}
     </section>
   );
 }
@@ -1531,11 +1677,20 @@ function EmploymentStartSection() {
   );
 }
 
-function RequestComposer({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const today = new Date().toISOString().slice(0, 10);
+const ALL_REQUEST_TYPES = ["LEAVE", "SICK", "PERMIT", "DAY_OFF", "RED_DATE"];
+
+function RequestComposer({ onClose, onCreated, viewerId }: { onClose: () => void; onCreated: () => void; viewerId: string | null }) {
+  // Today on the Jakarta calendar. toISOString() is UTC, so before 07:00 WIB it still said
+  // yesterday — and a permit could be backdated a day through the date picker's own minimum.
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+  // A BoD either files for themselves or grants a request to someone else. Two different jobs with
+  // two different rulebooks, so they are two explicit modes rather than a type that happens to
+  // reveal a "grant to" picker.
+  const [mode, setMode] = useState<"self" | "grant">("self");
   const [type, setType] = useState("DAY_OFF");
-  const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(today);
+  // Every request is ONE day, for everyone — the grant mode included. The server still takes a
+  // startDate/endDate pair; both are this date.
+  const [date, setDate] = useState(today);
   const [reason, setReason] = useState("");
   const [targetUserId, setTargetUserId] = useState("");
   const [attachment, setAttachment] = useState<File | null>(null);
@@ -1543,75 +1698,69 @@ function RequestComposer({ onClose, onCreated }: { onClose: () => void; onCreate
   const wsm = useQuery({ queryKey: ["nexus", "workspace-members"], queryFn: () => nexusApi.workspaceMembers(), retry: false, staleTime: 60_000 });
   const todayQ = useQuery({ queryKey: ["attendance-today"], queryFn: () => nexusApi.attendanceToday(), staleTime: 30_000 });
   const myRole = wsm.data?.role ?? "STAFF";
-  const canGrant = myRole === "BOD" || myRole === "ONE_ABOVE_ALL"; // BoD ke atas
+  const canGrant = myRole === "BOD" || myRole === "ONE_ABOVE_ALL"; // BoD and up
+  const granting = canGrant && mode === "grant";
   const leave = todayQ.data?.annualLeave;
   const leaveUsable = Boolean(leave?.eligible && (leave?.remaining ?? 0) > 0);
   const redQuota = todayQ.data?.redDateQuota ?? 0;
-  // Only what this person can actually file. Cuti tahunan needs a year of service AND days left;
-  // a public holiday needs the BoD to have set a quota for the month. Offering either without that
-  // is a button whose only outcome is a refusal, and people read a refusal as the app being broken.
-  const TYPES = [
-    ...(canGrant || leaveUsable ? ["LEAVE"] : []),
-    "SICK", "PERMIT", "DAY_OFF",
-    ...(canGrant || redQuota > 0 ? ["RED_DATE"] : []),
-  ];
+  const redLeft = Math.max(0, redQuota - (todayQ.data?.redDateUsedThisMonth ?? 0));
+  // Filing for YOURSELF follows the staff rules whatever your role: annual leave needs a year of
+  // service AND days left; a public holiday needs a quota for the month with days left. Offering
+  // either without that is a button whose only outcome is a refusal. Granting to someone else keeps
+  // every type — that is a BoD recording a decision, and the server lets a grant skip the quotas.
+  const TYPES = granting
+    ? ALL_REQUEST_TYPES
+    : [
+        ...(leaveUsable ? ["LEAVE"] : []),
+        "SICK", "PERMIT", "DAY_OFF",
+        ...(redLeft > 0 ? ["RED_DATE"] : []),
+      ];
   useEffect(() => { if (!TYPES.includes(type)) setType("DAY_OFF"); }, [TYPES.join(","), type]); // eslint-disable-line react-hooks/exhaustive-deps
-  const leaveBlocked = !canGrant && type === "LEAVE" && !leaveUsable;
-  // Sakit and izin are one day each: one date, one piece of evidence, one decision. The server says
-  // the same, so the form cannot promise something the submit will refuse.
-  const singleDay = !canGrant && (type === "SICK" || type === "PERMIT");
-  const dayCount = (() => {
-    const a = new Date(`${startDate}T00:00:00Z`).getTime();
-    const b = new Date(`${singleDay ? startDate : endDate}T00:00:00Z`).getTime();
-    if (!Number.isFinite(a) || !Number.isFinite(b) || b < a) return 1;
-    return Math.floor((b - a) / 86_400_000) + 1;
-  })();
+  const leaveBlocked = !granting && type === "LEAVE" && !leaveUsable;
   const remainingDays =
     type === "DAY_OFF" ? Math.max(0, (todayQ.data?.dayOffQuota ?? 0) - (todayQ.data?.dayOffUsedThisMonth ?? 0))
-    : type === "RED_DATE" ? Math.max(0, redQuota - (todayQ.data?.redDateUsedThisMonth ?? 0))
+    : type === "RED_DATE" ? redLeft
     : type === "LEAVE" ? (leave?.remaining ?? null)
     : null;
-  // Said before the submit, not after: asking for four days out of two left is caught here.
-  const quotaProblem = !canGrant && remainingDays != null && dayCount > remainingDays
-    ? `You're asking for ${dayCount} days and only ${remainingDays} is left.`
+  // Said before the submit, not after: a day asked for with none left is caught here.
+  const quotaProblem = !granting && remainingDays != null && remainingDays < 1
+    ? `You have no ${(REQ_LABEL[type] ?? "days").toLowerCase()} days left.`
     : null;
   const TYPE_ICON: Record<string, typeof Sun> = { LEAVE: Sun, SICK: HeartPulse, PERMIT: Hand, DAY_OFF: Moon, RED_DATE: Flag };
-  const typeHint =
-    type === "LEAVE" ? (!leave ? "Uses your annual leave." : !leave.eligible ? (leave.reason ?? "Annual leave needs 12 months of service.") : `Annual leave: ${leave.remaining} of ${leave.quota} days left this year.`)
-    : type === "SICK" ? "One day per request, and a photo of the doctor's note is required. A day that has already passed is fine."
-    : type === "PERMIT" ? "One day per request, today or later, with a photo and your location."
+  const typeHint = granting
+    ? `Granted to the person you pick below and approved straight away; it doesn't use up their quota.`
+    : type === "LEAVE" ? (!leave ? "Uses one day of your annual leave." : !leave.eligible ? (leave.reason ?? "Annual leave needs 12 months of service.") : `Annual leave: ${leave.remaining} of ${leave.quota} days left this year.`)
+    : type === "SICK" ? "A photo of the doctor's note is required. A day that has already passed is fine."
+    : type === "PERMIT" ? "Today or later, with a photo and your location."
     : type === "DAY_OFF" ? `Day off: ${remainingDays ?? 0} of ${todayQ.data?.dayOffQuota ?? 0} left this period.`
     : `Public holiday: ${remainingDays ?? 0} of ${redQuota} left this month.`;
   const pickType = (t: string) => {
     setType(t);
     if (t !== "SICK" && t !== "PERMIT") setAttachment(null);
-    // Izin cannot be backdated and the one-day types collapse the range: bring the dates into line
-    // the moment the type changes, rather than at submit time.
-    if (!canGrant && t === "PERMIT" && startDate < today) { setStartDate(today); setEndDate(today); return; }
-    if (!canGrant && (t === "SICK" || t === "PERMIT")) setEndDate(startDate);
-    else if (endDate < startDate) setEndDate(startDate);
+    // A permit cannot be backdated: bring the date into line the moment the type changes, rather
+    // than at submit time.
+    if (!canGrant && t === "PERMIT" && date < today) setDate(today);
   };
-  const leaveNote = !leave
+  const pickMode = (m: "self" | "grant") => { setMode(m); if (m === "self") setTargetUserId(""); };
+  const leaveNote = !leave || granting
     ? null
     : !leave.eligible
       ? leave.reason
       : leave.remaining > 0
-        ? `Sisa cuti tahunan ${leave.year}: ${leave.remaining} dari ${leave.quota} hari.`
-        : `Jatah cuti tahunan ${leave.year} udah habis (${leave.quota} hari terpakai).`;
-  const isGrantType = canGrant && (type === "LEAVE" || type === "PERMIT");
-  const grantingToUser = canGrant && isGrantType;
-  // Sakit (self-request) wajib lampirin foto surat sakit; Izin boleh lampirin foto (opsional).
-  // Izin now carries the same evidence check-in does: photo + coordinates + when it was filed.
-  // Without it, izin was the cheapest way to erase an attendance penalty — nothing to verify.
+        ? `${leave.year} annual leave: ${leave.remaining} of ${leave.quota} days left.`
+        : `${leave.year} annual leave is used up (${leave.quota} days taken).`;
+  // A sick day filed for yourself needs the doctor's note; a permit carries the same evidence a
+  // check-in does: photo + coordinates + when it was filed. Without it, a permit was the cheapest
+  // way to erase an attendance penalty — nothing to verify.
   const attachmentRequired = !canGrant && (type === "SICK" || type === "PERMIT");
   const showAttachment = type === "SICK" || type === "PERMIT";
   const needsLocation = !canGrant && type === "PERMIT";
-  const permitBackdated = type === "PERMIT" && !canGrant && startDate < today;
+  const permitBackdated = type === "PERMIT" && !canGrant && date < today;
   const shiftStart = todayQ.data?.myShift?.startTime ?? null;
   // Preview of how late this filing is, so the warning appears BEFORE submitting rather than as a
   // surprise on the approver's screen.
   const lateReportPreview = (() => {
-    if (type !== "PERMIT" || canGrant || startDate !== today || !shiftStart) return null;
+    if (type !== "PERMIT" || canGrant || date !== today || !shiftStart) return null;
     const [h, m] = shiftStart.split(":").map(Number);
     const now = new Date();
     const mins = now.getHours() * 60 + now.getMinutes() - (h * 60 + m);
@@ -1630,22 +1779,37 @@ function RequestComposer({ onClose, onCreated }: { onClose: () => void; onCreate
       { enableHighAccuracy: true, timeout: 15_000 },
     );
   };
-  // Ask as soon as izin is picked — a permission prompt at submit time is where people give up.
+  // Ask as soon as a permit is picked — a permission prompt at submit time is where people give up.
   useEffect(() => { if (needsLocation && !coords) askLocation(); }, [needsLocation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const create = useMutation({
-    mutationFn: () => nexusApi.createAttendanceRequest({ type, startDate, endDate, reason: reason.trim(), targetUserId: grantingToUser && targetUserId ? targetUserId : undefined, supportingDocument: attachment, lat: coords?.lat ?? null, lng: coords?.lng ?? null }),
+    mutationFn: () => nexusApi.createAttendanceRequest({ type, startDate: date, endDate: date, reason: reason.trim(), targetUserId: granting && targetUserId ? targetUserId : undefined, supportingDocument: attachment, lat: coords?.lat ?? null, lng: coords?.lng ?? null }),
     onSuccess: () => { onCreated(); onClose(); },
   });
 
-  const otherMembers = wsm.data?.members ?? [];
+  const otherMembers = (wsm.data?.members ?? []).filter((m) => m.userId && m.userId !== viewerId);
+  const missingTarget = granting && !targetUserId;
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-md rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
-        <h2 className="font-display text-lg font-bold tracking-tight">{grantingToUser ? "Grant a permit to a user" : "New attendance request"}</h2>
-        {!canGrant && <p className="mt-1 text-xs text-muted-foreground">Only the types you can actually use are listed. Sick and permit are one day each; day off and leave can span several.</p>}
+      <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-3xl border border-border bg-card p-6 shadow-pop" onClick={(e) => e.stopPropagation()}>
+        <h2 className="font-display text-lg font-bold tracking-tight">{granting ? "Grant a request to a user" : "New attendance request"}</h2>
+        {!granting && <p className="mt-1 text-xs text-muted-foreground">One day per request. Only the types you can actually use are listed.</p>}
+        {canGrant && (
+          <div className="mt-3 inline-flex rounded-xl border border-border bg-background p-0.5 text-xs font-semibold" role="group" aria-label="Who is this for">
+            <button type="button" onClick={() => pickMode("self")} className={cn("rounded-lg px-3 py-1.5 transition-colors", !granting ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>For myself</button>
+            <button type="button" onClick={() => pickMode("grant")} className={cn("rounded-lg px-3 py-1.5 transition-colors", granting ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>Grant to a user</button>
+          </div>
+        )}
         <div className="mt-4 space-y-3">
+          {granting && (
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Grant to
+              <select value={targetUserId} onChange={(e) => setTargetUserId(e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary">
+                <option value="">— Pick a person —</option>
+                {otherMembers.map((m) => <option key={m.userId} value={m.userId}>{m.name || m.email}</option>)}
+              </select>
+            </label>
+          )}
           <div>
             <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Type</div>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -1656,7 +1820,7 @@ function RequestComposer({ onClose, onCreated }: { onClose: () => void; onCreate
                   <button key={t} type="button" onClick={() => pickType(t)}
                     className={cn("inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition-all active:scale-[0.97]",
                       on ? "bg-primary text-primary-foreground ring-primary" : "bg-background text-muted-foreground ring-border hover:text-foreground")}>
-                    <Icon className="h-3.5 w-3.5" />{statusLabel(t)}
+                    <Icon className="h-3.5 w-3.5" />{REQ_LABEL[t] ?? statusLabel(t)}
                   </button>
                 );
               })}
@@ -1689,39 +1853,21 @@ function RequestComposer({ onClose, onCreated }: { onClose: () => void; onCreate
             </div>
           )}
           {type === "LEAVE" && leaveNote && (
-            // Colour follows the MESSAGE, not the viewer's role. A BoD bypasses the gate, but the
-            // note still says "belum diisi" — showing that in green read as approval.
+            // Colour follows the MESSAGE: an empty or not-yet-earned allowance reads red.
             <p className={cn("rounded-xl px-3 py-2 text-xs font-semibold",
               (!leave?.eligible || (leave?.remaining ?? 0) === 0)
                 ? "bg-destructive/10 text-destructive"
                 : "bg-success/10 text-success")}>{leaveNote}</p>
           )}
-          {grantingToUser && (
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Grant to
-              <select value={targetUserId} onChange={(e) => setTargetUserId(e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary">
-                <option value="">— Myself —</option>
-                {otherMembers.map((m) => <option key={m.userId} value={m.userId}>{m.name || m.email}</option>)}
-              </select>
-            </label>
-          )}
-          {singleDay ? (
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Date
-              <input type="date" value={startDate} min={type === "PERMIT" ? today : undefined}
-                onChange={(e) => { setStartDate(e.target.value); setEndDate(e.target.value); }}
-                className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" />
-            </label>
-          ) : (
-            <div className="space-y-2">
-              <div className="grid grid-cols-2 gap-2">
-                <label className="text-[11px] font-bold text-muted-foreground">Start<input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); if (endDate < e.target.value) setEndDate(e.target.value); }} className="mt-1 w-full rounded-xl border border-border bg-background px-2 py-2 text-sm" /></label>
-                <label className="text-[11px] font-bold text-muted-foreground">End<input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} className="mt-1 w-full rounded-xl border border-border bg-background px-2 py-2 text-sm" /></label>
-              </div>
-              {remainingDays != null && (
-                <div className="flex items-center gap-2">
-                  <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums", quotaProblem ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary")}>{dayCount} {dayCount === 1 ? "day" : "days"}</span>
-                  <span className="text-xs text-muted-foreground">{remainingDays} left</span>
-                </div>
-              )}
+          <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Date
+            <input type="date" value={date} min={type === "PERMIT" && !canGrant ? today : undefined}
+              onChange={(e) => setDate(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm" />
+          </label>
+          {!granting && remainingDays != null && (
+            <div className="flex items-center gap-2">
+              <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums", quotaProblem ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary")}>1 day</span>
+              <span className="text-xs text-muted-foreground">{remainingDays} left</span>
             </div>
           )}
           {quotaProblem && (
@@ -1741,12 +1887,12 @@ function RequestComposer({ onClose, onCreated }: { onClose: () => void; onCreate
                 {attachment && <button type="button" onClick={(e) => { e.preventDefault(); setAttachment(null); }} className="shrink-0 rounded-full p-0.5 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>}
                 <input type="file" accept="image/*,.pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0] ?? null; if (f && f.size > 10 * 1024 * 1024) { alert("Max 10MB."); return; } setAttachment(f); e.target.value = ""; }} />
               </label>
-              {attachmentRequired && !attachment && <p className="mt-1 text-[11px] font-semibold text-destructive">A doctor’s note photo is required.</p>}
+              {attachmentRequired && !attachment && <p className="mt-1 text-[11px] font-semibold text-destructive">{type === "SICK" ? "A doctor’s note photo is required." : "A photo is required."}</p>}
             </div>
           )}
         </div>
-        <div className="mt-5 flex items-center gap-2">
-          <button disabled={reason.trim().length < 3 || (attachmentRequired && !attachment) || (needsLocation && !coords) || permitBackdated || leaveBlocked || Boolean(quotaProblem) || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {grantingToUser && targetUserId ? "Grant permit" : "Submit request"}</button>
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          <button disabled={reason.trim().length < 3 || (attachmentRequired && !attachment) || (needsLocation && !coords) || permitBackdated || leaveBlocked || Boolean(quotaProblem) || missingTarget || create.isPending} onClick={() => create.mutate()} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {granting ? `Grant ${(REQ_LABEL[type] ?? "request").toLowerCase()}` : "Submit request"}</button>
           <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent">Cancel</button>
           {create.isError && <span className="text-xs font-semibold text-destructive">{(create.error as Error)?.message ?? "Couldn’t send the request."}</span>}
         </div>

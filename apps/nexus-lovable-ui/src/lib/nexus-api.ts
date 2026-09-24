@@ -692,6 +692,8 @@ export type NexusAttendanceRequest = {
   reviewNote?: string | null;
   reviewedAt?: string | null;
   reviewedBy?: NexusUser | null;
+  /** When it was filed. The Submissions list falls back to it for rows nobody has decided. */
+  createdAt?: string | null;
   startDate?: string | null;
   endDate?: string | null;
   submittedLat?: number | null;
@@ -1284,10 +1286,36 @@ export type NexusAuditLog = {
   id: string;
   action?: string | null;
   entityType?: string | null;
+  entityId?: string | null;
   entityName?: string | null;
   ipAddress?: string | null;
+  userAgent?: string | null;
   createdAt?: string | null;
+  /** A readable one-line sentence written by the server. Optional: older rows/servers don't send it. */
+  summary?: string;
+  metadata?: unknown;
   user?: NexusUser | null;
+};
+
+export type NexusAuditLink = { type: "task" | "project" | "user" | "attendance" | "form"; id: string };
+
+/** GET /api/audit/{id}: one entry, with its metadata turned into a title, field changes and details. */
+export type NexusAuditEntryDetail = {
+  entry: {
+    id: string;
+    action: string;
+    entityType: string;
+    entityId: string | null;
+    entityName: string | null;
+    createdAt: string;
+    ipAddress: string | null;
+    userAgent: string | null;
+    user: { id: string; name: string; email: string | null; avatar: string | null } | null;
+    metadata: unknown;
+  };
+  title: string;
+  changes: { field: string; label: string; from: string | null; to: string | null }[];
+  details: { label: string; value: string; link?: NexusAuditLink }[];
 };
 
 export type NexusNotificationPrefs = {
@@ -2179,6 +2207,7 @@ export const nexusApi = {
     return { users, total: first.pagination?.total ?? users.length };
   },
   auditLogs: (query = "") => apiFetch<{ logs: NexusAuditLog[]; total: number }>(`/api/audit${query ? `?${query}` : ""}`),
+  auditEntry: (id: string) => apiFetch<NexusAuditEntryDetail>(`/api/audit/${encodeURIComponent(id)}`),
   updateUserRole: (userId: string, role: string) => apiFetch<{ user?: NexusAdminUser }>(`/api/admin/users/${userId}`, { method: "PATCH", body: JSON.stringify({ role }) }),
   googleWorkspaceAccounts: () => apiFetch<GoogleWorkspaceAccounts>("/api/admin/google-workspace/accounts"),
   // Membuat mailbox BARU lalu menautkannya. BoD saja — ini satu-satunya panggilan di NEXUS yang

@@ -2,6 +2,7 @@ import prisma from '@/lib/prisma'
 import type { InputJsonValue } from '@prisma/client/runtime/client'
 import { NextRequest } from 'next/server'
 import { createLogger } from '@/lib/logger'
+import { redactAuditMetadata } from '@/lib/audit-describe'
 
 const log = createLogger('audit')
 
@@ -44,7 +45,9 @@ export async function logAudit({
         entityId,
         entityName,
         userId,
-        metadata: (metadata ?? undefined) as InputJsonValue | undefined,
+        // Secret-looking keys (password, token, secret, apiKey…) are blanked before the write: a few
+        // call sites log a raw request body (`changes: body`), and a body can carry one.
+        metadata: (metadata ? redactAuditMetadata(metadata) : undefined) as InputJsonValue | undefined,
         ipAddress,
         userAgent,
       },
@@ -87,7 +90,7 @@ export async function logAuditBatch(
         entityId: entry.entityId,
         entityName: entry.entityName,
         userId,
-        metadata: (entry.metadata ?? undefined) as InputJsonValue | undefined,
+        metadata: (entry.metadata ? redactAuditMetadata(entry.metadata) : undefined) as InputJsonValue | undefined,
         ipAddress,
         userAgent,
       })),

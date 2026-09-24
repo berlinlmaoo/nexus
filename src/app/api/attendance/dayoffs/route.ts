@@ -116,7 +116,7 @@ export async function PATCH(req: NextRequest) {
 
     const target = await prisma.workspaceMember.findUnique({
       where: { userId_workspaceId: { userId, workspaceId } },
-      select: { id: true },
+      select: { id: true, dayOffQuota: true },
     })
     if (!target) return NextResponse.json({ error: "User bukan member workspace ini." }, { status: 404 })
 
@@ -130,7 +130,7 @@ export async function PATCH(req: NextRequest) {
         entityName: `dayoff-quota:${userId}`,
         userId: session.user.id,
         request: req,
-        metadata: { reason: "admin_dayoff_quota", quota },
+        metadata: { reason: "admin_dayoff_quota", quota, targetUserId: userId, changes: { dayOffQuota: { from: target.dayOffQuota ?? null, to: quota } } },
       })
     } catch { /* audit best-effort */ }
 

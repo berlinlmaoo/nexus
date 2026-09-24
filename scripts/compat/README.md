@@ -118,9 +118,11 @@ Requests (dates from tomorrow, Jakarta):
 | 0.1.4, 0.1.5 | SICK multi-day + JPEG sent as octet-stream | 2xx |
 | 0.1.4, 0.1.5 | SICK 1 day + PDF from Files | 2xx |
 | 0.1.4, 0.1.5 | DAY_OFF 1 day | 2xx |
+| 0.1.4, 0.1.5 | DAY_OFF multi-day (START–UNTIL) — one-date rule does not apply to legacy | 2xx |
 | 0.1.4, 0.1.5 | PERMIT without photo (UI says optional) | policy: 4xx with an `error` message |
 | 0.1.6 | PERMIT 1 day + `permit-photo.jpg` + lat/lng · SICK 1 day · DAY_OFF | 2xx |
 | 0.1.6 | SICK multi-day | policy: 400 `SINGLE_DAY_ONLY` |
+| 0.1.6, web | DAY_OFF multi-day (every type is one date, 24 Sep 2026) | policy: 400 `SINGLE_DAY_ONLY` |
 | 0.1.6 | PERMIT without lat/lng | policy: 400 with message |
 | web | PERMIT 1 day + photo + lat/lng · SICK 1 day · DAY_OFF | 2xx |
 | web | PERMIT without lat/lng | policy: 400 with message |

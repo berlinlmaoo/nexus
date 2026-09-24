@@ -72,13 +72,32 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
+    // Only the name is recorded old → new. The other fields (phone, DND, onboarding) are logged by
+    // name only: the phone number is personal data and the rest is noise.
+    const previousName = data.name !== undefined
+      ? (await prisma.user.findUnique({ where: { id: session.user.id }, select: { name: true } }))?.name ?? null
+      : null
+
     const user = await prisma.user.update({
       where: { id: session.user.id },
       data,
       select: { id: true, name: true, email: true, avatar: true, phoneNumber: true, dndUntil: true, onboardedAt: true, googleWorkspaceEmail: true },
     })
 
-    logAudit({ action: "update", entityType: "user_profile", entityId: session.user.id, userId: session.user.id, request })
+    logAudit({
+      action: "update",
+      entityType: "user_profile",
+      entityId: session.user.id,
+      entityName: user.name,
+      userId: session.user.id,
+      request,
+      metadata: {
+        fields: Object.keys(data),
+        ...(data.name !== undefined && data.name !== previousName
+          ? { changes: { name: { from: previousName, to: data.name } } }
+          : {}),
+      },
+    })
 
     return NextResponse.json({ user })
   } catch (error) {

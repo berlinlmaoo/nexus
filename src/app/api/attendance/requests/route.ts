@@ -402,15 +402,18 @@ export async function POST(request: NextRequest) {
     if (!canGrant && reqType === "SICK" && !(supportingDocument instanceof File && supportingDocument.size > 0)) {
       return NextResponse.json({ error: "Request sakit wajib melampirkan foto surat sakit." }, { status: 400 })
     }
-    // Sakit and izin are filed one day at a time: one date, one piece of evidence, one decision.
-    // A multi-day illness goes through a BoD grant, where a human has seen the note and can set the
-    // range — which is also the only way a range ever carried any meaning.
-    if (modernClient && !canGrant && (reqType === "SICK" || reqType === "PERMIT") && parsedEndDate.getTime() !== parsedStartDate.getTime()) {
+    // One request, one date — for EVERY type (owner, 24 Sep 2026: LEAVE, SICK, PERMIT, DAY_OFF and
+    // RED_DATE alike; more than one day means filing one request per date). One date, one piece of
+    // evidence, one decision, and a quota charged exactly the way the person sees it.
+    //
+    // Held only to a client that can obey it (0.1.6+ and the web — see clientCanObeyRequestPolicy).
+    // An older phone keeps its START–UNTIL picker and its range is accepted as before: refusing it
+    // would lock people out with nothing on their screen to explain why. BoD grants (canGrant) stay
+    // exempt, so a multi-day grant still goes through in one step.
+    if (modernClient && !canGrant && parsedEndDate.getTime() !== parsedStartDate.getTime()) {
       return NextResponse.json(
         {
-          error: reqType === "SICK"
-            ? "Sakit diajukan per hari. Pilih satu tanggal — kalau sakitnya beberapa hari, minta BoD yang input rentangnya."
-            : "Izin diajukan per hari. Pilih satu tanggal.",
+          error: "Pengajuan diisi per hari. Pilih satu tanggal — kalau lebih dari sehari, ajukan per tanggal.",
           code: "SINGLE_DAY_ONLY",
         },
         { status: 400 }
