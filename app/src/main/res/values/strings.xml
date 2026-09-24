@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- English is the source language. Indonesian overlay lives in values-in (Android's code for "id").
+     Keep keys and English text aligned with iOS Localization.swift. -->
+<resources>
+    <string name="app_name">NEXUS</string>
+
+    <string name="login_email_label">ACCESS ID (EMAIL)</string>
+    <string name="login_password_label">ENCRYPTION KEY</string>
+    <string name="login_cta">Enter Mission Control</string>
+    <string name="login_busy">Opening uplink…</string>
+    <string name="login_fill_both">Fill in your Access ID and Encryption Key first.</string>
+    <string name="login_failed">Login failed. Check your email/password.</string>
+    <string name="login_new_to_nexus">New to NEXUS?</string>
+    <string name="login_create_account">Create account</string>
+    <string name="login_forgot_password">Forgot password?</string>
+
+    <string name="error_cant_reach">Can\'t reach NEXUS right now. Check your connection, or try again in a moment.</string>
+    <string name="error_server_status">Server error (%1$d).</string>
+    <string name="error_decoding">Couldn\'t read data from the server.</string>
+    <string name="error_signed_out">Session expired — please log in again.</string>
+    <string name="update_required_title">Update NEXUS to continue</string>
+
+    <string name="tab_home">Home</string>
+    <string name="tab_tasks">Tasks</string>
+    <string name="tab_inbox">Inbox</string>
+    <string name="tab_projects">Projects</string>
+    <string name="tab_more">More</string>
+
+    <string name="not_on_android_title">Not in the Android app yet</string>
+    <string name="not_on_android_message">This part of NEXUS is still being built for Android. Everything is already on the web, so open it there for now.</string>
+    <string name="open_on_web">Open on the web</string>
+
+    <string name="settings_language">Language</string>
+    <string name="settings_language_current">English</string>
+    <string name="change">Change</string>
+    <string name="cancel">Cancel</string>
+    <string name="logout">Logout</string>
+    <string name="logout_confirm_title">Log out of NEXUS?</string>
+    <string name="logout_confirm_message">Everything NEXUS saved on this phone for you is removed, including attendance that hasn\'t been sent yet.</string>
+</resources>

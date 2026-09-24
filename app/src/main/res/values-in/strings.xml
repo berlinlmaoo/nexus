@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="login_email_label">ACCESS ID (EMAIL)</string>
+    <string name="login_password_label">KUNCI ENKRIPSI</string>
+    <string name="login_cta">Masuk Mission Control</string>
+    <string name="login_busy">Membuka uplink…</string>
+    <string name="login_fill_both">Isi Access ID dan Encryption Key dulu ya.</string>
+    <string name="login_failed">Login gagal. Cek email/password.</string>
+    <string name="login_new_to_nexus">Baru di NEXUS?</string>
+    <string name="login_create_account">Buat akun</string>
+    <string name="login_forgot_password">Lupa password?</string>
+
+    <string name="error_cant_reach">NEXUS belum bisa dihubungi. Cek koneksi kamu, atau coba lagi sebentar lagi.</string>
+    <string name="error_server_status">Server error (%1$d).</string>
+    <string name="error_decoding">Gagal baca data dari server.</string>
+    <string name="error_signed_out">Sesi habis — login lagi ya.</string>
+    <string name="update_required_title">Perbarui NEXUS untuk lanjut</string>
+
+    <string name="tab_home">Beranda</string>
+    <string name="tab_tasks">Tugas</string>
+    <string name="tab_inbox">Kotak Masuk</string>
+    <string name="tab_projects">Proyek</string>
+    <string name="tab_more">Lainnya</string>
+
+    <string name="not_on_android_title">Belum ada di aplikasi Android</string>
+    <string name="not_on_android_message">Bagian NEXUS ini masih dibangun untuk Android. Semuanya sudah ada di web, jadi buka di sana dulu ya.</string>
+    <string name="open_on_web">Buka di web</string>
+
+    <string name="settings_language">Bahasa</string>
+    <string name="settings_language_current">Bahasa Indonesia</string>
+    <string name="change">Ganti</string>
+    <string name="cancel">Batal</string>
+    <string name="logout">Keluar</string>
+    <string name="logout_confirm_title">Keluar dari NEXUS?</string>
+    <string name="logout_confirm_message">Semua yang NEXUS simpan di HP ini untuk kamu akan dihapus, termasuk absen yang belum terkirim.</string>
+</resources>
