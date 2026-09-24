@@ -298,8 +298,18 @@ export async function POST(request: NextRequest) {
     const targetUserId = String(formData.get("targetUserId") ?? "").trim()
     const supportingDocument = formData.get("supportingDocument")
     // Where the person was when they filed. Same pair check-in already collects.
-    const submittedLat = Number(formData.get("lat"))
-    const submittedLng = Number(formData.get("lng"))
+    //
+    // NaN when absent, never 0. `Number(formData.get("lat"))` read a missing field as
+    // `Number(null)` = 0, which is finite — so the location rule never refused anybody, and every
+    // izin from an app that sends no position was stored at 0,0 (the Gulf of Guinea) and
+    // reverse-geocoded there.
+    const coord = (v: FormDataEntryValue | null) => {
+      if (typeof v !== "string" || v.trim() === "") return Number.NaN
+      return Number(v)
+    }
+    const submittedLat = coord(formData.get("lat"))
+    const submittedLng = coord(formData.get("lng"))
+    const hasPosition = Number.isFinite(submittedLat) && Number.isFinite(submittedLng)
 
     const validation = attendanceRequestCreateSchema.safeParse({
       type,
@@ -590,11 +600,14 @@ export async function POST(request: NextRequest) {
     let permitAddress: string | null = null
     let permitDelay: number | null = null
     if (!canGrant && reqType === "PERMIT") {
-      permitLat = submittedLat
-      permitLng = submittedLng
+      // An older app files without a position and is allowed to (see clientCanObeyRequestPolicy).
+      // Stored as empty, not as a made-up point: the approver should see "no location", not a
+      // street address in the ocean.
+      permitLat = hasPosition ? submittedLat : null
+      permitLng = hasPosition ? submittedLng : null
       try {
-        const geo = await reverseGeocodeCoordinates(submittedLat, submittedLng)
-        permitAddress = geo.displayName ?? null
+        const geo = hasPosition ? await reverseGeocodeCoordinates(submittedLat, submittedLng) : null
+        permitAddress = geo?.displayName ?? null
       } catch {
         // Coordinates are the evidence; the street name is a convenience. A geocoder outage must not
         // stop someone filing izin.
