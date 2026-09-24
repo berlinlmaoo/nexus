@@ -207,7 +207,8 @@ export async function GET() {
       // instead of showing a check-in button the person does not need.
       restDays: quotaMember?.restDays ?? [],
       isRestDayToday: isRestDayForMember(new Date(), quotaMember?.restDays ?? []),
-      dayOffUsedThisMonth: dayOffRequests.reduce((count: number, requestItem) => {
+      // Capped at the allowance for display — see lib/day-off-usage. Enforcement counts real rows.
+      dayOffUsedThisMonth: Math.min(quotaMember?.dayOffQuota ?? 4, dayOffRequests.reduce((count: number, requestItem) => {
         const start = dayOffPeriod.start
         const end = dayOffPeriod.end
         const days = Math.max(
@@ -215,9 +216,9 @@ export async function GET() {
           Math.floor((Math.min(requestItem.endDate.getTime(), end.getTime()) - Math.max(requestItem.startDate.getTime(), start.getTime())) / 86_400_000) + 1
         )
         return count + days
-      }, 0),
+      }, 0)),
       redDateQuota: redDateQuotaRow?.quota ?? 0,
-      redDateUsedThisMonth: redDateUsed,
+      redDateUsedThisMonth: Math.min(redDateQuotaRow?.quota ?? 0, redDateUsed),
       myShift,
       noGeofence,
       canManageAttendance: context.canManageAttendance,

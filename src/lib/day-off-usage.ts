@@ -93,7 +93,11 @@ export async function dayOffBalances(
     const key = dayOffUsageKey(w.userId, w.periodKey)
     const quota = quotas.get(w.userId) ?? DEFAULT_DAY_OFF_QUOTA
     const u = used.get(key) ?? 0
-    out.set(key, { quota, used: u, remaining: quota - u })
+  // Shown, never more than the allowance. The allowance is the weekly rest (4 per period); cuts for
+  // missed check-ins and heavy lateness keep landing after it is gone, but "22/4" reads like a bug
+  // and the owner wants it to read 4/4. Enforcement never uses this figure — the DAY_OFF cap counts
+  // the real rows (lib/day-off-usage dayOffUsedByPeriod), so capping the display loosens nothing.
+    out.set(key, { quota, used: Math.min(u, quota), remaining: Math.max(0, quota - u) })
   }
   return out
 }

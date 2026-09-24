@@ -117,8 +117,9 @@ export async function GET(req: NextRequest) {
           const lvl = levelForXp(score)
           return {
             userId: m.userId,
-            quota, used, remaining: Math.max(0, quota - used),
-            redDate: { quota: redQuota, used: redUsed, remaining: Math.max(0, redQuota - redUsed) },
+            // Capped at the allowance for display (see lib/day-off-usage); enforcement counts real rows.
+            quota, used: Math.min(used, quota), remaining: Math.max(0, quota - used),
+            redDate: { quota: redQuota, used: Math.min(redUsed, redQuota), remaining: Math.max(0, redQuota - redUsed) },
             xp: { score, level: lvl.level, levelName: lvl.name },
           }
         }),
@@ -223,7 +224,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       month,
       userId,
-      dayOff: { quota, used, remaining: Math.max(0, quota - used) },
+      dayOff: { quota, used: Math.min(used, quota), remaining: Math.max(0, quota - used) },
       totalXpLost: entries.filter((e) => e.unit === "XP" && !e.cleared).reduce((s, e) => s + e.amount, 0),
       entries,
     })
