@@ -350,4 +350,16 @@
     <string name="file_a_permit">Ajukan izin</string>
     <string name="reminder_checkin_title">Absen masuk 15 menit lagi</string>
     <string name="reminder_checkin_body">Shift kamu mulai jam %1$s. Buka NEXUS untuk absen masuk.</string>
+
+    <!-- Refleksi / hero -->
+    <string name="reflections_title">Refleksi</string>
+    <string name="reflections_link_sub">Catatan absen pulangmu, dirangkum GIDEON per hari dan per bulan.</string>
+    <string name="reflections_load_failed">Refleksi tidak bisa dimuat</string>
+    <string name="reflections_empty">Belum ada refleksi bulan ini</string>
+    <string name="reflections_empty_sub">Setiap absen pulang menambahkan refleksi hari itu di sini, dengan ringkasan GIDEON.</string>
+    <string name="previous_month">Bulan sebelumnya</string>
+    <string name="reflections_month_summary">Bulan ini, dirangkum GIDEON</string>
+    <string name="reflections_summarize">Rangkum sejauh ini</string>
+    <string name="reflections_update_summary">Perbarui ringkasan</string>
+    <string name="you_are_here">Kamu di sini</string>
 </resources>

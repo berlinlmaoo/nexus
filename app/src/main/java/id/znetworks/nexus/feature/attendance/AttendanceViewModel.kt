@@ -38,7 +38,7 @@ sealed interface CaptureFlow {
 /** The next step a refusal points to (REQ-ATT-00b: no dead ends). */
 enum class FixHint { APP_SETTINGS, LOCATION_SETTINGS }
 
-data class NearestOffice(val name: String, val distanceMeters: Double, val inside: Boolean)
+data class NearestOffice(val name: String, val distanceMeters: Double, val inside: Boolean, val lat: Double, val lng: Double, val radius: Double)
 
 data class AttendanceUiState(
     val today: AttendanceToday? = null,
@@ -56,6 +56,8 @@ data class AttendanceUiState(
     val offsitePrompt: Boolean = false,
     val offsiteReason: String = "",
     val nearest: NearestOffice? = null,
+    /** Display-only position for the hero map. Never sent. */
+    val here: LocationFix? = null,
     val locationOff: Boolean = false,
     /** No front camera or no GPS (ChromeOS, some tablets): read-only (REQ-ATT-39). */
     val canTakeAttendance: Boolean = true,
@@ -342,18 +344,19 @@ class AttendanceViewModel(app: Application) : AndroidViewModel(app) {
     private fun refreshNearest() = viewModelScope.launch {
         val s = _state.value
         _state.update { it.copy(locationOff = !c.location.hasFine() && !c.location.hasCoarse()) }
-        if (s.today?.today?.officeLocation?.name != null) return@launch
         val offices = runCatching { c.attendanceApi.offices() }.getOrNull().orEmpty()
             .filter { it.isActive != false && it.latitude != null && it.longitude != null }
         if (offices.isEmpty()) return@launch
         val fix = c.location.roughFix() ?: return@launch
+        _state.update { it.copy(here = fix) }
         val best = offices.map { o ->
             val out = FloatArray(1)
             Location.distanceBetween(fix.lat, fix.lng, o.latitude!!, o.longitude!!, out)
             o to out[0].toDouble()
         }.minByOrNull { it.second } ?: return@launch
         _state.update {
-            it.copy(nearest = NearestOffice(best.first.name.orEmpty(), best.second, best.second <= (best.first.radiusMeters ?: 100.0)))
+            it.copy(nearest = NearestOffice(best.first.name.orEmpty(), best.second, best.second <= (best.first.radiusMeters ?: 100.0),
+                best.first.latitude!!, best.first.longitude!!, best.first.radiusMeters ?: 100.0))
         }
     }
 

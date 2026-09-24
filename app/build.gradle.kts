@@ -59,6 +59,9 @@ android {
     buildTypes {
         release {
             signingConfig = releaseSigning
+            // Staff phones are ARM; the bundled ML Kit model ships native code per ABI, so leaving
+            // out x86 roughly halves the APK. Debug keeps every ABI for the emulator.
+            ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

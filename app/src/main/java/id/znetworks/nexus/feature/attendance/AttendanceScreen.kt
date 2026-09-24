@@ -7,6 +7,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -72,7 +74,11 @@ import id.znetworks.nexus.core.nav.Target
 import id.znetworks.nexus.core.time.OfficeTime
 import id.znetworks.nexus.feature.attendance.history.BoardViewModel
 import id.znetworks.nexus.feature.attendance.history.CrewBoardCard
+import id.znetworks.nexus.feature.attendance.history.MapCircle
+import id.znetworks.nexus.feature.attendance.history.MapPin
+import id.znetworks.nexus.feature.attendance.history.OsmMap
 import id.znetworks.nexus.feature.attendance.liveness.LivenessCaptureScreen
+import id.znetworks.nexus.feature.attendance.reflections.ReflectionsDialog
 import id.znetworks.nexus.feature.attendance.requests.RequestsViewModel
 import id.znetworks.nexus.feature.attendance.requests.SubmissionsCard
 import id.znetworks.nexus.feature.attendance.liveness.openAppSettings
@@ -138,6 +144,8 @@ fun AttendanceScreen(
         return
     }
 
+    var showReflections by remember { mutableStateOf(false) }
+    if (showReflections) ReflectionsDialog(onClose = { showReflections = false })
     val checkedIn = vm.checkedIn(s)
     val checkedOut = vm.checkedOut(s)
     val forcePending = vm.forcePending(s)
@@ -151,6 +159,7 @@ fun AttendanceScreen(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            HeroMap(s)
             Hero(s, checkedIn, checkedOut, forcePending)
             if (s.loading) LoadingRow()
             if (s.serverDown) DownCard(onRetry = { vm.load() })
@@ -164,6 +173,7 @@ fun AttendanceScreen(
                 PhoneOnlyCard()
             } else {
                 if (needsReflection) ReflectionCard(s.reflection, vm.reflectionCount(s), reflectionOk, vm::onReflection)
+                ReflectionsLink(onOpen = { showReflections = true })
                 if (s.locationOff) LocationOffBanner()
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     PresenceButton(stringResource(R.string.presence_in), Icons.AutoMirrored.Filled.Login, GREEN,
@@ -219,6 +229,39 @@ private fun problemText(p: QueueProblem): String = when (p) {
 }
 
 // region hero
+
+/** The hero map (web MobileCheckInHero): where you are and the office circle. Display only. */
+@Composable
+private fun HeroMap(s: AttendanceUiState) {
+    val office = s.today?.today?.officeLocation?.takeIf { it.latitude != null && it.longitude != null }
+    val circle = office?.let { MapCircle(it.latitude!!, it.longitude!!, it.radiusMeters ?: 100.0) }
+        ?: s.nearest?.let { MapCircle(it.lat, it.lng, it.radius) }
+    val here = s.here
+    if (circle == null && here == null) return
+    OsmMap(
+        Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(24.dp)).border(1.dp, Nx.colors.border, RoundedCornerShape(24.dp)),
+        circle = circle,
+        path = emptyList(),
+        pins = listOfNotNull(here?.let { MapPin(it.lat, it.lng, stringResource(R.string.you_are_here)) }),
+    )
+}
+
+@Composable
+private fun ReflectionsLink(onOpen: () -> Unit) {
+    val c = Nx.colors
+    Row(
+        Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(20.dp)).border(1.dp, c.border, RoundedCornerShape(20.dp))
+            .clickable(onClick = onOpen).padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.AutoAwesome, null, tint = c.violetText, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.size(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(stringResource(R.string.reflections_title), fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = c.foreground)
+            Text(stringResource(R.string.reflections_link_sub), fontSize = 11.sp, color = c.mutedFg)
+        }
+    }
+}
 
 @Composable
 private fun Hero(s: AttendanceUiState, checkedIn: Boolean, checkedOut: Boolean, forcePending: Boolean) {

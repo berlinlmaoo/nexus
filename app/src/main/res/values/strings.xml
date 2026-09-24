@@ -356,4 +356,16 @@
     <string name="file_a_permit">File a permit</string>
     <string name="reminder_checkin_title">Check-in in 15 minutes</string>
     <string name="reminder_checkin_body">Your shift starts at %1$s. Open NEXUS to check in.</string>
+
+    <!-- Reflections / hero -->
+    <string name="reflections_title">Reflections</string>
+    <string name="reflections_link_sub">Your check-out notes, summarized by GIDEON per day and per month.</string>
+    <string name="reflections_load_failed">Couldn\'t load your reflections</string>
+    <string name="reflections_empty">No reflections this month</string>
+    <string name="reflections_empty_sub">Each check-out adds the day\'s reflection here, with GIDEON\'s summary.</string>
+    <string name="previous_month">Previous month</string>
+    <string name="reflections_month_summary">This month, summarized by GIDEON</string>
+    <string name="reflections_summarize">Summarize so far</string>
+    <string name="reflections_update_summary">Update the summary</string>
+    <string name="you_are_here">You are here</string>
 </resources>
