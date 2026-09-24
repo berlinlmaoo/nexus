@@ -39,9 +39,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -180,7 +180,9 @@ fun LoginScreen(vm: LoginViewModel = viewModel()) = NexusLightTheme {
 @Composable
 private fun Glow(color: Color, x: androidx.compose.ui.unit.Dp, y: androidx.compose.ui.unit.Dp, size: androidx.compose.ui.unit.Dp) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Box(Modifier.offset(x, y).size(size).blur(100.dp).background(color, CircleShape))
+        // A radial gradient, not Modifier.blur: blur clips to the box (hard square edges) and does
+        // nothing at all below Android 12, where most staff phones sit.
+        Box(Modifier.offset(x, y).size(size * 1.6f).background(Brush.radialGradient(listOf(color, Color.Transparent))))
     }
 }
 
