@@ -50,6 +50,11 @@ enum WhatsNew {
     /// ship iPhone and Mac from one version number.
     private static var v016: [WhatsNewEntry] { [
         WhatsNewEntry(
+            icon: "wifi.slash",
+            title: T("NEXUS opens with no signal"),
+            body: T("Your projects, their tasks and files, today's attendance, the crew board, your requests and your selfies are kept on this phone and refreshed in the background. On a site with no bars it all still opens, with a line saying when it was saved. Files download on Wi-Fi only unless you switch it on in Tuning Room.")
+        ),
+        WhatsNewEntry(
             icon: "hand.raised.fill",
             title: T("Filing a permit works from your phone again"),
             body: T("A permit needs to know where you filed it from, and the app never sent that — so every permit from an iPhone was refused and people quietly moved to the web. It now asks for your location the moment you pick Permit, shows it locked, and won't let you send without it.")

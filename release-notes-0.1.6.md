@@ -1,3 +1,9 @@
+GAK ADA SINYAL? NEXUS TETAP KEBUKA.
+
+Proyek, task, file, absen hari ini, board crew, pengajuan, sampai foto absen — semua disimpan di HP dan diperbarui diam-diam di belakang.
+Di lokasi tanpa sinyal, semuanya tetap bisa dibuka. Ada keterangan kapan terakhir disimpan, biar kamu tahu itu bukan data barusan.
+File cuma diunduh lewat Wi-Fi. Mau pakai kuota? Nyalakan sendiri di Tuning Room.
+
 AJUIN IZIN DARI HP, AKHIRNYA BENERAN BISA.
 
 Izin perlu tahu kamu mengajukannya dari mana, dan aplikasi tidak pernah mengirimkannya.
