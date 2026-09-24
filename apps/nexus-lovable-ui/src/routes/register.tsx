@@ -5,7 +5,13 @@ import nexusLogo from "@/assets/nexus-logo.png";
 import { celebrate } from "@/components/Celebration";
 import { ApiError, nexusApi } from "@/lib/nexus-api";
 
-export const Route = createFileRoute("/register")({ component: RegisterPage });
+// `?code=` prefills the workspace code, so a company can hand out one link instead of a code
+// people have to retype: /register?code=83CFF2CEDE1E.
+export const Route = createFileRoute("/register")({
+  component: RegisterPage,
+  validateSearch: (s: Record<string, unknown>): { code?: string } =>
+    typeof s.code === "string" && s.code.trim() ? { code: s.code.trim() } : {},
+});
 
 function errMsg(err: unknown, fallback: string) {
   if (err instanceof ApiError) {
@@ -17,7 +23,12 @@ function errMsg(err: unknown, fallback: string) {
 
 function RegisterPage() {
   const navigate = useNavigate();
+  const search = Route.useSearch();
   const [step, setStep] = useState<"form" | "otp">("form");
+  // Sent at both steps. The server only acts on it at /verify, but checks it at /register so a
+  // typo is caught before the email goes out. Without it, every signup landed in a personal
+  // workspace and somebody had to move each person into the company by hand.
+  const [workspaceCode, setWorkspaceCode] = useState(search.code ?? "");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -39,7 +50,7 @@ function RegisterPage() {
     }
     setLoading(true);
     try {
-      await nexusApi.register({ name: name.trim(), email: email.trim(), password });
+      await nexusApi.register({ name: name.trim(), email: email.trim(), password, workspaceCode: workspaceCode.trim() || undefined });
       setInfo(`Verification code sent to ${email.trim()}. Check your inbox (or spam folder).`);
       setStep("otp");
     } catch (err) {
@@ -58,7 +69,7 @@ function RegisterPage() {
     }
     setLoading(true);
     try {
-      await nexusApi.verifyRegister({ email: email.trim(), code: code.trim() });
+      await nexusApi.verifyRegister({ email: email.trim(), code: code.trim(), workspaceCode: workspaceCode.trim() || undefined });
       const res = await nexusApi.login(email.trim(), password, "/dashboard").catch(() => ({ ok: false } as { ok: boolean }));
       celebrate("Account created — welcome aboard! 🚀");
       setTimeout(() => navigate({ to: res.ok ? "/dashboard" : "/login" }), 300);
@@ -107,6 +118,11 @@ function RegisterPage() {
             <div className="space-y-1.5">
               <label className={labelCls}>Password</label>
               <input type="password" required disabled={loading} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min. 8 characters" autoComplete="new-password" className={input} />
+            </div>
+            <div className="space-y-1.5">
+              <label className={labelCls}>Workspace Code</label>
+              <input type="text" disabled={loading} value={workspaceCode} onChange={(e) => setWorkspaceCode(e.target.value.toUpperCase())} placeholder="e.g. 83CFF2CEDE1E" autoCapitalize="characters" autoCorrect="off" spellCheck={false} className={`${input} font-mono tracking-wider`} />
+              <p className="ml-1 text-xs text-muted-foreground">From your company, to join its workspace. Leave empty to start your own.</p>
             </div>
 
             {error && <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">{error}</div>}

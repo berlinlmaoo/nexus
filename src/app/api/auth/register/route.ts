@@ -54,6 +54,17 @@ export async function POST(request: NextRequest) {
     const { name, password } = validation.data
     const email = canonicalEmail(validation.data.email)
 
+    // The code is only USED at /verify, but it is checked here too: otherwise a mistyped code is
+    // discovered after the person has gone to their inbox and back, and the OTP is spent.
+    const rawCode = typeof body?.workspaceCode === 'string' ? body.workspaceCode : ''
+    const joinCode = rawCode.replace(/[\s-]/g, '').toUpperCase()
+    if (joinCode) {
+      const target = await prisma.workspace.findUnique({ where: { joinCode }, select: { id: true } })
+      if (!target) {
+        return NextResponse.json({ error: 'That workspace code is not valid.' }, { status: 400 })
+      }
+    }
+
     const emailLimit = checkRateLimitByKey(`otp:signup:request:${request.nextUrl.pathname}`, email, {
       limit: 3,
       windowSeconds: 900,
