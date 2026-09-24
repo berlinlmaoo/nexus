@@ -52,7 +52,7 @@ function gateBlocks(profile, method, path) {
     // the two exempt paths.
     if (cmpVersion(profile.version, ANDROID_MIN) >= 0) return false
     const p = path.split("?")[0]
-    if (p.startsWith("/api/app/version-policy") || p.startsWith("/api/health")) return false
+    if (p.startsWith("/api/app/version-policy") || p.startsWith("/api/health") || p.startsWith("/api/app/android/")) return false
     return p.startsWith("/api/")
   }
   if (profile.style !== "ios") return false
@@ -124,10 +124,12 @@ function webFormData(fields, files) {
   return fd
 }
 
-async function send(profile, session, { method, path, json, multipart, clientHeader }) {
+async function send(profile, session, { method, path, json, multipart, clientHeader, headers: extraHeaders }) {
   const headers = baseHeaders(profile)
   // A fixture may speak as another build of the same client (the Android gate probes).
   if (clientHeader) headers["x-nexus-client"] = clientHeader
+  // …and add request headers of its own (Range / If-Range for the APK download).
+  for (const [k, v] of Object.entries(extraHeaders ?? {})) headers[k.toLowerCase()] = v
   if (session?.cookie) headers.cookie = session.cookie
   let body
   if (json !== undefined) {
@@ -153,10 +155,12 @@ async function send(profile, session, { method, path, json, multipart, clientHea
   } catch (e) {
     return { status: 0, json: null, text: String(e?.cause?.code || e?.message || e), ms: Date.now() - t0, headers: null }
   }
-  const text = await res.text()
+  // Bytes first: the APK fixtures count exactly what came back; JSON bodies decode as before.
+  const buf = Buffer.from(await res.arrayBuffer())
+  const text = buf.toString("utf8")
   let parsed = null
   try { parsed = text ? JSON.parse(text) : null } catch { parsed = undefined }
-  return { status: res.status, json: parsed, text, ms: Date.now() - t0, headers: res.headers }
+  return { status: res.status, json: parsed, text, bytes: buf, ms: Date.now() - t0, headers: res.headers }
 }
 
 async function login(profile, user) {
@@ -234,8 +238,8 @@ for (const profile of PROFILES) {
     let problem = null
     if (!statusMatches(expected.status, r.status)) problem = `status ${r.status}${short(r) ? ` — ${short(r)}` : ""}`
     else if (expected.code && r.json?.code !== expected.code) problem = `code ${r.json?.code ?? "none"} ≠ ${expected.code}`
-    else if (!blocked && r.json === undefined && r.status >= 200 && r.status < 300) problem = "2xx but body is not JSON (iOS decode would fail)"
-    else if (!blocked && expected.check) problem = expected.check(r.json, ctx)
+    else if (!blocked && !expected.raw && r.json === undefined && r.status >= 200 && r.status < 300) problem = "2xx but body is not JSON (iOS decode would fail)"
+    else if (!blocked && expected.check) problem = expected.check(r.json, ctx, r)
     if (step.login && !blocked && r.status === 200 && !ctx.sessions[step.as]) problem = problem ?? "login 200 but no session token/cookie"
 
     // With the gate absent, a gate-affected step still ran for real: record its ids so the steps after

@@ -1,7 +1,9 @@
 import prisma from "@/lib/prisma"
 import { APP_STORE_URL, latestIosVersion } from "@/lib/app-store"
 import { compareVersions, normalizeVersion, parseClientTag, parseLegacyIosUserAgent } from "@/lib/client-version"
-import { PLAY_STORE_URL, androidLatestVersion, androidMinVersion } from "@/lib/android-app"
+import { computeAndroidVersionPolicy, isPlayStoreUrl, type AndroidVersionPolicy } from "@/lib/android-app"
+
+export type { AndroidVersionPolicy }
 
 /**
  * The minimum iOS version NEXUS still serves — and the 426 gate that enforces it.
@@ -19,11 +21,15 @@ import { PLAY_STORE_URL, androidLatestVersion, androidMinVersion } from "@/lib/a
  * it. Rows are never deleted, so the minimum only ever moves up.
  *
  * Who is refused, by the gate in middleware.ts (appUpgradeGate below):
- *   • X-Nexus-Client `ios/x.y.z` below the minimum → 426 on EVERY /api call except
- *     /api/app/version-policy and /api/health. These builds (0.1.6+) know to show the update screen.
+ *   • X-Nexus-Client `ios/x.y.z` below the minimum → 426 on EVERY /api call except the EXEMPT paths
+ *     (/api/app/version-policy, /api/health, and the Android update download below). These builds
+ *     (0.1.6+) know to show the update screen.
  *   • X-Nexus-Client `android/x.y.z/…` below the ANDROID minimum (getAndroidVersionPolicy: the
- *     NEXUS_ANDROID_MIN_VERSION floor, "0.0.0" = nobody until the owner sets it) → the same 426 on the
- *     same paths, with the Play Store link. Every Android build has the update screen.
+ *     NEXUS_ANDROID_MIN_VERSION floor, "0.0.0" = nobody until the owner sets it, raised to
+ *     NEXUS_ANDROID_LATEST_VERSION 3 days after NEXUS_ANDROID_LATEST_RELEASED_AT) → the same 426 on the
+ *     same paths, with NEXUS_ANDROID_STORE_URL (the APK download page by default). Every Android build
+ *     has the update screen, and /api/app/android/{apk,release} stay open so a locked build can still
+ *     fetch its own update.
  *   • No header, User-Agent `NEXUS/<build>` (iOS 0.1.5 and older) below the minimum → 426 only on
  *     attendance WRITES (anything under /api/attendance that is not GET/HEAD/OPTIONS). Those builds
  *     have no update screen; they show the server's `error` text, so reads keep working and only the
@@ -50,6 +56,9 @@ export const ATTENDANCE_UPGRADE_MESSAGE =
   "This NEXUS version can no longer take attendance. Update NEXUS from the App Store, then try again."
 export const ANDROID_UPGRADE_REQUIRED_MESSAGE =
   "This version of NEXUS is no longer supported. Update from Google Play to keep going."
+/** The same sentence while Android is sideloaded (NEXUS_ANDROID_STORE_URL is not a Play link). */
+export const ANDROID_UPGRADE_DOWNLOAD_MESSAGE =
+  "This version of NEXUS is no longer supported. Download the new version to keep going."
 
 export interface IosRelease { version: string; firstSeenAt: Date }
 
@@ -165,26 +174,21 @@ export async function getIosVersionPolicy(now = Date.now()): Promise<IosVersionP
 }
 
 // ---------------------------------------------------------------------------------------------
-// Android. A separate, simpler policy: Play has no anonymous lookup like iTunes, so there are no
-// AppReleaseSeen sightings and no automatic 3-day roll. The owner moves the floor and the latest
-// version by env (lib/android-app.ts); nothing is read from the database, so the gate adds no I/O.
+// Android. A separate policy from env alone (lib/android-app.ts computeAndroidVersionPolicy): there is
+// no store to observe, so no AppReleaseSeen sightings. The owner sets the floor, the latest version and,
+// optionally, the moment it was released — which starts the same 3-day roll iOS has. Nothing is read
+// from the database, so the gate adds no I/O.
 
-export interface AndroidVersionPolicy {
-  /** Oldest Android versionName still served, "x.y.z". "0.0.0" = nothing is refused. */
-  minSupported: string
-  /** Current Play release from NEXUS_ANDROID_LATEST_VERSION, or null when not set. */
-  latest: string | null
-  storeUrl: string
-}
-
-export function getAndroidVersionPolicy(): AndroidVersionPolicy {
-  return { minSupported: androidMinVersion(), latest: androidLatestVersion(), storeUrl: PLAY_STORE_URL }
+export function getAndroidVersionPolicy(now = Date.now()): AndroidVersionPolicy {
+  return computeAndroidVersionPolicy(process.env, now)
 }
 
 // ---------------------------------------------------------------------------------------------
 // The gate.
 
-const EXEMPT = new Set(["/api/app/version-policy", "/api/health"])
+// The Android update download is exempt for every client: a build below the minimum must still be
+// able to fetch the APK that replaces it (both routes require a session of their own).
+const EXEMPT = new Set(["/api/app/version-policy", "/api/health", "/api/app/android/apk", "/api/app/android/release"])
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"])
 
 export interface UpgradeRequired {
@@ -229,7 +233,8 @@ export async function appUpgradeGate(
       // and is never blocked.
       const { minSupported, storeUrl } = getAndroidVersionPolicy()
       if (compareVersions(client.version, minSupported) >= 0) return null
-      return { status: 426, body: { error: ANDROID_UPGRADE_REQUIRED_MESSAGE, code: "UPGRADE_REQUIRED", minSupported, storeUrl } }
+      const error = isPlayStoreUrl(storeUrl) ? ANDROID_UPGRADE_REQUIRED_MESSAGE : ANDROID_UPGRADE_DOWNLOAD_MESSAGE
+      return { status: 426, body: { error, code: "UPGRADE_REQUIRED", minSupported, storeUrl } }
     }
     if (!client || client.platform !== "ios") return null // web/1, unknown platform, unreadable: never blocked
     version = client.version

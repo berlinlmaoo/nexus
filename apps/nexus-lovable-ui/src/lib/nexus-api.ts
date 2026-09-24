@@ -1484,6 +1484,23 @@ export type BufferDraft = {
 };
 export type BufferDraftsResponse = { configured: boolean; drafts: BufferDraft[]; channels: BufferChannel[]; error?: string; stale?: boolean; rateLimited?: boolean; cached?: boolean };
 
+/** GET /api/app/android/release — the sideloaded Android build the /download/android page offers. */
+export type AndroidReleaseInfo =
+  | { available: false; minSupported: string; latest: string | null }
+  | {
+      available: true;
+      versionName: string;
+      versionCode: number;
+      sizeBytes: number;
+      sha256: string | null;
+      releasedAt: string | null;
+      notes: string | null;
+      fileName: string;
+      downloadUrl: string;
+      minSupported: string;
+      latest: string | null;
+    };
+
 export class ApiError extends Error {
   status: number;
   payload: unknown;
@@ -2117,6 +2134,7 @@ export const nexusApi = {
   vaultRevokeShare: (shareId: string) =>
     apiFetch<VaultShare>(`/api/vault/shares/${shareId}`, { method: "DELETE" }),
   vaultPublic: (slug: string) => apiFetch<VaultPublicFile>(`/api/vault/public/${encodeURIComponent(slug)}`),
+  androidRelease: () => apiFetch<AndroidReleaseInfo>("/api/app/android/release"),
 
   // Small files go single-shot; anything larger rides the shared chunked transport with target=vault,
   // which is what makes the browser ceiling match the phone's instead of stopping at 640MB.

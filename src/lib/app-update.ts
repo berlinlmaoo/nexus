@@ -2,7 +2,7 @@ import prisma from "@/lib/prisma"
 import { createInAppNotification } from "@/lib/notification-service"
 import { APP_STORE_URL, fetchLatestIosVersion } from "@/lib/app-store"
 import { compareVersions } from "@/lib/client-version"
-import { PLAY_STORE_URL, androidLatestVersion } from "@/lib/android-app"
+import { androidLatestVersion, androidStoreUrl, isPlayStoreUrl, withVersionParam } from "@/lib/android-app"
 
 // The store lookup moved to app-store.ts (which also records every version Apple serves in
 // AppReleaseSeen — this reminder's daily lookup counts as a sighting) and the comparison to
@@ -80,8 +80,9 @@ export async function remindOutdatedApps(opts: { dryRun?: boolean; userIds?: str
 }
 
 /**
- * The same reminder for Android phones, against NEXUS_ANDROID_LATEST_VERSION (Play has no public
- * lookup). Unset → nothing is sent: an unknown "latest" must never tell anyone they are behind. Only
+ * The same reminder for Android phones, against NEXUS_ANDROID_LATEST_VERSION (no store to look up),
+ * linking to NEXUS_ANDROID_STORE_URL — the signed-in /download/android page by default, never the App
+ * Store. Unset → nothing is sent: an unknown "latest" must never tell anyone they are behind. Only
  * people with an Android device are judged here, by their newest Android device; people named in
  * `userIds` who have an Android device (and no iPhone) are reminded here instead of by the iOS pass.
  */
@@ -91,6 +92,7 @@ async function remindOutdatedAndroid(opts: { dryRun?: boolean; userIds?: string[
   if (!latest) {
     return { forcedHandled, result: { latest: null, checked: 0, behind: 0, reminded: 0, note: "NEXUS_ANDROID_LATEST_VERSION not set" } }
   }
+  const storeUrl = androidStoreUrl()
   const forced = new Set(opts.userIds ?? [])
   const devices = await prisma.deviceInstallation.findMany({
     where: { platform: "android", disabledAt: null, lastSeenAt: { gte: new Date(Date.now() - ACTIVE_WITHIN_MS) } },
@@ -123,14 +125,14 @@ async function remindOutdatedAndroid(opts: { dryRun?: boolean; userIds?: string[
     const created = await createInAppNotification({
       userId,
       type: "app_update",
-      title: `NEXUS ${latest} is on Google Play`,
+      title: isPlayStoreUrl(storeUrl) ? `NEXUS ${latest} is on Google Play` : `NEXUS ${latest} is ready to download`,
       message: !version
         ? `Your NEXUS is an older version. Update to get the latest fixes and features — it takes a minute.`
         : compareVersions(version, latest) < 0
           ? `You're on ${version}. Update to get the latest fixes and features — it takes a minute.`
           : `You're already on ${version} — nothing to do. This is what the reminder looks like.`,
-      // Per-release dedupe, as on iOS (Play ignores the extra parameter).
-      link: `${PLAY_STORE_URL}&v=${latest}`,
+      // Per-release dedupe, as on iOS (the download page and Play both ignore the extra parameter).
+      link: withVersionParam(storeUrl, latest),
       push: true,
       dedupeWindowMs: force ? 0 : REMIND_EVERY_MS,
     }).catch(() => null)
