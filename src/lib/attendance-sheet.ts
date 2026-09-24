@@ -580,6 +580,8 @@ function sampleCells(grid: AttendanceSheetGrid, n = 5) {
  */
 export async function syncAttendanceSheet(opts: {
   dryRun?: boolean
+  /** Older periods to (re)write in this run, e.g. a one-off backfill. One per call keeps each batch small. */
+  extraPeriods?: string[]
   now?: Date
   api?: AttendanceSheetApi | null
   store?: AttendanceSheetStore
@@ -617,6 +619,10 @@ export async function syncAttendanceSheet(opts: {
 
     const current = await loadGrid(workspace, currentKey, now)
     const grids = includePrev ? [current, await loadGrid(workspace, prevKey, now)] : [current]
+    for (const key of opts.extraPeriods ?? []) {
+      if (key === currentKey || grids.some((g) => g.periodKey === key)) continue
+      grids.push(await loadGrid(workspace, key, now))
+    }
     base.tabs = grids.map((g) => ({ periodKey: g.periodKey, title: g.tabTitle, rows: g.rowCount, columns: g.columnCount, people: g.people }))
 
     if (dryRun) {
