@@ -1424,8 +1424,24 @@ struct APIClient {
         }
     }
 
-    func auditLogs() async throws -> [AuditLog] {
-        (try await run(makeRequest("/api/audit"), decode: AuditLogsResponse.self)).logs ?? []
+    /// Where the unfiltered first page of the audit log is kept for offline, shared with the screen
+    /// that reads it back.
+    static let auditCacheKey = "audit-first-page"
+
+    /// GET /api/audit — one page, newest first. `action` is matched exactly by the route; `search`
+    /// is its own case-insensitive match on entity name, entity type and action. `limit` is capped
+    /// at 100 on the server.
+    func auditLogs(limit: Int, offset: Int, action: String?, search: String?, cache: Bool) async throws -> AuditLogsResponse {
+        var q = "limit=\(limit)&offset=\(offset)"
+        if let action, !action.isEmpty { q += "&action=\(encValue(action))" }
+        if let search, !search.isEmpty { q += "&search=\(encValue(search))" }
+        return try await run(makeRequest("/api/audit?\(q)"), decode: AuditLogsResponse.self,
+                             cache: cache ? Self.auditCacheKey : nil)
+    }
+
+    /// GET /api/audit/{id} — one entry with the server's title, field diff and linked details.
+    func auditEntry(id: String) async throws -> AuditEntryDetail {
+        try await run(makeRequest("/api/audit/\(encValue(id))"), decode: AuditEntryDetail.self)
     }
     func adminQuests(workspaceId: String) async throws -> [AdminQuest] {
         (try await run(makeRequest("/api/gamification/quests/admin?workspaceId=\(enc(workspaceId))"), decode: AdminQuestsResponse.self)).quests ?? []

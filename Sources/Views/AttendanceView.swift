@@ -1468,16 +1468,10 @@ struct RecordActionsSheet: View {
                         infoLine("checkmark.seal", "\(reqLabel(row.requestType)) · \(reqStatusLabel(row.requestStatus))"
                                  + (row.reviewedBy?.name.map { " · \(T("approved by")) \($0)" } ?? ""))
                         if let notes = row.notes, !notes.isEmpty { infoLine("text.alignleft", notes) }
-                        if let url = AttendanceRow.fileURL(row.supportingDocumentUrl) {
-                            if (row.supportingDocumentUrl ?? "").lowercased().hasSuffix(".pdf") {
-                                infoLine("doc.fill", (row.supportingDocumentName ?? "PDF") + " · " + T("open it on the web"))
-                            } else {
-                                Button { viewingPhoto = PhotoRef(url: url, name: row.supportingDocumentName) } label: {
-                                    CachedImage(url: url) { $0.resizable().scaledToFill() } placeholder: { NX.muted }
-                                        .frame(height: 160).frame(maxWidth: .infinity)
-                                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                }.buttonStyle(.plain)
-                            }
+                        // The same attachment view as the Submissions card: a photo is labelled by what
+                        // it is evidence of, never "sick-note.jpg"; any other file keeps its name.
+                        if AttendanceRow.fileURL(row.supportingDocumentUrl) != nil, let path = row.supportingDocumentUrl {
+                            RequestAttachmentView(path: path, name: row.supportingDocumentName, type: row.requestType, large: true)
                         }
                     }
 

@@ -3,16 +3,7 @@ import PhotosUI
 
 // MARK: models
 
-struct AuditLogsResponse: Decodable, Sendable { let logs: [AuditLog]? }
-struct AuditLog: Decodable, Identifiable, Sendable {
-    let id: String
-    let action: String?
-    let entityType: String?
-    let entityName: String?
-    let createdAt: String?
-    let user: UserRef?
-    struct UserRef: Decodable, Sendable { let name: String? }
-}
+// AuditLogsResponse / AuditLog live in Sources/AuditModels.swift, beside the detail model.
 struct AdminQuestsResponse: Decodable, Sendable { let quests: [AdminQuest]? }
 struct AdminQuest: Decodable, Identifiable, Sendable {
     let id: String
@@ -407,40 +398,8 @@ struct AdminUsersSection: View {
     }
 }
 
-// MARK: - Audit (read-only)
-
-struct AdminAuditSection: View {
-    @State private var logs: [AuditLog] = []
-    @State private var loading = true
-    var body: some View {
-        Group {
-            if loading { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity) }
-            else if logs.isEmpty { TabEmpty(icon: "scroll", text: T("No audit entries yet.")) }
-            else {
-                ScrollView {
-                    VStack(spacing: 0) {
-                        ForEach(Array(logs.enumerated()), id: \.element.id) { idx, l in
-                            if idx > 0 { Divider().overlay(NX.border) }
-                            HStack(spacing: 10) {
-                                Text(humanizeEnum(l.action ?? "").uppercased()).font(NXFont.text(9, .bold)).foregroundStyle(NX.mutedFg)
-                                    .padding(.horizontal, 6).padding(.vertical, 3).background(NX.muted, in: Capsule())
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(l.entityName ?? l.entityType ?? "—").font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                                    Text(l.user?.name ?? "system").font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-                                }
-                                Spacer()
-                                Text(ProjDate.parse(l.createdAt).map { ProjDate.dayLabel($0) } ?? "").font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
-                            }.padding(.horizontal, 14).padding(.vertical, 11)
-                        }
-                    }
-                    .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border)).padding(16)
-                }
-            }
-        }
-        .task { logs = (try? await APIClient.shared.auditLogs()) ?? []; loading = false }
-    }
-}
+// MARK: - Audit
+// AdminAuditSection lives in AdminAuditViews.swift.
 
 // MARK: - Quests admin
 

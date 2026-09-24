@@ -16,6 +16,151 @@ func reqStatusLabel(_ s: String?) -> String {
     default: return T("Pending")
     }
 }
+/// What to call an attached PHOTO — by what it is evidence of, never by its file name. Builds
+/// before 0.1.5 uploaded every picture as "sick-note.jpg", a permit's included, so the name told a
+/// reviewer the wrong thing about half the time; and the thumbnail beside it already shows the file.
+func reqPhotoLabel(_ type: String?) -> String {
+    switch (type ?? "").uppercased() {
+    case "PERMIT": return T("Permit photo")
+    case "SICK": return T("Sick note")
+    default: return T("Photo")
+    }
+}
+
+/// The extension of a request attachment, read off the stored path first and the uploaded name
+/// second. The path is what the server actually serves (it keeps the upload's extension); the
+/// name is only a fallback for a path without one. Only the last path component is looked at, so
+/// the dots in a host name never pass for an extension.
+func requestAttachmentExtension(path: String?, name: String?) -> String? {
+    for candidate in [path, name] {
+        guard let c = candidate, !c.isEmpty else { continue }
+        let bare = c.split(separator: "?", maxSplits: 1).first.map(String.init) ?? c
+        let last = bare.split(separator: "/").last.map(String.init) ?? bare
+        if let dot = last.lastIndex(of: "."), last.index(after: dot) < last.endIndex {
+            return String(last[last.index(after: dot)...]).lowercased()
+        }
+    }
+    return nil
+}
+
+/// A request's attachment, drawn the same way everywhere one is shown: the list row, the sheet a
+/// notification opens, and a day's detail in the attendance history.
+///
+/// A photo is a thumbnail with a label saying what it is evidence of, never its file name. Any
+/// other file keeps its name — there the name IS the useful part — and a PDF (or film) opens in the
+/// app's own viewer, fetched through the client because the file route refuses anyone without the
+/// session cookie.
+///
+/// It owns its full-screen cover, so the screens that embed it do not stack a second cover on a
+/// view that already presents something — SwiftUI then silently opens only one of them.
+struct RequestAttachmentView: View {
+    /// As the server sent it: an app-relative `/api/files/…` path, or an absolute URL.
+    let path: String
+    let name: String?
+    let type: String?
+    /// The sheets draw the photo wide; the list draws a thumbnail.
+    var large = false
+    @State private var preview: AttachmentPreview?
+    @State private var fetching = false
+    @State private var failed = false
+
+    private var url: URL? { AttendanceRow.fileURL(path) }
+    private var ext: String? { requestAttachmentExtension(path: path, name: name) }
+    /// Decided by the app's own `AttachmentKind`, the same test the task and vault viewers use.
+    private var kind: AttachmentKind? { ext.flatMap { AttachmentKind(mime: nil, name: "file.\($0)") } }
+    /// No extension anybody recognises is drawn as a picture, as every attachment here was before:
+    /// the route only takes photos and PDFs. A known office document is the one exception.
+    private var isPhoto: Bool {
+        if let kind { return kind == .image }
+        return !["doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "rtf", "zip", "pages", "numbers", "key"].contains(ext ?? "")
+    }
+    private var fileName: String {
+        if let name, !name.isEmpty { return name }
+        return path.split(separator: "/").last.map(String.init) ?? T("Attachment")
+    }
+
+    var body: some View {
+        Group {
+            if let url {
+                if isPhoto { photo(url) } else { document }
+            }
+        }
+        .fullScreenCover(item: $preview) { AttachmentViewerView(preview: $0) }
+    }
+
+    @ViewBuilder private func photo(_ url: URL) -> some View {
+        let label = reqPhotoLabel(type)
+        Button {
+            preview = AttachmentPreview(id: path, name: label, kind: .image, source: url)
+        } label: {
+            if large {
+                VStack(alignment: .leading, spacing: 6) {
+                    CachedImage(url: url) { $0.resizable().scaledToFill() } placeholder: { NX.muted }
+                        .frame(height: 160).frame(maxWidth: .infinity)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    HStack(spacing: 6) {
+                        Image(systemName: "photo").font(.system(size: 10)).foregroundStyle(NX.mutedFg)
+                        Text(label).font(NXFont.text(12, .semibold)).foregroundStyle(NX.violetText)
+                        Text("· " + T("Tap to enlarge")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                    }
+                }
+            } else {
+                HStack(spacing: 8) {
+                    CachedImage(url: url) { $0.resizable().scaledToFill() } placeholder: { NX.muted }
+                        .frame(width: 54, height: 54)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(label).font(NXFont.text(11, .semibold)).foregroundStyle(NX.violetText).lineLimit(1)
+                        Text(T("Tap to enlarge")).font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// A file the app can draw is a button; one it cannot (a .docx — the route refuses those, so
+    /// only very old rows) stays a plain line pointing at the web, rather than a tap that does nothing.
+    @ViewBuilder private var document: some View {
+        let line = HStack(spacing: 8) {
+            Image(systemName: kind?.glyph ?? "doc.fill")
+                .font(.system(size: large ? 16 : 13)).foregroundStyle(kind == nil ? NX.mutedFg : NX.violetText)
+                .frame(width: large ? 40 : 34, height: large ? 40 : 34)
+                .background(NX.violet.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(fileName).font(NXFont.text(large ? 13 : 11, .semibold))
+                    .foregroundStyle(kind == nil ? NX.foreground : NX.violetText).lineLimit(1)
+                Text(failed ? T("Couldn't open this file.") : (kind == nil ? T("Open it on the web") : T("Tap to open")))
+                    .font(NXFont.text(10)).foregroundStyle(failed ? NX.danger : NX.mutedFg)
+            }
+            Spacer(minLength: 0)
+            if fetching { ProgressView().scaleEffect(0.7) }
+        }
+        if kind != nil {
+            Button { Task { await open() } } label: { line }
+                .buttonStyle(.plain)
+                .disabled(fetching)
+        } else {
+            line
+        }
+    }
+
+    /// Fetched to a file first: PDFKit and AVPlayer both want something they can seek in, and
+    /// neither can carry the session cookie.
+    private func open() async {
+        guard let kind else { return }
+        fetching = true; failed = false
+        defer { fetching = false }
+        do {
+            let file = try await APIClient.shared.downloadAttachment(url: path, fileName: fileName)
+            preview = AttachmentPreview(id: path, name: fileName, kind: kind, source: file)
+        } catch {
+            failed = true
+        }
+    }
+}
+
 private func reqStatusTone(_ s: String?) -> ChipTone {
     switch (s ?? "").uppercased() {
     case "APPROVED": return .success; case "REJECTED": return .danger; case "CANCELED", "CANCELLED": return .neutral; default: return .warning
@@ -84,6 +229,85 @@ private enum SubmissionEntry: Identifiable {
         case .offsite(let o): return o.approvedAt ?? ""
         }
     }
+
+    /// The Jakarta day a SETTLED row counts from for the date window: the day it was decided; for a
+    /// withdrawn request, which has no review and so no `reviewedAt`, the day it was last written —
+    /// the withdrawal; and only failing both, the day the request is about.
+    var windowKey: String {
+        switch self {
+        case .request(let r): return SubmissionClock.dayKey(r.reviewedAt ?? r.updatedAt ?? r.startDate)
+        case .offsite(let o): return SubmissionClock.dayKey(o.approvedAt ?? o.attendanceDate)
+        }
+    }
+
+    /// Requester name or reason, ignoring case and accents — "desi" finds "Dési", and a reviewer
+    /// looking for "the one about the dentist" finds it by the reason.
+    func matches(_ q: String) -> Bool {
+        let hay: [String?]
+        switch self {
+        case .request(let r): hay = [r.user?.name, r.reason]
+        case .offsite(let o): hay = [o.user?.name, o.reason]
+        }
+        return hay.contains { ($0 ?? "").range(of: q, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+    }
+}
+
+/// Which stretch of settled history the non-Pending chips show.
+private enum SubmissionWindow { case recent, period }
+
+/// Day keys ("yyyy-MM-dd", Jakarta) and the attendance period, for the date window. Keys compare
+/// as plain strings, so the filter never builds a Date per row beyond the one parse.
+private enum SubmissionClock {
+    private static let keyFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = ProjDate.cal.timeZone
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
+    static func key(_ d: Date) -> String { keyFormatter.string(from: d) }
+
+    /// The Jakarta day an ISO timestamp falls on. Date-only columns are stored at 00:00 UTC, which is
+    /// 07:00 the same day in Jakarta, so they land on their own day too.
+    static func dayKey(_ iso: String?) -> String {
+        guard let iso, !iso.isEmpty else { return "" }
+        if let d = ProjDate.parse(iso) { return key(d) }
+        return String(iso.prefix(10))
+    }
+
+    /// The attendance period (28th → 27th, Jakarta) that `now` falls in — the same cut-off
+    /// `attendancePeriodRange` uses on the server. Starting from the 28th, adding a month never has
+    /// to clamp, so February needs no special case.
+    static func period(containing now: Date = Date()) -> (start: Date, end: Date) {
+        let cal = ProjDate.cal
+        let today = cal.startOfDay(for: now)
+        var c = cal.dateComponents([.year, .month], from: today)
+        c.day = 28
+        var start = cal.date(from: c) ?? today
+        if cal.component(.day, from: today) < 28 { start = cal.date(byAdding: .month, value: -1, to: start) ?? start }
+        let next = cal.date(byAdding: .month, value: 1, to: start) ?? start
+        let end = cal.date(byAdding: .day, value: -1, to: next) ?? next
+        return (start, end)
+    }
+
+    /// Inclusive day-key bounds. "Last 3 days" is today and the two before it, open-ended forward.
+    static func bounds(_ w: SubmissionWindow) -> (from: String, to: String?) {
+        switch w {
+        case .recent:
+            let today = ProjDate.cal.startOfDay(for: Date())
+            return (key(ProjDate.cal.date(byAdding: .day, value: -2, to: today) ?? today), nil)
+        case .period:
+            let p = period()
+            return (key(p.start), key(p.end))
+        }
+    }
+
+    /// "28 Agu – 27 Sep"
+    static var periodLabel: String {
+        let p = period()
+        return "\(ProjDate.dayLabel(p.start)) – \(ProjDate.dayLabel(p.end))"
+    }
 }
 
 // MARK: - Requests card (submit + review)
@@ -104,7 +328,6 @@ struct AttendanceRequestsCard: View {
     @State private var loading = true
     @State private var showComposer = false
     @State private var busy: String?
-    @State private var viewingPhoto: PhotoRef?
     @State private var rejecting: AttendanceRequest?
     /// The request a notification pointed at (`AppRouter.focus`), shown on its own sheet the moment
     /// the list is in — with Approve and Reject on it, which is the whole point of tapping the push.
@@ -122,6 +345,12 @@ struct AttendanceRequestsCard: View {
     /// here instead would have to be decided before `canReview` has loaded, latching the wrong
     /// answer for the whole session.
     @State private var filter: String?
+    /// Settled rows open on the last three days, not the whole history: a reviewer's Approved chip
+    /// was every approval ever made, and what they come to check is what just happened. One tap
+    /// widens it to the attendance period, which is what anyone reconciling a month needs.
+    @State private var window: SubmissionWindow = .recent
+    @State private var query = ""
+    private var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     private let filters = ["PENDING", "APPROVED", "REJECTED", "CANCELED", "ALL"]
     private func filterLabel(_ f: String) -> String { f == "ALL" ? T("All") : reqStatusLabel(f) }
@@ -156,10 +385,25 @@ struct AttendanceRequestsCard: View {
     /// spinner), so it filters BEFORE it sorts and body reads it exactly once. It used to sort the
     /// whole history two or three times per pass to show one chip's worth of it. The offsets are
     /// taken before the filter so the tie-break is the same one the unfiltered list had.
+    ///
+    /// The date window and the search are applied in the same pass. A PENDING row is never cut by
+    /// date — not under Pending and not under All: it is the work queue, and a request filed a week
+    /// ago that nobody has decided is exactly the one that must not drop out of sight.
     private var filtered: [SubmissionEntry] {
         let f = activeFilter
+        let q = trimmedQuery
+        let range: (from: String, to: String?)? = f == "PENDING" ? nil : SubmissionClock.bounds(window)
         let combined = requests.map { SubmissionEntry.request($0) } + offsite.map { SubmissionEntry.offsite($0) }
-        return combined.enumerated().filter { f == "ALL" || $0.element.statusKey == f }.sorted { a, b in
+        return combined.enumerated().filter { item in
+            let e = item.element
+            guard f == "ALL" || e.statusKey == f else { return false }
+            if let range, !e.isPending {
+                let k = e.windowKey
+                if k.isEmpty || k < range.from { return false }
+                if let to = range.to, k > to { return false }
+            }
+            return q.isEmpty || e.matches(q)
+        }.sorted { a, b in
             if a.element.isPending != b.element.isPending { return a.element.isPending }
             if !a.element.isPending, a.element.decidedKey != b.element.decidedKey {
                 return a.element.decidedKey > b.element.decidedKey
@@ -209,11 +453,10 @@ struct AttendanceRequestsCard: View {
                            actionTitle: T("File a request"), actionIcon: "plus", action: { showComposer = true }, compact: true)
             } else {
                 filterBar
+                refineBar
                 let shown = filtered
                 if shown.isEmpty {
-                    EmptyState(icon: "line.3.horizontal.decrease.circle", title: T("Nothing in this filter"),
-                               subtitle: T("Only requests with this status are shown. The rest are under All."),
-                               actionTitle: T("Show all"), actionIcon: nil, action: { filter = "ALL" }, compact: true)
+                    emptyForFilter
                 } else {
                     // Lazy, and that is the fix for the scroll. A reviewer's All chip is the whole
                     // workspace's history — hundreds of rows — and a plain ForEach in this VStack
@@ -237,8 +480,10 @@ struct AttendanceRequestsCard: View {
         // a plain .task fetched scope=me once and never ran again — so a reviewer kept looking at
         // their own history while the crew's pending requests sat on the server unseen.
         .task(id: permissionKey) { await load() }
-        .sheet(isPresented: $showComposer) { RequestComposerSheet(canGrant: canReview) { await load() } }
-        .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
+        // canReviewOffsite, not canReview: it is canManageAttendance, the same test the server uses for
+        // its BoD exemptions. A manager who may REVIEW requests is not exempt from filing rules, and
+        // offering them the exemptions only led to a refusal at submit.
+        .sheet(isPresented: $showComposer) { RequestComposerSheet(canGrant: canReviewOffsite) { await load() } }
         // A push tapped while this card is already on screen: claim it now rather than on the next load.
         .onChange(of: router.focus) { _, _ in if !loading { claimFocus() } }
         .alert(T("That request isn't in your list anymore"), isPresented: $focusMissing) {
@@ -261,7 +506,9 @@ struct AttendanceRequestsCard: View {
         default: return
         }
         router.focus = nil
-        if let hit { filter = "ALL"; focusEntry = hit } else { focusMissing = true }
+        // Widened and unsearched as well, for the same reason: a decision from last week is outside
+        // the three-day window, and a leftover search would hide the row just as well.
+        if let hit { filter = "ALL"; window = .period; query = ""; focusEntry = hit } else { focusMissing = true }
     }
 
     /// The Ticket screen's chip row, same shape and same colours — one filter idiom in the app
@@ -281,6 +528,89 @@ struct AttendanceRequestsCard: View {
                     .buttonStyle(.plain)
                 }
             }
+        }
+    }
+
+    /// The date window (settled chips only) and the search. Under the chips because both narrow
+    /// what the chip already chose.
+    private var refineBar: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if activeFilter != "PENDING" {
+                HStack(spacing: 6) {
+                    windowChip(.recent, T("Last 3 days"))
+                    windowChip(.period, T("This period"))
+                    if window == .period {
+                        Text(SubmissionClock.periodLabel).font(NXFont.text(11)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(NX.mutedFg)
+                TextField(T("Search name or reason"), text: $query)
+                    .font(NXFont.text(13)).autocorrectionDisabled().submitLabel(.search)
+                if !query.isEmpty {
+                    Button { query = "" } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg)
+                    }.buttonStyle(.plain).accessibilityLabel(T("Clear search"))
+                }
+            }
+            .padding(.horizontal, 11).padding(.vertical, 8)
+            .background(NX.card, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(NX.border))
+        }
+    }
+
+    private func windowChip(_ w: SubmissionWindow, _ title: String) -> some View {
+        let on = window == w
+        return Button { window = w } label: {
+            Text(title).font(NXFont.text(11, .semibold))
+                .foregroundStyle(on ? NX.violetText : NX.mutedFg)
+                .padding(.horizontal, 10).padding(.vertical, 5)
+                .background(on ? NX.violet.opacity(0.14) : Color.clear, in: Capsule())
+                .overlay(Capsule().strokeBorder(on ? Color.clear : NX.border))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Says which of the three narrowings emptied the list, and offers the one step that undoes it.
+    @ViewBuilder private var emptyForFilter: some View {
+        let f = activeFilter
+        if !trimmedQuery.isEmpty {
+            EmptyState(icon: "magnifyingglass", title: T("No matches"),
+                       subtitle: String(format: T("Nobody's name or reason here contains “%@”."), trimmedQuery),
+                       actionTitle: T("Clear search"), actionIcon: nil, action: { query = "" }, compact: true)
+        } else if f == "PENDING" {
+            EmptyState(icon: "checkmark.circle", title: T("Nothing waiting for a decision"),
+                       subtitle: T("Decided requests are under Approved, Rejected and All."),
+                       actionTitle: T("Show all"), actionIcon: nil, action: { filter = "ALL" }, compact: true)
+        } else if window == .recent {
+            EmptyState(icon: "clock.arrow.circlepath", title: Self.emptyTitle(f, recent: true),
+                       subtitle: T("Only the last 3 days are shown, so the list opens on what just happened. The rest of this period is one tap away."),
+                       actionTitle: T("Show this period"), actionIcon: nil, action: { window = .period }, compact: true)
+        } else if f != "ALL" {
+            EmptyState(icon: "calendar", title: Self.emptyTitle(f, recent: false),
+                       subtitle: String(format: T("This attendance period runs %@."), SubmissionClock.periodLabel),
+                       actionTitle: T("Show all"), actionIcon: nil, action: { filter = "ALL" }, compact: true)
+        } else {
+            EmptyState(icon: "calendar", title: Self.emptyTitle(f, recent: false),
+                       subtitle: String(format: T("This attendance period runs %@."), SubmissionClock.periodLabel),
+                       compact: true)
+        }
+    }
+
+    /// Whole sentences per chip rather than a verb spliced into a template: Indonesian does not put
+    /// the words in the same order, and a spliced sentence cannot be translated.
+    private static func emptyTitle(_ f: String, recent: Bool) -> String {
+        switch (f, recent) {
+        case ("APPROVED", true): return T("Nothing approved in the last 3 days")
+        case ("REJECTED", true): return T("Nothing rejected in the last 3 days")
+        case ("CANCELED", true): return T("Nothing canceled in the last 3 days")
+        case (_, true): return T("Nothing in the last 3 days")
+        case ("APPROVED", false): return T("Nothing approved this period")
+        case ("REJECTED", false): return T("Nothing rejected this period")
+        case ("CANCELED", false): return T("Nothing canceled this period")
+        default: return T("Nothing this period")
         }
     }
 
@@ -373,7 +703,9 @@ struct AttendanceRequestsCard: View {
             if let reason = r.reason, !reason.isEmpty {
                 reasonText(reason, id: r.id, collapsedLines: 3)
             }
-            if let url = r.attachmentURL { attachment(r, url) }
+            if r.attachmentURL != nil, let path = r.supportingDocumentUrl {
+                RequestAttachmentView(path: path, name: r.supportingDocumentName, type: r.type)
+            }
             decisionStamp(r)
             if let note = r.reviewNoteText { decisionNote(note, rejected: r.status?.uppercased() == "REJECTED", by: r.reviewerName) }
             if pending {
@@ -435,34 +767,6 @@ struct AttendanceRequestsCard: View {
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-
-    /// The evidence behind the request. The web offers it as a link; a link is no use here, because
-    /// the file route needs the session cookie and Safari does not have it — and a sick note is a
-    /// photograph anyway, so it belongs on the card rather than one navigation away.
-    @ViewBuilder private func attachment(_ r: AttendanceRequest, _ url: URL) -> some View {
-        let label = r.supportingDocumentName ?? T("View attachment")
-        if r.attachmentIsPDF {
-            HStack(spacing: 6) {
-                Image(systemName: "doc.fill").font(.system(size: 11)).foregroundStyle(NX.mutedFg)
-                Text(label).font(NXFont.text(11, .semibold)).foregroundStyle(NX.mutedFg).lineLimit(1)
-                Text(T("PDF · open it on the web")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-            }
-        } else {
-            Button { viewingPhoto = PhotoRef(url: url, name: r.supportingDocumentName) } label: {
-                HStack(spacing: 8) {
-                    CachedImage(url: url) { $0.resizable().scaledToFill() } placeholder: { NX.muted }
-                        .frame(width: 54, height: 54)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(label).font(NXFont.text(11, .semibold)).foregroundStyle(NX.violetText).lineLimit(1)
-                        Text(T("Tap to enlarge")).font(NXFont.text(10)).foregroundStyle(NX.mutedFg)
-                    }
-                    Spacer(minLength: 0)
-                }
-            }
-            .buttonStyle(.plain)
-        }
     }
 
     /// The offsite kind. Same list, same spacing, same chips — but spelled out as its own thing,
@@ -596,7 +900,6 @@ private struct RequestFocusSheet: View {
     @State private var rejecting = false
     @State private var note = ""
     @State private var err: String?
-    @State private var viewingPhoto: PhotoRef?
 
     var body: some View {
         NavigationStack {
@@ -616,7 +919,6 @@ private struct RequestFocusSheet: View {
             .navigationTitle(T("From your notification"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() } } }
-            .fullScreenCover(item: $viewingPhoto) { PhotoViewer(photo: $0) }
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
@@ -641,18 +943,8 @@ private struct RequestFocusSheet: View {
                 Text(reason).font(NXFont.text(14)).foregroundStyle(NX.foreground.opacity(0.9))
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if let url = r.attachmentURL {
-                if r.attachmentIsPDF {
-                    Label(r.supportingDocumentName ?? T("Attachment"), systemImage: "doc.fill")
-                        .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
-                    Text(T("PDF · open it on the web")).font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-                } else {
-                    Button { viewingPhoto = PhotoRef(url: url, name: r.supportingDocumentName) } label: {
-                        CachedImage(url: url) { $0.resizable().scaledToFill() } placeholder: { NX.muted }
-                            .frame(height: 160).frame(maxWidth: .infinity)
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }.buttonStyle(.plain)
-                }
+            if r.attachmentURL != nil, let path = r.supportingDocumentUrl {
+                RequestAttachmentView(path: path, name: r.supportingDocumentName, type: r.type, large: true)
             }
             if let note = r.reviewNoteText {
                 VStack(alignment: .leading, spacing: 2) {
@@ -842,7 +1134,6 @@ struct RequestComposerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var type: String = "DAY_OFF"
     @State private var start = Date()
-    @State private var end = Date()
     @State private var reason = ""
     @State private var attach: (name: String, data: Data)?
     @State private var showImporter = false
@@ -861,30 +1152,34 @@ struct RequestComposerSheet: View {
     @State private var geoError: String?
 
     /// Only what this person can actually file. Leave needs a year of service AND days left; public
-    /// holiday needs the BoD to have set a quota for the month. Offering either without that is a
-    /// button whose only outcome is a refusal, and people read a refusal as the app being broken.
+    /// holiday needs the BoD to have set a quota for the month, with days of it left. Offering either
+    /// without that is a button whose only outcome is a refusal, and people read a refusal as the app
+    /// being broken.
+    ///
+    /// The same for a BoD as for staff. This composer only ever files for the signed-in person — it
+    /// sends no `targetUserId` — and the server's quota and eligibility checks skip only a grant FOR
+    /// SOMEBODY ELSE (`isGrant`), never a BoD filing their own. The old `canGrant ||` offered a BoD
+    /// Leave and Public Holiday they could not use, and the submit was then refused.
     private var types: [String] {
         var out: [String] = []
-        if canGrant || leaveUsable { out.append("LEAVE") }
+        if leaveUsable { out.append("LEAVE") }
         out.append(contentsOf: ["SICK", "PERMIT", "DAY_OFF"])
-        if canGrant || (quota?.redDateQuota ?? 0) > 0 { out.append("RED_DATE") }
+        if redDateUsable { out.append("RED_DATE") }
         return out
+    }
+    private var redDateUsable: Bool {
+        guard let q = quota, let total = q.redDateQuota, total > 0 else { return false }
+        return total - (q.redDateUsedThisMonth ?? 0) > 0
     }
     private var leaveUsable: Bool {
         guard let l = quota?.annualLeave else { return false }
         return l.eligible && (l.remaining ?? 0) > 0
     }
-    /// Sakit and izin are one day each: one date, one piece of evidence, one decision. The server
-    /// says the same, so the form cannot promise something the submit will refuse.
-    private var singleDay: Bool { !canGrant && (type == "SICK" || type == "PERMIT") }
+    // Every request is ONE date, for every type and for everyone, a BoD included: one date, one
+    // piece of evidence, one decision. A range was a second way to file several days that nothing
+    // else in attendance understood, so the UNTIL picker is gone and endDate is always startDate.
     /// Izin is today or later; sakit may be filed for a day that has already happened.
     private var earliest: Date? { type == "PERMIT" && !canGrant ? Calendar.current.startOfDay(for: Date()) : nil }
-    private var dayCount: Int {
-        let cal = Calendar.current
-        let a = cal.startOfDay(for: start)
-        let b = cal.startOfDay(for: singleDay ? start : end)
-        return max(1, (cal.dateComponents([.day], from: a, to: b).day ?? 0) + 1)
-    }
     /// Days left in the bucket this type draws from, if it draws from one.
     private var remainingDays: Int? {
         switch type {
@@ -894,10 +1189,12 @@ struct RequestComposerSheet: View {
         default: return nil
         }
     }
-    /// Said before the submit, not after: asking for four days out of two left is caught here.
+    /// Said before the submit, not after. One date is one day, so this is simply "none left".
+    /// Not waived for `canGrant`: the server charges a BoD's own request to their own quota exactly
+    /// as it does anybody's (only a grant for somebody else skips it).
     private var quotaProblem: String? {
-        guard !canGrant, quota != nil, let left = remainingDays, dayCount > left else { return nil }
-        return String(format: T("You're asking for %d days and only %d is left."), dayCount, left)
+        guard quota != nil, let left = remainingDays, left < 1 else { return nil }
+        return String(format: T("You're asking for %d days and only %d is left."), 1, left)
     }
     private var showAttachment: Bool { type == "SICK" || type == "PERMIT" }
     /// The server demands a photo for a self-filed izin too, not only for sakit. The form said
@@ -975,39 +1272,20 @@ struct RequestComposerSheet: View {
                                 .animation(.easeInOut(duration: 0.15), value: typeHint)
                             }
                         }
-                        if singleDay {
-                            field(T("DATE")) {
-                                DatePicker("", selection: $start, displayedComponents: .date)
+                        field(T("DATE")) {
+                            HStack(spacing: 10) {
+                                // `in: dateRange` carries the per-type floor: izin cannot be backdated,
+                                // sakit can.
+                                DatePicker("", selection: $start, in: dateRange, displayedComponents: .date)
                                     .datePickerStyle(.compact).labelsHidden().tint(NX.violetText)
-                                    .onChange(of: start) { _, v in end = v }
-                            }
-                        } else {
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack(spacing: 12) {
-                                    field(T("START")) {
-                                        DatePicker("", selection: $start, in: dateRange, displayedComponents: .date)
-                                            .datePickerStyle(.compact).labelsHidden().tint(NX.violetText)
-                                            // The UNTIL picker only CLAMPS its display to the start;
-                                            // its value stays where it was. Without this it shows the
-                                            // new start and sends the old date.
-                                            .onChange(of: start) { _, v in if end < v { end = v } }
-                                    }
-                                    field(T("UNTIL")) {
-                                        DatePicker("", selection: $end, in: start..., displayedComponents: .date)
-                                            .datePickerStyle(.compact).labelsHidden().tint(NX.violetText)
-                                    }
-                                }
                                 if let left = remainingDays {
-                                    HStack(spacing: 6) {
-                                        Text(String(format: T("%d days"), dayCount))
-                                            .font(NXFont.text(12, .bold))
-                                            .padding(.horizontal, 9).padding(.vertical, 4)
-                                            .background(quotaProblem == nil ? NX.violet.opacity(0.12) : NX.danger.opacity(0.14), in: Capsule())
-                                            .foregroundStyle(quotaProblem == nil ? NX.violetText : NX.danger)
-                                        Text(String(format: T("%d left"), left)).font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
-                                    }
-                                    .animation(.easeInOut(duration: 0.15), value: dayCount)
+                                    Text(String(format: T("%d left"), left))
+                                        .font(NXFont.text(12, .bold))
+                                        .padding(.horizontal, 9).padding(.vertical, 4)
+                                        .background(quotaProblem == nil ? NX.violet.opacity(0.12) : NX.danger.opacity(0.14), in: Capsule())
+                                        .foregroundStyle(quotaProblem == nil ? NX.violetText : NX.danger)
                                 }
+                                Spacer(minLength: 0)
                             }
                         }
                         if let quotaProblem {
@@ -1161,9 +1439,8 @@ struct RequestComposerSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// Switching type is not only a label: izin cannot be backdated and the one-day types collapse
-    /// the range, so the dates are brought into line the moment the type changes rather than at
-    /// submit time.
+    /// Switching type is not only a label: izin cannot be backdated, so the date is brought into line
+    /// the moment the type changes rather than at submit time.
     private func pick(_ t: String) {
         type = t
         err = nil
@@ -1173,7 +1450,6 @@ struct RequestComposerSheet: View {
         // where people give up.
         if needsLocation && coords == nil { Task { await askLocation() } }
         if let floor = earliest, start < floor { start = floor }
-        if singleDay || end < start { end = start }
     }
 
     private func askLocation() async {
@@ -1187,7 +1463,7 @@ struct RequestComposerSheet: View {
         }
     }
 
-    /// Dates a range may start on. Only izin has a floor, and izin is never a range.
+    /// Dates the request may be for. Only izin has a floor.
     private var dateRange: PartialRangeFrom<Date> {
         (earliest ?? Date.distantPast)...
     }
@@ -1196,8 +1472,11 @@ struct RequestComposerSheet: View {
         busy = true; err = nil; defer { busy = false }
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = ProjDate.cal.timeZone
         do {
-            try await APIClient.shared.createAttendanceRequest(type: type, startDate: f.string(from: start),
-                                                               endDate: f.string(from: singleDay ? start : end),
+            // endDate is sent, and equal to startDate, rather than left out: the route still reads a
+            // range, and one date is the range that starts and ends on it.
+            let day = f.string(from: start)
+            try await APIClient.shared.createAttendanceRequest(type: type, startDate: day,
+                                                               endDate: day,
                                                                reason: reason.trimmingCharacters(in: .whitespaces), attachment: attach,
                                                                lat: coords?.lat, lng: coords?.lng,
                                                                progress: uploadProgress)

@@ -150,6 +150,10 @@ struct AttendanceRequest: Decodable, Identifiable, Sendable {
     /// "ADMIN" when the row was written by something other than a review screen — including the
     /// nightly penalty cron. Only meaningful together with `reviewedBy`; see `isAutoDeduction`.
     let approvalSource: String?
+    /// Last write to the row. Read for one reason: withdrawing your own request is not a review, so
+    /// it leaves `reviewedAt` empty, and this is then the only record of when it was withdrawn —
+    /// which is what the Canceled chip's date window has to go on. Optional like its neighbours.
+    let updatedAt: String?
     struct UserRef: Decodable, Sendable { let name: String? }
 
     /// The nightly cron's own penalty row, NOT something a person filed: ">120 min late" and
@@ -196,11 +200,9 @@ struct AttendanceRequest: Decodable, Identifiable, Sendable {
         return URL(string: path.hasPrefix("http") ? path : Config.baseURL.absoluteString + path)
     }
 
-    /// The composer accepts images and PDFs, so anything that is not plainly a PDF is drawn as a
-    /// picture. There is no PDF reader in this app, and pretending there is opens a blank page.
-    var attachmentIsPDF: Bool {
-        (supportingDocumentName ?? supportingDocumentUrl ?? "").lowercased().hasSuffix(".pdf")
-    }
+    // Whether the attachment is a picture or a document is decided where it is drawn
+    // (`RequestAttachmentView` in AttendanceRequestsView.swift), on the phone's own
+    // `AttachmentKind` — this file is also compiled into the watch, which has neither.
 }
 
 /// GET /api/attendance/offsite-checkouts?status=ALL — check-outs taken outside the office geofence,
