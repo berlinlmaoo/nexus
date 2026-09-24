@@ -28,6 +28,8 @@ class NexusApplication : Application() {
         container.appScope.launch { container.versionGate.checkPolicy(force = true) }
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
+                // Back in the foreground: are we in the office? (API.md §1.2)
+                container.lanRoute.reprobe(force = true)
                 container.appScope.launch {
                     container.versionGate.checkPolicy(force = false)
                     // After the gate: a lifted lock lets the held taps go in the same pass.

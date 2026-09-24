@@ -3,6 +3,7 @@ package id.znetworks.nexus.core
 import android.content.Context
 import id.znetworks.nexus.core.net.ApiClient
 import id.znetworks.nexus.core.net.ClientIdentity
+import id.znetworks.nexus.core.net.LanRoute
 import id.znetworks.nexus.core.session.KeystoreSessionCipher
 import id.znetworks.nexus.core.session.Session
 import id.znetworks.nexus.core.session.SessionStore
@@ -49,11 +50,15 @@ class AppContainer(private val context: Context) {
         cipher = KeystoreSessionCipher(),
     )
 
+    /** Office LAN shortcut (API.md §1.2): one host rewrite for every call, uploads included. */
+    val lanRoute = LanRoute.create(context, identity, { sessionStore.current }, appScope)
+
     val api: ApiClient = ApiClient.production(
         identity = identity,
         sessionProvider = { sessionStore.current },
         onUnauthorized = { refused -> auth.sessionEnded(refused) },
         onUpgradeRequired = { err -> versionGate.require(err.minSupported, err.storeUrl) },
+        routeInterceptor = lanRoute.interceptor,
     )
 
     val versionGate: VersionGate = VersionGate(

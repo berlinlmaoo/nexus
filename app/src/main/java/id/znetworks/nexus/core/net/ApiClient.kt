@@ -44,6 +44,8 @@ class ApiClient(
     /** Which hosts may receive the cookie. Only tests replace this. */
     private val mayCarrySession: (String) -> Boolean = NexusConfig::isNexusHost,
     baseClient: OkHttpClient = OkHttpClient(),
+    /** The LAN shortcut's host rewrite (after identity, so the LAN request carries the same headers). */
+    routeInterceptor: Interceptor? = null,
 ) {
     val json: Json = NexusJson
 
@@ -54,6 +56,7 @@ class ApiClient(
         .writeTimeout(60, TimeUnit.SECONDS)
         .callTimeout(0, TimeUnit.MILLISECONDS)
         .addInterceptor(IdentityInterceptor(identity))
+        .apply { routeInterceptor?.let(::addInterceptor) }
         .build()
 
     fun url(path: String): HttpUrl = baseUrl.resolve(path) ?: error("Bad path: $path")
@@ -186,7 +189,9 @@ class ApiClient(
             sessionProvider: () -> Session?,
             onUnauthorized: (Session) -> Unit,
             onUpgradeRequired: (ApiError.UpgradeRequired) -> Unit,
-        ) = ApiClient(NexusConfig.PUBLIC_BASE.toHttpUrl(), identity, sessionProvider, onUnauthorized, onUpgradeRequired)
+            routeInterceptor: Interceptor? = null,
+        ) = ApiClient(NexusConfig.PUBLIC_BASE.toHttpUrl(), identity, sessionProvider, onUnauthorized, onUpgradeRequired,
+            routeInterceptor = routeInterceptor)
     }
 }
 
