@@ -7,6 +7,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import id.znetworks.nexus.feature.auth.LoginScreen
 import id.znetworks.nexus.ui.shell.SignedInShell
@@ -28,6 +29,7 @@ class MainActivity : AppCompatActivity() {
         setContent {
             val session by container.sessionStore.session.collectAsStateWithLifecycle()
             val gateState by gate.state.collectAsStateWithLifecycle()
+            val queueState by container.attendanceQueue.state.collectAsStateWithLifecycle()
             val scope = rememberCoroutineScope()
             val current = session
 
@@ -37,7 +39,12 @@ class MainActivity : AppCompatActivity() {
             when {
                 // The lock wins over everything, signed in or not.
                 gateState.required != null -> NexusTheme {
-                    UpdateRequiredScreen(gateState, onCheckAgain = { scope.launch { gate.checkPolicy(force = true) } })
+                    UpdateRequiredScreen(
+                        gateState,
+                        onCheckAgain = { scope.launch { gate.checkPolicy(force = true) } },
+                        // The lock screen carries a line about taps held for the update (REQ-ATT-43).
+                        heldMessage = if (queueState.isHeldForUpdate) stringResource(R.string.held_body) else null,
+                    )
                 }
                 current == null -> LoginScreen()
                 else -> NexusTheme {

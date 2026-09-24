@@ -1,0 +1,550 @@
+package id.znetworks.nexus.feature.attendance
+
+import android.Manifest
+import android.content.Intent
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Login
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Coffee
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import id.znetworks.nexus.R
+import id.znetworks.nexus.core.time.OfficeTime
+import id.znetworks.nexus.feature.attendance.liveness.LivenessCaptureScreen
+import id.znetworks.nexus.feature.attendance.liveness.openAppSettings
+import id.znetworks.nexus.ui.theme.DisplayFont
+import id.znetworks.nexus.ui.theme.Nx
+import id.znetworks.nexus.ui.theme.TextFont
+import kotlinx.coroutines.delay
+import java.time.Instant
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+private val GREEN = Color(0xFF10B981)
+private val ROSE = Color(0xFFF43F5E)
+private val SKY = Color(0xFF0EA5E9)
+private val AMBER_FILL = Color(0xFFD97706)
+
+/** Port of iOS `AttendanceView` (PRD REQ-ATT-44), minus the map, crew board and requests (next). */
+@Composable
+fun AttendanceScreen(vm: AttendanceViewModel = viewModel()) {
+    val s by vm.state.collectAsStateWithLifecycle()
+    val q by vm.queueState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // Fine location is asked BEFORE the face check, so a refusal never wastes one.
+    var wantedKind by remember { mutableStateOf<AttendanceKind?>(null) }
+    val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        vm.onLocationPermissionResult()
+        val kind = wantedKind
+        wantedKind = null
+        if (result[Manifest.permission.ACCESS_FINE_LOCATION] == true && kind != null) vm.startCapture(kind)
+    }
+    val locationPerms = arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+    LaunchedEffect(Unit) { if (!hasFine(context)) locationLauncher.launch(locationPerms) }
+    fun press(kind: AttendanceKind) {
+        if (hasFine(context)) vm.startCapture(kind) else { wantedKind = kind; locationLauncher.launch(locationPerms) }
+    }
+
+    val capturing = s.capturing
+    if (capturing != null) {
+        LivenessCaptureScreen(onCaptured = vm::onSelfie, onCancel = vm::cancelCapture)
+        return
+    }
+
+    val checkedIn = vm.checkedIn(s)
+    val checkedOut = vm.checkedOut(s)
+    val forcePending = vm.forcePending(s)
+    val offsitePending = vm.offsitePending(s)
+    val needsReflection = vm.needsReflection(s)
+    val reflectionOk = vm.reflectionOk(s)
+    val c = Nx.colors
+
+    PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() }, modifier = Modifier.fillMaxSize().background(c.background)) {
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Hero(s, checkedIn, checkedOut, forcePending)
+            if (s.loading) LoadingRow()
+            if (s.serverDown) DownCard(onRetry = { vm.load() })
+            else s.error?.let { ErrorCard(it, onRetry = { vm.load() }) }
+            s.savedCopyAt?.let {
+                Text(stringResource(R.string.saved_copy_from, LocalNotifier.hhmm(it)), color = c.mutedFg, fontSize = 12.sp,
+                    modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+            }
+
+            if (!s.canTakeAttendance) {
+                PhoneOnlyCard()
+            } else {
+                if (needsReflection) ReflectionCard(s.reflection, vm.reflectionCount(s), reflectionOk, vm::onReflection)
+                if (s.locationOff) LocationOffBanner()
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    PresenceButton(stringResource(R.string.presence_in), Icons.AutoMirrored.Filled.Login, GREEN,
+                        enabled = !(checkedIn || forcePending || offsitePending) && !s.loading, busy = s.flow?.busy == true && s.flow?.kind == AttendanceKind.CHECK_IN,
+                        modifier = Modifier.weight(1f)) { press(AttendanceKind.CHECK_IN) }
+                    PresenceButton(stringResource(R.string.presence_out), Icons.AutoMirrored.Filled.Logout, ROSE,
+                        enabled = (checkedIn || forcePending) && !checkedOut && !offsitePending && reflectionOk && !s.loading,
+                        busy = s.flow?.busy == true && s.flow?.kind == AttendanceKind.CHECK_OUT,
+                        modifier = Modifier.weight(1f)) { press(AttendanceKind.CHECK_OUT) }
+                }
+                // Say WHY the button is grey, right where the grey button is.
+                if (needsReflection && !reflectionOk) {
+                    Text(stringResource(R.string.presence_out_locked), color = c.mutedFg, fontSize = 11.sp,
+                        textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                }
+                if (s.offsitePrompt) OffsitePrompt(s.offsiteReason, vm::onOffsiteReason, vm::cancelOffsite, vm::submitOffsite)
+            }
+
+            if (forcePending) {
+                InfoBanner(stringResource(if (reflectionOk) R.string.force_pending_ready else R.string.force_pending_reflection), c.warning)
+            }
+            if (offsitePending) InfoBanner(stringResource(R.string.offsite_waiting), c.warning)
+            if (s.today?.today?.checkOutApproval == "REJECTED") InfoBanner(stringResource(R.string.offsite_rejected), c.danger)
+            s.banner?.let { (text, good) -> InfoBanner(text, if (good) c.success else c.danger) }
+            // A queued tap must never be invisible: somebody who thinks they clocked in and did not
+            // would only find out at payroll.
+            q.problem?.takeIf { q.count == 0 }?.let { InfoBanner(problemText(it), c.danger) }
+            if (q.count > 0) {
+                InfoBanner(pluralStringResource(R.plurals.queue_waiting, q.count, q.count), c.warning)
+            }
+            Metrics(s, forcePending)
+        }
+    }
+
+    s.flow?.let { FlowCard(it, onDismiss = vm::dismissFlow) }
+    if (q.heldNoticeDue && q.isHeldForUpdate) HeldNotice(q, onDismiss = vm::heldNoticeSeen)
+}
+
+private fun hasFine(context: android.content.Context) =
+    androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+        android.content.pm.PackageManager.PERMISSION_GRANTED
+
+@Composable
+private fun problemText(p: QueueProblem): String = when (p) {
+    is QueueProblem.RefusedOutsideRadius -> LocalNotifier.refusedSentence(LocalContext.current, p)
+    is QueueProblem.ServerRefused -> {
+        val why = p.message ?: stringResource(R.string.error_server_status, p.status ?: 0)
+        if (p.dropped) stringResource(R.string.queue_dropped, why) else stringResource(R.string.queue_retrying, why)
+    }
+}
+
+// region hero
+
+@Composable
+private fun Hero(s: AttendanceUiState, checkedIn: Boolean, checkedOut: Boolean, forcePending: Boolean) {
+    val c = Nx.colors
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { while (true) { now = System.currentTimeMillis(); delay(1_000) } }
+    val zoned = Instant.ofEpochMilli(now).atZone(OfficeTime.ZONE)
+    val rec = s.today?.today ?: s.today?.pendingCheckout
+    val status = stringResource(
+        when {
+            forcePending -> R.string.status_finish_yesterday
+            checkedOut -> R.string.status_done
+            checkedIn -> R.string.status_clocked_in
+            else -> R.string.status_ready
+        },
+    )
+    Column(
+        Modifier.fillMaxWidth()
+            .background(Brush.linearGradient(listOf(Color(0xFFC4B5FD), Color(0xFF7C3AED))), RoundedCornerShape(24.dp))
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy", Locale.getDefault()).format(zoned), color = Color.White.copy(alpha = 0.9f),
+            fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth())
+        Text(DateTimeFormatter.ofPattern("HH:mm:ss").format(zoned), color = Color.White, fontFamily = DisplayFont,
+            fontWeight = FontWeight.Bold, fontSize = 46.sp)
+        Text(shiftLabel(s.today?.myShift), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.background(Color.White.copy(alpha = 0.18f), CircleShape).padding(horizontal = 12.dp, vertical = 5.dp))
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
+            Text("IN ${hhmmIso(rec?.checkInAt)}", color = Color.White.copy(alpha = 0.9f), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text("OUT ${hhmmIso(rec?.checkOutAt)}", color = Color.White.copy(alpha = 0.9f), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(status, color = c.foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.background(c.card.copy(alpha = 0.9f), CircleShape).padding(horizontal = 12.dp, vertical = 7.dp))
+            if (s.today?.noGeofence == true) {
+                Text(stringResource(R.string.location_free), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.background(SKY, CircleShape).padding(horizontal = 12.dp, vertical = 7.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun shiftLabel(shift: MyShift?): String {
+    val start = shift?.startTime
+    val end = shift?.endTime
+    if (start == null || end == null) return stringResource(R.string.my_schedule) + " —"
+    // Flexi: the check-in WINDOW and the +9h rule, as on web and iOS (REQ-ATT-20).
+    return if (shift.flexi == true) "Flexi $start–$end · +9h" else stringResource(R.string.my_schedule) + " $start – $end"
+}
+
+private fun hhmmIso(iso: String?): String = iso?.let {
+    runCatching { DateTimeFormatter.ofPattern("HH:mm").format(Instant.parse(it).atZone(OfficeTime.ZONE)) }.getOrNull()
+} ?: "--:--"
+
+// endregion
+
+@Composable
+private fun PresenceButton(title: String, icon: ImageVector, tint: Color, enabled: Boolean, busy: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    Button(
+        onClick = onClick, enabled = enabled && !busy,
+        shape = RoundedCornerShape(18.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = tint, contentColor = Color.White,
+            disabledContainerColor = tint, disabledContentColor = Color.White),
+        modifier = modifier.heightIn(min = 56.dp).alpha(if (enabled) 1f else 0.4f),
+    ) {
+        if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+        else Icon(icon, null)
+        Spacer(Modifier.size(8.dp))
+        Text(title.uppercase(Locale.ROOT), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+    }
+}
+
+@Composable
+private fun ReflectionCard(text: String, count: Int, ok: Boolean, onChange: (String) -> Unit) {
+    val c = Nx.colors
+    Card {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.reflection_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 15.sp,
+                color = c.foreground, modifier = Modifier.weight(1f))
+            Text("$count/${AttendanceViewModel.REFLECTION_MIN}", fontWeight = FontWeight.Bold, fontSize = 12.sp,
+                color = if (ok) c.success else c.warning)
+        }
+        Text(stringResource(R.string.reflection_help), fontSize = 11.sp, color = c.mutedFg)
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(
+            value = text, onValueChange = onChange, minLines = 5, maxLines = 12,
+            placeholder = { Text(stringResource(R.string.reflection_placeholder)) },
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = if (ok) c.success else c.violet,
+                unfocusedBorderColor = if (ok) c.success.copy(alpha = 0.45f) else c.border,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (!ok) {
+            Spacer(Modifier.height(6.dp))
+            Text(pluralStringResource(R.plurals.reflection_more, AttendanceViewModel.REFLECTION_MIN - count, AttendanceViewModel.REFLECTION_MIN - count),
+                fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.warning)
+        }
+    }
+}
+
+@Composable
+private fun OffsitePrompt(reason: String, onReason: (String) -> Unit, onCancel: () -> Unit, onSubmit: () -> Unit) {
+    val c = Nx.colors
+    val amber = c.warning
+    Column(
+        Modifier.fillMaxWidth().background(amber.copy(alpha = 0.10f), RoundedCornerShape(16.dp))
+            .border(1.dp, amber.copy(alpha = 0.5f), RoundedCornerShape(16.dp)).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(stringResource(R.string.offsite_title), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = c.foreground)
+        Text(stringResource(R.string.offsite_body), fontSize = 12.sp, color = c.mutedFg)
+        OutlinedTextField(reason, onReason, minLines = 2, placeholder = { Text(stringResource(R.string.offsite_placeholder)) },
+            modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.cancel)) }
+            Button(onClick = onSubmit, enabled = reason.isNotBlank(), modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = AMBER_FILL, contentColor = Color.White)) {
+                Text(stringResource(R.string.offsite_submit), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun Metrics(s: AttendanceUiState, forcePending: Boolean) {
+    val c = Nx.colors
+    val rec = s.today?.today ?: s.today?.pendingCheckout
+    val todayValue = when {
+        forcePending -> stringResource(R.string.status_finish_yesterday)
+        rec?.status != null -> humanize(rec.status)
+        s.today?.todayRequest?.type != null -> "${humanize(s.today.todayRequest.type)} ${humanize(s.today.todayRequest.status.orEmpty())}".trim()
+        else -> stringResource(R.string.status_ready)
+    }
+    val officeName = rec?.officeLocation?.name
+    val officeValue = officeName ?: s.nearest?.name ?: stringResource(if (s.locationOff) R.string.location_is_off else R.string.finding_you)
+    val officeHelper = when {
+        rec?.checkInAt != null -> "In ${hhmmIso(rec.checkInAt)} · Out ${hhmmIso(rec.checkOutAt)}"
+        s.nearest != null -> if (s.nearest.inside) stringResource(R.string.inside_office)
+            else stringResource(R.string.distance_from_here, distanceLabel(s.nearest.distanceMeters))
+        s.locationOff -> stringResource(R.string.turn_location_on_office)
+        else -> stringResource(R.string.checking_where)
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Metric(Icons.Filled.Coffee, stringResource(R.string.metric_today), todayValue, null, c.success, Modifier.weight(1f))
+            Metric(Icons.Filled.LocationOn, stringResource(if (officeName != null) R.string.metric_office else R.string.metric_where),
+                officeValue, officeHelper, if (s.nearest?.inside == true || officeName != null) c.success else c.warning, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Straight from the server, which already caps used at the quota (REQ-ATT-23).
+            Metric(Icons.Filled.AutoAwesome, stringResource(R.string.metric_dayoff),
+                quota(s.today?.dayOffUsedThisMonth, s.today?.dayOffQuota), stringResource(R.string.metric_dayoff_help), c.warning, Modifier.weight(1f))
+            Metric(Icons.Filled.CalendarMonth, stringResource(R.string.metric_holidays),
+                quota(s.today?.redDateUsedThisMonth, s.today?.redDateQuota), stringResource(R.string.metric_holidays_help), Color(0xFFFB7185), Modifier.weight(1f))
+        }
+    }
+}
+
+/** A dash, not "0/4", when the server sent no quota: a made-up number would look true. */
+@Composable
+private fun quota(used: Int?, quota: Int?): String =
+    if (quota == null) "—" else stringResource(R.string.quota_used, used ?: 0, quota)
+
+private fun distanceLabel(m: Double) = if (m < 1000) "${m.toInt()} m" else String.format(Locale.ROOT, "%.1f km", m / 1000)
+
+private fun humanize(raw: String) = raw.split('_', ' ').filter { it.isNotEmpty() }
+    .joinToString(" ") { it.lowercase().replaceFirstChar(Char::titlecase) }
+
+@Composable
+private fun Metric(icon: ImageVector, label: String, value: String, helper: String?, tint: Color, modifier: Modifier) {
+    val c = Nx.colors
+    Column(modifier.background(c.card, RoundedCornerShape(20.dp)).border(1.dp, c.border, RoundedCornerShape(20.dp)).padding(14.dp)) {
+        Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.height(8.dp))
+        Text(label, fontSize = 11.sp, color = c.mutedFg, fontWeight = FontWeight.SemiBold)
+        Text(value, fontSize = 15.sp, color = c.foreground, fontFamily = DisplayFont, fontWeight = FontWeight.Bold)
+        helper?.let { Text(it, fontSize = 11.sp, color = c.mutedFg) }
+    }
+}
+
+@Composable
+private fun Card(content: @Composable () -> Unit) {
+    val c = Nx.colors
+    Column(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(24.dp)).border(1.dp, c.border, RoundedCornerShape(24.dp)).padding(16.dp)) {
+        content()
+    }
+}
+
+@Composable
+private fun InfoBanner(text: String, tone: Color) {
+    Text(text, color = tone, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth().background(tone.copy(alpha = 0.14f), RoundedCornerShape(12.dp))
+            .border(1.dp, tone.copy(alpha = 0.2f), RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 9.dp))
+}
+
+@Composable
+private fun LoadingRow() {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+        Spacer(Modifier.size(8.dp))
+        Text(stringResource(R.string.loading_attendance), fontSize = 12.sp, color = Nx.colors.mutedFg)
+    }
+}
+
+@Composable
+private fun DownCard(onRetry: () -> Unit) {
+    val amber = Nx.colors.warning
+    Column(
+        Modifier.fillMaxWidth().background(amber.copy(alpha = 0.10f), RoundedCornerShape(14.dp))
+            .border(1.dp, amber.copy(alpha = 0.5f), RoundedCornerShape(14.dp)).padding(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.WifiOff, null, tint = amber, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.size(8.dp))
+            Text(stringResource(R.string.down_title), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = amber)
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(stringResource(R.string.down_body), fontSize = 12.sp, color = Nx.colors.foreground, textAlign = TextAlign.Center)
+        TextButton(onClick = onRetry) { Text(stringResource(R.string.update_check_again), color = amber, fontWeight = FontWeight.Bold) }
+    }
+}
+
+@Composable
+private fun ErrorCard(msg: String, onRetry: () -> Unit) {
+    val d = Nx.colors.danger
+    Column(
+        Modifier.fillMaxWidth().background(d.copy(alpha = 0.14f), RoundedCornerShape(12.dp)).padding(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(msg, color = d, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+        TextButton(onClick = onRetry) { Text(stringResource(R.string.try_again), color = d, fontWeight = FontWeight.Bold) }
+    }
+}
+
+@Composable
+private fun LocationOffBanner() {
+    val context = LocalContext.current
+    val w = Nx.colors.warning
+    Row(
+        Modifier.fillMaxWidth().background(w.copy(alpha = 0.12f), RoundedCornerShape(12.dp)).padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(stringResource(R.string.location_off_banner), fontSize = 12.sp, color = Nx.colors.foreground, modifier = Modifier.weight(1f))
+        TextButton(onClick = { openAppSettings(context) }) { Text(stringResource(R.string.open_settings), color = w, fontWeight = FontWeight.Bold) }
+    }
+}
+
+@Composable
+private fun PhoneOnlyCard() {
+    val c = Nx.colors
+    Column(
+        Modifier.fillMaxWidth().background(c.violet.copy(alpha = 0.07f), RoundedCornerShape(18.dp))
+            .border(1.dp, c.violet.copy(alpha = 0.25f), RoundedCornerShape(18.dp)).padding(horizontal = 18.dp, vertical = 22.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(Icons.Filled.PhoneAndroid, null, tint = c.violetText, modifier = Modifier.size(30.dp))
+        Spacer(Modifier.height(8.dp))
+        Text(stringResource(R.string.phone_only_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = c.foreground)
+        Text(stringResource(R.string.phone_only_body), fontSize = 13.sp, color = c.mutedFg, textAlign = TextAlign.Center)
+    }
+}
+
+// region flow card
+
+@Composable
+private fun FlowCard(flow: CaptureFlow, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val c = Nx.colors
+    val isIn = flow.kind == AttendanceKind.CHECK_IN
+    val tint = when (flow) {
+        is CaptureFlow.Locating, is CaptureFlow.Sending -> c.violet
+        is CaptureFlow.Done -> if (isIn) GREEN else ROSE
+        is CaptureFlow.SavedOffline -> c.warning
+        is CaptureFlow.Failed -> c.danger
+    }
+    val title = when (flow) {
+        is CaptureFlow.Locating -> stringResource(R.string.flow_locating)
+        is CaptureFlow.Sending -> stringResource(if (isIn) R.string.flow_sending_in else R.string.flow_sending_out)
+        is CaptureFlow.Done -> stringResource(if (isIn) R.string.flow_done_in else R.string.flow_done_out, flow.at)
+        is CaptureFlow.SavedOffline -> stringResource(if (isIn) R.string.flow_saved_in else R.string.flow_saved_out)
+        is CaptureFlow.Failed -> stringResource(if (isIn) R.string.flow_failed_in else R.string.flow_failed_out)
+    }
+    val body = when (flow) {
+        is CaptureFlow.Locating -> stringResource(R.string.flow_locating_body)
+        is CaptureFlow.Sending -> stringResource(R.string.flow_sending_body)
+        is CaptureFlow.Done -> stringResource(
+            when {
+                flow.pendingApproval -> R.string.offsite_waiting
+                isIn -> R.string.flow_done_in_body
+                else -> R.string.flow_done_out_body
+            },
+        )
+        is CaptureFlow.SavedOffline -> stringResource(R.string.flow_saved_body, flow.at)
+        is CaptureFlow.Failed -> flow.message
+    }
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier.widthIn(max = 320.dp).background(c.card, RoundedCornerShape(24.dp)).border(1.dp, c.border, RoundedCornerShape(24.dp)).padding(22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(Modifier.size(72.dp).background(tint.copy(alpha = 0.14f), CircleShape), contentAlignment = Alignment.Center) {
+                when (flow) {
+                    is CaptureFlow.Locating, is CaptureFlow.Sending -> CircularProgressIndicator(color = tint)
+                    is CaptureFlow.Done -> Icon(Icons.Filled.Check, null, tint = tint, modifier = Modifier.size(32.dp))
+                    is CaptureFlow.SavedOffline -> Icon(Icons.Filled.PhoneAndroid, null, tint = tint, modifier = Modifier.size(30.dp))
+                    is CaptureFlow.Failed -> Icon(Icons.Filled.Close, null, tint = tint, modifier = Modifier.size(32.dp))
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            Text(title, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(6.dp))
+            Text(body, fontSize = 13.sp, color = c.mutedFg, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(14.dp))
+            if (flow.busy) {
+                // Two stages, drawn as two segments: location, then send.
+                Row(Modifier.widthIn(max = 160.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(Modifier.weight(1f).height(4.dp).background(tint, CircleShape))
+                    Box(Modifier.weight(1f).height(4.dp).background(if (flow is CaptureFlow.Sending) tint else c.muted, CircleShape))
+                }
+            } else {
+                if (flow is CaptureFlow.Failed && flow.fix != null) {
+                    TextButton(onClick = {
+                        if (flow.fix == FixHint.LOCATION_SETTINGS) {
+                            runCatching { context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) }
+                        } else openAppSettings(context)
+                    }) { Text(stringResource(R.string.open_settings), color = tint, fontWeight = FontWeight.Bold) }
+                }
+                Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = tint, contentColor = Color.White)) { Text("OK", fontWeight = FontWeight.Bold) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeldNotice(q: AttendanceQueue.State, onDismiss: () -> Unit) {
+    val kinds = q.entries.map { it.kind }.toSet()
+    val title = stringResource(
+        when (kinds) {
+            setOf(AttendanceKind.CHECK_IN) -> R.string.held_title_in
+            setOf(AttendanceKind.CHECK_OUT) -> R.string.held_title_out
+            else -> R.string.held_title_both
+        },
+    )
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(stringResource(R.string.held_body)) },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } },
+    )
+}
+
+// endregion

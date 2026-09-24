@@ -1,5 +1,14 @@
 package id.znetworks.nexus.ui.shell
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
+import androidx.core.content.ContextCompat
+import id.znetworks.nexus.feature.attendance.AttendanceScreen
+
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -56,7 +65,7 @@ import id.znetworks.nexus.ui.theme.Nx
 import id.znetworks.nexus.ui.update.openUpdate
 
 private enum class Tab(val label: Int, val icon: ImageVector, val webPath: String) {
-    HOME(R.string.tab_home, Icons.Filled.Home, "/dashboard"),
+    HOME(R.string.tab_home, Icons.Filled.Home, "/attendance"),
     TASKS(R.string.tab_tasks, Icons.Filled.Checklist, "/my-tasks"),
     INBOX(R.string.tab_inbox, Icons.Filled.Inbox, "/inbox"),
     PROJECTS(R.string.tab_projects, Icons.Filled.Folder, "/projects"),
@@ -71,6 +80,13 @@ private enum class Tab(val label: Int, val icon: ImageVector, val webPath: Strin
 fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () -> Unit) {
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
     val context = LocalContext.current
+    // Android 13+: without this, the refused-tap notice and (later) push never show. Asked once.
+    val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
     Scaffold(
         containerColor = Nx.colors.background,
         bottomBar = {
@@ -87,6 +103,9 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
+                // Attendance is the core and the MVP's reason to exist: it is the Home tab until
+                // the full dashboard lands (PRD §3.3, Phase 2).
+                Tab.HOME -> AttendanceScreen()
                 Tab.MORE -> MoreScreen(session, gateState, onSignOut)
                 else -> EmptyState(
                     icon = tab.icon,

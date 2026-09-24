@@ -4,21 +4,31 @@ import android.content.Context
 import id.znetworks.nexus.core.net.ApiClient
 import id.znetworks.nexus.core.net.ClientIdentity
 import id.znetworks.nexus.core.session.KeystoreSessionCipher
+import id.znetworks.nexus.core.session.Session
 import id.znetworks.nexus.core.session.SessionStore
 import id.znetworks.nexus.core.version.GateStorage
 import id.znetworks.nexus.core.version.VersionGate
 import id.znetworks.nexus.core.version.VersionPolicyResponse
+import id.znetworks.nexus.feature.attendance.ApiQueueSender
+import id.znetworks.nexus.feature.attendance.AttendanceApi
+import id.znetworks.nexus.feature.attendance.AttendanceQueue
+import id.znetworks.nexus.feature.attendance.LocalNotifier
+import id.znetworks.nexus.feature.attendance.LocationProvider
+import id.znetworks.nexus.feature.attendance.QueueFlushWorker
+import id.znetworks.nexus.feature.attendance.ReflectionDrafts
+import id.znetworks.nexus.feature.attendance.TodayCache
 import id.znetworks.nexus.feature.auth.AuthRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import java.io.File
 
 /**
  * Manual dependency graph. Small enough that a DI framework would add build time and no safety;
  * revisit when the feature count makes wiring by hand error-prone.
  */
-class AppContainer(context: Context) {
+class AppContainer(private val context: Context) {
     val identity = ClientIdentity.current()
 
     /** Lives as long as the process: work that must not die with a screen (queue flush, checks). */
@@ -46,6 +56,50 @@ class AppContainer(context: Context) {
     )
 
     val auth = AuthRepository(api, sessionStore)
+
+    val attendanceApi = AttendanceApi(api)
+    val location = LocationProvider(context)
+    val todayCache = TodayCache(File(context.noBackupFilesDir, "cache/attendance-today.json"))
+    val reflectionDrafts = ReflectionDrafts(context)
+
+    /** In noBackupFilesDir, never cacheDir: an OS cache purge must never delete a check-in. */
+    val attendanceQueue = AttendanceQueue(
+        dir = File(context.noBackupFilesDir, "attendance-queue"),
+        sender = ApiQueueSender(attendanceApi),
+        currentUserId = { sessionStore.current?.userId },
+        isLocked = { versionGate.state.value.required != null },
+        onRefused = { LocalNotifier.queueRefused(context, it) },
+    )
+
+    init {
+        auth.addListener(object : AuthRepository.SessionListener {
+            override fun onSignedIn(session: Session) {
+                // Somebody else's taps are deleted; this person's own are sent now.
+                attendanceQueue.keepOnly(session.userId)
+                flushQueueSoon()
+            }
+
+            override fun onSignedOut(session: Session?, deliberate: Boolean) {
+                if (deliberate) {
+                    // Logout: the phone may be handed over. Everything this person left goes.
+                    attendanceQueue.clearAll()
+                    QueueFlushWorker.cancel(context)
+                } else {
+                    // Session expired: queued taps wait for the SAME person (REQ-ATT-16).
+                    attendanceQueue.holdForSignIn(session?.userId)
+                }
+                todayCache.clear()
+                reflectionDrafts.clearAll()
+            }
+        })
+    }
+
+    /** Replay now if possible, and leave a network-constrained job behind in case it is not. */
+    fun flushQueueSoon() {
+        if (attendanceQueue.state.value.count == 0) return
+        appScope.launch { attendanceQueue.flush() }
+        QueueFlushWorker.schedule(context)
+    }
 }
 
 private class PrefsGateStorage(context: Context) : GateStorage {
