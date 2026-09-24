@@ -121,3 +121,12 @@ and the "Your check-in at HH:mm was refused…" line + local notification (REQ-A
 Fix (either): iOS treats a check-in 422 carrying `distanceMeters` as `.outsideRadius`; or the server
 adds `code: "OUTSIDE_RADIUS"` to the check-in 422 (additive; the live iOS screen keys on
 `officeName/distanceMeters` for its sentence, so it is unaffected). Android already handles both.
+
+### I2. Managers can't see offsite check-outs on iOS — OPEN (parity)
+
+`GET /api/attendance/offsite-checkouts` now serves a manager with direct reports (their reports
+only, `isDirectManager` in the route), and those managers get the `offsite_checkout_pending` push.
+iOS still shows the offsite queue only when `canManageAttendance` (`AttendanceRequestsCard(
+canReviewOffsite: today?.canManageAttendance)`), so a manager taps the push and finds nothing to
+approve. Android shows it for `canReviewAttendanceRequests || canManageAttendance` and treats a 403
+as an empty list. Suggest iOS does the same.

@@ -78,6 +78,24 @@ class ApiClient(
     )
 
     /**
+     * Raw bytes of a stored file (`/api/files/…` selfies, request evidence). Those routes need the
+     * session, so they go through here, never through a browser or an image library that would
+     * drop the cookie (API.md §1.1). Absolute URLs on other hosts are fetched without it.
+     */
+    suspend fun bytes(pathOrUrl: String): ByteArray {
+        val target = if (pathOrUrl.startsWith("http")) pathOrUrl.toHttpUrl() else url(pathOrUrl)
+        val session = sessionProvider()
+        val req = Request.Builder().url(target).header("Accept", "*/*").apply {
+            if (session != null && mayCarrySession(target.host)) header("Cookie", "${session.cookieName}=${session.token}")
+        }.build()
+        val res = try { http.newCall(req).await() } catch (e: IOException) { throw ApiError.Transport(e) }
+        res.use {
+            if (it.isSuccessful) return try { it.body.bytes() } catch (e: IOException) { throw ApiError.Transport(e) }
+            throw classify(it.code, runCatching { it.body.string() }.getOrNull(), session)
+        }
+    }
+
+    /**
      * Sends [request] and decodes a 2xx body with [serializer]. [authed] = false is for the calls
      * made without a session (login, sign-up, version policy): their 401 is an answer, not an
      * expired session, and must never sign anybody out.

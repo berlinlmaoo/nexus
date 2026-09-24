@@ -36,6 +36,17 @@
             </intent-filter>
         </activity>
 
+        <!-- Camera shots for request evidence, and downloaded attachments handed to a viewer. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- Persists the in-app language on API < 33 (Android 13+ stores it in the system). -->
         <service
             android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"

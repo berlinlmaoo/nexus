@@ -69,6 +69,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import id.znetworks.nexus.R
 import id.znetworks.nexus.core.time.OfficeTime
 import id.znetworks.nexus.feature.attendance.liveness.LivenessCaptureScreen
+import id.znetworks.nexus.feature.attendance.requests.RequestsViewModel
+import id.znetworks.nexus.feature.attendance.requests.SubmissionsCard
 import id.znetworks.nexus.feature.attendance.liveness.openAppSettings
 import id.znetworks.nexus.ui.theme.DisplayFont
 import id.znetworks.nexus.ui.theme.Nx
@@ -85,8 +87,10 @@ private val AMBER_FILL = Color(0xFFD97706)
 
 /** Port of iOS `AttendanceView` (PRD REQ-ATT-44), minus the map, crew board and requests (next). */
 @Composable
-fun AttendanceScreen(vm: AttendanceViewModel = viewModel()) {
+fun AttendanceScreen(vm: AttendanceViewModel = viewModel(), requests: RequestsViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
+    // Requests need the viewer's permissions and quotas, which arrive with `today`.
+    LaunchedEffect(s.today) { requests.onToday(s.today) }
     val q by vm.queueState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
@@ -118,7 +122,7 @@ fun AttendanceScreen(vm: AttendanceViewModel = viewModel()) {
     val reflectionOk = vm.reflectionOk(s)
     val c = Nx.colors
 
-    PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() }, modifier = Modifier.fillMaxSize().background(c.background)) {
+    PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load(); requests.load() }, modifier = Modifier.fillMaxSize().background(c.background)) {
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -167,6 +171,8 @@ fun AttendanceScreen(vm: AttendanceViewModel = viewModel()) {
                 InfoBanner(pluralStringResource(R.plurals.queue_waiting, q.count, q.count), c.warning)
             }
             Metrics(s, forcePending)
+            // Filing changes today's quota and cover: re-read it after a request goes in.
+            SubmissionsCard(requests, onFiled = { vm.load() })
         }
     }
 
