@@ -7,7 +7,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
 import androidx.core.content.ContextCompat
+import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.feature.attendance.AttendanceScreen
+import id.znetworks.nexus.feature.attendance.trail.TrailConsentHost
 
 import android.content.Context
 import android.content.Intent
@@ -87,6 +89,8 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
+    // The location disclosure can come due from any screen (a queued check-in landing, a refresh).
+    TrailConsentHost((context.applicationContext as NexusApplication).container.workTrail)
     Scaffold(
         containerColor = Nx.colors.background,
         bottomBar = {

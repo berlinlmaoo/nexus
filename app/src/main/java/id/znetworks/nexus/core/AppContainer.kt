@@ -10,6 +10,8 @@ import id.znetworks.nexus.core.version.GateStorage
 import id.znetworks.nexus.core.version.VersionGate
 import id.znetworks.nexus.core.version.VersionPolicyResponse
 import id.znetworks.nexus.feature.attendance.ApiQueueSender
+import id.znetworks.nexus.feature.attendance.AttendanceKind
+import id.znetworks.nexus.feature.attendance.trail.WorkTrail
 import id.znetworks.nexus.feature.attendance.AttendanceApi
 import id.znetworks.nexus.feature.attendance.AttendanceQueue
 import id.znetworks.nexus.feature.attendance.LocalNotifier
@@ -62,6 +64,9 @@ class AppContainer(private val context: Context) {
     val todayCache = TodayCache(File(context.noBackupFilesDir, "cache/attendance-today.json"))
     val reflectionDrafts = ReflectionDrafts(context)
 
+    /** Live location while checked in (PRD §2.9). */
+    val workTrail = WorkTrail(context, api, appScope, signedIn = { sessionStore.current != null })
+
     /** In noBackupFilesDir, never cacheDir: an OS cache purge must never delete a check-in. */
     val attendanceQueue = AttendanceQueue(
         dir = File(context.noBackupFilesDir, "attendance-queue"),
@@ -69,6 +74,9 @@ class AppContainer(private val context: Context) {
         currentUserId = { sessionStore.current?.userId },
         isLocked = { versionGate.state.value.required != null },
         onRefused = { LocalNotifier.queueRefused(context, it) },
+        // A queued check-in that just landed is when the work-hours trail may start, and nothing
+        // else fetches today at that moment.
+        onCheckInLanded = { reconcileTrail() },
     )
 
     init {
@@ -90,8 +98,20 @@ class AppContainer(private val context: Context) {
                 }
                 todayCache.clear()
                 reflectionDrafts.clearAll()
+                // Location stops with the session; unsent points go with it.
+                workTrail.stopForLogout()
             }
         })
+    }
+
+    /** Re-reads today and lets the trail start or stop accordingly (foreground, queue replay, push). */
+    fun reconcileTrail() {
+        if (sessionStore.current == null) return
+        appScope.launch {
+            val today = runCatching { attendanceApi.today() }.getOrNull() ?: return@launch
+            todayCache.save(sessionStore.current?.userId.orEmpty(), today)
+            workTrail.sync(today, attendanceQueue.state.value.has(AttendanceKind.CHECK_OUT))
+        }
     }
 
     /** Replay now if possible, and leave a network-constrained job behind in case it is not. */

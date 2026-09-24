@@ -6,6 +6,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import id.znetworks.nexus.core.AppContainer
 import id.znetworks.nexus.feature.attendance.LocalNotifier
+import id.znetworks.nexus.feature.attendance.trail.WorkTrailService
 import kotlinx.coroutines.launch
 
 class NexusApplication : Application() {
@@ -16,6 +17,7 @@ class NexusApplication : Application() {
         super.onCreate()
         container = AppContainer(this)
         LocalNotifier.ensureChannels(this)
+        WorkTrailService.ensureChannel(this)
         // Queued taps go out on app start after sign-in, and on every foreground (REQ-ATT-13).
         container.flushQueueSoon()
         // Version policy: forced at launch, then at most every 30 min on foreground (REQ-ATT-41).
@@ -26,6 +28,8 @@ class NexusApplication : Application() {
                     container.versionGate.checkPolicy(force = false)
                     // After the gate: a lifted lock lets the held taps go in the same pass.
                     container.flushQueueSoon()
+                    // A check-out made on the web, or an automatic one, must stop the trail here.
+                    container.reconcileTrail()
                 }
             }
         })

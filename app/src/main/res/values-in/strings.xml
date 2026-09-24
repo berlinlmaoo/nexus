@@ -247,4 +247,26 @@
     <string name="hint_dayoff_left">Day off: sisa %1$d dari %2$d periode ini.</string>
     <string name="hint_red">Memakai jatah tanggal merah bulan ini.</string>
     <string name="hint_red_left">Tanggal merah: sisa %1$d dari %2$d bulan ini.</string>
+
+    <!-- Sesi kerja / lokasi -->
+    <string name="channel_work_session">Sesi kerja</string>
+    <string name="work_session_title">Sesi kerja</string>
+    <string name="work_session_inside">Di kantor · tidak ada yang direkam</string>
+    <string name="work_session_outside">Di luar kantor · lokasi direkam sekitar tiap 15 menit</string>
+    <string name="trail_disclosure_title">Lokasi selama jam kerja</string>
+    <string name="trail_disclosure_body">NEXUS merekam lokasimu hanya antara absen masuk dan absen pulang, termasuk saat aplikasi ditutup atau tidak dipakai. Di dalam kantor tidak ada yang direkam. Di luar kantor, satu titik sekitar tiap 15 menit, supaya ketidakhadiran lama dari kantor terlihat dan bisa ditutup dengan izin. Atasanmu dan BoD bisa melihat jejak hari itu. Notifikasi tetap tampil selama berjalan, dan berhenti saat absen pulang.\n\nKalau kamu menolak, harimu tampil \"lokasi mati\" di papan.</string>
+    <string name="trail_agree">Setuju dan lanjut</string>
+    <string name="not_now">Jangan sekarang</string>
+    <string name="trail_always_title">Tetap jalan setelah HP restart</string>
+    <string name="trail_always_body">Izinkan NEXUS memakai lokasi \"sepanjang waktu\", supaya sesi kerja lanjut sendiri kalau HP restart.</string>
+    <string name="trail_always_body_settings">Di layar berikutnya pilih \"Izinkan sepanjang waktu\" untuk Lokasi, supaya sesi kerja lanjut sendiri kalau HP restart. Tetap hanya dipakai antara absen masuk dan pulang.</string>
+    <string name="trail_always_go">Lanjut</string>
+    <string name="battery_title">Jangan biarkan NEXUS ditidurkan</string>
+    <string name="battery_body">Beberapa HP menghentikan aplikasi di latar belakang demi baterai, dan sesi kerja jadi berhenti merekam. Izinkan NEXUS berjalan di latar belakang.</string>
+    <string name="battery_go">Izinkan</string>
+    <string name="battery_xiaomi">Xiaomi / Redmi / POCO: nyalakan Autostart, atur Penghemat baterai ke \"Tanpa batasan\", dan kunci NEXUS di aplikasi terbaru.</string>
+    <string name="battery_oppo">Oppo / Realme / OnePlus: nyalakan Luncurkan otomatis (\"Izinkan aktivitas latar belakang\") dan atur baterai ke \"Jangan optimalkan\".</string>
+    <string name="battery_vivo">Vivo / iQOO: izinkan konsumsi daya latar belakang tinggi dan nyalakan Autostart.</string>
+    <string name="battery_samsung">Samsung: atur Baterai ke \"Tidak dibatasi\" dan keluarkan NEXUS dari \"Aplikasi tidur\".</string>
+    <string name="battery_huawei">Huawei / Honor: di Peluncuran aplikasi, kelola NEXUS secara manual dan izinkan ketiga tombolnya.</string>
 </resources>

@@ -253,4 +253,26 @@
     <string name="hint_dayoff_left">Day off: %1$d of %2$d left this period.</string>
     <string name="hint_red">Uses this month\'s public-holiday quota.</string>
     <string name="hint_red_left">Public holiday: %1$d of %2$d left this month.</string>
+
+    <!-- Work session / location -->
+    <string name="channel_work_session">Work session</string>
+    <string name="work_session_title">Work session</string>
+    <string name="work_session_inside">In the office · nothing is recorded</string>
+    <string name="work_session_outside">Outside the office · location recorded about every 15 min</string>
+    <string name="trail_disclosure_title">Location during working hours</string>
+    <string name="trail_disclosure_body">NEXUS records your location only between check-in and check-out, even when the app is closed or not in use. Inside the office nothing is recorded. Outside it, one point about every 15 minutes, so a long absence from the office can be seen and covered by a permit. Your manager and the BoD can see the path for that day. A notification stays on while it runs, and it stops at check-out.\n\nIf you say no, your day shows \"location off\" on the board.</string>
+    <string name="trail_agree">Agree and continue</string>
+    <string name="not_now">Not now</string>
+    <string name="trail_always_title">Keep it running after a restart</string>
+    <string name="trail_always_body">Allow NEXUS to use location \"all the time\", so the work session resumes by itself if the phone restarts.</string>
+    <string name="trail_always_body_settings">On the next screen choose \"Allow all the time\" for Location, so the work session resumes by itself if the phone restarts. It is still only used between check-in and check-out.</string>
+    <string name="trail_always_go">Continue</string>
+    <string name="battery_title">Keep NEXUS from being put to sleep</string>
+    <string name="battery_body">Some phones stop apps in the background to save battery, and then the work session stops recording. Allow NEXUS to run in the background.</string>
+    <string name="battery_go">Allow</string>
+    <string name="battery_xiaomi">Xiaomi / Redmi / POCO: turn on Autostart, set Battery saver to \"No restrictions\", and lock NEXUS in recent apps.</string>
+    <string name="battery_oppo">Oppo / Realme / OnePlus: turn on Auto launch (\"Allow background activity\") and set battery to \"Don\'t optimize\".</string>
+    <string name="battery_vivo">Vivo / iQOO: allow high background power consumption and turn on Autostart.</string>
+    <string name="battery_samsung">Samsung: set Battery to \"Unrestricted\" and keep NEXUS out of \"Sleeping apps\".</string>
+    <string name="battery_huawei">Huawei / Honor: in App launch, manage NEXUS manually and allow all three switches.</string>
 </resources>

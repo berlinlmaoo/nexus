@@ -104,6 +104,7 @@ class AttendanceViewModel(app: Application) : AndroidViewModel(app) {
             val today = c.attendanceApi.today()
             c.todayCache.save(userId, today)
             _state.update { it.copy(today = today, loading = false, serverDown = false, error = null, savedCopyAt = null) }
+            c.workTrail.sync(today, queue.state.value.has(AttendanceKind.CHECK_OUT))
             restoreDraft(today)
         } catch (e: ApiError) {
             if (e === ApiError.Unauthorized) return@launch
@@ -277,7 +278,11 @@ class AttendanceViewModel(app: Application) : AndroidViewModel(app) {
             reflection = if (kind == AttendanceKind.CHECK_OUT) reflection.trim() else null,
             offsite = offsite, reason = reason,
         )
-        if (kind == AttendanceKind.CHECK_OUT) clearReflection()
+        if (kind == AttendanceKind.CHECK_OUT) {
+            clearReflection()
+            // A check-out saved offline still ends the day: the trail stops now (keeping its points).
+            c.workTrail.sync(_state.value.today, queuedCheckOut = true)
+        }
     }
 
     private fun locationFailed(kind: AttendanceKind, e: LocationProvider.Failure) {
