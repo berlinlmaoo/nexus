@@ -6,7 +6,7 @@ import { celebrate } from "@/components/Celebration";
 import { ApiError, nexusApi } from "@/lib/nexus-api";
 
 // `?code=` prefills the workspace code, so a company can hand out one link instead of a code
-// people have to retype: /register?code=83CFF2CEDE1E.
+// people have to retype: /register?code=A1B2C3D4E5F6.
 export const Route = createFileRoute("/register")({
   component: RegisterPage,
   validateSearch: (s: Record<string, unknown>): { code?: string } =>
@@ -121,7 +121,7 @@ function RegisterPage() {
             </div>
             <div className="space-y-1.5">
               <label className={labelCls}>Workspace Code</label>
-              <input type="text" disabled={loading} value={workspaceCode} onChange={(e) => setWorkspaceCode(e.target.value.toUpperCase())} placeholder="e.g. 83CFF2CEDE1E" autoCapitalize="characters" autoCorrect="off" spellCheck={false} className={`${input} font-mono tracking-wider`} />
+              <input type="text" disabled={loading} value={workspaceCode} onChange={(e) => setWorkspaceCode(e.target.value.toUpperCase())} placeholder="e.g. A1B2C3D4E5F6" autoCapitalize="characters" autoCorrect="off" spellCheck={false} className={`${input} font-mono tracking-wider`} />
               <p className="ml-1 text-xs text-muted-foreground">From your company, to join its workspace. Leave empty to start your own.</p>
             </div>
 
