@@ -2419,9 +2419,9 @@ export const nexusApi = {
   logout: () => apiFetch<{ ok?: boolean }>("/api/auth/clear-session", { method: "POST" }),
 
   // --- Self-registration (OTP email verification) ---
-  register: (payload: { name: string; email: string; password: string }) =>
+  register: (payload: { name: string; email: string; password: string; workspaceCode?: string }) =>
     apiFetch<{ ok?: boolean; email?: string; expiresInSeconds?: number; resendCooldownSeconds?: number }>("/api/auth/register", { method: "POST", body: JSON.stringify(payload) }),
-  verifyRegister: (payload: { email: string; code: string }) =>
+  verifyRegister: (payload: { email: string; code: string; workspaceCode?: string }) =>
     apiFetch<{ id?: string; email?: string; name?: string }>("/api/auth/register/verify", { method: "POST", body: JSON.stringify(payload) }),
   resendRegisterOtp: (email: string) =>
     apiFetch<{ ok?: boolean }>("/api/auth/register/resend", { method: "POST", body: JSON.stringify({ email }) }),
