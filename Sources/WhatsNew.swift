@@ -66,8 +66,8 @@ enum WhatsNew {
         ),
         WhatsNewEntry(
             icon: "hand.raised.fill",
-            title: T("Filing a permit works from your phone again"),
-            body: T("A permit needs to know where you filed it from, and the app never sent that — so every permit from an iPhone was refused and people quietly moved to the web. It now asks for your location the moment you pick Permit, shows it locked, and won't let you send without it.")
+            title: T("Permits carry their proof"),
+            body: T("Pick Permit and your location is taken and locked on screen, with a photo from the camera or your library. Your approver sees where and when you filed it, without having to ask.")
         ),
         WhatsNewEntry(
             icon: "checklist",

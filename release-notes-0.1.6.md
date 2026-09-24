@@ -4,11 +4,11 @@ Proyek, task, file, absen hari ini, board crew, pengajuan, sampai foto absen —
 Di lokasi tanpa sinyal, semuanya tetap bisa dibuka. Ada keterangan kapan terakhir disimpan, biar kamu tahu itu bukan data barusan.
 File cuma diunduh lewat Wi-Fi. Mau pakai kuota? Nyalakan sendiri di Tuning Room.
 
-AJUIN IZIN DARI HP, AKHIRNYA BENERAN BISA.
+IZIN DARI HP, SEKARANG LENGKAP BUKTINYA.
 
-Izin perlu tahu kamu mengajukannya dari mana, dan aplikasi tidak pernah mengirimkannya.
-Jadi setiap izin dari iPhone ditolak, dan orang pelan-pelan pindah ke web tanpa bilang apa-apa.
-Sekarang lokasimu diambil begitu kamu pilih Izin, terkunci di layar, dan tombol kirim menunggu sampai dapat.
+Begitu kamu pilih Izin, lokasimu langsung diambil dan terkunci di layar.
+Foto buktinya bisa dari kamera atau galeri.
+Approver-mu lihat semuanya di satu tempat, tanpa perlu tanya balik.
 
 FORM PENGAJUAN CUMA MENAWARKAN YANG BISA KAMU PAKAI.
 
