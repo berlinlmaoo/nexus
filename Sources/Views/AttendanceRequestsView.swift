@@ -314,12 +314,16 @@ private enum SubmissionClock {
 
 struct AttendanceRequestsCard: View {
     let canReview: Bool
-    /// Offsite check-outs are governed by `canManageAttendance`, requests by
-    /// `canReviewAttendanceRequests` — two different permissions, and the offsite endpoint 403s on
-    /// the wrong one. Merging the queues must not merge the rights: a team lead who can review
-    /// requests but not manage attendance simply never sees the offsite kind, rather than seeing
-    /// rows whose buttons can only fail.
+    /// Whether the offsite check-out queue is fetched and its rows can be decided:
+    /// `canManageAttendance || canReviewAttendanceRequests`, the server's own test. The list
+    /// scopes itself (BoD: everyone; a manager: their direct reports) and the decision is checked
+    /// against the approval chain per record, so a manager sees exactly what they may act on.
+    /// A 403 (a permission that changed since today was loaded) reads as an empty list.
     let canReviewOffsite: Bool
+    /// Filing FOR somebody else, with the BoD's exemptions — `canManageAttendance` only. Kept apart
+    /// from `canReviewOffsite`: a manager who may decide their reports' check-outs is not exempt
+    /// from filing rules, and offering them the exemptions only led to a refusal at submit.
+    let canGrant: Bool
     @Environment(AuthStore.self) private var auth
     @State private var requests: [AttendanceRequest] = []
     @State private var offsite: [OffsiteCheckout] = []
@@ -484,10 +488,10 @@ struct AttendanceRequestsCard: View {
         // a plain .task fetched scope=me once and never ran again — so a reviewer kept looking at
         // their own history while the crew's pending requests sat on the server unseen.
         .task(id: permissionKey) { await load() }
-        // canReviewOffsite, not canReview: it is canManageAttendance, the same test the server uses for
-        // its BoD exemptions. A manager who may REVIEW requests is not exempt from filing rules, and
+        // canGrant, not canReview: it is canManageAttendance, the same test the server uses for its
+        // BoD exemptions. A manager who may REVIEW requests is not exempt from filing rules, and
         // offering them the exemptions only led to a refusal at submit.
-        .sheet(isPresented: $showComposer) { RequestComposerSheet(canGrant: canReviewOffsite, prefillPermit: composerPermit) { await load() } }
+        .sheet(isPresented: $showComposer) { RequestComposerSheet(canGrant: canGrant, prefillPermit: composerPermit) { await load() } }
         // A push tapped while this card is already on screen: claim it now rather than on the next load.
         .onChange(of: router.focus) { _, focus in
             // A permit request never waits for the list; a record does, to be found in it.
@@ -883,8 +887,9 @@ struct AttendanceRequestsCard: View {
                 cachedFrom = nil
             }
         }
-        // Only if this reviewer can actually act on them — see `canReviewOffsite`. Fetched second and
-        // separately: a 403 or an outage here must leave the requests already on screen alone.
+        // Only for a reviewer — see `canReviewOffsite`; the server narrows the list to what this
+        // reviewer may decide. Fetched second and separately: a 403 or an outage here must leave the
+        // requests already on screen alone.
         if canReviewOffsite {
             do { offsite = try await APIClient.shared.offsiteCheckouts() }
             catch APIError.unauthorized { auth.logout() } catch { offsite = [] }
