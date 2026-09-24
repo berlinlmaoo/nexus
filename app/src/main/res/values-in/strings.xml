@@ -269,4 +269,44 @@
     <string name="battery_vivo">Vivo / iQOO: izinkan konsumsi daya latar belakang tinggi dan nyalakan Autostart.</string>
     <string name="battery_samsung">Samsung: atur Baterai ke \"Tidak dibatasi\" dan keluarkan NEXUS dari \"Aplikasi tidur\".</string>
     <string name="battery_huawei">Huawei / Honor: di Peluncuran aplikasi, kelola NEXUS secara manual dan izinkan ketiga tombolnya.</string>
+
+    <!-- Papan -->
+    <string name="board_title">Papan streak kru</string>
+    <string name="board_title_me">Riwayat absenmu</string>
+    <string name="board_full">Layar penuh</string>
+    <string name="board_export">Ekspor periode ini (xlsx)</string>
+    <string name="board_load_failed">Papan tidak bisa dimuat</string>
+    <string name="board_empty">Belum ada catatan di periode ini</string>
+    <string name="board_empty_sub">Hari-hari muncul di sini saat absen, pengajuan, dan ketidakhadiran tercatat.</string>
+    <string name="previous_period">Periode sebelumnya</string>
+    <string name="previous">Sebelumnya</string>
+    <string name="next">Berikutnya</string>
+    <string name="tone_present">Hadir</string>
+    <string name="tone_present_permit">Hadir / Izin</string>
+    <string name="tone_wfh">WFH</string>
+    <string name="tone_dayoff">Day off</string>
+    <string name="tone_absent">Tidak hadir</string>
+    <string name="tone_none">Tidak ada catatan</string>
+    <string name="detail_times">Jam</string>
+    <string name="detail_late">telat %1$d menit</string>
+    <string name="detail_worked">Jam kerja</string>
+    <string name="detail_in_place">Tempat absen masuk</string>
+    <string name="detail_out_place">Tempat absen pulang</string>
+    <string name="detail_corrected">Dikoreksi</string>
+    <string name="detail_approver">Diputuskan oleh</string>
+    <string name="board_clear_checkout">Hapus absen pulang (buka lagi)</string>
+    <string name="board_delete_record">Hapus catatan absen ini</string>
+    <string name="board_clear_checkout_body">Absen pulang dihapus dan hari itu terbuka lagi. Tercatat di log audit.</string>
+    <string name="board_delete_record_body">Seluruh catatan dihapus, sehingga hari itu terlindung dari potongan. Tercatat di log audit.</string>
+    <string name="board_checkout_cleared">Absen pulang dihapus; hari itu terbuka lagi.</string>
+    <string name="board_record_deleted">Catatan absen dihapus.</string>
+    <string name="confirm">Konfirmasi</string>
+    <string name="trail_open">Jejak lokasi</string>
+    <string name="trail_title">Jejak lokasi</string>
+    <string name="trail_load_failed">Jejak lokasi tidak bisa dimuat</string>
+    <string name="trail_empty">Tidak ada titik di luar kantor</string>
+    <string name="trail_empty_sub">Di dalam kantor tidak ada yang direkam, jadi hari yang dihabiskan di sana jejaknya kosong. Lokasi hanya direkam oleh aplikasi NEXUS di HP.</string>
+    <string name="trail_location_off">Lokasi mati untuk hari ini: orangnya menolak lokasi selama jam kerja.</string>
+    <string name="trail_span">Di luar %1$s – %2$s · %3$s</string>
+    <string name="trail_still_out">masih di luar</string>
 </resources>

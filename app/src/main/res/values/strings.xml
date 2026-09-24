@@ -275,4 +275,44 @@
     <string name="battery_vivo">Vivo / iQOO: allow high background power consumption and turn on Autostart.</string>
     <string name="battery_samsung">Samsung: set Battery to \"Unrestricted\" and keep NEXUS out of \"Sleeping apps\".</string>
     <string name="battery_huawei">Huawei / Honor: in App launch, manage NEXUS manually and allow all three switches.</string>
+
+    <!-- Board -->
+    <string name="board_title">Crew streak board</string>
+    <string name="board_title_me">Your attendance history</string>
+    <string name="board_full">Full screen</string>
+    <string name="board_export">Export this period (xlsx)</string>
+    <string name="board_load_failed">Couldn\'t load the board</string>
+    <string name="board_empty">Nothing recorded this period yet</string>
+    <string name="board_empty_sub">Days appear here as check-ins, requests and absences are recorded.</string>
+    <string name="previous_period">Previous period</string>
+    <string name="previous">Previous</string>
+    <string name="next">Next</string>
+    <string name="tone_present">Present</string>
+    <string name="tone_present_permit">Present / Permit</string>
+    <string name="tone_wfh">WFH</string>
+    <string name="tone_dayoff">Day off</string>
+    <string name="tone_absent">Absent</string>
+    <string name="tone_none">No record</string>
+    <string name="detail_times">Times</string>
+    <string name="detail_late">%1$d min late</string>
+    <string name="detail_worked">Worked</string>
+    <string name="detail_in_place">Check-in place</string>
+    <string name="detail_out_place">Check-out place</string>
+    <string name="detail_corrected">Corrected</string>
+    <string name="detail_approver">Decided by</string>
+    <string name="board_clear_checkout">Delete check-out (reopen)</string>
+    <string name="board_delete_record">Delete this attendance record</string>
+    <string name="board_clear_checkout_body">The check-out is removed and the day is open again. This is written to the audit log.</string>
+    <string name="board_delete_record_body">The whole record is deleted, which shields that day from deductions. This is written to the audit log.</string>
+    <string name="board_checkout_cleared">Check-out deleted; the day is open again.</string>
+    <string name="board_record_deleted">Attendance record deleted.</string>
+    <string name="confirm">Confirm</string>
+    <string name="trail_open">Location trail</string>
+    <string name="trail_title">Location trail</string>
+    <string name="trail_load_failed">Couldn\'t load the location trail</string>
+    <string name="trail_empty">No points outside the office</string>
+    <string name="trail_empty_sub">Nothing is recorded inside the office, so a day spent there has an empty trail. Location is only recorded by the NEXUS app on a phone.</string>
+    <string name="trail_location_off">Location was off for this day: the person declined location during working hours.</string>
+    <string name="trail_span">Outside %1$s – %2$s · %3$s</string>
+    <string name="trail_still_out">still out</string>
 </resources>

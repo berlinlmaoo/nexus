@@ -103,6 +103,8 @@ dependencies {
     // and on the first launch (REQ-ATT-05).
     implementation(libs.mlkit.face)
     implementation(libs.androidx.exifinterface)
+    // OpenStreetMap, same tiles as the web (owner: no Google Maps API).
+    implementation(libs.osmdroid)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

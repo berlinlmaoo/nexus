@@ -17,6 +17,7 @@ playLocation = "21.4.0"
 camerax = "1.6.2"
 mlkitFace = "16.1.7"
 exif = "1.4.2"
+osmdroid = "6.1.20"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -47,6 +48,7 @@ camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "cam
 camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
 camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
 mlkit-face = { module = "com.google.mlkit:face-detection", version.ref = "mlkitFace" }
+osmdroid = { module = "org.osmdroid:osmdroid-android", version.ref = "osmdroid" }
 androidx-exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "exif" }
 
 [plugins]

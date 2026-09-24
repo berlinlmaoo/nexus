@@ -68,6 +68,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import id.znetworks.nexus.R
 import id.znetworks.nexus.core.time.OfficeTime
+import id.znetworks.nexus.feature.attendance.history.BoardViewModel
+import id.znetworks.nexus.feature.attendance.history.CrewBoardCard
 import id.znetworks.nexus.feature.attendance.liveness.LivenessCaptureScreen
 import id.znetworks.nexus.feature.attendance.requests.RequestsViewModel
 import id.znetworks.nexus.feature.attendance.requests.SubmissionsCard
@@ -87,10 +89,17 @@ private val AMBER_FILL = Color(0xFFD97706)
 
 /** Port of iOS `AttendanceView` (PRD REQ-ATT-44), minus the map, crew board and requests (next). */
 @Composable
-fun AttendanceScreen(vm: AttendanceViewModel = viewModel(), requests: RequestsViewModel = viewModel()) {
+fun AttendanceScreen(
+    vm: AttendanceViewModel = viewModel(),
+    requests: RequestsViewModel = viewModel(),
+    board: BoardViewModel = viewModel(),
+) {
     val s by vm.state.collectAsStateWithLifecycle()
-    // Requests need the viewer's permissions and quotas, which arrive with `today`.
-    LaunchedEffect(s.today) { requests.onToday(s.today) }
+    // Requests and the board need the viewer's permissions and quotas, which arrive with `today`.
+    LaunchedEffect(s.today) {
+        requests.onToday(s.today)
+        board.onToday(s.today)
+    }
     val q by vm.queueState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
@@ -122,7 +131,7 @@ fun AttendanceScreen(vm: AttendanceViewModel = viewModel(), requests: RequestsVi
     val reflectionOk = vm.reflectionOk(s)
     val c = Nx.colors
 
-    PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load(); requests.load() }, modifier = Modifier.fillMaxSize().background(c.background)) {
+    PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load(); requests.load(); board.load() }, modifier = Modifier.fillMaxSize().background(c.background)) {
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -173,6 +182,7 @@ fun AttendanceScreen(vm: AttendanceViewModel = viewModel(), requests: RequestsVi
             Metrics(s, forcePending)
             // Filing changes today's quota and cover: re-read it after a request goes in.
             SubmissionsCard(requests, onFiled = { vm.load() })
+            CrewBoardCard(board)
         }
     }
 
