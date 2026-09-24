@@ -390,6 +390,94 @@ struct APIClient {
         return try await run(req, decode: LoginResponse.self)
     }
 
+    // MARK: - Self-serve sign-up (email code)
+    //
+    // Three unauthenticated calls, in the order the web's /register makes them. None of them signs
+    // anybody in: /verify creates the account and answers with the bare user, and the caller then
+    // goes through `login(email:password:)` like everyone else, so a session is only ever stored by
+    // AuthStore's one path.
+
+    /// Sends the 6-digit code. The workspace code is checked here as well as at /verify so a typo
+    /// is caught before the person goes to their inbox and spends the code.
+    func registerStart(name: String, email: String, password: String, workspaceCode: String?) async throws -> SignupCodeResponse {
+        var body: [String: Any] = ["name": name, "email": email, "password": password]
+        if let workspaceCode, !workspaceCode.isEmpty { body["workspaceCode"] = workspaceCode }
+        return try await runSignup("/api/auth/register", body: body, decode: SignupCodeResponse.self)
+    }
+
+    /// Creates the account: joins the workspace as staff when the code is valid, otherwise gives
+    /// the person a workspace of their own. The code must be sent AGAIN here — /register only
+    /// validated it, it is /verify that acts on it.
+    @discardableResult
+    func registerVerify(email: String, code: String, workspaceCode: String?) async throws -> Bool {
+        var body: [String: Any] = ["email": email, "code": code]
+        if let workspaceCode, !workspaceCode.isEmpty { body["workspaceCode"] = workspaceCode }
+        // The 201 body is the new user without its password; nothing in it is needed here, and
+        // SuccessResponse decodes any object.
+        _ = try await runSignup("/api/auth/register/verify", body: body, decode: SuccessResponse.self)
+        return true
+    }
+
+    func registerResend(email: String) async throws -> SignupCodeResponse {
+        try await runSignup("/api/auth/register/resend", body: ["email": email], decode: SignupCodeResponse.self)
+    }
+
+    /// `run` for the sign-up calls, differing in the two places sign-up needs something `run`
+    /// throws away. A 429 carries how long to wait (`retryAfterSeconds` in the body for the
+    /// resend cooldown, `Retry-After` for the rate limiter), and the button has to count that down
+    /// rather than invite a tap the server will refuse again. And a schema refusal says only
+    /// "Validation failed" with the real sentence in `details`, which is the one worth showing.
+    private func runSignup<T: Decodable>(_ path: String, body: [String: Any], decode: T.Type) async throws -> T {
+        var req = makeRequest(path, method: "POST", authed: false)
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await perform(req)
+        } catch {
+            throw APIError.transport(error.localizedDescription)
+        }
+        guard let http = response as? HTTPURLResponse else { throw APIError.transport("No response") }
+        guard (200..<300).contains(http.statusCode) else {
+            let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            if http.statusCode == 429 {
+                let seconds = (obj?["retryAfterSeconds"] as? NSNumber)?.intValue
+                    ?? http.value(forHTTPHeaderField: "Retry-After").flatMap { Int($0) }
+                throw SignupRetryLater(message: Self.serverMessage(data)
+                                           ?? T("Too many attempts. Wait a moment and try again."),
+                                       seconds: seconds)
+            }
+            var message = Self.serverMessage(data)
+            if message == "Validation failed", let details = obj?["details"] as? [String: Any] {
+                // Field order fixed so the sentence shown is the first field on screen, not
+                // whichever key a dictionary happened to yield first.
+                for field in ["name", "email", "password", "code"] {
+                    if let first = (details[field] as? [String])?.first { message = first; break }
+                }
+            }
+            throw APIError.http(http.statusCode, message)
+        }
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            throw APIError.decoding
+        }
+    }
+
+    /// Deletes the SIGNED-IN person's own account (App Store 5.1.1(v)). The literal "DELETE" is
+    /// the server's own guard against a stray POST, not something the person's typing is relayed
+    /// into — the screen checks that they typed it before this is ever called.
+    @discardableResult
+    func deleteOwnAccount() async throws -> Bool {
+        var req = makeRequest("/api/user/account/delete", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["confirm": "DELETE"])
+        // `{ok:true}`; SuccessResponse decodes it, and a refusal (409: the only owner of a
+        // workspace other people are still in) arrives as APIError.http with the server's sentence.
+        _ = try await run(req, decode: SuccessResponse.self)
+        return true
+    }
+
     // MARK: - Passkeys (WebAuthn)
     //
     // Transport only — the ceremony itself lives in Passkeys.swift. `credential` is passed as a
@@ -2390,4 +2478,22 @@ enum AttachmentCache {
         else { return 0 }
         return files.reduce(0) { $0 + (((try? $1.resourceValues(forKeys: [.fileSizeKey]))?.fileSize) ?? 0) }
     }
+}
+
+/// What /api/auth/register and /register/resend answer with once a code is on its way. Optional
+/// throughout: the screen falls back to the server's current values (10 minutes, 60 seconds)
+/// rather than failing a sign-up whose email has already been sent.
+struct SignupCodeResponse: Decodable, Sendable {
+    /// The address as the server stored it (trimmed, lowercased). Every later call uses this one,
+    /// not what was typed, so /verify and the sign-in after it look up the same row.
+    let email: String?
+    let expiresInSeconds: Int?
+    let resendCooldownSeconds: Int?
+}
+
+/// A 429 from the sign-up calls, with the wait the server asked for when it named one.
+struct SignupRetryLater: LocalizedError, Sendable {
+    let message: String
+    let seconds: Int?
+    var errorDescription: String? { message }
 }

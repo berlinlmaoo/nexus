@@ -23,6 +23,9 @@ struct SettingsView: View {
     /// Whatever is switched off for NEXUS, listed at the top with the way to Settings. Empty — the
     /// normal case — draws nothing.
     @State private var deniedKinds: [PermissionKind] = []
+    /// The only sheet this view presents. Another `.sheet` added to this view later must share it
+    /// through an enum — two on one view and one of them never opens.
+    @State private var showDeleteAccount = false
     @Environment(\.scenePhase) private var scenePhase
 
     private static let roleLabel: [String: String] = ["ONE_ABOVE_ALL": "One Above All", "BOD": "BoD", "MANAGER": "Manager", "STAFF": "Staff"]
@@ -139,6 +142,24 @@ struct SettingsView: View {
                     .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
 
+                    // Last and set apart from Logout, so the permanent action is never the one a
+                    // thumb lands on by habit. The sheet explains what is kept and what goes.
+                    Button { showDeleteAccount = true } label: {
+                        HStack {
+                            Label(T("Delete account"), systemImage: "trash")
+                                .font(NXFont.text(15, .semibold)).foregroundStyle(NX.danger)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                        }
+                        .padding(14)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.danger.opacity(0.3)))
+                    .padding(.top, 10)
+
                     Text("NEXUS by Z Networks").font(NXFont.text(11)).foregroundStyle(NX.mutedFg.opacity(0.7))
                 }
                 .padding(16)
@@ -148,6 +169,7 @@ struct SettingsView: View {
         .alert(T("Couldn't save"), isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
             Button("OK") { saveError = nil }
         } message: { Text(saveError ?? "") }
+        .sheet(isPresented: $showDeleteAccount) { DeleteAccountSheet() }
         .navigationTitle(T("Tuning Room"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }

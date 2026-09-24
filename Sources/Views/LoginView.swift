@@ -4,7 +4,13 @@ import SwiftUI
 /// frosted white card, X logo, "NEXUS PHAËTHON" tracked title, uppercase labels, ONYX CTA, coral pill.
 struct LoginView: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(AppRouter.self) private var router
     @State private var email = ""
+    /// nil draws the sign-in card; a value swaps in the sign-up flow, prefilled with that
+    /// workspace code ("" when it was opened by hand). Swapped in place rather than presented, so
+    /// the glow behind both stays put and nothing is left presented when a finished sign-up
+    /// replaces this whole screen with the app.
+    @State private var signUpCode: String?
     @State private var password = ""
     @FocusState private var focus: Field?
 
@@ -24,11 +30,36 @@ struct LoginView: View {
             // A sign-in form has one column of content, so its width is set by reading comfort,
             // not by the screen. Left uncapped it stretched the full 13 inches in landscape and
             // the fields became a metre wide.
-            card
-                .frame(maxWidth: 460)
-                .padding(.horizontal, 22)
+            if let code = signUpCode {
+                SignUpView(initialCode: code) { typedEmail in
+                    // Back to sign-in, carrying the address over so a finished sign-up whose
+                    // automatic sign-in failed only needs the password typed again.
+                    if let typedEmail, !typedEmail.isEmpty { email = typedEmail }
+                    withAnimation(.easeInOut(duration: 0.25)) { signUpCode = nil }
+                }
+                // A second link tapped mid-flow starts over with its code, instead of the fields
+                // silently keeping the first one (@State only reads initialCode once).
+                .id(code)
+                .transition(.opacity)
+            } else {
+                card
+                    .frame(maxWidth: 460)
+                    .padding(.horizontal, 22)
+                    .transition(.opacity)
+            }
         }
         .preferredColorScheme(.light)   // login is light-only on web
+        // A `/register?code=…` link: on a cold start it is already waiting when this appears; on
+        // a warm one it lands while this is on screen.
+        .onAppear(perform: takeSignupRequest)
+        .onChange(of: router.signupRequest) { _, _ in takeSignupRequest() }
+    }
+
+    private func takeSignupRequest() {
+        guard let request = router.signupRequest else { return }
+        router.signupRequest = nil
+        auth.loginError = nil
+        withAnimation(.easeInOut(duration: 0.25)) { signUpCode = request.code }
     }
 
     private var card: some View {
@@ -130,14 +161,33 @@ struct LoginView: View {
                 .opacity(auth.isBusy ? 0.7 : 1)
                 .padding(.top, 14)
 
-                // There is no self-serve reset or signup on mobile — access is granted by a workspace
-                // admin (Tuning Room → Members). The old "FORGOT?" / "Request access" looked like
-                // links but did nothing, so say what to actually do instead.
-                Text(T("Forgot your password or don't have access yet?\nContact your workspace admin."))
-                    .font(NXFont.text(13))
+                // Sign-up is native now (App Store 5.1.1(v) wants account creation and deletion
+                // both in the app). A code from a company joins its workspace; no code gives the
+                // person one of their own — so this is safe to offer to anyone.
+                Button {
+                    focus = nil
+                    auth.loginError = nil
+                    withAnimation(.easeInOut(duration: 0.25)) { signUpCode = "" }
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(T("New to NEXUS?")).foregroundStyle(NX.mutedFg)
+                        Text(T("Create account")).font(NXFont.text(14, .bold)).foregroundStyle(NX.onyx)
+                        Image(systemName: "arrow.right").font(.system(size: 11, weight: .bold)).foregroundStyle(NX.onyx)
+                    }
+                    .font(NXFont.text(14))
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(auth.isBusy)
+                .padding(.top, 22)
+
+                // Reset is still not self-serve on mobile, so say what to actually do.
+                Text(T("Forgot your password? Contact your workspace admin."))
+                    .font(NXFont.text(12))
                     .foregroundStyle(NX.mutedFg)
                     .multilineTextAlignment(.center)
-                    .padding(.top, 28)
+                    .padding(.top, 8)
             }
             .padding(.horizontal, 30)
             .padding(.vertical, 40)

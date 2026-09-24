@@ -29,6 +29,16 @@ struct NXVaultRequest: Identifiable, Hashable {
     let id: String
 }
 
+/// A sign-up link somebody's company handed out: `/register?code=83CFF2CEDE1E`.
+///
+/// The id is fresh per tap rather than the code, so tapping the same link twice still reaches the
+/// login screen's `onChange` — an Equatable request that compares equal to the last one would not.
+struct NXSignupRequest: Identifiable, Hashable {
+    let id = UUID()
+    /// Already uppercased; may be empty, which still means "open sign-up".
+    let code: String
+}
+
 /// A record to draw as a sheet above whichever shape is mounted — see `AppRouter.detail`.
 struct NXDetailRequest: Identifiable, Hashable {
     let target: NotificationTarget
@@ -102,6 +112,15 @@ final class AppRouter {
     /// respect, including the one that matters most: it is NOT cleared when the app is signed out,
     /// so a link tapped by somebody who has to log in first still opens once they are in.
     var vaultRequest: NXVaultRequest?
+
+    /// Sign-up opened from a link, consumed (and cleared) by LoginView.
+    ///
+    /// The opposite rule to `formRequest`: only ever set while signed OUT. A form link survives the
+    /// login it causes because the form is still wanted afterwards; a sign-up link tapped by
+    /// somebody already in the app is simply not for them, and held here it would spring the
+    /// sign-up screen on whoever next reaches the login screen — including the person who just
+    /// deleted their account.
+    var signupRequest: NXSignupRequest?
 
     /// A record a notification pointed at, waiting for the screen that owns it to mount and claim it.
     ///
@@ -196,6 +215,8 @@ final class AppRouter {
     /// NXScreen's raw values, so a screen added there is reachable by URL without touching this.
     private func openScheme(_ url: URL) {
         let name = url.host ?? url.pathComponents.first { $0 != "/" } ?? ""
+        // Not a screen: there is nothing behind the login screen to navigate to while signed out.
+        if name.lowercased() == "register" { requestSignup(from: url); return }
         guard let screen = NXScreen(rawValue: name) else { return }
         go(screen)
     }
@@ -221,6 +242,9 @@ final class AppRouter {
     private func openWeb(_ url: URL) {
         guard Config.isNexusHost(url) else { return }
         let parts = url.pathComponents.filter { $0 != "/" }
+        // `/register?code=…`, the web's sign-up page. Only reachable here once the AASA claims
+        // `/register`; until then Safari opens it on the web, which does the same job.
+        if parts == ["register"] { requestSignup(from: url); return }
         // Exactly two: `/f/<id>` is a single segment on the web too (the SPA route is `/f/$formId`).
         // A deeper path under /f/ is not a form and must not be answered with somebody else's.
         guard parts.count == 2, !parts[1].isEmpty else { return }
@@ -229,5 +253,14 @@ final class AppRouter {
         case "v": vaultRequest = NXVaultRequest(id: parts[1])
         default:  return
         }
+    }
+
+    /// Both spellings of the sign-up link end here. The Keychain rather than AuthStore, because the
+    /// router has no AuthStore to ask — and the Keychain is what AuthStore itself restores from.
+    private func requestSignup(from url: URL) {
+        guard Keychain.load() == nil else { return }
+        let raw = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?.first { $0.name == "code" }?.value ?? ""
+        signupRequest = NXSignupRequest(code: raw.trimmingCharacters(in: .whitespacesAndNewlines).uppercased())
     }
 }
