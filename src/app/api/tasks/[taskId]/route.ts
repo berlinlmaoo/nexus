@@ -184,6 +184,8 @@ export async function PATCH(
     if (title !== undefined) updateData.title = title
     if (description !== undefined) updateData.description = description
     if (status !== undefined) updateData.status = status
+    // Who completed it. completedAt itself is stamped by the DB trigger (Task_completion_stamp).
+    if (status === "DONE" && existing.status !== "DONE") updateData.completedById = session.user.id
     if (priority !== undefined) updateData.priority = priority
     if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null
     if (tags !== undefined) updateData.tags = tags

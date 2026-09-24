@@ -176,7 +176,7 @@ export async function handleWaInbound(input: { chatId: string; senderId: string;
     if (matches.length === 0) { await sendWaChat(input.chatId, `Gak nemu task aktif kamu yang cocok "${arg}".`); return }
     if (matches.length > 1) { await sendWaChat(input.chatId, `Ada ${matches.length} task cocok — sebut lebih spesifik:\n${matches.slice(0, 6).map((t) => `• ${t.title}`).join("\n")}`); return }
     const t = matches[0]
-    await prisma.task.update({ where: { id: t.id }, data: { status: TaskStatus.DONE } })
+    await prisma.task.update({ where: { id: t.id }, data: { status: TaskStatus.DONE, completedById: user.id } })
     await sendWaChat(input.chatId, `✅ *${t.title}* ditandai DONE.`)
     return
   }

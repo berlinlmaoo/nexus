@@ -591,6 +591,8 @@ export async function GET(request: NextRequest) {
       }),
     ])
 
+    // The day rules below (record → request replaces it → absent on past workdays) are mirrored in
+    // src/lib/attendance-days.ts for Reports per crew. Change one, change the other.
     const fallbackOffice = activeOffices[0] ?? null
     const rowMap = new Map<string, HistoryRow>()
 

@@ -201,6 +201,8 @@ const handler = createMcpHandler(
           data: {
             ...(args.taskListId ? { taskListId: args.taskListId } : {}),
             ...(args.status ? { status: args.status as never } : {}),
+            // completedAt is stamped by the DB trigger; on DONE→DONE it keeps the first completer.
+            ...(args.status === "DONE" ? { completedById: userId } : {}),
             ...(args.priority ? { priority: args.priority as never } : {}),
             ...(args.title ? { title: args.title.trim() } : {}),
             ...(args.description !== undefined ? { description: args.description } : {}),

@@ -239,6 +239,35 @@ export async function getPeriodScore(userId: string, periodStart: Date = getLead
   return PERIOD_BASELINE_XP + (agg._sum.amount ?? 0)
 }
 
+/**
+ * Set form of getPeriodScore, for a bounded window: userId → the XP moved inside [start, end).
+ * Score = PERIOD_BASELINE_XP + that delta — the same formula, over whatever window the caller names
+ * (Reports per crew uses the 28→27 attendance period; the leaderboard keeps its own). Users without
+ * a transaction are absent from the map (delta 0). One groupBy, whatever the number of users.
+ */
+export async function getPeriodScores(userIds: string[], start: Date, end: Date): Promise<Map<string, number>> {
+  if (userIds.length === 0) return new Map()
+  const rows = await prisma.xpTransaction.groupBy({
+    by: ["userId"],
+    where: { userId: { in: userIds }, createdAt: { gte: start, lt: end } },
+    _sum: { amount: true },
+  })
+  return new Map(rows.map((r) => [r.userId, r._sum.amount ?? 0]))
+}
+
+export type XpPenaltyKind = "late" | "nocheckout" | "alpha" | "peer" | "penalty" | "admin" | "other"
+
+/** What a negative XP ledger row was for, by its reason key (see awardXpOnce / setLatePenalty callers). */
+export function xpPenaltyKind(reason: string): XpPenaltyKind {
+  if (reason.startsWith("attendance:late:")) return "late"
+  if (reason.startsWith("attendance:nocheckout:")) return "nocheckout"
+  if (reason.startsWith("attendance:alpha:")) return "alpha"
+  if (reason.startsWith("peer:report:")) return "peer"
+  if (reason === "penalty") return "penalty"
+  if (reason.startsWith("admin:")) return "admin"
+  return "other"
+}
+
 /** Increment the daily streak; awards a small bonus once per UTC day. */
 export async function bumpStreak(userId: string) {
   if (!userId) return

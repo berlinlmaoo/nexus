@@ -1,5 +1,14 @@
 import prisma from "@/lib/prisma"
 import { createInAppNotification } from "@/lib/notification-service"
+import { APP_STORE_URL, fetchLatestIosVersion } from "@/lib/app-store"
+import { compareVersions } from "@/lib/client-version"
+
+// The store lookup moved to app-store.ts (which also records every version Apple serves in
+// AppReleaseSeen — this reminder's daily lookup counts as a sighting) and the comparison to
+// client-version.ts, so the middleware's version gate can use them without pulling in the
+// notification service. Re-exported so every existing `from "@/lib/app-update"` import still works.
+export { APP_STORE_ID, APP_STORE_URL, fetchLatestIosVersion } from "@/lib/app-store"
+export { compareVersions } from "@/lib/client-version"
 
 /**
  * "Your NEXUS is out of date" — decided from what the phones themselves report.
@@ -10,54 +19,8 @@ import { createInAppNotification } from "@/lib/notification-service"
  * live on the store, the next morning's run finds it. A phone that registered before versions
  * were reported (blank) is by definition on an old build and is treated as behind.
  */
-export const APP_STORE_ID = "6807031457"
-export const APP_STORE_URL = `https://apps.apple.com/id/app/id${APP_STORE_ID}`
-/**
- * The store lookup, with a cache-buster.
- *
- * Apple serves this endpoint through a CDN that holds the previous answer for hours after a
- * release. Measured on 24 Sep 2026: the plain URL returned 0.1.4 (released the 16th) from this
- * server while the same URL with a changing parameter returned 0.1.5 (released the 23rd). Without
- * it every "update NEXUS" reminder is a day late, silently — the run reports success and simply
- * compares everyone against the old version. The in-process cache below is what keeps the rate
- * down; the parameter only stops someone else's cache answering for Apple.
- */
-function lookupUrl(): string {
-  return `https://itunes.apple.com/lookup?id=${APP_STORE_ID}&country=id&_=${Date.now()}`
-}
 const REMIND_EVERY_MS = 7 * 24 * 60 * 60 * 1000
 const ACTIVE_WITHIN_MS = 60 * 24 * 60 * 60 * 1000
-
-let cache: { version: string; at: number } | null = null
-
-/** Current App Store version, cached for an hour. Falls back to NEXUS_IOS_LATEST_VERSION, then null. */
-export async function fetchLatestIosVersion(): Promise<string | null> {
-  if (cache && Date.now() - cache.at < 60 * 60 * 1000) return cache.version
-  try {
-    const res = await fetch(lookupUrl(), {
-      signal: AbortSignal.timeout(10_000),
-      cache: "no-store",
-      headers: { "Cache-Control": "no-cache" },
-    })
-    if (res.ok) {
-      const json = (await res.json()) as { results?: Array<{ version?: string }> }
-      const v = json.results?.[0]?.version?.trim()
-      if (v && /^\d+(\.\d+)*$/.test(v)) { cache = { version: v, at: Date.now() }; return v }
-    }
-  } catch (e) { console.error("app store lookup failed:", e) }
-  const env = process.env.NEXUS_IOS_LATEST_VERSION?.trim()
-  return env && /^\d+(\.\d+)*$/.test(env) ? env : cache?.version ?? null
-}
-
-/** -1 when a < b, 0 equal, 1 when a > b; "0.1.4" vs "0.1.10" compares numerically per part. */
-export function compareVersions(a: string, b: string): number {
-  const pa = a.split(".").map((n) => parseInt(n, 10) || 0), pb = b.split(".").map((n) => parseInt(n, 10) || 0)
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const d = (pa[i] ?? 0) - (pb[i] ?? 0)
-    if (d !== 0) return d < 0 ? -1 : 1
-  }
-  return 0
-}
 
 /**
  * `userIds` reminds those people whatever version they are on, and ignores the weekly dedupe — for

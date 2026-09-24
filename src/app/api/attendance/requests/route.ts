@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server"
 import type { Prisma } from "@/generated/prisma/client"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { compareVersions, parseClientTag } from "@/lib/client-version"
 import { logAudit } from "@/lib/audit"
 import { notifyApproversOfRequest } from "@/lib/wa-bot"
 import { notifyAttendanceRequestPending , createInAppNotification } from "@/lib/notification-service"
@@ -64,17 +65,15 @@ const MAX_SUPPORTING_DOCUMENT_SIZE = 10 * 1024 * 1024
 const POLICY_0_1_6: readonly [number, number, number] = [0, 1, 6]
 
 function clientCanObeyRequestPolicy(request: NextRequest): boolean {
-  const tag = request.headers.get("x-nexus-client")?.trim()
-  if (!tag) return false
+  // Header only. The `NEXUS/<build>` User-Agent of older phones is deliberately NOT consulted here:
+  // those builds are the ones that cannot obey, and the minimum-version gate is its only user.
+  const client = parseClientTag(request.headers.get("x-nexus-client"))
+  // No header, or one we cannot read (including an iOS tag without a full x.y.z): assume the old app.
+  if (!client) return false
   // The web sends a single date and a position wherever these rules apply, and always has.
-  if (/^web\//i.test(tag)) return true
-  const m = /^ios\/(\d+)\.(\d+)\.(\d+)/i.exec(tag)
-  if (!m) return false // an app that names itself but not a version we can read: assume the old one
-  const version: [number, number, number] = [Number(m[1]), Number(m[2]), Number(m[3])]
-  for (let i = 0; i < 3; i++) {
-    if (version[i] !== POLICY_0_1_6[i]) return version[i] > POLICY_0_1_6[i]
-  }
-  return true
+  if (client.platform === "web") return true
+  if (client.platform !== "ios") return false
+  return compareVersions(client.version, POLICY_0_1_6) >= 0
 }
 
 /**
