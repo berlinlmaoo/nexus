@@ -2417,6 +2417,8 @@ export const nexusApi = {
   login: loginWithCredentials,
   // Clears all auth cookies server-side (NextAuth session/csrf/callback).
   logout: () => apiFetch<{ ok?: boolean }>("/api/auth/clear-session", { method: "POST" }),
+  // Self-service account deletion (deactivate + anonymise). Call logout() after it succeeds.
+  deleteMyAccount: () => apiFetch<{ ok: true }>("/api/user/account/delete", { method: "POST", body: JSON.stringify({ confirm: "DELETE" }) }),
 
   // --- Self-registration (OTP email verification) ---
   register: (payload: { name: string; email: string; password: string; workspaceCode?: string }) =>

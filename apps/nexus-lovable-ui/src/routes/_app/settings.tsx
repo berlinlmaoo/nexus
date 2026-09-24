@@ -369,6 +369,66 @@ function ProfileSection() {
         {save.isSuccess && <p className="text-right text-xs font-semibold text-success">Profile saved.</p>}
       </div>
       <PasswordSection />
+      <DeleteAccountSection />
+    </div>
+  );
+}
+
+function DeleteAccountSection() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-xl border border-destructive/40 bg-card p-6 shadow-soft space-y-3">
+      <div>
+        <h2 className="font-semibold text-destructive">Delete account</h2>
+        <p className="mt-1 text-xs text-muted-foreground">Permanently delete your NEXUS account. You won't be able to sign in again, and this cannot be undone.</p>
+      </div>
+      <div className="flex justify-end">
+        <button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-md bg-destructive px-4 py-1.5 text-sm font-semibold text-destructive-foreground shadow-soft transition-all duration-150 hover:bg-destructive/90 active:scale-[0.98]"><Trash2 className="h-4 w-4" /> Delete account</button>
+      </div>
+      {open && <DeleteAccountDialog onClose={() => setOpen(false)} />}
+    </div>
+  );
+}
+
+function DeleteAccountDialog({ onClose }: { onClose: () => void }) {
+  const [typed, setTyped] = useState("");
+  const del = useMutation({
+    mutationFn: () => nexusApi.deleteMyAccount(),
+    onSuccess: async () => {
+      // The account is gone server-side; clear the session cookie the same way the sidebar's
+      // Log out does, then a full reload to /login drops every cached query.
+      try { await nexusApi.logout(); } catch { /* best effort — the session is already dead on the server */ }
+      window.location.href = "/login";
+    },
+  });
+  const confirmed = typed.trim() === "DELETE";
+  const busy = del.isPending || del.isSuccess;
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm" onClick={busy ? undefined : onClose}>
+      <div role="dialog" aria-modal="true" aria-labelledby="delete-account-title" className="w-full max-w-md rounded-2xl border border-border bg-card shadow-pop" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-destructive" /><h3 id="delete-account-title" className="font-bold">Delete your account?</h3></div>
+          <button onClick={onClose} disabled={busy} aria-label="Close" className="rounded-full p-1.5 text-muted-foreground hover:bg-accent disabled:opacity-50"><X className="h-4 w-4" /></button>
+        </div>
+        <div className="space-y-4 p-5">
+          <p className="text-sm text-muted-foreground">Here's exactly what happens:</p>
+          <ul className="list-disc space-y-1.5 pl-5 text-sm">
+            <li>You're signed out everywhere and can no longer sign in — on the web or in the app.</li>
+            <li>Your name, email, photo and phone number are removed from NEXUS.</li>
+            <li>Your company keeps your attendance, task and XP history. It will show as <b>"Deleted account"</b>.</li>
+            <li>This cannot be undone. Your email becomes free, so you could sign up again later as a new account.</li>
+          </ul>
+          <label className="block">
+            <span className="text-xs font-medium text-muted-foreground">Type <b className="font-mono text-foreground">DELETE</b> to confirm</span>
+            <input value={typed} onChange={(e) => setTyped(e.target.value)} autoFocus autoComplete="off" autoCapitalize="characters" spellCheck={false} disabled={busy} placeholder="DELETE" className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm outline-none focus:border-destructive" />
+          </label>
+          {del.isError && <p className="text-xs font-semibold text-destructive">{(del.error as Error)?.message ?? "Couldn't delete your account. Please try again."}</p>}
+          <div className="flex justify-end gap-2">
+            <button onClick={onClose} disabled={busy} className="rounded-lg border border-border px-4 py-2 text-sm font-semibold transition hover:bg-accent disabled:opacity-50">Cancel</button>
+            <button disabled={!confirmed || busy} onClick={() => del.mutate()} className="inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground transition hover:bg-destructive/90 disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Delete my account</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

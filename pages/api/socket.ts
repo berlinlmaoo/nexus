@@ -8,6 +8,7 @@ import { createLogger } from "@/lib/logger"
 import { resolveSheetAccess } from "@/lib/project-sheets"
 import { checkProjectAccess } from "@/lib/rbac"
 import prisma from "@/lib/prisma"
+import { isDeletedAccountEmail } from "@/lib/account-deletion"
 
 const log = createLogger("socket")
 
@@ -148,6 +149,10 @@ export function initializeSocketServer(
       })
 
       if (!token?.id) return next(new Error("Invalid session"))
+      // A deleted account keeps its conversation memberships (chat history stays), so its
+      // leftover JWT must not be allowed back into those rooms.
+      const owner = await prisma.user.findUnique({ where: { id: token.id as string }, select: { email: true } })
+      if (!owner || isDeletedAccountEmail(owner.email)) return next(new Error("Invalid session"))
 
       socket.data.userId = token.id as string
       socket.data.userName = token.name as string

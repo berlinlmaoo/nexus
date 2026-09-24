@@ -5,6 +5,7 @@ import { logAudit } from '@/lib/audit'
 import { createLogger } from '@/lib/logger'
 import { verifyCredentialUser } from '@/lib/credentials-auth'
 import prisma from '@/lib/prisma'
+import { isDeletedAccountEmail } from '@/lib/account-deletion'
 
 const log = createLogger('auth')
 
@@ -65,8 +66,14 @@ export const nexusNextAuthConfig = {
         try {
           const dbUser = await prisma.user.findUnique({
             where: { id: token.id as string },
-            select: { avatar: true, name: true },
+            select: { avatar: true, name: true, email: true },
           })
+          // Sessions are stateless JWTs (web cookie and the iOS app's Keychain copy alike), so
+          // deleting an account cannot revoke them. Returning null here makes auth() answer
+          // "signed out" and clears the cookie, on the very next request.
+          if (dbUser && isDeletedAccountEmail(dbUser.email)) {
+            return null
+          }
           if (dbUser) {
             token.picture = dbUser.avatar
             token.name = dbUser.name
