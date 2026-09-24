@@ -168,7 +168,10 @@ export async function POST(request: NextRequest) {
         await tx.user.update({
           where: { id: userId },
           data: {
-            name: DELETED_ACCOUNT_NAME,
+            // The name stays, marked: the company keeps this person's attendance and task history, and a
+            // column headed "Deleted account" says nothing about whose history it is (owner's call,
+            // 24 Sep 2026). Everything that reaches the person (email, password, photo, phone) still goes.
+            name: `${user.name} (${DELETED_ACCOUNT_NAME})`,
             email: deletedAccountEmail(userId),
             password: null,
             avatar: null,
@@ -224,7 +227,7 @@ export async function POST(request: NextRequest) {
       action: "delete",
       entityType: "user_account",
       entityId: userId,
-      entityName: DELETED_ACCOUNT_NAME,
+      entityName: `${user.name} (${DELETED_ACCOUNT_NAME})`,
       userId,
       request,
       metadata: { selfService: true, previousRole: user.role, ...summary.counts },
