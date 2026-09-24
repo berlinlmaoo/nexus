@@ -166,7 +166,10 @@ final class AppLanguage {
         "New NEXUS signal arrived.": "Ada sinyal NEXUS baru.",
         "Login required to open the inbox.": "Login/session diperlukan untuk buka inbox.",
         "Your Mission": "Misi Kamu",
-        "Monthly Quests": "Quest Bulanan",
+        "Claim": "Klaim",
+        "Claiming…": "Mengklaim…",
+        "Claimed": "Sudah diklaim",
+        "Couldn't claim the quest.": "Gagal klaim quest.",
         "Commander": "Komandan",
 
         // ── login ─────────────────────────────────────────────────────────────

@@ -42,6 +42,12 @@ struct DashboardView: View {
     /// a prompt that keeps coming back after being answered stops being a prompt and becomes noise.
     @State private var showPasskeyNudge = false
     @State private var xpRulesOpen = false
+    /// The quest whose claim is in flight. One at a time, as on the web: every Claim button is
+    /// disabled while any claim runs, so a double tap cannot send the same claim twice.
+    @State private var claimingQuest: String?
+    /// The server's reason for the last refused claim, shown inside the Quest panel itself —
+    /// the panel is an overlay, and an alert on top of a morphing card would fight it.
+    @State private var questClaimError: String?
     @State private var passkeyBusy = false
     @State private var passkeyNote: String?
     @AppStorage("passkeyNudgeDismissed") private var passkeyNudgeDismissed = false
@@ -73,7 +79,7 @@ struct DashboardView: View {
         [
             .init(value: projectCount, total: nil, label: T("Projects"), icon: "rectangle.stack.fill", from: "#c4b5fd", to: "#7c3aed", glow: "#a78bfa"),
             .init(value: mission.done, total: mission.total, label: T("Your Mission"), icon: "checklist", from: "#6ee7b7", to: "#059669", glow: "#34d399"),
-            .init(value: game?.questsDone ?? 0, total: game?.questList.count ?? 0, label: T("Monthly Quests"), icon: "sparkles", from: "#fcd34d", to: "#ea580c", glow: "#fbbf24"),
+            .init(value: game?.questsDone ?? 0, total: game?.questList.count ?? 0, label: T("Quest"), icon: "sparkles", from: "#fcd34d", to: "#ea580c", glow: "#fbbf24"),
         ]
     }
     // Crisp transform-FLIP morph ported from the web's framer layout-spring — smoothness comes from the
@@ -382,7 +388,91 @@ struct DashboardView: View {
         switch a {
         case 0: detailList(projectsList.map { ($0.name, $0.statusLabel) }, empty: T("No projects yet."))
         case 1: detailList(tasksList.map { ($0.title ?? T("Untitled"), $0.isDone ? T("Done") : T("Open")) }, empty: T("No open tasks."))
-        default: detailList((game?.questList ?? []).map { ($0.title, "\($0.progress)/\($0.target) · +\($0.xpReward) XP") }, empty: "Belum ada quest.")
+        default: questDetailList
+        }
+    }
+
+    /// The Quest panel's list: `detailList`'s rows, plus a Claim button on every quest the
+    /// server marks claimable. This is the only place on iOS where quest XP can be claimed.
+    private var questDetailList: some View {
+        let quests = game?.questList ?? []
+        return VStack(spacing: 8) {
+            if let questClaimError {
+                Text(questClaimError).font(NXFont.text(12, .semibold)).foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            if quests.isEmpty {
+                Text(T("No quests yet.")).font(NXFont.text(13)).foregroundStyle(.white.opacity(0.85))
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
+            } else {
+                ForEach(quests.prefix(40)) { q in
+                    HStack(spacing: 8) {
+                        Text(q.title).font(NXFont.text(13, .semibold)).foregroundStyle(.white).lineLimit(1)
+                        Spacer(minLength: 8)
+                        Text("\(q.progress)/\(q.target) · +\(q.xpReward) XP").font(NXFont.text(11, .semibold))
+                            .foregroundStyle(.white.opacity(0.8)).fixedSize()
+                        questClaimControl(q)
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 10)
+                    .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+            }
+        }
+    }
+
+    /// Claimed wins over claimable, the same order the web checks them in.
+    @ViewBuilder private func questClaimControl(_ q: Gamification.Quest) -> some View {
+        if q.claimed == true {
+            Image(systemName: "checkmark.circle.fill").font(.system(size: 15, weight: .bold))
+                .foregroundStyle(.white).accessibilityLabel(T("Claimed"))
+        } else if q.claimable == true {
+            let busy = claimingQuest == q.key
+            Button { claimQuest(q) } label: {
+                Group {
+                    if busy { ProgressView().controlSize(.mini).tint(Color(hex: "#ea580c")) }
+                    else { Text(T("Claim")).font(NXFont.text(11, .bold)).foregroundStyle(Color(hex: "#ea580c")) }
+                }
+                .frame(minWidth: 44).padding(.horizontal, 10).padding(.vertical, 5)
+                .background(.white, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(claimingQuest != nil)
+            .opacity(claimingQuest != nil && !busy ? 0.5 : 1)
+            .accessibilityLabel(busy ? T("Claiming…") : "\(T("Claim")) +\(q.xpReward) XP")
+        }
+    }
+
+    private func claimQuest(_ q: Gamification.Quest) {
+        guard claimingQuest == nil else { return }
+        Haptics.tap()
+        claimingQuest = q.key
+        questClaimError = nil
+        Task {
+            defer { claimingQuest = nil }
+            do {
+                let result = try await APIClient.shared.claimQuest(q.key)
+                Haptics.success()
+                // Refetch rather than patch: the award can move the level, and the stat tile, the
+                // level card and the Home Screen glance all read from `game`. If the refetch fails
+                // the claim still happened, so mark it locally instead of leaving a Claim button
+                // that would only earn "Already claimed this period".
+                if let fresh = try? await APIClient.shared.gamification() {
+                    game = fresh
+                } else if let g = game {
+                    game = Gamification(
+                        xp: result.xp ?? g.xp, streak: g.streak,
+                        quests: g.questList.map { $0.key == q.key
+                            ? .init(key: $0.key, title: $0.title, progress: $0.progress, target: $0.target,
+                                    xpReward: $0.xpReward, claimed: true, claimable: false)
+                            : $0 })
+                }
+                GlancePresence.refresh(tasks: tasksList, unread: unread, game: game)
+            } catch {
+                Haptics.warning()
+                questClaimError = (error as? LocalizedError)?.errorDescription ?? T("Couldn't claim the quest.")
+            }
         }
     }
 
@@ -972,7 +1062,7 @@ if !XpRules.tiers.isEmpty {
     }
 }
 
-/// One gradient stat tile (Projects / Your Mission / Monthly Quests).
+/// One gradient stat tile (Projects / Your Mission / Quest).
 struct StatCardView: View {
     let value: Int
     let total: Int?

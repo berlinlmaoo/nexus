@@ -700,6 +700,18 @@ struct APIClient {
         try await run(makeRequest("/api/gamification/me"), decode: Gamification.self, cache: "gamification")
     }
 
+    /// Claim a finished quest's XP. Quest XP is never granted on completion alone, only here.
+    /// `questKey` is the quest's `key` from /api/gamification/me (an auto-quest key or an admin
+    /// quest id); same body as the web's `nexusApi.claimQuest`. Refusals (already claimed this
+    /// period, not complete, not your task) arrive as APIError.http with the server's sentence.
+    @discardableResult
+    func claimQuest(_ questKey: String) async throws -> QuestClaimResponse {
+        var req = makeRequest("/api/gamification/quests/claim", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["questKey": questKey])
+        return try await run(req, decode: QuestClaimResponse.self)
+    }
+
     func myTasks(assigneeId: String) async throws -> [MyTask] {
         // Keyed per assignee: two people on one device must never see each other's list.
         try await run(makeRequest("/api/tasks?assigneeId=\(assigneeId)"), decode: [MyTask].self,

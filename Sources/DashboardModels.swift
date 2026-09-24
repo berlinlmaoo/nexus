@@ -23,6 +23,10 @@ struct Gamification: Decodable, Sendable {
         let target: Int
         let xpReward: Int
         let claimed: Bool?
+        /// Computed by /api/gamification/me, and the web shows Claim on exactly this flag. Taken
+        /// as-is rather than rebuilt from progress >= target here: for a task-bundle quest the
+        /// server also requires the viewer to be one of the assignees, which this client cannot see.
+        let claimable: Bool?
         var id: String { key }
     }
 
@@ -65,6 +69,11 @@ struct UnreadResponse: Decodable, Sendable {
 
 struct SuccessResponse: Decodable, Sendable {
     let success: Bool?
+}
+
+/// POST /api/gamification/quests/claim answers with the claimer's XP right after the award.
+struct QuestClaimResponse: Decodable, Sendable {
+    let xp: Gamification.Xp?
 }
 
 /// GET /api/workspaces/members — caller's workspace id (for creating projects) + caller's org role.
