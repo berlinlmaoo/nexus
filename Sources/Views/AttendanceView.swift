@@ -160,6 +160,9 @@ struct AttendanceView: View {
                 }
                 .padding(16)
             }
+            // On the ScrollView, not beside `.permissionAlert` further down: two alerts on one view
+            // and one of them never shows.
+            .heldAttendanceNotice(whileLocked: false)
         }
         .overlay { flowOverlay.animation(.easeOut(duration: 0.18), value: flow) }
         .navigationTitle(T("Attendance"))
@@ -773,6 +776,28 @@ struct AttendanceView: View {
             banner = Banner(text: T("Saved on this phone — sends itself when NEXUS is back."), good: true)
             if action == .checkOut { reflection = "" }
         }
+        catch APIError.upgradeRequired(let why) {
+            // The server refused this BUILD before looking at the tap, so nothing was recorded.
+            // Kept exactly like an offline tap (same id, the time tapped, the evidence captured
+            // now) and sent by the updated build — otherwise somebody who taps at 09:00, updates,
+            // and taps again at 09:06 is late for a reason that was never theirs. The update cover
+            // replaces this screen and the queue raises the "saved on this phone" popup on it.
+            guard let fix = pendingCoords else {
+                Haptics.warning()
+                flow = .failed(action, why)
+                return
+            }
+            AttendanceQueue.shared.enqueue(
+                id: tapId,
+                kind: action == .checkIn ? .checkIn : .checkOut,
+                lat: fix.lat, lng: fix.lng, selfie: selfie,
+                reflection: action == .checkOut ? reflection : nil,
+                fix: pendingFix)
+            AttendanceQueue.shared.holdForUpdate(why)
+            Haptics.warning()
+            flow = nil
+            if action == .checkOut { reflection = "" }
+        }
         catch {
             Haptics.warning()
             let msg = (error as? LocalizedError)?.errorDescription ?? T("Failed.")
@@ -817,6 +842,21 @@ struct AttendanceView: View {
             serverDown = true
             flow = .savedOffline(.checkOut, Self.clock())
             banner = Banner(text: T("Saved on this phone — sends itself when NEXUS is back."), good: true)
+            reflection = ""
+            showOffsite = false
+        }
+        catch APIError.upgradeRequired(let why) {
+            // Same as the live tap above: refused for the build, kept for the updated one.
+            AttendanceQueue.shared.enqueue(
+                id: tapId,
+                kind: .checkOut,
+                lat: coords.lat, lng: coords.lng, selfie: selfie,
+                reflection: reflection,
+                offsite: true, reason: reason,
+                fix: pendingFix)
+            AttendanceQueue.shared.holdForUpdate(why)
+            Haptics.warning()
+            flow = nil
             reflection = ""
             showOffsite = false
         }

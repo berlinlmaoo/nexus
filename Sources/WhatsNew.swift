@@ -495,12 +495,7 @@ struct WhatsNewScreen: View {
     }
     /// "0.1.4" behind "0.1.10": numeric per part, not string order.
     static func isBehind(_ a: String, _ b: String) -> Bool {
-        let pa = a.split(separator: ".").map { Int($0) ?? 0 }, pb = b.split(separator: ".").map { Int($0) ?? 0 }
-        for i in 0..<max(pa.count, pb.count) {
-            let x = i < pa.count ? pa[i] : 0, y = i < pb.count ? pb[i] : 0
-            if x != y { return x < y }
-        }
-        return false
+        compareVersions(a, b) == .orderedAscending
     }
     @ViewBuilder private var updateBanner: some View {
         if updateAvailable, let latest, let url = URL(string: latest.storeUrl) {

@@ -27,6 +27,8 @@ struct SettingsView: View {
     /// through an enum — two on one view and one of them never opens.
     @State private var showDeleteAccount = false
     @Environment(\.scenePhase) private var scenePhase
+    /// Only for the "update available" / "update by <date>" row; NexusApp fetches the policy.
+    @State private var versionGate = AppVersionGate.shared
 
     private static let roleLabel: [String: String] = ["ONE_ABOVE_ALL": "One Above All", "BOD": "BoD", "MANAGER": "Manager", "STAFF": "Staff"]
     private var initial: String { String((name.isEmpty ? email : name).first ?? "?").uppercased() }
@@ -36,6 +38,14 @@ struct SettingsView: View {
             NX.background.ignoresSafeArea()
             ScrollView {
                 VStack(spacing: 18) {
+                    // A row, not a sheet: Tuning Room is the one place an optional update is
+                    // mentioned, and it waits to be noticed. A deadline outranks a mere "newer
+                    // version", so only one of the two is ever drawn.
+                    if let grace = versionGate.grace {
+                        UpdateDeadlineRow(grace: grace, storeUrl: versionGate.storeUrl)
+                    } else if let latest = versionGate.available, let url = versionGate.storeUrl {
+                        UpdateAvailableRow(version: latest, storeUrl: url)
+                    }
                     Group {
                         ForEach(deniedKinds) { PermissionBanner(kind: $0) }
                     }

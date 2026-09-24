@@ -1,150 +1,256 @@
 import SwiftUI
 
-/// Port of reports.tsx: range selector + metric grid + By-status/By-priority distributions + project health.
+/// Reports per crew.
+///
+/// Replaced the workspace-wide task report (total tasks, by status, project health): the owner's
+/// rule is that staff see only themselves, a manager sees their direct reports and BoD/admin see
+/// everyone, and a workspace total showed everybody everything. Who may see whom is decided by the
+/// server on every request; this screen only learns it (`viewerScope` on the first "me" report)
+/// to decide whether a team tab is worth drawing.
 struct ReportsView: View {
-    @Environment(AuthStore.self) private var auth
-    @State private var report: Reports?
-    @State private var days = 30
-    @State private var loading = true
-    @State private var error: String?
-    /// Set while the screen shows the copy saved on the last good load, because NEXUS did not
-    /// answer this time. Drives the `OfflineNotice` so the numbers never pass for live ones.
-    @State private var savedAt: Date?
+    private enum Pane: String { case me, team }
 
-    private static let statusColor: [String: String] = ["TODO": "#94a3b8", "IN_PROGRESS": "#0091ff", "IN_REVIEW": "#f59e0b", "DONE": "#16a34a", "CANCELLED": "#ef4444"]
-    private static let prioColor: [String: String] = ["URGENT": "#ef4444", "HIGH": "#f59e0b", "MEDIUM": "#0091ff", "LOW": "#94a3b8", "NONE": "#cbd5e1"]
+    @State private var pane: Pane = .me
+    /// nil = the current period, asked for with no parameter.
+    @State private var periodKey: String?
+    /// The current period as the server reported it: the anchor the older periods are counted
+    /// back from.
+    @State private var anchor: ReportPeriod?
+    /// SELF until a report says otherwise, so a staff member never sees a tab flash in and out.
+    @State private var scope: ReportScope = .selfOnly
+    /// Set when the roster answered REPORT_SELF_ONLY: the server's word beats the scope we read.
+    @State private var rosterRefused = false
+
+    private var options: [ReportPeriodOption] { ReportPeriodOption.options(anchor: anchor) }
+    private var offersTeam: Bool { scope != .selfOnly && !rosterRefused }
 
     var body: some View {
         ZStack {
             NX.background.ignoresSafeArea()
-            content
+            VStack(spacing: 0) {
+                if offersTeam {
+                    Picker(T("Show"), selection: $pane) {
+                        Text(T("Me")).tag(Pane.me)
+                        // BoD/admin see everyone, so "My team" would undersell it.
+                        Text(scope == .all ? T("Team") : T("My team")).tag(Pane.team)
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 4)
+                }
+                if pane == .team && offersTeam {
+                    ReportRosterPane(periodKey: periodKey, scope: scope, options: options) {
+                        rosterRefused = true
+                        pane = .me
+                    }
+                } else {
+                    PersonReportPane(userId: "me", periodKey: periodKey) { report, requestedKey in
+                        scope = report.scope
+                        if requestedKey == nil, let period = report.period { anchor = period }
+                    }
+                }
+            }
         }
-        .navigationTitle("Reports")
+        .navigationTitle(T("Reports"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    ForEach([7, 30, 90], id: \.self) { d in Button("\(d) \(T("days"))") { days = d; Task { await load() } } }
-                } label: { Text("\(days) \(T("days"))").font(NXFont.text(13, .bold)) }
-            }
-        }
-        .task { await load() }
-    }
-
-    @ViewBuilder private var content: some View {
-        if loading {
-            ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let error {
-            ErrorState(message: error, icon: "chart.bar.xaxis") { Task { await load() } }
-        } else if let r = report {
-            ScrollView {
-                VStack(spacing: 16) {
-                    if let savedAt { OfflineNotice(savedAt: savedAt) }
-                    let m = r.metrics
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                        metric("Total tasks", "\(m?.totalTasks ?? 0)", tone: .neutral)
-                        metric("Completed", "\(m?.completedTasks ?? 0)", tone: .success, trend: m?.completionTrend)
-                        metric("Overdue", "\(m?.overdueTasks ?? 0)", tone: (m?.overdueTasks ?? 0) > 0 ? .danger : .neutral)
-                        metric("Completion", "\(m?.completionRate ?? 0)%", tone: .info, sub: m?.avgCompletionDays.map { "\(Int($0))d avg" })
-                    }
-                    distro("By status", rows: (r.tasksByStatus ?? []).map { ($0.status.replacingOccurrences(of: "_", with: " ").capitalized, $0.count, Self.statusColor[$0.status] ?? "#7b68ee") })
-                    distro("By priority", rows: (r.tasksByPriority ?? []).map { ($0.priority.replacingOccurrences(of: "_", with: " ").capitalized, $0.count, Self.prioColor[$0.priority] ?? "#7b68ee") })
-                    if let health = r.projectHealth, !health.isEmpty { projectHealth(health) }
-                }
-                .padding(16)
-            }
-            .refreshable { await load() }
+            ToolbarItem(placement: .topBarTrailing) { ReportPeriodMenu(options: options, selection: $periodKey) }
         }
     }
+}
 
-    private func metric(_ label: String, _ value: String, tone: ChipTone, trend: Int? = nil, sub: String? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label.uppercased()).font(NXFont.text(10, .bold)).tracking(0.5).foregroundStyle(NX.mutedFg)
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(value).font(NXFont.display(28, .black)).foregroundStyle(tone == .danger ? NX.danger : NX.foreground)
-                if let trend, trend != 0 {
-                    Text("\(trend > 0 ? "↑" : "↓")\(abs(trend))%").font(NXFont.text(11, .bold)).foregroundStyle(trend > 0 ? NX.success : NX.danger)
-                }
-            }
-            if let sub { Text(sub).font(NXFont.text(11)).foregroundStyle(NX.mutedFg) }
+// MARK: - Roster
+
+/// Everybody the viewer may see, one row each, in the order the server sends (it puts the people
+/// who need attention first). Tapping a row opens that person's full report.
+struct ReportRosterPane: View {
+    let periodKey: String?
+    let scope: ReportScope
+    let options: [ReportPeriodOption]
+    /// The server said this viewer may only see themselves (REPORT_SELF_ONLY).
+    let onSelfOnly: () -> Void
+
+    @Environment(AuthStore.self) private var auth
+    @State private var roster: ReportRoster?
+    @State private var loadedKey: String??
+    @State private var loading = true
+    @State private var error: String?
+    @State private var savedAt: Date?
+    @State private var search = ""
+
+    private var rows: [ReportRoster.Row] {
+        let all = roster?.rows ?? []
+        let q = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return all }
+        return all.filter {
+            $0.displayName.localizedStandardContains(q) || ($0.email?.localizedStandardContains(q) ?? false)
+                || $0.teams.contains { $0.name.localizedStandardContains(q) }
         }
-        .frame(maxWidth: .infinity, alignment: .leading).nexusCard(padding: 16, radius: 18)
     }
 
-    private func distro(_ title: String, rows: [(String, Int, String)]) -> some View {
-        let maxV = max(1, rows.map(\.1).max() ?? 1)
-        return VStack(alignment: .leading, spacing: 10) {
-            Text(title).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
-            if rows.isEmpty { Text(T("No data yet.")).font(NXFont.text(13)).foregroundStyle(NX.mutedFg) }
-            ForEach(rows, id: \.0) { row in
-                VStack(spacing: 4) {
-                    HStack {
-                        Text(row.0).font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground)
-                        Spacer()
-                        Text("\(row.1)").font(NXFont.text(12, .bold)).foregroundStyle(NX.mutedFg)
-                    }
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(NX.muted)
-                            Capsule().fill(Color(hex: row.2)).frame(width: geo.size.width * CGFloat(row.1) / CGFloat(maxV))
+    var body: some View {
+        Group {
+            if let roster, loadedKey == .some(periodKey) {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        if let savedAt { OfflineNotice(savedAt: savedAt) }
+                        searchField
+                        summary(roster)
+                        if roster.rows.isEmpty {
+                            EmptyState(icon: "person.3",
+                                       title: T("No one to show yet"),
+                                       subtitle: scope == .all
+                                           ? T("People join this list once they are members of the workspace.")
+                                           : T("People appear here once the approval chart lists you as their manager."),
+                                       compact: true)
+                        } else if rows.isEmpty {
+                            EmptyState(icon: "magnifyingglass",
+                                       title: String(format: T("No one matches “%@”"), search),
+                                       subtitle: T("Search by name, email or team."),
+                                       compact: true)
+                        } else {
+                            ForEach(rows) { row in
+                                NavigationLink {
+                                    PersonReportView(userId: row.userId, name: row.name, options: options, periodKey: periodKey)
+                                } label: {
+                                    ReportRosterRow(row: row)
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
-                    }.frame(height: 7)
+                    }
+                    .padding(16)
                 }
+                .scrollDismissesKeyboard(.immediately)
+                .refreshable { await load() }
+            } else if loading {
+                ProgressView().tint(NX.violetText).frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ErrorState(message: error ?? T("Couldn't load this"), icon: "person.3") { Task { await load() } }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
+        .task(id: periodKey ?? "current") { await load() }
     }
 
-    private func projectHealth(_ health: [Reports.ProjectHealth]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Project health").font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
-            ForEach(health, id: \.idv) { p in
-                VStack(spacing: 5) {
-                    HStack {
-                        Circle().fill(Color(hex: p.color ?? "#7b68ee")).frame(width: 9, height: 9)
-                        Text(p.name ?? "—").font(NXFont.text(13, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
-                        Spacer()
-                        if let o = p.overdue, o > 0 { NexusChip(text: "\(o) overdue", tone: .danger) }
-                        Text("\(p.completionRate ?? 0)%").font(NXFont.text(12, .bold)).foregroundStyle(NX.mutedFg)
-                    }
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(NX.muted)
-                            Capsule().fill(NX.success).frame(width: geo.size.width * CGFloat(p.completionRate ?? 0) / 100)
-                        }
-                    }.frame(height: 6)
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").font(.system(size: 13, weight: .semibold)).foregroundStyle(NX.mutedFg)
+            TextField(T("Search crew"), text: $search)
+                .font(NXFont.text(14)).foregroundStyle(NX.foreground)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+            if !search.isEmpty {
+                Button { search = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(NX.mutedFg)
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel(T("Clear"))
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading).nexusCard()
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(NX.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(NX.border, lineWidth: 1))
+    }
+
+    private func summary(_ roster: ReportRoster) -> some View {
+        HStack {
+            SectionLabel(roster.team?.name ?? (scope == .all ? T("Everyone") : T("Your direct reports")))
+            Spacer()
+            Text(String(format: T("%d people"), roster.rows.count)).font(NXFont.text(11, .bold)).foregroundStyle(NX.mutedFg)
+        }
+        .padding(.top, 2)
     }
 
     private func load() async {
+        let key = periodKey
+        loading = true
         error = nil
+        let fresh: ReportRoster
         do {
-            report = try await APIClient.shared.reports(days: days)
-            savedAt = nil
+            fresh = try await APIClient.shared.reportRoster(period: key)
+        } catch {
+            if Task.isCancelled { return }
+            fail(error, key: key)
+            loading = false
+            return
         }
+        roster = fresh
+        loadedKey = .some(key)
+        savedAt = nil
+        loading = false
+    }
+
+    private func fail(_ error: Error, key: String?) {
+        do { throw error }
         catch APIError.unauthorized { auth.logout() }
+        catch ReportAccessError.selfOnly(_) { onSelfOnly() }
         catch let failure as APIError where failure.nobodyAnswered {
-            // Nothing answered (no network, a deploy restart, the tunnel): the last good copy for
-            // THIS range is a better screen than an error. Only then — a refusal the server did
-            // make is shown as it is, never papered over with old numbers.
-            if let hit = ResponseCache.decoded("reports-\(days)", as: Reports.self) {
-                report = hit.value
+            // Nothing answered: the saved roster for THIS period, or an error — never another
+            // period's numbers under this period's label.
+            if let hit = ResponseCache.decoded(ReportRoster.cacheKey(period: key, teamId: nil), as: ReportRoster.self) {
+                roster = hit.value
+                loadedKey = .some(key)
                 savedAt = hit.savedAt
             } else {
-                // No copy for this range: drop whatever range was on screen rather than let it
-                // pass for the one just picked.
-                report = nil
-                savedAt = nil
-                self.error = failure.errorDescription ?? APIError.unreachableText
+                drop(failure.errorDescription ?? APIError.unreachableText)
             }
         }
         catch {
-            savedAt = nil
-            self.error = (error as? LocalizedError)?.errorDescription ?? T("Couldn't load this")
+            drop((error as? LocalizedError)?.errorDescription ?? T("Couldn't load this"))
         }
-        loading = false
+    }
+
+    private func drop(_ message: String) {
+        roster = nil
+        loadedKey = nil
+        savedAt = nil
+        error = message
+    }
+}
+
+/// One person in the roster: who, four numbers, and what needs attention.
+/// No formatter is built here — everything goes through `ReportFormat`'s cached ones.
+struct ReportRosterRow: View {
+    let row: ReportRoster.Row
+
+    var body: some View {
+        let h = row.headline
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                AvatarView(url: row.avatar, initial: String(row.displayName.first ?? "?").uppercased(), size: 38)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(row.displayName).font(NXFont.text(15, .semibold)).foregroundStyle(NX.foreground).lineLimit(1)
+                    if let team = row.teams.first?.name {
+                        Text(row.teams.count > 1 ? "\(team) +\(row.teams.count - 1)" : team)
+                            .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 6)
+                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(NX.mutedFg)
+            }
+            HStack(spacing: 0) {
+                figure(T("Done"), ReportFormat.number(h?.completed ?? 0))
+                figure(T("On time"), ReportFormat.percent(h?.onTime))
+                figure(T("Overdue"), ReportFormat.number(h?.overdue ?? 0), color: (h?.overdue ?? 0) > 0 ? NX.danger : nil)
+                figure(T("Late"), ReportFormat.number(h?.late ?? 0), color: (h?.late ?? 0) > 0 ? NX.warning : nil)
+            }
+            if let flags = row.flags, flags.overdue3 || flags.late3 || flags.lowReflections {
+                HStack(spacing: 6) {
+                    if flags.overdue3 { NexusChip(text: T("3+ overdue"), tone: .danger, systemImage: "exclamationmark.circle") }
+                    if flags.late3 { NexusChip(text: T("Late 3+ times"), tone: .warning, systemImage: "clock") }
+                    if flags.lowReflections { NexusChip(text: T("Few reflections"), tone: .info, systemImage: "text.bubble") }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .nexusCard(padding: 14, radius: 20)
+        .contentShape(Rectangle())
+    }
+
+    private func figure(_ label: String, _ value: String, color: Color? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(value).font(NXFont.display(16, .bold)).foregroundStyle(color ?? NX.foreground).lineLimit(1).minimumScaleFactor(0.7)
+            Text(label).font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg).lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 }

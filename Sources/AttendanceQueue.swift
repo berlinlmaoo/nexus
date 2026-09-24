@@ -61,9 +61,45 @@ final class AttendanceQueue {
     private var indexURL: URL { dir.appendingPathComponent("queue.json") }
     private func selfieURL(_ id: String) -> URL { dir.appendingPathComponent("\(id).jpg") }
 
-    private init() { load() }
+    private init() {
+        load()
+        heldFlag = UserDefaults.standard.bool(forKey: Self.heldKey)
+    }
 
     var count: Int { pending.count }
+
+    // MARK: - held for an update
+
+    /// Entries are waiting because the server refused this BUILD (426), not because it was away.
+    ///
+    /// Persisted, like the entries themselves: both have to survive a relaunch while locked and
+    /// then the App Store update. The entries live in Application Support, which an update never
+    /// touches, and the updated build drains them on its first signed-in launch (NexusApp's
+    /// `.task(id: userId)` → `flush`) under their original tap time and idempotency key.
+    private var heldFlag = false
+    private static let heldKey = "nexus.attendanceQueue.heldForUpdate"
+    var isHeldForUpdate: Bool { heldFlag && !pending.isEmpty }
+    /// The "saved on this phone" popup is owed. Not persisted: it is said when the refusal
+    /// happens and when Attendance opens, not on every relaunch of a locked app — the cover
+    /// already carries a line about the saved tap.
+    var heldNoticeDue = false
+    /// Which kinds are waiting, so the popup can say check-in, check-out or both.
+    var heldKinds: Set<PendingAttendance.Kind> { Set(pending.map(\.kind)) }
+
+    /// Called when a replay or a live tap met 426 UPGRADE_REQUIRED.
+    func holdForUpdate(_ why: String) {
+        lastError = why
+        heldFlag = true
+        UserDefaults.standard.set(true, forKey: Self.heldKey)
+        heldNoticeDue = true
+    }
+
+    private func releaseHold() {
+        guard heldFlag else { return }
+        heldFlag = false
+        heldNoticeDue = false
+        UserDefaults.standard.removeObject(forKey: Self.heldKey)
+    }
 
     // MARK: - storing
 
@@ -100,6 +136,11 @@ final class AttendanceQueue {
 
     func flush() async {
         guard !flushing, !pending.isEmpty else { return }
+        // While the server refuses this build, every replay is a selfie uploaded only to be refused
+        // with 426. The entries wait on disk (Application Support survives an App Store update) and
+        // the updated build drains them on its first launch. If the gate is lowered by
+        // "Check again", the next flush goes ahead as usual.
+        guard AppVersionGate.shared.required == nil else { return }
         flushing = true
         defer { flushing = false }
 
@@ -164,11 +205,20 @@ final class AttendanceQueue {
                     continue
                 }
                 lastError = nil
+                // Anything getting through proves this build is accepted again.
+                releaseHold()
             } catch APIError.offline {
                 // Still unreachable. Stop here rather than hammering the rest of the queue.
                 return
             } catch APIError.unauthorized {
                 // Nothing to retry until the person logs back in; leave the queue intact.
+                return
+            } catch APIError.upgradeRequired(let why) {
+                // The server refused the BUILD, not the tap. Counting it as an attempt would drop a
+                // genuine check-in after five activations, for a reason the person fixes by updating,
+                // not by doing anything to the tap. So: keep it untouched, stop, and say why — the
+                // update cover is already coming up and `holdForUpdate` raises the popup on it.
+                holdForUpdate(why)
                 return
             } catch {
                 bumpAttempts(entry.id, message: error.localizedDescription)
@@ -184,6 +234,7 @@ final class AttendanceQueue {
         for entry in pending { try? FileManager.default.removeItem(at: selfieURL(entry.id)) }
         pending = []
         lastError = nil
+        releaseHold()
         try? FileManager.default.removeItem(at: indexURL)
         AttendancePresence.refresh()
     }

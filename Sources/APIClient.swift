@@ -37,6 +37,14 @@ enum APIError: LocalizedError {
     /// case may be queued and replayed, because replaying something the server already refused
     /// would be wrong.
     case offline
+    /// The server refuses to talk to this build at all (HTTP 426, code UPGRADE_REQUIRED) and has
+    /// already raised `AppVersionGate`. Carries the server's sentence.
+    ///
+    /// Its own case rather than `.http(426, …)` because of what it must NOT be mistaken for: it is
+    /// not "nobody answered" (`nobodyAnswered` is false, it is never `.offline`), so nothing shows a
+    /// cached copy as if the server were away and nothing queues a tap to replay — replaying against
+    /// a floor that only an update can clear would fail forever. See `upgradeRefusal`.
+    case upgradeRequired(String)
 
     var errorDescription: String? {
         switch self {
@@ -52,6 +60,7 @@ enum APIError: LocalizedError {
         case .decoding: return T("Couldn't read data from the server.")
         case .offline: return Self.unreachableText
         case .transport(let msg): return msg
+        case .upgradeRequired(let msg): return msg
         }
     }
 
@@ -67,6 +76,10 @@ enum APIError: LocalizedError {
     /// the system language, not the app's; this says the same thing in the app's voice. A
     /// cancellation keeps its own text: that is somebody leaving the screen, not an outage.
     static func nothingAnswered(_ error: Error) -> APIError {
+        // Not a failure to answer at all: the server answered "update first". It arrives through
+        // the same `catch` as a dropped connection only because `exchange` throws it from inside
+        // `perform` — relabelling it here would turn a clear refusal into "check your connection".
+        if let api = error as? APIError, case .upgradeRequired = api { return api }
         if error is CancellationError || (error as? URLError)?.code == .cancelled {
             return .transport(error.localizedDescription)
         }
@@ -228,10 +241,13 @@ struct APIClient {
         case .file: watchable = true
         }
         guard let progress, watchable else {
-            return try await route(outgoing, body: nil, on: session, reporting: nil, into: sink)
+            let done = try await route(outgoing, body: nil, on: session, reporting: nil, into: sink)
+            try Self.screenForUpgrade(done, sink: sink)
+            return done
         }
         do {
             let done = try await route(outgoing, body: going, on: session, reporting: progress, into: sink)
+            try Self.screenForUpgrade(done, sink: sink)
             await progress.finish()
             return done
         } catch {
@@ -240,6 +256,26 @@ struct APIClient {
             await progress.stop()
             throw error
         }
+    }
+
+    /// A 426 UPGRADE_REQUIRED becomes `APIError.upgradeRequired` HERE, once, for every request in
+    /// the app — `run`, `runSignup`, the uploads, the vault, forms, change-email, the attendance
+    /// upload and the downloads all come through `exchange`. Checking at each status switch instead
+    /// would mean eleven copies, and the next hand-rolled caller would forget it.
+    ///
+    /// After `route`, not inside it: `route`'s catch decides LAN replays, and a refusal is an
+    /// answer, not a route failure.
+    ///
+    /// A download's body is in the caller's file. On this refusal that file is deleted before
+    /// throwing: `downloadAttachment` treats any file at its destination as the attachment, and
+    /// only cleans up on the statuses it sees — which it no longer will for this one.
+    private static func screenForUpgrade(_ done: Fetched, sink: Sink) throws {
+        guard (done.response as? HTTPURLResponse)?.statusCode == 426 else { return }
+        var body = done.data
+        if case .file(let url) = sink { body = (try? Data(contentsOf: url)) ?? Data() }
+        guard let refusal = upgradeRefusal(done.response, body: body) else { return }
+        if case .file(let url) = sink { try? FileManager.default.removeItem(at: url) }
+        throw refusal
     }
 
     /// Which host the bytes are aimed at, and whether they may be sent a second time.
@@ -508,6 +544,9 @@ struct APIClient {
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await perform(req)
+        } catch let refusal as APIError {
+            // Only `.upgradeRequired` reaches here as an APIError; it must keep its own sentence.
+            throw refusal
         } catch {
             throw APIError.transport(error.localizedDescription)
         }
@@ -2302,6 +2341,11 @@ struct APIClient {
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await perform(req, reporting: progress)
+        } catch let refusal as APIError {
+            // "Update first" is the server answering, not silence. Thrown as `.offline` it would be
+            // queued and replayed on every activation against a floor that only an update clears;
+            // the caller shows the sentence and the update screen covers the app.
+            throw refusal
         } catch {
             // Nothing came back at all, so the tap is queueable. Anything below this line is the
             // server having an opinion, which must never be replayed.
@@ -2349,6 +2393,26 @@ extension APIClient {
         let build = info?["CFBundleVersion"] as? String ?? "0"
         return "ios/\(version)/\(build)"
     }()
+
+    /// The server's "this build is too old" answer, recognised and recorded; nil for anything else.
+    ///
+    /// Both halves are required: a bare 426 (some proxy's idea of protocol upgrade) is not the
+    /// server's floor, and raising a blocking screen over it would lock people out for nothing — it
+    /// falls through to the caller's ordinary refusal handling instead.
+    ///
+    /// The gate is raised asynchronously on the main actor; the error is thrown now, so the tap
+    /// that hit it fails with the server's own sentence while the cover slides in.
+    static func upgradeRefusal(_ response: URLResponse, body: Data) -> APIError? {
+        guard (response as? HTTPURLResponse)?.statusCode == 426,
+              let obj = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any],
+              obj["code"] as? String == "UPGRADE_REQUIRED" else { return nil }
+        let floor = (obj["minSupported"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        let store = (obj["storeUrl"] as? String).flatMap { URL(string: $0) }
+        Task { @MainActor in AppVersionGate.shared.require(minSupported: floor, storeUrl: store) }
+        let said = (obj["error"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return .upgradeRequired(said.flatMap { $0.isEmpty ? nil : $0 }
+                                ?? T("This version of NEXUS is no longer supported. Update from the App Store to continue."))
+    }
 
     /// Statuses that mean the request never reached a decision inside NEXUS.
     ///
