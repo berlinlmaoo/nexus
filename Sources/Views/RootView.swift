@@ -24,13 +24,6 @@ struct RootView: View {
             // In-app light/dark override. nil = follow the iOS setting.
             AdaptiveRoot()
                 .preferredColorScheme(appearance.theme.colorScheme)
-                .overlay {
-                    if showSplash {
-                        SplashView(status: sync.status, progress: sync.progress)
-                            .transition(.opacity)
-                            .zIndex(50)
-                    }
-                }
                 .task(id: auth.session?.userId) {
                     guard let userId = auth.session?.userId, warmedUserId != userId else { return }
                     warmedUserId = userId
@@ -57,6 +50,16 @@ struct RootView: View {
                 // Above the whole app rather than inside a tab: an announcement is not a screen you
                 // navigate to, and it must reach somebody wherever they happen to be standing.
                 .overlay { AnnouncementModal() }
+                // The splash LAST, because the overlay added last draws on top. It used to sit first,
+                // and the GIDEON button floated over the logo while the warm-up ran — an
+                // announcement would have done the same.
+                .overlay {
+                    if showSplash {
+                        SplashView(status: sync.status, progress: sync.progress)
+                            .transition(.opacity)
+                            .zIndex(50)
+                    }
+                }
                 // A form link tapped outside the app, drawn over whichever shape is mounted.
                 //
                 // It sits here rather than in NexusApp for two reasons that both have teeth. First,

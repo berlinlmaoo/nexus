@@ -116,17 +116,9 @@ final class OfflineSync: ObservableObject {
             }),
             (T("Your submissions"), { _ = try? await api.mySubmissions() }),
         ]
-        // Each project the person is in, with its tasks. Fetched after the list, because the list
-        // is what says which projects those are.
-        steps.append((T("Project details"), { [weak self] in
-            guard let projects = try? await api.projects() else { return }
-            for (i, p) in projects.enumerated() {
-                if Task.isCancelled { return }
-                _ = try? await api.project(p.id)
-                _ = try? await api.projectTasks(p.id)
-                await MainActor.run { self?.status = String(format: T("Project %d of %d"), i + 1, projects.count) }
-            }
-        }))
+        // Each project's own board is NOT here. It is two requests per project, and somebody in
+        // 79 projects stood in front of the splash for all 158 of them. It runs behind the app
+        // instead, at the start of the file pass — see `syncProjectDetails`.
 
         for (i, step) in steps.enumerated() {
             if Task.isCancelled { break }
@@ -148,6 +140,8 @@ final class OfflineSync: ObservableObject {
         mediaTask?.cancel()
         mediaTask = Task { [weak self] in
             guard let self else { return }
+            // Small data, so it runs on mobile data too — only the FILES wait for Wi-Fi.
+            await self.syncProjectDetails()
             guard await self.shouldFetchMedia() else { return }
             await MainActor.run { self.stage = .media }
             let api = APIClient.shared
@@ -221,6 +215,20 @@ final class OfflineSync: ObservableObject {
     }
 
     func cancelMedia() { mediaTask?.cancel(); mediaTask = nil }
+
+    /// Each project's board and task list, so any project opens offline — not just the ones
+    /// somebody happened to visit. Behind the app, never in front of it: the splash is for what a
+    /// person looks at first, and nobody looks at 79 projects first.
+    private func syncProjectDetails() async {
+        guard await MainActor.run(body: { !offline }) else { return }
+        let api = APIClient.shared
+        guard let projects = try? await api.projects() else { return }
+        for p in projects {
+            if Task.isCancelled { return }
+            _ = try? await api.project(p.id)
+            _ = try? await api.projectTasks(p.id)
+        }
+    }
 
     /// Waits for the file pass that was just started. The foreground never does — a person must
     /// not be held behind a gigabyte — but a background window has to stay open for the work it
