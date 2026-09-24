@@ -7,6 +7,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import id.znetworks.nexus.core.AppContainer
 import id.znetworks.nexus.feature.attendance.LocalNotifier
 import id.znetworks.nexus.feature.attendance.trail.WorkTrailService
+import id.znetworks.nexus.feature.push.PushManager
 import kotlinx.coroutines.launch
 
 class NexusApplication : Application() {
@@ -18,6 +19,9 @@ class NexusApplication : Application() {
         container = AppContainer(this)
         LocalNotifier.ensureChannels(this)
         WorkTrailService.ensureChannel(this)
+        PushManager.ensureChannels(this)
+        // Every launch re-registers, as iOS does on every activation: tokens rotate.
+        if (container.sessionStore.current != null) container.push.register()
         // Queued taps go out on app start after sign-in, and on every foreground (REQ-ATT-13).
         container.flushQueueSoon()
         // Version policy: forced at launch, then at most every 30 min on foreground (REQ-ATT-41).

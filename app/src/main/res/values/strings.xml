@@ -342,4 +342,18 @@
     <string name="delete_account_sub">Deactivate and anonymise your account.</string>
     <string name="delete_account_body">Your name, email and sign-in are removed and you are signed out everywhere. Attendance, tasks and messages stay as \"Deleted account\". This cannot be undone. Type DELETE to confirm.</string>
     <string name="delete">Delete</string>
+
+    <!-- Push -->
+    <string name="ch_attendance_reminders">Attendance reminders</string>
+    <string name="ch_attendance_location">Outside the office</string>
+    <string name="ch_approvals">Approvals</string>
+    <string name="ch_messages">Messages</string>
+    <string name="ch_tasks">Tasks</string>
+    <string name="ch_tickets">Tickets</string>
+    <string name="ch_announcements">Announcements</string>
+    <string name="ch_attendance">Attendance</string>
+    <string name="ch_general">General</string>
+    <string name="file_a_permit">File a permit</string>
+    <string name="reminder_checkin_title">Check-in in 15 minutes</string>
+    <string name="reminder_checkin_body">Your shift starts at %1$s. Open NEXUS to check in.</string>
 </resources>

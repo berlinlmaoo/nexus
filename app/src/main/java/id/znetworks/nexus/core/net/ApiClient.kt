@@ -106,8 +106,14 @@ class ApiClient(
         authed: Boolean = true,
         /** A hard ceiling for calls nobody should wait on (the version policy: 8 s). */
         callTimeoutMs: Long? = null,
+        /**
+         * Send under this session instead of the stored one. Only for logout's push-device DELETE,
+         * which must go out with the OLD cookie after the session is cleared (API.md §1.3). A 401
+         * here ends nothing.
+         */
+        asSession: Session? = null,
     ): T {
-        val session = if (authed) sessionProvider() else null
+        val session = asSession ?: if (authed) sessionProvider() else null
         val prepared = request.newBuilder().apply {
             if (session != null && mayCarrySession(request.url.host)) {
                 header("Cookie", "${session.cookieName}=${session.token}")
@@ -138,7 +144,7 @@ class ApiClient(
                     throw ApiError.Decoding(e)
                 }
             }
-            throw classify(res.code, raw, authedSession = session)
+            throw classify(res.code, raw, authedSession = if (asSession != null) null else session)
         }
     }
 

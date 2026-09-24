@@ -41,6 +41,21 @@ android {
         null
     }
 
+    // Firebase is configured from a file outside the repo (no google-services plugin), so the app
+    // builds without it and push simply stays off until the owner's project values are there.
+    // Keys: projectId, applicationId, apiKey, senderId. Location: NEXUS_FIREBASE_PROPERTIES or
+    // ~/.nexus-android-secrets/firebase.properties.
+    val firebaseProps = Properties().apply {
+        val f = File(System.getenv("NEXUS_FIREBASE_PROPERTIES")
+            ?: "${System.getProperty("user.home")}/.nexus-android-secrets/firebase.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+    }
+    defaultConfig {
+        listOf("projectId", "applicationId", "apiKey", "senderId").forEach { key ->
+            buildConfigField("String", "FIREBASE_${key.uppercase()}", "\"${firebaseProps.getProperty(key, "")}\"")
+        }
+    }
+
     buildTypes {
         release {
             signingConfig = releaseSigning
@@ -105,6 +120,7 @@ dependencies {
     implementation(libs.androidx.exifinterface)
     // OpenStreetMap, same tiles as the web (owner: no Google Maps API).
     implementation(libs.osmdroid)
+    implementation(libs.firebase.messaging)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

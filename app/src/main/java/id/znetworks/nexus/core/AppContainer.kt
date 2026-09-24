@@ -21,6 +21,7 @@ import id.znetworks.nexus.feature.attendance.ReflectionDrafts
 import id.znetworks.nexus.feature.attendance.TodayCache
 import id.znetworks.nexus.feature.auth.AuthRepository
 import id.znetworks.nexus.core.nav.Router
+import id.znetworks.nexus.feature.push.PushManager
 import id.znetworks.nexus.feature.inbox.AnnouncementHost
 import id.znetworks.nexus.feature.inbox.InboxApi
 import id.znetworks.nexus.ui.theme.AppTheme
@@ -66,6 +67,8 @@ class AppContainer(private val context: Context) {
 
     val auth = AuthRepository(api, sessionStore)
 
+    val push = PushManager(context, api, identity, appScope)
+
     val router = Router()
     val announcements = AnnouncementHost(InboxApi(api))
     val appearance = Appearance(context)
@@ -96,9 +99,12 @@ class AppContainer(private val context: Context) {
                 // Somebody else's taps are deleted; this person's own are sent now.
                 attendanceQueue.keepOnly(session.userId)
                 flushQueueSoon()
+                push.register()
             }
 
             override fun onSignedOut(session: Session?, deliberate: Boolean) {
+                // With the old cookie, before anything else forgets the session (API.md §1.3).
+                push.unregister(session)
                 if (deliberate) {
                     // Logout: the phone may be handed over. Everything this person left goes.
                     attendanceQueue.clearAll()

@@ -336,4 +336,18 @@
     <string name="delete_account_sub">Nonaktifkan dan anonimkan akunmu.</string>
     <string name="delete_account_body">Nama, email, dan login kamu dihapus dan kamu keluar di semua perangkat. Absen, tugas, dan pesan tetap ada sebagai \"Akun terhapus\". Tidak bisa dibatalkan. Ketik DELETE untuk konfirmasi.</string>
     <string name="delete">Hapus</string>
+
+    <!-- Push -->
+    <string name="ch_attendance_reminders">Pengingat absen</string>
+    <string name="ch_attendance_location">Di luar kantor</string>
+    <string name="ch_approvals">Persetujuan</string>
+    <string name="ch_messages">Pesan</string>
+    <string name="ch_tasks">Tugas</string>
+    <string name="ch_tickets">Tiket</string>
+    <string name="ch_announcements">Pengumuman</string>
+    <string name="ch_attendance">Absen</string>
+    <string name="ch_general">Umum</string>
+    <string name="file_a_permit">Ajukan izin</string>
+    <string name="reminder_checkin_title">Absen masuk 15 menit lagi</string>
+    <string name="reminder_checkin_body">Shift kamu mulai jam %1$s. Buka NEXUS untuk absen masuk.</string>
 </resources>

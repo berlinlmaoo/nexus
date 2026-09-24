@@ -3,6 +3,7 @@ package id.znetworks.nexus
 import android.content.Intent
 import android.os.Bundle
 import id.znetworks.nexus.core.nav.Links
+import id.znetworks.nexus.feature.inbox.InboxApi
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
@@ -84,6 +85,12 @@ class MainActivity : AppCompatActivity() {
             else -> null
         }
         target?.let(router::open)
+        // A tapped push marks its inbox row read, as the inbox does.
+        intent.getStringExtra(EXTRA_NOTIFICATION_ID)?.let { id ->
+            val c = (application as NexusApplication).container
+            c.appScope.launch { runCatching { InboxApi(c.api).markRead(id) } }
+        }
+        intent.removeExtra(EXTRA_NOTIFICATION_ID)
         // Handled once: a configuration change must not replay it.
         intent.data = null
         intent.removeExtra(EXTRA_TYPE)
@@ -95,5 +102,6 @@ class MainActivity : AppCompatActivity() {
         const val EXTRA_LINK = "link"
         const val EXTRA_TASK_ID = "taskId"
         const val EXTRA_PROJECT_ID = "projectId"
+        const val EXTRA_NOTIFICATION_ID = "notificationId"
     }
 }

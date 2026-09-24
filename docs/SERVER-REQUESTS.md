@@ -47,6 +47,13 @@ Add `data.channel` = the channel id below, so channel choice stays on the server
 
 (`work_session` is local only: the tracking service's own notification.)
 
+**Android side: DONE** (commit after 877aa21). The app creates all eight channels above plus
+`attendance`/`messages`/`general`, reads `data.channel` when present (falls back to the type), draws
+data-only messages itself with the "File a permit" action for `category: NEXUS_OUTSIDE_OFFICE`,
+re-reads today on `attendance_auto_offsite_checkout`, and marks the inbox row read from
+`notificationId` on tap. Push is configured from `~/.nexus-android-secrets/firebase.properties`
+(projectId, applicationId, apiKey, senderId), so it stays off until the owner's Firebase project exists.
+
 **Before it lands:** the app still works, but background notifications are shown by the system under
 the old three ids (the app will also create `attendance`/`messages`/`general` so they are not lost), and
 tapping one opens the app on Home instead of the target.

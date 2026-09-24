@@ -12,6 +12,7 @@ import id.znetworks.nexus.core.net.ApiError
 import id.znetworks.nexus.core.net.meansOriginUnreachable
 import id.znetworks.nexus.core.net.nobodyAnswered
 import id.znetworks.nexus.feature.attendance.liveness.FaceGuard
+import id.znetworks.nexus.feature.push.LocalReminders
 import id.znetworks.nexus.ui.components.describe
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -105,6 +106,7 @@ class AttendanceViewModel(app: Application) : AndroidViewModel(app) {
             c.todayCache.save(userId, today)
             _state.update { it.copy(today = today, loading = false, serverDown = false, error = null, savedCopyAt = null) }
             c.workTrail.sync(today, queue.state.value.has(AttendanceKind.CHECK_OUT))
+            LocalReminders.sync(getApplication(), today, c.push.deliveryActive.value)
             restoreDraft(today)
         } catch (e: ApiError) {
             if (e === ApiError.Unauthorized) return@launch
