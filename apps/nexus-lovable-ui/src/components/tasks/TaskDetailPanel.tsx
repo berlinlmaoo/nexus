@@ -485,7 +485,10 @@ export function TaskDetailPanel({ taskId, onClose, morphId }: { taskId: string; 
             </button>
             <button
               onClick={() => likeMut.mutate(!t?.liked)}
-              className={cn("inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition-colors active:scale-[0.97]", t?.liked ? "text-destructive" : "text-muted-foreground hover:bg-accent")}
+              // POST on this route TOGGLES, so a double-click sent two POSTs and the second one took
+              // the like straight back off. One request at a time.
+              disabled={likeMut.isPending}
+              className={cn("inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition-colors active:scale-[0.97] disabled:opacity-60", t?.liked ? "text-destructive" : "text-muted-foreground hover:bg-accent")}
               title="Like"
             >
               <Heart className={cn("h-4 w-4", t?.liked && "fill-destructive")} /> {t?.likeCount ?? 0}
