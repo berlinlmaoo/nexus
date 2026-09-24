@@ -95,7 +95,9 @@ fun LoginScreen(vm: LoginViewModel = viewModel()) = NexusLightTheme {
                     Modifier
                         .fillMaxWidth()
                         .shadow(40.dp, RoundedCornerShape(38.dp), ambientColor = Color.Black.copy(alpha = 0.1f))
-                        .background(Color.White.copy(alpha = 0.85f), RoundedCornerShape(38.dp))
+                        // Opaque: through a translucent card the elevation shadow shows as a pale
+                        // rectangle (no frosted-glass material on Android to hide it, unlike iOS).
+                        .background(Color.White, RoundedCornerShape(38.dp))
                         .border(1.dp, Color.White.copy(alpha = 0.65f), RoundedCornerShape(38.dp))
                         .padding(horizontal = 30.dp, vertical = 40.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -209,8 +211,8 @@ private fun NxField(
         shape = RoundedCornerShape(16.dp),
         textStyle = androidx.compose.ui.text.TextStyle(fontFamily = TextFont, fontSize = 16.sp, color = c.foreground),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = Color.White.copy(alpha = 0.7f), unfocusedContainerColor = Color.White.copy(alpha = 0.7f),
-            focusedBorderColor = c.onyx.copy(alpha = 0.5f), unfocusedBorderColor = Color.White,
+            focusedContainerColor = c.muted, unfocusedContainerColor = c.muted,
+            focusedBorderColor = c.onyx.copy(alpha = 0.5f), unfocusedBorderColor = c.border,
             cursorColor = c.onyx,
         ),
         modifier = Modifier.fillMaxWidth(),
