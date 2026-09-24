@@ -5,7 +5,10 @@ import SwiftUI
 // The widget extension does not link Theme.swift — that file carries UIKit appearance work the
 // extension has no business running. These two are the only colours the Island needs, taken from
 // the same palette: NX.violet and NX.warning.
-private let nxViolet = Color(red: 0x7B / 255, green: 0x68 / 255, blue: 0xEE / 255)
+/// White, not the brand violet: the Live Activity sits on the always-dark Lock Screen and Dynamic
+/// Island, where violet read as tinted and dim next to the system's own white glyphs (owner's call,
+/// 24 Sep 2026). The name is kept so every use site reads the same.
+private let nxViolet = Color.white
 private let nxAmber = Color(red: 0xFB / 255, green: 0xBF / 255, blue: 0x24 / 255)
 
 /// Where every tap on this activity lands. A literal, so the force-unwrap cannot fail at runtime.
