@@ -43,7 +43,7 @@ const bcrypt = appRequire("bcryptjs")
 const PASSWORD = process.env.COMPAT_PASSWORD || "Compat-Only-Pass-2026!"
 // Profiles that get their own staff users. Each profile needs its own people: a check-in is once per
 // person per day, and requests may not overlap — sharing users would make fixtures depend on order.
-const PROFILES = (process.env.COMPAT_PROFILES || "ios-0.1.3,ios-0.1.4,ios-0.1.5,ios-0.1.6,web").split(",")
+const PROFILES = (process.env.COMPAT_PROFILES || "ios-0.1.3,ios-0.1.4,ios-0.1.5,ios-0.1.6,web,android-0.1.0").split(",")
 
 // Kantor fiktif di Jakarta. Titik absen di fixtures ada ~10 m dari sini, jauh di dalam radius.
 const OFFICE = { lat: -6.2253, lng: 106.829, radiusMeters: 150 }

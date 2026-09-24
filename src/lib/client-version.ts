@@ -4,6 +4,7 @@
  *   iOS 0.1.6 and later   `X-Nexus-Client: ios/<marketing>/<build>`   e.g. `ios/0.1.6/12`
  *   web (Phaëthon SPA)    `X-Nexus-Client: web/1`
  *   iOS 0.1.5 and older   no X-Nexus-Client; URLSession's default `User-Agent: NEXUS/<build> CFNetwork/…`
+ *   Android               `X-Nexus-Client: android/<versionName>/<versionCode>`   e.g. `android/0.1.0/1`
  *   curl, scripts, …      neither
  *
  * The header is a statement of capability, not a credential. Every caller of these helpers must
@@ -18,7 +19,7 @@
 export type Version = readonly [number, number, number]
 
 export interface ClientTag {
-  /** Lower-cased: "ios", "web", … */
+  /** Lower-cased: "ios", "android", "web", … */
   platform: string
   version: [number, number, number]
   /** The build number after the version, e.g. "12" in `ios/0.1.6/12`; null when absent. */
@@ -32,20 +33,33 @@ const TAG_RE = /^([a-z][a-z0-9_-]*)\/(\d{1,6})(?:\.(\d{1,6}))?(?:\.(\d{1,6}))?(?
 
 /**
  * `ios/0.1.6/12` → { platform: "ios", version: [0, 1, 6], build: "12" }; `web/1` → { "web", [1, 0, 0], null }.
- * Missing, empty or unreadable → null. An iOS tag must carry all three parts (the app always sends its
- * marketing version as x.y.z) — `ios/1` is not "1.0.0", it is something we do not understand, so null.
+ * Missing, empty or unreadable → null. A native-app tag (iOS, Android) must carry all three parts (both
+ * apps always send their marketing version / versionName as x.y.z) — `ios/1` or `android/1.2` is not
+ * "1.0.0" / "1.2.0", it is something we do not understand, so null: never gated, looser rules.
  */
 export function parseClientTag(raw: string | null | undefined): ClientTag | null {
   if (!raw) return null
   const m = TAG_RE.exec(raw.trim())
   if (!m) return null
   const platform = m[1].toLowerCase()
-  if (platform === "ios" && m[4] === undefined) return null
+  if ((platform === "ios" || platform === "android") && m[4] === undefined) return null
   return {
     platform,
     version: [Number(m[2]), Number(m[3] ?? 0), Number(m[4] ?? 0)],
     build: m[5] ?? null,
   }
+}
+
+export type NativeAppPlatform = "ios" | "android"
+
+/**
+ * Which native app a request says it is, from X-Nexus-Client alone: "ios" / "android" for a readable
+ * tag of that platform, null for the web, an unknown platform, an unreadable tag or no header. Like
+ * everything here it is a statement, not a credential: use it to label, never to grant.
+ */
+export function nativeAppPlatformOf(raw: string | null | undefined): NativeAppPlatform | null {
+  const client = parseClientTag(raw)
+  return client && (client.platform === "ios" || client.platform === "android") ? client.platform : null
 }
 
 function toParts(v: string | readonly number[]): readonly number[] {

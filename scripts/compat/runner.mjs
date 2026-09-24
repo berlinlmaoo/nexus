@@ -6,10 +6,12 @@
 // Exit 0 = no FAIL. Exit 1 = at least one FAIL (a released client would break). WARN / PENDING-GATE /
 // SKIP never fail the run on their own.
 import { readFileSync, writeFileSync } from "node:fs"
-import { PROFILES, buildFixtures } from "./fixtures.mjs"
+import { PROFILES, buildFixtures, isNative } from "./fixtures.mjs"
 
 const BASE = process.env.COMPAT_BASE || "http://app:3000"
 const MIN = process.env.COMPAT_MIN_VERSION || "0.1.4"
+// The Android floor the candidate was started with (NEXUS_ANDROID_MIN_VERSION in run.sh).
+const ANDROID_MIN = process.env.COMPAT_ANDROID_MIN_VERSION || "0.0.0"
 const OUT = process.env.COMPAT_OUT || "/out"
 // Host the requests claim to be for. Mirrors what nginx sets in production (Host + X-Forwarded-Host
 // + X-Forwarded-Proto https) without naming a real domain.
@@ -45,6 +47,14 @@ function cmpVersion(a, b) {
   return 0
 }
 function gateBlocks(profile, method, path) {
+  if (profile.style === "android") {
+    // Own floor; every Android build sends the header, so it is the header rule: all /api/* except
+    // the two exempt paths.
+    if (cmpVersion(profile.version, ANDROID_MIN) >= 0) return false
+    const p = path.split("?")[0]
+    if (p.startsWith("/api/app/version-policy") || p.startsWith("/api/health")) return false
+    return p.startsWith("/api/")
+  }
   if (profile.style !== "ios") return false
   if (cmpVersion(profile.version, MIN) >= 0) return false
   const p = path.split("?")[0]
@@ -64,6 +74,10 @@ function baseHeaders(profile) {
   }
   if (profile.style === "ios") {
     h["user-agent"] = `NEXUS/${profile.build} CFNetwork/3826.500.131 Darwin/24.5.0`
+    h["accept-language"] = "id-ID,id;q=0.9"
+  } else if (profile.style === "android") {
+    // API.md: anything that does not start with NEXUS/<digits>; this is the recommended form.
+    h["user-agent"] = `NEXUS-Android/${profile.version} (${profile.build}; Android 34)`
     h["accept-language"] = "id-ID,id;q=0.9"
   } else {
     h["user-agent"] = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
@@ -86,6 +100,23 @@ function iosMultipart(fields, files) {
   chunks.push(Buffer.from(`--${boundary}--\r\n`))
   return { body: Buffer.concat(chunks), contentType: `multipart/form-data; boundary=${boundary}` }
 }
+// OkHttp MultipartBody (FORM): `createFormData(name, value)` parts carry no Content-Type; every part has
+// its own Content-Length; files carry the type the app gives them.
+function androidMultipart(fields, files) {
+  const boundary = crypto.randomUUID()
+  const chunks = []
+  for (const [k, v] of fields) {
+    const value = Buffer.from(String(v))
+    chunks.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\nContent-Length: ${value.length}\r\n\r\n`), value, Buffer.from("\r\n"))
+  }
+  for (const f of files) {
+    chunks.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${f.field}"; filename="${f.filename}"\r\nContent-Type: ${f.type}\r\nContent-Length: ${f.data.length}\r\n\r\n`))
+    chunks.push(f.data)
+    chunks.push(Buffer.from("\r\n"))
+  }
+  chunks.push(Buffer.from(`--${boundary}--\r\n`))
+  return { body: Buffer.concat(chunks), contentType: `multipart/form-data; boundary=${boundary}` }
+}
 function webFormData(fields, files) {
   const fd = new FormData()
   for (const [k, v] of fields) fd.set(k, v)
@@ -93,16 +124,18 @@ function webFormData(fields, files) {
   return fd
 }
 
-async function send(profile, session, { method, path, json, multipart }) {
+async function send(profile, session, { method, path, json, multipart, clientHeader }) {
   const headers = baseHeaders(profile)
+  // A fixture may speak as another build of the same client (the Android gate probes).
+  if (clientHeader) headers["x-nexus-client"] = clientHeader
   if (session?.cookie) headers.cookie = session.cookie
   let body
   if (json !== undefined) {
     headers["content-type"] = "application/json"
     body = JSON.stringify(json)
   } else if (multipart) {
-    if (profile.style === "ios") {
-      const m = iosMultipart(multipart.fields, multipart.files)
+    if (profile.style === "ios" || profile.style === "android") {
+      const m = profile.style === "ios" ? iosMultipart(multipart.fields, multipart.files) : androidMultipart(multipart.fields, multipart.files)
       headers["content-type"] = m.contentType
       body = m.body
     } else {
@@ -127,7 +160,7 @@ async function send(profile, session, { method, path, json, multipart }) {
 }
 
 async function login(profile, user) {
-  if (profile.style === "ios") {
+  if (isNative(profile)) {
     const r = await send(profile, null, { method: "POST", path: "/api/auth/app-login", json: { email: user.email, password: world.password } })
     const session = r.json?.token && r.json?.cookieName ? { cookie: `${r.json.cookieName}=${r.json.token}` } : null
     return { r, session }
@@ -161,7 +194,7 @@ async function probeGate() {
 const rows = []
 const t0 = Date.now()
 const gate = await probeGate()
-console.log(`version gate: /api/app/version-policy -> ${gate.status} (${gate.present ? "PRESENT" : "absent: gate fixtures reported as PENDING-GATE"}); expected minimum ${MIN}`)
+console.log(`version gate: /api/app/version-policy -> ${gate.status} (${gate.present ? "PRESENT" : "absent: gate fixtures reported as PENDING-GATE"}); expected minimum ${MIN}, Android ${ANDROID_MIN}`)
 if (gate.present) console.log(`  policy body: ${JSON.stringify(gate.body).slice(0, 300)}`)
 
 for (const profile of PROFILES) {
@@ -175,7 +208,7 @@ for (const profile of PROFILES) {
     const row = { profile: profile.id, id: step.id, title: step.title, kind: step.kind }
     const skip = step.needs?.(ctx)
     const reqSpec = step.login
-      ? { method: "POST", path: profile.style === "ios" ? "/api/auth/app-login" : "/api/auth/direct-login" }
+      ? { method: "POST", path: isNative(profile) ? "/api/auth/app-login" : "/api/auth/direct-login" }
       : step.request(ctx)
     const blocked = gateBlocks(profile, reqSpec.method, reqSpec.path)
     const expected = blocked ? { status: 426 } : step.expect

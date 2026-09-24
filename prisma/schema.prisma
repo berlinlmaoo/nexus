@@ -855,6 +855,9 @@ model Notification {
 
 model DeviceInstallation {
   id          String   @id @default(cuid())
+  // "ios" (APNs token, lower-case hex) or "android" (FCM registration token, case-sensitive). Every row
+  // written before Android existed is an iPhone, which is what the default says. See android0_server.sql.
+  platform    String   @default("ios")
   token       String   @unique
   deviceId    String
   bundleId    String

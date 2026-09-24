@@ -2,6 +2,7 @@ import prisma from "@/lib/prisma"
 import { createInAppNotification } from "@/lib/notification-service"
 import { APP_STORE_URL, fetchLatestIosVersion } from "@/lib/app-store"
 import { compareVersions } from "@/lib/client-version"
+import { PLAY_STORE_URL, androidLatestVersion } from "@/lib/android-app"
 
 // The store lookup moved to app-store.ts (which also records every version Apple serves in
 // AppReleaseSeen — this reminder's daily lookup counts as a sighting) and the comparison to
@@ -28,11 +29,15 @@ const ACTIVE_WITHIN_MS = 60 * 24 * 60 * 60 * 1000
  * is still judged on their version, so a normal run is unchanged.
  */
 export async function remindOutdatedApps(opts: { dryRun?: boolean; userIds?: string[] } = {}) {
+  // Android first and independently: it needs no App Store answer, and an Apple outage must not
+  // stop it (nor the other way round). Additive in the result: `android`; the iOS fields are unchanged.
+  const android = await remindOutdatedAndroid(opts)
   const forced = new Set(opts.userIds ?? [])
   const latest = await fetchLatestIosVersion()
-  if (!latest) return { latest: null, checked: 0, behind: 0, reminded: 0, note: "App Store version unknown" }
+  if (!latest) return { latest: null, checked: 0, behind: 0, reminded: 0, note: "App Store version unknown", android }
   const devices = await prisma.deviceInstallation.findMany({
-    where: { disabledAt: null, lastSeenAt: { gte: new Date(Date.now() - ACTIVE_WITHIN_MS) } },
+    // iPhones only: an Android build is judged against the Play version below, never the App Store's.
+    where: { platform: "ios", disabledAt: null, lastSeenAt: { gte: new Date(Date.now() - ACTIVE_WITHIN_MS) } },
     select: { userId: true, appVersion: true, lastSeenAt: true },
   })
   // One verdict per person: their NEWEST device decides, so somebody who already updated on the
@@ -46,8 +51,8 @@ export async function remindOutdatedApps(opts: { dryRun?: boolean; userIds?: str
   let behind = 0, reminded = 0
   const behindUsers: Array<{ userId: string; version: string | null }> = []
   // Somebody asked for by name is reminded even if their phone is up to date, and even if they
-  // were reminded this week.
-  for (const id of forced) if (!newest.has(id)) newest.set(id, null)
+  // were reminded this week. (Unless they only have an Android phone: the Android pass reminded them.)
+  for (const id of forced) if (!newest.has(id) && !android.forcedHandled.has(id)) newest.set(id, null)
   for (const [userId, version] of newest) {
     const force = forced.has(userId)
     const isBehind = !version || compareVersions(version, latest) < 0
@@ -71,5 +76,65 @@ export async function remindOutdatedApps(opts: { dryRun?: boolean; userIds?: str
     }).catch(() => null)
     if (created) reminded++
   }
-  return { latest, checked: newest.size, behind, reminded, ...(opts.dryRun ? { behindUsers } : {}) }
+  return { latest, checked: newest.size, behind, reminded, ...(opts.dryRun ? { behindUsers } : {}), android: android.result }
+}
+
+/**
+ * The same reminder for Android phones, against NEXUS_ANDROID_LATEST_VERSION (Play has no public
+ * lookup). Unset → nothing is sent: an unknown "latest" must never tell anyone they are behind. Only
+ * people with an Android device are judged here, by their newest Android device; people named in
+ * `userIds` who have an Android device (and no iPhone) are reminded here instead of by the iOS pass.
+ */
+async function remindOutdatedAndroid(opts: { dryRun?: boolean; userIds?: string[] }) {
+  const forcedHandled = new Set<string>()
+  const latest = androidLatestVersion()
+  if (!latest) {
+    return { forcedHandled, result: { latest: null, checked: 0, behind: 0, reminded: 0, note: "NEXUS_ANDROID_LATEST_VERSION not set" } }
+  }
+  const forced = new Set(opts.userIds ?? [])
+  const devices = await prisma.deviceInstallation.findMany({
+    where: { platform: "android", disabledAt: null, lastSeenAt: { gte: new Date(Date.now() - ACTIVE_WITHIN_MS) } },
+    select: { userId: true, appVersion: true },
+  })
+  const newest = new Map<string, string | null>()
+  for (const d of devices) {
+    const cur = newest.get(d.userId)
+    if (cur === undefined) { newest.set(d.userId, d.appVersion ?? null); continue }
+    if (d.appVersion && (!cur || compareVersions(d.appVersion, cur) > 0)) newest.set(d.userId, d.appVersion)
+  }
+  if (forced.size) {
+    const withIphone = new Set(
+      (await prisma.deviceInstallation.findMany({
+        where: { platform: "ios", disabledAt: null, userId: { in: [...forced] } },
+        select: { userId: true },
+      })).map((d) => d.userId),
+    )
+    for (const id of forced) if (newest.has(id) && !withIphone.has(id)) forcedHandled.add(id)
+  }
+  let behind = 0, reminded = 0
+  const behindUsers: Array<{ userId: string; version: string | null }> = []
+  for (const [userId, version] of newest) {
+    const force = forced.has(userId)
+    const isBehind = !version || compareVersions(version, latest) < 0
+    if (!isBehind && !force) continue
+    behind++
+    behindUsers.push({ userId, version })
+    if (opts.dryRun) continue
+    const created = await createInAppNotification({
+      userId,
+      type: "app_update",
+      title: `NEXUS ${latest} is on Google Play`,
+      message: !version
+        ? `Your NEXUS is an older version. Update to get the latest fixes and features — it takes a minute.`
+        : compareVersions(version, latest) < 0
+          ? `You're on ${version}. Update to get the latest fixes and features — it takes a minute.`
+          : `You're already on ${version} — nothing to do. This is what the reminder looks like.`,
+      // Per-release dedupe, as on iOS (Play ignores the extra parameter).
+      link: `${PLAY_STORE_URL}&v=${latest}`,
+      push: true,
+      dedupeWindowMs: force ? 0 : REMIND_EVERY_MS,
+    }).catch(() => null)
+    if (created) reminded++
+  }
+  return { forcedHandled, result: { latest, checked: newest.size, behind, reminded, ...(opts.dryRun ? { behindUsers } : {}) } }
 }

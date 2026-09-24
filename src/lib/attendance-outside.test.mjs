@@ -293,6 +293,9 @@ t("Android, desktop and iPadOS desktop mode are allowed", () => {
 t("check-in client", () => {
   assert.equal(M.attendanceClientOf(UA.app016, "ios/0.1.6/12"), "ios-app")
   assert.equal(M.attendanceClientOf(UA.legacyApp, null), "legacy-app")
+  assert.equal(M.attendanceClientOf("NEXUS-Android/0.1.0 (1; Android 34)", "android/0.1.0/1"), "android-app")
+  assert.equal(M.attendanceClientOf("okhttp/4.12.0", "Android/0.1.0/1"), "android-app")
+  assert.equal(M.isIosBrowserWithoutApp("NEXUS-Android/0.1.0 (1; Android 34)", "android/0.1.0/1"), false)
   assert.equal(M.attendanceClientOf(UA.desktopChrome, "web/1"), "web")
   assert.equal(M.attendanceClientOf(UA.android, null), "web")
   assert.equal(M.attendanceClientOf(UA.ipadDesktopMode, null), "web")

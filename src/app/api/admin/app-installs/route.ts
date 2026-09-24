@@ -46,6 +46,7 @@ export async function GET() {
       orderBy: { lastSeenAt: "desc" },
       select: {
         id: true,
+        platform: true,
         appVersion: true,
         buildNumber: true,
         osVersion: true,
@@ -103,11 +104,23 @@ export async function GET() {
       }))
       .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""))
 
+    // `versions` is what every shipped client already renders as chips. iPhone keys are unchanged; an
+    // Android build is prefixed so "0.1.0 (1)" on Android is never read as an ancient iOS build.
+    // `platforms` and `versionsByPlatform` are the same counts split by platform (additive).
     const versions = new Map<string, number>()
+    const byPlatform = new Map<string, Map<string, number>>()
+    const platforms: Record<string, number> = { ios: 0, android: 0 }
     for (const i of installs) {
-      const key = i.appVersion ? `${i.appVersion}${i.buildNumber ? ` (${i.buildNumber})` : ""}` : "unknown"
+      const label = i.appVersion ? `${i.appVersion}${i.buildNumber ? ` (${i.buildNumber})` : ""}` : "unknown"
+      const key = i.platform !== "android" ? label : i.appVersion ? `Android ${label}` : "Android (not reported)"
       versions.set(key, (versions.get(key) ?? 0) + 1)
+      const bucket = byPlatform.get(i.platform) ?? new Map<string, number>()
+      bucket.set(label, (bucket.get(label) ?? 0) + 1)
+      byPlatform.set(i.platform, bucket)
+      platforms[i.platform] = (platforms[i.platform] ?? 0) + 1
     }
+    const countList = (m: Map<string, number>) =>
+      [...m.entries()].map(([version, count]) => ({ version, count })).sort((a, b) => b.count - a.count)
 
     return NextResponse.json({
       installs,
@@ -117,9 +130,9 @@ export async function GET() {
         devices: rows.length,
         members: members.length,
         notInstalled: notInstalled.length,
-        versions: [...versions.entries()]
-          .map(([version, count]) => ({ version, count }))
-          .sort((a, b) => b.count - a.count),
+        versions: countList(versions),
+        platforms,
+        versionsByPlatform: Object.fromEntries([...byPlatform.entries()].map(([p, m]) => [p, countList(m)])),
       },
     })
   } catch (error) {

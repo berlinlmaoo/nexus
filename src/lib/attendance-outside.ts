@@ -312,10 +312,11 @@ export function isAutoOffsiteCheckoutReason(reason: string | null | undefined): 
 
 // ── where a check-in came from ─────────────────────────────────────────────────────────────────────
 
-export type CheckInClient = "ios-app" | "web" | "legacy-app"
+export type CheckInClient = "ios-app" | "android-app" | "web" | "legacy-app"
 
 /**
  * "ios-app"    — X-Nexus-Client: ios/… (0.1.6 and later).
+ * "android-app" — X-Nexus-Client: android/… (every Android build).
  * "legacy-app" — no such header, User-Agent `NEXUS/<build> CFNetwork/… Darwin/…` (0.1.5 and older).
  * "web"        — X-Nexus-Client: web/… or any browser (User-Agent starting "Mozilla/").
  * null         — anything else (curl, scripts): unknown, and never guessed.
@@ -323,6 +324,7 @@ export type CheckInClient = "ios-app" | "web" | "legacy-app"
 export function attendanceClientOf(userAgent: string | null | undefined, clientHeader: string | null | undefined): CheckInClient | null {
   const header = (clientHeader ?? "").trim()
   if (/^ios\//i.test(header)) return "ios-app"
+  if (/^android\//i.test(header)) return "android-app"
   const ua = (userAgent ?? "").trim()
   if (/^NEXUS\/\d+/.test(ua)) return "legacy-app"
   if (/^web\//i.test(header)) return "web"
