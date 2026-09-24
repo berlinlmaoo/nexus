@@ -58,8 +58,12 @@ class ApiClient(
 
     fun url(path: String): HttpUrl = baseUrl.resolve(path) ?: error("Bad path: $path")
 
-    suspend fun <T> get(path: String, serializer: KSerializer<T>, authed: Boolean = true): T =
-        send(Request.Builder().url(url(path)).get().build(), serializer, authed)
+    suspend fun <T> get(
+        path: String,
+        serializer: KSerializer<T>,
+        authed: Boolean = true,
+        callTimeoutMs: Long? = null,
+    ): T = send(Request.Builder().url(url(path)).get().build(), serializer, authed, callTimeoutMs)
 
     suspend fun <B, T> postJson(
         path: String,
@@ -78,7 +82,13 @@ class ApiClient(
      * made without a session (login, sign-up, version policy): their 401 is an answer, not an
      * expired session, and must never sign anybody out.
      */
-    suspend fun <T> send(request: Request, serializer: KSerializer<T>, authed: Boolean = true): T {
+    suspend fun <T> send(
+        request: Request,
+        serializer: KSerializer<T>,
+        authed: Boolean = true,
+        /** A hard ceiling for calls nobody should wait on (the version policy: 8 s). */
+        callTimeoutMs: Long? = null,
+    ): T {
         val session = if (authed) sessionProvider() else null
         val prepared = request.newBuilder().apply {
             if (session != null && mayCarrySession(request.url.host)) {
@@ -87,7 +97,12 @@ class ApiClient(
         }.build()
 
         val response = try {
-            http.newCall(prepared).await()
+            val client = if (callTimeoutMs != null) {
+                http.newBuilder().callTimeout(callTimeoutMs, TimeUnit.MILLISECONDS).build()
+            } else {
+                http
+            }
+            client.newCall(prepared).await()
         } catch (e: IOException) {
             throw ApiError.Transport(e)
         }

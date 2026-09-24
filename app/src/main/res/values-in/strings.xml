@@ -33,4 +33,14 @@
     <string name="logout">Keluar</string>
     <string name="logout_confirm_title">Keluar dari NEXUS?</string>
     <string name="logout_confirm_message">Semua yang NEXUS simpan di HP ini untuk kamu akan dihapus, termasuk absen yang belum terkirim.</string>
+
+    <string name="update_required_body">Versi ini sudah tidak didukung. Data kamu aman — pasang versi baru dan kamu bisa lanjut persis dari tempat terakhir.</string>
+    <string name="update_required_min">Versi minimum: %1$s</string>
+    <string name="update_download">Unduh update</string>
+    <string name="update_check_again">Cek lagi</string>
+    <string name="update_available">NEXUS %1$s sudah tersedia</string>
+    <string name="update_action">Perbarui</string>
+    <string name="update_soon_title">Segera perbarui NEXUS</string>
+    <string name="update_grace_body">Perbarui NEXUS sebelum %1$s. Setelah itu, versi ini tidak bisa dipakai absen.</string>
+    <string name="later">Nanti</string>
 </resources>

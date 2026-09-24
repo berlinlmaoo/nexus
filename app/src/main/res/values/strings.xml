@@ -37,4 +37,14 @@
     <string name="logout">Logout</string>
     <string name="logout_confirm_title">Log out of NEXUS?</string>
     <string name="logout_confirm_message">Everything NEXUS saved on this phone for you is removed, including attendance that hasn\'t been sent yet.</string>
+
+    <string name="update_required_body">This version is no longer supported. Your data is safe — install the new version and you\'ll pick up right where you left off.</string>
+    <string name="update_required_min">Minimum version: %1$s</string>
+    <string name="update_download">Download update</string>
+    <string name="update_check_again">Check again</string>
+    <string name="update_available">NEXUS %1$s is available</string>
+    <string name="update_action">Update</string>
+    <string name="update_soon_title">Update NEXUS soon</string>
+    <string name="update_grace_body">Update NEXUS by %1$s. After that, this version can\'t take attendance.</string>
+    <string name="later">Later</string>
 </resources>

@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -20,8 +22,28 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Release key lives OUTSIDE the repo (agents:~/.nexus-android-secrets, backup on the host's
+    // /mnt/nexus-backup/android-signing). Losing it means no installed phone accepts an update, so
+    // it is never committed. Override the location with NEXUS_KEYSTORE_PROPERTIES.
+    val keystoreProps = File(
+        System.getenv("NEXUS_KEYSTORE_PROPERTIES")
+            ?: "${System.getProperty("user.home")}/.nexus-android-secrets/keystore.properties",
+    )
+    val releaseSigning = if (keystoreProps.exists()) {
+        val p = Properties().apply { keystoreProps.inputStream().use { load(it) } }
+        signingConfigs.create("release") {
+            storeFile = File(p.getProperty("storeFile"))
+            storePassword = p.getProperty("storePassword")
+            keyAlias = p.getProperty("keyAlias")
+            keyPassword = p.getProperty("keyPassword")
+        }
+    } else {
+        null
+    }
+
     buildTypes {
         release {
+            signingConfig = releaseSigning
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

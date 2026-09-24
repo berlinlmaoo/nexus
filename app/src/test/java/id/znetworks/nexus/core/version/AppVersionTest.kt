@@ -1,6 +1,7 @@
 package id.znetworks.nexus.core.version
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -19,10 +20,15 @@ class AppVersionTest {
         assertTrue(v("0.1.1") > v("0.1"))
     }
 
-    @Test fun unreadableIsNullNotZero() {
+    @Test fun leadingDigitsLikeIos() {
+        assertEquals(v("0.1.6"), v("0.1.6-beta"))
+        assertEquals(v("0.1.0"), v("0.1.x"))
+    }
+
+    @Test fun blankIsNoVersion() {
         assertNull(AppVersion.parse(""))
-        assertNull(AppVersion.parse(null))
-        assertNull(AppVersion.parse("0.1.x"))
-        assertNull(AppVersion.parse("-1.0"))
+        assertNull(AppVersion.parse("  "))
+        assertFalse(AppVersion.isBelow("0.1.6", null))
+        assertFalse(AppVersion.isBelow("0.1.6", ""))
     }
 }

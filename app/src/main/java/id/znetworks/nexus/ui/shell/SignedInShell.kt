@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -48,9 +49,11 @@ import androidx.core.os.LocaleListCompat
 import id.znetworks.nexus.R
 import id.znetworks.nexus.core.net.NexusConfig
 import id.znetworks.nexus.core.session.Session
+import id.znetworks.nexus.core.version.VersionGate
 import id.znetworks.nexus.ui.components.EmptyState
 import id.znetworks.nexus.ui.theme.DisplayFont
 import id.znetworks.nexus.ui.theme.Nx
+import id.znetworks.nexus.ui.update.openUpdate
 
 private enum class Tab(val label: Int, val icon: ImageVector, val webPath: String) {
     HOME(R.string.tab_home, Icons.Filled.Home, "/dashboard"),
@@ -65,7 +68,7 @@ private enum class Tab(val label: Int, val icon: ImageVector, val webPath: Strin
  * open the web page instead (PRD §5 Phase 1: a link to an unbuilt screen opens the web).
  */
 @Composable
-fun SignedInShell(session: Session, onSignOut: () -> Unit) {
+fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () -> Unit) {
     var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
     val context = LocalContext.current
     Scaffold(
@@ -84,7 +87,7 @@ fun SignedInShell(session: Session, onSignOut: () -> Unit) {
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
-                Tab.MORE -> MoreScreen(session, onSignOut)
+                Tab.MORE -> MoreScreen(session, gateState, onSignOut)
                 else -> EmptyState(
                     icon = tab.icon,
                     title = stringResource(R.string.not_on_android_title),
@@ -99,7 +102,7 @@ fun SignedInShell(session: Session, onSignOut: () -> Unit) {
 }
 
 @Composable
-private fun MoreScreen(session: Session, onSignOut: () -> Unit) {
+private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut: () -> Unit) {
     val c = Nx.colors
     var confirmLogout by rememberSaveable { mutableStateOf(false) }
     var pickLanguage by rememberSaveable { mutableStateOf(false) }
@@ -110,6 +113,17 @@ private fun MoreScreen(session: Session, onSignOut: () -> Unit) {
         Spacer(Modifier.height(20.dp))
         val itemColors = ListItemDefaults.colors(containerColor = c.card)
         val shape = Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(16.dp))
+        val context = LocalContext.current
+        gateState.available?.let { version ->
+            // Soft "update available": Tuning Room only, never a nag (REQ-ATT-41).
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.update_available, version)) },
+                leadingContent = { Icon(Icons.Filled.SystemUpdate, null, tint = c.violetText) },
+                colors = itemColors, modifier = shape,
+                trailingContent = { TextButton(onClick = { openUpdate(context, gateState.storeUrl) }) { Text(stringResource(R.string.update_action)) } },
+            )
+            Spacer(Modifier.height(12.dp))
+        }
         ListItem(
             headlineContent = { Text(stringResource(R.string.settings_language)) },
             supportingContent = { Text(stringResource(R.string.settings_language_current)) },
