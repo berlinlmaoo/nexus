@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { resolveUploadedImageType } from "@/lib/image-sniff"
 import { logAudit } from "@/lib/audit"
 import { writeFile, mkdir, unlink, readdir } from "fs/promises"
 import path from "path"
@@ -31,7 +32,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 })
     }
 
-    if (!ALLOWED_TYPES.includes(file.type)) {
+    // A part labelled application/octet-stream (or unlabelled) is judged by its bytes.
+    const fileType = await resolveUploadedImageType(file, ALLOWED_TYPES)
+    if (!fileType) {
       return NextResponse.json(
         { error: "Invalid file type. Allowed: PNG, JPG, WEBP" },
         { status: 400 }
@@ -46,7 +49,7 @@ export async function POST(request: NextRequest) {
     }
 
     const userId = session.user.id
-    const ext = EXT_MAP[file.type] || "png"
+    const ext = EXT_MAP[fileType] || "png"
     const fileName = `${userId}.${ext}`
 
     const uploadDir = path.join(process.cwd(), "public", "uploads", "avatars")

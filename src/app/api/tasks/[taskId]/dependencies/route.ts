@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
+import { canReadTask, taskReadRefusal } from "@/lib/read-access"
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
 
@@ -9,6 +10,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ task
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // Signed in is not enough (API.md E5): whoever may open the task (lib/read-access.ts).
+    const readable = await canReadTask(session.user.id, (await params).taskId)
+    if (readable !== "ok") return taskReadRefusal(readable)
     const dependencies = await prisma.taskDependency.findMany({
       where: { taskId: (await params).taskId },
       include: { dependsOnTask: { select: { id: true, title: true, status: true } } },

@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
+import { canReadProjectContent } from "@/lib/read-access"
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
 import { extractTextFromTipTap } from '@/lib/tiptap-utils'
@@ -10,6 +11,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ docI
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // Signed in is not enough (API.md E5). Search lists every doc of the searcher's workspaces, so the
+    // bar is the doc's workspace (or its project), not the docs list's project-member filter.
+    const docRef = await prisma.doc.findUnique({ where: { id: (await params).docId }, select: { projectId: true } })
+    if (!docRef) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (!(await canReadProjectContent(session.user.id, docRef.projectId))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     const doc = await prisma.doc.findUnique({
       where: { id: (await params).docId },
       include: {

@@ -12,6 +12,10 @@ model User {
   name           String
   email          String            @unique
   password       String?
+  /// Session revocation (src/lib/session-version.ts): every session token minted since this existed
+  /// carries the value; bumping it ends every token carrying an older one. Bumped by a password reset,
+  /// and by a password change made from the web (which re-issues that browser's own cookie).
+  sessionVersion Int               @default(0)
   /// Passkeys registered from this person's devices. Additive: password sign-in stays, because a
   /// lost device must not become a lost account.
   passkeys       Passkey[]

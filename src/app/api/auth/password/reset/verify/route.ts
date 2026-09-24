@@ -99,7 +99,9 @@ export async function POST(request: NextRequest) {
     await prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: user.id },
-        data: { password: hashedPassword },
+        // Ends every session issued with a sessionVersion (lib/session-version.ts): whoever had the
+        // old password is signed out everywhere. The person resetting is not signed in here anyway.
+        data: { password: hashedPassword, sessionVersion: { increment: 1 } },
       })
 
       await tx.emailOtpVerification.update({

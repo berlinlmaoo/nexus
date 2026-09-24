@@ -61,6 +61,14 @@ const TASK_STATUSES = new Set(["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE", "CANC
 const TASK_PRIORITIES = new Set(["URGENT", "HIGH", "MEDIUM", "LOW", "NONE"])
 const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024
 
+/** A form file over MAX_ATTACHMENT_SIZE. Thrown from the parser, answered 413 by POST (it used to be a 500). */
+class FormFileTooLargeError extends Error {
+  constructor(fileName: string) {
+    super(`File "${fileName}" is too large. Maximum size is 50 MB.`)
+    this.name = "FormFileTooLargeError"
+  }
+}
+
 interface SubmittedFile {
   fieldId: string
   file: File
@@ -232,7 +240,7 @@ async function parseSubmissionRequest(request: NextRequest) {
       const isFieldAttachment = key.startsWith("attachment:")
       if ((!isFieldFile && !isFieldAttachment) || !(value instanceof File) || value.size === 0) continue
       if (value.size > MAX_ATTACHMENT_SIZE) {
-        throw new Error(`File "${value.name}" is too large. Maximum size is 50MB.`)
+        throw new FormFileTooLargeError(value.name)
       }
       files.push({ fieldId: key.replace("file:", "").replace("attachment:", ""), file: value })
     }
@@ -566,6 +574,12 @@ export async function POST(
 
     return NextResponse.json(result, { status: 201 })
   } catch (error) {
+    if (error instanceof FormFileTooLargeError) {
+      return NextResponse.json(
+        { error: error.message, code: "FILE_TOO_LARGE", maxBytes: MAX_ATTACHMENT_SIZE },
+        { status: 413 }
+      )
+    }
     console.error("Error submitting form:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }

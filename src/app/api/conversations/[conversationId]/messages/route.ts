@@ -22,7 +22,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ conv
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const { conversationId } = await params
     const access = await assertAccess(session.user.id, conversationId)
-    if (!access.ok) return NextResponse.json({ error: "Forbidden" }, { status: access.status })
+    if (!access.ok) return NextResponse.json({ error: access.status === 404 ? "Not found" : "Forbidden" }, { status: access.status })
 
     const before = req.nextUrl.searchParams.get("before")
     const limit = Math.min(parseInt(req.nextUrl.searchParams.get("limit") || "50", 10), 100)
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
     const userId = session.user.id
     const { conversationId } = await params
     const access = await assertAccess(userId, conversationId)
-    if (!access.ok) return NextResponse.json({ error: "Forbidden" }, { status: access.status })
+    if (!access.ok) return NextResponse.json({ error: access.status === 404 ? "Not found" : "Forbidden" }, { status: access.status })
 
     const { content, mentionedUserIds, attachmentUrl, attachmentType, replyToId } = await req.json()
     const text = typeof content === "string" ? content.trim() : ""

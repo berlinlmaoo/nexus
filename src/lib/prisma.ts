@@ -12,7 +12,10 @@ function createPrismaClient() {
     connectionTimeoutMillis: parseInt(process.env.DB_CONNECT_TIMEOUT || '5000', 10),
   })
   const adapter = new PrismaPg(pool)
-  return new PrismaClient({ adapter })
+  // Secrets never leave the database by accident: 14 routes use `include: { user: true }` and used to
+  // hand every signed-in caller the bcrypt hash of whoever they included. Omitted globally; the two
+  // places that must read the hash (credentials-auth, user/password) ask with an explicit `select`.
+  return new PrismaClient({ adapter, omit: { user: { password: true, waLinkCode: true } } })
 }
 
 const prismaClient = globalForPrisma.prisma ?? createPrismaClient()

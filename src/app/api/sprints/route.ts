@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
+import { checkProjectAccess } from "@/lib/rbac"
 import prisma from '@/lib/prisma'
 import { executeAutomations } from '@/lib/automation-engine'
 import { emitSprintUpdated } from '@/lib/socket-emitter'
@@ -14,6 +15,10 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const projectId = searchParams.get('projectId')
     if (!projectId) return NextResponse.json({ error: 'projectId required' }, { status: 400 })
+    // Signed in is not enough (API.md E5): the same check as the project page itself.
+    if (!(await checkProjectAccess(session.user.id, projectId, ["VIEWER"])).allowed) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
     const sprints = await prisma.sprint.findMany({
       where: { projectId },
       include: { tasks: { include: { task: { select: { id: true, title: true, status: true, priority: true, assignees: { include: { user: { select: { id: true, name: true } } } } } } } } },

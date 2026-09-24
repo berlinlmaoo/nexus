@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { isSystemAdminUser } from "@/lib/rbac"
 import { validateFolderPlacement } from "@/lib/folder-tree"
+import { normalizeAggregateProjectIds } from "@/lib/folder-aggregate"
 
 async function canManageWorkspace(userId: string, workspaceId: string) {
   if (await isSystemAdminUser(userId)) return true
@@ -59,6 +60,28 @@ export async function PATCH(
       return NextResponse.json({ error: "Folder name is required" }, { status: 400 })
     }
 
+    // Curated subset for the folder's aggregate view ("Pick projects" on iOS and the web). Both send it
+    // on its own; it used to be ignored with a 200. Only projects of this folder's workspace are kept —
+    // an id from elsewhere is dropped, not stored. [] (or null) = every project in the folder.
+    const hasAggregateChange = Object.prototype.hasOwnProperty.call(body, "aggregateProjectIds")
+    let aggregateProjectIds: string[] | undefined
+    if (hasAggregateChange) {
+      const wanted = normalizeAggregateProjectIds(body.aggregateProjectIds)
+      if (wanted === null) {
+        return NextResponse.json({ error: "aggregateProjectIds must be a list of project ids" }, { status: 400 })
+      }
+      if (wanted.length === 0) {
+        aggregateProjectIds = []
+      } else {
+        const inWorkspace = await prisma.project.findMany({
+          where: { id: { in: wanted }, workspaceId: existing.workspaceId },
+          select: { id: true },
+        })
+        const known = new Set(inWorkspace.map((project) => project.id))
+        aggregateProjectIds = wanted.filter((id) => known.has(id))
+      }
+    }
+
     if (hasParentChange) {
       const placementError = await validateFolderPlacement({
         workspaceId: existing.workspaceId,
@@ -78,6 +101,7 @@ export async function PATCH(
         ...(color !== undefined && { color }),
         ...(position !== undefined && { position }),
         ...(hasParentChange && { parentFolderId: newParentFolderId ?? null }),
+        ...(aggregateProjectIds !== undefined && { aggregateProjectIds }),
       },
     })
 
