@@ -76,8 +76,10 @@ export async function POST(request: NextRequest) {
     })
 
     if (existingUser) {
+      // Most often an invited person: the invite made their account (with no password they know)
+      // before they ever got here. Tell them the way in instead of a dead end.
       return NextResponse.json(
-        { error: 'User with this email already exists' },
+        { error: 'This email already has a NEXUS account — you may have been invited. Use Forgot password to set your password, then sign in.' },
         { status: 409 }
       )
     }

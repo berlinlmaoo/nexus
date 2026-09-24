@@ -164,6 +164,7 @@ function Admin() {
       const moved = r.absorbed?.length ? ` · workspace pribadi "${r.absorbed[0]}" dihapus` : "";
       toast.success(`${r.member?.name ?? "Akun"} masuk sebagai Staff${moved}`, { description: "Taruh di bawah manager-nya di Bagan Approval." });
       if (r.kept?.length) toast.warning("Masih punya workspace lain yang tidak kosong", { description: r.kept.join(", ") + " — dibiarkan. Dia bisa mendarat di sana, bukan di sini." });
+      if (r.emailSent === false) toast.warning("Email pemberitahuan tidak terkirim", { description: "Dia sudah masuk workspace, tapi belum tahu. Kabari sendiri." });
     },
     onError: (e: unknown) => toast.error("Gagal memasukkan", { description: e instanceof ApiError ? e.message : "Coba lagi." }),
   });

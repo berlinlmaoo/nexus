@@ -1923,7 +1923,9 @@ export const nexusApi = {
   /** `absorbPersonalWorkspace`: hapus workspace pribadi kosong yang dibuat saat daftar tanpa kode,
    *  supaya workspace ini benar-benar jadi rumahnya (workspace aktif dipilih dari joinedAt tertua). */
   inviteWorkspaceMember: (payload: { email: string; role?: OrgRole; attendanceRole?: string; workspaceId?: string; absorbPersonalWorkspace?: boolean }) =>
-    apiFetch<{ member: NexusWorkspaceMember; absorbed?: string[]; kept?: string[] }>("/api/workspaces/members", { method: "POST", body: JSON.stringify(payload) }),
+    // emailSent: false = member added but the notification email didn't go out (tell the admin).
+    // accountCreated: true = no account existed; the invitee sets a password via /forgot-password.
+    apiFetch<{ member: NexusWorkspaceMember; absorbed?: string[]; kept?: string[]; emailSent?: boolean; accountCreated?: boolean }>("/api/workspaces/members", { method: "POST", body: JSON.stringify(payload) }),
   updateWorkspaceMember: (payload: { memberId: string; role?: OrgRole; attendanceRole?: string; workspaceId?: string; attendanceShiftStartTime?: string | null; attendanceShiftEndTime?: string | null; attendanceShiftByDay?: Record<string, { start: string; end: string }> | null; phoneNumber?: string | null; flexiTimeEnabled?: boolean; noGeofenceMode?: boolean; approverId?: string | null; restDays?: number[] }) =>
     apiFetch<{ member: NexusWorkspaceMember; orphaned?: Array<{ id: string; name: string | null }> }>("/api/workspaces/members", { method: "PATCH", body: JSON.stringify(payload) }),
   /** Seluruh Bagan Approval dalam satu panggilan. BoD saja. */

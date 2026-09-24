@@ -264,6 +264,66 @@ export function statusUpdateEmail(data: {
   }
 }
 
+// Workspace and display names are typed by users. These two templates go to people who may never
+// have opened NEXUS, so they escape what they interpolate (the older templates don't).
+function escapeHtml(s: string): string {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
+// A header must stay on one line.
+const oneLine = (s: string) => String(s).replace(/[\r\n]+/g, " ").trim()
+
+/** Invite to someone who had no NEXUS account: the account exists now, it only needs a password. */
+export function workspaceInviteNewUserEmail(data: {
+  recipientName: string
+  recipientEmail: string
+  inviterName: string
+  workspaceName: string
+}): EmailPayload {
+  const setPasswordUrl = link(`forgot-password?email=${encodeURIComponent(data.recipientEmail)}&invited=1`)
+  return {
+    to: "",
+    subject: oneLine(`${data.inviterName} added you to ${data.workspaceName} on NEXUS`),
+    html: wrapHtml(
+      "You're Invited to NEXUS",
+      paragraph(`Hi ${escapeHtml(data.recipientName)},`) +
+        paragraph(`<strong>${escapeHtml(data.inviterName)}</strong> added you to <strong>${escapeHtml(data.workspaceName)}</strong> on NEXUS.`) +
+        metaRow("Workspace", escapeHtml(data.workspaceName)) +
+        metaRow("Email", escapeHtml(data.recipientEmail)) +
+        paragraph("Your account is ready &mdash; it just needs a password. We'll email you a 6-digit code to confirm this address is yours, then you choose your password.") +
+        (setPasswordUrl
+          ? button("Set your password", escapeHtml(setPasswordUrl))
+          : paragraph("Open NEXUS, choose <strong>Forgot password</strong> on the sign-in page and enter this email address to set your password.")) +
+        paragraph("After that, sign in with this email on the web or in the NEXUS app. If you weren't expecting this, you can ignore this email.")
+    ),
+  }
+}
+
+/** The person already had a NEXUS account and was added to another workspace. */
+export function workspaceAddedEmail(data: {
+  recipientName: string
+  inviterName: string
+  workspaceName: string
+}): EmailPayload {
+  return {
+    to: "",
+    subject: oneLine(`You've been added to ${data.workspaceName} on NEXUS`),
+    html: wrapHtml(
+      "Added to a Workspace",
+      paragraph(`Hi ${escapeHtml(data.recipientName)},`) +
+        paragraph(`<strong>${escapeHtml(data.inviterName)}</strong> added you to <strong>${escapeHtml(data.workspaceName)}</strong> on NEXUS.`) +
+        paragraph("Sign in with your existing NEXUS account to get started.") +
+        button("Sign in", escapeHtml(link("login"))) +
+        paragraph("Forgot your password? Use <strong>Forgot password</strong> on the sign-in page.")
+    ),
+  }
+}
+
 // ── Send function ───────────────────────────────────────────────
 
 export async function sendEmail(payload: EmailPayload): Promise<boolean> {

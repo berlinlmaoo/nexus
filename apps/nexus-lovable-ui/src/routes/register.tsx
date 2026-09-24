@@ -125,7 +125,16 @@ function RegisterPage() {
               <p className="ml-1 text-xs text-muted-foreground">From your company, to join its workspace. Leave empty to start your own.</p>
             </div>
 
-            {error && <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">{error}</div>}
+            {error && (
+              <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
+                {error}
+                {/* The "already has an account" answer usually means an invite: the account exists
+                    and only needs a password, so the way out is one tap away rather than a sentence. */}
+                {error.includes("Forgot password") && (
+                  <a href={`/forgot-password?email=${encodeURIComponent(email.trim())}&invited=1`} className="mt-2 block font-bold text-primary underline-offset-4 hover:underline">Set your password →</a>
+                )}
+              </div>
+            )}
 
             <button type="submit" disabled={loading} className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 font-bold text-primary-foreground shadow-xl shadow-primary/25 transition-all active:scale-[0.98] disabled:opacity-70">
               {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending code…</> : <>Continue <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></>}
