@@ -57,6 +57,9 @@ struct NexusApp: App {
                     }
                 }
                 .onChange(of: scenePhase) { _, phase in
+                    // On the way out, which is the only moment iOS will accept the request: an app
+                    // in the foreground is not a candidate for either window.
+                    if phase == .background { BackgroundRefresh.schedule() }
                     guard phase == .active, let userId = auth.session?.userId else { return }
                     Task { await NotificationManager.shared.reconcileReminders(userId: userId) }
                     Task { await AttendanceQueue.shared.flush() }

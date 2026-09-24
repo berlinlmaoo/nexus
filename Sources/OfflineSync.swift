@@ -206,6 +206,11 @@ final class OfflineSync: ObservableObject {
 
     func cancelMedia() { mediaTask?.cancel(); mediaTask = nil }
 
+    /// Waits for the file pass that was just started. The foreground never does — a person must
+    /// not be held behind a gigabyte — but a background window has to stay open for the work it
+    /// asked for, or iOS records a run that fetched nothing and offers fewer of them.
+    func waitForMedia() async { await mediaTask?.value }
+
     /// Wiped with the session, like every other cache: an offline copy of somebody's project files
     /// must not outlive their login.
     func reset() {

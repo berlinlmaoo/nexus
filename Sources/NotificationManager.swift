@@ -303,6 +303,9 @@ final class NotificationAppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = NotificationManager.shared
+        // Here rather than in NexusApp.init: iOS refuses a handler registered after this method
+        // returns, and refuses it by trapping.
+        BackgroundRefresh.register()
         return true
     }
 

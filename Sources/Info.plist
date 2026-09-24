@@ -57,6 +57,21 @@
 	<true/>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
+	<!-- Working ahead, so the app is useful on a site with no bars. `fetch` is the short window
+	     that keeps today's attendance and the board current; `processing` is the long idle one
+	     that pulls the files. See Sources/BackgroundRefresh.swift — the identifiers below and the
+	     ones it registers are checked against each other by iOS, and a disagreement is a trap at
+	     launch rather than a feature that silently never runs. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>id.znetworks.nexus.refresh</string>
+		<string>id.znetworks.nexus.prefetch</string>
+	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
