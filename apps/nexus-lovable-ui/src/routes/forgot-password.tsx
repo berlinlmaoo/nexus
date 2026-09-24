@@ -4,14 +4,24 @@ import { ArrowRight, Loader2, ShieldCheck, Eye, EyeOff, RotateCcw, ArrowLeft } f
 import nexusLogo from "@/assets/nexus-logo.png";
 import { ApiError, nexusApi } from "@/lib/nexus-api";
 
-export const Route = createFileRoute("/forgot-password")({ component: ForgotPasswordPage });
+export const Route = createFileRoute("/forgot-password")({
+  component: ForgotPasswordPage,
+  // Invite emails link here as ?email=…&invited=1. The default search parser JSON-decodes values,
+  // so `invited=1` arrives as the number 1 — accept every spelling.
+  validateSearch: (s: Record<string, unknown>): { email?: string; invited?: boolean } => ({
+    ...(typeof s.email === "string" && s.email.trim() ? { email: s.email.trim() } : {}),
+    ...(s.invited === 1 || s.invited === "1" || s.invited === true ? { invited: true } : {}),
+  }),
+});
 
 const errOf = (e: unknown, fb: string) => (e instanceof ApiError ? ((e.payload as { error?: string; message?: string } | null)?.error ?? (e.payload as { message?: string } | null)?.message ?? fb) : fb);
 
 function ForgotPasswordPage() {
   const navigate = useNavigate();
+  const search = Route.useSearch();
+  const invited = search.invited === true;
   const [step, setStep] = useState<"request" | "verify">("request");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(search.email ?? "");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -55,7 +65,7 @@ function ForgotPasswordPage() {
     try {
       await nexusApi.passwordResetVerify({ email: email.trim(), code, password });
       setError(null);
-      setInfo("Password reset! Taking you to login…");
+      setInfo(invited ? "Password set! Taking you to login…" : "Password reset! Taking you to login…");
       setTimeout(() => navigate({ to: "/login" }), 1200);
     } catch (err) {
       setError(errOf(err, "Wrong or expired code. Double-check it or resend."));
@@ -90,8 +100,8 @@ function ForgotPasswordPage() {
         </div>
         <div className="mb-8 text-center">
           <div className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-2xl bg-primary/10 text-primary"><ShieldCheck className="h-6 w-6" /></div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground">Reset Password</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{step === "request" ? "Drop your email and we'll send a verification code." : `Enter the code we sent to ${email}, plus a new password.`}</p>
+          <h1 className="text-xl font-bold tracking-tight text-foreground">{invited ? "Set your password" : "Reset Password"}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{step === "request" ? (invited ? "You've been invited to NEXUS. We'll email you a code to set your password." : "Drop your email and we'll send a verification code.") : `Enter the code we sent to ${email}, plus a new password.`}</p>
         </div>
 
         {step === "request" ? (
@@ -125,7 +135,7 @@ function ForgotPasswordPage() {
             </div>
             {error && <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">{error}</div>}
             <button type="submit" disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 font-bold text-primary-foreground shadow-xl shadow-primary/25 transition-all active:scale-[0.98] disabled:opacity-70">
-              {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : <>Reset password <ArrowRight className="h-4 w-4" /></>}
+              {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : <>{invited ? "Set password" : "Reset password"} <ArrowRight className="h-4 w-4" /></>}
             </button>
             <div className="flex items-center justify-between gap-2 pt-1">
               <button type="button" onClick={() => { setStep("request"); setError(null); setInfo(null); setCode(""); }} className="inline-flex items-center gap-1 text-xs font-bold text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3.5 w-3.5" /> Change email</button>

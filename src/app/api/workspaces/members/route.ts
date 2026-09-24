@@ -9,6 +9,8 @@ import { logAudit } from '@/lib/audit'
 import { isSystemAdminUser, WORKSPACE_HIERARCHY } from '@/lib/rbac'
 import { isLikelyPhoneNumber, normalizeIndonesianPhoneNumber } from '@/lib/phone-number'
 import { Prisma } from '@/generated/prisma/client'
+import { canonicalEmail } from '@/lib/email-auth'
+import { sendEmail, workspaceAddedEmail, workspaceInviteNewUserEmail } from '@/lib/email'
 import type { WorkspaceRole } from '@/generated/prisma/client'
 
 // Caller's effective tier (system super-admin = top). Used to gate who can assign which role.
@@ -198,21 +200,31 @@ export async function POST(req: NextRequest) {
     }
     const effectiveRole = role
 
-    if (!email) return NextResponse.json({ error: 'Email is required' }, { status: 400 })
+    if (typeof email !== 'string' || !email.trim()) return NextResponse.json({ error: 'Email is required' }, { status: 400 })
 
-    // Check if user already exists
-    let user = await prisma.user.findUnique({ where: { email } })
+    // Same normalisation sign-up uses (register/route.ts). Without it "Budi@Patsgroup.id" missed the
+    // existing "budi@patsgroup.id" and created a second, unreachable account.
+    const inviteEmail = canonicalEmail(email)
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail)) {
+      return NextResponse.json({ error: 'Enter a valid email address' }, { status: 400 })
+    }
+
+    // Case-insensitive, like sign-up and password reset: older rows were stored as typed.
+    let user = await prisma.user.findFirst({ where: { email: { equals: inviteEmail, mode: 'insensitive' } } })
+    let accountCreated = false
 
     if (!user) {
-      // Create placeholder user
+      // Placeholder account. The random password is never told to anyone: the invitee sets their own
+      // through the password-reset OTP flow (proves they own the inbox), linked from the invite email.
       const hashedPassword = await bcrypt.hash(Math.random().toString(36).slice(2) + 'Aa1!', 12)
       user = await prisma.user.create({
         data: {
-          email,
-          name: email.split('@')[0],
+          email: inviteEmail,
+          name: inviteEmail.split('@')[0],
           password: hashedPassword,
         },
       })
+      accountCreated = true
     }
 
     // Check if already a member
@@ -275,7 +287,26 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    logAudit({ action: "create", entityType: "workspace_member", entityId: newMember.id, entityName: email, userId: session.user.id, request: req, metadata: { role, attendanceRole, workspaceId: currentMember.workspaceId, ...(absorbed.length ? { absorbedWorkspaces: absorbed } : {}), ...(kept.length ? { keptWorkspaces: kept } : {}) } })
+    logAudit({ action: "create", entityType: "workspace_member", entityId: newMember.id, entityName: inviteEmail, userId: session.user.id, request: req, metadata: { role, attendanceRole, workspaceId: currentMember.workspaceId, ...(absorbed.length ? { absorbedWorkspaces: absorbed } : {}), ...(kept.length ? { keptWorkspaces: kept } : {}) } })
+
+    // Tell the person. Before this, a new address got a placeholder account nobody could sign in to
+    // and no email at all; sign-up then refused them with "already exists" and they were stuck.
+    // A failed send must NOT undo the invite — the membership is already made. Clients read
+    // `emailSent` and tell the admin to pass the link on themselves.
+    let emailSent = false
+    try {
+      const inviter = await prisma.user.findUnique({ where: { id: session.user.id }, select: { name: true, email: true } })
+      const inviterName = inviter?.name?.trim() || inviter?.email || 'Someone'
+      const workspaceName = currentMember.workspace?.name || 'a workspace'
+      const recipientEmail = newMember.user.email
+      const payload = accountCreated
+        ? workspaceInviteNewUserEmail({ recipientName: newMember.user.name, recipientEmail, inviterName, workspaceName })
+        : workspaceAddedEmail({ recipientName: newMember.user.name, inviterName, workspaceName })
+      emailSent = await sendEmail({ ...payload, to: recipientEmail })
+      if (!emailSent) console.error('[members] invite email NOT sent to', recipientEmail)
+    } catch (e) {
+      console.error('[members] invite email failed', e)
+    }
 
     return NextResponse.json({
       member: {
@@ -290,6 +321,8 @@ export async function POST(req: NextRequest) {
       },
       absorbed,
       kept,
+      emailSent,
+      accountCreated,
     }, { status: 201 })
   } catch (error) {
     console.error("Error inviting workspace member:", error)
