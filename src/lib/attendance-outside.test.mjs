@@ -303,4 +303,114 @@ t("check-in client", () => {
   assert.equal(M.attendanceClientOf(null, null), null)
 })
 
+// ── presence checks (25 Sep 2026) ─────────────────────────────────────────────────────────────────
+{
+  const O = [{ latitude: -6.2253, longitude: 106.829, radiusMeters: 150 }]
+  const north = (m) => -6.2253 + m / 111195 // metres north of the office centre
+  // 08:47 WIB = 01:47Z
+  const W = (hhmm) => new Date(`2026-09-25T${String(Number(hhmm.slice(0, 2)) - 7).padStart(2, "0")}:${hhmm.slice(3)}:00Z`)
+  const cp = (hhmm, cls, event = "presence") => ({ at: W(hhmm), cls, event })
+
+  t("presence: parse accepts the event, classify treats it like a point", () => {
+    const { points, dropped } = M.parseTrailPoints([{ lat: -6.2, lng: 106.8, at: "2026-09-25T02:00:00.000Z", accuracy: 9, event: "presence" }])
+    assert.equal(dropped, 0)
+    assert.equal(points[0].event, "presence")
+    // 180 m out with ±10: within radius+50 → ambiguous (only "enter" gets the looser rule)
+    assert.equal(M.classifyPoint({ lat: north(180), lng: 106.829, accuracy: 10, event: "presence" }, O).cls, "ambiguous")
+    assert.equal(M.classifyPoint({ lat: north(180), lng: 106.829, accuracy: 10, event: "enter" }, O).cls, "inside")
+    assert.equal(M.classifyPoint({ lat: north(40), lng: 106.829, accuracy: 12, event: "presence" }, O).cls, "inside")
+    assert.equal(M.classifyPoint({ lat: north(400), lng: 106.829, accuracy: 12, event: "presence" }, O).cls, "outside")
+  })
+
+  t("presence: counts in the outside episodes like any point", () => {
+    // two consecutive clearly-outside presence checks prove an episode; a presence inside ends it
+    const spans = M.outsideSpans([cp("10:00", "outside"), cp("10:50", "outside"), cp("11:40", "inside")])
+    assert.equal(spans.length, 1)
+    assert.equal(spans[0].from.toISOString(), W("10:00").toISOString())
+    assert.equal(spans[0].to.toISOString(), W("11:40").toISOString())
+    // a lone outside reading between inside checks proves nothing
+    assert.equal(M.outsideSpans([cp("10:00", "inside"), cp("10:50", "outside"), cp("11:40", "inside")]).length, 0)
+  })
+
+  t("presence hours: a full day at the office", () => {
+    const pts = ["09:37", "10:27", "11:17", "12:07", "12:57", "13:47", "14:37", "15:27", "16:17"].map((h) => cp(h, "inside"))
+    const hours = M.presenceHours({ checkInAt: W("08:47"), closedAt: W("17:05"), checkOutInsideAt: W("17:05"), now: W("20:00"), points: pts, spans: [] })
+    assert.deepEqual(hours.map((h) => h.label), ["08", "09", "10", "11", "12", "13", "14", "15", "16", "17"])
+    assert.ok(hours.every((h) => h.status === "inside"), hours.map((h) => h.status).join(","))
+    assert.equal(hours[0].from.toISOString(), W("08:47").toISOString(), "first hour starts at the check-in")
+    assert.equal(hours[0].at.toISOString(), W("08:47").toISOString(), "the check-in is the first hour's check")
+    assert.equal(hours[9].to.toISOString(), W("17:05").toISOString(), "last hour ends at the check-out")
+    assert.equal(hours[12 - 8].at.toISOString(), W("12:57").toISOString(), "latest check of the hour")
+  })
+
+  t("presence hours: outside episode, gap, unclear, pending", () => {
+    const pts = [
+      cp("09:37", "inside"),
+      cp("10:20", "outside", "exit"), cp("10:35", "outside", "point"), cp("10:50", "outside", "point"),
+      cp("11:05", "inside", "enter"),
+      cp("11:55", "inside"),
+      // 12: nothing (phone quiet) → gap
+      cp("13:30", "ambiguous"),
+      cp("14:10", "outside"), // lone, unconfirmed → unclear
+      cp("15:05", "inside"),
+    ]
+    const spans = M.outsideSpans(pts)
+    assert.equal(spans.length, 1)
+    const hours = M.presenceHours({ checkInAt: W("08:47"), closedAt: null, now: W("15:20"), points: pts, spans })
+    assert.deepEqual(hours.map((h) => `${h.label}:${h.status}`), ["08:inside", "09:inside", "10:outside", "11:outside", "12:gap", "13:unclear", "14:unclear", "15:inside"])
+    assert.equal(hours[7].to.toISOString(), W("15:20").toISOString(), "open record: the running hour ends now")
+    assert.equal(hours[4].at, null)
+    assert.equal(hours[6].at.toISOString(), W("14:10").toISOString())
+  })
+
+  t("presence hours: the running hour with nothing yet is pending, a past one a gap", () => {
+    const hours = M.presenceHours({ checkInAt: W("08:47"), closedAt: null, now: W("10:20"), points: [cp("09:37", "inside")], spans: [] })
+    assert.deepEqual(hours.map((h) => `${h.label}:${h.status}`), ["08:inside", "09:inside", "10:pending"])
+    const later = M.presenceHours({ checkInAt: W("08:47"), closedAt: null, now: W("11:20"), points: [cp("09:37", "inside")], spans: [] })
+    assert.deepEqual(later.map((h) => h.status), ["inside", "inside", "gap", "pending"])
+  })
+
+  t("presence hours: an hour inside an open episode with no points is outside, not a gap", () => {
+    const pts = [cp("09:10", "outside", "exit")]
+    const hours = M.presenceHours({ checkInAt: W("08:47"), closedAt: null, now: W("11:30"), points: pts, spans: M.outsideSpans(pts) })
+    assert.deepEqual(hours.map((h) => h.status), ["inside", "outside", "outside", "outside"])
+    // the check-in hour stays inside (the episode starts at 09:10)
+    assert.equal(hours[0].label, "08")
+  })
+
+  t("presence hours: out-of-radius check-in / check-out are not checks", () => {
+    const hours = M.presenceHours({ checkInAt: W("08:47"), checkInInside: false, closedAt: W("09:30"), checkOutInsideAt: null, now: W("12:00"), points: [], spans: [] })
+    assert.deepEqual(hours.map((h) => h.status), ["gap", "gap"])
+  })
+
+  t("presence hours: no check-in → none; just checked in → one pending-free hour", () => {
+    assert.deepEqual(M.presenceHours({ checkInAt: null, closedAt: null, now: W("09:00"), points: [], spans: [] }), [])
+    const h = M.presenceHours({ checkInAt: W("09:00"), closedAt: null, now: W("09:00"), points: [], spans: [] })
+    assert.equal(h.length, 1)
+    assert.equal(h[0].status, "inside")
+    assert.equal(h[0].label, "09")
+  })
+
+  t("presence hours: office timezone decides the hour, including +05:30", () => {
+    const at = new Date("2026-09-25T03:10:00Z") // 10:10 WIB, 08:40 IST
+    const wib = M.presenceHours({ checkInAt: at, closedAt: new Date("2026-09-25T04:45:00Z"), now: at, points: [], spans: [] })
+    assert.deepEqual(wib.map((h) => h.label), ["10", "11"])
+    const ist = M.presenceHours({ checkInAt: at, closedAt: new Date("2026-09-25T04:45:00Z"), now: at, points: [], spans: [], timeZone: "Asia/Kolkata" })
+    assert.deepEqual(ist.map((h) => h.label), ["08", "09", "10"])
+    assert.equal(ist[1].from.toISOString(), "2026-09-25T03:30:00.000Z", "IST hours start at :30 UTC")
+    assert.equal(M.hourStart(at, "Not/AZone").toISOString(), "2026-09-25T03:00:00.000Z", "bad timezone falls back to WIB")
+  })
+
+  t("presence hours: capped, and a forgotten check-out does not grow forever", () => {
+    const h = M.presenceHours({ checkInAt: W("08:47"), closedAt: null, now: new Date(W("08:47").getTime() + 40 * 3600e3), points: [], spans: [] })
+    assert.equal(h.length, M.PRESENCE_MAX_HOURS)
+    assert.equal(h[h.length - 1].status, "gap", "only the running hour can be pending")
+  })
+
+  t("presence hours: a close exactly on the hour adds no empty hour", () => {
+    const h = M.presenceHours({ checkInAt: W("08:47"), closedAt: W("10:00"), now: W("12:00"), points: [cp("09:37", "inside")], spans: [] })
+    assert.deepEqual(h.map((x) => x.label), ["08", "09"])
+  })
+}
+
 console.log(`${passed} passed${process.exitCode ? ", some FAILED" : ""}`)

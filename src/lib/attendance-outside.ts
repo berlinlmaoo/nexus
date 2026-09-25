@@ -14,6 +14,9 @@
  *     offsite check-out, check-out time = the moment they left the radius.
  *   - A real excuse (izin etc.) covering today that is PENDING or APPROVED pauses the clock; rejected or
  *     withdrawn → the clock restarts from that moment. Coming back inside resets it.
+ *   - Presence checks (25 Sep 2026): while inside, the app (iOS 0.1.6+) also sends one point about every
+ *     hour, event "presence", so the trail shows a day spent at the office (presenceHours below). They
+ *     are points like any other: classified, counted in the outside episodes, stored 90 days.
  */
 
 export const OUTSIDE_REMIND_MIN = 90
@@ -27,7 +30,8 @@ export const OUTSIDE_STALE_MIN = 30
 export const OUTSIDE_MIN_BUFFER_M = 50
 export const MAX_POINTS_PER_REQUEST = 200
 
-export type TrailEvent = "exit" | "enter" | "point"
+/** "presence": the hourly check while inside (iOS 0.1.6+). Classified and counted exactly like "point". */
+export type TrailEvent = "exit" | "enter" | "point" | "presence"
 export type PointClass = "inside" | "outside" | "ambiguous"
 /** Stored in AttendanceRecord.outsideStage. */
 export type StoredStage = "outside" | "reminded" | "warned" | "auto_checked_out"
@@ -250,6 +254,114 @@ export function stageAfter(step: OutsideStep): ResponseStage {
   return step.nextStoredStage ?? step.stage
 }
 
+// ── hourly presence ────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Presence checks (owner, 25 Sep 2026). While checked in and INSIDE the office, the app sends one point
+ * about every hour (event "presence"), so a day spent at the office shows as one — not only the time
+ * outside. This folds a record's points into one entry per office-clock hour of the shift, for the hour
+ * chips on the trail (web and iOS draw the same thing from it).
+ *
+ * Derived here, not on each client: only the server classifies against EVERY office of the workspace
+ * (a client knows the one checked in at), and the outside episodes that decide an hour are the very
+ * ones the clock and the automatic check-out use — a chip can never disagree with them.
+ *
+ * An hour's status, first match wins:
+ *   outside — an outside episode (outsideSpans: an exit, or two clearly-outside points) overlaps it;
+ *   inside  — a point in it is inside an office, or the check-in / an in-radius check-out happened in it
+ *             (both are geofenced, so each is itself a check);
+ *   unclear — points arrived but none could say: a vague fix, or a lone reading past the radius that
+ *             nothing confirmed (the clock ignores that one as jitter too);
+ *   pending — the hour still running with nothing yet (open record only);
+ *   gap     — nothing arrived: phone off, app ended by iOS, Always refused, or an app before 0.1.6.
+ *
+ * Every point counts, not only "presence": exit/enter and the 15-minute points say where the phone was
+ * just as well. Hours are clock hours in the office timezone ("10" = 10:00–10:59 on the office wall);
+ * the first starts at the check-in, the last ends at the close (or now). At most PRESENCE_MAX_HOURS —
+ * the app itself stops tracking 16 h after a check-in.
+ */
+export const PRESENCE_MAX_HOURS = 17
+export type PresenceStatus = "inside" | "outside" | "unclear" | "pending" | "gap"
+export type PresenceHour = { from: Date; to: Date; label: string; status: PresenceStatus; at: Date | null }
+
+const HOUR = 60 * MIN
+
+function localClock(d: Date, timeZone: string): { hour: number; minute: number; second: number } {
+  const fmt = (tz: string) =>
+    new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" })
+  let parts: Intl.DateTimeFormatPart[]
+  try {
+    parts = fmt(timeZone).formatToParts(d)
+  } catch {
+    parts = fmt("Asia/Jakarta").formatToParts(d)
+  }
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0)
+  return { hour: get("hour") % 24, minute: get("minute"), second: get("second") }
+}
+
+/** Start of the office-clock hour that contains `d` (right for half-hour offsets like +05:30 too). */
+export function hourStart(d: Date, timeZone = "Asia/Jakarta"): Date {
+  const c = localClock(d, timeZone)
+  return new Date(d.getTime() - c.minute * MIN - c.second * 1000 - d.getUTCMilliseconds())
+}
+
+export function presenceHours(i: {
+  checkInAt: Date | null
+  /** Whether the check-in counts as a check (within the radius). Default true: tracked records are. */
+  checkInInside?: boolean
+  /** When the record closed (for an automatic check-out: when it happened); null while open. */
+  closedAt: Date | null
+  /** A check-out made within the radius — a check for its hour. */
+  checkOutInsideAt?: Date | null
+  now: Date
+  points: ClassifiedPoint[]
+  /** The episodes as the trail reports them (an episode still open at the close already ends there). */
+  spans: OutsideSpan[]
+  timeZone?: string
+}): PresenceHour[] {
+  if (!i.checkInAt) return []
+  const tz = i.timeZone || "Asia/Jakarta"
+  const open = i.closedAt === null
+  const inMs = i.checkInAt.getTime()
+  const endMs = Math.max(inMs, (i.closedAt ?? i.now).getTime())
+  const sorted = [...i.points].sort((a, b) => a.at.getTime() - b.at.getTime())
+  const checks: number[] = []
+  if (i.checkInInside !== false) checks.push(inMs)
+  if (i.checkOutInsideAt) checks.push(i.checkOutInsideAt.getTime())
+
+  const hours: PresenceHour[] = []
+  for (let s = hourStart(i.checkInAt, tz).getTime(); (hours.length === 0 || s < endMs) && hours.length < PRESENCE_MAX_HOURS; s += HOUR) {
+    const from = Math.max(s, inMs)
+    const to = Math.min(s + HOUR, endMs)
+    const final = s + HOUR >= endMs
+    const inHour = (t: number) => t >= from && t < s + HOUR && t <= endMs
+    const pts = sorted.filter((p) => inHour(p.at.getTime()))
+    const outside = i.spans.some((sp) => sp.from.getTime() < Math.max(to, from + 1) && (sp.to ? sp.to.getTime() : endMs) > from)
+    const insidePts = pts.filter((p) => p.cls === "inside").map((p) => p.at.getTime())
+    const insideChecks = [...insidePts, ...checks.filter(inHour)].sort((a, b) => a - b)
+    const latest = pts.length ? pts[pts.length - 1].at.getTime() : null
+
+    let status: PresenceStatus
+    let at: number | null
+    if (outside) {
+      status = "outside"
+      at = latest
+    } else if (insideChecks.length) {
+      status = "inside"
+      at = insideChecks[insideChecks.length - 1]
+    } else if (pts.length) {
+      status = "unclear"
+      at = latest
+    } else {
+      status = open && final ? "pending" : "gap"
+      at = null
+    }
+    const label = String(localClock(new Date(s), tz).hour).padStart(2, "0")
+    hours.push({ from: new Date(from), to: new Date(to), label, status, at: at === null ? null : new Date(at) })
+  }
+  return hours
+}
+
 // ── copy ───────────────────────────────────────────────────────────────────────────────────────────
 
 /** "13:05" in the office's timezone (never "13.05", which is what id-ID would print). */
@@ -381,7 +493,7 @@ export function parseTrailPoints(raw: unknown): { points: TrailPointInput[]; dro
     }
     seen.add(at.getTime())
     const accuracy = typeof o.accuracy === "number" && Number.isFinite(o.accuracy) && o.accuracy >= 0 ? o.accuracy : null
-    const event = o.event === "exit" || o.event === "enter" || o.event === "point" ? o.event : null
+    const event = o.event === "exit" || o.event === "enter" || o.event === "point" || o.event === "presence" ? o.event : null
     points.push({ lat, lng, accuracy, at, event })
   }
   return { points, dropped }
