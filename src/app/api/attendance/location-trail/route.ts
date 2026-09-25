@@ -8,7 +8,8 @@ import { MAX_POINTS_PER_REQUEST, parseTrailPoints } from "@/lib/attendance-outsi
 /**
  * The phone's location trail while checked in (app only; see lib/attendance-location.ts).
  *
- * Body: { recordId?: string, points: { lat, lng, accuracy?, at: ISO, event?: "exit"|"enter"|"point" }[] }
+ * Body: { recordId?: string, points: { lat, lng, accuracy?, at: ISO, event?: "exit"|"enter"|"point"|"presence" }[] }
+ * ("presence" = the hourly check while inside, iOS 0.1.6+; an unknown event is stored as none, never refused.)
  * (at most 200 points). Idempotent on (user, at): the app may resend a batch whose reply it lost.
  *
  * Reply: { ok, tracking, outsideSince, stage, nextAt } (+ accepted/ignored counts). `tracking: false`

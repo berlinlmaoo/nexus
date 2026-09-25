@@ -19,6 +19,7 @@ import {
   excuseEffect,
   outsidePushCopy,
   outsideSpans,
+  presenceHours,
   stageAfter,
   type ClassifiedPoint,
   type Fire,
@@ -196,8 +197,11 @@ export async function ingestTrailPoints(userId: string, recordId: string | null,
     })
     accepted = res.count
   }
-  // Points arriving = tracking works, whatever the app said before (permission can be granted later).
-  if (inWindow.length > 0 && record.locationTrackingState !== "on") {
+  // Points arriving = tracking works — when the app has not said anything yet. An explicit "denied"
+  // (Always refused) is NOT overwritten: since the presence checks, a While-Using phone sends points
+  // whenever the app is open, even inside, and that must not clear the board's "Location off". A
+  // later grant is reported by the app itself (location-status → "on").
+  if (inWindow.length > 0 && record.locationTrackingState == null) {
     await prisma.attendanceRecord.update({ where: { id: record.id }, data: { locationTrackingState: "on" } })
     record.locationTrackingState = "on"
   }
@@ -501,11 +505,31 @@ export async function buildRecordTrail(record: RecordForClock) {
       ? record.outsideStageAt ?? record.checkOutAt
       : record.checkOutAt
     : null
-  const outsideSpansOut = spans.map((s) => {
+  const spansClosed = spans.map((s) => {
     let to = s.to
     if (!to && closedAt) to = new Date(Math.max(closedAt.getTime(), lastAt?.getTime() ?? 0, s.from.getTime()))
-    return { from: s.from.toISOString(), to: to ? to.toISOString() : null }
+    return { from: s.from, to }
   })
+  const outsideSpansOut = spansClosed.map((s) => ({ from: s.from.toISOString(), to: s.to ? s.to.toISOString() : null }))
+  // Hourly presence (see presenceHours). None for a web check-in: nothing on that day could report.
+  const radius = record.officeLocation?.radiusMeters ?? 0
+  const webDay = record.checkInClient === "web" || record.locationTrackingState === "web"
+  const presence = webDay
+    ? []
+    : presenceHours({
+        checkInAt: record.checkInAt,
+        checkInInside: record.checkInDistanceMeters === null || record.checkInDistanceMeters <= radius,
+        // Closed without a check-out time (not a normal close): the last update is when it ended.
+        closedAt: closedAt ?? (isOpenRecord(record) ? null : record.updatedAt),
+        checkOutInsideAt:
+          record.checkOutAt && !record.checkOutOffsite && record.checkOutDistanceMeters !== null && record.checkOutDistanceMeters <= radius
+            ? record.checkOutAt
+            : null,
+        now: new Date(),
+        points,
+        spans: spansClosed,
+        timeZone: record.officeLocation?.timezone || "Asia/Jakarta",
+      })
   return {
     record: {
       id: record.id,
@@ -515,6 +539,7 @@ export async function buildRecordTrail(record: RecordForClock) {
       checkInAt: record.checkInAt?.toISOString() ?? null,
       checkOutAt: record.checkOutAt?.toISOString() ?? null,
       checkOutOffsite: record.checkOutOffsite,
+      locationTrackingState: record.locationTrackingState ?? null,
       office: record.officeLocation
         ? {
             name: record.officeLocation.name,
@@ -533,6 +558,13 @@ export async function buildRecordTrail(record: RecordForClock) {
       event: p.event ?? null,
     })),
     outsideSpans: outsideSpansOut,
+    presence: presence.map((h) => ({
+      from: h.from.toISOString(),
+      to: h.to.toISOString(),
+      label: h.label,
+      status: h.status,
+      at: h.at ? h.at.toISOString() : null,
+    })),
   }
 }
 

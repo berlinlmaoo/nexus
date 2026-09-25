@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { Loader2, LogIn, LogOut, MapPinOff, Route as RouteIcon, X } from "lucide-react";
-import { ApiError, fmtTime, nexusApi, type NexusAttendanceTrail, type NexusTrailPoint } from "@/lib/nexus-api";
+import { Check, Loader2, LogIn, LogOut, MapPinOff, Minus, MoreHorizontal, Route as RouteIcon, X } from "lucide-react";
+import { ApiError, fmtTime, nexusApi, type NexusAttendanceTrail, type NexusPresenceHour, type NexusTrailPoint } from "@/lib/nexus-api";
 
 /**
  * Where someone was between check-in and check-out — the web twin of the app's live location.
@@ -13,6 +13,11 @@ import { ApiError, fmtTime, nexusApi, type NexusAttendanceTrail, type NexusTrail
  * in time order (green while inside, amber while outside), a pin where they left and where they
  * came back, and beside it the spans in words, because "10:05 – 12:40 · 2 h 35 min" is what a
  * manager actually asks. Same Leaflet + OpenStreetMap tiles as the office picker.
+ *
+ * Since the hourly presence checks (25 Sep 2026) the phone also reports about once an hour while
+ * INSIDE. Those are "still here", not movement: they are kept off the line and out of the pins (they
+ * would only scribble inside the office circle) and drawn as faint dots; the hour chips beside the map
+ * are where they are read.
  */
 
 const GREEN = "#10b981";
@@ -48,20 +53,23 @@ function pinIcon(color: string, label: string) {
   });
 }
 
+/** An hourly check made inside the office — shown as a faint dot, never part of the route. */
+const isInsideCheck = (p: NexusTrailPoint) => p.event === "presence" && p.inside;
+
 function TrailMap({ trail }: { trail: NexusAttendanceTrail }) {
   const divRef = useRef<HTMLDivElement>(null);
-  const points = useMemo(
-    () => trail.points
+  const { points, checks } = useMemo(() => {
+    const all = trail.points
       .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng))
       .slice()
-      .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()),
-    [trail.points],
-  );
+      .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+    return { points: all.filter((p) => !isInsideCheck(p)), checks: all.filter(isInsideCheck) };
+  }, [trail.points]);
   const office = trail.record.office;
 
   useEffect(() => {
     if (!divRef.current) return;
-    const center: L.LatLngExpression = office ? [office.lat, office.lng] : points.length ? [points[0].lat, points[0].lng] : [-6.2088, 106.8456];
+    const center: L.LatLngExpression = office ? [office.lat, office.lng] : points.length ? [points[0].lat, points[0].lng] : checks.length ? [checks[0].lat, checks[0].lng] : [-6.2088, 106.8456];
     const map = L.map(divRef.current, { zoomControl: true, attributionControl: false }).setView(center, 16);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
     const bounds = L.latLngBounds([]);
@@ -71,6 +79,13 @@ function TrailMap({ trail }: { trail: NexusAttendanceTrail }) {
         .bindTooltip(esc(office.name))
         .addTo(map);
       bounds.extend(circle.getBounds());
+    }
+
+    for (const p of checks) {
+      bounds.extend([p.lat, p.lng]);
+      L.circleMarker([p.lat, p.lng], { radius: 2.5, color: GREEN, weight: 0, fillColor: GREEN, fillOpacity: 0.45 })
+        .bindTooltip(`Presence check · ${fmtTime(p.at)} WIB${p.accuracy != null ? ` · ±${Math.round(p.accuracy)} m` : ""}`)
+        .addTo(map);
     }
 
     // One polyline per run of same-coloured segments. A segment that touches an outside point is
@@ -124,9 +139,42 @@ function TrailMap({ trail }: { trail: NexusAttendanceTrail }) {
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => map.invalidateSize()) : null;
     ro?.observe(divRef.current);
     return () => { window.clearTimeout(t); ro?.disconnect(); map.remove(); };
-  }, [points, office]);
+  }, [points, checks, office]);
 
   return <div ref={divRef} className="relative z-0 h-64 w-full overflow-hidden rounded-xl border border-border sm:h-80" />;
+}
+
+const PRESENCE_LOOK: Record<NexusPresenceHour["status"], { title: string; className: string; icon: ReactNode }> = {
+  inside: { title: "At the office", className: "border-emerald-500 bg-emerald-500 text-white", icon: <Check className="h-3.5 w-3.5" strokeWidth={3} /> },
+  outside: { title: "Outside the office", className: "border-amber-500 bg-amber-500 text-white", icon: <X className="h-3.5 w-3.5" strokeWidth={3} /> },
+  unclear: { title: "Unclear — the phone reported, but its position couldn’t say", className: "border-border bg-muted text-muted-foreground", icon: <span className="text-[11px] font-bold leading-none">?</span> },
+  pending: { title: "This hour — not checked yet", className: "border-border bg-transparent text-muted-foreground", icon: <MoreHorizontal className="h-3.5 w-3.5" /> },
+  gap: { title: "No check — the phone didn’t report", className: "border-dashed border-border bg-transparent text-muted-foreground", icon: <Minus className="h-3.5 w-3.5" /> },
+};
+
+/** One chip per office-clock hour: was the phone at the office when it checked? */
+function PresenceChecks({ hours }: { hours: NexusPresenceHour[] }) {
+  const decided = hours.filter((h) => h.status !== "pending");
+  const atOffice = decided.filter((h) => h.status === "inside").length;
+  return (
+    <div className="rounded-xl border border-border p-3">
+      <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Presence checks</p>
+      <ul className="mt-2 flex flex-wrap gap-1.5">
+        {hours.map((h) => {
+          const look = PRESENCE_LOOK[h.status] ?? PRESENCE_LOOK.unclear;
+          const tip = `${h.label}:00 · ${look.title}${h.at ? ` · ${fmtTime(h.at)} WIB` : ""}`;
+          return (
+            <li key={h.from} title={tip} aria-label={tip} className="flex w-7 flex-col items-center gap-0.5">
+              <span className={`grid h-6 w-6 place-items-center rounded-full border ${look.className}`}>{look.icon}</span>
+              <span className="text-[10px] tabular-nums text-muted-foreground">{h.label}</span>
+            </li>
+          );
+        })}
+      </ul>
+      {decided.length > 0 && <p className="mt-1.5 text-xs font-semibold">{atOffice} of {decided.length} {decided.length === 1 ? "hour" : "hours"} at the office</p>}
+      <p className="mt-1 text-[11px] leading-snug text-muted-foreground">✓ at the office · ✗ outside · ? unclear · – no check. About one check an hour while at the office; outside, the route on the map.</p>
+    </div>
+  );
 }
 
 /** `compact`: always one column (map on top) — for narrow panels where a viewport breakpoint would lie. */
@@ -179,13 +227,14 @@ export function LocationTrail({ recordId, compact = false, trackingState }: { re
               {trackingState === "web" ? "Checked in from the web — location isn’t tracked during the day. Tracking starts after check-in in the NEXUS app."
                 : trackingState === "denied" ? "Location access was off on the phone, so nothing was recorded. Tracking starts after check-in in the NEXUS app."
                 : !record.checkInAt ? "There’s no check-in on this day yet. Tracking starts after check-in in the NEXUS app."
-                : !record.checkOutAt ? "No points yet. The app only sends your location once you leave the office area — inside it, nothing is sent."
-                : "Nothing was sent: stayed inside the office, or the day was checked in without the NEXUS app."}
+                : !record.checkOutAt ? "No points yet. The app checks about once an hour while you’re at the office, and follows the route when you leave it."
+                : "Nothing was sent: checked in without the NEXUS app, or with a version before 0.1.6 (those stayed silent inside the office)."}
             </p>
           </div>
         )}
       </div>
       <div className="min-w-0 space-y-2 text-sm">
+        {trail.presence && trail.presence.length > 0 && <PresenceChecks hours={trail.presence} />}
         <div className="rounded-xl border border-border bg-muted/20 p-3">
           <div className="flex items-center justify-between gap-2">
             <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><LogIn className="h-3.5 w-3.5" /> Check-in</span>

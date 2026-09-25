@@ -446,6 +446,8 @@ export type NexusAttendanceHistory = {
 };
 
 export type NexusTrailPoint = { lat: number; lng: number; accuracy: number | null; at: string; inside: boolean; event: string | null };
+/** One office-clock hour of the shift (server: presenceHours in attendance-outside.ts). */
+export type NexusPresenceHour = { from: string; to: string; label: string; status: "inside" | "outside" | "unclear" | "pending" | "gap"; at: string | null };
 export type NexusAttendanceTrail = {
   record: {
     id: string;
@@ -455,10 +457,13 @@ export type NexusAttendanceTrail = {
     checkInAt: string | null;
     checkOutAt: string | null;
     checkOutOffsite: boolean | null;
+    locationTrackingState?: "on" | "denied" | "web" | null;
     office: { name: string; lat: number; lng: number; radiusMeters: number } | null;
   };
   points: NexusTrailPoint[];
   outsideSpans: { from: string; to: string | null }[];
+  /** Hourly presence checks; absent on a server from before them. */
+  presence?: NexusPresenceHour[];
 };
 
 export type NexusOffice = {

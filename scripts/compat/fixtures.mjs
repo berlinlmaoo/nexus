@@ -381,7 +381,7 @@ export function buildFixtures(profile, world, media) {
       },
     }),
     expect: { status: "2xx", check: (j) => firstError(need(isStr(j?.record?.id), "record.id missing"), need(isStr(j?.record?.checkInAt), "record.checkInAt missing")) },
-    after: (j, ctx) => { ctx.flags.checkedIn = true },
+    after: (j, ctx) => { ctx.flags.checkedIn = true; ctx.flags.recordId = j?.record?.id },
   })
   add({
     id: "today-after", title: "GET /api/attendance/today (after check-in)", as: "a", kind: "compat",
@@ -393,6 +393,42 @@ export function buildFixtures(profile, world, media) {
         : null,
     },
   })
+
+  // ---- location trail (0.1.6: WorkTrailWire.body — JSON, ISO with millis, event "presence") ----
+  // The hourly presence check while inside, then the trail read the manager's map makes.
+  if (p.id === "ios-0.1.6") {
+    add({
+      id: "trail-presence", title: "POST location-trail: hourly presence check (inside)", as: "a", kind: "compat",
+      needs: (ctx) => (ctx.flags.recordId ? null : "check-in did not succeed"),
+      request: (ctx) => ({
+        method: "POST", path: "/api/attendance/location-trail",
+        json: { recordId: ctx.flags.recordId, points: [{ lat: pos.lat, lng: pos.lng, at: new Date().toISOString(), event: "presence", accuracy: 12 }] },
+      }),
+      expect: {
+        status: 200,
+        check: (j) => firstError(
+          need(j?.tracking === true, `tracking=${j?.tracking} (a checked-in 0.1.6 staff member is tracked)`),
+          need(j?.accepted === 1, `accepted=${j?.accepted}`),
+          need(j?.stage === "inside", `stage=${j?.stage}`),
+        ),
+      },
+    })
+    add({
+      id: "trail-read", title: "GET records/:id/trail → presence point + hours", as: "a", kind: "compat",
+      needs: (ctx) => (ctx.flags.recordId ? null : "check-in did not succeed"),
+      request: (ctx) => ({ method: "GET", path: `/api/attendance/records/${ctx.flags.recordId}/trail` }),
+      expect: {
+        status: 200,
+        check: (j) => firstError(
+          need(isStr(j?.record?.id) && Array.isArray(j?.points) && Array.isArray(j?.outsideSpans), "trail shape"),
+          need((j?.points ?? []).some((pt) => pt.event === "presence" && pt.inside === true), "presence point missing or not inside"),
+          need(Array.isArray(j?.presence) && j.presence.length >= 1, "presence[] missing"),
+          need((j?.presence ?? []).every((h) => isStr(h.from) && isStr(h.to) && isStr(h.label) && isStr(h.status)), "presence entry shape"),
+          need(j?.presence?.[0]?.status === "inside", `first hour ${j?.presence?.[0]?.status} (check-in + check are inside)`),
+        ),
+      },
+    })
+  }
 
   // ---- offline replay (iOS queue) ----
   if (ios && !p.legacy) {
