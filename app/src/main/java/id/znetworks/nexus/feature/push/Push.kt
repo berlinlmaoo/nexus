@@ -131,7 +131,7 @@ class PushManager(
     private data class TokenBody(val token: String)
 
     companion object {
-        /** PRD §4.5 channels, plus the three the server sends to today (fcm-payload.ts). */
+        /** PRD §4.5 channels (server ANDROID_CHANNELS, fcm-payload.ts), plus the pre-R1 ids so nothing is lost. */
         private val CHANNELS = listOf(
             Triple("attendance_reminders", R.string.ch_attendance_reminders, NotificationManager.IMPORTANCE_HIGH),
             Triple("attendance_location", R.string.ch_attendance_location, NotificationManager.IMPORTANCE_HIGH),
@@ -140,6 +140,8 @@ class PushManager(
             Triple("tasks", R.string.ch_tasks, NotificationManager.IMPORTANCE_DEFAULT),
             Triple("tickets", R.string.ch_tickets, NotificationManager.IMPORTANCE_DEFAULT),
             Triple("announcements", R.string.ch_announcements, NotificationManager.IMPORTANCE_HIGH),
+            // Same id and name LocalNotifier uses; the server files app_update/system_*/unknown here.
+            Triple("system", R.string.channel_system, NotificationManager.IMPORTANCE_DEFAULT),
             Triple("attendance", R.string.ch_attendance, NotificationManager.IMPORTANCE_HIGH),
             Triple("general", R.string.ch_general, NotificationManager.IMPORTANCE_DEFAULT),
         )
@@ -162,7 +164,7 @@ class PushManager(
                 t.startsWith("complaint") || t.startsWith("peer_report") || t == "system_gideon" -> "tickets"
                 t == "announcement" -> "announcements"
                 t.startsWith("task") || t.startsWith("comment") || t.startsWith("project") -> "tasks"
-                else -> "general"
+                else -> "system"
             }
         }
     }

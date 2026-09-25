@@ -19,6 +19,7 @@ class ChannelTest {
         assertEquals("attendance_reminders", PushManager.channelFor("attendance_absent_recorded", null))
         assertEquals("tickets", PushManager.channelFor("complaint_reply", null))
         assertEquals("announcements", PushManager.channelFor("announcement", null))
-        assertEquals("general", PushManager.channelFor("brand_new", null))
+        assertEquals("system", PushManager.channelFor("brand_new", null))
+        assertEquals("system", PushManager.channelFor("app_update", "system"))
     }
 }
