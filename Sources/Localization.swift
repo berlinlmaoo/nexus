@@ -1545,9 +1545,9 @@ final class AppLanguage {
         // Live location while checked in (0.1.6)
         "File a permit": "Ajukan izin",
         "Location during work hours": "Lokasi selama jam kerja",
-        "NEXUS records your location only during work hours, from check-in to check-out, so your manager knows when you're out of the office. Outside those hours your location is not recorded.": "NEXUS mencatat lokasimu hanya selama jam kerja, dari check-in sampai check-out, supaya manager tahu kalau kamu sedang di luar kantor. Di luar jam itu lokasi tidak dicatat.",
+        "NEXUS checks your location only during work hours, from check-in to check-out: about once an hour at the office, and your route when you leave it, so your manager can see where you worked. Before check-in and after check-out nothing is recorded.": "NEXUS mengecek lokasimu hanya selama jam kerja, dari check-in sampai check-out: kira-kira sejam sekali di kantor, dan rutemu saat kamu keluar kantor, supaya manager bisa lihat kamu kerja di mana. Sebelum check-in dan sesudah check-out tidak ada yang dicatat.",
         "To do that while the app is closed, open Settings › NEXUS › Location and choose Always.": "Supaya tetap tercatat saat aplikasi ditutup, buka Pengaturan › NEXUS › Lokasi lalu pilih Selalu.",
-        "On the next screen, choose \"Change to Always Allow\". Inside the office nothing is sent; outside, one point about every 15 minutes.": "Di layar berikutnya, pilih \"Ubah ke Selalu Izinkan\". Selama di kantor tidak ada yang dikirim; di luar kantor, satu titik kira-kira tiap 15 menit.",
+        "On the next screen, choose \"Change to Always Allow\". At the office, one check about every hour; outside it, one point about every 15 minutes.": "Di layar berikutnya, pilih \"Ubah ke Selalu Izinkan\". Di kantor, satu kali cek kira-kira tiap jam; di luar kantor, satu titik kira-kira tiap 15 menit.",
         "Out-of-office activity: ": "Kegiatan di luar kantor: ",
         "Location off": "Lokasi mati",
         "View location trail": "Lihat jalur lokasi",
@@ -1555,7 +1555,7 @@ final class AppLanguage {
         "Couldn't load the location trail": "Jalur lokasi gagal dimuat",
         "Always location was refused on this phone, so NEXUS could only record while the app was open. Gaps in this trail are expected.": "Izin lokasi \"Selalu\" ditolak di HP ini, jadi NEXUS hanya bisa mencatat selama aplikasinya terbuka. Wajar kalau jalur ini ada yang bolong.",
         "No location points": "Belum ada titik lokasi",
-        "Nothing was recorded for this day. Points are only sent while the person is outside the office, so a day spent inside leaves an empty trail.": "Tidak ada yang tercatat hari itu. Titik hanya dikirim saat orangnya di luar kantor, jadi seharian di kantor berarti jalurnya kosong.",
+        "Nothing was recorded for this day. Between check-in and check-out the app checks about once an hour at the office, and follows the route when the person leaves it.": "Tidak ada yang tercatat hari itu. Dari check-in sampai check-out, aplikasi mengecek kira-kira sejam sekali di kantor, dan mengikuti rutenya saat orangnya keluar kantor.",
         "Office": "Kantor",
         "Last point": "Titik terakhir",
         "Left at": "Keluar",
@@ -1565,6 +1565,15 @@ final class AppLanguage {
         "now": "sekarang",
         "%@ outside in total": "Total %@ di luar kantor",
         "offsite": "di luar kantor",
+        // Presence checks while at the office (0.1.6, owner 25 Sep 2026)
+        "Presence checks": "Cek kehadiran",
+        "Presence check": "Cek kehadiran",
+        "%d of %d hours at the office": "%d dari %d jam di kantor",
+        "✓ at the office · ✗ outside · ? unclear · – no check. About one check an hour while at the office; outside, the route above.": "✓ di kantor · ✗ di luar · ? tidak jelas · – tidak ada cek. Kira-kira sekali cek per jam selama di kantor; di luar kantor, lihat rute di atas.",
+        "At the office": "Di kantor",
+        "This hour, not checked yet": "Jam ini, belum dicek",
+        "No check": "Tidak ada cek",
+        "Unclear": "Tidak jelas",
     ]
 }
 

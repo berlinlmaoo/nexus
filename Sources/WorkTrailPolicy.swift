@@ -6,10 +6,14 @@ import Foundation
 // give up — lives here as plain values, so it can be run and checked with nothing but Foundation.
 //
 // The rules it encodes are the owner's, and they are narrow on purpose:
-//   • only between a check-in that the server has accepted and the check-out;
-//   • while inside the office, nothing is sent and no continuous GPS runs;
+//   • only between a check-in that the server has accepted and the check-out — nothing before,
+//     nothing after, ever;
+//   • while inside the office (owner, 25 Sep 2026): one "presence" check about once an hour, so the
+//     day shows that the person stayed, not only when they left. No continuous GPS: between checks
+//     only a coarse, cell/Wi-Fi-level stream runs, whose job is to keep the app alive for the next
+//     check; the check itself raises the accuracy for one fix and drops it again;
 //   • while outside, one point about every 15 minutes, plus one immediately on leaving and on
-//     coming back;
+//     coming back (no presence checks: the 15-minute points already say where the phone is);
 //   • the server has the last word: `tracking:false` stops everything.
 
 /// The office circle a check-in was made against.
@@ -21,7 +25,9 @@ struct WorkTrailFence: Codable, Equatable {
 
 /// One position that is going to, or already went to, the server.
 struct WorkTrailPoint: Codable, Equatable {
-    enum Event: String, Codable { case exit, enter, point }
+    /// `presence`: the hourly "still here" check while inside (or before the zone is known).
+    /// Servers older than the presence change store it as a plain point, which is also true.
+    enum Event: String, Codable { case exit, enter, point, presence }
 
     /// Local identity, so a batch that was sent can be removed exactly — never "the first N", which
     /// would drop the wrong points if something was appended while the request was in flight.
@@ -65,6 +71,19 @@ struct WorkTrailState: Codable, Equatable {
     /// record as open (an exempt member, a switched-off workspace), and without this every refresh
     /// would start it again, send an exit, and be told to stop — all day long.
     var refusedRecordId: String?
+    // Presence checks. All optional: a state file written by a build before them must still decode
+    // (a synthesized Decodable only tolerates a missing key for an Optional).
+    /// When tracking of this record began on this phone — the presence clock's anchor when neither a
+    /// point nor the check-in time is known.
+    var startedAt: Date?
+    /// A precise fix is wanted since then: a presence check, or a one-shot fix while the coarse
+    /// keep-alive stream is running (a one-shot request must not be mixed with running updates).
+    var preciseSince: Date?
+    /// The best fix seen since `preciseSince`, used if no good one arrives before the timeout.
+    var preciseBest: WorkTrailPoint?
+    /// When a presence check last raised the accuracy. A check that got nothing (deep indoors, no
+    /// signal) waits `presenceRetry` before trying again instead of keeping the GPS on.
+    var presenceTriedAt: Date?
 
     var isActive: Bool { recordId != nil }
 }
@@ -76,6 +95,8 @@ enum WorkTrailEffect: Equatable {
     /// Continuous updates (outside only): background-capable, 100 m accuracy, ~50 m filter.
     case startContinuous
     case stopContinuous
+    /// The precise window opened or closed: CoreLocation's accuracy should follow `setup.precise`.
+    case preciseChanged
     /// One fix, for an exit/enter that happened with no recent position in hand.
     case requestFix
     /// Upload whatever is pending.
@@ -110,6 +131,19 @@ struct WorkTrailMachine {
     static let retryAfter: TimeInterval = 120
     /// A fix worse than this cannot decide inside vs outside for a ~100 m office circle.
     static let decisiveAccuracy: Double = 100
+    /// Presence rhythm while inside. "About once an hour", kept under 60 minutes on purpose: the trail
+    /// shows one chip per clock hour, and any gap shorter than an hour between checks lands at least
+    /// one check in every hour even when iOS runs the timer a few minutes late.
+    static let presenceInterval: TimeInterval = 50 * 60
+    /// How long a presence check may keep the accuracy raised. After it, the best fix seen counts.
+    static let preciseTimeout: TimeInterval = 45
+    /// A fix this good ends a presence check at once.
+    static let presenceAccuracy: Double = 50
+    /// A presence check that got no fix waits this long before raising the accuracy again.
+    static let presenceRetry: TimeInterval = 15 * 60
+    /// Coarser than this is a cell-tower position — the keep-alive stream's usual answer. It cannot
+    /// place anyone relative to a circle of a hundred metres, so it is not used for anything.
+    static let usableAccuracy: Double = 1000
 
     var state: WorkTrailState
     /// Set by `resume` when the app comes back from not running while outside: the first fresh
@@ -132,11 +166,19 @@ struct WorkTrailMachine {
         var region: WorkTrailFence?
         /// Continuous background updates plus significant-change monitoring: outside only.
         var continuous: Bool
+        /// Inside, or not known yet: the low-power stream that keeps the app running so the hourly
+        /// presence check can happen at all (a suspended app runs no timer). Needs Always; the
+        /// tracker decides what the permission allows.
+        var keepAlive: Bool = false
+        /// A precise fix is wanted right now (never while outside: continuous updates are precise).
+        var precise: Bool = false
     }
 
     var setup: Setup {
         guard state.isActive, let fence = state.fence else { return Setup(region: nil, continuous: false) }
-        return Setup(region: fence, continuous: state.zone == .outside)
+        let outside = state.zone == .outside
+        return Setup(region: fence, continuous: outside, keepAlive: !outside,
+                     precise: !outside && state.preciseSince != nil)
     }
 
     // MARK: - lifecycle
@@ -162,6 +204,10 @@ struct WorkTrailMachine {
             state.latest = nil
             state.pendingTag = nil
             state.stage = nil
+            state.startedAt = now
+            state.preciseSince = nil
+            state.preciseBest = nil
+            state.presenceTriedAt = nil
         }
         return [.armRegion(fence)]
     }
@@ -193,11 +239,16 @@ struct WorkTrailMachine {
     ///     (a region can report "inside" long after a fix saw the phone leave);
     ///   • while outside, that first fresh fix is sent at once, so the server's record of the
     ///     trail resumes the moment the app does rather than up to 15 minutes later.
+    ///   • inside, the fix comes through the precise window (the keep-alive stream is coarse), and a
+    ///     presence check that fell due while the app was not running is taken with it.
     mutating func resume(now: Date) -> [WorkTrailEffect] {
         guard state.isActive else { return [] }
         if let p = state.latest, now.timeIntervalSince(p.at) > Self.freshFix { state.latest = nil }
         sendNextFix = state.zone == .outside
-        return [.requestFix]
+        // A window left open by the process that died is not this one's: it starts again from now.
+        state.preciseSince = nil
+        state.preciseBest = nil
+        return askForFix(now: now)
     }
 
     // MARK: - inputs
@@ -231,6 +282,9 @@ struct WorkTrailMachine {
             // Outside from the very first answer counts as leaving: the server starts its clock
             // from the exit point, and a check-in made at the edge of the circle is still one.
             state.outsideSince = now
+            // Continuous updates take over; a presence check in progress has nothing left to do.
+            state.preciseSince = nil
+            state.preciseBest = nil
             return [.startContinuous] + tag(.exit, lastKnown: lastKnown, now: now)
         }
     }
@@ -242,21 +296,25 @@ struct WorkTrailMachine {
         // from hours ago or from before the app stopped running. "Where the phone was then" may not
         // decide the zone, carry an exit/enter tag, or become the heartbeat's position.
         guard now.timeIntervalSince(raw.at) <= Self.freshFix else { return [] }
+        guard Self.usable(raw) else { return [] }
         var p = raw
         p.recordId = recordId
         p.event = .point
         state.latest = p
+        if let since = state.preciseSince, p.at >= since, Self.better(p, than: state.preciseBest) { state.preciseBest = p }
 
         // The fix itself may settle the zone faster than the region does: iOS reports a region
-        // crossing late and only after a margin, while a clear fix is unambiguous.
+        // crossing late and only after a margin, while a clear fix is unambiguous. (This is also how
+        // a presence check that finds the phone outside reveals a region exit iOS never reported.)
         if let fence = state.fence, let inside = Self.decisive(p, fence: fence), (inside ? WorkTrailZone.inside : .outside) != state.zone {
-            return determined(inside: inside, lastKnown: p, now: now)
+            let fx = determined(inside: inside, lastKnown: p, now: now)
+            return state.zone == .outside ? fx : fx + presence(p, now: now)
         }
         if let tagged = state.pendingTag {
             state.pendingTag = nil
             p.event = tagged
             enqueue(p, now: now)
-            return [.flush]
+            return [.flush] + (state.zone == .outside ? [] : endPrecise(ifSatisfiedBy: p))
         }
         // Right after a resume the first fresh fix goes out without waiting for the rhythm.
         if state.zone == .outside && (isDue(now) || sendNextFix) {
@@ -264,7 +322,23 @@ struct WorkTrailMachine {
             enqueue(p, now: now)
             return [.flush]
         }
-        return []
+        return state.zone == .outside ? [] : presence(p, now: now)
+    }
+
+    /// Inside or not known yet: the fix becomes the hourly presence check when one is due, and a
+    /// precise window it satisfies is closed.
+    private mutating func presence(_ p: WorkTrailPoint, now: Date) -> [WorkTrailEffect] {
+        guard state.zone != .outside else { return [] }
+        var fx: [WorkTrailEffect] = []
+        let good = (p.accuracy ?? Self.decisiveAccuracy) <= Self.presenceAccuracy
+        // Inside a window only a fix taken after it opened counts: the first delivery after the
+        // accuracy goes up can be the old coarse position.
+        let inWindow = state.preciseSince.map { p.at >= $0 } ?? true
+        if good, inWindow, isPresenceDue(now) {
+            enqueue(presencePoint(from: p), now: now)
+            fx.append(.flush)
+        }
+        return fx + endPrecise(ifSatisfiedBy: p)
     }
 
     /// Called about once a minute while tracking (and on every wake): the heartbeat while outside,
@@ -289,11 +363,52 @@ struct WorkTrailMachine {
                 fx.append(.requestFix)
             }
         }
+        if state.isActive, state.zone != .outside {
+            fx += presenceTick(now: now)
+        }
         if !fx.contains(.flush), !state.pending.isEmpty {
             if let failed = state.lastFailureAt, now.timeIntervalSince(failed) < Self.retryAfter { return fx }
             fx.append(.flush)
         }
         return fx
+    }
+
+    /// The presence clock, once a minute while inside (or while the zone is not known yet).
+    private mutating func presenceTick(now: Date) -> [WorkTrailEffect] {
+        if let since = state.preciseSince {
+            guard now.timeIntervalSince(since) >= Self.preciseTimeout else { return [] }
+            // Timed out without a good fix. The best one seen still says something (the server
+            // marks a vague one "unclear"); with none at all, nothing is invented.
+            var fx: [WorkTrailEffect] = []
+            if let best = state.preciseBest, isPresenceDue(now) {
+                enqueue(presencePoint(from: best), now: now)
+                fx.append(.flush)
+            }
+            state.preciseSince = nil
+            state.preciseBest = nil
+            return fx + [.preciseChanged]
+        }
+        guard isPresenceDue(now) else { return [] }
+        if let tried = state.presenceTriedAt, now.timeIntervalSince(tried) < Self.presenceRetry { return [] }
+        // A fix that is fresh and good already needs no GPS at all (the stream delivers a Wi-Fi fix
+        // now and then, and While Using delivers precise ones while the app is open).
+        if let p = state.latest, now.timeIntervalSince(p.at) <= Self.freshFix,
+           (p.accuracy ?? Self.decisiveAccuracy) <= Self.presenceAccuracy {
+            enqueue(presencePoint(from: p), now: now)
+            return [.flush]
+        }
+        state.presenceTriedAt = now
+        state.preciseSince = now
+        state.preciseBest = nil
+        return [.preciseChanged]
+    }
+
+    /// Whether the hourly presence check is due: inside or zone unknown, and no point queued for
+    /// `presenceInterval` — any point counts (an enter, a check), since each says where the phone was.
+    func isPresenceDue(_ now: Date) -> Bool {
+        guard state.isActive, state.zone != .outside else { return false }
+        guard let anchor = state.lastQueuedAt ?? state.checkInAt ?? state.startedAt else { return true }
+        return now.timeIntervalSince(anchor) >= Self.presenceInterval
     }
 
     // MARK: - upload bookkeeping
@@ -345,7 +460,11 @@ struct WorkTrailMachine {
 
     private mutating func tag(_ event: WorkTrailPoint.Event, lastKnown: WorkTrailPoint?, now: Date) -> [WorkTrailEffect] {
         guard let recordId = state.recordId else { return [] }
-        if var p = lastKnown ?? state.latest, now.timeIntervalSince(p.at) <= Self.freshFix {
+        // The manager's cached fix can now be the keep-alive stream's cell-level one: skipped, so the
+        // exit/enter point is never placed kilometres off (the server would call it unclear).
+        let candidate = [lastKnown, state.latest].compactMap { $0 }
+            .first { now.timeIntervalSince($0.at) <= Self.freshFix && Self.usable($0) }
+        if var p = candidate {
             p.id = UUID().uuidString
             p.recordId = recordId
             p.event = event
@@ -354,7 +473,43 @@ struct WorkTrailMachine {
             return [.flush]
         }
         state.pendingTag = event
-        return [.requestFix]
+        return askForFix(now: now)
+    }
+
+    /// One fix, however the current setup gets it: outside, continuous updates are already precise;
+    /// inside, the precise window raises the keep-alive stream's accuracy until a good fix arrives.
+    private mutating func askForFix(now: Date) -> [WorkTrailEffect] {
+        guard state.zone != .outside else { return [.requestFix] }
+        let opened = state.preciseSince == nil
+        if opened { state.preciseSince = now; state.preciseBest = nil }
+        return opened ? [.requestFix, .preciseChanged] : [.requestFix]
+    }
+
+    /// Closes the precise window when `p` is the good, post-opening fix it was waiting for.
+    private mutating func endPrecise(ifSatisfiedBy p: WorkTrailPoint) -> [WorkTrailEffect] {
+        guard let since = state.preciseSince, p.at >= since,
+              (p.accuracy ?? Self.decisiveAccuracy) <= Self.presenceAccuracy else { return [] }
+        state.preciseSince = nil
+        state.preciseBest = nil
+        return [.preciseChanged]
+    }
+
+    private func presencePoint(from p: WorkTrailPoint) -> WorkTrailPoint {
+        var q = p
+        q.id = UUID().uuidString
+        q.recordId = state.recordId ?? p.recordId
+        q.event = .presence
+        return q
+    }
+
+    static func usable(_ p: WorkTrailPoint) -> Bool {
+        guard let acc = p.accuracy else { return true }
+        return acc >= 0 && acc <= usableAccuracy
+    }
+
+    static func better(_ p: WorkTrailPoint, than q: WorkTrailPoint?) -> Bool {
+        guard let q else { return true }
+        return (p.accuracy ?? decisiveAccuracy) < (q.accuracy ?? decisiveAccuracy)
     }
 
     private mutating func enqueue(_ p: WorkTrailPoint, now: Date) {

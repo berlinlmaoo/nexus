@@ -67,7 +67,7 @@ enum WhatsNew {
         WhatsNewEntry(
             icon: "location.circle.fill",
             title: T("Where you work, only during work hours"),
-            body: T("Between check-in and check-out, NEXUS records where you are when you leave the office area, about once every 15 minutes. Inside the office nothing is sent, and it stops the moment you check out. Out for a while? You get a reminder with a File a permit button. After 2 hours 30 minutes outside without a permit, you are checked out offsite automatically, pending your approver.")
+            body: T("Between check-in and check-out, NEXUS checks where you are about once an hour, so a day at the office shows as one. Leave the office area and it follows your route, about one point every 15 minutes. Nothing before check-in, nothing after check-out. Out for a while? You get a reminder with a File a permit button. After 2 hours 30 minutes outside without a permit, you are checked out offsite automatically, pending your approver.")
         ),
         WhatsNewEntry(
             icon: "hand.raised.fill",

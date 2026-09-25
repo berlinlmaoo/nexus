@@ -6,8 +6,10 @@ File cuma diunduh lewat Wi-Fi. Mau pakai kuota? Nyalakan sendiri di Tuning Room.
 
 LOKASI IKUT TERCATAT. CUMA SELAMA JAM KERJA.
 
-Dari check-in sampai check-out, NEXUS mencatat lokasimu saat kamu keluar area kantor.
-Di dalam kantor, tidak ada yang dikirim. Begitu check-out, pencatatan berhenti.
+Dari check-in sampai check-out, NEXUS cek posisimu kira-kira sejam sekali.
+Seharian di kantor? Sekarang ada buktinya.
+Keluar area kantor, rutemu ikut tercatat.
+Sebelum check-in dan sesudah check-out, tidak ada yang dicatat.
 Kelamaan di luar? Kamu diingatkan duluan, tombol Ajukan izin sudah siap.
 Lewat 2 jam 30 menit tanpa izin, kamu otomatis check-out offsite.
 

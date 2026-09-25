@@ -34,7 +34,7 @@
 	     purpose — when, why, who sees it, and when it stops — because App Review rejects a vague
 	     background-location reason, and because the person deserves to know exactly this. -->
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>NEXUS by Z Networks records your location only between your check-in and check-out, including while the app is closed, so your manager can see when you are outside the office during work hours. Inside the office nothing is sent; outside, about one point every 15 minutes. Nothing is recorded before check-in or after check-out.</string>
+	<string>NEXUS by Z Networks checks your location only between your check-in and check-out, including while the app is closed, so your manager can see where you worked during work hours: about once an hour while you are at the office, and your route (about one point every 15 minutes) when you leave it. Nothing is recorded before check-in or after check-out.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>NEXUS by Z Networks accesses your photo library to attach receipts and expense photos.</string>
 	<key>UILaunchScreen</key>
@@ -68,9 +68,11 @@
 	     that pulls the files. See Sources/BackgroundRefresh.swift — the identifiers below and the
 	     ones it registers are checked against each other by iOS, and a disagreement is a trap at
 	     launch rather than a feature that silently never runs.
-	     `location` is the work-hours trail (WorkLocationTracker.swift): continuous updates while
-	     the person is OUTSIDE the office between check-in and check-out, with the blue indicator
-	     showing. Without this key, setting allowsBackgroundLocationUpdates traps at runtime. -->
+	     `location` is the work-hours trail (WorkLocationTracker.swift), only between check-in and
+	     check-out: continuous updates while the person is OUTSIDE the office, with the blue
+	     indicator showing; inside, a coarse cell/Wi-Fi-level stream (no GPS, no indicator under
+	     Always) that keeps the app running for one presence check about every hour. Without this
+	     key, setting allowsBackgroundLocationUpdates traps at runtime. -->
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

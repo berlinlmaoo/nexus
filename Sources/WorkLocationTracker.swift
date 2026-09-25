@@ -6,10 +6,26 @@ import UIKit
 // Live location while checked in (0.1.6).
 //
 // Owner's rule, and the whole of it: NEXUS records a position ONLY between a check-in the server
-// has accepted and the check-out. Inside the office nothing is sent and no continuous GPS runs —
-// region monitoring alone watches the door. Outside, a point about every 15 minutes, plus one on
-// leaving and one on coming back. The server turns "outside for 1h30 / 2h" into pushes and at 2h30
-// checks the person out offsite; managers and the BoD see the path (LocationTrailView).
+// has accepted and the check-out. Inside the office, one "presence" check about once an hour
+// (owner, 25 Sep 2026) and no continuous GPS: region monitoring watches the door, and a coarse
+// cell/Wi-Fi-level stream keeps the app alive between checks without the blue location pill.
+// Outside, a point about every 15 minutes, plus one on leaving and one on coming back. The server
+// turns "outside for 1h30 / 2h" into pushes and at 2h30 checks the person out offsite; managers and
+// the BoD see the path and the hourly checks (LocationTrailView).
+//
+// Why a stream, and what it costs. A suspended app runs no timer, and iOS offers no "wake me every
+// hour" for location: region monitoring only fires on a crossing, significant-change and visit
+// monitoring only when the phone moves, and background refresh / silent pushes run when iOS
+// chooses. Standard location updates with `allowsBackgroundLocationUpdates` (UIBackgroundModes
+// location) are the one thing that keeps the app running in the background, and with
+// `pausesLocationUpdatesAutomatically = false` iOS does not pause them. At
+// kCLLocationAccuracyThreeKilometers with a 1 km filter they need no GPS — cell and Wi-Fi only —
+// so the cost is the process staying resident plus an occasional coarse fix, not the radio cost of
+// GPS. Under Always, `showsBackgroundLocationIndicator = false` means no blue pill (Apple: the
+// property only affects Always apps; While Using apps always get the indicator in the background).
+// None of this is free, and iOS may still end the app (memory pressure, a force-quit): then the
+// checks stop until a region crossing relaunches it or the person opens NEXUS, and `resume` takes
+// the overdue check at once. Hourly is best-effort by design.
 //
 // Every decision lives in WorkTrailMachine (WorkTrailPolicy.swift, Foundation-only and probed);
 // this file only carries those decisions out against CoreLocation, the disk and the network.
@@ -56,9 +72,19 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
     /// What this process has asked CoreLocation for. nil until the first `reconcile`, so that one
     /// always applies in full: services a previous process started (significant-change monitoring
     /// outlives the process) are brought in line with the state instead of being assumed off.
-    private enum Updates { case off, background, foreground }
+    private enum Updates: Equatable {
+        case off
+        /// Outside, Always: precise continuous updates, blue pill on.
+        case background
+        /// Inside (or zone unknown), Always: the coarse stream that keeps the app alive; `precise`
+        /// while a presence check (or a one-shot fix) is under way.
+        case keepAlive(precise: Bool)
+        /// While Using, app in front.
+        case foreground(precise: Bool)
+    }
     private var updates: Updates?
-    private var continuousOn: Bool { updates == .background || updates == .foreground }
+    /// Some stream is delivering fixes: a one-shot `requestLocation` must not be mixed in.
+    private var streamOn: Bool { updates != nil && updates != .off }
     private var flushing = false
     private var ticker: Timer?
     private var awaitingAlwaysAnswer = false
@@ -261,18 +287,19 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
         for effect in effects {
             switch effect {
             case .armRegion: setupChanged = true; armed = true
-            case .startContinuous, .stopContinuous: setupChanged = true
+            case .startContinuous, .stopContinuous, .preciseChanged: setupChanged = true
             default: break
             }
         }
         if setupChanged { reconcile(refreshRegionState: armed) }
         for effect in effects {
             switch effect {
-            case .armRegion, .startContinuous, .stopContinuous:
+            case .armRegion, .startContinuous, .stopContinuous, .preciseChanged:
                 continue   // done by `reconcile` above
             case .requestFix:
-                // With updates running, a fix is on its way anyway.
-                if !continuousOn { m.desiredAccuracy = kCLLocationAccuracyHundredMeters; m.requestLocation() }
+                // With a stream running, a fix is on its way anyway (inside, the machine has opened
+                // the precise window, which `reconcile` just applied to the keep-alive stream).
+                if !streamOn { m.desiredAccuracy = kCLLocationAccuracyHundredMeters; m.requestLocation() }
             case .flush:
                 Task { await flush() }
             case .disarmAll:
@@ -287,7 +314,9 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
     /// attendance refresh, and every decision the machine makes.
     ///   • active, Always → the office region is monitored;
     ///   • outside, Always → continuous background updates + significant-change monitoring;
-    ///   • active, While Using, app in front → foreground-only updates (fixes decide the zone);
+    ///   • inside or unknown, Always → the coarse keep-alive stream (precise during a check);
+    ///   • active, While Using, app in front → foreground-only updates (fixes decide the zone, and the
+    ///     presence checks happen only while the app is open);
     ///   • anything else → off.
     private func reconcile(refreshRegionState: Bool = false) {
         guard let m = manager else { return }
@@ -329,8 +358,10 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
         let target: Updates
         if want.continuous && status == .authorizedAlways {
             target = .background
+        } else if want.keepAlive && status == .authorizedAlways {
+            target = .keepAlive(precise: want.precise)
         } else if status == .authorizedWhenInUse && UIApplication.shared.applicationState == .active {
-            target = .foreground
+            target = .foreground(precise: want.precise)
         } else {
             target = .off
         }
@@ -350,12 +381,33 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
             // and `bootstrap` resumes from disk. (After a force-quit iOS relaunches nothing until
             // the person opens the app — then `bootstrap` resumes the same way.)
             m.startMonitoringSignificantLocationChanges()
-        case .foreground:
+        case .keepAlive(let precise):
+            // Inside. Background-capable so the app keeps running for the hourly check, but WITHOUT
+            // the blue pill (Always only — the branch above requires it) and without GPS between
+            // checks: at three kilometres iOS answers from cell and Wi-Fi. A check raises the
+            // accuracy on the SAME running stream (a one-shot request cannot be mixed with running
+            // updates) for at most WorkTrailMachine.preciseTimeout, then drops it again.
+            // Significant-change monitoring is outside-only: region exit already relaunches the app.
+            m.stopMonitoringSignificantLocationChanges()
+            m.allowsBackgroundLocationUpdates = true
+            m.pausesLocationUpdatesAutomatically = false
+            m.showsBackgroundLocationIndicator = false
+            m.activityType = .other
+            if precise {
+                m.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
+                m.distanceFilter = kCLDistanceFilterNone
+            } else {
+                m.desiredAccuracy = kCLLocationAccuracyThreeKilometers
+                m.distanceFilter = 1000
+            }
+            m.startUpdatingLocation()
+        case .foreground(let precise):
             // While Using only: the app may watch while it is open, and not a moment longer.
             m.stopMonitoringSignificantLocationChanges()
             if status == .authorizedAlways { m.allowsBackgroundLocationUpdates = false }
-            m.desiredAccuracy = kCLLocationAccuracyHundredMeters
-            m.distanceFilter = 50
+            m.desiredAccuracy = precise ? kCLLocationAccuracyNearestTenMeters : kCLLocationAccuracyHundredMeters
+            // A phone lying on a desk moves less than 50 m: during a check every fix is wanted.
+            m.distanceFilter = precise ? kCLDistanceFilterNone : 50
             m.startUpdatingLocation()
         case .off:
             m.stopUpdatingLocation()
@@ -398,8 +450,10 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
 
     private func startTicker() {
         guard ticker == nil else { return }
-        // Fires while the app runs — which, outside the office, is all the time (continuous
-        // background updates keep it running). Inside, the app is suspended and nothing is due.
+        // Fires while the app runs — which, with Always, is the whole shift: continuous updates
+        // outside and the keep-alive stream inside keep it running. It drives the 15-minute
+        // heartbeat outside and the hourly presence check inside. With While Using it runs only
+        // while the app is open, and so do the checks.
         let t = Timer(timeInterval: 60, repeats: true) { _ in
             MainActor.assumeIsolated { WorkLocationTracker.shared.tick() }
         }
@@ -609,12 +663,12 @@ struct WorkLocationPromptSheet: View {
                 .font(.system(size: 40, weight: .semibold)).foregroundStyle(NX.violetText)
             Text(T("Location during work hours"))
                 .font(NXFont.display(20, .bold)).foregroundStyle(NX.foreground)
-            Text(T("NEXUS records your location only during work hours, from check-in to check-out, so your manager knows when you're out of the office. Outside those hours your location is not recorded."))
+            Text(T("NEXUS checks your location only during work hours, from check-in to check-out: about once an hour at the office, and your route when you leave it, so your manager can see where you worked. Before check-in and after check-out nothing is recorded."))
                 .font(NXFont.text(14)).foregroundStyle(NX.foreground.opacity(0.85))
                 .fixedSize(horizontal: false, vertical: true)
             Text(mode == .settings
                  ? T("To do that while the app is closed, open Settings › NEXUS › Location and choose Always.")
-                 : T("On the next screen, choose \"Change to Always Allow\". Inside the office nothing is sent; outside, one point about every 15 minutes."))
+                 : T("On the next screen, choose \"Change to Always Allow\". At the office, one check about every hour; outside it, one point about every 15 minutes."))
                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)

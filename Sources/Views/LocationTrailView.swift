@@ -8,6 +8,9 @@ struct LocationTrailResponse: Decodable, Sendable {
     let record: Record
     let points: [Point]?
     let outsideSpans: [Span]?
+    /// One entry per clock hour of the shift (server-derived, see presenceHours in
+    /// attendance-outside.ts). Missing from servers before the presence checks: the section hides.
+    let presence: [PresenceHour]?
 
     struct Record: Decodable, Sendable {
         let id: String
@@ -42,6 +45,16 @@ struct LocationTrailResponse: Decodable, Sendable {
         let to: String?
         var id: String { from }
     }
+    /// status: "inside" | "outside" | "unclear" | "pending" | "gap" — anything else draws as unclear.
+    struct PresenceHour: Decodable, Sendable, Identifiable {
+        let from: String
+        let to: String?
+        /// The hour on the office's clock ("09"), so the chip reads the same wherever it is opened.
+        let label: String?
+        let status: String
+        let at: String?
+        var id: String { from }
+    }
 }
 
 /// Where somebody went between check-in and check-out: the path, the office circle, where they
@@ -62,6 +75,12 @@ struct LocationTrailView: View {
 
     private var points: [LocationTrailResponse.Point] { trail?.points ?? [] }
     private var spans: [LocationTrailResponse.Span] { trail?.outsideSpans ?? [] }
+    private var hours: [LocationTrailResponse.PresenceHour] { trail?.presence ?? [] }
+    /// The hourly "still here" checks made inside the office. They are not movement, so they stay off
+    /// the line (it would only scribble inside the office circle) and are drawn as faint dots.
+    private func isInsideCheck(_ p: LocationTrailResponse.Point) -> Bool { p.event == "presence" && p.inside == true }
+    private var linePoints: [LocationTrailResponse.Point] { points.filter { !isInsideCheck($0) } }
+    private var insideChecks: [LocationTrailResponse.Point] { points.filter(isInsideCheck) }
     private var locationOff: Bool { (trail?.record.locationTrackingState ?? trackingState) == "denied" }
 
     var body: some View {
@@ -77,6 +96,7 @@ struct LocationTrailView: View {
                                action: { Task { await load() } }, compact: true)
                 } else {
                     map
+                    if !hours.isEmpty { presenceCard }
                     timeline
                 }
             }
@@ -121,7 +141,7 @@ struct LocationTrailView: View {
     @ViewBuilder private var map: some View {
         if points.isEmpty && trail?.record.office == nil {
             EmptyState(icon: "map", title: T("No location points"),
-                       subtitle: T("Nothing was recorded for this day. Points are only sent while the person is outside the office, so a day spent inside leaves an empty trail."),
+                       subtitle: T("Nothing was recorded for this day. Between check-in and check-out the app checks about once an hour at the office, and follows the route when the person leaves it."),
                        compact: true)
                 .nexusCard()
         } else {
@@ -136,8 +156,15 @@ struct LocationTrailView: View {
                             .padding(6).background(NX.violet, in: Circle())
                     }
                 }
-                if points.count >= 2 {
-                    MapPolyline(coordinates: points.map(\.coordinate))
+                ForEach(insideChecks) { p in
+                    Annotation(T("Presence check") + " · " + time(p.at), coordinate: p.coordinate) {
+                        Circle().fill(NX.success.opacity(0.45)).frame(width: 7, height: 7)
+                            .overlay(Circle().strokeBorder(.white.opacity(0.8), lineWidth: 1))
+                    }
+                    .annotationTitles(.hidden)
+                }
+                if linePoints.count >= 2 {
+                    MapPolyline(coordinates: linePoints.map(\.coordinate))
                         .stroke(Color.orange, lineWidth: 3)
                 }
                 ForEach(markers) { p in
@@ -147,7 +174,7 @@ struct LocationTrailView: View {
                             .padding(6).background(p.event == "exit" ? Color.orange : NX.success, in: Circle())
                     }
                 }
-                if let last = points.last {
+                if let last = linePoints.last {
                     Annotation(T("Last point") + " · " + time(last.at), coordinate: last.coordinate) {
                         Circle().fill(Color.orange).frame(width: 12, height: 12)
                             .overlay(Circle().strokeBorder(.white, lineWidth: 2))
@@ -169,6 +196,55 @@ struct LocationTrailView: View {
 
     private func markerLabel(_ p: LocationTrailResponse.Point) -> String {
         (p.event == "exit" ? T("Left at") : T("Back at")) + " " + time(p.at)
+    }
+
+    // MARK: - presence checks
+
+    private var presenceCard: some View {
+        let decided = hours.filter { $0.status != "pending" }
+        let atOffice = decided.filter { $0.status == "inside" }.count
+        return VStack(alignment: .leading, spacing: 10) {
+            SectionLabel(T("Presence checks"))
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 34), spacing: 6)], alignment: .leading, spacing: 8) {
+                ForEach(hours) { chip($0) }
+            }
+            if !decided.isEmpty {
+                Text(String(format: T("%d of %d hours at the office"), atOffice, decided.count))
+                    .font(NXFont.text(12, .semibold)).foregroundStyle(NX.foreground)
+            }
+            Text(T("✓ at the office · ✗ outside · ? unclear · – no check. About one check an hour while at the office; outside, the route above."))
+                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .nexusCard()
+    }
+
+    private struct ChipLook { let icon: String; let fg: Color; let bg: Color; let title: String; let dashed: Bool }
+
+    private func look(_ status: String) -> ChipLook {
+        switch status {
+        case "inside": return ChipLook(icon: "checkmark", fg: .white, bg: NX.success, title: T("At the office"), dashed: false)
+        case "outside": return ChipLook(icon: "xmark", fg: .white, bg: .orange, title: T("Outside the office"), dashed: false)
+        case "pending": return ChipLook(icon: "ellipsis", fg: NX.mutedFg, bg: .clear, title: T("This hour, not checked yet"), dashed: false)
+        case "gap": return ChipLook(icon: "minus", fg: NX.mutedFg, bg: .clear, title: T("No check"), dashed: true)
+        default: return ChipLook(icon: "questionmark", fg: NX.mutedFg, bg: NX.mutedFg.opacity(0.15), title: T("Unclear"), dashed: false)
+        }
+    }
+
+    private func chip(_ h: LocationTrailResponse.PresenceHour) -> some View {
+        let l = look(h.status)
+        let label = h.label ?? String(time(h.from).prefix(2))
+        return VStack(spacing: 3) {
+            Image(systemName: l.icon)
+                .font(.system(size: 11, weight: .heavy)).foregroundStyle(l.fg)
+                .frame(width: 26, height: 26)
+                .background(l.bg, in: Circle())
+                .overlay(Circle().strokeBorder(NX.border, style: StrokeStyle(lineWidth: 1, dash: l.dashed ? [3, 2] : [])))
+            Text(label).font(NXFont.text(10, .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label):00 · \(l.title)" + (h.at.map { " · " + time($0) } ?? ""))
     }
 
     private var timeline: some View {
