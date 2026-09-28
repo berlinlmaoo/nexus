@@ -1,0 +1,114 @@
+package id.znetworks.nexus.feature.vault
+
+import id.znetworks.nexus.core.net.ApiClient
+import id.znetworks.nexus.core.net.ApiClient.Companion.toJsonBody
+import id.znetworks.nexus.core.net.Uploads
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import okhttp3.Request
+import java.net.URLEncoder
+
+// API.md §2.6 Z Vault. Server sentences (Indonesian) are shown verbatim.
+
+@Serializable data class VaultPerson(val id: String? = null, val name: String? = null)
+
+@Serializable
+data class VaultItem(
+    val id: String,
+    val kind: String = "FILE",
+    val name: String = "",
+    val mimeType: String? = null,
+    val size: Long? = null,
+    val parentId: String? = null,
+    val url: String? = null,
+    val downloadUrl: String? = null,
+    val uploader: VaultPerson? = null,
+    val childCount: Int? = null,
+    val shareCount: Int? = null,
+    val trashed: Boolean? = null,
+    val deletedAt: String? = null,
+    val updatedAt: String? = null,
+    val canModify: Boolean? = null,
+) {
+    val isFolder: Boolean get() = kind == "FOLDER"
+    val isImage: Boolean get() = mimeType.orEmpty().startsWith("image/")
+}
+
+@Serializable data class Crumb(val id: String, val name: String = "")
+@Serializable data class Quota(val usedBytes: Long = 0, val totalBytes: Long = 0)
+
+@Serializable
+data class VaultList(
+    val items: List<VaultItem> = emptyList(),
+    val breadcrumb: List<Crumb> = emptyList(),
+    val parentId: String? = null,
+    val canWrite: Boolean = false,
+    val canManageAccess: Boolean = false,
+    val quota: Quota? = null,
+)
+
+@Serializable
+data class VaultShare(
+    val id: String,
+    val slug: String = "",
+    val url: String = "",
+    val requireAuth: Boolean = true,
+    val allowDownload: Boolean = true,
+    val expiresAt: String? = null,
+    val status: String = "active",
+    val viewCount: Int = 0,
+)
+
+@Serializable data class VaultShares(val shares: List<VaultShare> = emptyList())
+
+@Serializable data class PublicFile(val name: String = "", val mimeType: String? = null, val size: Long? = null)
+
+@Serializable
+data class VaultPublic(val slug: String = "", val requireAuth: Boolean = true, val allowDownload: Boolean = true,
+                       val file: PublicFile = PublicFile(), val previewUrl: String? = null, val downloadUrl: String? = null)
+
+object VaultRules {
+    /** 3d / 7d / 14d / 30d / permanent, the server's accepted values. */
+    val EXPIRES = listOf("permanent", "3d", "7d", "14d", "30d")
+    const val MAX_FILE = 1L shl 30
+
+    /** Folders first, then by name (the server already sorts; kept stable here after local edits). */
+    fun sorted(items: List<VaultItem>) = items.sortedWith(compareBy({ !it.isFolder }, { it.name.lowercase() }))
+}
+
+class VaultApi(private val api: ApiClient, private val uploads: Uploads) {
+    suspend fun list(parentId: String?, trash: Boolean = false, q: String? = null): VaultList {
+        val params = buildList {
+            parentId?.let { add("parentId=${URLEncoder.encode(it, "UTF-8")}") }
+            if (trash) add("trash=1")
+            q?.takeIf { it.isNotBlank() }?.let { add("q=${URLEncoder.encode(it.take(100), "UTF-8")}") }
+        }.joinToString("&")
+        val path = "/api/vault/items" + if (params.isEmpty()) "" else "?$params"
+        return if (!trash && q.isNullOrBlank()) api.getCached(path, "vault-${parentId ?: "root"}", VaultList.serializer()).value
+        else api.get(path, VaultList.serializer())
+    }
+
+    suspend fun createFolder(name: String, parentId: String?) = send("POST", "/api/vault/items", buildJsonObject { put("name", name.trim()); parentId?.let { put("parentId", it) } }, VaultItem.serializer())
+    suspend fun rename(id: String, name: String) = send("PATCH", "/api/vault/items/$id", buildJsonObject { put("name", name.trim()) }, VaultItem.serializer())
+    suspend fun restore(id: String) = send("PATCH", "/api/vault/items/$id", buildJsonObject { put("restore", true) }, VaultItem.serializer())
+    suspend fun delete(id: String, purge: Boolean) =
+        api.send(Request.Builder().url(api.url("/api/vault/items/$id" + if (purge) "?purge=1" else "")).delete().build(), JsonObject.serializer())
+    suspend fun emptyTrash() = send("POST", "/api/vault/trash/empty", JsonObject(emptyMap()), JsonObject.serializer())
+
+    /** ≤ 64 MiB in one request, above that the attachment chunk route with target=vault. */
+    suspend fun upload(file: Uploads.Picked, parentId: String?, onProgress: (Long, Long) -> Unit): VaultItem =
+        uploads.send(file, "/api/vault/upload", listOfNotNull(parentId?.let { "parentId" to it }),
+            listOf("target" to "vault") + listOfNotNull(parentId?.let { "parentId" to it }), VaultItem.serializer(), onProgress)
+
+    suspend fun shares(itemId: String) = api.get("/api/vault/shares?itemId=$itemId", VaultShares.serializer()).shares
+    suspend fun share(itemId: String, requireAuth: Boolean, allowDownload: Boolean, expires: String) =
+        send("POST", "/api/vault/shares", buildJsonObject { put("itemId", itemId); put("requireAuth", requireAuth); put("allowDownload", allowDownload); put("expires", expires) }, VaultShare.serializer())
+    suspend fun revoke(shareId: String) = api.send(Request.Builder().url(api.url("/api/vault/shares/$shareId")).delete().build(), VaultShare.serializer())
+
+    suspend fun public(slug: String) = api.get("/api/vault/public/${URLEncoder.encode(slug, "UTF-8")}", VaultPublic.serializer())
+
+    private suspend fun <T> send(method: String, path: String, body: JsonObject, ser: kotlinx.serialization.KSerializer<T>): T =
+        api.send(Request.Builder().url(api.url(path)).method(method, body.toString().toJsonBody()).build(), ser)
+}

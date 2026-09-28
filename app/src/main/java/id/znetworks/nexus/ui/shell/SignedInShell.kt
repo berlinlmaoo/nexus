@@ -14,6 +14,8 @@ import id.znetworks.nexus.feature.chat.MessagesScreen
 import id.znetworks.nexus.feature.threads.ThreadsScreen
 import id.znetworks.nexus.feature.docs.DocReaderScreen
 import id.znetworks.nexus.feature.docs.DocsScreen
+import id.znetworks.nexus.feature.vault.VaultPublicScreen
+import id.znetworks.nexus.feature.vault.VaultScreen
 import id.znetworks.nexus.feature.forms.FormFillScreen
 import id.znetworks.nexus.feature.forms.SubmissionsScreen
 import id.znetworks.nexus.feature.forms.SubmissionDetailScreen
@@ -163,6 +165,8 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             is Target.Form -> { container.router.consumed(t); nav.navigate("form/${android.net.Uri.encode(t.idOrSlug)}") }
             is Target.Submissions -> { container.router.consumed(t); nav.navigate(t.submissionId?.let { "submission/$it" } ?: "submissions") }
             is Target.Docs -> { container.router.consumed(t); nav.navigate(t.docId?.let { "doc/$it" } ?: "docs") }
+            is Target.Vault -> { container.router.consumed(t); nav.navigate("vault?folder=${t.folderId.orEmpty()}&trash=") }
+            is Target.VaultShare -> { container.router.consumed(t); nav.navigate("vault-share/${t.slug}") }
             is Target.Chat -> { container.router.consumed(t); nav.navigate(t.conversationId?.let { "chat/$it" } ?: "messages") }
             is Target.Announcement -> { container.router.consumed(t); container.announcements.showOne(t.id) }
             is Target.Web -> { container.router.consumed(t); openWeb(context, t.path) }
@@ -225,6 +229,13 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             }
             composable("docs") { DocsScreen(onBack = { nav.popBackStack() }, onOpenDoc = { nav.navigate("doc/$it") }) }
             composable("doc/{id}") { e -> DocReaderScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }) }
+            composable("vault?folder={folder}&trash={trash}", arguments = listOf(
+                androidx.navigation.navArgument("folder") { nullable = true; defaultValue = null },
+                androidx.navigation.navArgument("trash") { nullable = true; defaultValue = null },
+            )) {
+                VaultScreen(onBack = { nav.popBackStack() }, onOpenFolder = { nav.navigate("vault?folder=$it&trash=") }, onOpenTrash = { nav.navigate("vault?folder=&trash=1") })
+            }
+            composable("vault-share/{slug}") { e -> VaultPublicScreen(e.arguments?.getString("slug").orEmpty(), onBack = { nav.popBackStack() }) }
             composable("messages") { MessagesScreen(onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }
             composable("chat/{id}") { ChatThreadScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") }) }
             composable("search") {
@@ -243,7 +254,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable(Tab.PROJECTS.route) {
                 ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") })
             }
-            composable(Tab.MORE.route) { MoreScreen(session, gateState, onSignOut, onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } }, onOpenAccount = { nav.navigate("account") }, onOpenWhatsNew = { whatsNew = true }, onOpenTickets = { nav.navigate("tickets") }, onOpenSubmissions = { nav.navigate("submissions") }, onOpenDocs = { nav.navigate("docs") }) }
+            composable(Tab.MORE.route) { MoreScreen(session, gateState, onSignOut, onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } }, onOpenAccount = { nav.navigate("account") }, onOpenWhatsNew = { whatsNew = true }, onOpenTickets = { nav.navigate("tickets") }, onOpenSubmissions = { nav.navigate("submissions") }, onOpenDocs = { nav.navigate("docs") }, onOpenVault = { nav.navigate("vault?folder=&trash=") }) }
             composable("project/{id}") { entry ->
                 ProjectDetailScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") },
                     onOpenSettings = { nav.navigate("project/${entry.arguments?.getString("id")}/settings") },
@@ -284,7 +295,7 @@ private fun NotYet(tab: Tab) {
 }
 
 @Composable
-private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut: () -> Unit, onOpenAttendance: () -> Unit, onOpenAccount: () -> Unit, onOpenWhatsNew: () -> Unit, onOpenTickets: () -> Unit, onOpenSubmissions: () -> Unit, onOpenDocs: () -> Unit) {
+private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut: () -> Unit, onOpenAttendance: () -> Unit, onOpenAccount: () -> Unit, onOpenWhatsNew: () -> Unit, onOpenTickets: () -> Unit, onOpenSubmissions: () -> Unit, onOpenDocs: () -> Unit, onOpenVault: () -> Unit) {
     val c = Nx.colors
     val context = LocalContext.current
     val container = (context.applicationContext as NexusApplication).container
@@ -333,6 +344,13 @@ private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut
             supportingContent = { Text(stringResource(R.string.docs_more_sub)) },
             leadingContent = { Icon(Icons.Filled.MenuBook, null, tint = c.violetText) },
             colors = itemColors, modifier = shape.clickable(onClick = onOpenDocs),
+        )
+        Spacer(Modifier.height(12.dp))
+        ListItem(
+            headlineContent = { Text("Z Vault") },
+            supportingContent = { Text(stringResource(R.string.vault_more_sub)) },
+            leadingContent = { Icon(Icons.Filled.Folder, null, tint = c.violetText) },
+            colors = itemColors, modifier = shape.clickable(onClick = onOpenVault),
         )
         Spacer(Modifier.height(12.dp))
         if (WhatsNew.entries(container.identity.versionName).isNotEmpty()) {

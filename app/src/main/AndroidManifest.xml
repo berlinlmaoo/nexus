@@ -52,13 +52,14 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="nexus" />
             </intent-filter>
-            <!-- Form links (/f/…) open in the app; assetlinks.json is live with the release key.
-                 /v/ joins when Z Vault is built; /s/ is never claimed (PRD §4.6). -->
+            <!-- Form (/f/…) and members-only vault (/v/…) links open in the app; assetlinks.json is
+                 live with the release key. Public /s/ links are never claimed (PRD §4.6). -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="nexus.znetworks.id" android:pathPrefix="/f/" />
+                <data android:scheme="https" android:host="nexus.znetworks.id" android:pathPrefix="/v/" />
             </intent-filter>
         </activity>
 

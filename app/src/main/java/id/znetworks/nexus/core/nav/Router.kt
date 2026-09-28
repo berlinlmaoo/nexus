@@ -27,6 +27,9 @@ sealed interface Target {
     data class Submissions(val submissionId: String?) : Target
     /** The Knowledge Library, or one doc. */
     data class Docs(val docId: String?) : Target
+    /** Z Vault (a folder), and a `/v/<slug>` share link (members only). `/s/` is never claimed. */
+    data class Vault(val folderId: String?) : Target
+    data class VaultShare(val slug: String) : Target
     data class Announcement(val id: String) : Target
     data object Settings : Target
     /** Signed-out screens: the invite email's "set your password" link and a sign-up with a workspace code. */
@@ -107,6 +110,8 @@ object Links {
             Regex("^/f/([^/]+)$").matches(p) -> Target.Form(path.trimEnd('/').substringAfterLast('/'))
             p == "/submissions" -> Target.Submissions(q["id"])
             p == "/docs" -> Target.Docs(null)
+            p == "/vault" -> Target.Vault(q["folder"] ?: q["id"])
+            Regex("^/v/([^/]+)$").matches(p) -> Target.VaultShare(path.trimEnd('/').substringAfterLast('/'))
             Regex("^/docs/([^/]+)$").matches(p) -> Target.Docs(path.trimEnd('/').substringAfterLast('/'))
             Regex("^/complaints/([^/]+)$").matches(p) -> Target.Tickets(path.trimEnd('/').substringAfterLast('/'))
             Regex("^/messages/([^/]+)$").matches(p) -> Target.Chat(path.trimEnd('/').substringAfterLast('/'))
