@@ -63,6 +63,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
+import id.znetworks.nexus.feature.auth.ProfileApi
+import id.znetworks.nexus.feature.auth.rememberAvatarPicker
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.ui.text.font.FontFamily
 import id.znetworks.nexus.core.net.ApiError
 import id.znetworks.nexus.feature.projects.Pill
 import id.znetworks.nexus.feature.projects.TabEmpty
@@ -291,8 +295,21 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
                         fontSize = 12.sp, color = c.mutedFg)
                 }
             }
+            if (Roles.canEdit(r.role, m.role)) AdminCard(stringResource(R.string.gw_title)) {
+                var linking by remember { mutableStateOf(false) }
+                Text(stringResource(R.string.gw_card_sub), fontSize = 11.sp, color = c.mutedFg)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(m.googleWorkspaceEmail ?: stringResource(R.string.gw_not_linked_yet), fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                        color = if (m.googleWorkspaceEmail == null) c.mutedFg else c.foreground, modifier = Modifier.weight(1f), maxLines = 1)
+                    TextButton(onClick = { linking = true }) { Text(stringResource(if (m.googleWorkspaceEmail == null) R.string.gw_link else R.string.change)) }
+                }
+                if (linking) GoogleLinkDialog(m.userId, m.displayName, m.googleWorkspaceEmail, { linking = false }) { tick++ }
+            }
             MembershipEditor(m.userId, m.displayName, ms, canManage, onOpenTeam) { block -> run(block) }
-            if (canManage) AccountCard(m) { f -> run { api.updateAccount(m.userId, f) } }
+            if (canManage) {
+                val profiles = remember { ProfileApi((context.applicationContext as NexusApplication).container.api) }
+                AccountCard(m, onPhoto = { jpeg -> if (jpeg == null) notice = res.getString(R.string.chat_photo_unreadable) else run { profiles.uploadMemberAvatar(m.id, jpeg); notice = res.getString(R.string.ad_photo_changed) } }) { f -> run { api.updateAccount(m.userId, f) } }
+            }
             if (canManage && m.userId != (context.applicationContext as NexusApplication).container.sessionStore.current?.userId) AdminCard(stringResource(R.string.ps_danger)) {
                 OutlinedButton(onClick = { confirm = "remove" }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ad_remove_ws), color = c.danger) }
                 if (viewer.isBoD) OutlinedButton(onClick = { confirm = "delete" }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ad_delete_user), color = c.danger) }
@@ -343,14 +360,19 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
 }
 
 @Composable
-private fun AccountCard(m: WsMember, onSave: (Map<String, JsonElement>) -> Unit) {
+private fun AccountCard(m: WsMember, onPhoto: (ByteArray?) -> Unit, onSave: (Map<String, JsonElement>) -> Unit) {
     var name by rememberSaveable(m.name) { mutableStateOf(m.name.orEmpty()) }
     var email by rememberSaveable(m.email) { mutableStateOf(m.email.orEmpty()) }
     var password by rememberSaveable { mutableStateOf("") }
+    val pick = rememberAvatarPicker(onPhoto)
     AdminCard(stringResource(R.string.ad_account)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Avatar(m.name, m.avatar, 56.dp); Spacer(Modifier.width(12.dp))
+            TextButton(onClick = pick) { Text(stringResource(R.string.pf_change_photo)) }
+        }
         OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.signup_name)) }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(email, { email = it }, singleLine = true, label = { Text("Email") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(password, { password = it }, singleLine = true, label = { Text(stringResource(R.string.reset_new_password)) }, visualTransformation = PasswordVisualTransformation(),
+        OutlinedTextField(password, { password = it }, singleLine = true, label = { Text(stringResource(R.string.reset_new_password)) }, textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
             supportingText = { Text(stringResource(R.string.ad_password_hint)) }, modifier = Modifier.fillMaxWidth())
         // Only changed keys: re-sending an unchanged email can 409.
         val fields = buildMap<String, JsonElement> {

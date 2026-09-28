@@ -55,18 +55,18 @@ object AttachmentReader {
         }
     }.getOrNull()
 
-    /** Upright (EXIF applied), at most 2048 px, JPEG 85: what photo uploads send. */
-    fun uprightJpeg(context: Context, uri: Uri): ByteArray? = runCatching {
+    /** Upright (EXIF applied), at most [maxEdge] px, JPEG 85: what photo uploads send. */
+    fun uprightJpeg(context: Context, uri: Uri, maxEdge: Int = 2048): ByteArray? = runCatching {
         val cr = context.contentResolver
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         cr.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
         if (bounds.outWidth <= 0) return null
         var sample = 1
-        while (max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 2048) sample *= 2
+        while (max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxEdge) sample *= 2
         val bmp = cr.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) }
             ?: return null
         val rotation = cr.openInputStream(uri)?.use { ExifInterface(it).rotationDegrees } ?: 0
-        val scale = minOf(1f, 2048f / max(bmp.width, bmp.height))
+        val scale = minOf(1f, maxEdge.toFloat() / max(bmp.width, bmp.height))
         val m = Matrix().apply { postRotate(rotation.toFloat()); postScale(scale, scale) }
         val out = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, true)
         ByteArrayOutputStream().use { bos -> out.compress(Bitmap.CompressFormat.JPEG, 85, bos); bos.toByteArray() }

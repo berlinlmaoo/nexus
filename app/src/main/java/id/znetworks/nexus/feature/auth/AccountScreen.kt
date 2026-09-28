@@ -146,6 +146,7 @@ fun AccountScreen(onBack: () -> Unit, onOpenProfile: (String) -> Unit = {}, vm: 
             if (s.busy) CircularProgressIndicator(Modifier.size(18.dp).padding(end = 4.dp), strokeWidth = 2.dp)
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            ProfileCard()
             Section(stringResource(R.string.acct_email)) {
                 var newEmail by rememberSaveable { mutableStateOf("") }
                 var code by rememberSaveable { mutableStateOf("") }
