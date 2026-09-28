@@ -150,6 +150,9 @@ struct DashboardView: View {
     /// Same trade as marking one read: the rows and the badge are struck off here, and the whole
     /// dashboard is not refetched to learn something already known. The endpoint is scoped to the
     /// caller server-side, so this can only ever clear the reader's own signals.
+    /// GET /api/attendance/today, for the attendance bar above the XP card.
+    @State private var attToday: AttendanceToday?
+
     private func markAllRead() {
         guard unread > 0 else { return }
         for i in notifs.indices { notifs[i].read = true }
@@ -162,6 +165,7 @@ struct DashboardView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 18) {
                     greeting
+                    attendanceBar
                     levelCard
                     searchRow
                     statCards
@@ -232,6 +236,93 @@ struct DashboardView: View {
         case 11..<18: return T("Good Afternoon,")
         default:      return T("Good Evening,")
         }
+    }
+
+    // MARK: attendance bar
+
+    /// Today's attendance at a glance, above the XP card (owner, 29 Sep 2026, as Android): tap to open
+    /// Attendance; once checked in it says when and how much of the working day is left — Flexi ends
+    /// nine hours after check-in, a fixed shift at its end time.
+    private var attendanceBar: some View {
+        NavigationLink { AttendanceView() } label: {
+            TimelineView(.everyMinute) { ctx in
+                let line = attendanceLine(now: ctx.date)
+                HStack(spacing: 12) {
+                    Image(systemName: "clock.fill").font(.system(size: 18, weight: .semibold)).foregroundStyle(NX.success)
+                        .frame(width: 44, height: 44)
+                        .background(NX.success.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(T("Attendance")).font(NXFont.display(14, .bold)).foregroundStyle(NX.foreground)
+                        Text(line.text).font(NXFont.text(12, .semibold)).foregroundStyle(line.tint).lineLimit(2)
+                    }
+                    Spacer(minLength: 8)
+                    // "Open" is a chevron: its Indonesian key reads "Terbuka" (the adjective).
+                    if line.action.isEmpty {
+                        Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundStyle(NX.mutedFg)
+                    } else {
+                        Text(line.action).font(NXFont.text(13, .bold)).foregroundStyle(NX.violetText)
+                    }
+                }
+            }
+            .nexusCard(padding: 12, radius: 18)
+        }
+        .buttonStyle(PressableCardStyle())
+    }
+
+    private func attendanceLine(now: Date) -> (text: String, tint: Color, action: String) {
+        guard let t = attToday else { return (T("Check in, check out and requests"), NX.mutedFg, "") }
+        let rec = t.today
+        let inAt = Self.isoDate(rec?.checkInAt)
+        let outAt = Self.isoDate(rec?.checkOutAt)
+        if let inAt, let outAt {
+            let mins = max(0, Int(outAt.timeIntervalSince(inAt) / 60))
+            return (String(format: T("Done for today · worked %@"), Self.hm(mins)), NX.success, "")
+        }
+        if let inAt {
+            let clock = Self.hhmm(inAt)
+            if let end = Self.expectedEnd(from: inAt, shift: t.myShift) {
+                let left = Int(end.timeIntervalSince(now) / 60)
+                if left > 0 {
+                    return (String(format: T("Checked in at %@ · %@ left"), clock, Self.hm(left)), NX.success, "")
+                }
+                return (String(format: T("Checked in at %@ · work hours are over — check out"), clock), NX.warning, T("Check out"))
+            }
+            return (String(format: T("Checked in at %@"), clock), NX.success, "")
+        }
+        if let req = t.todayRequest, req.status == "APPROVED" {
+            return (T("Your approved request covers today"), NX.mutedFg, "")
+        }
+        if let s = t.myShift {
+            let window = s.flexi == true ? "Flexi \(s.startTime)–\(s.endTime)" : "\(s.startTime)–\(s.endTime)"
+            return (String(format: T("Not checked in yet · %@"), window), NX.warning, T("Check in"))
+        }
+        return (T("Not checked in yet"), NX.warning, T("Check in"))
+    }
+
+    private static func expectedEnd(from start: Date, shift: AttendanceToday.Shift?) -> Date? {
+        guard let shift else { return nil }
+        if shift.flexi == true { return start.addingTimeInterval(9 * 3600) }
+        let parts = shift.endTime.split(separator: ":").compactMap { Int($0) }
+        guard parts.count >= 2 else { return nil }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Jakarta") ?? .current
+        var comps = cal.dateComponents([.year, .month, .day], from: start)
+        comps.hour = parts[0]; comps.minute = parts[1]
+        guard let end = cal.date(from: comps) else { return nil }
+        return end > start ? end : end.addingTimeInterval(24 * 3600)
+    }
+    private static func isoDate(_ s: String?) -> Date? {
+        guard let s else { return nil }
+        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f.date(from: s) ?? ISO8601DateFormatter().date(from: s)
+    }
+    private static func hhmm(_ d: Date) -> String {
+        let f = DateFormatter(); f.dateFormat = "HH:mm"; f.timeZone = TimeZone(identifier: "Asia/Jakarta")
+        return f.string(from: d)
+    }
+    private static func hm(_ minutes: Int) -> String {
+        let h = minutes / 60, m = minutes % 60
+        return h > 0 ? "\(h)h \(m)m" : "\(m)m"
     }
 
     // MARK: level/XP card
@@ -1038,9 +1129,11 @@ if !XpRules.tiers.isEmpty {
         async let g = try? APIClient.shared.gamification()
         async let projs = try? APIClient.shared.projects()
         async let notifsN = try? APIClient.shared.notifications()
+        async let att = try? APIClient.shared.attendanceToday()
 
         let prof = await p
         profile = prof?.user
+        attToday = await att
         game = await g
         projectsList = (await projs) ?? []
         projectCount = projectsList.count

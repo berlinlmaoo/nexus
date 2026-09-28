@@ -97,7 +97,7 @@ struct AdminView: View {
         var t: [(String, String)] = [("Users", "users"), ("Absensi", "attendance"),
                                      ("Audit", "audit"), ("Quests", "quests")]
         if viewer.canAnnounce {
-            t.append(("Pengumuman", "announcements"))
+            t.append((T("Announcements"), "announcements"))
             t.append((T("Extra day off"), "extra-dayoff"))
             if RemoteConfig.shared.fakeGpsReview { t.append((T("Fake GPS"), "suspects")) }
             t.append(("GIDEON", "gideon"))
@@ -166,6 +166,7 @@ struct AdminView: View {
                 }
             }
         }
+        .keyboardDoneBar()
         .navigationTitle("Control Room").navigationBarTitleDisplayMode(.inline)
         .task {
             await viewer.loadIfNeeded()
