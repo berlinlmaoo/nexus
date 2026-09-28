@@ -4,6 +4,9 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 
+// SSO / SAML / SCIM are not used (their tables are empty): every handler answers 404 until someone needs them.
+const SSO_DISABLED = true
+
 const SCIM_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User"
 const SCIM_LIST_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:ListResponse"
 
@@ -42,6 +45,7 @@ function toScimUser(user: { id: string; name: string; email: string; createdAt: 
 }
 
 export async function GET(req: NextRequest) {
+  if (SSO_DISABLED) return NextResponse.json({ error: "Not found" }, { status: 404 })
   try {
     const scimAuth = await authenticateScim(req)
     if (!scimAuth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -88,6 +92,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  if (SSO_DISABLED) return NextResponse.json({ error: "Not found" }, { status: 404 })
   try {
     const scimAuth = await authenticateScim(req)
     if (!scimAuth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })

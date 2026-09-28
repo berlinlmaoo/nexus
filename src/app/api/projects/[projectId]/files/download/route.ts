@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth"
 import { checkProjectAccess } from "@/lib/rbac"
 import { NasError, getNasSession, nasDownload } from "@/lib/nas"
 import { resolveProjectFolder } from "@/lib/nas-project"
+import { INLINE_OK, extensionOf } from "@/lib/file-response"
 
 export async function GET(
   request: NextRequest,
@@ -21,7 +22,9 @@ export async function GET(
     const rel = request.nextUrl.searchParams.get("path")
     if (!rel) return NextResponse.json({ error: "Missing path" }, { status: 400 })
     const filePath = resolveProjectFolder(projectId, rel)
-    const inline = request.nextUrl.searchParams.get("inline") === "1"
+    // Inline only for types that cannot run script on this origin (an SVG/HTML from the NAS served
+    // inline with the NAS's Content-Type would execute with the viewer's session).
+    const inline = request.nextUrl.searchParams.get("inline") === "1" && INLINE_OK.has(extensionOf(filePath))
 
     const sid = await getNasSession()
     const { stream, contentType, filename, size } = await nasDownload(sid, filePath)

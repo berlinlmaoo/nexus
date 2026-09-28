@@ -2,12 +2,17 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { isAdminOrOrgBodPlus } from "@/lib/org"
 import { getNasSession, nasDownload, NasError } from "@/lib/nas"
 
 export async function GET(request: NextRequest) {
   const session = await auth()
-  if (!session?.user) {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+  // The NAS is the company's file server: system admin or company BoD+ only.
+  if (!(await isAdminOrOrgBodPlus(session.user.id))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
   try {

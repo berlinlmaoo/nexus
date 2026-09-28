@@ -6,6 +6,9 @@ import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import crypto from "crypto"
 
+// SSO / SAML / SCIM are not used (their tables are empty): every handler answers 404 until someone needs them.
+const SSO_DISABLED = true
+
 async function getWorkspaceAdmin(userId: string) {
   const member = await prisma.workspaceMember.findFirst({
     where: { userId },
@@ -18,6 +21,7 @@ async function getWorkspaceAdmin(userId: string) {
 }
 
 export async function GET() {
+  if (SSO_DISABLED) return NextResponse.json({ error: "Not found" }, { status: 404 })
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -49,6 +53,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  if (SSO_DISABLED) return NextResponse.json({ error: "Not found" }, { status: 404 })
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -83,6 +88,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  if (SSO_DISABLED) return NextResponse.json({ error: "Not found" }, { status: 404 })
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
