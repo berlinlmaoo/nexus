@@ -380,6 +380,8 @@ export type NexusAttendanceToday = {
     checkOutReflection?: string | null;
     checkOutReflectionAt?: string | null;
     officeLocation?: { name?: string | null } | null;
+    /** Where the check-in was made (server reverse geocode) — shown for location-free members. */
+    checkInAddress?: string | null;
   } | null;
   // A previous day's check-in that was never checked out — must be closed before a new check-in.
   pendingCheckout?: {

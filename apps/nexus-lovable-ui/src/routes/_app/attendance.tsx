@@ -369,8 +369,11 @@ function Attendance() {
           />
           <FunMetric
             icon={<MapPin className="h-5 w-5" />}
-            label="Office checkpoint"
-            value={today.data?.today?.officeLocation?.name || `${today.data?.activeOfficeCount ?? 0} active offices`}
+            // Location-free members: where they actually checked in, not the office the record is filed under.
+            label={today.data?.noGeofence ? (today.data?.today?.checkInAt ? "Where you checked in" : "Location-free") : "Office checkpoint"}
+            value={today.data?.noGeofence
+              ? (today.data?.today?.checkInAddress?.split(",").slice(0, 2).join(",") || (today.data?.today?.checkInAt ? "Away from the office" : "Clock in from anywhere"))
+              : (today.data?.today?.officeLocation?.name || `${today.data?.activeOfficeCount ?? 0} active offices`)}
             helper={`In ${fmtTime(today.data?.today?.checkInAt)} · Out ${fmtTime(today.data?.today?.checkOutAt)}${today.data?.today?.id && today.data.today.checkInAt ? " · tap for your location trail" : ""}`}
             tone="purple"
             onClick={today.data?.today?.id && today.data.today.checkInAt ? () => setTrailFor({ id: today.data!.today!.id, title: "Your location trail", subtitle: `Today${today.data?.today?.officeLocation?.name ? ` · ${today.data.today.officeLocation.name}` : ""}` }) : undefined}
