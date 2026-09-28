@@ -466,12 +466,12 @@ export async function notifyAttendanceRequestReviewed(input: {
   // The requester is still told, above, by attendance_request_reviewed — that one they act on.
 }
 
-const OVERRIDE_STATUS_LABEL: Record<string, string> = { PRESENT: "Hadir", LEAVE: "Cuti", SICK: "Sakit", DAY_OFF: "Day off" }
+const OVERRIDE_STATUS_LABEL: Record<string, string> = { PRESENT: "Hadir", LEAVE: "Cuti", SICK: "Sakit", DAY_OFF: "Day off", PERMIT: "Izin" }
 
 /** A BoD rewrote a member-day from the crew board (status change or clear-penalty) → tell that member. */
 export async function notifyAttendanceOverride(input: {
   workspaceId: string; targetUserId: string; actorId: string; actorName?: string | null
-  dateKey: string; action: "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "CLEAR_PENALTY"; note?: string | null
+  dateKey: string; action: "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "PERMIT" | "CLEAR_PENALTY"; note?: string | null
 }): Promise<void> {
   const isSelf = input.targetUserId === input.actorId // self-changes still notify (user opted in)
   const [target, actorName] = await Promise.all([

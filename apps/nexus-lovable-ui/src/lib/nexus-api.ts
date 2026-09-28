@@ -1818,7 +1818,7 @@ export const nexusApi = {
       entries: { id: string; dateKey: string; kind: string; label: string; amount: number; unit: "XP" | "DAY_OFF"; detail: string | null; cleared: boolean }[];
     }>(`/api/attendance/deductions?userId=${encodeURIComponent(userId)}${month ? `&month=${month}` : ""}`),
 
-  attendanceOverride: (payload: { userId: string; date: string; action: "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "CLEAR_PENALTY"; note?: string; checkInAt?: string | null; checkOutAt?: string | null }) =>
+  attendanceOverride: (payload: { userId: string; date: string; action: "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "PERMIT" | "CLEAR_PENALTY"; note?: string; checkInAt?: string | null; checkOutAt?: string | null }) =>
     apiFetch<{ ok: boolean; action: string; date: string; refunded: boolean; alreadyCovered?: boolean; canceledRequests?: number; replacedRequests?: number; multiDayRequestsLeft?: number }>("/api/attendance/override", { method: "POST", body: JSON.stringify(payload) }),
   // `reviewNote` is required by the server on "reject" (min 3 chars) and optional on "approve".
   reviewAttendanceRequest: (requestId: string, action: "approve" | "reject" | "cancel", reviewNote?: string) => apiFetch<{ request?: NexusAttendanceRequest }>(`/api/attendance/requests/${requestId}`, { method: "PATCH", body: JSON.stringify({ action, reviewNote: reviewNote?.trim() || undefined }) }),

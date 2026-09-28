@@ -187,14 +187,14 @@ function LeaveDetailDrawer({ record, onClose, canOverride }: { record: HistRow; 
   );
 }
 
-const OVERRIDE_LABEL: Record<string, string> = { PRESENT: "Present", LEAVE: "Leave", SICK: "Sick", DAY_OFF: "Day off" };
+const OVERRIDE_LABEL: Record<string, string> = { PRESENT: "Present", PERMIT: "Permit", LEAVE: "Leave", SICK: "Sick", DAY_OFF: "Day off" };
 
 /** BoD-only: rewrite one member-day's status (Hadir on-time / Cuti / Sakit / Day off) — XP penalties
  *  for that day are refunded + an auto-cut day-off restored — or just remove the punishment. */
 function StatusOverridePanel({ userId, name, dateKey, onDone }: { userId: string; name: string | null; dateKey: string; onDone: () => void }) {
   const qc = useQueryClient();
   const override = useMutation({
-    mutationFn: (action: "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "CLEAR_PENALTY") => nexusApi.attendanceOverride({ userId, date: dateKey, action }),
+    mutationFn: (action: "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "PERMIT" | "CLEAR_PENALTY") => nexusApi.attendanceOverride({ userId, date: dateKey, action }),
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["attendance-history"] });
       qc.invalidateQueries({ queryKey: ["attendance-requests"] });
@@ -211,7 +211,7 @@ function StatusOverridePanel({ userId, name, dateKey, onDone }: { userId: string
     },
     onError: (e) => alert(e instanceof Error ? e.message : "Couldn’t change the status."),
   });
-  const ask = (action: "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "CLEAR_PENALTY") => {
+  const ask = (action: "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "PERMIT" | "CLEAR_PENALTY") => {
     const what = action === "CLEAR_PENALTY"
       ? `Clear the penalty for ${dateKey} for ${name ?? "this staff member"}?\n\nDeducted XP (late / forgot checkout / no-show) gets refunded + any auto-deducted day-off is restored. Attendance status is NOT changed.`
       : `Change ${dateKey} (${name ?? "this staff member"}) to ${OVERRIDE_LABEL[action]}?\n\nThat day’s auto XP & day-off deductions get restored too.`;
@@ -221,7 +221,7 @@ function StatusOverridePanel({ userId, name, dateKey, onDone }: { userId: string
     <div className="mt-4 rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-3">
       <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-primary"><Pencil className="h-3.5 w-3.5" /> Change status (BoD)</div>
       <div className="flex flex-wrap gap-1.5">
-        {(["PRESENT", "LEAVE", "SICK", "DAY_OFF"] as const).map((a) => (
+        {(["PRESENT", "PERMIT", "LEAVE", "SICK", "DAY_OFF"] as const).map((a) => (
           <button key={a} disabled={override.isPending} onClick={() => ask(a)} className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-bold transition hover:border-primary hover:text-primary disabled:opacity-50">
             {OVERRIDE_LABEL[a]}
           </button>

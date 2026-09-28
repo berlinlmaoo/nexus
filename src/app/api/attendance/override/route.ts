@@ -16,8 +16,8 @@ import {
 import { cancelAttendancePenaltiesForDate, isAutoDeduction, grantAttendanceWaiver } from "@/lib/attendance-absence"
 import { notifyAttendanceOverride } from "@/lib/wa-bot"
 
-type OverrideAction = "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "CLEAR_PENALTY"
-const ACTIONS = new Set<OverrideAction>(["PRESENT", "LEAVE", "SICK", "DAY_OFF", "CLEAR_PENALTY"])
+type OverrideAction = "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "PERMIT" | "CLEAR_PENALTY"
+const ACTIONS = new Set<OverrideAction>(["PRESENT", "LEAVE", "SICK", "DAY_OFF", "PERMIT", "CLEAR_PENALTY"])
 
 // BoD status override from the crew streak board: rewrite one member-day to Hadir (on-time) /
 // Cuti / Sakit / Day off — refunding every attendance XP penalty + restoring an auto-cut day-off
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     const targetUserId = (body?.userId ?? "").trim()
     const action = (body?.action ?? "").toUpperCase() as OverrideAction
     if (!targetUserId || !body?.date || !ACTIONS.has(action)) {
-      return NextResponse.json({ error: "userId, date (YYYY-MM-DD), dan action (PRESENT|LEAVE|SICK|DAY_OFF|CLEAR_PENALTY) wajib diisi." }, { status: 400 })
+      return NextResponse.json({ error: "userId, date (YYYY-MM-DD), dan action (PRESENT|LEAVE|SICK|DAY_OFF|PERMIT|CLEAR_PENALTY) wajib diisi." }, { status: 400 })
     }
 
     const date = parseDateOnlyToUtc(body.date)
@@ -180,9 +180,13 @@ export async function POST(req: NextRequest) {
     // dangling "pending check-out" — the staff can't check out (the day is now covered by the request)
     // AND the open record blocks their next day's check-in. Runs even when the day is ALREADY this status
     // (the common case: BoD changed the status mid-shift, and we're now cleaning up the stuck record).
-    const closed = await prisma.attendanceRecord.deleteMany({
-      where: { userId: targetUserId, workspaceId, attendanceDate: date, checkOutAt: null },
-    })
+    // Not for PERMIT (owner, 28 Sep 2026): a permit is a working day elsewhere, so a check-in already made
+    // that day is part of it and stays.
+    const closed = action === "PERMIT"
+      ? { count: 0 }
+      : await prisma.attendanceRecord.deleteMany({
+          where: { userId: targetUserId, workspaceId, attendanceDate: date, checkOutAt: null },
+        })
 
     const sameTypeApproved = real.find((r) => r.type === action && r.status === "APPROVED")
     if (sameTypeApproved) {
