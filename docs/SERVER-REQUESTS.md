@@ -132,7 +132,7 @@ refuse when `versionCode < minBuild` too, with the same body (`minSupported`, `s
 (signed in); no build floor. **After:** reads the three fields (already implemented and tested:
 `VersionGate.evaluate`, `lockLifted` with a persisted build floor), no app change needed.
 
-## R6. Review of suspect attendance records (PRD Phase 5) — OPEN (28 Sep 2026)
+## R6. Review of suspect attendance records (PRD Phase 5) — DONE (server f7f5f1c, live 28 Sep 2026: `GET /api/attendance/suspects?periodKey=`, `POST /api/attendance/suspects/{recordId}/review`; Android Control Room › Fake GPS built on it). The proposal below is kept for the record; the live shape is in STATUS / FakeGps.kt
 
 **Why.** Check-in/out already carry a server verdict (`checkInSuspect` / `checkInSuspectReason` /
 `checkInImpliedKmh`, same for check-out; `src/lib/attendance.ts` integrity check) but nothing lets anybody

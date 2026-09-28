@@ -58,14 +58,14 @@ import id.znetworks.nexus.ui.theme.Nx
 object ControlRoomTabs {
     fun forRole(isBoD: Boolean) = buildList {
         addAll(listOf("users", "attendance", "audit", "quests"))
-        if (isBoD) addAll(listOf("announcements", "extra-dayoff", "gideon", "app"))
+        if (isBoD) addAll(listOf("announcements", "extra-dayoff", "suspects", "gideon", "app"))
     }
 }
 
 @Composable
 private fun tabLabel(id: String) = when (id) {
     "users" -> "Users"; "attendance" -> "Absensi"; "audit" -> "Audit"; "quests" -> "Quests"; "announcements" -> "Pengumuman"
-    "extra-dayoff" -> stringResource(R.string.ad_extra_dayoff); "gideon" -> "GIDEON"; else -> "App"
+    "extra-dayoff" -> stringResource(R.string.ad_extra_dayoff); "suspects" -> stringResource(R.string.fg_fake); "gideon" -> "GIDEON"; else -> "App"
 }
 
 /** Everything a tab screen may ask the shell for. */
@@ -111,6 +111,7 @@ fun ControlRoomScreen(onBack: () -> Unit, nav: AdminNav, tabContent: @Composable
                 "audit" -> AuditTab(nav.openAudit)
                 "quests" -> QuestsTab()
                 "extra-dayoff" -> ExtraDayOffTab(viewer.isBoD)
+                "suspects" -> FakeGpsTab()
                 "announcements" -> AnnouncementsTab()
                 "gideon" -> GideonUsageTab()
                 "app" -> AppInstallsTab()
