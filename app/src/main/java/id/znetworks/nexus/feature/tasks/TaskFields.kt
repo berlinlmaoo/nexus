@@ -75,6 +75,20 @@ object FieldValues {
     fun toggled(current: List<String>, choice: String) = if (choice in current) current - choice else current + choice
 
     fun placeValue(label: String, mapUrl: String) = buildJsonObject { put("label", label.trim()); put("mapUrl", mapUrl.trim()) }
+
+    /** New task: only values somebody actually filled are sent (as the web composer). */
+    fun filled(v: JsonElement?): Boolean = when (v) {
+        is JsonArray -> v.isNotEmpty()
+        is JsonObject -> place(v).let { (l, m) -> l.isNotBlank() || m.isNotBlank() }
+        is JsonPrimitive -> !v.contentOrNull.isNullOrBlank()
+        else -> false
+    }
+}
+
+/** The New task form's custom fields: every type but the read-only CREATED, held until the task exists. */
+@Composable
+fun NewTaskFields(fields: List<CustomFieldDef>, values: Map<String, JsonElement>, onChange: (String, JsonElement) -> Unit) {
+    fields.filter { it.kind != "CREATED" }.forEach { f -> FieldRow(f.copy(value = values[f.id])) { onChange(f.id, it) } }
 }
 
 /** View and edit the project's custom fields on one task (iOS TaskCustomFieldsCard). Hidden when there are none. */

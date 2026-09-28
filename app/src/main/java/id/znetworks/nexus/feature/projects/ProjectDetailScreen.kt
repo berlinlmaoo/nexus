@@ -74,6 +74,10 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
+import id.znetworks.nexus.feature.tasks.FieldValues
+import id.znetworks.nexus.feature.tasks.NewTaskFields
+import kotlinx.serialization.json.JsonElement
+import androidx.compose.ui.platform.LocalContext
 import id.znetworks.nexus.core.net.ApiError
 import id.znetworks.nexus.feature.attendance.LocalNotifier
 import id.znetworks.nexus.ui.components.Avatar
@@ -165,9 +169,12 @@ class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : Andro
         api.updateTask(t.id, buildJsonObject { put("status", JsonPrimitive(if (t.isDone) "TODO" else "DONE")) })
     }
 
-    fun create(laneId: String, title: String, priority: String? = null, due: LocalDate? = null, onDone: (String) -> Unit = {}) =
+    fun create(laneId: String, title: String, priority: String? = null, due: LocalDate? = null, fields: Map<String, JsonElement> = emptyMap(), onDone: (String) -> Unit = {}) =
         act(R.string.board_create_failed) {
             val id = api.createTask(projectId, laneId, title, priority, due?.toString())
+            // Values go on after the task exists (web composer); a refused one is said, the task stays.
+            val failed = fields.filter { (_, v) -> FieldValues.filled(v) }.count { (fid, v) -> id.isNotBlank() && runCatching { api.setFieldValue(fid, id, v) }.isFailure }
+            if (failed > 0) _state.update { it.copy(actionError = res.getString(R.string.task_fields_not_saved, failed)) }
             onDone(id)
         }
 
@@ -262,8 +269,8 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpen
                 modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp)) { Icon(Icons.Filled.Add, stringResource(R.string.task_new)) }
         }
     }
-    if (creating) CreateTaskDialog(s.lanes, busy = s.busy, initialDue = createDue, onDismiss = { creating = false }) { lane, title, prio, due ->
-        vm.create(lane, title, prio, due) { id -> creating = false; if (id.isNotBlank()) onOpenTask(id) }
+    if (creating) CreateTaskDialog(s.lanes, busy = s.busy, initialDue = createDue, projectId = vm.projectId, onDismiss = { creating = false }) { lane, title, prio, due, fields ->
+        vm.create(lane, title, prio, due, fields) { id -> creating = false; if (id.isNotBlank()) onOpenTask(id) }
     }
     s.actionError?.let { AlertDialog(onDismissRequest = vm::dismissError, title = { Text(stringResource(R.string.board_update_failed)) },
         text = { Text(it) }, confirmButton = { TextButton(onClick = vm::dismissError) { Text("OK") } }) }
@@ -392,7 +399,11 @@ private fun OverviewStat(label: String, value: String, modifier: Modifier, tone:
 /** New task: title, lane, priority (none → urgent), deadline. Custom fields come in a later step. */
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-fun CreateTaskDialog(lanes: List<Lane>, busy: Boolean, initialDue: LocalDate? = null, onDismiss: () -> Unit, onCreate: (String, String, String?, LocalDate?) -> Unit) {
+fun CreateTaskDialog(lanes: List<Lane>, busy: Boolean, initialDue: LocalDate? = null, projectId: String? = null, onDismiss: () -> Unit, onCreate: (String, String, String?, LocalDate?, Map<String, JsonElement>) -> Unit) {
+    val container = (LocalContext.current.applicationContext as NexusApplication).container
+    var fields by remember { mutableStateOf<List<CustomFieldDef>>(emptyList()) }
+    var values by remember { mutableStateOf<Map<String, JsonElement>>(emptyMap()) }
+    LaunchedEffect(projectId) { if (projectId != null) fields = runCatching { ProjectsApi(container.api).customFields(projectId) }.getOrDefault(emptyList()) }
     var title by rememberSaveable { mutableStateOf("") }
     var lane by rememberSaveable { mutableStateOf(lanes.firstOrNull()?.id) }
     var prio by rememberSaveable { mutableStateOf("NONE") }
@@ -403,7 +414,7 @@ fun CreateTaskDialog(lanes: List<Lane>, busy: Boolean, initialDue: LocalDate? = 
         onDismissRequest = { if (!busy) onDismiss() },
         title = { Text(stringResource(R.string.task_new)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(title, { title = it }, label = { Text(stringResource(R.string.board_task_title)) }, modifier = Modifier.fillMaxWidth())
                 Box {
                     OutlinedButton(onClick = { laneMenu = true }) { Text(lanes.firstOrNull { it.id == lane }?.name ?: "—") }
@@ -415,10 +426,11 @@ fun CreateTaskDialog(lanes: List<Lane>, busy: Boolean, initialDue: LocalDate? = 
                 OutlinedButton(onClick = { picking = true }) {
                     Text(due?.let { DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault()).format(it) } ?: stringResource(R.string.task_add_deadline))
                 }
+                NewTaskFields(fields, values) { id, v -> values = values + (id to v) }
             }
         },
         confirmButton = {
-            TextButton(onClick = { lane?.let { onCreate(it, title, prio, due) } }, enabled = title.isNotBlank() && lane != null && !busy) {
+            TextButton(onClick = { lane?.let { onCreate(it, title, prio, due, values) } }, enabled = title.isNotBlank() && lane != null && !busy) {
                 if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp) else Text(stringResource(R.string.add))
             }
         },

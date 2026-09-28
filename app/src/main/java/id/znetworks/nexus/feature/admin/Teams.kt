@@ -305,7 +305,8 @@ fun TeamDetailScreen(teamId: String, onBack: () -> Unit, onOpenProfile: (String)
                     t.members.forEachIndexed { i, m ->
                         if (i > 0) HorizontalDivider(color = c.border)
                         val key = "member-${m.uid}"
-                        var open by remember { mutableStateOf(false) }
+                        // Keyed by person: after a reload the open menu stays on the row it was opened on.
+                        var open by remember(m.uid) { mutableStateOf(false) }
                         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                             Row(Modifier.weight(1f).clickable(enabled = m.uid != null) { m.uid?.let(onOpenProfile) }, verticalAlignment = Alignment.CenterVertically) {
                                 Avatar(m.displayName, m.user?.avatar, 34.dp); Spacer(Modifier.width(12.dp))

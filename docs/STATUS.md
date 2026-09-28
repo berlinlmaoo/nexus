@@ -119,7 +119,7 @@ Done. PRESENCE IN / OUT are gone; `AttendanceButton` is one full-width control:
 | 2.4 | Tasks tab = My Quest Log (iOS TasksView): Hot today (open, due within 2 days incl. overdue, soonest first, max 8) / In motion (12) / Recently slayed (8), shared TaskCard with project, done toggle, re-read on every visit, saved copy offline, empty state → Browse missions | 224ad86 |
 | 2.5 | Home = dashboard (iOS DashboardView): greeting by office hour, **attendance card** (today's state incl. queued taps, open day, rest day; one tap to Attendance), level/XP card + level sheet, search pill (→ Mission Control search until 2.8) and bell with unread → Inbox, stat tiles Projects / Your Mission / Quest with sheets (quest **Claim**, one at a time, server sentence on refusal), XP rules (same tables as iOS/web), quick actions (Chat, Attendance, Leaderboard, Room Booking, Threads, Team Calendar; web until built), pinned + recent project shortcuts (per person on the phone, cleared on logout), 14-day agenda from my tasks, profile card. Attendance moved to its own screen reached from Home, More, pushes and links (`nexus://attendance…` focus still claimed by it) | 6f2f5a1 |
 | 2.6 | Project tabs as the web/iOS: Sheet (every card + custom-field columns), Calendar (month grid, day list, add a task on that day), Timeline (gantt: title column, day axis, weekends, today line, priority colours, web taskWindow fallbacks), Sprints (Active/Planning/Shipped, progress, start/complete; **`requiresAction` handled**: asks backlog or another sprint and re-sends with `moveIncompleteTo` — iOS silently did nothing), Automations (IF → THEN, enable switch; LEAD refusal shown), Finance (name contains "finance") and P&L (flag + BoD) read-only by year. Pages, Forms and project Chat open the project on the web until Phase 3. Search box only on tabs that draw tasks | af4e36e |
-| 2.7 | Custom fields on a task (view + edit every type: text, number, date, select/status, multi-select, place; created read-only) and **Project settings** (gear on the project header): identity (name, description, emoji, colour), flags (task duplicate mode, proof required for DONE, P&L for BoD, auto-assign with members), custom field definitions (create with options, delete), members (add from the workspace roster, remove, invite by email with role), duplicate (BoD) and delete project. LEAD/BoD refusals show the server's sentence. Custom fields in the New task dialog: not yet | 39bbc3b |
+| 2.7 | Custom fields on a task (view + edit every type: text, number, date, select/status, multi-select, place; created read-only) and **Project settings** (gear on the project header): identity (name, description, emoji, colour), flags (task duplicate mode, proof required for DONE, P&L for BoD, auto-assign with members), custom field definitions (create with options, delete), members (add from the workspace roster, remove, invite by email with role), duplicate (BoD) and delete project. LEAD/BoD refusals show the server's sentence. Custom fields in the New task dialog: **done** (every type but CREATED; filled values set after the task exists, a refused one is said) | 39bbc3b, this step |
 | 2.8 | Search (Home's search pill): `GET /api/search`, 2-character minimum, 300 ms debounce, groups Projects / Tasks / Docs / Forms / Members as iOS. Projects and tasks open natively; docs and forms on the web until Phase 3; members are listed (profiles come with Phase 3) | db6d9df |
 | 2.9 | Account, natively: **sign-up** (name, email, password, optional workspace code → 6-digit code → account created → signed in; the code is sent again on verify as the API requires), **password reset** (email → code + new password), resend with the server's countdown, first field error in form order, tries left shown; **passkeys**: sign in with a passkey on the login card (Credential Manager 1.6.0; server origins + assetlinks are live), and in More › Account & sign-in list/add/remove; **change email** (code to the new address, session email updated) and **change password**. `nexus://forgot-password?email=…&invited=1` and `nexus://register?code=…` open those cards. Not verified on a phone yet: the passkey sheet needs the release-signed APK (assetlinks has the release fingerprint only) | 073ee45 |
 | 2.10 | What's New: a sheet once per versionName after sign-in (0.1.6 = the first Android release: one button, work session/outside countdown, offline queue, missions in the app, sign-up/reset/passkeys, in-app updates), also under More. A version without notes shows nothing | f691852 |
@@ -157,7 +157,7 @@ Done. PRESENCE IN / OUT are gone; `AttendanceButton` is one full-width control:
 | 4.7 | Tuning Room › **Members** (iOS WorkspaceMembersCard): everyone A–Z with profile link; BoD+ invite by email with a role, change role, remove. Invite result says when the email could not be sent (`emailSent:false`), also in Control Room › Users. **Fix:** role rules now match the server `canAssign` — One Above All may give any role (incl. One Above All), Managers assign nothing (were offered roles the server 403s) | 15e49e7 |
 | 4.8 | User detail › **Google Workspace** (BoD, per tier): link an existing account (others' accounts locked and named), unlink (JSON null), create a mailbox (name guessed, editable, domain menu; temporary password shown once, copied as sensitive, no way out but "Copied"; email failure and not-linked said at once). User detail › account: **change photo** (`/api/workspaces/members/{id}/avatar`), new password typed in the clear as iOS. **Gap closed (PRD 3.9, P2):** Tuning Room › **Profile** — photo upload (JPEG, 1024 px) / remove, name, Google Workspace address read-only | 4af03e0 |
 | 4.9 | API call-list audit iOS vs Android (PRD acceptance): only gaps were `xp-log` and `upload/folder-icon`. **Member profile** now calls `/api/gamification/xp-log` when the record is 403: its 403 shows "Profile unavailable" (not a colleague), otherwise yourself/BoD see the period ledger (zero rows dropped, reasons mapped to the record's kinds) | 5229718 |
-| 4.10 | Projects › folder dialog: **photo icon** (`/api/upload/folder-icon`, JPEG ≤ 1024 px so always under 5 MB) after create/edit; a refused picture keeps the folder and shows why. Closes the call-list audit: every iOS `/api/…` call now has an Android caller except `/api/app/latest` (iOS App Store only; Android uses its own version policy) | this step |
+| 4.10 | Projects › folder dialog: **photo icon** (`/api/upload/folder-icon`, JPEG ≤ 1024 px so always under 5 MB) after create/edit; a refused picture keeps the folder and shows why. Closes the call-list audit: every iOS `/api/…` call now has an Android caller except `/api/app/latest` (iOS App Store only; Android uses its own version policy) | 4b50f89 |
 
 
 Still on the web until built: Phase 3 (chat, Threads, docs/pages, forms, profiles, tickets, Z Vault, reports, leaderboard, GIDEON, Control Room).
@@ -223,18 +223,16 @@ check-in replayed at the tap time, 502/530 queued vs 409 not queued, reflection 
 approval, permit rules, push to the approver, 2 h 30 outside with the phone locked, floor raised →
 lock + held tap, day-off never over quota.
 
-## Not built (Phase 2+ in PRD §5)
+## Not built
 
-Tasks/projects, full dashboard, search, sign-up/reset/passkeys in-app (today they open the web),
-chat, Threads, tickets, forms (`/f/` App Links), submissions, Z Vault (`/v/`), reports, leaderboard,
-profiles, GIDEON, Control Room, offices admin, reflections of others, What's New, offline media
-warm-up. Those tabs and links open the web page today.
+Phases 2–4 of PRD §5 are built (28 Sep 2026). Left, by decision: Phase 5 (after adoption), the
+approval chart as a zoom/pan tree with PNG export (Android lists approvers with their reports; each
+row opens the user, where the approver is changed), and Sheets on mobile (0.1.7 on iOS too).
 
 ## Next steps
 
-1. Main session publishes the APK above (`~/nexus-data/android/` + `current.json`, R2) and sets
-   `NEXUS_ANDROID_LATEST_VERSION` (+ `_RELEASED_AT`, R4). The in-app updater is then testable with a
-   0.1.6 (2) build.
-2. On-device run of the acceptance list above on the Oppo, fixing what it finds.
-3. Internal rollout to the Android staff (Rifqi, Alvar) with `docs/INSTALL-APK.md`; watch the App tab.
-4. Then Phase 2 per PRD.
+1. Audit pass over everything built today (bugs first), then the Phase 4 acceptance by role
+   (STAFF/MANAGER/BOD/OAA see and may do exactly what iOS allows).
+2. Release per Berlin's rule (above): not before parity + a clean audit; new versionCode, publish via
+   web /download/android, Android minimum 3 days later.
+3. On-device run of the acceptance lists on the first staff phone (docs/INSTALL-APK.md checklist).

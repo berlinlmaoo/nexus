@@ -1404,4 +1404,5 @@
     <string name="pf_no_points_moved">Belum ada poin yang bergerak periode ini.</string>
     <string name="folder_photo">Pakai foto sebagai ikon</string>
     <string name="folder_photo_chosen">Foto dipilih ✓ (ketuk untuk ganti)</string>
+    <string name="task_fields_not_saved">Task dibuat, tapi %1$d custom field gagal disimpan. Buka task-nya untuk mengisi lagi.</string>
 </resources>

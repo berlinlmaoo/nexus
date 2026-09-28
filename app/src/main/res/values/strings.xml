@@ -1410,4 +1410,5 @@
     <string name="pf_no_points_moved">No points moved this period.</string>
     <string name="folder_photo">Use a photo as the icon</string>
     <string name="folder_photo_chosen">Photo chosen ✓ (tap to change)</string>
+    <string name="task_fields_not_saved">Task created, but %1$d custom field(s) weren\'t saved. Open the task to fill them in.</string>
 </resources>
