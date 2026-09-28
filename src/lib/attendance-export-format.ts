@@ -62,7 +62,16 @@ export function attendanceExportFill(code: string) {
   }
 }
 
-/** The block under the grid, one row each, counted per person. TOTAL = every day that has a code. */
+/**
+ * The period's working days for one person: its calendar days minus their weekly-rest quota
+ * (WorkspaceMember.dayOffQuota, default 4) — 31 days → 27, 30 → 26 (owner, 28 Sep 2026). This is the
+ * "TOTAL HARI KERJA" row, and the board's Score column uses the same rule.
+ */
+export function exportWorkingDays(periodDays: number, dayOffQuota = 4) {
+  return Math.max(0, periodDays - dayOffQuota)
+}
+
+/** The block under the grid, one row each, counted per person. TOTAL = working days (exportWorkingDays). */
 export const ATTENDANCE_EXPORT_SUMMARY_ROWS = [
   { label: "HADIR", code: "H", fill: "7CFC00" },
   { label: "CUTI", code: "C", fill: "F9E27D" },

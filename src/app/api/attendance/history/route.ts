@@ -8,6 +8,7 @@ import { AttendanceDayType, attendancePeriodRange, enumerateAttendanceDates, for
 import { getOutageDateKeysForRange, isAutoDeduction } from "@/lib/attendance-absence"
 import { getHolidayKeys } from "@/lib/holidays"
 import { attendanceHistoryQuerySchema } from "@/lib/validations"
+import { dayOffQuotaByUser } from "@/lib/day-off-usage"
 // Letters, colours, summary rows and labels are shared with the live Google Sheet
 // (src/lib/attendance-sheet.ts) so the two can never disagree about a day.
 import {
@@ -17,6 +18,7 @@ import {
   attendanceExportFill,
   formatExportDateLabel,
   formatExportPeriod,
+  exportWorkingDays,
 } from "@/lib/attendance-export-format"
 
 type HistoryRow = ReturnType<typeof serializeAttendanceRecord> & {
@@ -67,11 +69,13 @@ async function buildAttendanceWorkbook({
   start,
   end,
   workspaceName,
+  quotaByUser,
 }: {
   rows: HistoryRow[]
   start: Date
   end: Date
   workspaceName: string
+  quotaByUser?: Map<string, number>
 }) {
   const workbook = new ExcelJS.Workbook()
   workbook.creator = "NEXUS"
@@ -187,7 +191,6 @@ async function buildAttendanceWorkbook({
         const counter = summaryCounters.get(userId)
         if (counter) {
           counter[code] = (counter[code] ?? 0) + 1
-          counter.TOTAL += 1
         }
       }
     })
@@ -195,6 +198,7 @@ async function buildAttendanceWorkbook({
 
   const summaryStartRow = 6 + dates.length
   const summaryRows = ATTENDANCE_EXPORT_SUMMARY_ROWS
+  for (const [userId, counter] of summaryCounters) counter.TOTAL = exportWorkingDays(dates.length, quotaByUser?.get(userId))
 
   summaryRows.forEach((summary, index) => {
     const rowNumber = summaryStartRow + index
@@ -243,12 +247,14 @@ async function buildPersonWorkbook({
   end,
   workspaceName,
   person,
+  dayOffQuota,
 }: {
   rows: HistoryRow[]
   start: Date
   end: Date
   workspaceName: string
   person: { name: string; email?: string | null }
+  dayOffQuota?: number
 }) {
   const workbook = new ExcelJS.Workbook()
   workbook.creator = "NEXUS"
@@ -314,8 +320,9 @@ async function buildPersonWorkbook({
       if (col === 0) c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFCE4D6" } }
       if (col === 1 && code) c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: getAttendanceExportFill(code) } }
     })
-    if (code) { counts[code] = (counts[code] ?? 0) + 1; counts.TOTAL += 1; lateTotal += code === "H" ? late : 0 }
+    if (code) { counts[code] = (counts[code] ?? 0) + 1; lateTotal += code === "H" ? late : 0 }
   })
+  counts.TOTAL = exportWorkingDays(dates.length, dayOffQuota)
 
   const summaryStart = 6 + dates.length
   const summary = [
@@ -796,7 +803,8 @@ export async function GET(request: NextRequest) {
       const person = fromRows
         ? { name: fromRows.name || fromRows.email || "Crew", email: fromRows.email }
         : await prisma.user.findUnique({ where: { id: parsed.data.userId }, select: { name: true, email: true } }).then((u) => ({ name: u?.name || u?.email || "Crew", email: u?.email ?? null }))
-      const personBuffer = await buildPersonWorkbook({ rows, start: range.start, end: range.end, workspaceName: context.workspace.name, person })
+      const personQuota = (await dayOffQuotaByUser(context.workspace.id, [parsed.data.userId])).get(parsed.data.userId)
+      const personBuffer = await buildPersonWorkbook({ rows, start: range.start, end: range.end, workspaceName: context.workspace.name, person, dayOffQuota: personQuota })
       const slug = person.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "crew"
       return new NextResponse(personBuffer, {
         status: 200,
@@ -808,11 +816,13 @@ export async function GET(request: NextRequest) {
     }
 
     if (parsed.data.format === "xlsx") {
+      const exportUserIds = [...new Set(rows.map((r) => r.user.id))]
       const workbookBuffer = await buildAttendanceWorkbook({
         rows,
         start: range.start,
         end: range.end,
         workspaceName: context.workspace.name,
+        quotaByUser: await dayOffQuotaByUser(context.workspace.id, exportUserIds),
       })
 
       return new NextResponse(Buffer.from(workbookBuffer), {
