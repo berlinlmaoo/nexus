@@ -14,7 +14,7 @@ export function PageHeader({
   tabs?: ReactNode;
 }) {
   return (
-    <div className="border-b border-border bg-background/80 backdrop-blur sticky top-0 z-10">
+    <div className="border-b border-border bg-background/80 backdrop-blur sticky top-0 z-40">
       <div className="px-4 md:px-8 pt-4 md:pt-6 pb-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-6">
         <div className="flex items-start gap-3 min-w-0">
           {icon && <div className="text-2xl mt-0.5 shrink-0">{icon}</div>}

@@ -380,7 +380,7 @@ function Attendance() {
   // on the board too) or WFH. Out of the period's WORKING days: its calendar days minus the person's
   // weekly-rest quota (default 4), so a 31-day period has 27 and a 30-day period 26 (owner, 28 Sep 2026).
   const presentCount = (uid: string) => rows.filter((r) => { if (r.user?.id !== uid) return false; const t = recTone(r); return t === "present" || t === "permit" || t === "wfh"; }).length;
-  const workDaysOf = (uid: string) => Math.max(0, periodDays.length - (dayOffOf(uid)?.quota ?? 4));
+  const workDaysOf = (uid: string) => { const q = dayOffOf(uid)?.quota ?? (rows.find((r) => r.user?.id === uid)?.user as { dayOffQuota?: number } | undefined)?.dayOffQuota ?? 4; return Math.max(0, periodDays.length - q); };
 
   return (
     <div>
@@ -554,7 +554,10 @@ function Attendance() {
               )}
             </div>
           ) : (
-          <div className="overflow-x-auto">
+          // Its own scroll box, as tall as the screen allows: the date row can only stay pinned inside
+          // the element that scrolls, and a page-level sticky cannot cross `overflow-x`. So the days
+          // and weekdays stay above the dots while you scroll down the crew (owner, 28 Sep 2026).
+          <div className="max-h-[calc(100dvh-11rem)] overflow-auto overscroll-contain">
             {/* `min-w-max`: with a plain `w-full` the 31 day columns and the member column were
                 squeezed into the phone's width, so the name, the pills and the dots all landed on
                 top of each other. Now the table keeps its natural width and this container scrolls,
@@ -562,11 +565,14 @@ function Attendance() {
             <table className="w-full min-w-max text-sm">
               <thead className="bg-muted/40 border-b border-border">
                 <tr>
-                  <th className="sticky left-0 z-20 w-[15rem] min-w-[15rem] bg-muted px-3 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_hsl(var(--border))] sm:w-[20rem] sm:min-w-[20rem] sm:px-4">Member</th>
+                  <th className="sticky left-0 top-0 z-30 w-[15rem] min-w-[15rem] bg-muted px-3 py-2 text-left text-xs font-medium uppercase text-muted-foreground shadow-[1px_0_0_0_hsl(var(--border))] sm:w-[20rem] sm:min-w-[20rem] sm:px-4">Member</th>
                   {periodDays.map((pd) => (
-                    <th key={pd.key} className={cn("px-1 py-2 font-medium text-[10px] text-muted-foreground", pd.day === 1 && "border-l border-border/70")}>{pd.day}</th>
+                    <th key={pd.key} className={cn("sticky top-0 z-20 bg-muted px-1 py-1.5 font-medium text-[10px] leading-tight text-muted-foreground", pd.day === 1 && "border-l border-border/70")}>
+                      <span className="block text-[9px] font-normal uppercase opacity-70">{new Date(`${pd.key}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" })}</span>
+                      {pd.day}
+                    </th>
                   ))}
-                  <th className="text-right px-4 py-2 font-medium text-xs text-muted-foreground uppercase">Score</th>
+                  <th className="sticky top-0 z-20 bg-muted text-right px-4 py-2 font-medium text-xs text-muted-foreground uppercase">Score</th>
                 </tr>
               </thead>
               <tbody>
@@ -704,7 +710,7 @@ function Attendance() {
                         </td>
                       );
                     })}
-                    <td className="px-4 py-2.5 text-right text-xs font-semibold tabular-nums text-muted-foreground" title="Days worked (present, permit or WFH) out of this period's working days: calendar days minus the day-off quota">{presentCount(u.id)}/{workDaysOf(u.id)}</td>
+                    <td className="px-4 py-2.5 text-right text-xs font-semibold tabular-nums text-muted-foreground" title={`Days worked (present, permit or WFH) out of this period's working days: ${periodDays.length} days − ${periodDays.length - workDaysOf(u.id)} day-off quota = ${workDaysOf(u.id)}`}>{presentCount(u.id)}/{workDaysOf(u.id)}</td>
                   </tr>
                 ))}
                 {!history.isLoading && hiddenCount > 0 && (

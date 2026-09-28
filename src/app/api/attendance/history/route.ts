@@ -930,9 +930,12 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    // Each person's weekly-rest quota rides on their rows, so every client computes the Score column
+    // (days worked / period days minus quota) the same way — 4 for most people, 9 for some.
+    const quotaByUserId = await dayOffQuotaByUser(context.workspace.id, [...new Set(rows.map((r) => r.user.id))])
     return NextResponse.json({
       scope,
-      records: rows,
+      records: rows.map((r) => ({ ...r, user: { ...r.user, dayOffQuota: quotaByUserId.get(r.user.id) ?? 4 } })),
     })
   } catch (error) {
     console.error("Error fetching attendance history:", error)
