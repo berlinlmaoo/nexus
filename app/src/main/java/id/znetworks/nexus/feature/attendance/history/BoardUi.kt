@@ -66,6 +66,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
+import id.znetworks.nexus.feature.attendance.AttendancePlace
 import id.znetworks.nexus.core.net.ApiError
 import id.znetworks.nexus.core.time.OfficeTime
 import id.znetworks.nexus.feature.attendance.AttendanceToday
@@ -443,7 +444,10 @@ private fun DayDetail(vm: BoardViewModel, r: HistoryRow) {
                         (r.lateMinutes?.takeIf { it > 0 }?.let { " · " + stringResource(R.string.detail_late, it) } ?: ""))
                     r.workedMinutes?.let { Fact(stringResource(R.string.detail_worked), "${it / 60}h ${it % 60}m") }
                     if (r.effectiveShiftStartTime != null) Fact(stringResource(R.string.my_schedule), "${r.effectiveShiftStartTime} – ${r.effectiveShiftEndTime}")
-                    r.officeLocation?.name?.let { Fact(stringResource(R.string.metric_office), it) }
+                    // Away day (location-free, outside the radius): the address, never the office.
+                    if (r.checkedInAway == true) Fact(stringResource(R.string.away_from_office),
+                        AttendancePlace.label(true, r.checkInAddress, r.checkInLat, r.checkInLng, null) ?: "—")
+                    else r.officeLocation?.name?.let { Fact(stringResource(R.string.metric_office), it) }
                     r.checkInAddress?.let { Fact(stringResource(R.string.detail_in_place), it + (r.checkInDistanceMeters?.let { d -> " · ±${d.toInt()} m" } ?: "")) }
                     r.checkOutAddress?.let { Fact(stringResource(R.string.detail_out_place), it + (r.checkOutDistanceMeters?.let { d -> " · ±${d.toInt()} m" } ?: "")) }
                     if (r.checkOutOffsite == true) Fact(stringResource(R.string.offsite_checkout), listOfNotNull(r.checkOutApproval, r.checkOutReason).joinToString(" · "))
@@ -626,6 +630,9 @@ private fun TrailDialog(vm: BoardViewModel, r: HistoryRow, trail: TrailResponse?
                         },
                     )
                     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        trailPlace(trail.record, stringResource(R.string.away_from_office))?.let {
+                            Text(it, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
+                        }
                         if ((trail.record?.locationTrackingState ?: r.locationTrackingState) == "denied") {
                             Text(stringResource(R.string.trail_location_off), color = c.warning, fontWeight = FontWeight.SemiBold)
                         }
@@ -645,6 +652,13 @@ private fun TrailDialog(vm: BoardViewModel, r: HistoryRow, trail: TrailResponse?
             }
         }
     }
+}
+
+/** The trail header's place (iOS LocationTrailView): "Away from the office · <address>", else the office. */
+internal fun trailPlace(r: TrailRecord?, awayWord: String): String? {
+    if (r?.checkInAt == null) return null
+    if (r.checkInAway == true) return awayWord + ((r.placeLabel ?: AttendancePlace.shortAddress(r.checkInAddress))?.let { " · $it" } ?: "")
+    return r.placeLabel ?: r.office?.name
 }
 
 /** "Presence checks": one chip per clock hour (iOS 64b1bfb, web LocationTrail.tsx). */

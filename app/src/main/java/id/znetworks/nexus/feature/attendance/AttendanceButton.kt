@@ -75,7 +75,8 @@ sealed interface ButtonMode {
     data object CheckIn : ButtonMode
     /** [count]/[min] reflection characters; unlocks at [min]. [waiting]: an offsite check-out awaits approval. */
     data class CheckOut(val count: Int, val min: Int, val unlocked: Boolean, val waiting: Boolean) : ButtonMode
-    data class DoneForToday(val workedMinutes: Int?) : ButtonMode
+    /** [savedOnPhone]: the check-out is still queued here, not on the server yet (iOS). */
+    data class DoneForToday(val workedMinutes: Int?, val savedOnPhone: Boolean = false) : ButtonMode
     /** An approved request covers today: the server refuses a check-in, so there is nothing to press (iOS). */
     data class CoveredByRequest(val type: String?) : ButtonMode
 }
@@ -87,9 +88,11 @@ object AttendanceButtonLogic {
      */
     fun mode(checkedIn: Boolean, checkedOut: Boolean, forcePending: Boolean, offsitePending: Boolean,
              reflectionCount: Int, reflectionMin: Int, checkInAt: String?, checkOutAt: String?,
-             coveredBy: TodayRequest? = null): ButtonMode = when {
+             coveredBy: TodayRequest? = null, workedMinutes: Int? = null, checkOutQueued: Boolean = false): ButtonMode = when {
         forcePending -> ButtonMode.CheckOut(reflectionCount, reflectionMin, reflectionCount >= reflectionMin, offsitePending)
-        checkedOut && !offsitePending -> ButtonMode.DoneForToday(worked(checkInAt, checkOutAt))
+        // The server's own count first (breaks and corrections are in it), the two stamps only as a fallback.
+        checkedOut && !offsitePending -> if (checkOutQueued) ButtonMode.DoneForToday(null, savedOnPhone = true)
+            else ButtonMode.DoneForToday(workedMinutes ?: worked(checkInAt, checkOutAt))
         checkedIn -> ButtonMode.CheckOut(reflectionCount, reflectionMin, reflectionCount >= reflectionMin, offsitePending)
         covers(coveredBy) -> ButtonMode.CoveredByRequest(coveredBy?.type)
         else -> ButtonMode.CheckIn
@@ -224,7 +227,7 @@ private fun ModeLabel(mode: ButtonMode, fg: Color) = when (mode) {
     // Never drawn: the screen shows the covered-by-request card instead of the button.
     is ButtonMode.CoveredByRequest -> Line(Icons.Filled.CheckCircle, stringResource(R.string.covered_title), fg)
     is ButtonMode.DoneForToday -> Line(Icons.Filled.CheckCircle,
-        mode.workedMinutes?.let { stringResource(R.string.btn_done_worked, it / 60, it % 60) } ?: stringResource(R.string.btn_done), fg)
+        if (mode.savedOnPhone) stringResource(R.string.btn_checkout_saved_phone) else mode.workedMinutes?.let { stringResource(R.string.btn_done_worked, it / 60, it % 60) } ?: stringResource(R.string.btn_done), fg)
 }
 
 @Composable

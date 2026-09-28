@@ -1,5 +1,6 @@
 package id.znetworks.nexus.feature.attendance.history
 
+import id.znetworks.nexus.feature.attendance.AttendancePlace
 import id.znetworks.nexus.core.net.ApiClient
 import id.znetworks.nexus.feature.attendance.OfficeRef
 import id.znetworks.nexus.feature.attendance.requests.PersonRef
@@ -27,6 +28,9 @@ data class HistoryRow(
     val checkOutAddress: String? = null,
     val checkInDistanceMeters: Double? = null,
     val checkOutDistanceMeters: Double? = null,
+    val checkInAway: Boolean? = null,
+    val checkInLat: Double? = null,
+    val checkInLng: Double? = null,
     val checkInPhotoUrl: String? = null,
     val checkOutPhotoUrl: String? = null,
     val checkOutOffsite: Boolean? = null,
@@ -44,6 +48,7 @@ data class HistoryRow(
     val user: PersonRef? = null,
     val reviewedBy: PersonRef? = null,
 ) {
+    val checkedInAway: Boolean? get() = AttendancePlace.isAway(checkInAway, checkInDistanceMeters, officeLocation?.radiusMeters)
     /** A real check-in record (only these can be edited or have a trail). */
     val isRecord: Boolean get() = (recordKind ?: if (checkInAt != null) "ATTENDANCE" else "") == "ATTENDANCE" && id != null
     val dayKey: String get() = attendanceDate.orEmpty().take(10)
@@ -79,6 +84,10 @@ data class TrailRecord(
     val checkOutOffsite: Boolean? = null,
     val office: TrailOffice? = null,
     val locationTrackingState: String? = null,
+    /** Servers from 28 Sep 2026: away check-in, its address, and the day's place as text. */
+    val checkInAway: Boolean? = null,
+    val checkInAddress: String? = null,
+    val placeLabel: String? = null,
 )
 
 @Serializable

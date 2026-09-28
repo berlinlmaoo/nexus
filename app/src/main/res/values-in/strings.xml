@@ -1300,9 +1300,9 @@
     <string name="xd_confirm_grant_msg">%1$s · tambahan %2$d %3$s day off · periode %4$s\n\nAlasan: %5$s\n\nTiap orang dapat notifikasi. Hari yang tak dipakai hangus saat periode berakhir.</string>
     <string name="xd_confirm_revoke">Cabut day off tambahan %1$s?</string>
     <string name="xd_confirm_revoke_msg">+%1$d %2$s · %3$s\n\nHari yang sudah diambil tidak dibatalkan.</string>
-    <string name="xd_notified_some">%1$d dari %2$d diberi tahu.</string>
-    <string name="xd_notified_one">Sudah diberi tahu.</string>
-    <string name="xd_notified_all">Ke-%1$d orang sudah diberi tahu.</string>
+    <string name="xd_notified_some">%1$d dari %2$d dikabari.</string>
+    <string name="xd_notified_one">Yang bersangkutan sudah dikabari.</string>
+    <string name="xd_notified_all">Ke-%1$d orang sudah dikabari.</string>
     <string name="xd_granted">%1$d %2$s dapat tambahan %3$d %4$s day off · %5$s. %6$s</string>
     <string name="xd_already_revoked">Sudah dicabut.</string>
     <string name="xd_revoked">Day off tambahan %1$s dicabut.</string>
@@ -1409,4 +1409,6 @@
     <string name="covered_request">Pengajuan</string>
     <string name="covered_body">Tidak perlu check-in — sudah tercatat di absensimu.</string>
     <string name="work_session_at">Di %1$s · lokasi dicek sekitar sejam sekali</string>
+    <string name="away_from_office">Di luar kantor</string>
+    <string name="btn_checkout_saved_phone">Check-out tersimpan di HP ini</string>
 </resources>

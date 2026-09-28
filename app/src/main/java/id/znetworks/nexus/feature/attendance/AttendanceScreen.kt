@@ -215,7 +215,8 @@ fun AttendanceScreen(
                 // One control that changes with the day (UPDATES §11); the press flow is drawn inside it.
                 val mode = AttendanceButtonLogic.mode(checkedIn, checkedOut, forcePending, offsitePending,
                     vm.reflectionCount(s), AttendanceViewModel.REFLECTION_MIN, s.today?.today?.checkInAt, s.today?.today?.checkOutAt,
-                    coveredBy = s.today?.todayRequest.takeIf { q.count == 0 })
+                    coveredBy = s.today?.todayRequest.takeIf { q.count == 0 }, workedMinutes = s.today?.today?.workedMinutes,
+                    checkOutQueued = s.today?.today?.hasCheckedOut != true && q.has(AttendanceKind.CHECK_OUT))
                 if (mode is ButtonMode.CoveredByRequest) CoveredByRequestCard(mode.type)
                 else Box(Modifier.bringIntoViewRequester(buttonInView)) {
                     AttendanceButton(mode, s.flow, enabled = !s.loading, onPress = ::press, onDismissFlow = vm::dismissFlow)
@@ -439,15 +440,20 @@ private fun Metrics(s: AttendanceUiState, forcePending: Boolean, hereName: Strin
         s.today?.todayRequest?.type != null -> "${humanize(s.today.todayRequest.type)} ${humanize(s.today.todayRequest.status.orEmpty())}".trim()
         else -> stringResource(R.string.status_ready)
     }
-    val free = s.today?.noGeofence == true
-    // Location-free: where they checked in (the server's address), not an office they were never at.
+    // Once there is a check-in the record decides (iOS a0f1de4): away → where they checked in,
+    // inside the radius → the office, location-free or not. Before it, the per-person rule.
+    val checkedIn = rec?.checkInAt != null
+    val away = if (checkedIn) rec?.checkedInAway else null
+    val free = if (checkedIn && away != null) away else s.today?.noGeofence == true
     // While working: the active office they are in now (moved from A to B = B), else the record's.
     val officeName = if (free) null else hereName ?: rec?.officeLocation?.name
     val officeValue = if (free) {
-        rec?.checkInAddress?.let(::shortAddress)?.takeIf { it.isNotBlank() }
-            ?: stringResource(if (rec?.checkInAt != null) R.string.checked_in_away else R.string.location_free)
+        (if (checkedIn) rec?.placeLabel else null)?.takeIf { it.isNotBlank() }
+            ?: rec?.checkInAddress?.let(::shortAddress)?.takeIf { it.isNotBlank() }
+            ?: stringResource(if (checkedIn) R.string.checked_in_away else R.string.location_free)
     } else officeName ?: s.nearest?.name ?: stringResource(if (s.locationOff) R.string.location_is_off else R.string.finding_you)
     val officeHelper = when {
+        checkedIn && away == true -> stringResource(R.string.away_from_office) + " · In ${hhmmIso(rec?.checkInAt)} · Out ${hhmmIso(rec?.checkOutAt)}"
         rec?.checkInAt != null -> "In ${hhmmIso(rec.checkInAt)} · Out ${hhmmIso(rec.checkOutAt)}"
         s.nearest != null -> if (s.nearest.inside) stringResource(R.string.inside_office)
             else stringResource(R.string.distance_from_here, distanceLabel(s.nearest.distanceMeters))

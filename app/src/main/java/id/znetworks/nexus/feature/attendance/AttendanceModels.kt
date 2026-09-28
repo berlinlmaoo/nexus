@@ -34,9 +34,41 @@ data class AttendanceRecord(
     val outsideSince: String? = null,
     /** Where the check-in was made, reverse-geocoded by the server (older servers omit it). */
     val checkInAddress: String? = null,
+    /** Checked in outside the office radius (location-free); servers from 28 Sep 2026. */
+    val checkInAway: Boolean? = null,
+    val checkInDistanceMeters: Double? = null,
+    val checkInLat: Double? = null,
+    val checkInLng: Double? = null,
+    /** The server's worked minutes for the day, when it sends them. */
+    val workedMinutes: Int? = null,
 ) {
+    /** Per record, not per person: a location-free member who checked in inside the radius is at the office. */
+    val checkedInAway: Boolean? get() = AttendancePlace.isAway(checkInAway, checkInDistanceMeters, officeLocation?.radiusMeters)
+    val placeLabel: String? get() = AttendancePlace.label(checkedInAway, checkInAddress, checkInLat, checkInLng, officeLocation?.name)
     val hasCheckedIn: Boolean get() = !checkInAt.isNullOrBlank()
     val hasCheckedOut: Boolean get() = !checkOutAt.isNullOrBlank()
+}
+
+/**
+ * Where a day was worked (iOS a0f1de4, server `lib/attendance-place.ts`): a check-in away from the
+ * office shows the address it was made at, one inside the radius the office, location-free or not.
+ */
+object AttendancePlace {
+    /** The server's flag first; an older server's answer from distance vs radius; null when unknown. */
+    fun isAway(flag: Boolean?, distance: Double?, radius: Double?): Boolean? =
+        flag ?: if (distance != null && radius != null) distance > radius else null
+
+    /** The first two comma parts of a reverse-geocoded address. */
+    fun shortAddress(address: String?): String? =
+        address?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.takeIf { it.isNotEmpty() }?.take(2)?.joinToString(", ")
+
+    /** Away → short address, else coordinates, never the office; null when away with neither. Not away → the office. */
+    fun label(away: Boolean?, address: String?, lat: Double?, lng: Double?, office: String?): String? {
+        if (away != true) return office?.takeIf { it.isNotEmpty() }
+        shortAddress(address)?.let { return it }
+        if (lat != null && lng != null) return String.format(java.util.Locale.US, "%.5f, %.5f", lat, lng)
+        return null
+    }
 }
 
 @Serializable

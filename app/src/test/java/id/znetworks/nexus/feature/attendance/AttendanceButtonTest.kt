@@ -35,4 +35,13 @@ class AttendanceButtonTest {
     @Test fun offsiteWaitingStaysOnALockedCheckOut() {
         assertEquals(ButtonMode.CheckOut(250, 200, unlocked = true, waiting = true), mode(inn = true, out = true, offsite = true, count = 250))
     }
+
+    // Audit R2: the server's worked minutes first; a queued check-out says so.
+    @Test fun doneUsesServerMinutesAndSaysWhenOnlyOnThePhone() {
+        fun m(worked: Int?, queued: Boolean) = AttendanceButtonLogic.mode(true, true, false, false, 200, 200,
+            "2026-09-28T02:00:00Z", "2026-09-28T10:45:00Z", workedMinutes = worked, checkOutQueued = queued)
+        assertEquals(ButtonMode.DoneForToday(480), m(480, false))
+        assertEquals(ButtonMode.DoneForToday(525), m(null, false))
+        assertEquals(ButtonMode.DoneForToday(null, savedOnPhone = true), m(480, true))
+    }
 }
