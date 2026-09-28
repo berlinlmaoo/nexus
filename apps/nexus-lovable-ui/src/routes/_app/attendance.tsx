@@ -3,7 +3,7 @@ import { OfficeMapPicker } from "@/components/attendance/OfficeMapPicker";
 import { LocationTrail, LocationTrailDialog } from "@/components/attendance/LocationTrail";
 import { IosAppCheckInCard, isUseIosAppError, WebCheckInNote } from "@/components/attendance/IosAppCheckInCard";
 import { EmptyState, EmptyAction } from "@/components/EmptyState";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
@@ -11,34 +11,19 @@ import { Avatar } from "@/components/Avatar";
 import { ApiError, downloadFile, fmtDate, fmtTime, nexusApi, statusLabel, type AttendanceActionPayload, type NexusAttendanceHistory, type NexusOffice, type NexusOffsiteCheckout } from "@/lib/nexus-api";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { getAttendanceFix, GeoError } from "@/lib/geo";
-import { AlertTriangle, Calendar, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Clock, Coffee, Download, FileText, Flag, Globe, Hand, HeartPulse, Image as ImageIcon, Info, Loader2, MapPin, MapPinOff, Moon, Pencil, PenLine, Route as RouteIcon, Scale, Search, Sparkles, Sun, Trash2, X } from "lucide-react";
+import { AlertTriangle, Calendar, Camera, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Clock, Coffee, Download, FileText, Flag, Globe, Hand, HeartPulse, Image as ImageIcon, Info, Loader2, MapPin, MapPinOff, Moon, Pencil, PenLine, Route as RouteIcon, Search, Sparkles, Sun, Trash2, X } from "lucide-react";
 import { celebrate } from "@/components/Celebration";
 import { SelfieCapture } from "@/components/attendance/SelfieCapture";
 import { MobileCheckInHero } from "@/components/attendance/MobileCheckInHero";
 import { MorphPanel, rectCenter, type MorphOrigin } from "@/components/motion/MorphPanel";
 import { cn } from "@/lib/utils";
 import { PERIOD_BASELINE_XP } from "@/lib/levels";
+// The board's colours and the BoD "Change status" panel live in shared files since the member record
+// page (/people/:userId) draws the same cells and offers the same panel (28 Sep 2026).
+import { recTone, sCls, toneLabel } from "@/lib/attendance-tone";
+import { StatusOverridePanel } from "@/components/attendance/StatusOverridePanel";
 
 type HistRow = NonNullable<NexusAttendanceHistory["rows"]>[number];
-
-function recTone(r: HistRow): "present" | "permit" | "wfh" | "leave" | "sick" | "dayoff" | "absent" | "none" {
-  // Approved leave/sick/permit/day-off/red-date days are surfaced via attendanceDayType (the request
-  // type), NOT `status` (which is "COMPLETED" on those synthetic rows) — check it FIRST.
-  const dt = (r.attendanceDayType || "").toUpperCase();
-  if (dt === "SICK_APPROVED") return "sick";
-  if (dt === "DAY_OFF_APPROVED") return "dayoff"; // covers DAY_OFF + RED_DATE (tanggal merah)
-  if (dt === "PERMIT_APPROVED") return "permit"; // a working day with the manager's blessing → green, like present
-  if (dt === "LEAVE_APPROVED") return "leave";
-  // The server's synthetic "no record on a workday" row: status INCOMPLETE, no check-in. It used to
-  // fall through to "none" and draw the same grey as a weekend — so an absence looked like nothing.
-  if (dt === "ABSENT") return "absent";
-  const s = (r.status || "").toUpperCase();
-  if (s.includes("REMOTE") || s.includes("WFH")) return "wfh";
-  if (s.includes("LEAVE") || s.includes("SICK") || s.includes("PERMIT") || s.includes("OFF") || s.includes("IZIN") || s.includes("CUTI")) return "leave";
-  if (r.checkInAt || s.includes("PRESENT") || s.includes("HADIR")) return "present";
-  if (s.includes("ABSENT") || s.includes("ALPHA")) return "absent";
-  return "none";
-}
 
 /** The line under "Today's status": what today actually looks like, not where the number came from. */
 function todayStatusHelper(d: { today?: { checkInAt?: string | null; checkOutAt?: string | null; lateMinutes?: number | null; workedMinutes?: number | null; checkOutOffsite?: boolean | null; checkOutApproval?: string | null } | null; todayRequest?: { status?: string | null } | null; myShift?: { endTime: string; flexi?: boolean } | null } | undefined, isError: boolean) {
@@ -69,22 +54,6 @@ export const Route = createFileRoute("/_app/attendance")({
     offsite: typeof s.offsite === "string" ? s.offsite : undefined,
   }),
 });
-
-// BoD's palette (17 Sep 2026): absent red, present & permit green, sick orange, day off purple.
-// Leave (cuti) stays yellow so it is not mistaken for a permit; WFH blue.
-const sCls: Record<string, string> = {
-  present: "bg-emerald-400/70",
-  permit: "bg-emerald-400/70",
-  wfh: "bg-sky-400/60",
-  leave: "bg-amber-300/80",
-  sick: "bg-orange-400/80",
-  dayoff: "bg-violet-400/70",
-  absent: "bg-rose-500/75",
-  none: "bg-muted/40",
-};
-const toneLabel: Record<string, string> = {
-  present: "Present", permit: "Permit (counted present)", wfh: "WFH", leave: "Leave", sick: "Sick", dayoff: "Day off / public holiday", absent: "Absent", none: "",
-};
 
 // The WIB calendar day — "outside since" only means something on today's record.
 function jakartaDateKey(d = new Date()) {
@@ -183,54 +152,6 @@ function LeaveDetailDrawer({ record, onClose, canOverride }: { record: HistRow; 
           <StatusOverridePanel userId={record.user.id} name={record.user?.name ?? null} dateKey={(record.attendanceDate || "").slice(0, 10)} onDone={onClose} />
         )}
       </div>
-    </div>
-  );
-}
-
-const OVERRIDE_LABEL: Record<string, string> = { PRESENT: "Present", PERMIT: "Permit", LEAVE: "Leave", SICK: "Sick", DAY_OFF: "Day off" };
-
-/** BoD-only: rewrite one member-day's status (Hadir on-time / Cuti / Sakit / Day off) — XP penalties
- *  for that day are refunded + an auto-cut day-off restored — or just remove the punishment. */
-function StatusOverridePanel({ userId, name, dateKey, onDone }: { userId: string; name: string | null; dateKey: string; onDone: () => void }) {
-  const qc = useQueryClient();
-  const override = useMutation({
-    mutationFn: (action: "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "PERMIT" | "CLEAR_PENALTY") => nexusApi.attendanceOverride({ userId, date: dateKey, action }),
-    onSuccess: (r) => {
-      qc.invalidateQueries({ queryKey: ["attendance-history"] });
-      qc.invalidateQueries({ queryKey: ["attendance-requests"] });
-      qc.invalidateQueries({ queryKey: ["attendance-today"] });
-      if (r.action === "CLEAR_PENALTY") {
-        celebrate(r.refunded ? `Penalty for ${r.date} cleared — XP & day-off restored 🛡️` : `No penalty on ${r.date} — this day stays safe from deductions.`);
-      } else {
-        celebrate(`${name ?? "Staff"} · ${r.date} → ${OVERRIDE_LABEL[r.action] ?? r.action}${r.refunded ? " (penalty restored)" : ""} ✅`);
-      }
-      if ((r.multiDayRequestsLeft ?? 0) > 0) {
-        alert(`Heads up: this date is still covered by ${r.multiDayRequestsLeft} multi-day request(s) (multi-day leave/permit). If you want today to actually show as Present, adjust that request in the Requests section.`);
-      }
-      onDone();
-    },
-    onError: (e) => alert(e instanceof Error ? e.message : "Couldn’t change the status."),
-  });
-  const ask = (action: "PRESENT" | "LEAVE" | "SICK" | "DAY_OFF" | "PERMIT" | "CLEAR_PENALTY") => {
-    const what = action === "CLEAR_PENALTY"
-      ? `Clear the penalty for ${dateKey} for ${name ?? "this staff member"}?\n\nDeducted XP (late / forgot checkout / no-show) gets refunded + any auto-deducted day-off is restored. Attendance status is NOT changed.`
-      : `Change ${dateKey} (${name ?? "this staff member"}) to ${OVERRIDE_LABEL[action]}?\n\nThat day’s auto XP & day-off deductions get restored too.`;
-    if (window.confirm(what)) override.mutate(action);
-  };
-  return (
-    <div className="mt-4 rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-3">
-      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-primary"><Pencil className="h-3.5 w-3.5" /> Change status (BoD)</div>
-      <div className="flex flex-wrap gap-1.5">
-        {(["PRESENT", "PERMIT", "LEAVE", "SICK", "DAY_OFF"] as const).map((a) => (
-          <button key={a} disabled={override.isPending} onClick={() => ask(a)} className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-bold transition hover:border-primary hover:text-primary disabled:opacity-50">
-            {OVERRIDE_LABEL[a]}
-          </button>
-        ))}
-      </div>
-      <button disabled={override.isPending} onClick={() => ask("CLEAR_PENALTY")} className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 transition hover:bg-amber-100 disabled:opacity-50">
-        {override.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Scale className="h-3.5 w-3.5" />} Clear penalty (restore XP & day-off)
-      </button>
-      <p className="mt-1.5 text-[10px] text-muted-foreground">Every action automatically restores that day’s XP & day-off deductions, and is recorded in the audit log.</p>
     </div>
   );
 }
@@ -518,6 +439,7 @@ function Attendance() {
                 </div>
               )}
               {canSeeBoard && <ExportMenu monthKey={monthKey} monthLabel={monthLabel} />}
+              <Link to="/people/$userId" params={{ userId: "me" }} search={{ period: monthKey }} className="shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">My record</Link>
             </div>
           </div>
           {viewMode === "log" ? (
@@ -610,6 +532,9 @@ function Attendance() {
                           </>
                         )}
                         <TrackingBadges rec={recMap.get(`${u.id}:${todayKey}`)} isToday className="sm:ml-1" />
+                        {/* The person's whole record for this period: counts, XP log with reasons, requests. */}
+                        <Link to="/people/$userId" params={{ userId: u.id }} search={{ period: monthKey }} title={`${u.name ?? "Crew"} — record for this period`}
+                          className="shrink-0 self-start rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground ring-1 ring-border transition hover:bg-accent hover:text-foreground sm:self-auto">Record</Link>
                         {canManage && (() => {
                           const d = dayOffOf(u.id);
                           if (!d) return null;

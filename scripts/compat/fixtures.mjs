@@ -730,5 +730,85 @@ export function buildFixtures(profile, world, media) {
     })
   }
 
+  // ---- member record + removing one XP deduction (28 Sep 2026): GET /api/members/:id/record and
+  // POST /api/gamification/xp-transactions/:id/refund. Staff see themselves, the manager their
+  // direct reports, the BoD everyone; only the BoD removes a deduction, once.
+  if (!p.legacy) {
+    const isRecord = (j) => firstError(
+      need(isStr(j?.person?.id), "person.id"),
+      need(isStr(j?.period?.key) && Array.isArray(j?.days) && j.days.length === j.period.days, "period/days"),
+      need(Number.isInteger(j?.summary?.score?.working) && Number.isInteger(j?.summary?.counts?.absent), "summary"),
+      need(Number.isInteger(j?.summary?.dayOff?.quota) && Number.isInteger(j?.summary?.xp?.lost), "dayOff/xp totals"),
+      need(Array.isArray(j?.xp?.entries) && Array.isArray(j?.requests), "xp.entries / requests"),
+    )
+    const refund = (id, title, as, idOf, expect, kind = "compat") =>
+      add({
+        id, title, as, kind,
+        needs: (ctx) => (idOf(ctx) ? null : "no XP entry to remove"),
+        request: (ctx) => ({ method: "POST", path: `/api/gamification/xp-transactions/${idOf(ctx)}/refund`, json: { note: "Compat: bukan salah dia" } }),
+        expect,
+      })
+    add({
+      id: "record-self", title: "GET members/me/record (own record, current period)", as: "a", kind: "compat",
+      request: () => ({ method: "GET", path: "/api/members/me/record" }),
+      expect: { status: 200, check: (j, ctx) => firstError(isRecord(j), need(j?.person?.id === ctx.users.a.id && j.person.isSelf === true, "not self"), need(j?.viewer?.canRemoveXp === false, "staff may remove XP")) },
+    })
+    add({
+      id: "record-peer", title: "GET members/<peer>/record as staff → 403 FORBIDDEN", as: "a", kind: "compat",
+      request: (ctx) => ({ method: "GET", path: `/api/members/${ctx.users.b.id}/record` }),
+      expect: { status: 403, code: "FORBIDDEN" },
+    })
+    add({
+      id: "record-manager", title: "GET members/<direct report>/record as manager", as: "manager", kind: "compat",
+      request: (ctx) => ({ method: "GET", path: `/api/members/${ctx.users.a.id}/record` }),
+      expect: { status: 200, check: (j) => firstError(isRecord(j), need(j?.viewer?.scope === "DIRECT_REPORTS" && j.viewer.canRemoveXp === false, "manager scope")) },
+    })
+    add({
+      id: "xp-cut", title: "POST xp-adjust −7 (BoD) — a deduction to remove", as: "bod", kind: "compat",
+      request: (ctx) => ({ method: "POST", path: "/api/gamification/xp-adjust", json: { userId: ctx.users.a.id, amount: -7, note: `Compat ${p.id}` } }),
+      expect: { status: 200, check: (j) => need(j?.ok === true, "ok!==true") },
+    })
+    add({
+      id: "xp-gain", title: "POST xp-adjust +3 (BoD) — a gain, not removable", as: "bod", kind: "compat",
+      request: (ctx) => ({ method: "POST", path: "/api/gamification/xp-adjust", json: { userId: ctx.users.a.id, amount: 3, note: `Compat ${p.id}` } }),
+      expect: { status: 200, check: (j) => need(j?.ok === true, "ok!==true") },
+    })
+    add({
+      id: "record-bod", title: "GET members/<staff>/record as BoD → the −7 is removable", as: "bod", kind: "compat",
+      request: (ctx) => ({ method: "GET", path: `/api/members/${ctx.users.a.id}/record` }),
+      expect: {
+        status: 200,
+        check: (j) => {
+          const cut = j?.xp?.entries?.find((e) => e.kind === "admin_adjust" && e.originalAmount === -7)
+          const gain = j?.xp?.entries?.find((e) => e.kind === "admin_adjust" && e.amount === 3)
+          return firstError(isRecord(j), need(j?.viewer?.canRemoveXp === true, "BoD cannot remove"), need(cut?.canRemove === true && cut.removed === null, "−7 not removable"), need(gain && gain.canRemove === false, "+3 entry"))
+        },
+      },
+      after: (j, ctx) => {
+        ctx.flags.xpCutId = j.xp.entries.find((e) => e.kind === "admin_adjust" && e.originalAmount === -7)?.id
+        ctx.flags.xpGainId = j.xp.entries.find((e) => e.kind === "admin_adjust" && e.amount === 3)?.id
+      },
+    })
+    refund("xp-refund-staff", "POST refund as staff → 403 FORBIDDEN", "a", (ctx) => ctx.flags.xpCutId, { status: 403, code: "FORBIDDEN" })
+    refund("xp-refund-bod", "POST refund (BoD) → +7 back", "bod", (ctx) => ctx.flags.xpCutId, {
+      status: 200,
+      check: (j, ctx) => firstError(need(j?.ok === true && j?.refund?.refunded === 7 && j.refund.amount === -7, "refund amount"), need(j?.refund?.userId === ctx.users.a.id && j.refund.kind === "admin_adjust", "refund shape")),
+    })
+    refund("xp-refund-again", "POST the same refund again → 409 ALREADY_REFUNDED", "bod", (ctx) => ctx.flags.xpCutId, { status: 409, code: "ALREADY_REFUNDED" })
+    refund("xp-refund-gain", "POST refund of a gain → 400 NOT_A_DEDUCTION", "bod", (ctx) => ctx.flags.xpGainId, { status: 400, code: "NOT_A_DEDUCTION" })
+    add({
+      id: "record-removed", title: "GET members/me/record → the −7 shows as removed by the BoD", as: "a", kind: "compat",
+      needs: (ctx) => (ctx.flags.xpCutId ? null : "no XP entry was removed"),
+      request: () => ({ method: "GET", path: "/api/members/me/record?only=xp" }),
+      expect: {
+        status: 200,
+        check: (j, ctx) => {
+          const e = j?.xp?.entries?.find((x) => x.id === ctx.flags.xpCutId)
+          return firstError(need(e, "entry missing"), need(e?.amount === 0 && e?.originalAmount === -7, "amounts"), need(e?.removed?.by?.id === ctx.users.bod.id && isStr(e?.removed?.at), "removed.by"))
+        },
+      },
+    })
+  }
+
   return steps
 }

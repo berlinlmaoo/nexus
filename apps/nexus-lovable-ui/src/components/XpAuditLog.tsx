@@ -48,7 +48,8 @@ export function XpAuditLog() {
     retry: 1,
   });
 
-  const rows = log.data?.pages.flatMap((p) => p.rows) ?? [];
+  // 0 XP rows moved nothing (the "clear penalty" marker, a deduction removed from a member record).
+  const rows = (log.data?.pages.flatMap((p) => p.rows) ?? []).filter((r) => r.amount !== 0);
 
   return (
     <div className="mt-4 overflow-hidden rounded-2xl border border-border bg-card shadow-soft">

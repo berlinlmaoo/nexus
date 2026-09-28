@@ -774,6 +774,7 @@ function UserDetailModal(props: UserRowProps & { onClose: () => void }) {
               <span>{teamCount} tim · {projectCount} project</span>
             </div>
           </div>
+          <Link to="/people/$userId" params={{ userId: user.id }} title="Absensi, log XP dan request orang ini per periode" className="shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-primary transition hover:bg-accent">Rekap →</Link>
           <button onClick={onClose} aria-label="Tutup" className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-accent"><X className="h-5 w-5" /></button>
         </header>
 

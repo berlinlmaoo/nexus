@@ -88,7 +88,8 @@ export function priorityBonus(priority?: string | null): number {
  */
 /** Atomically apply a totalXp delta (DB-side increment, so concurrent awards for the SAME user can't
  *  lost-update each other) and reconcile the cached currentLevel from the authoritative new total. */
-async function applyXpDelta(tx: Prisma.TransactionClient, userId: string, delta: number) {
+/** Exported for lib/xp-refund (a removed deduction hands its XP back through the same path). */
+export async function applyXpDelta(tx: Prisma.TransactionClient, userId: string, delta: number) {
   const ux = await tx.userXp.upsert({
     where: { userId },
     create: { userId, totalXp: delta, currentLevel: levelForXp(delta).level },
@@ -144,6 +145,9 @@ export async function setLatePenalty(userId: string, dateKey: string, targetAmou
     // day's penalty row, so the read-compute-write of `delta` can't race (lost update on totalXp).
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${userId}|${reason}`})::int8)`
     const existing = await tx.xpTransaction.findFirst({ where: { userId, reason }, select: { id: true, amount: true } })
+    // The BoD removed this day's late penalty from the member record (lib/xp-refund): it stays at 0.
+    // Without this the live accrual and the check-in would write it straight back.
+    if (existing && (await tx.xpRefund.findUnique({ where: { transactionId: existing.id }, select: { id: true } }))) return
     const current = existing?.amount ?? 0
     if (current === targetAmount) return
     const delta = targetAmount - current
