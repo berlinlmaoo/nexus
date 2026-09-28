@@ -88,6 +88,16 @@ final class AuthStore {
         logout()
     }
 
+    /// The Logout buttons: false, and nothing happens, while a workday is running
+    /// (`AttendancePresence.workdayOpen`) — the button then explains with `SignOutBlockedAlert`.
+    /// A 401 still ends the session through `logout()`; only the person's own tap is held.
+    @discardableResult
+    func signOutIfAllowed() -> Bool {
+        guard !AttendancePresence.workdayOpen else { return false }
+        signOut()
+        return true
+    }
+
     /// The session ENDED, which is what every 401 handler calls. Same wipe as `signOut` except the
     /// queued check-ins, which are kept for the same person's next sign-in (`holdForSignIn`) and
     /// deleted if somebody else signs in instead (`persist` → `keepOnly`).

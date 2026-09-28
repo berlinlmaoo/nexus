@@ -1558,6 +1558,8 @@ final class AppLanguage {
         "Where you checked in": "Lokasi check-in",
         "Checked in away from the office": "Check-in di luar kantor",
         "Away from the office": "Di luar kantor",
+        "Check out first": "Check out dulu",
+        "You're checked in, so your workday and live location are still running. You can't sign out until you check out — check out on the Attendance screen, then sign out.": "Kamu sedang check in, jadi jam kerja dan lokasi live masih berjalan. Kamu tidak bisa keluar dari akun sebelum check out — check out dulu di layar Absensi, lalu keluar.",
         "Now at %@": "Sekarang di %@",
         "Location-free": "Bebas lokasi",
         "Score": "Skor",

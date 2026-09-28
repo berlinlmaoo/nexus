@@ -278,6 +278,7 @@ struct AccountFooter: View {
     /// The Keychain `Session` only stores id/name/email — no avatar — so the footer could only ever
     /// draw an initial. Fetch the profile for the real photo.
     @State private var avatar: String?
+    @State private var signOutBlocked = false
 
     var body: some View {
         VStack(spacing: 12) {
@@ -299,7 +300,7 @@ struct AccountFooter: View {
                 }
                 .buttonStyle(.plain)
             }
-            Button { auth.signOut() } label: {
+            Button { if !auth.signOutIfAllowed() { signOutBlocked = true } } label: {
                 Label(T("Logout"), systemImage: "rectangle.portrait.and.arrow.right")
                     .font(NXFont.text(14, .semibold)).foregroundStyle(NX.danger)
                     .frame(maxWidth: .infinity).padding(.vertical, 13)
@@ -309,5 +310,17 @@ struct AccountFooter: View {
         }
         .padding(.top, 4)
         .task { avatar = try? await APIClient.shared.profile().user.avatar }
+        .signOutBlockedAlert(isPresented: $signOutBlocked)
+    }
+}
+
+extension View {
+    /// "Check out first": shown when Logout is tapped during a running workday.
+    func signOutBlockedAlert(isPresented: Binding<Bool>) -> some View {
+        alert(T("Check out first"), isPresented: isPresented) {
+            Button(T("OK"), role: .cancel) {}
+        } message: {
+            Text(T("You're checked in, so your workday and live location are still running. You can't sign out until you check out — check out on the Attendance screen, then sign out."))
+        }
     }
 }

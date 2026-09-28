@@ -7,6 +7,7 @@ import UIKit
 struct SettingsView: View {
     @Environment(AuthStore.self) private var auth
     @State private var name = ""
+    @State private var signOutBlocked = false
     @State private var email = ""
     @State private var googleEmail = ""
     @State private var role: String?
@@ -138,7 +139,7 @@ struct SettingsView: View {
 
                     // account
                     VStack(spacing: 0) {
-                        Button(role: .destructive) { auth.signOut() } label: {
+                        Button(role: .destructive) { if !auth.signOutIfAllowed() { signOutBlocked = true } } label: {
                             HStack {
                                 Label(T("Logout"), systemImage: "rectangle.portrait.and.arrow.right")
                                     .font(NXFont.text(15, .semibold)).foregroundStyle(NX.danger)
@@ -148,6 +149,7 @@ struct SettingsView: View {
                         }.buttonStyle(.plain)
                     }
                     .background(NX.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .signOutBlockedAlert(isPresented: $signOutBlocked)
                     .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(NX.border))
 
                     // Last and set apart from Logout, so the permanent action is never the one a

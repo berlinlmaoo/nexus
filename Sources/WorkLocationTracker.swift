@@ -112,6 +112,9 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
 
     private override init() { super.init() }
 
+    /// A work session is being tracked (restored from disk on launch, before anything is fetched).
+    var isTracking: Bool { machine.state.isActive }
+
     // MARK: - entry points
 
     /// From `application(_:didFinishLaunchingWithOptions:)`, on every launch — including the
@@ -772,6 +775,7 @@ final class WorkPlace {
 @MainActor
 final class WorkLocationTracker {
     static let shared = WorkLocationTracker()
+    var isTracking: Bool { false }
     func bootstrap() {}
     func sync(today: AttendanceToday?) {}
     func reconcileFromServer() async {}

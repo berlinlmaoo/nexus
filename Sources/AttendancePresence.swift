@@ -66,6 +66,18 @@ enum AttendancePresence {
         if let today { WorkLocationTracker.shared.heard(today: today, at: heardAt ?? Date()) }
     }
 
+    /// A workday is running on this phone: checked in (live, or a check-in still queued) and not
+    /// checked out, not even offline. Signing out then is refused (owner, 28 Sep 2026): logout stops
+    /// the live location and wipes the queue, leaving a day nobody can close from this phone.
+    static var workdayOpen: Bool {
+        let queue = AttendanceQueue.shared.pending
+        if queue.contains(where: { $0.kind == .checkOut }) { return false }
+        if queue.contains(where: { $0.kind == .checkIn }) { return true }
+        // Before today has been fetched this launch, the tracker restored from disk still knows.
+        guard let rec = lastToday?.today else { return WorkLocationTracker.shared.isTracking }
+        return rec.hasCheckedIn && !rec.hasCheckedOut
+    }
+
     /// Logging out has to erase every trace outside the app. A widget left showing one person's
     /// hours, or a Live Activity still counting them, survives on a phone handed to somebody else.
     static func stop() {
