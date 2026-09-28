@@ -160,10 +160,10 @@ export function buildAttendanceSheetGrid(input: {
   const { periodKey, workspaceName, now } = input
   const { start, end } = attendancePeriodRange(periodKey)
   const dates = enumerateAttendanceDates(start, end)
-  // Same roster rule as the export: whoever has at least one day, A→Z by name.
-  const people = input.people
-    .filter((p) => (input.days.get(p.id)?.length ?? 0) > 0)
-    .sort((left, right) => left.name.localeCompare(right.name))
+  // Everyone the loader passes (it already applies the roster: joined by the period end, minus BoD/OAA),
+  // A→Z by name. The old "at least one day" filter here undid that and left the first days of a period
+  // with a handful of columns (28 Sep 2026).
+  const people = [...input.people].sort((left, right) => left.name.localeCompare(right.name))
   const columnCount = Math.max(2, people.length + 1)
   const summaryStart = HEADER_ROWS + dates.length + 1
   const rowCount = summaryStart + ATTENDANCE_EXPORT_SUMMARY_ROWS.length
