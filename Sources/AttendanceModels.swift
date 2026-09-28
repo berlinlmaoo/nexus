@@ -74,6 +74,13 @@ struct AttendanceRecord: Decodable, Sendable {
     /// Where the check-in was made, reverse-geocoded by the server. What a location-free member's
     /// card shows instead of an office they were never at. Optional so older servers still decode.
     let checkInAddress: String?
+    /// Checked in further from `officeLocation` than its radius — only a location-free member can.
+    /// Then the day's place is `checkInAddress`, not the office (owner, 28 Sep 2026). nil = unknown or
+    /// a server before it; `checkedInAway` falls back to distance vs radius.
+    let checkInAway: Bool?
+    let checkInDistanceMeters: Double?
+    let checkInLat: Double?
+    let checkInLng: Double?
 
     /// The office the check-in was made against. `serializeAttendanceRecord` has always sent the
     /// geofence too; only the name was decoded until the work-hours trail needed the circle itself.
@@ -87,6 +94,42 @@ struct AttendanceRecord: Decodable, Sendable {
 
     var hasCheckedIn: Bool { checkInAt != nil }
     var hasCheckedOut: Bool { checkOutAt != nil }
+
+    /// true = this day's check-in was made away from the office; nil = unknown.
+    var checkedInAway: Bool? {
+        AttendancePlace.isAway(flag: checkInAway, distance: checkInDistanceMeters, radius: officeLocation?.radiusMeters)
+    }
+    /// "Which office" for this day: the short check-in address when away, else the office name.
+    var placeLabel: String? {
+        AttendancePlace.label(away: checkedInAway, address: checkInAddress, lat: checkInLat, lng: checkInLng,
+                              office: officeLocation?.name)
+    }
+}
+
+/// Where a day's check-in happened, as text (owner decision, Berlin, 28 Sep 2026): per record, a
+/// check-in made outside the office radius (location-free members) shows the ADDRESS it was made at,
+/// not the office the record is filed under; inside the radius it stays the office. Same rule as the
+/// server (src/lib/attendance-place.ts) and the web. No T() here: the watch compiles this file too.
+enum AttendancePlace {
+    static func isAway(flag: Bool?, distance: Double?, radius: Double?) -> Bool? {
+        if let flag { return flag }
+        guard let distance, let radius else { return nil }
+        return distance > radius
+    }
+    /// The first two comma parts of a reverse-geocoded address.
+    static func shortAddress(_ address: String?) -> String? {
+        guard let address else { return nil }
+        let parts = address.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        return parts.isEmpty ? nil : parts.prefix(2).joined(separator: ", ")
+    }
+    /// Away → the short address, else the coordinates; never the office name. nil when away with
+    /// neither (callers then say "away from the office"). Not away → the office name.
+    static func label(away: Bool?, address: String?, lat: Double?, lng: Double?, office: String?) -> String? {
+        guard away == true else { return (office?.isEmpty == false) ? office : nil }
+        if let a = shortAddress(address) { return a }
+        if let lat, let lng { return String(format: "%.5f, %.5f", lat, lng) }
+        return nil
+    }
 }
 
 /// GET /api/attendance/history?scope=&month= — rows for the streak board.
@@ -125,6 +168,10 @@ struct AttendanceRow: Decodable, Identifiable, Sendable {
     let checkOutPhotoUrl: String?
     let checkInDistanceMeters: Double?
     let checkOutDistanceMeters: Double?
+    /// Checked in outside the office radius (location-free); null on synthetic rows. 28 Sep 2026+.
+    let checkInAway: Bool?
+    let checkInLat: Double?
+    let checkInLng: Double?
     let checkOutOffsite: Bool?
     let checkOutApproval: String?
     let checkOutReason: String?
@@ -132,7 +179,7 @@ struct AttendanceRow: Decodable, Identifiable, Sendable {
     let isCorrected: Bool?
     let correctionReason: String?
     let officeLocation: OfficeRef?
-    struct OfficeRef: Decodable, Sendable { let id: String?; let name: String? }
+    struct OfficeRef: Decodable, Sendable { let id: String?; let name: String?; let radiusMeters: Double? }
     let effectiveShiftStartTime: String?
     let effectiveShiftEndTime: String?
     let requestType: String?
@@ -152,6 +199,17 @@ struct AttendanceRow: Decodable, Identifiable, Sendable {
 }
 
 extension AttendanceRow {
+    /// true = this day's check-in was made away from the office; nil = unknown / no check-in.
+    var checkedInAway: Bool? {
+        guard checkInAt != nil else { return nil }
+        return AttendancePlace.isAway(flag: checkInAway, distance: checkInDistanceMeters, radius: officeLocation?.radiusMeters)
+    }
+    /// "Which office" for this day: the short check-in address when away, else the office name.
+    var placeLabel: String? {
+        AttendancePlace.label(away: checkedInAway, address: checkInAddress, lat: checkInLat, lng: checkInLng,
+                              office: officeLocation?.name)
+    }
+
     /// A stand-in for a board cell the server sent no row for (a workday with nothing on it), so a
     /// BoD can still open the day and set its status. Built through the decoder because the row is
     /// Decodable-only; every other field stays nil. `recordKind` "EMPTY" tells the sheet what it is.

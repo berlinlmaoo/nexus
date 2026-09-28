@@ -23,6 +23,11 @@ struct LocationTrailResponse: Decodable, Sendable {
         let office: Office?
         /// "denied" when the person refused Always location for this record.
         let locationTrackingState: String?
+        /// Servers from 28 Sep 2026: checked in away from the office (location-free), the address,
+        /// and the day's place as text (the address when away, else the office). Optional.
+        let checkInAway: Bool?
+        let checkInAddress: String?
+        let placeLabel: String?
     }
     struct Office: Decodable, Sendable {
         let name: String?
@@ -123,12 +128,26 @@ struct LocationTrailView: View {
                 Label("OUT \(time(trail?.record.checkOutAt))", systemImage: "arrow.left.to.line")
             }
             .font(NXFont.text(13, .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
+            if let place = placeText {
+                Label(place, systemImage: trail?.record.checkInAway == true ? "mappin.and.ellipse" : "building.2")
+                    .font(NXFont.text(12)).foregroundStyle(NX.mutedFg).lineLimit(2)
+            }
             if locationOff {
                 Text(T("Always location was refused on this phone, so NEXUS could only record while the app was open. Gaps in this trail are expected."))
                     .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    /// Where the day was: the office, or — checked in away from it — the address, said so.
+    private var placeText: String? {
+        guard let r = trail?.record, r.checkInAt != nil else { return nil }
+        if r.checkInAway == true {
+            let where_ = r.placeLabel ?? AttendancePlace.shortAddress(r.checkInAddress)
+            return T("Away from the office") + (where_.map { " · \($0)" } ?? "")
+        }
+        return r.placeLabel ?? r.office?.name
     }
 
     private var locationOffBadge: some View {

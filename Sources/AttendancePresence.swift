@@ -43,7 +43,8 @@ enum AttendancePresence {
             dateKey: AttendanceSnapshot.currentDateKey(),
             checkInAt: checkInAt,
             checkOutAt: checkOutAt,
-            officeName: record?.officeLocation?.name,
+            // The day's place: the address when checked in away from the office (location-free).
+            officeName: record?.placeLabel,
             expectedOutAt: expectedOut(from: start, shift: lastToday?.myShift),
             recentDays: lastRecent,
             pendingCount: queue.count,

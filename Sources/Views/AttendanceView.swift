@@ -400,7 +400,14 @@ struct AttendanceView: View {
     /// Once checked in this is the office on the record. Before that it used to say "5 active
     /// offices", which is a fact about the company and not about the person holding the phone —
     /// so now it answers the question they actually have: which office am I at?
+    /// Per record (owner, 28 Sep 2026): was the displayed day's check-in made away from the office?
+    /// nil before check-in or when unknown — then the per-person `locationFree` rule below applies.
+    private var recordAway: Bool? { dispRec?.checkInAt != nil ? dispRec?.checkedInAway : nil }
     private var officeValue: String {
+        // The record decides once there is a check-in: away → the address it was made at; inside the
+        // radius → the office, even for a location-free member.
+        if recordAway == true { return dispRec?.placeLabel ?? T("Checked in away from the office") }
+        if recordAway == false, let name = dispRec?.officeLocation?.name { return name }
         // Location-free: where they actually checked in (the server's address for it), not the
         // office the record happens to be filed under.
         if locationFree {
@@ -413,12 +420,15 @@ struct AttendanceView: View {
         return T("Finding you…")
     }
     private var officeLabel: String {
+        if recordAway == true { return T("Where you checked in") }
+        if recordAway == false { return dispRec?.officeLocation?.name != nil ? T("Office checkpoint") : T("Where you are") }
         if locationFree { return dispRec?.checkInAt != nil ? T("Where you checked in") : T("Where you are") }
         return dispRec?.officeLocation?.name != nil ? T("Office checkpoint") : T("Where you are")
     }
     private var officeHelper: String {
         if dispRec?.checkInAt != nil || dispRec?.checkOutAt != nil {
-            return "In \(dispRec?.checkInAt.flatMap(Self.hhmm) ?? "--:--") · Out \(dispRec?.checkOutAt.flatMap(Self.hhmm) ?? "--:--")"
+            let times = "In \(dispRec?.checkInAt.flatMap(Self.hhmm) ?? "--:--") · Out \(dispRec?.checkOutAt.flatMap(Self.hhmm) ?? "--:--")"
+            return recordAway == true ? "\(T("Away from the office")) · \(times)" : times
         }
         if let n = nearby {
             return n.inside
@@ -1946,7 +1956,12 @@ struct RecordActionsSheet: View {
                         if row.checkOutOffsite == true {
                             infoLine("mappin.and.ellipse", "\(T("Offsite check-out")) · \(reqStatusLabel(row.checkOutApproval))" + (row.checkOutReason.map { " · \($0)" } ?? ""))
                         }
-                        if let office = row.officeLocation?.name {
+                        // Which office — or, for a check-in made away from it (location-free), the
+                        // address it was made at (owner, 28 Sep 2026).
+                        if row.checkedInAway == true {
+                            infoLine("mappin.and.ellipse", "\(T("Away from the office"))" + (row.placeLabel.map { " · \($0)" } ?? "")
+                                     + (row.effectiveShiftStartTime.map { " · \(T("shift")) \($0)–\(row.effectiveShiftEndTime ?? "")" } ?? ""))
+                        } else if let office = row.officeLocation?.name {
                             infoLine("building.2", office + (row.effectiveShiftStartTime.map { " · \(T("shift")) \($0)–\(row.effectiveShiftEndTime ?? "")" } ?? ""))
                         }
                         if let w = row.workedMinutes, w > 0 { infoLine("clock", "\(T("Worked")) \(w / 60)h \(w % 60)m") }

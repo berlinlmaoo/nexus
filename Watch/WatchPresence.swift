@@ -14,7 +14,8 @@ enum WatchPresence {
             dateKey: AttendanceSnapshot.currentDateKey(),
             checkInAt: checkInAt,
             checkOutAt: parseISO(record?.checkOutAt),
-            officeName: record?.officeLocation?.name,
+            // The day's place: the address when checked in away from the office (location-free).
+            officeName: record?.placeLabel,
             expectedOutAt: expectedOut(from: checkInAt, shift: today?.myShift),
             recentDays: recent.sorted { $0.date < $1.date }.suffix(7).map { .init(dateKey: $0.date, tone: $0.tone) },
             pendingCount: 0,

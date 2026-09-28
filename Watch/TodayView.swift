@@ -42,7 +42,7 @@ struct TodayView: View {
     }
 
     private var header: some View {
-        Text(record?.officeLocation?.name ?? "NEXUS")
+        Text(record?.placeLabel ?? "NEXUS")
             .font(.caption.weight(.semibold))
             .foregroundStyle(.secondary)
             .lineLimit(1)
