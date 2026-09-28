@@ -1513,4 +1513,5 @@
     <string name="always_body">NEXUS needs location set to “Allow all the time” with precise location on to check you in. It is used only between check-in and check-out: about once an hour at the office, and your route while you are out of it.</string>
     <string name="always_button">Allow location</string>
     <string name="acct_email_password_help">To make sure this is you. Your old email will be told about this change.</string>
+    <string name="company_only">Only for Z Networks. This is part of the company workspace.</string>
 </resources>

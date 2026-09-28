@@ -1507,4 +1507,5 @@
     <string name="always_body">NEXUS butuh izin lokasi “Izinkan sepanjang waktu” dengan lokasi akurat menyala untuk check in. Lokasi hanya dipakai antara check-in dan check-out: sekitar sejam sekali di kantor, dan rutemu selama di luar kantor.</string>
     <string name="always_button">Izinkan lokasi</string>
     <string name="acct_email_password_help">Untuk memastikan ini kamu. Email lamamu akan diberi tahu soal perubahan ini.</string>
+    <string name="company_only">Hanya untuk Z Networks. Ini bagian dari workspace perusahaan.</string>
 </resources>

@@ -591,13 +591,15 @@ private fun XpSection(title: String, icon: ImageVector, tone: Color, rows: List<
 @Composable
 private fun QuickActions(onOpenAttendance: () -> Unit, onOpenWeb: (String) -> Unit) {
     val c = Nx.colors
+    val showThreads = id.znetworks.nexus.ui.components.rememberIsCompany() == true
     // Three across: six tiles two-wide push the agenda a whole screen down.
-    val tiles = listOf(
+    val tiles = listOfNotNull(
         Triple(R.string.home_q_chat, Icons.Filled.Chat, c.blue) to { onOpenWeb("/messages") },
         Triple(R.string.home_attendance, Icons.Filled.WatchLater, c.success) to onOpenAttendance,
         Triple(R.string.home_q_leaderboard, Icons.Filled.EmojiEvents, c.warning) to { onOpenWeb("/leaderboard") },
         Triple(R.string.home_q_rooms, Icons.Filled.MeetingRoom, c.danger) to { onOpenWeb("/room-booking") },
-        Triple(R.string.home_q_threads, Icons.Filled.Forum, c.violetText) to { onOpenWeb("/threads") },
+        // Threads is the company's (iOS 14b086f): no tile until known, none outside Z Networks.
+        (Triple(R.string.home_q_threads, Icons.Filled.Forum, c.violetText) to { onOpenWeb("/threads") }).takeIf { showThreads },
         Triple(R.string.home_q_calendar, Icons.Filled.CalendarMonth, c.violetText) to { onOpenWeb("/master-calendar") },
     )
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

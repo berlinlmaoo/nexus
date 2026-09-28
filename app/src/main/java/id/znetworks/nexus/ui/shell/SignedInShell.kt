@@ -116,6 +116,8 @@ import id.znetworks.nexus.feature.projects.ProjectDetailScreen
 import id.znetworks.nexus.feature.projects.ProjectsScreen
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
+import id.znetworks.nexus.ui.components.CompanyOnly
+import id.znetworks.nexus.ui.components.rememberIsCompany
 import id.znetworks.nexus.core.nav.Target
 import id.znetworks.nexus.core.net.ApiError
 import id.znetworks.nexus.core.net.NexusConfig
@@ -263,7 +265,9 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             }
             composable("account") { AccountScreen(onBack = { nav.popBackStack() }, onOpenProfile = { nav.navigate("profile/$it") }) }
             composable("threads?post={post}", arguments = listOf(androidx.navigation.navArgument("post") { nullable = true; defaultValue = null })) { e ->
-                ThreadsScreen(onBack = { nav.popBackStack() }, focusPostId = e.arguments?.getString("post"))
+                CompanyOnly(onBack = { nav.popBackStack() }) {
+                    ThreadsScreen(onBack = { nav.popBackStack() }, focusPostId = e.arguments?.getString("post"))
+                }
             }
             composable("tickets") { TicketsScreen(onBack = { nav.popBackStack() }, onOpenTicket = { nav.navigate("ticket/$it") }) }
             composable("ticket/{id}") { TicketDetailScreen(onBack = { nav.popBackStack() }) }
@@ -280,9 +284,13 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 androidx.navigation.navArgument("folder") { nullable = true; defaultValue = null },
                 androidx.navigation.navArgument("trash") { nullable = true; defaultValue = null },
             )) {
-                VaultScreen(onBack = { nav.popBackStack() }, onOpenFolder = { nav.navigate("vault?folder=$it&trash=") }, onOpenTrash = { nav.navigate("vault?folder=&trash=1") })
+                CompanyOnly(onBack = { nav.popBackStack() }) {
+                    VaultScreen(onBack = { nav.popBackStack() }, onOpenFolder = { nav.navigate("vault?folder=$it&trash=") }, onOpenTrash = { nav.navigate("vault?folder=&trash=1") })
+                }
             }
-            composable("vault-share/{slug}") { e -> VaultPublicScreen(e.arguments?.getString("slug").orEmpty(), onBack = { nav.popBackStack() }) }
+            composable("vault-share/{slug}") { e ->
+                CompanyOnly(onBack = { nav.popBackStack() }) { VaultPublicScreen(e.arguments?.getString("slug").orEmpty(), onBack = { nav.popBackStack() }) }
+            }
             composable("reports") {
                 ReportsScreen(onBack = { nav.popBackStack() }, onOpenPerson = { id, off -> nav.navigate("report/$id/$off") }, onOpenTask = { nav.navigate("task/$it") })
             }
@@ -435,13 +443,16 @@ private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut
             colors = itemColors, modifier = shape.clickable(onClick = onOpenDocs),
         )
         Spacer(Modifier.height(12.dp))
-        ListItem(
-            headlineContent = { Text("Z Vault") },
-            supportingContent = { Text(stringResource(R.string.vault_more_sub)) },
-            leadingContent = { Icon(Icons.Filled.Folder, null, tint = c.violetText) },
-            colors = itemColors, modifier = shape.clickable(onClick = onOpenVault),
-        )
-        Spacer(Modifier.height(12.dp))
+        // Company only (iOS 14b086f): hidden until known, and outside Z Networks.
+        if (rememberIsCompany() == true) {
+            ListItem(
+                headlineContent = { Text("Z Vault") },
+                supportingContent = { Text(stringResource(R.string.vault_more_sub)) },
+                leadingContent = { Icon(Icons.Filled.Folder, null, tint = c.violetText) },
+                colors = itemColors, modifier = shape.clickable(onClick = onOpenVault),
+            )
+            Spacer(Modifier.height(12.dp))
+        }
         ListItem(
             headlineContent = { Text(stringResource(R.string.rp_title)) },
             supportingContent = { Text(stringResource(R.string.rp_more_sub)) },
