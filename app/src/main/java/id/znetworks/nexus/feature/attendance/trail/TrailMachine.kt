@@ -184,10 +184,17 @@ class TrailMachine(var state: TrailState = TrailState()) {
          * The office the person is in now: the one whose radius holds the latest fix, else the
          * record's own while the zone is inside. Null outside or before the zone is known.
          */
+        /** The office for [recordId]'s card: only when the trail is tracking that very record (iOS WorkPlace.recordId). */
+        fun officeHereFor(state: TrailState, recordId: String?): TrailFence? =
+            if (recordId != null && state.recordId == recordId) officeHere(state) else null
+
         fun officeHere(state: TrailState): TrailFence? {
             if (!state.isActive || state.zone != TrailZone.INSIDE) return null
             // The nearest office (edge distance) to the latest fix clear enough to tell (iOS currentOffice).
-            val p = state.latest?.takeIf { (it.accuracy ?: DECISIVE_ACCURACY) <= DECISIVE_ACCURACY } ?: return state.fence
+            // The freshest clear one of the latest fix and the last queued point (iOS latest / lastGood).
+            val p = listOfNotNull(state.latest, state.lastQueued)
+                .filter { (it.accuracy ?: DECISIVE_ACCURACY) <= DECISIVE_ACCURACY }
+                .maxByOrNull { it.atMillis } ?: return state.fence
             return state.fences.minByOrNull { distance(p.lat, p.lng, it.lat, it.lng) - it.radius } ?: state.fence
         }
 

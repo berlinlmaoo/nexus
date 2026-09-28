@@ -247,7 +247,8 @@ fun AttendanceScreen(
             }
             val trail = (context.applicationContext as NexusApplication).container.workTrail
             val trailTick by trail.changes.collectAsState()
-            val hereName = remember(trailTick) { id.znetworks.nexus.feature.attendance.trail.TrailMachine.officeHere(trail.state)?.name }
+            val recId = s.today?.today?.id
+            val hereName = remember(trailTick, recId) { id.znetworks.nexus.feature.attendance.trail.TrailMachine.officeHereFor(trail.state, recId)?.name }
             Metrics(s, forcePending, hereName.takeIf { s.today?.today?.let { it.hasCheckedIn && !it.hasCheckedOut } == true })
             // Filing changes today's quota and cover: re-read it after a request goes in.
             SubmissionsCard(requests, onFiled = { vm.load() })

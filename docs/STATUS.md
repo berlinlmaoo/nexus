@@ -210,7 +210,8 @@ until the main session says; build 5 goes out for Berlin to test.
 |---|---|---|
 | R1 session cookie followed a redirect to another host | A network interceptor drops `Cookie` on any hop (redirects included) whose host may not carry the session (ApiClientTest) | c80e21e |
 | R3 an id with "/" from a link crashed the app | Every id put into a route from a link or push is `Uri.encode`d (ticket, submission, chat, doc, vault, report, profile, folder, task, project, thread post, form); guarded in AttendanceGuardTest | ec14393, ae5d60b |
-| R4 files in cache/shared and cache/evidence survived logout | Both emptied at sign-out with the rest of the session (the offline copy was already); AttendanceGuardTest checks every FileProvider cache path is covered | this step |
+| R4 files in cache/shared and cache/evidence survived logout | Both emptied at sign-out with the rest of the session (the offline copy was already); AttendanceGuardTest checks every FileProvider cache path is covered | 7bd6270 |
+| R6 "Now at" parity | Shown only when the trail tracks the record on the card (iOS WorkPlace.recordId); the office is read from the freshest clear fix among the latest and the last queued point (iOS latest / lastGood). TrailMachineTest | this step |
 
 ## Re-audit 28 Sep 2026 evening (docs/AUDIT.md, HEAD 8842c35, "RILIS BELUM LAYAK"): fixes
 

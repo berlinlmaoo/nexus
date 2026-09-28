@@ -311,4 +311,17 @@ class TrailMachineTest {
         assertEquals(true, TrailMachine.decisive(p, listOf(a, b)))
         assertNull(TrailMachine.decisive(p, emptyList()))
     }
+
+    // Audit R6 (build 5): "Now at" only for the record the trail tracks; a clear queued point counts.
+    @Test fun officeHereBelongsToTheTrackedRecord() {
+        m.start("r1", now, fence.copy(name = "HQ"), now)
+        m.fix(inside(), now)
+        assertEquals("HQ", TrailMachine.officeHereFor(m.state, "r1")?.name)
+        assertNull(TrailMachine.officeHereFor(m.state, "another-day"))
+        assertNull(TrailMachine.officeHereFor(m.state, null))
+        // Latest fix vague, the last queued point clear: that point decides.
+        val clear = at(0.0002).copy(recordId = "r1", atMillis = now)
+        m.state = m.state.copy(latest = at(0.0002, acc = 900.0), lastQueued = clear)
+        assertEquals("HQ", TrailMachine.officeHere(m.state)?.name)
+    }
 }
