@@ -801,4 +801,19 @@
     <string name="acct_add_passkey">Add a passkey</string>
     <string name="passkey_added">Passkey added.</string>
     <string name="passkey_add_failed">Couldn\'t add that passkey.</string>
+    <string name="wn_title">What\'s new</string>
+    <string name="wn_version">NEXUS %1$s</string>
+    <string name="wn_ok">Got it</string>
+    <string name="wn016_button_t">One button for your day</string>
+    <string name="wn016_button_b">Check in with the green button. It turns into Check out once your 200-character reflection is written, and shows every step while it works: selfie, location, sending, done.</string>
+    <string name="wn016_trail_t">Where you work, only during work hours</string>
+    <string name="wn016_trail_b">Between check-in and check-out NEXUS checks about once an hour that you\'re at the office. Step out and it follows your route, and the Work session notification counts down to the automatic check-out, with a File a permit button. Nothing before check-in, nothing after check-out.</string>
+    <string name="wn016_offline_t">No signal? It still counts</string>
+    <string name="wn016_offline_b">A check-in or check-out tapped while NEXUS can\'t be reached is kept on this phone with the time you tapped, and sends itself when NEXUS is back.</string>
+    <string name="wn016_projects_t">Your missions, in the app</string>
+    <string name="wn016_projects_b">Home, My Quest Log, boards, task details with files and comments, sprints, calendar, timeline and search all run on the phone now.</string>
+    <string name="wn016_account_t">Sign up, reset and passkeys</string>
+    <string name="wn016_account_b">Create an account with your company\'s workspace code, reset a forgotten password, or add a passkey and sign in with the phone\'s screen lock.</string>
+    <string name="wn016_update_t">Updates arrive inside NEXUS</string>
+    <string name="wn016_update_b">No Play Store needed: when a new version is out, More shows it and installs it from the app.</string>
 </resources>

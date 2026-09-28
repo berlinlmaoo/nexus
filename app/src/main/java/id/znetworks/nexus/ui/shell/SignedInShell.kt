@@ -3,8 +3,11 @@ package id.znetworks.nexus.ui.shell
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.filled.WatchLater
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.AutoAwesome
 import id.znetworks.nexus.feature.auth.AccountScreen
 import id.znetworks.nexus.feature.home.HomeScreen
+import id.znetworks.nexus.feature.whatsnew.WhatsNew
+import id.znetworks.nexus.feature.whatsnew.WhatsNewSheet
 import id.znetworks.nexus.feature.search.SearchScreen
 import id.znetworks.nexus.feature.projects.ProjectSettingsScreen
 import id.znetworks.nexus.feature.tasks.MyTasksScreen
@@ -153,6 +156,10 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
     // The location disclosure can come due from any screen (a queued check-in landing, a refresh).
     TrailConsentHost(container.workTrail)
     AnnouncementDialog(container.announcements)
+    // Once per version, after the location disclosure and announcements have had their turn.
+    val version = container.identity.versionName
+    var whatsNew by rememberSaveable { mutableStateOf(WhatsNew.due(context, version)) }
+    if (whatsNew) WhatsNewSheet(version) { WhatsNew.seen(context, version); whatsNew = false }
 
     Scaffold(
         containerColor = Nx.colors.background,
@@ -197,7 +204,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable(Tab.PROJECTS.route) {
                 ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") })
             }
-            composable(Tab.MORE.route) { MoreScreen(session, gateState, onSignOut, onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } }, onOpenAccount = { nav.navigate("account") }) }
+            composable(Tab.MORE.route) { MoreScreen(session, gateState, onSignOut, onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } }, onOpenAccount = { nav.navigate("account") }, onOpenWhatsNew = { whatsNew = true }) }
             composable("project/{id}") { entry ->
                 ProjectDetailScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") },
                     onOpenSettings = { nav.navigate("project/${entry.arguments?.getString("id")}/settings") })
@@ -235,7 +242,7 @@ private fun NotYet(tab: Tab) {
 }
 
 @Composable
-private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut: () -> Unit, onOpenAttendance: () -> Unit, onOpenAccount: () -> Unit) {
+private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut: () -> Unit, onOpenAttendance: () -> Unit, onOpenAccount: () -> Unit, onOpenWhatsNew: () -> Unit) {
     val c = Nx.colors
     val context = LocalContext.current
     val container = (context.applicationContext as NexusApplication).container
@@ -265,6 +272,15 @@ private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut
             colors = itemColors, modifier = shape.clickable(onClick = onOpenAccount),
         )
         Spacer(Modifier.height(12.dp))
+        if (WhatsNew.entries(container.identity.versionName).isNotEmpty()) {
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.wn_title)) },
+                supportingContent = { Text(stringResource(R.string.wn_version, container.identity.versionName)) },
+                leadingContent = { Icon(Icons.Filled.AutoAwesome, null, tint = c.violetText) },
+                colors = itemColors, modifier = shape.clickable(onClick = onOpenWhatsNew),
+            )
+            Spacer(Modifier.height(12.dp))
+        }
         gateState.available?.let { version ->
             // Soft "update available": Tuning Room only, never a nag (REQ-ATT-41).
             ListItem(
