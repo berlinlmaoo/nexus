@@ -16,7 +16,7 @@ android {
         targetSdk = 36
         // Always three parts (the server rejects a tag without x.y.z). Android shares the iOS version
         // number (owner, 24 Sep 2026); versionCode counts Android builds on its own.
-        versionCode = 1
+        versionCode = 2
         versionName = "0.1.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

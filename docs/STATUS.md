@@ -146,12 +146,16 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 | B13 | **Fixed** (main session, 28 Sep: board showed only people who had checked in on a period's first day). The board now merges `roster` from `GET /api/attendance/history?scope=workspace` with the people in the rows, sorted A–Z as on iOS/web (the viewer is no longer pinned first); roster quota is used when a person has no row yet (history/BoardModel.kt `members`, BoardModelTest `rosterShowsEveryoneEvenWithoutRows`). |
 | B14 | **Fixed** (iOS 91d7e98, crew board freeze panes): (1) a drag over the names, the Score column or the date row now scrolls the board too (outer `scrollable` on the whole grid sharing the day-cell and row scroll states; history/BoardUi.kt `Grid`); (2) **not affected**: rows are a plain Column, never a lazy list inside the two-way scroll, so every row is always drawn. |
 
-## First APK, ready to publish (for the main session, R2)
+## APK ready (for the main session, R2) — publish only on Berlin's go
 
-`agents:~/nexus-android-release/NEXUS-0.1.6-1.apk` — versionName 0.1.6, versionCode 1, arm64-v8a +
-armeabi-v7a, targetSdk 36, 21.9 MB, sha256 `5fabc061f5200e9783c594627e6a82f029614b26aafa8b7f8583411862e2d97e`,
-signed by the release key (SHA-256 53:22:FE:…:AD:26). Built WITH Firebase (project
-nexus-znetworks-android, read from `~/.nexus-android-secrets/firebase.properties`, 28 Sep).
+**APK siap: versionCode 2, sha256 `2993075c64b28f0718b1504dbeba2d9ef16d7d4128d6f288cf7a9215040b946a`**
+`agents:~/nexus-android-release/NEXUS-0.1.6-2.apk` (+ `.sha256`) — versionName 0.1.6, versionCode 2,
+arm64-v8a + armeabi-v7a, targetSdk 36, 22.5 MB, signed by the release key (SHA-256
+53:22:FE:…:AD:26, the fingerprint in assetlinks.json, so passkeys can be tested with it), built with
+Firebase. Contains Phase 2, UPDATES §9–§11, B13/B14 and Phase 3.1 (Messages), commit 1f03e22 + the
+versionCode bump. Rule (main session, 28 Sep): versionName stays 0.1.6, versionCode +1 per published APK.
+
+Older: `NEXUS-0.1.6-1.apk` (versionCode 1, sha256 `5fabc061…2d97e`), before Phase 2.
 
 ## Not verified yet (the first thing to do)
 
