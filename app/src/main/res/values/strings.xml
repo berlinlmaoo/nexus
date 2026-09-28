@@ -1405,4 +1405,7 @@
     <string name="pf_saved">Saved ✓</string>
     <string name="pf_no_google">No company Google account linked yet.</string>
     <string name="ad_photo_changed">Profile photo changed.</string>
+    <string name="pf_not_a_peer">Profile unavailable — that person isn\'t in a workspace you share.</string>
+    <string name="pf_this_period">This period</string>
+    <string name="pf_no_points_moved">No points moved this period.</string>
 </resources>

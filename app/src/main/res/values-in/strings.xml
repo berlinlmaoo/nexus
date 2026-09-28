@@ -1399,4 +1399,7 @@
     <string name="pf_saved">Tersimpan ✓</string>
     <string name="pf_no_google">Belum ada akun Google kantor yang ditautkan.</string>
     <string name="ad_photo_changed">Foto profil diganti.</string>
+    <string name="pf_not_a_peer">Profil tidak tersedia — orang itu tidak ada di workspace yang sama denganmu.</string>
+    <string name="pf_this_period">Periode ini</string>
+    <string name="pf_no_points_moved">Belum ada poin yang bergerak periode ini.</string>
 </resources>

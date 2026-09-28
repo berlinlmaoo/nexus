@@ -57,7 +57,30 @@ object PeopleLogic {
     }
 }
 
+@Serializable data class XpLogRow(val id: String, val amount: Int = 0, val reason: String = "", val createdAt: String? = null, val lateMinutes: Int? = null)
+@Serializable data class XpLogUser(val id: String? = null, val name: String? = null, val avatar: String? = null)
+@Serializable data class XpLog(val rows: List<XpLogRow> = emptyList(), val user: XpLogUser? = null)
+
+/** The peer-scoped ledger (`/api/gamification/xp-log`): its 403 is how iOS says "not a colleague". */
+object XpLogLogic {
+    /** Zero rows are server bookkeeping (a waiver, a removed deduction): nothing moved, nothing to say. */
+    fun entries(log: XpLog) = log.rows.filter { it.amount != 0 }.map(::entry)
+    /** "attendance:late", "peer:report:…:bounty", "admin:adjust:<note>", "quest:…" → the record's kinds. */
+    fun entry(r: XpLogRow): XpEntry {
+        val p = r.reason.split(":", limit = 3)
+        val kind = when (p.getOrNull(0) to p.getOrNull(1)) {
+            "attendance" to "late" -> "late"; "attendance" to "alpha" -> "alpha"; "attendance" to "nocheckout" -> "nocheckout"
+            "peer" to "report" -> if (r.reason.endsWith(":bounty")) "peer_bounty" else "peer_penalty"
+            "admin" to "adjust" -> "admin_adjust"
+            else -> if (p.firstOrNull() == "quest") "quest" else null
+        }
+        return XpEntry(r.id, r.amount, createdAt = r.createdAt, reason = r.reason, kind = kind, label = r.reason,
+            detail = if (kind == "admin_adjust") p.getOrNull(2) else null, lateMinutes = r.lateMinutes)
+    }
+}
+
 class PeopleApi(private val api: ApiClient) {
+    suspend fun xpLog(userId: String, limit: Int = 20) = api.get("/api/gamification/xp-log?userId=${URLEncoder.encode(userId, "UTF-8")}&limit=$limit", XpLog.serializer())
     suspend fun leaderboard() = api.getCached("/api/gamification/leaderboard", "leaderboard", Leaderboard.serializer())
     suspend fun record(userId: String, period: String?) =
         api.get("/api/members/${URLEncoder.encode(userId, "UTF-8")}/record" + (period?.let { "?period=$it" } ?: ""), MemberRecord.serializer())

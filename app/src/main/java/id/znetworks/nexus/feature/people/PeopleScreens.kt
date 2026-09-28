@@ -147,9 +147,14 @@ fun MemberProfileScreen(userId: String, onBack: () -> Unit, onOpenChat: (String)
     var notice by remember { mutableStateOf<String?>(null) }
     var tick by remember { mutableStateOf(0) }
     LaunchedEffect(userId) { boardRow = runCatching { api.leaderboard().value.rows.firstOrNull { it.userId == userId } }.getOrNull() }
+    var notAPeer by remember { mutableStateOf(false) }
+    var ledger by remember { mutableStateOf<List<XpEntry>?>(null) }
     LaunchedEffect(userId, period, tick) {
         try { val r = api.record(userId, period); rec = r; older = emptyList(); olderKey = r.xp?.olderPeriod.takeIf { r.xp?.hasOlder == true }; hidden = false }
         catch (e: ApiError) { if (e is ApiError.Http && e.status == 403) hidden = true else error = e.describe(res) }
+        // Record not ours to see: the peer-scoped ledger decides between "not a colleague" and the old ledger.
+        if (hidden) try { ledger = XpLogLogic.entries(api.xpLog(userId)); container.viewer.load() }
+            catch (e: ApiError) { if (e is ApiError.Http && e.status == 403) notAPeer = true }
     }
     Column(Modifier.fillMaxSize().background(c.background)) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -157,6 +162,7 @@ fun MemberProfileScreen(userId: String, onBack: () -> Unit, onOpenChat: (String)
         }
         val r = rec
         if (r == null && !hidden && error == null) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return@Column }
+        if (notAPeer) { TabEmpty(Icons.Filled.Person, stringResource(R.string.pf_not_a_peer)); return@Column }
         if (r == null && boardRow == null) { TabEmpty(Icons.Filled.Person, error ?: stringResource(R.string.pf_unavailable)); return@Column }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             val name = r?.person?.name ?: boardRow?.name ?: "—"
@@ -182,6 +188,18 @@ fun MemberProfileScreen(userId: String, onBack: () -> Unit, onOpenChat: (String)
                     Text("%,d XP".format(Locale.getDefault(), b.totalXp), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = c.foreground)
                     Text(stringResource(R.string.home_level_n, b.level) + (b.levelName?.let { " · $it" } ?: ""), fontSize = 13.sp, color = c.violetText)
                 } ?: Text(stringResource(if (r?.person?.role in setOf("BOD", "ONE_ABOVE_ALL")) R.string.pf_outside_ranking else R.string.pf_no_points), fontSize = 13.sp, color = c.mutedFg)
+            }
+            if (hidden && (isMe || container.viewer.isBoD)) ledger?.let { l ->
+                Card {
+                    Text(stringResource(R.string.pf_this_period).uppercase(), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.mutedFg)
+                    if (l.isEmpty()) Text(stringResource(R.string.pf_no_points_moved), fontSize = 12.sp, color = c.mutedFg)
+                    l.forEach { e ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(e.signed, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = if (e.amount < 0) c.danger else c.success, modifier = Modifier.width(52.dp))
+                            Text(xpTitle(e), fontSize = 13.sp, color = c.foreground, maxLines = 2, modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
             }
             if (hidden || r == null) return@Column
             // Period bar
