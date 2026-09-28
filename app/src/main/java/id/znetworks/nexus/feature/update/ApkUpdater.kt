@@ -123,17 +123,13 @@ class ApkUpdater(
 
     /** Checksum, package, signing certificate and version: a wrong or tampered file never reaches the installer. */
     private fun verify(apk: File, release: AndroidRelease): Reason? {
-        release.sha256?.takeIf { it.isNotBlank() }?.let { expected ->
-            if (!sha256(apk).equals(expected.replace(":", ""), ignoreCase = true)) return Reason.CHECKSUM
-        }
+        val checksumOk = release.sha256?.takeIf { it.isNotBlank() }?.let { expected -> sha256(apk).equals(expected.replace(":", ""), ignoreCase = true) }
         val pm = context.packageManager
         val flags = if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else @Suppress("DEPRECATION") PackageManager.GET_SIGNATURES
-        val archive = pm.getPackageArchiveInfo(apk.path, flags) ?: return Reason.WRONG_APP
-        if (archive.packageName != context.packageName) return Reason.WRONG_APP
-        val installed = runCatching { pm.getPackageInfo(context.packageName, flags) }.getOrNull() ?: return Reason.WRONG_APP
-        if (signers(archive) != signers(installed)) return Reason.WRONG_APP
-        if (!isNewer(versionCode(archive), runningCode)) return Reason.NOT_NEWER
-        return null
+        val archive = pm.getPackageArchiveInfo(apk.path, flags)
+        val installed = runCatching { pm.getPackageInfo(context.packageName, flags) }.getOrNull()
+        return verdict(checksumOk, archive?.packageName, context.packageName, archive?.let(::signers), installed?.let(::signers),
+            archive?.let(::versionCode), runningCode)
     }
 
     private fun install(apk: File) {
@@ -163,6 +159,22 @@ class ApkUpdater(
 
     companion object {
         fun isNewer(candidate: Int, running: Int) = candidate > running
+
+        /**
+         * The whole gate before PackageInstaller, as a pure rule: a checksum that was given must
+         * match; the file must be THIS app, signed by the SAME key as the installed one (so a
+         * swapped or tampered APK never installs even without a checksum), and strictly newer.
+         */
+        fun verdict(
+            checksumOk: Boolean?, archivePackage: String?, ownPackage: String,
+            archiveSigners: Set<String>?, installedSigners: Set<String>?, archiveCode: Int?, runningCode: Int,
+        ): Reason? = when {
+            checksumOk == false -> Reason.CHECKSUM
+            archivePackage == null || archivePackage != ownPackage -> Reason.WRONG_APP
+            archiveSigners.isNullOrEmpty() || installedSigners.isNullOrEmpty() || archiveSigners != installedSigners -> Reason.WRONG_APP
+            archiveCode == null || !isNewer(archiveCode, runningCode) -> Reason.NOT_NEWER
+            else -> null
+        }
 
         fun sha256(f: File): String {
             val md = MessageDigest.getInstance("SHA-256")

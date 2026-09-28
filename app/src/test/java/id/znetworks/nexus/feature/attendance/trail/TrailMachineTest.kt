@@ -251,4 +251,29 @@ class TrailMachineTest {
         now += 2 * min
         assertTrue(TrailEffect.Flush in m.tick(now))
     }
+
+    @Test fun nothingIsRecordedWithoutAnOpenRecord() {
+        // Before check-in: fixes and ticks queue nothing and ask for no GPS.
+        assertTrue(m.fix(outside(), now).isEmpty())
+        assertTrue(m.tick(now + 20 * min).isEmpty())
+        assertTrue(m.state.pending.isEmpty())
+        assertFalse(m.setup.active)
+        // After check-out: the same.
+        started(); m.fix(outside(), now)
+        m.sent(m.state.pending.map { it.id }.toSet(), "r1", TrailReply(true, "outside", now, null), now)
+        m.stop(keepUnsent = true)
+        now += 10 * min
+        assertTrue(m.fix(outside(), now).isEmpty())
+        m.tick(now)
+        assertTrue(m.state.pending.isEmpty())
+        assertFalse(m.setup.active)
+        assertNull(OutsideClock.present(m.state, now))
+    }
+
+    @Test fun aStaleCachedFixDecidesNothing() {
+        started()
+        val old = at(0.005).copy(atMillis = now - 10 * min)
+        assertTrue(m.fix(old, now).isEmpty())
+        assertEquals(TrailZone.UNKNOWN, m.state.zone)
+    }
 }

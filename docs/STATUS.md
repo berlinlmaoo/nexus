@@ -4,7 +4,7 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (192 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (206 JVM tests, all green).
 Version 0.1.6 (versionCode 1), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 
 ## Done (Phase 1, attendance MVP)
@@ -123,7 +123,7 @@ Done. PRESENCE IN / OUT are gone; `AttendanceButton` is one full-width control:
 |---|---|---|
 | 3.1 | Messages: list (Direct / Groups / Projects, unread badges, previews, polled every 15 s, saved copy offline), new DM or group from the workspace roster, thread (polled every 5 s, load earlier, **reply** with quote, @mention picker → mentionedUserIds, photos from gallery/camera as JPEG ≤ 8 MB via /api/upload/chat, send location, location and task cards, copy, full-screen photo, rename group), **marks read** (`POST …/read`, which iOS never calls), the project Chat tab opens the project room, `/messages?c=` links and message pushes open the thread | 824a6f9 |
 | 3.2 | Threads (company feed): composer (≤ 280 chars, up to 4 photos as JPEG ≤ 8 MB with their sizes in imageMeta, @mention picker from the roster), feed **paged** with the server cursor (iOS never pages), like (optimistic, reconciled), comments sheet with mentions, delete (own or BoD+), edit within 15 min (web parity), server sentences (20 s gap, hourly cap) shown verbatim; Home quick action and `/threads?post=` links/pushes open it (the post's comments) | da786a2 |
-| 3.3 | Tickets (More › Tickets): list with status filters and counts (In review includes Awaiting decision), anonymous reporters, GIDEON-replied and decision-waiting marks; new ticket (category, subject 4–140, body ≥ 10, 1–5 evidence photos from camera/gallery as JPEG ≤ 8 MB); detail with photos, conversation (GIDEON labelled), reply (≥ 10), BoD status menu; **attendance corrections** on ATTENDANCE/EXP tickets: before → proposed times, penalty cancellation with XP/day-off cost, propose both kinds (iOS only times), BoD approve/reject with note, the 409 optimistic lock explained; `/complaints?id=` links and ticket pushes open it | this step |
+| 3.3 | Tickets (More › Tickets): list with status filters and counts (In review includes Awaiting decision), anonymous reporters, GIDEON-replied and decision-waiting marks; new ticket (category, subject 4–140, body ≥ 10, 1–5 evidence photos from camera/gallery as JPEG ≤ 8 MB); detail with photos, conversation (GIDEON labelled), reply (≥ 10), BoD status menu; **attendance corrections** on ATTENDANCE/EXP tickets: before → proposed times, penalty cancellation with XP/day-off cost, propose both kinds (iOS only times), BoD approve/reject with note, the 409 optimistic lock explained; `/complaints?id=` links and ticket pushes open it | 859622b |
 
 Still on the web until built: Phase 3 (chat, Threads, docs/pages, forms, profiles, tickets, Z Vault, reports, leaderboard, GIDEON, Control Room).
 
@@ -147,6 +147,20 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 | B12 | **Not affected** (6f23cdc): attendance only accepts `LiveSelfie` from the face check (liveness/LivenessCaptureScreen.kt:100); AttendanceGuardTest fails the build on any bypass. |
 | B13 | **Fixed** (main session, 28 Sep: board showed only people who had checked in on a period's first day). The board now merges `roster` from `GET /api/attendance/history?scope=workspace` with the people in the rows, sorted A–Z as on iOS/web (the viewer is no longer pinned first); roster quota is used when a person has no row yet (history/BoardModel.kt `members`, BoardModelTest `rosterShowsEveryoneEvenWithoutRows`). |
 | B14 | **Fixed** (iOS 91d7e98, crew board freeze panes): (1) a drag over the names, the Score column or the date row now scrolls the board too (outer `scrollable` on the whole grid sharing the day-cell and row scroll states; history/BoardUi.kt `Grid`); (2) **not affected**: rows are a plain Column, never a lazy list inside the two-way scroll, so every row is always drawn. |
+
+## Release rule (Berlin, 28 Sep 2026)
+
+Build 2 is **not** published. The Android release to all staff comes only after every feature is
+level with iOS 0.1.6 (Phase 3 + Phase 4 Control Room + every UPDATES section) and a clean audit; it
+is published through the web `/download/android`, and the Android minimum version then follows the
+iOS rule (3 days after release). With no phone tester before that, the release-critical paths are
+held by tests (added 28 Sep): `AttendanceGuardTest` (only capture flow/queue reach check-in/out,
+only the face check makes a selfie, notification actions are permit links only, no cron/notify
+routes, GPS only through the work session, only the updater installs and it always runs the
+verdict, the queue lives outside backups, the mock-location flag is always sent, no secrets in logs),
+`UpdateVerdictTest` (checksum, package, signing key, version), `TrailMachineTest` (nothing recorded
+without an open record; stale fixes decide nothing) on top of the queue/LAN/version-gate suites.
+The first staff member's device checklist is in `docs/INSTALL-APK.md` (13 checks).
 
 ## APK ready (for the main session, R2) — publish only on Berlin's go
 

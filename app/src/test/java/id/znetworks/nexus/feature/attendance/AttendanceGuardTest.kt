@@ -47,4 +47,38 @@ class AttendanceGuardTest {
             assertEquals(name, Regex("""addAction\(""").findAll(src).count(), Regex("""nexus://attendance\?permit=today""").findAll(src).count())
         }
     }
+
+    @Test fun neverCallsCronOrNotificationSendingRoutes() {
+        // CLAUDE.md: a POST there sends real notifications / runs real jobs on production.
+        assertEquals(sortedSetOf<String>(), filesMatching(Regex("""/api/cron|/api/notifications/due-check|/api/notifications/send""")))
+    }
+
+    @Test fun locationRunsOnlyThroughTheWorkSession() {
+        // The foreground service is started by the trail (after consent, while a record is open) and
+        // by the boot receiver (resuming that same record) — nothing else may switch GPS on.
+        assertEquals(sortedSetOf("WorkTrail.kt", "WorkTrailService.kt"), filesMatching(Regex("""WorkTrailService\.start\(""")))
+        assertEquals(sortedSetOf("WorkTrailService.kt"), filesMatching(Regex("""requestLocationUpdates\(""")))
+    }
+
+    @Test fun onlyTheUpdaterInstallsPackages() {
+        assertEquals(sortedSetOf("ApkUpdater.kt"), filesMatching(Regex("""PackageInstaller\.SessionParams|packageInstaller\b""")))
+        // …and it always runs the verdict (checksum, package, signing key, version) first.
+        val updater = sources.entries.first { it.key.name == "ApkUpdater.kt" }.value
+        assertTrue(updater.contains("verdict("))
+    }
+
+    @Test fun theQueueLivesOutsideBackups() {
+        // Selfies and tap times must never ride along into a cloud backup or a new phone.
+        val container = sources.entries.first { it.key.name == "AppContainer.kt" }.value
+        assertTrue(Regex("""AttendanceQueue\(\s*dir = File\(context\.noBackupFilesDir""").containsMatchIn(container))
+    }
+
+    @Test fun everyAttendanceSendCarriesTheMockLocationFlag() {
+        val api = sources.entries.first { it.key.name == "AttendanceApi.kt" }.value
+        assertTrue(api.contains("\"simulated\" to"))
+    }
+
+    @Test fun noSecretsInLogs() {
+        assertEquals(sortedSetOf<String>(), filesMatching(Regex("""Log\.[divwe]\(.*(token|cookie|password|selfie)""", RegexOption.IGNORE_CASE)))
+    }
 }
