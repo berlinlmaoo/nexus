@@ -4,7 +4,7 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (187 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (188 JVM tests, all green).
 Version 0.1.6 (versionCode 1), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 
 ## Done (Phase 1, attendance MVP)
@@ -121,7 +121,8 @@ Done. PRESENCE IN / OUT are gone; `AttendanceButton` is one full-width control:
 
 | Part | What exists | Commit |
 |---|---|---|
-| 3.1 | Messages: list (Direct / Groups / Projects, unread badges, previews, polled every 15 s, saved copy offline), new DM or group from the workspace roster, thread (polled every 5 s, load earlier, **reply** with quote, @mention picker → mentionedUserIds, photos from gallery/camera as JPEG ≤ 8 MB via /api/upload/chat, send location, location and task cards, copy, full-screen photo, rename group), **marks read** (`POST …/read`, which iOS never calls), the project Chat tab opens the project room, `/messages?c=` links and message pushes open the thread | this step |
+| 3.1 | Messages: list (Direct / Groups / Projects, unread badges, previews, polled every 15 s, saved copy offline), new DM or group from the workspace roster, thread (polled every 5 s, load earlier, **reply** with quote, @mention picker → mentionedUserIds, photos from gallery/camera as JPEG ≤ 8 MB via /api/upload/chat, send location, location and task cards, copy, full-screen photo, rename group), **marks read** (`POST …/read`, which iOS never calls), the project Chat tab opens the project room, `/messages?c=` links and message pushes open the thread | 824a6f9 |
+| 3.2 | Threads (company feed): composer (≤ 280 chars, up to 4 photos as JPEG ≤ 8 MB with their sizes in imageMeta, @mention picker from the roster), feed **paged** with the server cursor (iOS never pages), like (optimistic, reconciled), comments sheet with mentions, delete (own or BoD+), edit within 15 min (web parity), server sentences (20 s gap, hourly cap) shown verbatim; Home quick action and `/threads?post=` links/pushes open it (the post's comments) | this step |
 
 Still on the web until built: Phase 3 (chat, Threads, docs/pages, forms, profiles, tickets, Z Vault, reports, leaderboard, GIDEON, Control Room).
 

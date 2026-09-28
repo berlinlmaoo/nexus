@@ -845,4 +845,20 @@
     <string name="chat_location_failed">Gagal kirim lokasi.</string>
     <string name="chat_project_missing">Belum ada ruang chat untuk project ini</string>
     <string name="chat_project_missing_sub">Ruangnya dibuat untuk member project. Coba lagi sebentar.</string>
+    <string name="th_title">Utas</string>
+    <string name="th_whats_new">Lagi ada apa?</string>
+    <string name="th_post">Kirim</string>
+    <string name="th_post_failed">Gagal mengirim.</string>
+    <string name="th_delete_failed">Nggak bisa hapus postingannya.</string>
+    <string name="th_comment_failed">Komentar gagal dikirim. Teksnya masih ada di kotak.</string>
+    <string name="th_load_failed">Gagal memuat feed.</string>
+    <string name="th_empty">Feed masih kosong</string>
+    <string name="th_empty_sub">Threads itu feed perusahaan: pencapaian, foto, pertanyaan untuk semua. Tulis post pertama di kotak atas dan langsung tampil untuk satu kantor.</string>
+    <string name="th_write_first">Tulis post pertama</string>
+    <string name="th_comments">Komentar</string>
+    <string name="th_reply_hint">Balas… (@ buat sebut orang)</string>
+    <string name="th_delete_q">Hapus postingan ini?</string>
+    <string name="th_delete_body">Postingannya hilang dari feed buat semua orang.</string>
+    <string name="th_edit">Edit post</string>
+    <string name="th_edited">diedit</string>
 </resources>

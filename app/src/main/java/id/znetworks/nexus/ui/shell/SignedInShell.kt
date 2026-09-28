@@ -8,6 +8,7 @@ import id.znetworks.nexus.feature.auth.AccountScreen
 import id.znetworks.nexus.feature.home.HomeScreen
 import id.znetworks.nexus.feature.chat.ChatThreadScreen
 import id.znetworks.nexus.feature.chat.MessagesScreen
+import id.znetworks.nexus.feature.threads.ThreadsScreen
 import id.znetworks.nexus.feature.whatsnew.WhatsNew
 import id.znetworks.nexus.feature.whatsnew.WhatsNewSheet
 import id.znetworks.nexus.feature.search.SearchScreen
@@ -146,6 +147,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             is Target.Tab -> { Tab.entries.firstOrNull { it.route == t.route }?.let(::goTab); container.router.consumed(t) }
             is Target.Project -> { container.router.consumed(t); nav.navigate("project/${t.id}") }
             is Target.Task -> { container.router.consumed(t); nav.navigate("task/${t.id}") }
+            is Target.Threads -> { container.router.consumed(t); nav.navigate(t.postId?.let { "threads?post=$it" } ?: "threads") }
             is Target.Chat -> { container.router.consumed(t); nav.navigate(t.conversationId?.let { "chat/$it" } ?: "messages") }
             is Target.Announcement -> { container.router.consumed(t); container.announcements.showOne(t.id) }
             is Target.Web -> { container.router.consumed(t); openWeb(context, t.path) }
@@ -193,6 +195,9 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 )
             }
             composable("account") { AccountScreen(onBack = { nav.popBackStack() }) }
+            composable("threads?post={post}", arguments = listOf(androidx.navigation.navArgument("post") { nullable = true; defaultValue = null })) { e ->
+                ThreadsScreen(onBack = { nav.popBackStack() }, focusPostId = e.arguments?.getString("post"))
+            }
             composable("messages") { MessagesScreen(onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }
             composable("chat/{id}") { ChatThreadScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") }) }
             composable("search") {
@@ -200,7 +205,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     onBack = { nav.popBackStack() },
                     onOpenTask = { nav.navigate("task/$it") },
                     onOpenProject = { nav.navigate("project/$it") },
-                    onOpenWeb = { if (it == "/messages") nav.navigate("messages") else openWeb(context, it) },
+                    onOpenWeb = { when (it) { "/messages" -> nav.navigate("messages"); "/threads" -> nav.navigate("threads"); else -> openWeb(context, it) } },
                 )
             }
             composable("attendance") { AttendanceScreen(onBack = { nav.popBackStack() }) }

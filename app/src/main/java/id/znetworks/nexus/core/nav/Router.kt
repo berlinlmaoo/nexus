@@ -18,6 +18,8 @@ sealed interface Target {
     data class Task(val id: String) : Target
     /** Messages: the list, or one conversation. */
     data class Chat(val conversationId: String?) : Target
+    /** The company feed, optionally one post (its comments). */
+    data class Threads(val postId: String?) : Target
     data class Announcement(val id: String) : Target
     data object Settings : Target
     /** Signed-out screens: the invite email's "set your password" link and a sign-up with a workspace code. */
@@ -93,6 +95,7 @@ object Links {
             p == "/dashboard" && q["announcement"] != null -> Target.Announcement(q["announcement"]!!)
             p == "/settings" -> Target.Settings
             p == "/messages" -> Target.Chat(q["c"])
+            p == "/threads" || p == "/social" -> Target.Threads(q["post"])
             Regex("^/messages/([^/]+)$").matches(p) -> Target.Chat(path.trimEnd('/').substringAfterLast('/'))
             p == "/forgot-password" -> Target.ResetPassword(q["email"])
             p == "/register" -> Target.Register(q["code"])

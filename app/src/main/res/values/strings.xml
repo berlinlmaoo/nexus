@@ -851,4 +851,20 @@
     <string name="chat_location_failed">Couldn\'t send your location.</string>
     <string name="chat_project_missing">No chat room for this project yet</string>
     <string name="chat_project_missing_sub">It is created for project members. Pull the list again in a moment.</string>
+    <string name="th_title">Threads</string>
+    <string name="th_whats_new">What\'s new?</string>
+    <string name="th_post">Post</string>
+    <string name="th_post_failed">Couldn\'t post.</string>
+    <string name="th_delete_failed">Couldn\'t delete that post.</string>
+    <string name="th_comment_failed">Couldn\'t post the comment. It\'s still in the box.</string>
+    <string name="th_load_failed">Couldn\'t load the feed.</string>
+    <string name="th_empty">Nothing on the feed yet</string>
+    <string name="th_empty_sub">Threads is the company feed: wins, photos, questions for everyone. Write the first post in the box above and it appears here for the whole office.</string>
+    <string name="th_write_first">Write the first post</string>
+    <string name="th_comments">Comments</string>
+    <string name="th_reply_hint">Reply… (@ to mention)</string>
+    <string name="th_delete_q">Delete this post?</string>
+    <string name="th_delete_body">It disappears from the feed for everyone.</string>
+    <string name="th_edit">Edit post</string>
+    <string name="th_edited">edited</string>
 </resources>

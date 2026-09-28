@@ -34,4 +34,9 @@ class ChatModelsTest {
         assertEquals(Target.Chat(null), Links.parse("/messages"))
         assertEquals(Target.Chat(null), Links.forNotification("MESSAGE", null, null, null))
     }
+
+    @Test fun threadsLinks() {
+        assertEquals(Target.Threads("p1"), Links.parse("/threads?post=p1"))
+        assertEquals(Target.Threads(null), Links.parse("/threads"))
+    }
 }
