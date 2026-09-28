@@ -53,4 +53,21 @@ object BoardLogic {
             }
         }
     }
+
+    /** A gantt bar (web taskWindow): start→due; ±3 days when one is missing; today+3 when both are. */
+    data class Window(val start: java.time.LocalDate, val end: java.time.LocalDate)
+
+    fun window(t: BoardTask, today: java.time.LocalDate): Window {
+        var s = dueDate(t.startDate)
+        var e = dueDate(t.dueDate)
+        if (s != null && e == null) e = s.plusDays(3)
+        if (s == null && e != null) s = e.minusDays(3)
+        if (s == null || e == null) { s = today; e = today.plusDays(3) }
+        return Window(s, if (e.isBefore(s)) s else e)
+    }
+
+    /** Tasks with a due date in [month], by day of month (dated subtasks included). */
+    fun byDay(tasks: List<BoardTask>, month: java.time.YearMonth): Map<Int, List<BoardTask>> =
+        tasks.mapNotNull { t -> dueDate(t.dueDate)?.takeIf { java.time.YearMonth.from(it) == month }?.let { it.dayOfMonth to t } }
+            .groupBy({ it.first }, { it.second })
 }

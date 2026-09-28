@@ -91,7 +91,13 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-enum class ProjectTab(val label: Int) { OVERVIEW(R.string.ptab_overview), BOARD(R.string.ptab_board), LIST(R.string.ptab_list) }
+/** The web's project tabs, same order. [searches]: the tab draws tasks, so the search box filters it. */
+enum class ProjectTab(val label: Int, val searches: Boolean = false) {
+    OVERVIEW(R.string.ptab_overview), BOARD(R.string.ptab_board, true), LIST(R.string.ptab_list, true),
+    SHEET(R.string.ptab_sheet, true), CALENDAR(R.string.ptab_calendar, true), TIMELINE(R.string.ptab_timeline, true),
+    SPRINTS(R.string.ptab_sprints), AUTOMATIONS(R.string.ptab_automations), PAGES(R.string.ptab_pages), FORMS(R.string.ptab_forms),
+    CHAT(R.string.ptab_chat), FINANCE(R.string.ptab_finance), PNL(R.string.ptab_pnl),
+}
 
 data class ProjectDetailState(
     val detail: ProjectDetail? = null,
@@ -103,7 +109,20 @@ data class ProjectDetailState(
     val query: String = "",
     val busy: Boolean = false,
     val actionError: String? = null,
-)
+    val isBoD: Boolean = false,
+) {
+    /**
+     * The web's tab filter: Finance only on a project whose NAME says finance (no backend flag),
+     * P&L only with the project's flag AND a BoD-tier viewer.
+     */
+    val tabs: List<ProjectTab> get() = ProjectTab.entries.filter {
+        when (it) {
+            ProjectTab.FINANCE -> detail?.name.orEmpty().contains("finance", ignoreCase = true)
+            ProjectTab.PNL -> detail?.enablePnlDashboard == true && isBoD
+            else -> true
+        }
+    }
+}
 
 class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
     val projectId: String = handle["id"] ?: ""
@@ -113,7 +132,10 @@ class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : Andro
     private val _state = MutableStateFlow(ProjectDetailState())
     val state = _state.asStateFlow()
 
-    init { load() }
+    init {
+        load()
+        viewModelScope.launch { c.viewer.load(); _state.update { it.copy(isBoD = c.viewer.isBoD) } }
+    }
 
     fun load() = viewModelScope.launch {
         try {
@@ -166,6 +188,8 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, vm: Pr
     val c = Nx.colors
     var tab by rememberSaveable { mutableStateOf(ProjectTab.BOARD) }
     var creating by rememberSaveable { mutableStateOf(false) }
+    var createDue by remember { mutableStateOf<LocalDate?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     val lanes = BoardLogic.filter(s.lanes, s.query)
     val total = s.lanes.sumOf { it.tasks.size }
     val shown = lanes.sumOf { it.tasks.size }
@@ -180,10 +204,11 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, vm: Pr
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 s.detail?.let { StatusChip(it.status); Spacer(Modifier.size(12.dp)) }
             }
-            ScrollableTabRow(selectedTabIndex = tab.ordinal, edgePadding = 12.dp, containerColor = c.background) {
-                ProjectTab.entries.forEach { t -> Tab(selected = tab == t, onClick = { tab = t }, text = { Text(stringResource(t.label)) }) }
+            val tabs = s.tabs
+            ScrollableTabRow(selectedTabIndex = tabs.indexOf(tab).coerceAtLeast(0), edgePadding = 12.dp, containerColor = c.background) {
+                tabs.forEach { t -> Tab(selected = tab == t, onClick = { tab = t }, text = { Text(stringResource(t.label)) }) }
             }
-            if (tab != ProjectTab.OVERVIEW && !s.locked && s.detail != null) {
+            if (tab.searches && !s.locked && s.detail != null) {
                 OutlinedTextField(
                     s.query, vm::setQuery, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) },
                     trailingIcon = {
@@ -206,21 +231,32 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, vm: Pr
                     s.error != null && s.detail == null -> EmptyState(Icons.Filled.ViewKanban, stringResource(R.string.project_load_failed), s.error!!,
                         stringResource(R.string.try_again), { vm.load() }, Modifier.fillMaxSize())
                     s.detail != null -> PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load() }) {
+                        val web = { id.znetworks.nexus.ui.shell.openWeb(context, "/projects/${vm.projectId}") }
                         when (tab) {
                             ProjectTab.OVERVIEW -> Overview(s.detail!!, s.lanes)
                             ProjectTab.BOARD -> Board(lanes, s.lanes, onOpenTask, vm)
                             ProjectTab.LIST -> ListTab(lanes, onOpenTask, vm)
+                            ProjectTab.SHEET -> SheetTab(vm.projectId, lanes, onOpenTask)
+                            ProjectTab.CALENDAR -> CalendarTab(lanes.flatMap { it.tasks }, onOpenTask) { d -> createDue = d; creating = true }
+                            ProjectTab.TIMELINE -> TimelineTab(lanes, onOpenTask)
+                            ProjectTab.SPRINTS -> SprintsTab(vm.projectId, onOpenTask)
+                            ProjectTab.AUTOMATIONS -> AutomationsTab(vm.projectId)
+                            ProjectTab.FINANCE -> FinanceTab(vm.projectId)
+                            ProjectTab.PNL -> PnlTab(vm.projectId)
+                            ProjectTab.PAGES -> WebOnlyTab(Icons.Filled.ViewKanban, stringResource(R.string.ptab_pages), web)
+                            ProjectTab.FORMS -> WebOnlyTab(Icons.Filled.ViewKanban, stringResource(R.string.ptab_forms), web)
+                            ProjectTab.CHAT -> WebOnlyTab(Icons.Filled.ViewKanban, stringResource(R.string.ptab_chat), web)
                         }
                     }
                 }
             }
         }
-        if (s.detail != null && s.lanes.isNotEmpty() && tab != ProjectTab.OVERVIEW) {
-            FloatingActionButton(onClick = { creating = true }, containerColor = c.violet, contentColor = Color.White,
+        if (s.detail != null && s.lanes.isNotEmpty() && tab.searches) {
+            FloatingActionButton(onClick = { createDue = null; creating = true }, containerColor = c.violet, contentColor = Color.White,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp)) { Icon(Icons.Filled.Add, stringResource(R.string.task_new)) }
         }
     }
-    if (creating) CreateTaskDialog(s.lanes, busy = s.busy, onDismiss = { creating = false }) { lane, title, prio, due ->
+    if (creating) CreateTaskDialog(s.lanes, busy = s.busy, initialDue = createDue, onDismiss = { creating = false }) { lane, title, prio, due ->
         vm.create(lane, title, prio, due) { id -> creating = false; if (id.isNotBlank()) onOpenTask(id) }
     }
     s.actionError?.let { AlertDialog(onDismissRequest = vm::dismissError, title = { Text(stringResource(R.string.board_update_failed)) },

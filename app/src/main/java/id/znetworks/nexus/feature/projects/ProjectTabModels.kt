@@ -1,0 +1,99 @@
+package id.znetworks.nexus.feature.projects
+
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import java.text.NumberFormat
+import java.util.Locale
+
+// Project tabs beyond the board (API.md §2.4 sprints, automations, finance/P&L, custom fields).
+
+@Serializable
+data class SprintTaskRef(val id: String, val title: String? = null, val status: String? = null)
+
+@Serializable
+data class SprintTask(val task: SprintTaskRef? = null)
+
+@Serializable
+data class Sprint(
+    val id: String,
+    val name: String = "",
+    val status: String? = null,
+    val startDate: String? = null,
+    val endDate: String? = null,
+    val tasks: List<SprintTask> = emptyList(),
+) {
+    val refs: List<SprintTaskRef> get() = tasks.mapNotNull { it.task }
+    val done: Int get() = refs.count { it.status.equals("DONE", true) }
+    val progress: Float get() = if (refs.isEmpty()) 0f else done.toFloat() / refs.size
+    val state: String get() = (status ?: "PLANNING").uppercase()
+    /** PLANNING → ACTIVE → COMPLETED. */
+    val next: String? get() = when (state) { "PLANNING" -> "ACTIVE"; "ACTIVE" -> "COMPLETED"; else -> null }
+}
+
+@Serializable
+data class SprintsResponse(val sprints: List<Sprint> = emptyList())
+
+/** PATCH reply: the sprint, or (completing with open tasks and no destination) nothing changed. */
+@Serializable
+data class SprintPatchReply(val requiresAction: Boolean? = null, val incompleteTasks: List<SprintTaskRef> = emptyList())
+
+@Serializable
+data class Rule(val type: String? = null, val field: String? = null, val value: JsonElement? = null) {
+    fun text(): String {
+        fun human(s: String) = s.lowercase().replace('_', ' ').replaceFirstChar(Char::titlecase)
+        var out = human(type.orEmpty()).ifBlank { "—" }
+        if (!field.isNullOrBlank()) out += " · " + human(field)
+        valueText(value)?.takeIf { it.isNotBlank() }?.let { out += " = $it" }
+        return out
+    }
+}
+
+@Serializable
+data class Automation(val id: String, val name: String = "", val enabled: Boolean? = null, val trigger: Rule? = null, val action: Rule? = null)
+
+@Serializable
+data class AutomationsResponse(val automations: List<Automation> = emptyList())
+
+@Serializable
+data class FinLine(val id: String, val name: String = "", val total: Double? = null)
+
+@Serializable
+data class FinCategory(val id: String, val kind: String = "", val name: String = "", val lineItems: List<FinLine> = emptyList(), val subtotal: Double? = null)
+
+@Serializable
+data class FinTotals(val opexTotal: Double? = null, val revenueTotal: Double? = null, val profitTotal: Double? = null)
+
+@Serializable
+data class FinanceDashboard(val year: Int? = null, val categories: List<FinCategory> = emptyList(), val totals: FinTotals? = null)
+
+@Serializable
+data class PnlTotals(val income: Double? = null, val expense: Double? = null, val profit: Double? = null, val pipelineOutstanding: Double? = null)
+
+@Serializable
+data class PnlStage(val id: String, val name: String = "", val color: String? = null, val count: Int? = null, val outstanding: Double? = null)
+
+@Serializable
+data class PnlIncome(val id: String, val title: String = "", val totalAmount: Double? = null, val paid: Double? = null, val outstanding: Double? = null)
+
+@Serializable
+data class PnlCategory(val id: String, val name: String = "", val color: String? = null, val total: Double? = null)
+
+@Serializable
+data class PnlDashboard(
+    val year: Int? = null,
+    val totals: PnlTotals? = null,
+    val stages: List<PnlStage> = emptyList(),
+    val incomes: List<PnlIncome> = emptyList(),
+    val categories: List<PnlCategory> = emptyList(),
+)
+
+@Serializable
+data class CustomFieldDef(val id: String, val name: String = "", val type: String? = null, val position: Int? = null, val options: JsonElement? = null)
+
+@Serializable
+data class CustomFieldsResponse(val fields: List<CustomFieldDef> = emptyList())
+
+/** "Rp1.250.000", as iOS `idr`. */
+fun idr(n: Double?): String = NumberFormat.getCurrencyInstance(Locale.forLanguageTag("id-ID")).apply {
+    currency = java.util.Currency.getInstance("IDR"); maximumFractionDigits = 0
+}.format(n ?: 0.0).replace(" ", "")
