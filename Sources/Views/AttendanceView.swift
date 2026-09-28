@@ -1231,23 +1231,44 @@ private struct ConfettiBurst: View {
     @State private var out = false
     private static let colors: [Color] = [Color(hex: "#10b981"), Color(hex: "#f59e0b"), Color(hex: "#7c3aed"),
                                           Color(hex: "#f43f5e"), Color(hex: "#0ea5e9"), .white]
+
     var body: some View {
         GeometryReader { g in
             ZStack {
                 ForEach(0..<18, id: \.self) { i in
-                    let angle = Double(i) / 18 * 2 * .pi + (i.isMultiple(of: 2) ? 0.2 : -0.1)
-                    let reach = Double(40 + (i * 37) % 50)
-                    RoundedRectangle(cornerRadius: 1.5)
-                        .fill(Self.colors[i % Self.colors.count])
-                        .frame(width: 5, height: i.isMultiple(of: 3) ? 9 : 6)
-                        .rotationEffect(.degrees(out ? Double(i * 47) : 0))
-                        .offset(x: out ? cos(angle) * reach * 1.8 : 0, y: out ? sin(angle) * reach : 0)
-                        .opacity(out ? 0 : 1)
-                        .position(x: g.size.width / 2, y: g.size.height / 2)
+                    ConfettiPiece(index: i, out: out, color: Self.colors[i % Self.colors.count],
+                                  center: CGPoint(x: g.size.width / 2, y: g.size.height / 2))
                 }
             }
         }
         .onAppear { withAnimation(.easeOut(duration: 1.1)) { out = true } }
+    }
+}
+
+/// One piece of the burst. Its numbers are worked out as plain CGFloats first: written inline in one
+/// modifier chain, the arithmetic was too much for the type checker ("unable to type-check this
+/// expression in reasonable time").
+private struct ConfettiPiece: View {
+    let index: Int
+    let out: Bool
+    let color: Color
+    let center: CGPoint
+
+    var body: some View {
+        let turn: Double = index.isMultiple(of: 2) ? 0.2 : -0.1
+        let angle: Double = Double(index) / 18.0 * 2.0 * Double.pi + turn
+        let reach: Double = Double(40 + (index * 37) % 50)
+        let dx: CGFloat = out ? CGFloat(cos(angle) * reach * 1.8) : 0
+        let dy: CGFloat = out ? CGFloat(sin(angle) * reach) : 0
+        let height: CGFloat = index.isMultiple(of: 3) ? 9 : 6
+        let degrees: Double = out ? Double(index * 47) : 0
+        return RoundedRectangle(cornerRadius: 1.5)
+            .fill(color)
+            .frame(width: 5, height: height)
+            .rotationEffect(.degrees(degrees))
+            .offset(x: dx, y: dy)
+            .opacity(out ? 0 : 1)
+            .position(x: center.x, y: center.y)
     }
 }
 
