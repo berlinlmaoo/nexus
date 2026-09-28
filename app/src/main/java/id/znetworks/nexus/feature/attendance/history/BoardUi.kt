@@ -94,6 +94,8 @@ data class BoardState(
     val rows: List<HistoryRow> = emptyList(),
     /** The period [rows] and [roster] belong to: another period's rows are never drawn (audit T6). */
     val rowsPeriod: String? = null,
+    /** The rows are a saved copy from then (nobody answered). */
+    val savedAt: Long? = null,
     /** Everyone who belongs on the board, rows or not (scope=workspace). */
     val roster: List<id.znetworks.nexus.feature.attendance.requests.PersonRef> = emptyList(),
     val loading: Boolean = true,
@@ -143,7 +145,7 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
             val period = BoardModel.periodKey(_state.value.offset)
             try {
                 val r = api.history(if (wide) "workspace" else "me", period)
-                _state.update { it.copy(rows = r.records, roster = r.roster, rowsPeriod = period, loading = false) }
+                _state.update { it.copy(rows = r.records, roster = r.roster, rowsPeriod = period, loading = false, savedAt = api.historySavedAtMillis) }
             } catch (e: ApiError) {
                 _state.update { it.copy(loading = false, error = e.describe(res)) }
             }
@@ -285,6 +287,7 @@ fun CrewBoardCard(vm: BoardViewModel) {
                     fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.foreground)
                 Text("${DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(days.first())} – " +
                     DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault()).format(days.last()), fontSize = 11.sp, color = c.mutedFg)
+                if (s.rowsPeriod == period) s.savedAt?.let { Text(stringResource(R.string.saved_copy_from, id.znetworks.nexus.feature.attendance.LocalNotifier.hhmm(it)), fontSize = 11.sp, color = c.warning) }
             }
             IconButton(onClick = { vm.shift(-1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.previous)) }
             IconButton(onClick = { vm.shift(1) }, enabled = s.offset < 0) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next)) }

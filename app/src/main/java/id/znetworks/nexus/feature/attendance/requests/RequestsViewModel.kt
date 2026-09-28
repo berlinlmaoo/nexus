@@ -41,6 +41,8 @@ data class RequestsUiState(
     val offsite: List<OffsiteCheckout> = emptyList(),
     val loading: Boolean = true,
     val loadError: String? = null,
+    /** The list is a saved copy from then (nobody answered). */
+    val savedAt: Long? = null,
     /** null = the default for this viewer (reviewers: PENDING, everyone else: ALL). */
     val statusFilter: String? = null,
     val window: SubmissionWindow = SubmissionWindow.RECENT,
@@ -91,7 +93,7 @@ class RequestsViewModel(app: Application) : AndroidViewModel(app) {
         try {
             // The nightly cron's own penalties are not submissions (filtered here too, not trusted).
             val list = api.list(scope).filterNot { it.isAutoDeduction }
-            _state.update { it.copy(requests = list, loading = false, loadError = null) }
+            _state.update { it.copy(requests = list, loading = false, loadError = null, savedAt = api.listSavedAtMillis) }
         } catch (e: ApiError) {
             if (e === ApiError.Unauthorized) return@launch
             _state.update { it.copy(loading = false, loadError = e.describe(res)) }

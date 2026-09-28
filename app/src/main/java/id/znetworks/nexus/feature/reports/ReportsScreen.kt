@@ -104,9 +104,10 @@ fun ReportsScreen(onBack: () -> Unit, onOpenPerson: (String, Int) -> Unit, onOpe
     var roster by remember { mutableStateOf<ReportRoster?>(null) }
     var selfOnly by remember { mutableStateOf(false) }
     var rosterError by remember { mutableStateOf<String?>(null) }
+    var rosterSavedAt by remember { mutableStateOf<Long?>(null) }
     var q by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(offset) {
-        try { roster = api.roster(periodKey(offset)).value; rosterError = null }
+        try { val got = api.roster(periodKey(offset)); roster = got.value; rosterSavedAt = got.savedAtMillis; rosterError = null }
         catch (e: ApiError) {
             // Staff: not a fault, there is simply no team view.
             if (e is ApiError.Http && e.code == "REPORT_SELF_ONLY") selfOnly = true else rosterError = e.describe(res)
@@ -123,6 +124,7 @@ fun ReportsScreen(onBack: () -> Unit, onOpenPerson: (String, Int) -> Unit, onOpe
             Tab(tab == 1, { tab = 1 }, text = { Text(stringResource(R.string.rp_team)) })
         }
         PeriodBar(offset, roster?.period, { offset = it })
+        rosterSavedAt?.let { Text(stringResource(R.string.saved_copy_from, id.znetworks.nexus.feature.attendance.LocalNotifier.hhmm(it)), fontSize = 12.sp, color = c.warning, modifier = Modifier.padding(horizontal = 16.dp)) }
         if (tab == 0 || !showTeam) PersonReportBody("me", periodKey(offset), onOpenTask)
         else {
             val r = roster
@@ -202,8 +204,9 @@ private fun PersonReportBody(userId: String, period: String?, onOpenTask: (Strin
     val res = LocalContext.current.resources
     var r by remember(userId, period) { mutableStateOf<PersonReport?>(null) }
     var error by remember(userId, period) { mutableStateOf<String?>(null) }
+    var savedAt by remember(userId, period) { mutableStateOf<Long?>(null) }
     LaunchedEffect(userId, period) {
-        try { r = api.person(userId, period).value } catch (e: ApiError) {
+        try { val got = api.person(userId, period); r = got.value; savedAt = got.savedAtMillis } catch (e: ApiError) {
             error = if (e is ApiError.Http && e.code == "REPORT_OUT_OF_SCOPE") res.getString(R.string.rp_out_of_scope) else e.describe(res)
         }
     }
@@ -212,6 +215,7 @@ private fun PersonReportBody(userId: String, period: String?, onOpenTask: (Strin
         rep == null && error == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         rep == null -> TabEmpty(Icons.Filled.BarChart, error!!)
         else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            savedAt?.let { Text(stringResource(R.string.saved_copy_from, id.znetworks.nexus.feature.attendance.LocalNotifier.hhmm(it)), fontSize = 12.sp, color = c.warning) }
             if (!rep.person.isSelf) Row(verticalAlignment = Alignment.CenterVertically) {
                 Avatar(rep.person.name, rep.person.avatar, 40.dp); Spacer(Modifier.width(10.dp))
                 Text(rep.person.name ?: "—", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground)

@@ -90,8 +90,12 @@ class Attachment(val bytes: ByteArray, val fileName: String, val mime: String)
 open class RequestsApi(private val api: ApiClient) {
 
     /** `workspace` when the viewer can review (managers see direct reports only), else `me`. */
+    /** When the last [list] answer is a saved copy, when it was saved (audit S4); null = live. */
+    open var listSavedAtMillis: Long? = null
+
     open suspend fun list(scope: String): List<AttendanceRequest> =
-        api.getCached("/api/attendance/requests?scope=$scope", "requests-$scope", RequestsResponse.serializer()).value.requests
+        api.getCached("/api/attendance/requests?scope=$scope", "requests-$scope", RequestsResponse.serializer())
+            .also { listSavedAtMillis = it.savedAtMillis }.value.requests
 
     open suspend fun offsite(): List<OffsiteCheckout> =
         api.get("/api/attendance/offsite-checkouts?status=ALL", OffsiteResponse.serializer()).items

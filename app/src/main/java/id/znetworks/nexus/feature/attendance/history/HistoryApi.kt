@@ -123,8 +123,12 @@ class HistoryApi(private val api: ApiClient) {
 
     /** [period] is the 28→27 period key `YYYY-MM`; `workspace` needs BoD or direct reports. */
     /** Cached (saved copy offline), like iOS: the board opens with no signal. */
+    /** When the last [history] answer is a saved copy, when it was saved (audit S4); null = live. */
+    var historySavedAtMillis: Long? = null
+
     suspend fun history(scope: String, period: String): HistoryResponse =
-        api.getCached("/api/attendance/history?scope=$scope&month=$period", "history-$scope-$period", HistoryResponse.serializer()).value
+        api.getCached("/api/attendance/history?scope=$scope&month=$period", "history-$scope-$period", HistoryResponse.serializer())
+            .also { historySavedAtMillis = it.savedAtMillis }.value
 
     suspend fun trail(recordId: String): TrailResponse =
         api.get("/api/attendance/records/$recordId/trail", TrailResponse.serializer())

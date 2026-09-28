@@ -194,6 +194,7 @@ fun SubmissionsCard(vm: RequestsViewModel, onFiled: () -> Unit) {
             Text(err, color = c.danger, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.fillMaxWidth().background(c.danger.copy(alpha = 0.12f), RoundedCornerShape(10.dp)).padding(10.dp))
         }
+        s.savedAt?.let { Text(stringResource(R.string.saved_copy_from, id.znetworks.nexus.feature.attendance.LocalNotifier.hhmm(it)), fontSize = 12.sp, color = Nx.colors.mutedFg) }
         when {
             s.loading -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }
             s.loadError != null && s.requests.isEmpty() -> EmptyState(Icons.Filled.Inbox, stringResource(R.string.req_load_failed), s.loadError!!,
