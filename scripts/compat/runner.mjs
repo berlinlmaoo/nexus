@@ -56,6 +56,9 @@ function gateBlocks(profile, method, path) {
     return p.startsWith("/api/")
   }
   if (profile.style !== "ios") return false
+  // A header-less build below 8 is never blocked: the Mac app reused low build numbers until 0.1.6,
+  // so the server cannot tell a 0.1.5 Mac from a 0.1.0 iPhone (client-version.ts, 28 Sep 2026).
+  if (profile.legacy && profile.build < 8) return false
   if (cmpVersion(profile.version, MIN) >= 0) return false
   const p = path.split("?")[0]
   if (p.startsWith("/api/app/version-policy") || p.startsWith("/api/health")) return false

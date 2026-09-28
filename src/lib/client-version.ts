@@ -94,6 +94,8 @@ export function normalizeVersion(raw: string | null | undefined): string | null 
  * (only 11 shipped), 12 = 0.1.6 — which sends the header, so the UA path should never see it.
  * (Build 2 was briefly labelled "1.0" on 31 Aug before going back to 0.1.x; it is pre-0.1.4 either way.)
  */
+/** The first header-less build number that is unambiguously the iPhone app (0.1.4). */
+export const LEGACY_FIRST_PLACEABLE_BUILD = 8
 const IOS_BUILDS: ReadonlyArray<readonly [number, string]> = [
   [1, "0.1.0"],
   [2, "0.1.1"],
@@ -107,6 +109,10 @@ const IOS_BUILDS: ReadonlyArray<readonly [number, string]> = [
 /** Marketing version of an iOS build number, or null for one we cannot place (0, negative, NaN). */
 export function iosVersionForBuild(build: number): string | null {
   if (!Number.isInteger(build) || build < IOS_BUILDS[0][0]) return null
+  // Builds below 8 cannot be placed: the Mac app numbered its builds on its own until 0.1.6, so
+  // "NEXUS/1" is a 0.1.5 Mac as much as a 0.1.0 iPhone (28 Sep 2026: Mey's Mac got 426 filing a permit).
+  // An unplaceable build is never blocked — the looser side, as for every client we cannot read.
+  if (build < LEGACY_FIRST_PLACEABLE_BUILD) return null
   let v: string | null = null
   for (const [first, version] of IOS_BUILDS) {
     if (build >= first) v = version
