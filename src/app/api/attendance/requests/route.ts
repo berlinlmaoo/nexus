@@ -33,7 +33,7 @@ import { ANNUAL_LEAVE_DAYS, checkLeaveEligibility, leaveDaysInYear, leaveYearRan
 import { reverseGeocodeCoordinates } from "@/lib/reverse-geocode"
 import { isBackdated, reportDelayMinutes } from "@/lib/permit-rules"
 import { classifyPermitReason } from "@/lib/permit-reason-guard"
-import { dayOffBalances, dayOffPeriodOf, dayOffUsageKey, dayOffUsedByPeriod } from "@/lib/day-off-usage"
+import { DEFAULT_DAY_OFF_QUOTA, dayOffBalances, dayOffPeriodOf, dayOffUsageKey, dayOffUsedByPeriod, effectiveDayOffQuotas } from "@/lib/day-off-usage"
 
 const MAX_SUPPORTING_DOCUMENT_SIZE = 10 * 1024 * 1024
 
@@ -579,16 +579,18 @@ export async function POST(request: NextRequest) {
       }
 
       const label = reqType === "DAY_OFF" ? "day-off" : "tanggal merah"
-      // DAY_OFF: per-person override (default 4). RED_DATE: per-month quota set by BoD (default 0
-      // until BoD inputs it — so staff can't request tanggal merah until BoD sets the month's jatah).
-      let dayOffQuota = 4
+      // DAY_OFF: per-person override (default 4) + the extra days the BoD granted for THAT period
+      // (DayOffBonus) — each period the request touches is capped by its own allowance.
+      // RED_DATE: per-month quota set by BoD (default 0 until BoD inputs it — so staff can't request
+      // tanggal merah until BoD sets the month's jatah).
+      const dayOffQuotaByPeriod = new Map<string, number>()
       const redQuotaByMonth = new Map<string, number>()
       if (reqType === "DAY_OFF") {
-        const quotaMember = await prisma.workspaceMember.findUnique({
-          where: { userId_workspaceId: { userId: effectiveUserId, workspaceId: context.workspace.id } },
-          select: { dayOffQuota: true },
-        })
-        dayOffQuota = quotaMember?.dayOffQuota ?? 4
+        const periodKeys = Array.from(monthCounts.keys())
+        const allowance = await effectiveDayOffQuotas(context.workspace.id, periodKeys.map((periodKey) => ({ userId: effectiveUserId, periodKey })))
+        for (const periodKey of periodKeys) {
+          dayOffQuotaByPeriod.set(periodKey, allowance.get(dayOffUsageKey(effectiveUserId, periodKey))?.quota ?? DEFAULT_DAY_OFF_QUOTA)
+        }
       } else {
         const rows = await prisma.redDateQuota.findMany({
           where: { workspaceId: context.workspace.id, month: { in: Array.from(monthCounts.keys()) } },
@@ -600,7 +602,7 @@ export async function POST(request: NextRequest) {
       if (!isGrant) {
         for (const [monthKey, requestedCount] of Array.from(monthCounts.entries())) {
           const total = requestedCount + (existingMonthCounts.get(monthKey) ?? 0)
-          const quota = reqType === "DAY_OFF" ? dayOffQuota : (redQuotaByMonth.get(monthKey) ?? 0)
+          const quota = reqType === "DAY_OFF" ? (dayOffQuotaByPeriod.get(monthKey) ?? DEFAULT_DAY_OFF_QUOTA) : (redQuotaByMonth.get(monthKey) ?? 0)
           if (total > quota) {
             return NextResponse.json(
               { error: `Jatah ${label} ${monthKey} terlampaui. Maksimal ${quota} hari per bulan${quota === 0 ? " (BoD belum set jatah)" : ""}.` },

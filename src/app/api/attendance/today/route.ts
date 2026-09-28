@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth"
 import { attendancePeriodKey, attendancePeriodRange, endOfAttendanceMonth, formatAttendanceDateKey, getAttendanceDate, getAttendanceWorkspaceContext, getMemberNoGeofence, resolveEffectiveAttendanceShift, serializeAttendanceRequest, startOfAttendanceMonth, serializeAttendanceRecord, isRestDayForMember } from "@/lib/attendance"
 import { clearLeaveCoveredOpenRecords } from "@/lib/attendance-absence"
 import { ANNUAL_LEAVE_DAYS, checkLeaveEligibility, leaveDaysInYear, leaveYearRange } from "@/lib/annual-leave"
+import { effectiveDayOffQuota } from "@/lib/day-off-usage"
 
 export async function GET() {
   try {
@@ -20,7 +21,8 @@ export async function GET() {
 
     const attendanceDate = getAttendanceDate()
     // DAY_OFF quota counts within the 28→27 payroll period (RED_DATE below stays on the calendar month).
-    const dayOffPeriod = attendancePeriodRange(attendancePeriodKey())
+    const dayOffPeriodKey = attendancePeriodKey()
+    const dayOffPeriod = attendancePeriodRange(dayOffPeriodKey)
     const [todayRecord, activeOfficeCount, todayRequest, dayOffRequests, pendingCheckoutRecord] = await prisma.$transaction([
       prisma.attendanceRecord.findUnique({
         where: {
@@ -129,8 +131,10 @@ export async function GET() {
 
     const quotaMember = await prisma.workspaceMember.findUnique({
       where: { userId_workspaceId: { userId: session.user.id, workspaceId: context.workspace.id } },
-      select: { dayOffQuota: true, restDays: true },
+      select: { restDays: true },
     })
+    // This period's allowance: the member's quota + any extra day off granted for this period.
+    const dayOffAllowance = await effectiveDayOffQuota(context.workspace.id, session.user.id, dayOffPeriodKey)
 
     // Tanggal merah (RED_DATE): this user's usage + the month's BoD-set quota (same for all staff).
     const currentMonthKey = formatAttendanceDateKey().slice(0, 7)
@@ -202,13 +206,22 @@ export async function GET() {
       today: todayRecord ? serializeAttendanceRecord(todayRecord) : null,
       pendingCheckout: pendingCheckout ? serializeAttendanceRecord(pendingCheckout) : null,
       todayRequest: todayRequest ? serializeAttendanceRequest(todayRequest) : null,
-      dayOffQuota: quotaMember?.dayOffQuota ?? 4,
+      // The EFFECTIVE allowance for the period today is in (base + extra days granted for it) —
+      // every released client reads this one number as "the quota", so the extra days just show up.
+      dayOffQuota: dayOffAllowance.quota,
+      // Additive (28 Sep 2026): how that number is made up. Older clients ignore it.
+      dayOffAllowance: {
+        period: dayOffPeriodKey,
+        base: dayOffAllowance.base,
+        bonus: dayOffAllowance.bonus,
+        grants: dayOffAllowance.grants.map((g) => ({ days: g.days, reason: g.reason })),
+      },
       // Fixed weekly rest days (ISO 1=Mon..7=Sun) and whether today is one — so a client can say so
       // instead of showing a check-in button the person does not need.
       restDays: quotaMember?.restDays ?? [],
       isRestDayToday: isRestDayForMember(new Date(), quotaMember?.restDays ?? []),
       // Capped at the allowance for display — see lib/day-off-usage. Enforcement counts real rows.
-      dayOffUsedThisMonth: Math.min(quotaMember?.dayOffQuota ?? 4, dayOffRequests.reduce((count: number, requestItem) => {
+      dayOffUsedThisMonth: Math.min(dayOffAllowance.quota, dayOffRequests.reduce((count: number, requestItem) => {
         const start = dayOffPeriod.start
         const end = dayOffPeriod.end
         const days = Math.max(

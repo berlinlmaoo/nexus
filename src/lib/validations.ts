@@ -157,6 +157,20 @@ export const attendanceRequestQuerySchema = z.object({
   includeAutoDeductions: z.enum(["1", "true"]).optional(),
 })
 
+// Extra day off for one attendance period (POST /api/attendance/day-off-bonus). Bounds mirror
+// lib/day-off-bonus (1..31 days — also a CHECK in the table; ≤200 people; reason ≤200 chars).
+export const dayOffBonusCreateSchema = z.object({
+  userIds: z.array(idString).min(1, "Pilih minimal satu orang.").max(200),
+  periodKey: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Periode harus format YYYY-MM."),
+  days: z.coerce.number().int("Jumlah hari harus angka bulat.").min(1, "Minimal 1 hari.").max(31, "Maksimal 31 hari."),
+  reason: z.string().trim().min(3, "Alasan wajib diisi (minimal 3 karakter).").max(200, "Alasan maksimal 200 karakter."),
+})
+
+export const dayOffBonusQuerySchema = z.object({
+  periodKey: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Periode harus format YYYY-MM.").optional(),
+  userId: idString.optional(),
+})
+
 // ── Tasks ───────────────────────────────────────────────────────
 
 export const createTaskSchema = z.object({

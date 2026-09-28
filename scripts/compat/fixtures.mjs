@@ -88,6 +88,18 @@ export function jktDate(offsetDays = 0) {
   return new Date(Date.now() + 7 * 3600e3 + offsetDays * 86400e3).toISOString().slice(0, 10)
 }
 
+// The 28→27 attendance period ("YYYY-MM" = the month it ends in) a Jakarta date falls in.
+export function periodOf(dateKey) {
+  const [y, m, d] = dateKey.split("-").map(Number)
+  if (d <= 27) return dateKey.slice(0, 7)
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`
+}
+function shiftPeriod(periodKey, delta) {
+  const [y, m] = periodKey.split("-").map(Number)
+  const i = y * 12 + (m - 1) + delta
+  return `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}`
+}
+
 // A point ~10 m from the office — well inside the radius.
 function inside(world, jitter = 0) {
   return { lat: +(world.office.lat + 0.00008 + jitter).toFixed(6), lng: +(world.office.lng + 0.00005).toFixed(6) }
@@ -106,7 +118,7 @@ function androidFix() {
 // ---------- the fixture list ----------
 //
 // step = {
-//   id, title, as: "a" | "b" | "manager", kind: "compat" | "policy",
+//   id, title, as: "a" | "b" | "manager" | "bod", kind: "compat" | "policy",
 //   login?: true,                               // performs the profile's login for `as`
 //   request?: (ctx) => ({ method, path, json?, multipart?: { fields: [[k,v]], files: [{ field, filename, type, data }] } }),
 //   expect: { status: "2xx" | "4xx" | <number>, code?, check?: (json, ctx) => string|null },
@@ -623,6 +635,98 @@ export function buildFixtures(profile, world, media) {
       needs: (ctx) => (ctx.flags.dayOffId ? null : "DAY_OFF request was not created"),
       request: (ctx) => ({ method: "PATCH", path: `/api/attendance/requests/${ctx.flags.dayOffId}`, json: { action: "approve" } }),
       expect: { status: "2xx" },
+    })
+  }
+
+  // ---- extra day off (28 Sep 2026): the BoD grants days for ONE period; the staff member's own
+  // today/requests must reflect it on every released build — they read `dayOffQuota` as the quota.
+  if (!p.legacy) {
+    const period = periodOf(jktDate(0))
+    const BONUS = 2
+    // 0.1.4 / 0.1.5 filed 3 DAY_OFF days above (jktDate 9, 12, 13). Two more (14, 15) make 5: over the
+    // default 4, inside 4 + 2. Only meaningful while all of them sit in today's period.
+    const capTest = ios && !modern && !android && periodOf(jktDate(15)) === period
+    const capSkip = () => (capTest ? null : "the fixture dates cross into the next period today")
+    const reqOver = (id, title, kind, expect, after) =>
+      add({
+        id, title, as: "a", kind, needs: capSkip,
+        request: () => ({ method: "POST", path: "/api/attendance/requests", multipart: { fields: base("DAY_OFF", jktDate(14), jktDate(15), "Libur setelah event"), files: [] } }),
+        expect, after,
+      })
+    add({
+      id: "bonus-today-base", title: "GET today → dayOffQuota before any extra day off", as: "a", kind: "compat",
+      request: () => ({ method: "GET", path: "/api/attendance/today" }),
+      expect: { status: 200, check: (j) => need(Number.isInteger(j?.dayOffQuota), `dayOffQuota=${j?.dayOffQuota}`) },
+      after: (j, ctx) => { ctx.flags.baseQuota = j.dayOffQuota },
+    })
+    if (capTest) {
+      reqOver("bonus-cap-before", "DAY_OFF 2 days over the base quota → 422 (no extra yet)", "policy", { status: 422 })
+    }
+    add({ id: "login-bod", title: "login (BoD)", as: "bod", kind: "compat", login: true, expect: { status: 200 } })
+    add({
+      id: "bonus-forbidden", title: "POST day-off-bonus as staff → 403 FORBIDDEN", as: "a", kind: "policy",
+      request: (ctx) => ({ method: "POST", path: "/api/attendance/day-off-bonus", json: { userIds: [ctx.users.a.id], periodKey: period, days: 5, reason: "Coba sendiri" } }),
+      expect: { status: 403, code: "FORBIDDEN" },
+    })
+    add({
+      id: "bonus-too-old", title: "POST day-off-bonus two periods back → PERIOD_TOO_OLD", as: "bod", kind: "policy",
+      request: (ctx) => ({ method: "POST", path: "/api/attendance/day-off-bonus", json: { userIds: [ctx.users.a.id], periodKey: shiftPeriod(period, -2), days: 1, reason: "Event lama" } }),
+      expect: { status: 400, code: "PERIOD_TOO_OLD" },
+    })
+    add({
+      id: "bonus-grant", title: `POST day-off-bonus (BoD) +${BONUS} days this period`, as: "bod", kind: "compat",
+      request: (ctx) => ({ method: "POST", path: "/api/attendance/day-off-bonus", json: { userIds: [ctx.users.a.id], periodKey: period, days: BONUS, reason: "Kerja event 3 hari" } }),
+      expect: {
+        status: 201,
+        check: (j, ctx) => firstError(
+          need(Array.isArray(j?.grants) && j.grants.length === 1, "grants[] missing"),
+          need(j?.grants?.[0]?.userId === ctx.users.a.id && j.grants[0].days === BONUS && j.grants[0].active === true, "grant shape"),
+          need(j?.periodKey === period && isStr(j?.periodLabel), "period"),
+        ),
+      },
+      after: (j, ctx) => { ctx.flags.bonusId = j.grants[0].id },
+    })
+    add({
+      id: "bonus-today", title: `GET today → dayOffQuota raised by ${BONUS}`, as: "a", kind: "compat",
+      needs: (ctx) => (ctx.flags.bonusId && Number.isInteger(ctx.flags.baseQuota) ? null : "grant or baseline missing"),
+      request: () => ({ method: "GET", path: "/api/attendance/today" }),
+      expect: {
+        status: 200,
+        check: (j, ctx) => firstError(
+          need(j?.dayOffQuota === ctx.flags.baseQuota + BONUS, `dayOffQuota=${j?.dayOffQuota}, want ${ctx.flags.baseQuota + BONUS}`),
+          need(j?.dayOffAllowance?.bonus === BONUS && j?.dayOffAllowance?.base === ctx.flags.baseQuota, "dayOffAllowance breakdown"),
+          need(Number.isInteger(j?.dayOffUsedThisMonth) && j.dayOffUsedThisMonth <= j.dayOffQuota, "dayOffUsedThisMonth"),
+        ),
+      },
+    })
+    add({
+      id: "bonus-list-own", title: "GET day-off-bonus as staff → own grant only", as: "a", kind: "compat",
+      needs: (ctx) => (ctx.flags.bonusId ? null : "grant missing"),
+      request: () => ({ method: "GET", path: `/api/attendance/day-off-bonus?periodKey=${period}` }),
+      expect: {
+        status: 200,
+        check: (j, ctx) => firstError(
+          need(Array.isArray(j?.grants) && j.grants.every((g) => g.userId === ctx.users.a.id), "a staff member sees someone else's grant"),
+          need(j.grants.some((g) => g.id === ctx.flags.bonusId), "own grant missing"),
+          need(j?.canManage === false && j?.mine?.bonus === BONUS, "canManage / mine"),
+        ),
+      },
+    })
+    if (capTest) {
+      reqOver("bonus-cap-after", "same DAY_OFF 2 days → accepted inside 4 + extra", "compat",
+        { status: "2xx", check: (j) => need(isStr(j?.request?.id), "request.id missing") })
+    }
+    add({
+      id: "bonus-revoke", title: "DELETE day-off-bonus/:id (BoD) → revoked", as: "bod", kind: "compat",
+      needs: (ctx) => (ctx.flags.bonusId ? null : "grant missing"),
+      request: (ctx) => ({ method: "DELETE", path: `/api/attendance/day-off-bonus/${ctx.flags.bonusId}` }),
+      expect: { status: 200, check: (j) => need(j?.grant?.active === false && isStr(j?.grant?.revokedAt) && j?.alreadyRevoked === false, "not revoked") },
+    })
+    add({
+      id: "bonus-today-revoked", title: "GET today → dayOffQuota back to the base", as: "a", kind: "compat",
+      needs: (ctx) => (ctx.flags.bonusId && Number.isInteger(ctx.flags.baseQuota) ? null : "grant or baseline missing"),
+      request: () => ({ method: "GET", path: "/api/attendance/today" }),
+      expect: { status: 200, check: (j, ctx) => need(j?.dayOffQuota === ctx.flags.baseQuota, `dayOffQuota=${j?.dayOffQuota}, want ${ctx.flags.baseQuota}`) },
     })
   }
 

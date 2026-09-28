@@ -4,11 +4,11 @@ import { NextRequest, NextResponse } from "next/server"
 import ExcelJS from "exceljs"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
-import { AttendanceDayType, attendancePeriodRange, enumerateAttendanceDates, formatAttendanceDateKey, getAttendanceWorkspaceContext, isWorkdayForAttendanceDate, mapRequestTypeToAttendanceDayType, serializeAttendanceRecord, isRestDayForMember } from "@/lib/attendance"
+import { AttendanceDayType, attendancePeriodKey, attendancePeriodRange, enumerateAttendanceDates, formatAttendanceDateKey, getAttendanceWorkspaceContext, isWorkdayForAttendanceDate, mapRequestTypeToAttendanceDayType, serializeAttendanceRecord, isRestDayForMember } from "@/lib/attendance"
 import { getOutageDateKeysForRange, isAutoDeduction } from "@/lib/attendance-absence"
 import { getHolidayKeys } from "@/lib/holidays"
 import { attendanceHistoryQuerySchema } from "@/lib/validations"
-import { dayOffQuotaByUser } from "@/lib/day-off-usage"
+import { DEFAULT_DAY_OFF_QUOTA, dayOffQuotaByUser } from "@/lib/day-off-usage"
 // Letters, colours, summary rows and labels are shared with the live Google Sheet
 // (src/lib/attendance-sheet.ts) so the two can never disagree about a day.
 import {
@@ -416,6 +416,9 @@ export async function GET(request: NextRequest) {
           start: new Date(`${parsed.data.dateFrom ?? formatAttendanceDateKey()}T00:00:00.000Z`),
           end: new Date(`${parsed.data.dateTo ?? parsed.data.dateFrom ?? formatAttendanceDateKey()}T00:00:00.000Z`),
         }
+    // The period whose day-off allowance (base + extra days granted for it) the quota figures below
+    // use: the requested month, else the period the range ends in.
+    const quotaPeriodKey = parsed.data.month ?? attendancePeriodKey(formatAttendanceDateKey(range.end))
 
     // BoD and One Above All are exempt from attendance — the nightly cron never penalises them
     // (attendance-absence.ts) — so a workspace-wide board and the Sheets export leave them out.
@@ -803,7 +806,7 @@ export async function GET(request: NextRequest) {
       const person = fromRows
         ? { name: fromRows.name || fromRows.email || "Crew", email: fromRows.email }
         : await prisma.user.findUnique({ where: { id: parsed.data.userId }, select: { name: true, email: true } }).then((u) => ({ name: u?.name || u?.email || "Crew", email: u?.email ?? null }))
-      const personQuota = (await dayOffQuotaByUser(context.workspace.id, [parsed.data.userId])).get(parsed.data.userId)
+      const personQuota = (await dayOffQuotaByUser(context.workspace.id, [parsed.data.userId], quotaPeriodKey)).get(parsed.data.userId)
       const personBuffer = await buildPersonWorkbook({ rows, start: range.start, end: range.end, workspaceName: context.workspace.name, person, dayOffQuota: personQuota })
       const slug = person.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "crew"
       return new NextResponse(personBuffer, {
@@ -822,7 +825,7 @@ export async function GET(request: NextRequest) {
         start: range.start,
         end: range.end,
         workspaceName: context.workspace.name,
-        quotaByUser: await dayOffQuotaByUser(context.workspace.id, exportUserIds),
+        quotaByUser: await dayOffQuotaByUser(context.workspace.id, exportUserIds, quotaPeriodKey),
       })
 
       return new NextResponse(Buffer.from(workbookBuffer), {
@@ -931,11 +934,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Each person's weekly-rest quota rides on their rows, so every client computes the Score column
-    // (days worked / period days minus quota) the same way — 4 for most people, 9 for some.
-    const quotaByUserId = await dayOffQuotaByUser(context.workspace.id, [...new Set(rows.map((r) => r.user.id))])
+    // (days worked / period days minus quota) the same way — 4 for most people, 9 for some, plus any
+    // extra day off granted for the requested period.
+    const quotaByUserId = await dayOffQuotaByUser(context.workspace.id, [...new Set(rows.map((r) => r.user.id))], quotaPeriodKey)
     return NextResponse.json({
       scope,
-      records: rows.map((r) => ({ ...r, user: { ...r.user, dayOffQuota: quotaByUserId.get(r.user.id) ?? 4 } })),
+      records: rows.map((r) => ({ ...r, user: { ...r.user, dayOffQuota: quotaByUserId.get(r.user.id) ?? DEFAULT_DAY_OFF_QUOTA } })),
     })
   } catch (error) {
     console.error("Error fetching attendance history:", error)

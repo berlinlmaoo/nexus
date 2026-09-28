@@ -14,8 +14,9 @@ import {
 import { isAutoDeduction } from "@/lib/attendance-absence"
 import { PERIOD_BASELINE_XP, getLeaderboardPeriodStart, levelForXp } from "@/lib/gamification"
 import { getAttendanceSheetUrl } from "@/lib/attendance-sheet"
+import { DEFAULT_DAY_OFF_QUOTA, dayOffUsageKey, effectiveDayOffQuotas } from "@/lib/day-off-usage"
 
-const DEFAULT_DAYOFF_QUOTA = 4 // keep in sync with the dayoffs route
+const DEFAULT_DAYOFF_QUOTA = DEFAULT_DAY_OFF_QUOTA
 const MONTH_RE = /^\d{4}-\d{2}$/
 
 // Attendance deductions for the crew board.
@@ -63,7 +64,7 @@ export async function GET(req: NextRequest) {
       const xpSince = getLeaderboardPeriodStart()
 
       const [members, dayoffs, redDates, redQuotaRow, xpAgg] = await Promise.all([
-        prisma.workspaceMember.findMany({ where: { workspaceId }, select: { userId: true, dayOffQuota: true } }),
+        prisma.workspaceMember.findMany({ where: { workspaceId }, select: { userId: true } }),
         prisma.attendanceRequest.findMany({
           where: {
             workspaceId, type: "DAY_OFF", status: { in: ["PENDING", "APPROVED"] },
@@ -105,6 +106,8 @@ export async function GET(req: NextRequest) {
 
       // 0 until BoD sets the month's jatah — that's the real default, not a missing value.
       const redQuota = redQuotaRow?.quota ?? 0
+      // Day-off allowance for THIS period: base + the extra days granted for it (lib/day-off-usage).
+      const allowance = await effectiveDayOffQuotas(workspaceId, members.map((m) => ({ userId: m.userId, periodKey: month })))
 
       return NextResponse.json({
         month,
@@ -113,7 +116,8 @@ export async function GET(req: NextRequest) {
         defaultQuota: DEFAULT_DAYOFF_QUOTA,
         redDateQuota: redQuota,
         members: members.map((m) => {
-          const quota = m.dayOffQuota ?? DEFAULT_DAYOFF_QUOTA
+          const a = allowance.get(dayOffUsageKey(m.userId, month))
+          const quota = a?.quota ?? DEFAULT_DAYOFF_QUOTA
           const used = usedDayOff.get(m.userId) ?? 0
           const redUsed = usedRedDate.get(m.userId) ?? 0
           const score = PERIOD_BASELINE_XP + (xpDelta.get(m.userId) ?? 0)
@@ -122,6 +126,9 @@ export async function GET(req: NextRequest) {
             userId: m.userId,
             // Capped at the allowance for display (see lib/day-off-usage); enforcement counts real rows.
             quota, used: Math.min(used, quota), remaining: Math.max(0, quota - used),
+            // Additive (28 Sep 2026): quota = baseQuota + bonus.days; bonus.grants for the tooltip.
+            baseQuota: a?.base ?? DEFAULT_DAYOFF_QUOTA,
+            bonus: { days: a?.bonus ?? 0, grants: (a?.grants ?? []).map((g) => ({ days: g.days, reason: g.reason })) },
             redDate: { quota: redQuota, used: Math.min(redUsed, redQuota), remaining: Math.max(0, redQuota - redUsed) },
             xp: { score, level: lvl.level, levelName: lvl.name },
           }
@@ -132,7 +139,7 @@ export async function GET(req: NextRequest) {
     // ── Per-member mode: the deduction log ────────────────────────────────────
     const member = await prisma.workspaceMember.findUnique({
       where: { userId_workspaceId: { userId, workspaceId } },
-      select: { dayOffQuota: true },
+      select: { id: true },
     })
     if (!member) return NextResponse.json({ error: "Orang ini bukan member workspace." }, { status: 404 })
 
@@ -216,7 +223,8 @@ export async function GET(req: NextRequest) {
 
     entries.sort((a, b) => (a.dateKey < b.dateKey ? 1 : a.dateKey > b.dateKey ? -1 : 0))
 
-    const quota = member.dayOffQuota ?? DEFAULT_DAYOFF_QUOTA
+    const allowance = (await effectiveDayOffQuotas(workspaceId, [{ userId, periodKey: month }])).get(dayOffUsageKey(userId, month))
+    const quota = allowance?.quota ?? DEFAULT_DAYOFF_QUOTA
     const usedRows = requests.filter((r) => r.status === "PENDING" || r.status === "APPROVED")
     const used = usedRows.reduce((sum, d) => {
       const clipStart = d.startDate.getTime() < start.getTime() ? start : d.startDate
@@ -227,7 +235,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       month,
       userId,
-      dayOff: { quota, used: Math.min(used, quota), remaining: Math.max(0, quota - used) },
+      dayOff: {
+        quota, used: Math.min(used, quota), remaining: Math.max(0, quota - used),
+        baseQuota: allowance?.base ?? DEFAULT_DAYOFF_QUOTA,
+        bonus: { days: allowance?.bonus ?? 0, grants: (allowance?.grants ?? []).map((g) => ({ days: g.days, reason: g.reason })) },
+      },
       totalXpLost: entries.filter((e) => e.unit === "XP" && !e.cleared).reduce((s, e) => s + e.amount, 0),
       entries,
     })

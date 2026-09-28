@@ -305,6 +305,7 @@ const ID_KEY_KIND: Record<string, AuditIdKind> = {
   teamId: "team",
   userId: "user",
   targetUserId: "user",
+  targetUserIds: "user",
   assigneeUserId: "user",
   removedUserId: "user",
   reportedUserId: "user",
@@ -683,6 +684,7 @@ const NOUNS: Record<string, string> = {
   task_relation: "task relation",
   project_page: "project page",
   notificationPreference: "notification preferences",
+  dayoff_bonus: "extra day off",
 }
 
 const REQUEST_TYPE_NOUN: Record<string, string> = {
@@ -813,6 +815,21 @@ function buildTitle(row: AuditRowLike, names?: AuditNames): string {
     const date = formatAuditDate(meta.date)
     const what = str(meta.override)
     return `${actor} overrode ${who ? `${possessive(who)} attendance` : "an attendance day"}${date ? ` on ${date}` : ""}${what ? ` (${humanizeKey(what).toLowerCase()})` : ""}`
+  }
+
+  if (type === "dayoff_bonus") {
+    const period = str(meta.periodKey)
+    const days = typeof meta.days === "number" ? meta.days : null
+    const what = days !== null ? `${days} extra day${days === 1 ? "" : "s"} off` : "extra day off"
+    const forPeriod = period ? ` for the ${period} period` : ""
+    if (action === "grant") {
+      const n = typeof meta.people === "number" ? meta.people : null
+      return `${actor} gave ${n !== null ? `${n} ${n === 1 ? "person" : "people"}` : "people"} ${what}${forPeriod}`
+    }
+    if (action === "revoke") {
+      const who = person("targetUserId")
+      return `${actor} revoked ${who ? possessive(who) : "someone’s"} ${what}${forPeriod}`
+    }
   }
 
   if (type === "workspace_member") {

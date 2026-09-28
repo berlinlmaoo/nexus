@@ -356,7 +356,9 @@ export type NexusAttendanceToday = {
     remaining: number;
   };
   dayOffUsedThisMonth?: number;
+  /** This period's allowance: base + extra days granted for it (servers from 28 Sep 2026). */
   dayOffQuota?: number;
+  dayOffAllowance?: { period: string; base: number; bonus: number; grants: { days: number; reason: string }[] };
   redDateUsedThisMonth?: number;
   redDateQuota?: number;
   myShift?: { startTime: string; endTime: string; source: string; flexi?: boolean } | null;
@@ -631,6 +633,30 @@ export type NexusDayoff = {
   reviewedBy?: { id: string; name: string | null } | null;
 };
 
+/** One "extra day off" grant — GET/POST /api/attendance/day-off-bonus, DELETE …/:id. */
+export type NexusDayOffBonus = {
+  id: string;
+  userId: string;
+  user: { id: string; name: string | null; email: string | null; avatar: string | null } | null;
+  periodKey: string;
+  days: number;
+  reason: string;
+  createdAt: string;
+  grantedBy: { id: string; name: string | null } | null;
+  revokedAt: string | null;
+  revokedBy: { id: string; name: string | null } | null;
+  active: boolean;
+};
+export type NexusDayOffBonusList = {
+  periodKey: string; periodLabel: string; periodStart: string; periodEnd: string;
+  currentPeriodKey: string; canManage: boolean;
+  grantablePeriods: { periodKey: string; periodLabel: string }[];
+  mine: { base: number; bonus: number; quota: number };
+  grants: NexusDayOffBonus[];
+};
+/** How a day-off allowance is made up: quota = baseQuota + bonus.days. */
+export type NexusDayOffBonusBreakdown = { days: number; grants: { days: number; reason: string }[] };
+
 export type WorkspaceMembersResponse = {
   workspaceId: string;
   /** Nama workspace si pemanggil — untuk label tombol "Masukkan ke …". */
@@ -865,7 +891,7 @@ export const NOTIFICATION_GROUPS: { id: NotificationGroupId; label: string }[] =
  *  rather than disappearing — a new type must never become invisible. */
 export function notificationGroup(type?: string | null): Exclude<NotificationGroupId, "all"> {
   const t = (type ?? "").toLowerCase();
-  if (t.startsWith("attendance") || t.startsWith("offsite") || t === "dayoff_quota_low" || t === "red_date_quota_low") return "attendance";
+  if (t.startsWith("attendance") || t.startsWith("offsite") || t === "dayoff_quota_low" || t === "dayoff_bonus_granted" || t === "red_date_quota_low") return "attendance";
   if (t === "submission_status") return "submissions";
   if (t.startsWith("complaint")) return "tickets";
   if (t.includes("announcement")) return "announcements";
@@ -1806,6 +1832,7 @@ export const nexusApi = {
       month: string; defaultQuota: number; redDateQuota: number;
       members: {
         userId: string; quota: number; used: number; remaining: number;
+        baseQuota?: number; bonus?: NexusDayOffBonusBreakdown;
         redDate: { quota: number; used: number; remaining: number };
         xp: { score: number; level: number; levelName: string };
       }[];
@@ -1813,7 +1840,7 @@ export const nexusApi = {
   attendanceDeductions: (userId: string, month?: string) =>
     apiFetch<{
       month: string; userId: string;
-      dayOff: { quota: number; used: number; remaining: number };
+      dayOff: { quota: number; used: number; remaining: number; baseQuota?: number; bonus?: NexusDayOffBonusBreakdown };
       totalXpLost: number;
       entries: { id: string; dateKey: string; kind: string; label: string; amount: number; unit: "XP" | "DAY_OFF"; detail: string | null; cleared: boolean }[];
     }>(`/api/attendance/deductions?userId=${encodeURIComponent(userId)}${month ? `&month=${month}` : ""}`),
@@ -2063,11 +2090,18 @@ export const nexusApi = {
     apiFetch<{ success?: boolean }>(`/api/workspaces/members?memberId=${encodeURIComponent(memberId)}${workspaceId ? `&workspaceId=${encodeURIComponent(workspaceId)}` : ""}`, { method: "DELETE" }),
   // Per-user day-off management (BoD only) for Control Room → Members.
   userDayoffs: (userId: string, month?: string) =>
-    apiFetch<{ month: string; quota: number; quotaOverride: number | null; defaultQuota: number; used: number; dayoffs: NexusDayoff[] }>(`/api/attendance/dayoffs?userId=${encodeURIComponent(userId)}${month ? `&month=${encodeURIComponent(month)}` : ""}`),
+    apiFetch<{ month: string; quota: number; quotaOverride: number | null; defaultQuota: number; used: number; dayoffs: NexusDayoff[]; baseQuota?: number; bonusDays?: number; bonusGrants?: { id: string; days: number; reason: string }[] }>(`/api/attendance/dayoffs?userId=${encodeURIComponent(userId)}${month ? `&month=${encodeURIComponent(month)}` : ""}`),
   grantDayoff: (payload: { userId: string; date: string; reason?: string }) =>
     apiFetch<{ dayoff: NexusDayoff }>("/api/attendance/dayoffs", { method: "POST", body: JSON.stringify(payload) }),
   deleteDayoff: (id: string) =>
     apiFetch<{ message: string }>(`/api/attendance/dayoffs?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
+  // Extra day off for one attendance period (BoD grants; everyone can list their own).
+  dayOffBonuses: (periodKey?: string) =>
+    apiFetch<NexusDayOffBonusList>(`/api/attendance/day-off-bonus${periodKey ? `?periodKey=${encodeURIComponent(periodKey)}` : ""}`),
+  grantDayOffBonus: (payload: { userIds: string[]; periodKey: string; days: number; reason: string }) =>
+    apiFetch<{ periodKey: string; periodLabel: string; periodStart: string; periodEnd: string; days: number; notified: number; grants: NexusDayOffBonus[] }>("/api/attendance/day-off-bonus", { method: "POST", body: JSON.stringify(payload) }),
+  revokeDayOffBonus: (id: string) =>
+    apiFetch<{ grant: NexusDayOffBonus; alreadyRevoked: boolean }>(`/api/attendance/day-off-bonus/${encodeURIComponent(id)}`, { method: "DELETE" }),
   // Set/reset a member's monthly day-off quota (quota = number, or null to reset to default 4).
   setDayoffQuota: (userId: string, quota: number | null) =>
     apiFetch<{ quota: number; quotaOverride: number | null }>("/api/attendance/dayoffs", { method: "PATCH", body: JSON.stringify({ userId, quota }) }),

@@ -13,6 +13,7 @@ import {
   parseDateOnlyToUtc,
   serializeAttendanceRequest,
 } from "@/lib/attendance"
+import { dayOffUsageKey, effectiveDayOffQuotas } from "@/lib/day-off-usage"
 
 const DEFAULT_DAYOFF_QUOTA = 4 // workspace default; overridable per-person via PATCH
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
@@ -49,7 +50,10 @@ export async function GET(req: NextRequest) {
       where: { userId_workspaceId: { userId, workspaceId } },
       select: { dayOffQuota: true },
     })
-    const quota = member?.dayOffQuota ?? DEFAULT_DAYOFF_QUOTA
+    // `quota` = this period's allowance (base + extra days granted for it); the editable setting is
+    // `quotaOverride` (null = default) — the iOS editor reads that one, the web editor `baseQuota`.
+    const allowance = (await effectiveDayOffQuotas(workspaceId, [{ userId, periodKey: month }])).get(dayOffUsageKey(userId, month))
+    const quota = allowance?.quota ?? member?.dayOffQuota ?? DEFAULT_DAYOFF_QUOTA
 
     // Overlap window (matches the quota counting in the requests route): any day-off whose range
     // intersects the month, even if it starts in the previous month.
@@ -82,6 +86,10 @@ export async function GET(req: NextRequest) {
       quota,
       quotaOverride: member?.dayOffQuota ?? null,
       defaultQuota: DEFAULT_DAYOFF_QUOTA,
+      // Additive (28 Sep 2026): quota = baseQuota + bonusDays.
+      baseQuota: allowance?.base ?? member?.dayOffQuota ?? DEFAULT_DAYOFF_QUOTA,
+      bonusDays: allowance?.bonus ?? 0,
+      bonusGrants: (allowance?.grants ?? []).map((g) => ({ id: g.id, days: g.days, reason: g.reason })),
       used,
       dayoffs: dayoffs.map(serializeAttendanceRequest),
     })

@@ -343,6 +343,19 @@ check("day-off quota change names the member", {
   assert.deepEqual(o.changes, [{ field: "dayOffQuota", label: "Day-off quota", from: "4", to: "6" }])
 })
 
+check("extra day off grant: people, days and period in the title; the people resolve", {
+  action: "grant", entityType: "dayoff_bonus", entityId: "cmbonus000000000000000001", entityName: "dayoff-bonus:2026-10", userId: bagas.id, user: bagas,
+  metadata: { reason: "dayoff_bonus_grant", periodKey: "2026-10", days: 3, note: "Event 3 hari", people: 2, targetUserIds: [rina.id, "cmmanager000000000000001"], grantIds: ["cmbonus000000000000000001", "cmbonus000000000000000002"] },
+}, (o) => {
+  assert.equal(o.title, "Bagas Putro gave 2 people 3 extra days off for the 2026-10 period")
+  assert.ok(JSON.stringify(o.details).includes("Rina Kartika"), "targetUserIds resolve to names")
+})
+
+check("extra day off revoke names the person", {
+  action: "revoke", entityType: "dayoff_bonus", entityId: "cmbonus000000000000000001", entityName: "dayoff-bonus:2026-10", userId: bagas.id, user: bagas,
+  metadata: { reason: "dayoff_bonus_revoke", periodKey: "2026-10", days: 1, note: "Event", targetUserId: rina.id },
+}, (o) => assert.equal(o.title, "Bagas Putro revoked Rina Kartika’s 1 extra day off for the 2026-10 period"))
+
 check("update user_profile, NEW shape", {
   action: "update", entityType: "user_profile", entityId: rina.id, entityName: "Rina K.", userId: rina.id, user: rina,
   metadata: { fields: ["name", "phoneNumber"], changes: { name: { from: "Rina Kartika", to: "Rina K." } } },

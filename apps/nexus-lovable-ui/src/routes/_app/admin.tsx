@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Avatar } from "@/components/Avatar";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AtSign, CalendarDays, CalendarX2, ChevronDown, FolderKanban, GitBranch, Link2, Link2Off, Loader2, Megaphone, Plus, ScrollText, Search, Settings2, Shield, Trash2, Trophy, Users as UsersIcon, X, Zap, Smartphone } from "lucide-react";
+import { AtSign, CalendarDays, CalendarPlus, CalendarX2, ChevronDown, FolderKanban, GitBranch, Link2, Link2Off, Loader2, Megaphone, Plus, ScrollText, Search, Settings2, Shield, Trash2, Trophy, Users as UsersIcon, X, Zap, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { ApprovalChart } from "@/components/ApprovalChart";
-import { type NexusAdminAnnouncement } from "@/lib/nexus-api";
+import { type NexusAdminAnnouncement, type NexusDayOffBonus } from "@/lib/nexus-api";
 import { GideonMark } from "@/components/gideon/GideonMark";
 import { PageHeader } from "@/components/PageHeader";
 import { ApiError, fmtDate, fmtTime, nexusApi, statusLabel, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusAdminUser, type GoogleWorkspaceAccount, type NexusUserMemberships, type NexusTeam } from "@/lib/nexus-api";
@@ -27,7 +27,7 @@ function initialsOf(name?: string | null) {
 
 function Admin() {
   const qc = useQueryClient();
-  const [view, setView] = useState<"users" | "approval" | "audit" | "quests" | "announcements" | "gideon" | "app">("users");
+  const [view, setView] = useState<"users" | "approval" | "extra-dayoff" | "audit" | "quests" | "announcements" | "gideon" | "app">("users");
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState<"ALL" | "ONE_ABOVE_ALL" | "BOD" | "MANAGER" | "STAFF">("ALL");
   const [dayoffUser, setDayoffUser] = useState<{ id: string; name: string } | null>(null);
@@ -194,6 +194,7 @@ function Admin() {
         <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-0.5 w-fit">
           <button onClick={() => setView("users")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "users" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><UsersIcon className="h-3.5 w-3.5" /> Users</button>
           {canAnnounce && <button onClick={() => setView("approval")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "approval" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><GitBranch className="h-3.5 w-3.5" /> Bagan Approval</button>}
+          {canManageShift && <button onClick={() => setView("extra-dayoff")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "extra-dayoff" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><CalendarPlus className="h-3.5 w-3.5" /> Extra day off</button>}
           <button onClick={() => setView("audit")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "audit" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><ScrollText className="h-3.5 w-3.5" /> Audit log</button>
           <button onClick={() => setView("quests")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "quests" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Trophy className="h-3.5 w-3.5" /> Quests</button>
           {canAnnounce && <button onClick={() => setView("announcements")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "announcements" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Megaphone className="h-3.5 w-3.5" /> Announcements</button>}
@@ -202,6 +203,7 @@ function Admin() {
         </div>
 
         {view === "approval" && canAnnounce && <ApprovalChart />}
+        {view === "extra-dayoff" && canManageShift && <ExtraDayOffAdmin members={wsMembers} />}
         {view === "audit" && <AuditLog />}
         {view === "quests" && <AdminQuests />}
         {view === "announcements" && canAnnounce && <AnnouncementsAdmin />}
@@ -1234,15 +1236,209 @@ function DayoffModal({ user, canEdit, onClose }: { user: { id: string; name: str
         {q.isLoading && <div className="flex justify-center py-6 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
 
         {/* Jatah day-off per bulan — bisa diubah dari default (4). */}
-        {canEdit && data && <QuotaEditor userId={user.id} quota={data.quota} override={data.quotaOverride} defaultQuota={data.defaultQuota} />}
+        {canEdit && data && <QuotaEditor userId={user.id} quota={data.baseQuota ?? data.quotaOverride ?? data.defaultQuota} override={data.quotaOverride} defaultQuota={data.defaultQuota} />}
         <RestDaysEditor userId={user.id} canEdit={canEdit} />
 
         {data && (
           <p className="text-xs text-muted-foreground">
-            Used this month: <b className="text-foreground">{data.used} / {data.quota}</b>
+            Used this period: <b className="text-foreground">{data.used} / {data.quota}</b>
+            {(data.bonusDays ?? 0) > 0 && <span className="ml-1">({data.baseQuota} + {data.bonusDays} extra{data.bonusGrants?.length ? `: ${data.bonusGrants.map((g) => g.reason).join(", ")}` : ""})</span>}
             {data.used > data.quota && <span className="ml-1 font-semibold text-amber-600">(over quota)</span>}
           </p>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Extra day off (owner, 28 Sep 2026): the BoD gives selected people X extra day-off days that count
+ * in ONE attendance period (28th → 27th) only — e.g. for working a 3-day event. Unused days expire
+ * with the period. Each person gets a push. Grants can be revoked while the period is still open.
+ */
+function ExtraDayOffAdmin({ members }: { members: Array<{ userId: string; name: string; email: string; avatar: string | null; role: string }> }) {
+  const qc = useQueryClient();
+  const [periodKey, setPeriodKey] = useState<string | null>(null);
+  const list = useQuery({
+    queryKey: ["nexus", "day-off-bonus", periodKey ?? "current"],
+    queryFn: () => nexusApi.dayOffBonuses(periodKey ?? undefined),
+    retry: false,
+  });
+  // Default to the period today is in, once the server has said which that is.
+  useEffect(() => { if (!periodKey && list.data) setPeriodKey(list.data.currentPeriodKey); }, [periodKey, list.data]);
+  const periods = list.data?.grantablePeriods ?? [];
+  const current = list.data?.currentPeriodKey;
+
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [days, setDays] = useState("1");
+  const [reason, setReason] = useState("");
+  const nameCmp = (a: string, b: string) => a.localeCompare(b, "id", { sensitivity: "base" });
+  const sorted = useMemo(() => [...members].sort((a, b) => nameCmp(a.name || a.email, b.name || b.email)), [members]);
+  const shown = sorted.filter((m) => {
+    const t = search.trim().toLowerCase();
+    return !t || (m.name ?? "").toLowerCase().includes(t) || (m.email ?? "").toLowerCase().includes(t);
+  });
+  const toggle = (id: string) => setSelected((cur) => { const n = new Set(cur); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const n = parseInt(days, 10);
+  const daysValid = Number.isInteger(n) && n >= 1 && n <= 31;
+  const reasonValid = reason.trim().length >= 3 && reason.trim().length <= 200;
+  const canSubmit = !!periodKey && selected.size > 0 && daysValid && reasonValid;
+  const periodLabelOf = (k: string | null) => periods.find((p) => p.periodKey === k)?.periodLabel ?? list.data?.periodLabel ?? k ?? "";
+
+  const refreshAll = () => {
+    qc.invalidateQueries({ queryKey: ["nexus", "day-off-bonus"] });
+    qc.invalidateQueries({ queryKey: ["attendance-dayoff-summary"] });
+    qc.invalidateQueries({ queryKey: ["attendance-history"] });
+    qc.invalidateQueries({ queryKey: ["attendance-today"] });
+    qc.invalidateQueries({ queryKey: ["nexus", "dayoffs"] });
+  };
+  const grant = useMutation({
+    mutationFn: () => nexusApi.grantDayOffBonus({ userIds: [...selected], periodKey: periodKey!, days: n, reason: reason.trim() }),
+    onSuccess: (r) => {
+      refreshAll();
+      toast.success(`${r.grants.length} ${r.grants.length === 1 ? "person" : "people"} got ${r.days} extra day${r.days === 1 ? "" : "s"} off`, {
+        description: `Period ${r.periodLabel}. ${r.notified === r.grants.length ? "Everyone was notified." : `${r.notified} of ${r.grants.length} notified.`}`,
+      });
+      setSelected(new Set()); setReason(""); setDays("1");
+    },
+    onError: (e: unknown) => toast.error("Couldn't give extra day off", { description: e instanceof ApiError ? e.message : "Try again." }),
+  });
+  const revoke = useMutation({
+    mutationFn: (id: string) => nexusApi.revokeDayOffBonus(id),
+    onSuccess: (r) => { refreshAll(); toast.success(r.alreadyRevoked ? "Already revoked" : `Revoked ${r.grant.user?.name ?? "the grant"}’s extra day off`); },
+    onError: (e: unknown) => toast.error("Couldn't revoke", { description: e instanceof ApiError ? e.message : "Try again." }),
+  });
+  const submit = () => {
+    if (!canSubmit) return;
+    const who = selected.size === 1 ? (members.find((m) => selected.has(m.userId))?.name ?? "1 person") : `${selected.size} people`;
+    if (!window.confirm(`Give ${who} ${n} extra day${n === 1 ? "" : "s"} off for the period ${periodLabelOf(periodKey)}?\n\nReason: ${reason.trim()}\n\nEach person gets a notification. Unused days expire when the period ends.`)) return;
+    grant.mutate();
+  };
+  const grants = list.data?.grants ?? [];
+  const active = grants.filter((g) => g.active);
+  const revoked = grants.filter((g) => !g.active);
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-soft md:p-5">
+        <div>
+          <h2 className="font-display text-base font-bold tracking-tight">Give extra day off</h2>
+          <p className="mt-1 text-xs text-muted-foreground">Adds day-off days for <b className="text-foreground">one attendance period</b> (28th → 27th) on top of each person’s quota — e.g. after working an event. Unused days expire when the period ends. Missed check-ins are still deducted as usual.</p>
+        </div>
+
+        <div>
+          <div className="mb-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground">Period</div>
+          {list.isLoading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : (
+            <div className="flex flex-wrap gap-1.5">
+              {periods.map((p) => (
+                <button key={p.periodKey} type="button" onClick={() => setPeriodKey(p.periodKey)}
+                  className={cn("rounded-full px-3 py-1 text-xs font-semibold ring-1 transition", periodKey === p.periodKey ? "bg-primary text-primary-foreground ring-primary" : "bg-background text-muted-foreground ring-border hover:text-foreground")}>
+                  {p.periodLabel}{p.periodKey === current ? " · current" : p.periodKey < (current ?? "") ? " · previous" : " · next"}
+                </button>
+              ))}
+            </div>
+          )}
+          {list.isError && <p className="mt-1 text-xs text-rose-600">{list.error instanceof ApiError ? list.error.message : "Couldn't load grants."}</p>}
+        </div>
+
+        <div>
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">People · {selected.size} selected</span>
+            <span className="flex gap-2 text-[11px]">
+              <button type="button" onClick={() => setSelected((cur) => new Set([...cur, ...shown.map((m) => m.userId)]))} className="font-semibold text-primary hover:underline">Select shown</button>
+              <button type="button" onClick={() => setSelected(new Set())} className="text-muted-foreground hover:underline">Clear</button>
+            </span>
+          </div>
+          <div className="relative mb-2">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name or email…" className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-primary" />
+          </div>
+          {selected.size > 0 && (
+            <div className="mb-2 flex flex-wrap gap-1">
+              {sorted.filter((m) => selected.has(m.userId)).map((m) => (
+                <span key={m.userId} className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                  {m.name || m.email}
+                  <button type="button" aria-label={`Remove ${m.name}`} onClick={() => toggle(m.userId)}><X className="h-3 w-3" /></button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="max-h-64 overflow-y-auto rounded-xl border border-border">
+            {shown.length === 0 && <div className="py-6 text-center text-xs text-muted-foreground">No one matches “{search}”.</div>}
+            {shown.map((m) => (
+              <label key={m.userId} className="flex cursor-pointer items-center gap-2 border-b border-border px-3 py-1.5 text-sm last:border-b-0 hover:bg-accent/50">
+                <input type="checkbox" checked={selected.has(m.userId)} onChange={() => toggle(m.userId)} className="h-4 w-4 accent-[hsl(var(--primary))]" />
+                <Avatar userId={m.userId} name={m.name} avatar={m.avatar} size={22} />
+                <span className="min-w-0 flex-1 truncate">{m.name || m.email}</span>
+                <span className="shrink-0 text-[10px] text-muted-foreground">{ORG_ROLE_LABEL[m.role] ?? m.role}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-[7rem_minmax(0,1fr)]">
+          <label className="block">
+            <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted-foreground">Days</span>
+            <input type="number" inputMode="numeric" min={1} max={31} value={days} onChange={(e) => setDays(e.target.value)} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold outline-none focus:border-primary" />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-bold uppercase tracking-wider text-muted-foreground">Reason (required)</span>
+            <input value={reason} maxLength={200} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Worked the 3-day Jakarta event" className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary" />
+          </label>
+        </div>
+        {!daysValid && days !== "" && <p className="text-[11px] text-rose-600">Days must be a whole number from 1 to 31.</p>}
+
+        <div className="flex flex-wrap items-center gap-3 rounded-xl bg-muted/40 px-3 py-2">
+          <span className="text-sm">
+            <b>{selected.size}</b> {selected.size === 1 ? "person" : "people"} × <b>{daysValid ? n : "?"}</b> {n === 1 ? "day" : "days"}
+            {periodKey && <span className="text-muted-foreground"> · {periodLabelOf(periodKey)}</span>}
+          </span>
+          <button type="button" disabled={!canSubmit || grant.isPending} onClick={submit} className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-40">
+            {grant.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CalendarPlus className="h-3.5 w-3.5" />} Give extra day off
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-3 rounded-2xl border border-border bg-card p-4 shadow-soft md:p-5">
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="font-display text-base font-bold tracking-tight">Grants · {periodLabelOf(periodKey)}</h2>
+          <span className="text-xs text-muted-foreground">{active.length} active{revoked.length ? ` · ${revoked.length} revoked` : ""}</span>
+        </div>
+        {list.isLoading && <div className="flex justify-center py-6 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>}
+        {!list.isLoading && grants.length === 0 && (
+          <div className="rounded-xl border border-dashed border-border p-6 text-center">
+            <CalendarPlus className="mx-auto mb-2 h-6 w-6 text-muted-foreground/60" />
+            <div className="text-sm font-semibold">No extra day off in this period yet</div>
+            <p className="mt-1 text-xs text-muted-foreground">Pick people on the left, set the days and a reason, and they’ll see it in their day-off quota right away.</p>
+          </div>
+        )}
+        <ul className="divide-y divide-border">
+          {[...active, ...revoked].map((g: NexusDayOffBonus) => (
+            <li key={g.id} className={cn("flex items-start gap-2 py-2", !g.active && "opacity-50")}>
+              <Avatar userId={g.userId} name={g.user?.name ?? null} avatar={g.user?.avatar ?? null} size={26} />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-baseline gap-x-2">
+                  <span className="truncate text-sm font-semibold">{g.user?.name ?? g.user?.email ?? "Unknown"}</span>
+                  <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">+{g.days} DO</span>
+                </div>
+                <div className="truncate text-xs text-muted-foreground" title={g.reason}>{g.reason}</div>
+                <div className="text-[10px] text-muted-foreground">
+                  {g.active
+                    ? `by ${g.grantedBy?.name ?? "—"} · ${fmtDate(g.createdAt)}`
+                    : `revoked by ${g.revokedBy?.name ?? "—"} · ${g.revokedAt ? fmtDate(g.revokedAt) : ""}`}
+                </div>
+              </div>
+              {g.active && (
+                <button type="button" disabled={revoke.isPending}
+                  onClick={() => { if (window.confirm(`Revoke ${g.user?.name ?? "this person"}’s ${g.days} extra day${g.days === 1 ? "" : "s"} off (${g.reason})?\n\nDays already taken are not undone.`)) revoke.mutate(g.id); }}
+                  className="shrink-0 rounded-lg border border-border px-2 py-1 text-[11px] font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-40">
+                  Revoke
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );

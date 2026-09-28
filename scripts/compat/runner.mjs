@@ -206,7 +206,7 @@ for (const profile of PROFILES) {
   const ctx = {
     flags: {},
     sessions: {},
-    users: { a: world.staff[profile.id].a, b: world.staff[profile.id].b, manager: world.manager },
+    users: { a: world.staff[profile.id].a, b: world.staff[profile.id].b, manager: world.manager, bod: world.bod },
   }
   for (const step of buildFixtures(profile, world, media)) {
     const row = { profile: profile.id, id: step.id, title: step.title, kind: step.kind }

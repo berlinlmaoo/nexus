@@ -39,7 +39,7 @@ const { buildFcmMessage, androidChannelFor, classifyFcmError, ANDROID_CHANNELS }
 
 // SERVER-REQUESTS R1: every type the table names, one by one, plus the families and the fallback.
 const R1 = {
-  attendance_reminders: ["attendance_checkin_reminder", "attendance_checkout_reminder", "attendance_absent_recorded", "dayoff_quota_low", "red_date_quota_low", "attendance_override"],
+  attendance_reminders: ["attendance_checkin_reminder", "attendance_checkout_reminder", "attendance_absent_recorded", "dayoff_quota_low", "dayoff_bonus_granted", "red_date_quota_low", "attendance_override"],
   attendance_location: ["attendance_outside_reminder", "attendance_outside_warning", "attendance_auto_offsite_checkout"],
   approvals: ["attendance_request_pending", "attendance_request_reviewed", "attendance_request_escalated", "offsite_checkout_pending", "offsite_checkout_reviewed"],
   messages: ["MESSAGE", "MESSAGE_MENTION", "feed_mention", "feed_comment"],
