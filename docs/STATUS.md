@@ -1,9 +1,10 @@
 # NEXUS Android: status
 
-**ON HOLD since 25 Sep 2026**: Berlin is finishing iOS 0.1.6 first. Do not resume without his go.
+**Active again since 28 Sep 2026** (hold lifted by Berlin). Parity with iOS per
+`docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (107 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (129 JVM tests, all green).
 Version 0.1.6 (versionCode 1), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 
 ## Done (Phase 1, attendance MVP)
@@ -27,14 +28,36 @@ Version 0.1.6 (versionCode 1), applicationId `id.znetworks.nexus`, minSdk 26, ta
 
 Server side for all of this is live (SERVER-REQUESTS R1–R4 DONE, server a79796b; iOS I1/I2 fixed by the main session).
 
-## Not verified yet (the first thing to do on resume)
+## 28 Sep: brought level with iOS (UPDATES-2026-09-28.md)
+
+| § | What | Commit |
+|---|---|---|
+| 1 | Hourly presence checks at the office (50 min, ≤ 45 s precise window, ≤ 50 m ends it, 15-min retry, presence outside = exit, > 1 km never used); trail view "Presence checks" hour chips + faint inside dots; disclosure/notification text | 98e7717 |
+| 2 | Resume: stale fixes (> 2 min) ignored, `resume()` on every new service process, first fresh fix outside sent at once, level-triggered setup re-asserted every 10 min | 98e7717 |
+| 3 | Board Score (worked/working, capped + "+N", effective `user.dayOffQuota`), freeze panes, weekday labels | 1ff56f1 |
+| 3 | BoD "Change status" incl. Permit + Clear penalty via `POST /api/attendance/override` | 7cda4a0 |
+| 5 | Extra day off: shows the effective quota the server sends (no grant UI; server PENDING) | a884d5c |
+| 6 | Liveness on every attendance selfie, enforced by type + source-scanning test | 6f23cdc |
+| — | Period keys: 28th-at-midnight-WIB cut-off verified everywhere (iOS bug 8838eec not present) | a808e55 |
+| — | Firebase read from `app/google-services.json` (main session drops it in; git-ignored) | a884d5c |
+| — | In-app APK update: release check, resumable download with session, sha256 + package + signing cert + version verified, PackageInstaller, "Install unknown apps" guided once | fd00ad5 |
+
+## First APK, ready to publish (for the main session, R2)
+
+`agents:~/nexus-android-release/NEXUS-0.1.6-1.apk` — versionName 0.1.6, versionCode 1, arm64-v8a +
+armeabi-v7a, targetSdk 36, 21.9 MB, sha256 `b5e05ab8d184e383217c9259a8bc046445cf6732ec3e2a8c2da2f04a955e3133`,
+signed by the release key (SHA-256 53:22:FE:…:AD:26). Built WITHOUT Firebase (no google-services.json
+yet): push is off in this build; rebuild after the file lands.
+
+## Not verified yet (the first thing to do)
 
 Nothing past the login screen has run against production. The emulator can't pass liveness (synthetic
 camera), and no account has been used. Needed:
-1. A real Android phone (ideally the staff Oppo A53 / Android 11) with the release APK.
-2. An account Berlin approves for testing. His own (`bagasputro.bp@gmail.com`) was offered. Check-ins and the
-   location trail then land in production attendance under his name.
-3. Firebase project values in `firebase.properties`, then a test push (`?dryRun=1` rules still apply to cron endpoints).
+1. Test phone: Oppo Reno 16 F 5G (Dimensity 7300-Energy, Android 16), with the APK above.
+2. Test account: the STAFF member who holds that phone logs in himself; his attendance is real.
+   Never ask for or store a password. One check-in per day per account.
+3. Firebase: Berlin is creating the project (bagas@znetworks.id); the main session installs
+   google-services.json + the server key. Then rebuild and test a push (never POST cron endpoints).
 
 Run the PRD §5 Phase 1 acceptance list on that phone: liveness vs a photo on a screen, airplane-mode
 check-in replayed at the tap time, 502/530 queued vs 409 not queued, reflection gate, offsite
@@ -48,11 +71,11 @@ chat, Threads, tickets, forms (`/f/` App Links), submissions, Z Vault (`/v/`), r
 profiles, GIDEON, Control Room, offices admin, reflections of others, What's New, offline media
 warm-up. Those tabs and links open the web page today.
 
-## Next steps when the hold lifts
+## Next steps
 
-1. On-device run of the acceptance list above, fixing what it finds.
-2. Publish the first APK: hand the main session the release APK + SHA-256 for
-   `nexus-prod:~/nexus-data/android/current.json` (R2), and set `NEXUS_ANDROID_LATEST_VERSION`
-   (+ `NEXUS_ANDROID_LATEST_RELEASED_AT` for the grace window, R4).
+1. Main session publishes the APK above (`~/nexus-data/android/` + `current.json`, R2) and sets
+   `NEXUS_ANDROID_LATEST_VERSION` (+ `_RELEASED_AT`, R4). The in-app updater is then testable with a
+   0.1.6 (2) build.
+2. On-device run of the acceptance list above on the Oppo, fixing what it finds.
 3. Internal rollout to the Android staff (Rifqi, Alvar) with `docs/INSTALL-APK.md`; watch the App tab.
 4. Then Phase 2 per PRD.
