@@ -14,7 +14,7 @@ class LinksTest {
     }
 
     @Test fun otherScreensOpenOnTheWeb() {
-        assertEquals(Target.Web("/complaints?id=abc"), Links.parse("/complaints?id=abc"))
+        assertEquals(Target.Web("/leaderboard?period=2026-09"), Links.parse("/leaderboard?period=2026-09"))
         assertEquals(Target.Announcement("a1"), Links.parse("/dashboard?announcement=a1"))
         assertEquals(Target.Inbox, Links.parse("/inbox"))
         assertEquals(Target.Settings, Links.parse("nexus://settings"))
@@ -58,5 +58,10 @@ class LinksTest {
         assertEquals(Target.ResetPassword("a@b.id"), Links.parse("nexus://forgot-password?email=a%40b.id&invited=1"))
         assertEquals(Target.ResetPassword(null), Links.parse("https://nexus.znetworks.id/forgot-password"))
         assertEquals(Target.Register("ZNET-12"), Links.parse("/register?code=ZNET-12"))
+    }
+
+    @Test fun ticketLinks() {
+        assertEquals(Target.Tickets("t1"), Links.parse("/complaints?id=t1"))
+        assertEquals(Target.Tickets(null), Links.forNotification("complaint_reply", null, null, null))
     }
 }

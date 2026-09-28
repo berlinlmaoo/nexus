@@ -20,6 +20,8 @@ sealed interface Target {
     data class Chat(val conversationId: String?) : Target
     /** The company feed, optionally one post (its comments). */
     data class Threads(val postId: String?) : Target
+    /** Tickets to the BoD, optionally one ticket. */
+    data class Tickets(val ticketId: String?) : Target
     data class Announcement(val id: String) : Target
     data object Settings : Target
     /** Signed-out screens: the invite email's "set your password" link and a sign-up with a workspace code. */
@@ -47,7 +49,7 @@ object Links {
             "attendance" in t || "offsite" in t || "checkout" in t -> Target.Attendance()
             "announcement" in t -> Target.Web("/dashboard")
             "message" in t -> Target.Chat(null)
-            "complaint" in t -> Target.Web("/complaints")
+            "complaint" in t -> Target.Tickets(null)
             else -> Target.Inbox
         }
     }
@@ -96,6 +98,8 @@ object Links {
             p == "/settings" -> Target.Settings
             p == "/messages" -> Target.Chat(q["c"])
             p == "/threads" || p == "/social" -> Target.Threads(q["post"])
+            p == "/complaints" -> Target.Tickets(q["id"] ?: q["c"])
+            Regex("^/complaints/([^/]+)$").matches(p) -> Target.Tickets(path.trimEnd('/').substringAfterLast('/'))
             Regex("^/messages/([^/]+)$").matches(p) -> Target.Chat(path.trimEnd('/').substringAfterLast('/'))
             p == "/forgot-password" -> Target.ResetPassword(q["email"])
             p == "/register" -> Target.Register(q["code"])
