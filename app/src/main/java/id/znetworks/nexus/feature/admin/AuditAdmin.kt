@@ -2,6 +2,7 @@ package id.znetworks.nexus.feature.admin
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.text.withStyle
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -88,10 +89,13 @@ import java.util.Locale
                                     val entityName: String? = null, val createdAt: String? = null, val ipAddress: String? = null,
                                     val userAgent: String? = null, val user: AuditUser? = null, val metadata: JsonElement? = null)
 @Serializable data class AuditChange(val field: String? = null, val label: String? = null, val from: JsonElement? = null, val to: JsonElement? = null)
-@Serializable data class AuditDetail(val label: String = "", val value: JsonElement? = null)
+@Serializable data class AuditLink(val type: String? = null, val id: String? = null)
+@Serializable data class AuditDetail(val label: String = "", val value: JsonElement? = null, val link: AuditLink? = null)
 @Serializable data class AuditEntryResponse(val entry: AuditEntry, val title: String? = null, val changes: List<AuditChange> = emptyList(), val details: List<AuditDetail> = emptyList())
 
 object AuditLogic {
+    val LINKABLE = setOf("task", "project", "user")
+
     const val PAGE = 50
     /** Office-day groups, newest first. */
     fun byDay(logs: List<AuditLog>) = logs.groupBy { l -> l.createdAt?.let { runCatching { Instant.parse(it).atZone(OfficeTime.ZONE).toLocalDate() }.getOrNull() } }
@@ -190,7 +194,7 @@ fun AuditTab(onOpen: (String) -> Unit) {
 }
 
 @Composable
-fun AuditEntryScreen(id: String, onBack: () -> Unit) {
+fun AuditEntryScreen(id: String, onBack: () -> Unit, onOpenLink: (type: String, id: String) -> Unit = { _, _ -> }) {
     val api = auditApi()
     val c = Nx.colors
     val res = LocalContext.current.resources
@@ -218,13 +222,29 @@ fun AuditEntryScreen(id: String, onBack: () -> Unit) {
                         Column {
                             Text(ch.label ?: ch.field ?: "—", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg)
                             val from = valueText(ch.from); val to = valueText(ch.to)
-                            Text(when { from == null && to != null -> stringResource(R.string.au_set_to, to); to == null -> "${from ?: "—"} → " + stringResource(R.string.au_cleared); else -> "$from → $to" },
+                            // The old value struck through, the new one plain (iOS 3ae2630).
+                            val cleared = stringResource(R.string.au_cleared)
+                            Text(when {
+                                from == null && to != null -> androidx.compose.ui.text.AnnotatedString(stringResource(R.string.au_set_to, to))
+                                else -> androidx.compose.ui.text.buildAnnotatedString {
+                                    withStyle(androidx.compose.ui.text.SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough, color = c.mutedFg)) { append(from ?: "—") }
+                                    append(" → "); append(to ?: cleared)
+                                }
+                            },
                                 fontSize = 13.sp, color = c.foreground)
                         }
                     }
                 }
                 if (x.details.isNotEmpty()) AdminCard(stringResource(R.string.au_details)) {
-                    x.details.forEach { d -> Row { Text(d.label, fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.width(120.dp)); Text(valueText(d.value) ?: "—", fontSize = 13.sp, color = c.foreground) } }
+                    x.details.forEach { d ->
+                        // A detail that names a task, project or person opens it (iOS 3ae2630).
+                        val target = d.link?.takeIf { it.type in AuditLogic.LINKABLE && !it.id.isNullOrBlank() }
+                        Row(Modifier.then(if (target != null) Modifier.clickable { onOpenLink(target.type!!, target.id!!) } else Modifier)) {
+                            Text(d.label, fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.width(120.dp))
+                            Text(valueText(d.value) ?: "—", fontSize = 13.sp, color = if (target != null) c.violetText else c.foreground,
+                                fontWeight = if (target != null) FontWeight.SemiBold else FontWeight.Normal)
+                        }
+                    }
                 }
                 AdminCard(stringResource(R.string.au_technical)) {
                     listOf(R.string.au_device to x.entry.userAgent, R.string.au_ip to x.entry.ipAddress,

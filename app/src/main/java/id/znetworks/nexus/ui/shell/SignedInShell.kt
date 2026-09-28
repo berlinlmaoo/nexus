@@ -300,7 +300,8 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable("admin-att/{id}") { e -> MemberAttendanceAdminScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenReflections = { nav.navigate("reflections/$it") }) }
             composable("admin-offices") { OfficesScreen(onBack = { nav.popBackStack() }) }
             composable("reflections/{id}") { e -> ReflectionsScreen(e.arguments?.getString("id"), onBack = { nav.popBackStack() }) }
-            composable("audit/{id}") { e -> AuditEntryScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }) }
+            composable("audit/{id}") { e -> AuditEntryScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() },
+                onOpenLink = { type, id -> when (type) { "task" -> nav.navigate("task/$id"); "project" -> nav.navigate("project/$id"); else -> nav.navigate("profile/$id") } }) }
             composable("admin-chart") { ApprovalChartScreen(onBack = { nav.popBackStack() }, onOpenUser = { nav.navigate("admin-user/$it") }) }
             composable("messages") { MessagesScreen(onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }
             composable("chat/{id}") { ChatThreadScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") }) }
