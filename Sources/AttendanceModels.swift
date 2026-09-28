@@ -71,6 +71,9 @@ struct AttendanceRecord: Decodable, Sendable {
     /// automatic offsite check-out at 2h30), nil while inside. The Live Activity quotes it so the
     /// phone and the pushes name the same time. Optional so every server before it still decodes.
     let outsideSince: String?
+    /// Where the check-in was made, reverse-geocoded by the server. What a location-free member's
+    /// card shows instead of an office they were never at. Optional so older servers still decode.
+    let checkInAddress: String?
 
     /// The office the check-in was made against. `serializeAttendanceRecord` has always sent the
     /// geofence too; only the name was decoded until the work-hours trail needed the circle itself.

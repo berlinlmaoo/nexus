@@ -222,6 +222,8 @@ struct AttendanceView: View {
     /// The office drawn on the hero map: today's record's office, else the nearest one found before
     /// check-in. nil when neither has coordinates.
     private var mapOffice: (center: CLLocationCoordinate2D, radius: Double, name: String)? {
+        // Location-free members aren't tied to an office: their map follows them, not a building.
+        if locationFree { return nil }
         if let o = dispRec?.officeLocation, let la = o.latitude, let lo = o.longitude {
             return (CLLocationCoordinate2D(latitude: la, longitude: lo), o.radiusMeters ?? 100, o.name ?? "")
         }
@@ -232,12 +234,25 @@ struct AttendanceView: View {
     }
     /// Framed on the office: a few radii across, never tighter than ~300 m, so the circle and the
     /// streets around it are readable instead of a whole district.
+    private var locationFree: Bool { today?.noGeofence == true }
     private func frameOffice() {
+        if locationFree {
+            // Framed on the person's own GPS fix, close enough to read the streets.
+            #if !targetEnvironment(macCatalyst)
+            Task {
+                guard let fix = try? await loc.currentFix() else { return }
+                camera = .region(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: fix.latitude, longitude: fix.longitude),
+                                                    latitudinalMeters: 400, longitudinalMeters: 400))
+            }
+            #endif
+            return
+        }
         guard let o = mapOffice else { return }
         let span = max(o.radius * 7, 300)
         camera = .region(MKCoordinateRegion(center: o.center, latitudinalMeters: span, longitudinalMeters: span))
     }
     private var mapOfficeKey: String {
+        if locationFree { return "free" }
         guard let o = mapOffice else { return "" }
         return "\(o.center.latitude),\(o.center.longitude),\(o.radius)"
     }
@@ -386,13 +401,20 @@ struct AttendanceView: View {
     /// offices", which is a fact about the company and not about the person holding the phone —
     /// so now it answers the question they actually have: which office am I at?
     private var officeValue: String {
+        // Location-free: where they actually checked in (the server's address for it), not the
+        // office the record happens to be filed under.
+        if locationFree {
+            if let a = dispRec?.checkInAddress, !a.isEmpty { return a.components(separatedBy: ",").prefix(2).joined(separator: ",") }
+            return dispRec?.checkInAt != nil ? T("Checked in away from the office") : T("Location-free")
+        }
         if let name = dispRec?.officeLocation?.name { return name }
         if let n = nearby { return n.office.name }
         if locationOff { return T("Location is off") }
         return T("Finding you…")
     }
     private var officeLabel: String {
-        dispRec?.officeLocation?.name != nil ? T("Office checkpoint") : T("Where you are")
+        if locationFree { return dispRec?.checkInAt != nil ? T("Where you checked in") : T("Where you are") }
+        return dispRec?.officeLocation?.name != nil ? T("Office checkpoint") : T("Where you are")
     }
     private var officeHelper: String {
         if dispRec?.checkInAt != nil || dispRec?.checkOutAt != nil {
