@@ -4,7 +4,7 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (183 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (187 JVM tests, all green).
 Version 0.1.6 (versionCode 1), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 
 ## Done (Phase 1, attendance MVP)
@@ -113,9 +113,15 @@ Done. PRESENCE IN / OUT are gone; `AttendanceButton` is one full-width control:
 | 2.7 | Custom fields on a task (view + edit every type: text, number, date, select/status, multi-select, place; created read-only) and **Project settings** (gear on the project header): identity (name, description, emoji, colour), flags (task duplicate mode, proof required for DONE, P&L for BoD, auto-assign with members), custom field definitions (create with options, delete), members (add from the workspace roster, remove, invite by email with role), duplicate (BoD) and delete project. LEAD/BoD refusals show the server's sentence. Custom fields in the New task dialog: not yet | 39bbc3b |
 | 2.8 | Search (Home's search pill): `GET /api/search`, 2-character minimum, 300 ms debounce, groups Projects / Tasks / Docs / Forms / Members as iOS. Projects and tasks open natively; docs and forms on the web until Phase 3; members are listed (profiles come with Phase 3) | db6d9df |
 | 2.9 | Account, natively: **sign-up** (name, email, password, optional workspace code → 6-digit code → account created → signed in; the code is sent again on verify as the API requires), **password reset** (email → code + new password), resend with the server's countdown, first field error in form order, tries left shown; **passkeys**: sign in with a passkey on the login card (Credential Manager 1.6.0; server origins + assetlinks are live), and in More › Account & sign-in list/add/remove; **change email** (code to the new address, session email updated) and **change password**. `nexus://forgot-password?email=…&invited=1` and `nexus://register?code=…` open those cards. Not verified on a phone yet: the passkey sheet needs the release-signed APK (assetlinks has the release fingerprint only) | 073ee45 |
-| 2.10 | What's New: a sheet once per versionName after sign-in (0.1.6 = the first Android release: one button, work session/outside countdown, offline queue, missions in the app, sign-up/reset/passkeys, in-app updates), also under More. A version without notes shows nothing | this step |
+| 2.10 | What's New: a sheet once per versionName after sign-in (0.1.6 = the first Android release: one button, work session/outside countdown, offline queue, missions in the app, sign-up/reset/passkeys, in-app updates), also under More. A version without notes shows nothing | f691852 |
 
 **Phase 2 is complete** (28 Sep 2026). To ship it, the APK needs a new versionCode (the one handed over below is build 1, before Phase 2): the main session decides the build number and publishes (R2/R4).
+
+## Phase 3 (communication and knowledge), in progress since 28 Sep 2026
+
+| Part | What exists | Commit |
+|---|---|---|
+| 3.1 | Messages: list (Direct / Groups / Projects, unread badges, previews, polled every 15 s, saved copy offline), new DM or group from the workspace roster, thread (polled every 5 s, load earlier, **reply** with quote, @mention picker → mentionedUserIds, photos from gallery/camera as JPEG ≤ 8 MB via /api/upload/chat, send location, location and task cards, copy, full-screen photo, rename group), **marks read** (`POST …/read`, which iOS never calls), the project Chat tab opens the project room, `/messages?c=` links and message pushes open the thread | this step |
 
 Still on the web until built: Phase 3 (chat, Threads, docs/pages, forms, profiles, tickets, Z Vault, reports, leaderboard, GIDEON, Control Room).
 

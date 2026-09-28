@@ -1,0 +1,254 @@
+package id.znetworks.nexus.feature.chat
+
+import android.app.Application
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.ViewKanban
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
+import id.znetworks.nexus.NexusApplication
+import id.znetworks.nexus.R
+import id.znetworks.nexus.core.net.ApiError
+import id.znetworks.nexus.feature.attendance.LocalNotifier
+import id.znetworks.nexus.feature.projects.ProjectsApi
+import id.znetworks.nexus.feature.projects.RosterMember
+import id.znetworks.nexus.ui.components.Avatar
+import id.znetworks.nexus.ui.components.EmptyState
+import id.znetworks.nexus.ui.components.describe
+import id.znetworks.nexus.ui.theme.DisplayFont
+import id.znetworks.nexus.ui.theme.Nx
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+data class MessagesState(
+    val conversations: List<Conversation> = emptyList(),
+    val loading: Boolean = true,
+    val error: String? = null,
+    val savedAt: Long? = null,
+    val roster: List<RosterMember> = emptyList(),
+    val busy: Boolean = false,
+)
+
+class MessagesViewModel(app: Application) : AndroidViewModel(app) {
+    private val c = (app as NexusApplication).container
+    private val api = ChatApi(c.api)
+    private val res get() = getApplication<Application>().resources
+    private val _state = MutableStateFlow(MessagesState())
+    val state = _state.asStateFlow()
+    val meId: String? get() = c.sessionStore.current?.userId
+
+    init {
+        // Badges and previews at a calm pace while the list is open (iOS: 15 s).
+        viewModelScope.launch { while (isActive) { load(); delay(ChatApi.LIST_POLL_MS) } }
+    }
+
+    suspend fun load() {
+        try {
+            val r = api.conversations()
+            _state.update { it.copy(conversations = r.value.conversations, savedAt = r.savedAtMillis, loading = false, error = null) }
+        } catch (e: ApiError) {
+            _state.update { it.copy(loading = false, error = if (it.conversations.isEmpty()) e.describe(res) else null) }
+        }
+    }
+
+    fun refresh() = viewModelScope.launch { load() }
+
+    fun loadRoster() = viewModelScope.launch {
+        if (_state.value.roster.isNotEmpty()) return@launch
+        runCatching { ProjectsApi(c.api).roster().members }.getOrNull()?.let { l -> _state.update { it.copy(roster = l) } }
+    }
+
+    fun create(userIds: List<String>, groupName: String?, onOpen: (String) -> Unit) = viewModelScope.launch {
+        _state.update { it.copy(busy = true) }
+        try {
+            val conv = api.create(if (userIds.size > 1) "GROUP" else "DM", userIds, groupName)
+            load(); onOpen(conv.id)
+        } catch (e: ApiError) { _state.update { it.copy(error = e.describe(res)) } }
+        _state.update { it.copy(busy = false) }
+    }
+}
+
+internal fun chatTime(iso: String?): String {
+    val t = iso?.let { runCatching { Instant.parse(it).atZone(ZoneId.of("Asia/Jakarta")) }.getOrNull() } ?: return ""
+    val today = java.time.LocalDate.now(ZoneId.of("Asia/Jakarta"))
+    return if (t.toLocalDate() == today) DateTimeFormatter.ofPattern("HH:mm").format(t)
+    else DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(t)
+}
+
+@Composable
+fun MessagesScreen(onBack: () -> Unit, onOpenChat: (String) -> Unit, vm: MessagesViewModel = viewModel()) {
+    val s by vm.state.collectAsStateWithLifecycle()
+    val c = Nx.colors
+    var composing by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxSize().background(c.background)) {
+        Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
+            Text(stringResource(R.string.chat_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground, modifier = Modifier.weight(1f))
+            IconButton(onClick = { vm.loadRoster(); composing = true }) { Icon(Icons.Filled.Edit, stringResource(R.string.chat_new), tint = c.violetText) }
+        }
+        s.savedAt?.let { Text(stringResource(R.string.saved_copy_from, LocalNotifier.hhmm(it)), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(horizontal = 16.dp)) }
+        Box(Modifier.weight(1f)) {
+            when {
+                s.loading && s.conversations.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                s.error != null && s.conversations.isEmpty() -> EmptyState(Icons.Filled.Forum, stringResource(R.string.chat_load_failed), s.error!!,
+                    stringResource(R.string.try_again), vm::refresh, Modifier.fillMaxSize())
+                s.conversations.isEmpty() -> EmptyState(Icons.Filled.Forum, stringResource(R.string.chat_empty), stringResource(R.string.chat_empty_sub),
+                    stringResource(R.string.chat_new), { vm.loadRoster(); composing = true }, Modifier.fillMaxSize())
+                else -> PullToRefreshBox(isRefreshing = false, onRefresh = vm::refresh) {
+                    val groups = listOf("DM" to R.string.chat_direct, "GROUP" to R.string.chat_groups, "PROJECT" to R.string.chat_projects)
+                        .map { (t, l) -> l to s.conversations.filter { it.type == t } }.filter { it.second.isNotEmpty() }
+                    LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
+                        groups.forEach { (label, list) ->
+                            item(key = "h$label") {
+                                Text(stringResource(label).uppercase(Locale.getDefault()), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp,
+                                    color = c.mutedFg, modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp))
+                            }
+                            items(list, key = { it.id }) { conv -> ConversationRow(conv, vm.meId) { onOpenChat(conv.id) } }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (composing) NewChatDialog(s, vm.meId, onDismiss = { composing = false }) { ids, name ->
+        composing = false; vm.create(ids, name, onOpenChat)
+    }
+}
+
+@Composable
+private fun ConversationRow(conv: Conversation, meId: String?, onClick: () -> Unit) {
+    val c = Nx.colors
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        when (conv.type) {
+            "DM" -> Avatar(conv.other(meId)?.name, conv.other(meId)?.avatar, 44.dp)
+            else -> Box(Modifier.size(44.dp).background(c.violet.copy(alpha = 0.14f), CircleShape), contentAlignment = Alignment.Center) {
+                Icon(if (conv.type == "PROJECT") Icons.Filled.ViewKanban else Icons.Filled.Groups, null, tint = c.violetText)
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(conv.title(meId), fontSize = 15.sp, fontWeight = if (conv.unreadCount > 0) FontWeight.Bold else FontWeight.SemiBold,
+                    color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(chatTime(conv.lastMessage?.createdAt), fontSize = 11.sp, color = if (conv.unreadCount > 0) c.violetText else c.mutedFg)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val last = conv.lastMessage
+                val preview = when {
+                    last == null -> stringResource(R.string.chat_no_message)
+                    last.content.isBlank() && last.attachmentUrl != null -> "📷 " + stringResource(R.string.chat_photo)
+                    else -> when (val p = ChatPayload.parse(last.content)) {
+                        is ChatPayload.Location -> "📍 " + stringResource(R.string.chat_location)
+                        is ChatPayload.Task -> "📋 " + p.title
+                        ChatPayload.Plain -> last.content
+                    }
+                }
+                val who = if (conv.type != "DM" && last?.user?.name != null) "${last.user.name.substringBefore(' ')}: " else ""
+                Text(who + preview, fontSize = 13.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                if (conv.unreadCount > 0) Text("${conv.unreadCount}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = androidx.compose.ui.graphics.Color.White,
+                    modifier = Modifier.background(c.danger, CircleShape).padding(horizontal = 6.dp, vertical = 2.dp))
+            }
+        }
+    }
+    HorizontalDivider(color = c.border.copy(alpha = 0.5f), modifier = Modifier.padding(start = 72.dp))
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun NewChatDialog(s: MessagesState, meId: String?, onDismiss: () -> Unit, onCreate: (List<String>, String?) -> Unit) {
+    val c = Nx.colors
+    var q by rememberSaveable { mutableStateOf("") }
+    var picked by remember { mutableStateOf(listOf<RosterMember>()) }
+    var groupName by rememberSaveable { mutableStateOf("") }
+    val people = s.roster.filter { (it.userId ?: it.id) != meId }
+        .filter { m -> q.isBlank() || listOfNotNull(m.name, m.email).any { it.contains(q.trim(), true) } }
+        .sortedBy { it.name.orEmpty().lowercase() }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.chat_new)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (picked.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    picked.forEach { m -> FilterChip(true, { picked = picked - m }, { Text("${m.name ?: m.email} ✕", fontSize = 12.sp) }) }
+                }
+                if (picked.size > 1) OutlinedTextField(groupName, { groupName = it }, singleLine = true, label = { Text(stringResource(R.string.chat_group_name)) }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(q, { q = it }, singleLine = true, placeholder = { Text(stringResource(R.string.ps_search_people)) }, modifier = Modifier.fillMaxWidth())
+                if (s.roster.isEmpty()) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                    items(people, key = { it.userId ?: it.id ?: it.email.orEmpty() }) { m ->
+                        val on = m in picked
+                        Row(Modifier.fillMaxWidth().clickable { picked = if (on) picked - m else picked + m }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Avatar(m.name, m.avatar, 28.dp); Spacer(Modifier.width(10.dp))
+                            Text(m.name ?: m.email ?: "—", fontSize = 14.sp, color = c.foreground, modifier = Modifier.weight(1f))
+                            Checkbox(on, { picked = if (on) picked - m else picked + m })
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onCreate(picked.mapNotNull { it.userId ?: it.id }, groupName.ifBlank { null }) }, enabled = picked.isNotEmpty() && !s.busy) {
+                Text(stringResource(if (picked.size > 1) R.string.chat_create_group else R.string.chat_start))
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+    )
+}

@@ -16,6 +16,8 @@ sealed interface Target {
     data class Tab(val route: String) : Target
     data class Project(val id: String) : Target
     data class Task(val id: String) : Target
+    /** Messages: the list, or one conversation. */
+    data class Chat(val conversationId: String?) : Target
     data class Announcement(val id: String) : Target
     data object Settings : Target
     /** Signed-out screens: the invite email's "set your password" link and a sign-up with a workspace code. */
@@ -42,7 +44,7 @@ object Links {
         return when {
             "attendance" in t || "offsite" in t || "checkout" in t -> Target.Attendance()
             "announcement" in t -> Target.Web("/dashboard")
-            "message" in t -> Target.Web("/messages")
+            "message" in t -> Target.Chat(null)
             "complaint" in t -> Target.Web("/complaints")
             else -> Target.Inbox
         }
@@ -90,6 +92,8 @@ object Links {
             Regex("^/projects/([^/]+)$").matches(p) -> Target.Project(path.trimEnd('/').substringAfterLast('/'))
             p == "/dashboard" && q["announcement"] != null -> Target.Announcement(q["announcement"]!!)
             p == "/settings" -> Target.Settings
+            p == "/messages" -> Target.Chat(q["c"])
+            Regex("^/messages/([^/]+)$").matches(p) -> Target.Chat(path.trimEnd('/').substringAfterLast('/'))
             p == "/forgot-password" -> Target.ResetPassword(q["email"])
             p == "/register" -> Target.Register(q["code"])
             // Everything else exists on the web: open it there rather than landing nowhere.

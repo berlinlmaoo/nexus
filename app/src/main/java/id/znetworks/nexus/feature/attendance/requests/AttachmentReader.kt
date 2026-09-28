@@ -55,7 +55,8 @@ object AttachmentReader {
         }
     }.getOrNull()
 
-    private fun uprightJpeg(context: Context, uri: Uri): ByteArray? = runCatching {
+    /** Upright (EXIF applied), at most 2048 px, JPEG 85: what photo uploads send. */
+    fun uprightJpeg(context: Context, uri: Uri): ByteArray? = runCatching {
         val cr = context.contentResolver
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         cr.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }

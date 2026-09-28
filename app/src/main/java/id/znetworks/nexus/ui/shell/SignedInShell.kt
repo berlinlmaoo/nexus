@@ -6,6 +6,8 @@ import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.AutoAwesome
 import id.znetworks.nexus.feature.auth.AccountScreen
 import id.znetworks.nexus.feature.home.HomeScreen
+import id.znetworks.nexus.feature.chat.ChatThreadScreen
+import id.znetworks.nexus.feature.chat.MessagesScreen
 import id.znetworks.nexus.feature.whatsnew.WhatsNew
 import id.znetworks.nexus.feature.whatsnew.WhatsNewSheet
 import id.znetworks.nexus.feature.search.SearchScreen
@@ -144,6 +146,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             is Target.Tab -> { Tab.entries.firstOrNull { it.route == t.route }?.let(::goTab); container.router.consumed(t) }
             is Target.Project -> { container.router.consumed(t); nav.navigate("project/${t.id}") }
             is Target.Task -> { container.router.consumed(t); nav.navigate("task/${t.id}") }
+            is Target.Chat -> { container.router.consumed(t); nav.navigate(t.conversationId?.let { "chat/$it" } ?: "messages") }
             is Target.Announcement -> { container.router.consumed(t); container.announcements.showOne(t.id) }
             is Target.Web -> { container.router.consumed(t); openWeb(context, t.path) }
             is Target.External -> { container.router.consumed(t); openUrl(context, t.url) }
@@ -190,12 +193,14 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 )
             }
             composable("account") { AccountScreen(onBack = { nav.popBackStack() }) }
+            composable("messages") { MessagesScreen(onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }
+            composable("chat/{id}") { ChatThreadScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") }) }
             composable("search") {
                 SearchScreen(
                     onBack = { nav.popBackStack() },
                     onOpenTask = { nav.navigate("task/$it") },
                     onOpenProject = { nav.navigate("project/$it") },
-                    onOpenWeb = { openWeb(context, it) },
+                    onOpenWeb = { if (it == "/messages") nav.navigate("messages") else openWeb(context, it) },
                 )
             }
             composable("attendance") { AttendanceScreen(onBack = { nav.popBackStack() }) }
@@ -207,7 +212,8 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable(Tab.MORE.route) { MoreScreen(session, gateState, onSignOut, onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } }, onOpenAccount = { nav.navigate("account") }, onOpenWhatsNew = { whatsNew = true }) }
             composable("project/{id}") { entry ->
                 ProjectDetailScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") },
-                    onOpenSettings = { nav.navigate("project/${entry.arguments?.getString("id")}/settings") })
+                    onOpenSettings = { nav.navigate("project/${entry.arguments?.getString("id")}/settings") },
+                    onOpenChat = { nav.navigate("chat/$it") })
             }
             composable("project/{id}/settings") {
                 ProjectSettingsScreen(
