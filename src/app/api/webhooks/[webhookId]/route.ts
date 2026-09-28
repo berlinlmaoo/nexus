@@ -4,6 +4,9 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
+import { checkProjectAccess } from '@/lib/rbac'
+import { isAdminOrOrgBodPlus } from '@/lib/org'
+import { webhookUrlError } from '@/lib/webhook-dispatcher'
 
 export async function PATCH(
   req: Request,
@@ -27,16 +30,26 @@ export async function PATCH(
 
     const data: Record<string, unknown> = {}
     if (url !== undefined) {
-      try {
-        new URL(url)
-        data.url = url
-      } catch {
-        return NextResponse.json({ error: 'Invalid URL' }, { status: 400 })
+      // https, and not pointing at this server / the LAN / Tailscale (SSRF).
+      const urlError = await webhookUrlError(url)
+      if (urlError) {
+        return NextResponse.json({ error: urlError }, { status: 400 })
       }
+      data.url = url
     }
     if (events !== undefined) data.events = events
     if (active !== undefined) data.active = active
-    if (projectId !== undefined) data.projectId = projectId || null
+    if (projectId !== undefined) {
+      // Same rule as creating one: project access for a project webhook, BoD+ for a global one.
+      if (projectId) {
+        if (typeof projectId !== 'string' || !(await checkProjectAccess(session.user.id, projectId, ['MEMBER'])).allowed) {
+          return NextResponse.json({ error: 'Not a member of this project' }, { status: 403 })
+        }
+      } else if (!(await isAdminOrOrgBodPlus(session.user.id))) {
+        return NextResponse.json({ error: 'Only BoD can create a webhook for all projects' }, { status: 403 })
+      }
+      data.projectId = projectId || null
+    }
 
     const updated = await prisma.webhook.update({
       where: { id: webhookId },
