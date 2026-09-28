@@ -388,30 +388,8 @@ function Attendance() {
         title="Attendance"
         subtitle="Team presence, leave, WFH, and check-in streaks — less spreadsheet, more vibe check."
         icon={<ClipboardCheck className="h-6 w-6 text-primary" />}
-        actions={
-          <>
-            {canManage && (
-              <>
-                <button
-                  onClick={runOutageRefund}
-                  disabled={outageBusy || outageRefund.isPending}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm transition-colors duration-150 hover:bg-accent active:scale-[0.98] disabled:opacity-50"
-                  title="Restore XP & day-off lost to a system/power outage (preview first before running)"
-                >
-                  {outageBusy || outageRefund.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <AlertTriangle className="h-3.5 w-3.5" />} Refund system-down
-                </button>
-                <button
-                  onClick={() => { if (confirm("Run the no-show sweep & deduct day-off quota?\n\nFor every past work day (up to yesterday) where someone did NOT check in & had NO permit, the system auto-creates a DAY_OFF (deducts quota). Safe to re-run.")) deduct.mutate(); }}
-                  disabled={deduct.isPending}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm transition-colors duration-150 hover:bg-accent active:scale-[0.98] disabled:opacity-50"
-                  title="Detect no-show days & deduct day-off quota"
-                >
-                  {deduct.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Scale className="h-3.5 w-3.5" />} No-show sweep
-                </button>
-              </>
-            )}
-          </>
-        }
+        // The outage-refund and no-show-sweep buttons were removed (owner, 28 Sep 2026): outage days are
+        // not compensated, and the sweep is what the nightly cron already runs. Both APIs stay for the cron.
       />
 
       <div className="p-4 md:p-8 space-y-5">
