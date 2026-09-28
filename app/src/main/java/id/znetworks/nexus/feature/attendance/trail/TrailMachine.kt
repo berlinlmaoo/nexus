@@ -17,7 +17,9 @@ import kotlin.math.sqrt
 //   • inside the office (owner, 25 Sep 2026): one "presence" check about once an hour, so the day
 //     shows that the person stayed. Between checks only a low-power stream runs; the check raises
 //     the accuracy for one fix (≤ 45 s) and drops it again;
-//   • outside, one point about every 15 minutes, plus one on leaving and one on coming back;
+//   • outside (UPDATES §10), a precise route: a point every ~50 m moved, or every 5 min standing
+//     still, plus one on leaving and one on coming back; uploaded in batches about every 2 min
+//     (leaving and coming back go at once: the server's clock starts on them);
 //   • the server has the last word: `tracking:false` stops everything.
 
 @Serializable
@@ -72,6 +74,10 @@ data class TrailState(
     val preciseBest: TrailPoint? = null,
     /** When a presence check last raised the accuracy; one that got nothing waits 15 min. */
     val presenceTriedAtMillis: Long? = null,
+    /** The last point queued, for the 50 m step outside. */
+    val lastQueued: TrailPoint? = null,
+    /** When a batch last went up (success), for the ~2 min upload rhythm outside. */
+    val lastUploadAtMillis: Long? = null,
     /** The server's outsideSince (location-trail reply or GET today): the clock both sides agree on. */
     val serverOutsideSinceMillis: Long? = null,
     /** A PENDING/APPROVED excuse covers today: the outside clock is paused. */
@@ -116,7 +122,12 @@ class TrailMachine(var state: TrailState = TrailState()) {
         }
 
     companion object {
-        const val SEND_INTERVAL_MS = 15 * 60_000L
+        /** Outside, standing still: the last position again this often. */
+        const val SEND_INTERVAL_MS = 5 * 60_000L
+        /** Outside, moving: a point once this far from the last one queued. */
+        const val STEP_METERS = 50.0
+        /** Outside points wait for one upload about this often (exit/enter never wait). */
+        const val UPLOAD_EVERY_MS = 120_000L
         const val MAX_SHIFT_MS = 16 * 3_600_000L
         const val BATCH_LIMIT = 200
         const val PENDING_CAP = 1000
@@ -179,7 +190,7 @@ class TrailMachine(var state: TrailState = TrailState()) {
             sendNextFix = false
             state.copy(
                 recordId = recordId, checkInAtMillis = checkInAtMillis, fence = fence, zone = TrailZone.UNKNOWN,
-                outsideSinceMillis = null, lastQueuedAtMillis = null, serverNextAtMillis = null, latest = null,
+                outsideSinceMillis = null, lastQueuedAtMillis = null, lastQueued = null, serverNextAtMillis = null, latest = null,
                 pendingTag = null, stage = null, startedAtMillis = now, preciseSinceMillis = null, preciseBest = null,
                 presenceTriedAtMillis = null, serverOutsideSinceMillis = null, excusedToday = false,
             )
@@ -286,10 +297,12 @@ class TrailMachine(var state: TrailState = TrailState()) {
             return listOf(TrailEffect.Flush) + if (state.zone == TrailZone.OUTSIDE) emptyList() else endPrecise(p)
         }
         // Right after a resume the first fresh fix goes out without waiting for the rhythm.
-        if (state.zone == TrailZone.OUTSIDE && (isDue(now) || sendNextFix)) {
+        if (state.zone == TrailZone.OUTSIDE && (isDue(now) || sendNextFix || moved(p))) {
+            // Right after a resume the point goes up at once; otherwise it joins the next batch.
+            val urgent = sendNextFix
             sendNextFix = false
             enqueue(p, now)
-            return listOf(TrailEffect.Flush)
+            return if (urgent || uploadDue(now)) listOf(TrailEffect.Flush) else emptyList()
         }
         return if (state.zone == TrailZone.OUTSIDE) emptyList() else presence(p, now)
     }
@@ -319,13 +332,13 @@ class TrailMachine(var state: TrailState = TrailState()) {
                 // Standing still outside delivers no fixes past the distance filter; re-sending that
                 // position with the current time is true to within the filter.
                 enqueue(latest.copy(id = UUID.randomUUID().toString(), atMillis = now, event = TrailPoint.Event.point), now)
-                fx += TrailEffect.Flush
+                if (uploadDue(now)) fx += TrailEffect.Flush
             } else {
                 fx += TrailEffect.RequestFix
             }
         }
         if (state.isActive && state.zone != TrailZone.OUTSIDE) fx += presenceTick(now)
-        if (TrailEffect.Flush !in fx && state.pending.isNotEmpty()) {
+        if (TrailEffect.Flush !in fx && state.pending.isNotEmpty() && uploadDue(now)) {
             val failed = state.lastFailureAtMillis
             if (failed != null && now - failed < RETRY_AFTER_MS) return fx
             fx += TrailEffect.Flush
@@ -379,7 +392,7 @@ class TrailMachine(var state: TrailState = TrailState()) {
     }
 
     fun sent(ids: Set<String>, recordId: String, reply: TrailReply, now: Long): List<TrailEffect> {
-        state = state.copy(pending = state.pending.filterNot { it.id in ids }, lastFailureAtMillis = null)
+        state = state.copy(pending = state.pending.filterNot { it.id in ids }, lastFailureAtMillis = null, lastUploadAtMillis = now)
         // A reply about an older record says nothing about the one being tracked now.
         if (recordId != state.recordId) return if (state.pending.isEmpty()) emptyList() else listOf(TrailEffect.Flush)
         if (!reply.tracking) {
@@ -403,6 +416,20 @@ class TrailMachine(var state: TrailState = TrailState()) {
     }
 
     // endregion
+
+    /** Moved a clear [STEP_METERS] from the last queued point (a vague fix never counts as moving). */
+    private fun moved(p: TrailPoint): Boolean {
+        val last = state.lastQueued ?: return false
+        if ((p.accuracy ?: DECISIVE_ACCURACY) > DECISIVE_ACCURACY) return false
+        return distance(p.lat, p.lng, last.lat, last.lng) >= STEP_METERS
+    }
+
+    /** Outside, points go up about every [UPLOAD_EVERY_MS]; inside anything pending goes at once. */
+    fun uploadDue(now: Long): Boolean {
+        if (state.zone != TrailZone.OUTSIDE || !state.isActive) return true
+        val last = state.lastUploadAtMillis ?: return true
+        return now - last >= UPLOAD_EVERY_MS
+    }
 
     fun isDue(now: Long): Boolean {
         val last = state.lastQueuedAtMillis ?: return true
@@ -446,6 +473,6 @@ class TrailMachine(var state: TrailState = TrailState()) {
     private fun enqueue(p: TrailPoint, now: Long) {
         var pending = state.pending + p
         if (pending.size > PENDING_CAP) pending = pending.drop(pending.size - PENDING_CAP)
-        state = state.copy(pending = pending, lastQueuedAtMillis = now)
+        state = state.copy(pending = pending, lastQueuedAtMillis = now, lastQueued = p)
     }
 }

@@ -63,4 +63,22 @@ class OutsideClockTest {
         m.noteToday("r", null, excused = true)
         assertEquals(true, m.state.excusedToday)
     }
+
+    @Test fun leftAlertOnceThenTheHourOneThenNothing() {
+        val A = OutsideClock.Alert.LEFT; val H = OutsideClock.Alert.HOUR
+        assertEquals(OutsideClock.AlertStep(A, false), OutsideClock.alertStep(out(), t0 + min, emptySet()))
+        assertEquals(OutsideClock.AlertStep(null, false), OutsideClock.alertStep(out(), t0 + 30 * min, setOf(A)))
+        assertEquals(OutsideClock.AlertStep(H, false), OutsideClock.alertStep(out(), t0 + 60 * min, setOf(A)))
+        assertEquals(OutsideClock.AlertStep(null, false), OutsideClock.alertStep(out(), t0 + 75 * min, setOf(A, H)))
+    }
+
+    @Test fun foundOutLateSkipsStraightToTheHourAlert() {
+        assertEquals(OutsideClock.Alert.HOUR, OutsideClock.alertStep(out(), t0 + 70 * min, emptySet()).post)
+    }
+
+    @Test fun insideExcusedOrStoppedTakesTheAlertBack() {
+        assertEquals(OutsideClock.AlertStep(null, true), OutsideClock.alertStep(out().copy(zone = TrailZone.INSIDE), t0, emptySet()))
+        assertEquals(OutsideClock.AlertStep(null, true), OutsideClock.alertStep(out(t0, { it.copy(excusedToday = true) }), t0 + 60 * min, emptySet()))
+        assertEquals(OutsideClock.AlertStep(null, true), OutsideClock.alertStep(TrailState(), t0, emptySet()))
+    }
 }

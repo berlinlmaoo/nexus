@@ -252,9 +252,9 @@
     <string name="channel_work_session">Sesi kerja</string>
     <string name="work_session_title">Sesi kerja</string>
     <string name="work_session_inside">Di kantor · lokasi dicek sekitar sejam sekali</string>
-    <string name="work_session_outside">Di luar kantor · rute direkam sekitar tiap 15 menit</string>
+    <string name="work_session_outside">Di luar kantor · rute direkam tiap ~50 m atau 5 menit</string>
     <string name="trail_disclosure_title">Lokasi selama jam kerja</string>
-    <string name="trail_disclosure_body">Selama jam kerja, dari absen masuk sampai absen pulang, NEXUS mengecek posisimu sekitar sejam sekali saat kamu di kantor, dan mengikuti rutemu (sekitar tiap 15 menit) saat kamu keluar, termasuk saat aplikasi ditutup atau tidak dipakai. Tidak ada yang direkam sebelum absen masuk atau setelah absen pulang. Ketidakhadiran lama dari kantor jadi terlihat dan bisa ditutup dengan izin. Atasanmu dan BoD bisa melihat jejak hari itu. Notifikasi tetap tampil selama berjalan.\n\nKalau kamu menolak, harimu tampil \"lokasi mati\" di papan.</string>
+    <string name="trail_disclosure_body">Selama jam kerja, dari absen masuk sampai absen pulang, NEXUS mengecek posisimu sekitar sejam sekali saat kamu di kantor, dan mengikuti rutemu dengan teliti saat kamu keluar (satu titik tiap ~50 m, atau tiap 5 menit kalau diam), termasuk saat aplikasi ditutup atau tidak dipakai. Tidak ada yang direkam sebelum absen masuk atau setelah absen pulang. Ketidakhadiran lama dari kantor jadi terlihat dan bisa ditutup dengan izin. Atasanmu dan BoD bisa melihat jejak hari itu. Notifikasi tetap tampil selama berjalan.\n\nKalau kamu menolak, harimu tampil \"lokasi mati\" di papan.</string>
     <string name="trail_agree">Setuju dan lanjut</string>
     <string name="not_now">Jangan sekarang</string>
     <string name="trail_always_title">Tetap jalan setelah HP restart</string>
@@ -618,4 +618,10 @@
     <string name="home_level">Level</string>
     <string name="home_points_period">POIN PERIODE</string>
     <string name="home_settings">Pengaturan</string>
+    <string name="outside_left_title">Kamu keluar kantor jam %1$s</string>
+    <string name="outside_left_body">Auto check-out offsite jam %1$s kalau belum balik atau ajukan izin.</string>
+    <string name="outside_hour_title">Sudah 1 jam di luar kantor</string>
+    <string name="outside_hour_body">Sisa %1$s sebelum auto check-out (%2$s). Ajukan izin atau balik ke kantor.</string>
+    <string name="dur_hm">%1$dj %2$dm</string>
+    <string name="dur_m">%1$dm</string>
 </resources>

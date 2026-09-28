@@ -44,8 +44,8 @@ import kotlinx.coroutines.tasks.await
  * [TrailMachine]'s, via [WorkTrail]. Started from the foreground (Android 12+ forbids otherwise).
  *
  * Inside the office: a low-power (Wi-Fi/cell) stream that notices leaving, and about once an
- * hour a presence check: one high-accuracy request of at most 45 s. Outside: a fix a minute or
- * every 50 m, and the machine decides what is queued (about every 15 min).
+ * hour a presence check: one high-accuracy request of at most 45 s. Outside: a fix every 30 s or
+ * every 20 m; the machine queues a point every ~50 m or 5 min and uploads about every 2 min.
  */
 class WorkTrailService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -124,8 +124,10 @@ class WorkTrailService : Service() {
             // Cheap between presence checks; usually still clear enough (Wi-Fi) to notice leaving.
             WorkTrail.Mode.WATCH_OFFICE -> LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 5 * 60_000L)
                 .setMinUpdateIntervalMillis(2 * 60_000L).build()
-            else -> LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 60_000L)
-                .setMinUpdateDistanceMeters(50f).setMinUpdateIntervalMillis(30_000L).build()
+            // Outside: the precise route (UPDATES §10). A finer filter than the 50 m step, so a
+            // step is noticed close to where it happened; the machine decides what is queued.
+            else -> LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 30_000L)
+                .setMinUpdateDistanceMeters(20f).setMinUpdateIntervalMillis(15_000L).build()
         }
         try {
             fused.requestLocationUpdates(request, callback, Looper.getMainLooper())
@@ -170,6 +172,7 @@ class WorkTrailService : Service() {
     private var shown: Any? = null
 
     private fun refreshNotification() {
+        outsideAlerts(System.currentTimeMillis())
         val key = listOf(currentMode, OutsideClock.present(trail.state, System.currentTimeMillis()), trail.state.checkInAtMillis)
         if (key == shown) return
         getSystemService(NotificationManager::class.java)?.notify(NOTIFICATION_ID, notification())
@@ -213,20 +216,67 @@ class WorkTrailService : Service() {
                 .setUsesChronometer(true)
                 .setChronometerCountDown(true)
                 .setWhen(outside.autoAtMillis)
-            if (outside.level != OutsideClock.Level.OUTSIDE) {
-                // Same destination as the push's "File a permit" action.
-                val permit = Intent(Intent.ACTION_VIEW, Uri.parse("nexus://attendance?permit=today"), this, MainActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
-                b.addAction(0, getString(R.string.file_a_permit),
-                    PendingIntent.getActivity(this, 1, permit, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
-            }
+            if (outside.level != OutsideClock.Level.OUTSIDE) b.permitAction(1)
         }
         return b.build()
     }
 
+    /** The only action these notifications carry: the permit composer, as the push's. Never check-out. */
+    private fun NotificationCompat.Builder.permitAction(requestCode: Int) {
+        val permit = Intent(Intent.ACTION_VIEW, Uri.parse("nexus://attendance?permit=today"), this@WorkTrailService, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
+        addAction(0, getString(R.string.file_a_permit),
+            PendingIntent.getActivity(this@WorkTrailService, requestCode, permit, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
+    }
+
+    /**
+     * UPDATES §10: a local notification on leaving the office and one at minute 60 with the time
+     * left, each once per episode; taken back on coming back, an excuse, check-out or logout.
+     * Computed here from the tracker, so it holds when a push is lost.
+     */
+    private fun outsideAlerts(now: Long) {
+        val nm = getSystemService(NotificationManager::class.java) ?: return
+        val prefs = getSharedPreferences("nexus.outsideAlerts", MODE_PRIVATE)
+        val episode = OutsideClock.episode(trail.state)
+        val posted = if (episode != null && prefs.getLong("episode", -1) == episode) {
+            prefs.getStringSet("posted", emptySet()).orEmpty().mapNotNull { runCatching { OutsideClock.Alert.valueOf(it) }.getOrNull() }.toSet()
+        } else emptySet()
+        val step = OutsideClock.alertStep(trail.state, now, posted)
+        if (step.cancel) { nm.cancel(ALERT_ID); return }
+        val alert = step.post ?: return
+        val o = OutsideClock.present(trail.state, now) ?: return
+        val auto = LocalNotifier.hhmm(o.autoAtMillis)
+        val (title, text) = when (alert) {
+            OutsideClock.Alert.LEFT -> getString(R.string.outside_left_title, LocalNotifier.hhmm(o.sinceMillis)) to getString(R.string.outside_left_body, auto)
+            OutsideClock.Alert.HOUR -> {
+                val left = ((o.autoAtMillis - now) / 60_000L).coerceAtLeast(0).toInt()
+                val dur = if (left >= 60) getString(R.string.dur_hm, left / 60, left % 60) else getString(R.string.dur_m, left)
+                getString(R.string.outside_hour_title) to getString(R.string.outside_hour_body, dur, auto)
+            }
+        }
+        val open = PendingIntent.getActivity(this, 2, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val n = NotificationCompat.Builder(this, ALERT_CHANNEL)
+            .setSmallIcon(R.drawable.ic_stat_nexus)
+            .setColor(AMBER)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .apply { permitAction(3) }
+            .build()
+        runCatching { nm.notify(ALERT_ID, n) }
+        prefs.edit().putLong("episode", episode ?: -1).putStringSet("posted", (posted + alert).map { it.name }.toSet()).apply()
+    }
+
+
     private fun hasFine() = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
     override fun onDestroy() {
+        // Check-out, logout or tracking stopped: an "outside" alert no longer holds.
+        runCatching { getSystemService(NotificationManager::class.java)?.cancel(ALERT_ID) }
         runCatching { fused.removeLocationUpdates(callback) }
         scope.cancel()
         super.onDestroy()
@@ -235,6 +285,9 @@ class WorkTrailService : Service() {
     companion object {
         const val CHANNEL_WORK_SESSION = "work_session"
         private const val NOTIFICATION_ID = 4201
+        private const val ALERT_ID = 4202
+        /** The server's channel for outside-the-office pushes (PushManager.CHANNELS). */
+        private const val ALERT_CHANNEL = "attendance_location"
         private const val VIOLET = 0xFF7B68EE.toInt()
         private const val AMBER = 0xFFF59E0B.toInt()
 

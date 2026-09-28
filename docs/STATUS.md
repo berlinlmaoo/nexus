@@ -4,7 +4,7 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (157 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (161 JVM tests, all green).
 Version 0.1.6 (versionCode 1), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 
 ## Done (Phase 1, attendance MVP)
@@ -55,6 +55,23 @@ action (`nexus://attendance?permit=today`, the same as the push). It is re-poste
 presentation changes (state change, or the minute tick crossing 90/120). Inside it is unchanged.
 AttendanceGuardTest now allows exactly one permit link per notification action, in Push.kt and
 WorkTrailService.kt only. Not seen on the phone yet: needs a real 90+ min outside run.
+
+## Local alerts and the precise route outside the office (UPDATES §10), 28 Sep 2026
+
+Done (§10 was not yet written in UPDATES when this landed; built from Berlin's brief, re-check
+against the text once it is there).
+- Local notifications (channel `attendance_location`): "Kamu keluar kantor jam 14:05 · Auto check-out
+  offsite jam 16:35 kalau belum balik atau ajukan izin" on leaving, and "Sudah 1 jam di luar kantor ·
+  Sisa 1j 30m sebelum auto check-out (16:35)" at minute 60, both with the "Ajukan izin" action. Once
+  per episode (keyed on the phone's exit time); someone found outside only after an hour gets the
+  hour one alone. Taken back when back inside, when an excuse for today is PENDING/APPROVED, on
+  check-out and on logout (service stop). Decided by `OutsideClock.alertStep` (JVM-tested).
+- Precise route: outside, a point is queued every ~50 m moved (fixes vaguer than 100 m never count
+  as moving) or every 5 min standing still; outside points go up in batches about every 2 min
+  (exit/enter and the first fix after a resume go at once). GPS outside: high accuracy, 30 s /
+  20 m. Inside unchanged (hourly presence check).
+- The work-session text and the prominent location disclosure now say "every ~50 m or 5 min".
+  PRD REQ-ATT-34/36 still say 15 min (owner's document, not edited here).
 
 ## Phase 2 (tasks & projects), in progress since 28 Sep 2026
 

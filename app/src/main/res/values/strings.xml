@@ -258,9 +258,9 @@
     <string name="channel_work_session">Work session</string>
     <string name="work_session_title">Work session</string>
     <string name="work_session_inside">At the office · location checked about once an hour</string>
-    <string name="work_session_outside">Outside the office · your route is recorded about every 15 min</string>
+    <string name="work_session_outside">Outside the office · your route is recorded every ~50 m or 5 min</string>
     <string name="trail_disclosure_title">Location during working hours</string>
-    <string name="trail_disclosure_body">During work hours, from check-in to check-out, NEXUS checks where you are about once an hour while you are at the office, and follows your route (about every 15 minutes) when you leave it, even when the app is closed or not in use. Nothing is recorded before check-in or after check-out. A long absence from the office can then be seen and covered by a permit. Your manager and the BoD can see that day\'s trail. A notification stays on while it runs.\n\nIf you say no, your day shows \"location off\" on the board.</string>
+    <string name="trail_disclosure_body">During work hours, from check-in to check-out, NEXUS checks where you are about once an hour while you are at the office, and follows your route closely when you leave it (a point every ~50 m, or every 5 minutes while you stay put), even when the app is closed or not in use. Nothing is recorded before check-in or after check-out. A long absence from the office can then be seen and covered by a permit. Your manager and the BoD can see that day\'s trail. A notification stays on while it runs.\n\nIf you say no, your day shows \"location off\" on the board.</string>
     <string name="trail_agree">Agree and continue</string>
     <string name="not_now">Not now</string>
     <string name="trail_always_title">Keep it running after a restart</string>
@@ -624,4 +624,10 @@
     <string name="home_level">Level</string>
     <string name="home_points_period">POINTS THIS PERIOD</string>
     <string name="home_settings">Settings</string>
+    <string name="outside_left_title">You left the office at %1$s</string>
+    <string name="outside_left_body">Automatic offsite check-out at %1$s unless you\'re back or file a permit.</string>
+    <string name="outside_hour_title">1 hour outside the office</string>
+    <string name="outside_hour_body">%1$s left before the automatic check-out (%2$s). File a permit or head back to the office.</string>
+    <string name="dur_hm">%1$dh %2$dm</string>
+    <string name="dur_m">%1$dm</string>
 </resources>

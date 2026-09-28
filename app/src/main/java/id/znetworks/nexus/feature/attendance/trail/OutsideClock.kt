@@ -31,4 +31,28 @@ object OutsideClock {
         }
         return Outside(since, autoAt, level)
     }
+
+    const val HOUR_ALERT_MS = 60 * 60_000L
+
+    enum class Alert { LEFT, HOUR }
+
+    /**
+     * The two local notifications of UPDATES §10: one on leaving, one at minute 60 with the time
+     * left. Each once per episode ([posted] holds what already went out for [episode]); none while
+     * paused or inside, and whatever was shown is taken back then ([cancel]).
+     */
+    data class AlertStep(val post: Alert?, val cancel: Boolean)
+
+    fun alertStep(s: TrailState, now: Long, posted: Set<Alert>): AlertStep {
+        val o = present(s, now) ?: return AlertStep(null, cancel = true)
+        return when {
+            // Found out late (phone off for an hour): only the hour one, it says everything.
+            now - o.sinceMillis >= HOUR_ALERT_MS -> AlertStep(if (Alert.HOUR in posted) null else Alert.HOUR, cancel = false)
+            Alert.LEFT !in posted -> AlertStep(Alert.LEFT, cancel = false)
+            else -> AlertStep(null, cancel = false)
+        }
+    }
+
+    /** One key per episode: the phone's own exit time (the server's may arrive later and differ). */
+    fun episode(s: TrailState): Long? = s.outsideSinceMillis
 }

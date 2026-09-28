@@ -91,8 +91,8 @@ class TrailMachineTest {
     @Test fun resumeOutsideSendsTheFirstFreshFixAtOnce() {
         started(); m.fix(outside(), now)                      // exit queued
         m.sent(m.state.pending.map { it.id }.toSet(), "r1", TrailReply(true, "outside", now, null), now)
-        // Killed; reopened 5 min later, well inside the 15-min rhythm.
-        now += 5 * min
+        // Killed; reopened 4 min later, inside the 5-min rhythm.
+        now += 4 * min
         val restored = TrailMachine(m.state)
         val fx = restored.resume(now)
         assertTrue(TrailEffect.RequestFix in fx)
@@ -112,7 +112,7 @@ class TrailMachineTest {
         assertNull(s.preciseSinceMillis)
     }
 
-    @Test fun leavingQueuesExitAtOnceThenEvery15Minutes() {
+    @Test fun leavingQueuesExitAtOnceThenEvery5MinutesStandingStill() {
         started()
         m.fix(inside(), now)
         now += min
@@ -120,12 +120,31 @@ class TrailMachineTest {
         assertTrue(TrailEffect.StartContinuous in fx && TrailEffect.Flush in fx)
         assertEquals(TrailPoint.Event.exit, m.state.pending.single().event)
         assertEquals("r1", m.state.pending.single().recordId)
-        // Standing still outside: no fixes, the tick re-sends the last position every 15 min.
-        repeat(14) { now += min; m.tick(now) }
+        // Standing still outside: no fixes, the tick re-sends the last position every 5 min.
+        repeat(4) { now += min; m.tick(now) }
         assertEquals(1, m.state.pending.size)
         now += min; m.tick(now)
         assertEquals(2, m.state.pending.size)
         assertEquals(TrailPoint.Event.point, m.state.pending.last().event)
+    }
+
+    @Test fun movingOutsideQueuesAPointEvery50mAndUploadsInBatches() {
+        started(); m.fix(outside(), now)                        // exit, sent at once
+        m.sent(m.state.pending.map { it.id }.toSet(), "r1", TrailReply(true, "outside", now, null), now)
+        now += 20_000
+        assertTrue(m.fix(at(0.0053), now).isEmpty())            // ~33 m: not a step yet
+        assertTrue(m.state.pending.isEmpty())
+        now += 20_000
+        assertTrue(m.fix(at(0.0055), now).isEmpty())            // ~55 m: queued, waits for the batch
+        assertEquals(1, m.state.pending.size)
+        now += 20_000; m.fix(at(0.006), now)                    // another step
+        assertEquals(2, m.state.pending.size)
+        now += 20_000
+        assertTrue(m.fix(at(0.007, acc = 150.0), now).isEmpty()) // a vague fix is not movement
+        assertEquals(2, m.state.pending.size)
+        // Two minutes after the last upload the batch goes up.
+        now += 40_000
+        assertTrue(TrailEffect.Flush in m.tick(now))
     }
 
     @Test fun comingBackQueuesEnterAndStops() {
