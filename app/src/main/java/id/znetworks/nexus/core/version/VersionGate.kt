@@ -21,6 +21,12 @@ data class AndroidPolicy(
     val storeUrl: String? = null,
     val nextMinimum: String? = null,
     val graceUntil: String? = null,
+    /**
+     * The APK actually published (server current.json). The versionName can stay the same across
+     * builds (Berlin: 0.1.6 until further notice), so the build number decides between equal names.
+     */
+    val latestName: String? = null,
+    val latestBuild: Int? = null,
 )
 
 @Serializable
@@ -45,6 +51,7 @@ class VersionGate(
     private val storage: GateStorage,
     private val fetchPolicy: suspend () -> AndroidPolicy?,
     private val now: () -> Instant = Instant::now,
+    private val runningCode: Int? = null,
 ) {
     data class Requirement(val minSupported: String, val storeUrl: String?)
     data class Grace(val nextMinimum: String, val deadline: Instant)
@@ -106,7 +113,7 @@ class VersionGate(
         policy.storeUrl?.takeIf { it.isNotBlank() }?.let { storage.put(KEY_STORE, it) }
         val store = storage.get(KEY_STORE)
         val running = running ?: return
-        val verdict = evaluate(running, policy, t)
+        val verdict = evaluate(running, policy, t, runningCode)
         if (verdict.required != null) {
             lock(verdict.required.minSupported, verdict.required.storeUrl ?: store)
             _state.update { it.copy(available = verdict.available, grace = null, storeUrl = store) }
@@ -162,14 +169,25 @@ class VersionGate(
             return lockedOn.isNotBlank() && AppVersion.isBelow(lockedOn, running)
         }
 
+        /**
+         * "Update available": a newer published name, or the same name with a higher build
+         * (build 7 of 0.1.6 offered to build 6). Same name, higher build shows as "0.1.6 (7)".
+         */
+        fun available(running: String, runningCode: Int?, policy: AndroidPolicy): String? {
+            val name = (policy.latestName ?: policy.latest)?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+            if (AppVersion.isBelow(running, name)) return name
+            val build = policy.latestBuild ?: return null
+            val sameName = !AppVersion.isBelow(name, running)
+            return if (sameName && runningCode != null && build > runningCode) "$name ($build)" else null
+        }
+
         /** Pure verdict for one policy and one running version. */
-        fun evaluate(running: String, policy: AndroidPolicy, now: Instant): Verdict {
+        fun evaluate(running: String, policy: AndroidPolicy, now: Instant, runningCode: Int? = null): Verdict {
             val floor = policy.minSupported?.trim()?.takeIf { it.isNotEmpty() }
             val required = if (floor != null && AppVersion.isBelow(running, floor)) {
                 Requirement(floor, policy.storeUrl?.takeIf { it.isNotBlank() })
             } else null
-            val latest = policy.latest?.trim()?.takeIf { it.isNotEmpty() }
-            val available = latest?.takeIf { AppVersion.isBelow(running, it) }
+            val available = available(running, runningCode, policy)
             val next = policy.nextMinimum?.trim()?.takeIf { it.isNotEmpty() }
             val deadline = policy.graceUntil?.let { runCatching { Instant.parse(it.trim()) }.getOrNull() }
             val grace = if (required == null && next != null && deadline != null &&

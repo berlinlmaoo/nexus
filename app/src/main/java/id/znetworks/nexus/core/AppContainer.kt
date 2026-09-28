@@ -74,6 +74,7 @@ class AppContainer(private val context: Context) {
 
     val versionGate: VersionGate = VersionGate(
         running = identity.versionName,
+        runningCode = identity.versionCode,
         storage = PrefsGateStorage(context),
         fetchPolicy = {
             // Unauthenticated: a signed-out phone must learn it is too old before it signs in.

@@ -103,4 +103,23 @@ class VersionGateTest {
         assertEquals("0.0.0", live.android?.minSupported)
         assertNull(VersionGate.evaluate("0.1.6", live.android!!, Instant.now()).required)
     }
+
+    // Server 29 Sep: latestName + latestBuild from the published APK; the name stays 0.1.6.
+    @Test fun sameNameHigherBuildIsAvailable() {
+        val now = Instant.now()
+        val p = AndroidPolicy(latest = null, latestName = "0.1.6", latestBuild = 7)
+        assertEquals("0.1.6 (7)", VersionGate.evaluate("0.1.6", p, now, runningCode = 6).available)
+        assertNull(VersionGate.evaluate("0.1.6", p, now, runningCode = 7).available)
+        assertNull(VersionGate.evaluate("0.1.6", p, now, runningCode = 8).available)
+        // Unknown running build: no guess.
+        assertNull(VersionGate.evaluate("0.1.6", p, now).available)
+        // A newer name wins whatever the builds say; an older name never offers.
+        assertEquals("0.1.7", VersionGate.evaluate("0.1.6", p.copy(latestName = "0.1.7", latestBuild = 1), now, 9).available)
+        assertNull(VersionGate.evaluate("0.1.7", p.copy(latestBuild = 99), now, 1).available)
+        // The live body parses.
+        val live = id.znetworks.nexus.core.net.NexusJson.decodeFromString(VersionPolicyResponse.serializer(),
+            """{"android":{"minSupported":"0.0.0","latest":null,"storeUrl":"x","latestName":"0.1.6","latestBuild":6}}""")
+        assertEquals(6, live.android?.latestBuild)
+        assertNull(VersionGate.evaluate("0.1.6", live.android!!, now, 6).available)
+    }
 }
