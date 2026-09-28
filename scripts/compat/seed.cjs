@@ -54,7 +54,9 @@ async function main() {
   const hash = await bcrypt.hash(PASSWORD, 10)
 
   const workspace = await prisma.workspace.create({
-    data: fit("Workspace", { name: "Compat Workspace", slug: "compat-ws", joinCode: "COMPAT1" }),
+    // The company workspace id (lib/org.ts ORG_WORKSPACE_ID): company-level powers (XP adjust,
+    // announcements, Control Room) come only from a role in it, so the fixtures must live in it.
+    data: fit("Workspace", { id: "cmmroq7dk0001vewe92nk1g0w", name: "Compat Workspace", slug: "compat-ws", joinCode: "COMPAT1" }),
   })
   const office = await prisma.officeLocation.create({
     data: fit("OfficeLocation", {
