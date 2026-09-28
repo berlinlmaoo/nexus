@@ -19,6 +19,7 @@ import {
   formatExportDateLabel,
   formatExportPeriod,
   exportWorkingDays,
+  coverAbsencesWithDayOffQuota,
 } from "@/lib/attendance-export-format"
 
 type HistoryRow = ReturnType<typeof serializeAttendanceRecord> & {
@@ -158,6 +159,14 @@ async function buildAttendanceWorkbook({
     summaryCounters.set(userId, { H: 0, C: 0, S: 0, I: 0, DO: 0, TK: 0, TOTAL: 0 })
   }
 
+  // TK uses up the remaining day-off quota first (shown as DO), in date order — see coverAbsencesWithDayOffQuota.
+  const codeByKey = new Map<string, string>()
+  for (const userId of userIds) {
+    const keys = dates.map((d) => d.toISOString().slice(0, 10))
+    const { codes } = coverAbsencesWithDayOffQuota(keys.map((k) => getAttendanceExportCode(rowMap.get(`${userId}:${k}`))), quotaByUser?.get(userId) ?? 4)
+    keys.forEach((k, i) => codeByKey.set(`${userId}:${k}`, codes[i]))
+  }
+
   dates.forEach((date, dateIndex) => {
     const rowNumber = 5 + dateIndex
     const row = sheet.getRow(rowNumber)
@@ -175,7 +184,7 @@ async function buildAttendanceWorkbook({
     userIds.forEach((userId, userIndex) => {
       const cell = row.getCell(userIndex + 2)
       const dateKey = date.toISOString().slice(0, 10)
-      const code = getAttendanceExportCode(rowMap.get(`${userId}:${dateKey}`))
+      const code = codeByKey.get(`${userId}:${dateKey}`) ?? ""
       cell.value = code || null
       cell.alignment = { horizontal: "center", vertical: "middle" }
       cell.font = { bold: Boolean(code), size: 10, color: { argb: "FF111111" } }
@@ -295,13 +304,15 @@ async function buildPersonWorkbook({
   const counts: Record<string, number> = { H: 0, C: 0, S: 0, DO: 0, TK: 0, TOTAL: 0 }
   let lateTotal = 0
   const dates = enumerateAttendanceDates(start, end)
+  const covered = coverAbsencesWithDayOffQuota(dates.map((d) => getAttendanceExportCode(rowMap.get(d.toISOString().slice(0, 10)))), dayOffQuota ?? 4)
   dates.forEach((date, i) => {
     const r = sheet.getRow(5 + i)
     const row = rowMap.get(date.toISOString().slice(0, 10))
-    const code = getAttendanceExportCode(row)
+    const code = covered.codes[i]
     const late = row?.lateMinutes ?? 0
     const worked = row?.workedMinutes ?? 0
-    const note = row?.isCorrected ? `dikoreksi${row.correctionReason ? `: ${row.correctionReason}` : ""}` : row?.notes ?? ""
+    const note = covered.covered.has(i) ? "Tanpa keterangan — memakai jatah day off"
+      : row?.isCorrected ? `dikoreksi${row.correctionReason ? `: ${row.correctionReason}` : ""}` : row?.notes ?? ""
     const values: Array<string | number | null> = [
       formatExportDateLabel(date),
       code || null,

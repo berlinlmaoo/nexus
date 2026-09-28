@@ -71,6 +71,23 @@ export function exportWorkingDays(periodDays: number, dayOffQuota = 4) {
   return Math.max(0, periodDays - dayOffQuota)
 }
 
+/**
+ * How the sheet and the xlsx exports show a person's days off (owner, 28 Sep 2026): a day without
+ * attendance and without excuse (TK) first uses up whatever is left of the period's day-off quota and
+ * is shown as DO; only once the quota is gone does a day show as TK. Days are taken in date order, and
+ * days off the person actually took (DO already) count against the quota first.
+ * Returns the codes plus the indexes that were converted, so a caller can annotate them.
+ */
+export function coverAbsencesWithDayOffQuota(codes: readonly string[], dayOffQuota = 4): { codes: string[]; covered: Set<number> } {
+  let left = Math.max(0, dayOffQuota - codes.filter((c) => c === "DO").length)
+  const covered = new Set<number>()
+  const out = codes.map((c, i) => {
+    if (c === "TK" && left > 0) { left -= 1; covered.add(i); return "DO" }
+    return c
+  })
+  return { codes: out, covered }
+}
+
 /** The block under the grid, one row each, counted per person. TOTAL = working days (exportWorkingDays). */
 export const ATTENDANCE_EXPORT_SUMMARY_ROWS = [
   { label: "HADIR", code: "H", fill: "7CFC00" },
