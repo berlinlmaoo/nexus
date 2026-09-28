@@ -1534,15 +1534,14 @@ struct StreakBoardCard: View {
         }
     }
 
-    /// A `LazyHStack` only registers the ids of columns it has actually built, and today is ~27
-    /// columns off-screen — so a single call made at the wrong moment scrolls nowhere and says
-    /// nothing. Tried again as the layout settles.
+    /// Tried again as the layout settles: a single call made before the scroll view has its
+    /// size scrolls nowhere and says nothing.
     private func scrollToToday(_ proxy: ScrollViewProxy) {
         guard let t = todayKey else { return }
         Task { @MainActor in
             for delay in [0, 150, 500] {
                 if delay > 0 { try? await Task.sleep(for: .milliseconds(delay)) }
-                // Centred across, top down: the targets live in the grid's first (empty) row.
+                // Centred across, top down: the targets sit at the very top of the content.
                 proxy.scrollTo("day-\(t)", anchor: UnitPoint(x: 0.5, y: 0))
             }
         }
@@ -1562,55 +1561,112 @@ struct StreakBoardCard: View {
     /// Date row: weekday over day number.
     private let headerH: CGFloat = 24
     private let scoreW: CGFloat = 48
+    /// The gutter between the names and the first day, and between the last day and the Score.
+    private let lane: CGFloat = 6
     private static let boardSpace = "streakBoardCells"
-    /// Where the cell grid is scrolled to. Only the pinned strips read it, so a scroll frame
-    /// re-renders those three and not the whole card.
+    /// Where the board is scrolled to. Only the frozen panes read it, so a scroll frame re-renders
+    /// those and not the card, the rows or the cells.
     @State private var scrollOffset = BoardScrollOffset()
 
     /// Freeze panes, like the web board since 28 Sep 2026: while correcting attendance the owner
     /// scrolls down the crew and across the days, and lost both the dates and the names doing it.
-    /// Only the cells scroll (both ways, inside a bounded height); the date row, the names and the
-    /// Score column are separate strips that follow the grid's offset along one axis each, clipped
-    /// to their lane, and the top-left corner never moves. The strips sit OUTSIDE the scroll view
-    /// rather than overlaid on it, so a tap on a name can never land on a cell hidden underneath.
+    ///
+    /// ONE scroll view holds everything — date row, names, cells and Score — so a drag anywhere on
+    /// the board scrolls it. The first version kept the names and the Score as strips BESIDE the
+    /// scroll view, and on the phone a drag on a name did nothing. The panes stay frozen by undoing
+    /// the scroll inside the content: the names shift right by exactly as much as the board has
+    /// scrolled across (so they only move down and up with their rows), the date row shifts down by
+    /// as much as it has scrolled down, the Score column keeps to the visible right edge, and the
+    /// corners do both. They draw above the cells on the card's own colour, so no cell shows
+    /// through and a tap on a name never reaches a cell underneath.
+    ///
+    /// Every stack in here is a plain one. The rows used to be `LazyHStack`s, and a lazy stack
+    /// inside a scroll view that scrolls both ways does not reliably build its content: on the
+    /// owner's phone whole rows came up empty (Andi NJ, Ariq Darmawan, Bayemsore) while their
+    /// Score read 27/27. ~40 people × 31 days is ~1,240 small shapes, which a plain stack handles.
     private var grid: some View {
+        let lead = nameW + lane
+        let trail = lane + scoreW
+        let daysW = max(0, CGFloat(periodDays.count) * (cell + gap) - gap)
+        let top = headerH + gap
         let rowsH = max(0, CGFloat(members.count) * (cell + gap) - gap)
-        let contentH = headerH + gap + rowsH
-        return VStack(alignment: .leading, spacing: gap) {
-            HStack(spacing: 6) {
-                Color.clear.frame(width: nameW, height: headerH)
-                Color.clear.frame(height: headerH)
-                    .overlay(alignment: .topLeading) { PinnedStrip(offset: scrollOffset, axis: .horizontal) { dateRow } }
-                    .clipped()
-                Text(T("Score")).font(.system(size: 8, weight: .semibold)).foregroundStyle(NX.mutedFg)
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                    .frame(width: scoreW, height: headerH, alignment: .bottomTrailing)
-            }
-            HStack(alignment: .top, spacing: 6) {
-                Color.clear.frame(width: nameW)
-                    .overlay(alignment: .topLeading) { PinnedStrip(offset: scrollOffset, axis: .vertical) { nameColumn } }
-                    .clipped()
-                ScrollViewReader { proxy in
-                    ScrollView([.horizontal, .vertical], showsIndicators: false) { cells }
-                        // A crew that fits the height doesn't grab vertical drags from the page.
-                        .scrollBounceBehavior(.basedOnSize)
-                        .coordinateSpace(.named(Self.boardSpace))
-                        .onPreferenceChange(BoardOffsetKey.self) { origin in
-                            scrollOffset.x = -origin.x
-                            scrollOffset.y = -origin.y
-                        }
-                        // The grid is rebuilt after every reload (the spinner replaces it), and a new
-                        // scroll view starts at the origin while the model still holds the old offset.
-                        .onAppear { scrollOffset.x = 0; scrollOffset.y = 0; scrollToToday(proxy) }
-                        // Land on today, not on the 28th: the column that matters is the one being filled in.
-                        .onChange(of: members.count) { _, _ in scrollToToday(proxy) }
-                        .onChange(of: periodDays.count) { _, _ in scrollToToday(proxy) }
+        let contentW = lead + daysW + trail
+        let contentH = top + rowsH
+        return ScrollViewReader { proxy in
+            ScrollView([.horizontal, .vertical], showsIndicators: false) {
+                ZStack(alignment: .topLeading) {
+                    // Scroll targets for `scrollToToday`, one per day, at the very top of the
+                    // content so landing on today never scrolls the first row under the date row.
+                    HStack(spacing: gap) {
+                        ForEach(periodDays) { pd in Color.clear.frame(width: cell, height: 0).id("day-\(pd.key)") }
+                    }
+                    .padding(.leading, lead)
+
+                    cells.padding(.leading, lead).padding(.top, top)
+
+                    FrozenPane(offset: scrollOffset, pin: .left) {
+                        nameColumn.frame(width: lead, alignment: .leading)
+                            .background(NX.card).contentShape(Rectangle())
+                            .padding(.top, top)
+                    }
+                    .zIndex(1)
+
+                    FrozenPane(offset: scrollOffset, pin: .right(contentW)) {
+                        scoreColumn.frame(width: trail, alignment: .trailing)
+                            .background(NX.card).contentShape(Rectangle())
+                            .padding(.leading, contentW - trail).padding(.top, top)
+                    }
+                    .zIndex(1)
+
+                    FrozenPane(offset: scrollOffset, pin: .top) {
+                        dateRow.padding(.leading, lead)
+                            .frame(width: contentW, height: top, alignment: .topLeading)
+                            .background(NX.card).contentShape(Rectangle())
+                    }
+                    .zIndex(2)
+
+                    FrozenPane(offset: scrollOffset, pin: .corner) {
+                        NX.card.frame(width: lead, height: top).contentShape(Rectangle())
+                    }
+                    .zIndex(3)
+
+                    FrozenPane(offset: scrollOffset, pin: .topRight(contentW)) {
+                        Text(T("Score")).font(.system(size: 8, weight: .semibold)).foregroundStyle(NX.mutedFg)
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                            .frame(width: trail, height: headerH, alignment: .bottomTrailing)
+                            .frame(height: top, alignment: .top)
+                            .background(NX.card).contentShape(Rectangle())
+                            .padding(.leading, contentW - trail)
+                    }
+                    .zIndex(3)
                 }
-                // Score, pinned to the right like the web board: days worked out of working days.
-                Color.clear.frame(width: scoreW)
-                    .overlay(alignment: .topTrailing) { PinnedStrip(offset: scrollOffset, axis: .vertical) { scoreColumn } }
-                    .clipped()
+                .frame(width: contentW, height: contentH, alignment: .topLeading)
+                // The content's origin in the scroll view's own space is minus its content offset;
+                // the frozen panes read it from here. iOS 17 has no `onScrollGeometryChange`, and
+                // this works on both.
+                .background(GeometryReader { g in
+                    Color.clear.preference(key: BoardOffsetKey.self, value: g.frame(in: .named(Self.boardSpace)).origin)
+                })
             }
+            // A crew that fits the height doesn't grab vertical drags from the page.
+            .scrollBounceBehavior(.basedOnSize)
+            .coordinateSpace(.named(Self.boardSpace))
+            .onPreferenceChange(BoardOffsetKey.self) { origin in
+                scrollOffset.x = -origin.x
+                scrollOffset.y = -origin.y
+            }
+            // The visible width, so the Score column can keep to the right edge of it.
+            .background(GeometryReader { g in
+                Color.clear
+                    .onAppear { scrollOffset.viewW = g.size.width }
+                    .onChange(of: g.size.width) { _, w in scrollOffset.viewW = w }
+            })
+            // The grid is rebuilt after every reload (the spinner replaces it), and a new
+            // scroll view starts at the origin while the model still holds the old offset.
+            .onAppear { scrollOffset.x = 0; scrollOffset.y = 0; scrollToToday(proxy) }
+            // Land on today, not on the 28th: the column that matters is the one being filled in.
+            .onChange(of: members.count) { _, _ in scrollToToday(proxy) }
+            .onChange(of: periodDays.count) { _, _ in scrollToToday(proxy) }
         }
         // As tall as the crew, up to ~60% of the visible screen; past that the board scrolls
         // inside itself and the page around it stays put.
@@ -1659,48 +1715,33 @@ struct StreakBoardCard: View {
         }
     }
 
-    // Each row is lazy across the days. A month for a full crew is ~31 days × 40 people ≈ 1,240 cells, and as
-    // plain HStacks every one of them was built and kept alive even though a dozen columns fit on
-    // screen. Each row carries an explicit height — the same height its children already had —
-    // because a lazy stack, unlike a plain one, will stretch to fill its container across its axis,
-    // and that would blow the row spacing out.
+    /// Plain stacks, every row and every day built — see `grid` for why not lazy ones. Nothing in
+    /// here reads the scroll offset, so scrolling never rebuilds a row.
     private var cells: some View {
         let nowKey = ProjDate.fmt("yyyy-MM-dd").string(from: Date())
-        return VStack(alignment: .leading, spacing: 0) {
-            // Scroll targets for `scrollToToday`: zero-height and eager, so every day's id exists
-            // even before its lazy column has been built.
-            HStack(spacing: gap) {
-                ForEach(periodDays) { pd in Color.clear.frame(width: cell, height: 0).id("day-\(pd.key)") }
-            }
-            VStack(alignment: .leading, spacing: gap) {
-                ForEach(members) { m in
-                    LazyHStack(spacing: gap) {
-                        ForEach(periodDays) { pd in
-                            let fill = RoundedRectangle(cornerRadius: 5, style: .continuous).fill((m.cells[pd.key] ?? .none).color).frame(width: cell, height: cell)
-                                .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(pd.key == todayKey ? NX.violet : Color.clear, lineWidth: 1.5))
-                                .overlay(alignment: .leading) {
-                                    if pd.startsMonth { Rectangle().fill(NX.border).frame(width: 1, height: cell).offset(x: -gap / 2) }
-                                }
-                            // Every cell with a record opens it — a manager reviewing their people
-                            // and staff on their own board need the day's detail and its
-                            // location trail too. The BoD also opens id-less and empty days to
-                            // change their status; only the BoD's actions stay gated.
-                            if Self.canOpen(m, pd, canManage: canManage, nowKey: nowKey) {
-                                Button { selectedRow = Self.openableRow(m, pd) } label: { fill }.buttonStyle(.plain)
-                            } else {
-                                fill
+        return VStack(alignment: .leading, spacing: gap) {
+            ForEach(members) { m in
+                HStack(spacing: gap) {
+                    ForEach(periodDays) { pd in
+                        let fill = RoundedRectangle(cornerRadius: 5, style: .continuous).fill((m.cells[pd.key] ?? .none).color).frame(width: cell, height: cell)
+                            .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(pd.key == todayKey ? NX.violet : Color.clear, lineWidth: 1.5))
+                            .overlay(alignment: .leading) {
+                                if pd.startsMonth { Rectangle().fill(NX.border).frame(width: 1, height: cell).offset(x: -gap / 2) }
                             }
+                        // Every cell with a record opens it — a manager reviewing their people
+                        // and staff on their own board need the day's detail and its
+                        // location trail too. The BoD also opens id-less and empty days to
+                        // change their status; only the BoD's actions stay gated.
+                        if Self.canOpen(m, pd, canManage: canManage, nowKey: nowKey) {
+                            Button { selectedRow = Self.openableRow(m, pd) } label: { fill }.buttonStyle(.plain)
+                        } else {
+                            fill
                         }
                     }
-                    .frame(height: cell)
                 }
+                .frame(height: cell)
             }
         }
-        // The grid's origin in the scroll view's own space is minus its content offset; the pinned
-        // strips read it from here. iOS 17 has no `onScrollGeometryChange`, and this works on both.
-        .background(GeometryReader { g in
-            Color.clear.preference(key: BoardOffsetKey.self, value: g.frame(in: .named(Self.boardSpace)).origin)
-        })
     }
 
     /// The whole month at once, pinch-zoomable — the card shows a few days at a time and hides
@@ -1834,32 +1875,51 @@ struct StreakBoardCard: View {
     }
 }
 
-/// The crew board's scroll position. A class (not @State values on the card) so a scroll frame
-/// invalidates only the strips that read it — Observation tracks reads per property.
+/// The crew board's scroll position and visible width. A class (not @State values on the card) so
+/// a scroll frame invalidates only the panes that read it — Observation tracks reads per property.
 @Observable final class BoardScrollOffset {
     var x: CGFloat = 0
     var y: CGFloat = 0
+    var viewW: CGFloat = 0
 }
 
-/// The cell grid's origin in its scroll view's coordinate space (= minus the content offset).
+/// The board content's origin in its scroll view's coordinate space (= minus the content offset).
 private struct BoardOffsetKey: PreferenceKey {
     static let defaultValue: CGPoint = .zero
     static func reduce(value: inout CGPoint, nextValue: () -> CGPoint) { value = nextValue() }
 }
 
-/// A frozen strip of the crew board: its content moves with the grid along one axis only.
-/// It reads just that axis, so scrolling across doesn't re-render the name column and
-/// scrolling down doesn't re-render the date row.
-private struct PinnedStrip<Content: View>: View {
+/// A frozen pane of the crew board. It lives inside the scroll view with everything else and
+/// cancels the scroll along the axes it is pinned on. It reads only those axes, so scrolling
+/// across doesn't re-render the names and scrolling down doesn't re-render the date row.
+private struct FrozenPane<Content: View>: View {
+    enum Pin {
+        case left, top, corner
+        /// Kept to the visible right edge; the value is the content's full width.
+        case right(CGFloat), topRight(CGFloat)
+    }
     let offset: BoardScrollOffset
-    let axis: Axis
+    let pin: Pin
     let content: Content
-    init(offset: BoardScrollOffset, axis: Axis, @ViewBuilder content: () -> Content) {
-        self.offset = offset; self.axis = axis; self.content = content()
+    init(offset: BoardScrollOffset, pin: Pin, @ViewBuilder content: () -> Content) {
+        self.offset = offset; self.pin = pin; self.content = content()
+    }
+    private var dx: CGFloat {
+        switch pin {
+        case .left, .corner: return offset.x
+        // Its home is the content's right end; pulled left to wherever the visible area ends.
+        case .right(let w), .topRight(let w): return offset.viewW > 0 ? min(0, offset.x + offset.viewW - w) : 0
+        case .top: return 0
+        }
+    }
+    private var dy: CGFloat {
+        switch pin {
+        case .top, .corner, .topRight: return offset.y
+        case .left, .right: return 0
+        }
     }
     var body: some View {
-        content.fixedSize()
-            .offset(x: axis == .horizontal ? -offset.x : 0, y: axis == .vertical ? -offset.y : 0)
+        content.offset(x: dx, y: dy)
     }
 }
 
