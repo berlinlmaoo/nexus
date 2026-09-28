@@ -104,12 +104,13 @@ class PushManager(
     }
 
     /** Logout: before the session is gone for good, with that session's own cookie. */
-    fun unregister(old: Session?) {
+    /** Returns the job deleting the device (null when there was nothing to delete), so logout can wait for it. */
+    fun unregister(old: Session?): kotlinx.coroutines.Job? {
         _deliveryActive.value = false
-        val token = prefs.getString("token", null) ?: return
+        val token = prefs.getString("token", null) ?: return null
         prefs.edit().remove("token").apply()
-        if (old == null || !configured) return
-        scope.launch {
+        if (old == null || !configured) return null
+        return scope.launch {
             runCatching {
                 api.send(
                     Request.Builder().url(api.url("/api/push/devices"))

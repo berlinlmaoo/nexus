@@ -1,5 +1,6 @@
 package id.znetworks.nexus.feature.auth
 
+import okhttp3.RequestBody.Companion.toRequestBody
 import id.znetworks.nexus.core.net.ApiClient
 import id.znetworks.nexus.core.session.Session
 import id.znetworks.nexus.core.session.SessionStore
@@ -96,6 +97,12 @@ class AuthRepository(
     suspend fun deleteAccount() {
         api.postJson("/api/user/account/delete", DeleteBody("DELETE"), DeleteBody.serializer(), kotlinx.serialization.json.JsonObject.serializer())
         signOut()
+    }
+
+    /** `POST /api/auth/app-logout` with [old]'s cookie; its 401 never ends anything (asSession). */
+    suspend fun revokeOnServer(old: Session) {
+        api.send(okhttp3.Request.Builder().url(api.url("/api/auth/app-logout")).post(ByteArray(0).toRequestBody(null)).build(),
+            kotlinx.serialization.json.JsonObject.serializer(), asSession = old)
     }
 
     fun signOut() {

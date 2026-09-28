@@ -205,6 +205,12 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 | B13 | **Fixed** (main session, 28 Sep: board showed only people who had checked in on a period's first day). The board now merges `roster` from `GET /api/attendance/history?scope=workspace` with the people in the rows, sorted A–Z as on iOS/web (the viewer is no longer pinned first); roster quota is used when a person has no row yet (history/BoardModel.kt `members`, BoardModelTest `rosterShowsEveryoneEvenWithoutRows`). |
 | B14 | **Fixed** (iOS 91d7e98, crew board freeze panes): (1) a drag over the names, the Score column or the date row now scrolls the board too (outer `scrollable` on the whole grid sharing the day-cell and row scroll states; history/BoardUi.kt `Grid`); (2) **not affected**: rows are a plain Column, never a lazy list inside the two-way scroll, so every row is always drawn. |
 
+## 29 Sep (Berlin, into 0.1.6; iOS f068bbf)
+
+| Change | What exists | Commit |
+|---|---|---|
+| Logout revokes the token on the server | A manual logout (and delete account) sends `POST /api/auth/app-logout` with that session's cookie, fire and forget, after the push device is deleted (it needs the same cookie); the phone signs out at once regardless: offline, a 404 while the route is new, or any error change nothing, and a 401 there never touches the current session (AuthRepositoryTest) | this step |
+
 ## Security + parity audit of build 5 (docs/AUDIT.md 266af90): RILIS LAYAK, 8 RENDAH
 
 R2 (restrict the Firebase key) and R5 (server-side logout) are not the Android session's. No new build

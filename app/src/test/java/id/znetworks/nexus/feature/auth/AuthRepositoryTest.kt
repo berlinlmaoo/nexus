@@ -91,4 +91,21 @@ class AuthRepositoryTest {
         assertNull(store.current)
         assertEquals(listOf("out:u1:true"), events)
     }
+
+    // Berlin 29 Sep (iOS f068bbf): logout revokes the token on the server with the session's own
+    // cookie; the answer (404 while the route is new, 401, offline) never ends or blocks anything.
+    @Test fun appLogoutCarriesTheOldCookieAndItsAnswerIsIgnored() = runTest {
+        val old = Session("oldtok", "c", "u1")
+        server.enqueue(MockResponse.Builder().code(404).body("""{"error":"Not found"}""").build())
+        runCatching { auth.revokeOnServer(old) }
+        val req = server.takeRequest()
+        assertEquals("POST", req.method)
+        assertEquals("/api/auth/app-logout", req.url.encodedPath)
+        assertEquals("c=oldtok", req.headers["Cookie"])
+        server.enqueue(MockResponse.Builder().code(401).body("""{"error":"Unauthorized"}""").build())
+        store.save(Session("newtok", "c", "u2"))
+        runCatching { auth.revokeOnServer(old) }
+        assertEquals("u2", store.current?.userId) // a 401 for the OLD session never signs the current one out
+        assertTrue(events.none { it.startsWith("out:") })
+    }
 }

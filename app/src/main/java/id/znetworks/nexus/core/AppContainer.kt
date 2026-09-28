@@ -151,7 +151,14 @@ class AppContainer(private val context: Context) {
 
             override fun onSignedOut(session: Session?, deliberate: Boolean) {
                 // With the old cookie, before anything else forgets the session (API.md §1.3).
-                push.unregister(session)
+                val pushGone = push.unregister(session)
+                // Logout revokes the token on the server too (Berlin, 29 Sep; iOS f068bbf): fire and forget,
+                // with the session's own cookie, after the push device is gone (it needs that cookie).
+                // Offline, a 404 while the route is new, any error: the phone signs out regardless.
+                if (deliberate && session != null) appScope.launch {
+                    runCatching { pushGone?.join() }
+                    runCatching { auth.revokeOnServer(session) }
+                }
                 if (deliberate) {
                     // Logout: the phone may be handed over. Everything this person left goes.
                     attendanceQueue.clearAll()
