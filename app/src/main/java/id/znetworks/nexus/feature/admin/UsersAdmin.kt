@@ -259,7 +259,10 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
         }
         if (r == null) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return@Column }
         if (m == null || ws == null) { TabEmpty(Icons.Filled.PersonAdd, stringResource(R.string.ad_not_member)); return@Column }
+        // As iOS AdminUserDetailView: attendance settings and the account for BoD/OAA; role, Google,
+        // memberships and the danger zone only on someone below you (One Above All: anyone).
         val canManage = Roles.tier(r.role) >= 3
+        val canEdit = Roles.canEdit(r.role, m.role)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { onOpenProfile(m.userId) }) {
                 Avatar(m.name, m.avatar, 56.dp); Spacer(Modifier.width(12.dp))
@@ -275,7 +278,7 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
                     if (Roles.canEdit(r.role, m.role)) TextButton(onClick = { picking = "role" }) { Text(stringResource(R.string.change)) }
                 }
             }
-            AdminCard(stringResource(R.string.ad_approval)) {
+            if (canManage) AdminCard(stringResource(R.string.ad_approval)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(m.approver?.name ?: stringResource(R.string.ad_no_approver), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
@@ -284,7 +287,7 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
                     if (canManage) TextButton(onClick = { picking = "approver" }) { Text(stringResource(R.string.change)) }
                 }
             }
-            AdminCard(stringResource(R.string.ad_att_mode)) {
+            if (canManage) AdminCard(stringResource(R.string.ad_att_mode)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) { Text("Flexi time", fontSize = 14.sp, color = c.foreground); Text(stringResource(R.string.ad_flexi_sub), fontSize = 11.sp, color = c.mutedFg) }
                     Switch(m.flexiTimeEnabled, { patch("flexiTimeEnabled" to JsonPrimitive(it)) }, enabled = canManage && !busy)
@@ -295,7 +298,7 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
                     Switch(m.noGeofenceMode, { patch("noGeofenceMode" to JsonPrimitive(it)) }, enabled = canManage && !busy)
                 }
             }
-            AdminCard(stringResource(R.string.ad_rest_days)) {
+            if (canManage) AdminCard(stringResource(R.string.ad_rest_days)) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     DayOfWeek.entries.forEach { d ->
                         val on = d.value in m.restDays
@@ -307,7 +310,7 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
                     }
                 }
             }
-            AdminCard(stringResource(R.string.ad_work_hours)) {
+            if (canManage) AdminCard(stringResource(R.string.ad_work_hours)) {
                 val def = if (m.attendanceShiftStartTime != null) "${m.attendanceShiftStartTime}–${m.attendanceShiftEndTime}" else stringResource(R.string.ad_follows_team)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(def, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f))
@@ -318,7 +321,7 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
                         fontSize = 12.sp, color = c.mutedFg)
                 }
             }
-            if (Roles.canEdit(r.role, m.role)) AdminCard(stringResource(R.string.gw_title)) {
+            if (canEdit) AdminCard(stringResource(R.string.gw_title)) {
                 var linking by remember { mutableStateOf(false) }
                 Text(stringResource(R.string.gw_card_sub), fontSize = 11.sp, color = c.mutedFg)
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -328,12 +331,12 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
                 }
                 if (linking) GoogleLinkDialog(m.userId, m.displayName, m.googleWorkspaceEmail, { linking = false }) { tick++ }
             }
-            MembershipEditor(m.userId, m.displayName, ms, canManage, onOpenTeam) { block -> run(block) }
+            MembershipEditor(m.userId, m.displayName, ms, canEdit, onOpenTeam) { block -> run(block) }
             if (canManage) {
                 val profiles = remember { ProfileApi((context.applicationContext as NexusApplication).container.api) }
                 AccountCard(m, onPhoto = { jpeg -> if (jpeg == null) notice = res.getString(R.string.chat_photo_unreadable) else run { profiles.uploadMemberAvatar(m.id, jpeg); notice = res.getString(R.string.ad_photo_changed) } }) { f -> run { api.updateAccount(m.userId, f) } }
             }
-            if (canManage && m.userId != (context.applicationContext as NexusApplication).container.sessionStore.current?.userId) AdminCard(stringResource(R.string.ps_danger)) {
+            if (canEdit && m.userId != (context.applicationContext as NexusApplication).container.sessionStore.current?.userId) AdminCard(stringResource(R.string.ps_danger)) {
                 OutlinedButton(onClick = { confirm = "remove" }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ad_remove_ws), color = c.danger) }
                 if (viewer.isBoD) OutlinedButton(onClick = { confirm = "delete" }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ad_delete_user), color = c.danger) }
             }
