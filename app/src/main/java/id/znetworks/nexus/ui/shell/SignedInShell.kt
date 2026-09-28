@@ -177,23 +177,23 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             Target.Inbox -> { goTab(Tab.INBOX); container.router.consumed(t) }
             Target.Settings -> { goTab(Tab.MORE); container.router.consumed(t) }
             is Target.Tab -> { Tab.entries.firstOrNull { it.route == t.route }?.let(::goTab); container.router.consumed(t) }
-            is Target.Project -> { container.router.consumed(t); nav.navigate("project/${t.id}") }
-            is Target.Task -> { container.router.consumed(t); nav.navigate("task/${t.id}") }
-            is Target.Threads -> { container.router.consumed(t); nav.navigate(t.postId?.let { "threads?post=$it" } ?: "threads") }
-            is Target.Tickets -> { container.router.consumed(t); nav.navigate(t.ticketId?.let { "ticket/$it" } ?: "tickets") }
-            is Target.Form -> { container.router.consumed(t); nav.navigate("form/${android.net.Uri.encode(t.idOrSlug)}") }
-            is Target.Submissions -> { container.router.consumed(t); nav.navigate(t.submissionId?.let { "submission/$it" } ?: "submissions") }
-            is Target.Docs -> { container.router.consumed(t); nav.navigate(t.docId?.let { "doc/$it" } ?: "docs") }
-            is Target.Vault -> { container.router.consumed(t); nav.navigate("vault?folder=${t.folderId.orEmpty()}&trash=") }
-            is Target.VaultShare -> { container.router.consumed(t); nav.navigate("vault-share/${t.slug}") }
-            is Target.Reports -> { container.router.consumed(t); nav.navigate(t.userId?.let { "report/$it/0" } ?: "reports") }
+            is Target.Project -> { container.router.consumed(t); nav.navigate("project/${enc(t.id)}") }
+            is Target.Task -> { container.router.consumed(t); nav.navigate("task/${enc(t.id)}") }
+            is Target.Threads -> { container.router.consumed(t); nav.navigate(t.postId?.let { "threads?post=${enc(it)}" } ?: "threads") }
+            is Target.Tickets -> { container.router.consumed(t); nav.navigate(t.ticketId?.let { "ticket/${enc(it)}" } ?: "tickets") }
+            is Target.Form -> { container.router.consumed(t); nav.navigate("form/${enc(t.idOrSlug)}") }
+            is Target.Submissions -> { container.router.consumed(t); nav.navigate(t.submissionId?.let { "submission/${enc(it)}" } ?: "submissions") }
+            is Target.Docs -> { container.router.consumed(t); nav.navigate(t.docId?.let { "doc/${enc(it)}" } ?: "docs") }
+            is Target.Vault -> { container.router.consumed(t); nav.navigate("vault?folder=${enc(t.folderId.orEmpty())}&trash=") }
+            is Target.VaultShare -> { container.router.consumed(t); nav.navigate("vault-share/${enc(t.slug)}") }
+            is Target.Reports -> { container.router.consumed(t); nav.navigate(t.userId?.let { "report/${enc(it)}/0" } ?: "reports") }
             Target.RoomBooking -> { container.router.consumed(t); nav.navigate("rooms") }
             Target.TeamCalendar -> { container.router.consumed(t); nav.navigate("team-calendar") }
             Target.Admin -> { container.router.consumed(t); nav.navigate("admin") }
             Target.Leaderboard -> { container.router.consumed(t); nav.navigate("leaderboard") }
-            is Target.Profile -> { container.router.consumed(t); nav.navigate("profile/${t.userId}") }
-            is Target.Folder -> { container.router.consumed(t); nav.navigate("folder/${t.id}") }
-            is Target.Chat -> { container.router.consumed(t); nav.navigate(t.conversationId?.let { "chat/$it" } ?: "messages") }
+            is Target.Profile -> { container.router.consumed(t); nav.navigate("profile/${enc(t.userId)}") }
+            is Target.Folder -> { container.router.consumed(t); nav.navigate("folder/${enc(t.id)}") }
+            is Target.Chat -> { container.router.consumed(t); nav.navigate(t.conversationId?.let { "chat/${enc(it)}" } ?: "messages") }
             is Target.Announcement -> { container.router.consumed(t); container.announcements.showOne(t.id) }
             is Target.Web -> { container.router.consumed(t); openWeb(context, t.path) }
             is Target.External -> { container.router.consumed(t); openUrl(context, t.url) }
@@ -362,6 +362,12 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
 object ShellLayout {
     fun useRail(widthDp: Int) = widthDp >= 600
 }
+
+/**
+ * An id from a link or a push, as one route segment (audit R3): decoded "a/b" would otherwise change the
+ * route and crash the navigation. Navigation decodes the argument again for the screen.
+ */
+internal fun enc(id: String): String = android.net.Uri.encode(id)
 
 @Composable
 private fun NotYet(tab: Tab) {

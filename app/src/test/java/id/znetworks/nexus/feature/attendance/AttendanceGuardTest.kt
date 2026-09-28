@@ -133,4 +133,11 @@ class AttendanceGuardTest {
         val shell = sources.entries.first { it.key.name == "SignedInShell.kt" }.value
         assertTrue(shell.contains("container.workdayOpen() &&")) // asked again on every return mid-workday
     }
+
+    @Test fun idsFromLinksAreEncodedInRoutes() {
+        // Audit R3 (build 5): an id with "/" from a link or push must not change the route and crash.
+        val shell = sources.entries.first { it.key.name == "SignedInShell.kt" }.value
+        val block = shell.substringAfter("is Target.Project ->").substringBefore("is Target.Announcement ->")
+        assertEquals(0, Regex("""\$\{t\.[a-zA-Z]+\}|"[a-z-]+/\$it""").findAll(block).count())
+    }
 }
