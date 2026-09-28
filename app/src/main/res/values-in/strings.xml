@@ -1539,4 +1539,12 @@
     <string name="set_appearance_caps">TAMPILAN</string>
     <string name="set_footer">NEXUS by Z Networks</string>
     <string name="mt_vault">Z Vault</string>
+    <string name="sub_empty_title">Belum ada pengajuan</string>
+    <string name="sub_empty_body">Semua yang kamu ajukan lewat form — permintaan, reimbursement, laporan — tampil di papan ini beserta statusnya, jadi tidak perlu tanya sudah sampai mana. Mulai dari sebuah form.</string>
+    <string name="sub_open_forms">Buka form</string>
+    <string name="sub_read_only">Read-only — status diatur tim Finance</string>
+    <string name="sub_col_new">Baru masuk</string>
+    <string name="sub_col_empty">Kosong</string>
+    <string name="sub_submitted_at">Diajukan %1$s</string>
+    <string name="sub_fallback_title">Pengajuan</string>
 </resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds only: a screen gallery with sample data, to screenshot UI on an emulator without signing in. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity android:name=".debug.UiPreviewActivity" android:exported="true" android:theme="@style/Theme.Nexus" />
+    </application>
+</manifest>

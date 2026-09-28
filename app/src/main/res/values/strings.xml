@@ -1545,4 +1545,12 @@
     <string name="set_appearance_caps">APPEARANCE</string>
     <string name="set_footer">NEXUS by Z Networks</string>
     <string name="mt_vault">Z Vault</string>
+    <string name="sub_empty_title">No submissions yet</string>
+    <string name="sub_empty_body">Everything you file through a form — a request, a reimbursement, a report — lands on this board with its status, so you never have to ask where it got to. Start with a form.</string>
+    <string name="sub_open_forms">Open forms</string>
+    <string name="sub_read_only">Read-only — status is set by the Finance team</string>
+    <string name="sub_col_new">New</string>
+    <string name="sub_col_empty">Empty</string>
+    <string name="sub_submitted_at">Submitted %1$s</string>
+    <string name="sub_fallback_title">Submission</string>
 </resources>

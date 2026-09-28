@@ -1,6 +1,20 @@
 package id.znetworks.nexus.feature.forms
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.gestures.snapping.SnapPosition
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Inbox
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -59,40 +73,147 @@ private fun formsApi(): FormsApi {
     return remember { FormsApi(ctx.applicationContext, c.api, c.sessionStore) }
 }
 
-/** What happened to the things I sent through forms: the board column and the "Status" field. */
+/**
+ * My Submissions (Berlin 29 Sep, UI point 4; iOS SubmissionsView, web submissions.tsx): a read-only
+ * kanban of what I sent through forms. Columns are the finance team's "Status" values from the server,
+ * after one of ours for what nobody processed yet; each card shows the item's own title, not the form's.
+ */
 @Composable
-fun SubmissionsScreen(onBack: () -> Unit, onOpen: (String) -> Unit) {
+fun SubmissionsScreen(onBack: () -> Unit, onOpen: (String) -> Unit, onOpenForms: () -> Unit = {}) {
     val api = formsApi()
     val c = Nx.colors
     val res = LocalContext.current.resources
-    var list by remember { mutableStateOf<List<Submission>?>(null) }
+    var data by remember { mutableStateOf<Submissions?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var tick by remember { mutableStateOf(0) }
     LaunchedEffect(tick) {
-        try { list = api.mySubmissions().value.submissions; error = null } catch (e: ApiError) { error = e.describe(res) }
+        try { data = api.mySubmissions().value; error = null } catch (e: ApiError) { error = e.describe(res) }
     }
     Column(Modifier.fillMaxSize().background(c.background)) {
-        Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-            Text(stringResource(R.string.form_my_submissions), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground)
+        Box(Modifier.fillMaxWidth().padding(4.dp), contentAlignment = Alignment.Center) {
+            IconButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
+            Text(stringResource(R.string.mt_submissions), fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = c.foreground)
         }
-        val l = list
+        val d = data
         when {
-            l == null && error == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            l == null -> EmptyState(Icons.Filled.Assignment, stringResource(R.string.form_load_failed), error!!, stringResource(R.string.try_again), { tick++ }, Modifier.fillMaxSize())
-            l.isEmpty() -> TabEmpty(Icons.Filled.Assignment, stringResource(R.string.form_no_submissions))
-            else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(l, key = { it.id }) { s ->
-                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(16.dp))
-                        .clickable { onOpen(s.id) }.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(s.formName ?: s.taskTitle ?: "—", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
-                        Text(listOfNotNull(s.projectName, chatTime(s.createdAt)).joinToString(" · "), fontSize = 12.sp, color = c.mutedFg)
-                        Row { StageChips(s) }
-                    }
+            d == null && error == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            d == null -> EmptyState(Icons.Filled.Assignment, stringResource(R.string.form_load_failed), error!!, stringResource(R.string.try_again), { tick++ }, Modifier.fillMaxSize())
+            d.submissions.isEmpty() -> EmptyState(Icons.Filled.Inbox, stringResource(R.string.sub_empty_title), stringResource(R.string.sub_empty_body),
+                stringResource(R.string.sub_open_forms), onOpenForms, Modifier.fillMaxSize())
+            else -> SubmissionBoardView(d, onOpen)
+        }
+    }
+}
+
+/** The board itself: the read-only chip, then the columns side by side. */
+@Composable
+internal fun SubmissionBoardView(d: Submissions, onOpen: (String) -> Unit) {
+    val c = Nx.colors
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.padding(start = 16.dp, top = 8.dp).background(c.muted.copy(alpha = 0.5f), CircleShape).padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Lock, null, tint = c.mutedFg, modifier = Modifier.size(11.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(R.string.sub_read_only), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg)
+        }
+        val newCol = stringResource(R.string.sub_col_new)
+        val columns = SubmissionBoard.columns(d, newCol)
+        val state = rememberLazyListState()
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            // One column plus a hint of the next on any width (iOS: min(320, 82%)).
+            val colWidth = minOf(320.dp, maxWidth * 0.82f)
+            LazyRow(state = state, contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp),
+                flingBehavior = rememberSnapFlingBehavior(state, SnapPosition.Start), modifier = Modifier.fillMaxSize()) {
+                items(columns, key = { it.first }) { (name, items) -> BoardColumn(name, items, colWidth, onOpen) }
+            }
+        }
+    }
+}
+
+/** Grouping for the board: kept pure so it is tested on the JVM. */
+object SubmissionBoard {
+    /**
+     * Ours first (no status yet), then the server's columns in order; a status the server did not list
+     * still gets a column, after them, so nothing sent ever disappears from the board.
+     */
+    fun columns(d: Submissions, newName: String): List<Pair<String, List<Submission>>> {
+        fun key(s: Submission) = s.procStatus?.trim()?.takeIf { it.isNotEmpty() }
+        val names = d.statusColumns.filter { it.isNotBlank() }.distinct()
+        val extra = d.submissions.mapNotNull(::key).distinct().filter { it !in names }
+        return listOf(newName to d.submissions.filter { key(it) == null }) + (names + extra).map { n -> n to d.submissions.filter { key(it) == n } }
+    }
+
+    /** Column tint, as iOS subColTone: done/approved green, in progress blue, rejected red, else grey. */
+    enum class Tone { SUCCESS, BLUE, DANGER, MUTED }
+    fun tone(name: String): Tone {
+        val n = name.lowercase()
+        return when {
+            listOf("done", "selesai", "approve", "setuju", "paid").any { it in n } -> Tone.SUCCESS
+            "progress" in n || "proses" in n -> Tone.BLUE
+            listOf("tolak", "reject", "batal").any { it in n } -> Tone.DANGER
+            else -> Tone.MUTED
+        }
+    }
+}
+
+@Composable
+private fun BoardColumn(name: String, items: List<Submission>, width: androidx.compose.ui.unit.Dp, onOpen: (String) -> Unit) {
+    val c = Nx.colors
+    val tone = when (SubmissionBoard.tone(name)) {
+        SubmissionBoard.Tone.SUCCESS -> c.success; SubmissionBoard.Tone.BLUE -> c.blue
+        SubmissionBoard.Tone.DANGER -> c.danger; SubmissionBoard.Tone.MUTED -> c.mutedFg
+    }
+    val shape = RoundedCornerShape(18.dp)
+    Column(Modifier.width(width).fillMaxHeight().clip(shape).background(tone.copy(alpha = 0.08f)).border(1.dp, tone.copy(alpha = 0.3f), shape)) {
+        Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(name, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = c.foreground, maxLines = 1,
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text("${items.size}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg,
+                modifier = Modifier.background(c.card, CircleShape).padding(horizontal = 8.dp, vertical = 2.dp))
+        }
+        // Each column scrolls on its own: swipe sideways between columns, down inside one (iOS).
+        LazyColumn(contentPadding = PaddingValues(start = 8.dp, end = 8.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(items, key = { it.id }) { s -> BoardCard(s) { onOpen(s.id) } }
+            if (items.isEmpty()) item {
+                Box(Modifier.fillMaxWidth().dashedBorder(c.border).padding(vertical = 18.dp), contentAlignment = Alignment.Center) {
+                    Text(stringResource(R.string.sub_col_empty), fontSize = 11.sp, color = c.mutedFg.copy(alpha = 0.7f))
                 }
             }
         }
     }
+}
+
+@Composable
+private fun BoardCard(s: Submission, onClick: () -> Unit) {
+    val c = Nx.colors
+    val shape = RoundedCornerShape(12.dp)
+    Row(Modifier.fillMaxWidth().clip(shape).background(c.card).border(1.dp, c.border, shape).clickable(onClick = onClick).padding(10.dp),
+        verticalAlignment = Alignment.Top) {
+        Box(Modifier.size(28.dp).background(c.violet.copy(alpha = 0.12f), RoundedCornerShape(9.dp)), contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.Description, null, tint = c.violetText, modifier = Modifier.size(15.dp))
+        }
+        Spacer(Modifier.width(8.dp))
+        Column(Modifier.weight(1f)) {
+            Text(s.taskTitle ?: s.formName ?: stringResource(R.string.sub_fallback_title), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = c.foreground,
+                maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(listOfNotNull(s.formName, s.projectName).joinToString(" · "), fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(stringResource(R.string.sub_submitted_at, submittedText(s.createdAt)), fontSize = 10.sp, color = c.mutedFg.copy(alpha = 0.8f))
+        }
+        Spacer(Modifier.width(4.dp))
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+    }
+}
+
+/** "20 Sep, 19:14" in office time. */
+private fun submittedText(iso: String?): String = iso?.let {
+    runCatching { java.time.format.DateTimeFormatter.ofPattern("d MMM, HH:mm", java.util.Locale.getDefault())
+        .format(java.time.Instant.parse(it).atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE)) }.getOrNull()
+}.orEmpty()
+
+private fun Modifier.dashedBorder(color: androidx.compose.ui.graphics.Color) = drawBehind {
+    drawRoundRect(color, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx(),
+        pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 5.dp.toPx()))),
+        cornerRadius = androidx.compose.ui.geometry.CornerRadius(12.dp.toPx()))
 }
 
 @Composable

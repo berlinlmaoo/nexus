@@ -316,7 +316,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable("tickets") { TicketsScreen(onBack = { nav.popBackStack() }, onOpenTicket = { nav.navigate("ticket/$it") }) }
             composable("ticket/{id}") { TicketDetailScreen(onBack = { nav.popBackStack() }) }
             composable("form/{id}") { FormFillScreen(onBack = { nav.popBackStack() }, onOpenSubmissions = { nav.navigate("submissions") }) }
-            composable("submissions") { SubmissionsScreen(onBack = { nav.popBackStack() }, onOpen = { nav.navigate("submission/$it") }) }
+            composable("submissions") { SubmissionsScreen(onBack = { nav.popBackStack() }, onOpen = { nav.navigate("submission/${enc(it)}") }, onOpenForms = { nav.navigate("forms") }) }
             composable("submission/{id}") { e ->
                 val scope = androidx.compose.runtime.rememberCoroutineScope()
                 SubmissionDetailScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") },
@@ -454,7 +454,7 @@ private fun NotYet(tab: Tab) {
  * (language, appearance, offline, update, delete account) live in Tuning Room, as on iOS.
  */
 @Composable
-private fun MoreScreen(session: Session, onLogout: () -> Unit, open: (String) -> Unit, onOpenWhatsNew: () -> Unit) {
+internal fun MoreScreen(session: Session, onLogout: () -> Unit, open: (String) -> Unit, onOpenWhatsNew: () -> Unit) {
     val c = Nx.colors
     val container = (LocalContext.current.applicationContext as NexusApplication).container
     // Company only (iOS 14b086f): hidden until known, and outside Z Networks.
