@@ -95,11 +95,18 @@ export type AttendanceSheetGrid = {
 export type SheetPerson = { id: string; name: string; dayOffQuota?: number }
 export type SheetDay = { dateKey: string; dayType: AttendanceDayType }
 
-/** "2026-09" → "2026-09 (28 Aug–27 Sep)". English month abbreviations fixed here: ICU's en-GB now says "Sept". */
+const MONTHS_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+
+/**
+ * "2026-09" → "2026-September (28 Aug–27 Sep)" (owner, 28 Sep 2026: the month by name, not number).
+ * English month names fixed here: ICU's en-GB now says "Sept". Tabs are found by sheetId, so renaming
+ * is safe — the next write of a tab updates its title in place.
+ */
 export function attendanceSheetTabTitle(periodKey: string) {
   const { start, end } = attendancePeriodRange(periodKey)
   const d = (x: Date) => `${x.getUTCDate()} ${MONTHS[x.getUTCMonth()]}`
-  return `${periodKey} (${d(start)}–${d(end)})`
+  const [y, m] = periodKey.split("-").map(Number)
+  return `${y}-${MONTHS_FULL[m - 1]} (${d(start)}–${d(end)})`
 }
 
 export function attendanceSheetId(periodKey: string) {
