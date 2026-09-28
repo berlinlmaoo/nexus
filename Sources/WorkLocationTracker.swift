@@ -9,9 +9,15 @@ import UIKit
 // has accepted and the check-out. Inside the office, one "presence" check about once an hour
 // (owner, 25 Sep 2026) and no continuous GPS: region monitoring watches the door, and a coarse
 // cell/Wi-Fi-level stream keeps the app alive between checks without the blue location pill.
-// Outside, a point about every 15 minutes, plus one on leaving and one on coming back. The server
+// Outside (owner, 28 Sep 2026), the route itself: GPS-grade fixes, a point per 50 m moved and a
+// heartbeat every 5 minutes standing still, uploaded in batches about every 2 minutes, plus a point on
+// leaving and on coming back sent at once. Leaving is announced on the phone right away and again an
+// hour in, with the time left (local notifications, NotificationManager.outsideAlert). The server
 // turns "outside for 1h30 / 2h" into pushes and at 2h30 checks the person out offsite; managers and
 // the BoD see the path and the hourly checks (LocationTrailView).
+//
+// The battery cost is deliberate and bounded: GPS runs continuously only while outside, and an
+// outside episode ends at the latest with the automatic check-out 2h30 in. Inside, nothing changes.
 //
 // Why a stream, and what it costs. A suspended app runs no timer, and iOS offers no "wake me every
 // hour" for location: region monitoring only fires on a crossing, significant-change and visit
@@ -185,11 +191,19 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
         publishOutside()
     }
 
-    /// Hands the Live Activity the outside-the-office state. Called on every fix, tick, reply and
-    /// attendance refresh — `LiveActivityController.updateOutside` only spends an update when what
-    /// it would draw changes (a new stage, a new start), and the countdown itself is the system's.
+    /// Hands the Live Activity the outside-the-office state, and keeps the phone's own outside
+    /// alerts in step with it. Called on every fix, tick, reply and attendance refresh —
+    /// `LiveActivityController.updateOutside` only spends an update when what it would draw changes
+    /// (a new stage, a new start), the countdown itself is the system's, and `planOutsideAlerts`
+    /// only answers with a change.
     private func publishOutside() {
-        LiveActivityController.updateOutside(machine.outsideStatus(now: Date()))
+        let now = Date()
+        LiveActivityController.updateOutside(machine.outsideStatus(now: now))
+        let alerts = machine.planOutsideAlerts(now: now)
+        guard !alerts.isEmpty else { return }
+        persist()
+        let recordId = machine.state.recordId
+        for alert in alerts { NotificationManager.shared.outsideAlert(alert, recordId: recordId, now: now) }
     }
 
     /// Fetches today and feeds it through AttendancePresence, which calls `sync`. Used when the app
@@ -390,7 +404,8 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
         } else if want.keepAlive && status == .authorizedAlways {
             target = .keepAlive(precise: want.precise)
         } else if status == .authorizedWhenInUse && UIApplication.shared.applicationState == .active {
-            target = .foreground(precise: want.precise)
+            // Outside, the open app records the route too, and a route needs fixes good to 65 m.
+            target = .foreground(precise: want.precise || want.continuous)
         } else {
             target = .off
         }
@@ -399,12 +414,17 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
         case .background:
             // Outside only. Background-capable with the blue pill showing, so the person can
             // always see that NEXUS is using location — and only while they are outside.
+            // The route (owner, 28 Sep 2026): GPS-grade accuracy so the line follows the streets, a
+            // fix per 50 m (the machine keeps those good to 65 m, and repeats the last one every
+            // 5 minutes standing still), never paused by iOS. `.otherNavigation`: on foot, by
+            // motorbike or by car — not `.automotiveNavigation`, which would snap fixes to roads
+            // and pause off them.
             m.allowsBackgroundLocationUpdates = true
             m.pausesLocationUpdatesAutomatically = false
             m.showsBackgroundLocationIndicator = true
-            m.desiredAccuracy = kCLLocationAccuracyHundredMeters
-            m.distanceFilter = 50
-            m.activityType = .other
+            m.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
+            m.distanceFilter = WorkTrailMachine.trailSpacing
+            m.activityType = .otherNavigation
             m.startUpdatingLocation()
             // The safety net if iOS kills the app while outside: a significant move relaunches it,
             // and `bootstrap` resumes from disk. (After a force-quit iOS relaunches nothing until
@@ -447,6 +467,9 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
     }
 
     private func disarm() {
+        // Every way tracking ends (check-out, logout, `tracking:false`, the automatic check-out, the
+        // shift cap) comes through here: the outside alerts go with it, pending and shown.
+        NotificationManager.shared.cancelOutsideAlerts()
         guard let m = manager else { return }
         for region in m.monitoredRegions where region.identifier == Self.regionId { m.stopMonitoring(for: region) }
         m.stopUpdatingLocation()
@@ -481,9 +504,9 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
     private func startTicker() {
         guard ticker == nil else { return }
         // Fires while the app runs — which, with Always, is the whole shift: continuous updates
-        // outside and the keep-alive stream inside keep it running. It drives the 15-minute
-        // heartbeat outside and the hourly presence check inside. With While Using it runs only
-        // while the app is open, and so do the checks.
+        // outside and the keep-alive stream inside keep it running. It drives the 5-minute
+        // heartbeat and the ~2-minute batched upload outside, and the hourly presence check inside.
+        // With While Using it runs only while the app is open, and so do the checks.
         let t = Timer(timeInterval: 60, repeats: true) { _ in
             MainActor.assumeIsolated { WorkLocationTracker.shared.tick() }
         }
@@ -707,7 +730,7 @@ struct WorkLocationPromptSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
             Text(mode == .settings
                  ? T("To do that while the app is closed, open Settings › NEXUS › Location and choose Always.")
-                 : T("On the next screen, choose \"Change to Always Allow\". At the office, one check about every hour; outside it, one point about every 15 minutes."))
+                 : T("On the next screen, choose \"Change to Always Allow\". At the office, one check about every hour; outside it, your route while you're out of the office."))
                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)

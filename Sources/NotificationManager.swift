@@ -227,6 +227,98 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         try? await center.add(UNNotificationRequest(identifier: "nexus.queue-refused.\(UUID().uuidString)", content: content, trigger: nil))
     }
 
+    // MARK: outside-the-office alerts (local)
+    //
+    // Scheduled by the phone for itself the moment it leaves the office (WorkTrailMachine.planOutsideAlerts,
+    // owner 28 Sep 2026): one at once, one an hour in, each with the time left before the automatic
+    // check-out. NOT a fallback for push like the reminders above — the server sends nothing at those
+    // two moments (its pushes are at 1h30 and 2h), so these run whether push works or not.
+    // Identifiers are fixed per record and per alert: planning again replaces, never adds.
+
+    private let outsidePrefix = "nexus.outside-alert."
+    /// The record the outside alerts were last scheduled for, so a stop — after which the tracker no
+    /// longer knows the record — can still remove exactly those two identifiers, synchronously (a
+    /// list-then-remove would be asynchronous, and could remove an alert scheduled right after it).
+    private let outsideRecordKey = "nexus.outside-alert.record"
+
+    private func outsideIds(_ recordId: String) -> [String] {
+        ["\(outsidePrefix)\(recordId).left", "\(outsidePrefix)\(recordId).hour"]
+    }
+
+    func outsideAlert(_ alert: WorkOutsideAlert, recordId: String?, now: Date) {
+        switch alert {
+        case .cancelAll:
+            cancelOutsideAlerts()
+        case .cancelHour:
+            guard let recordId else { return }
+            center.removePendingNotificationRequests(withIdentifiers: [outsideIds(recordId)[1]])
+        case let .left(fireAt, since, autoAt):
+            guard let recordId else { return }
+            let left = WorkTrailMachine.minutesLeft(from: max(fireAt, now), to: autoAt)
+            scheduleOutside(
+                id: outsideIds(recordId)[0], recordId: recordId, fireAt: fireAt, now: now,
+                title: T("Outside the office"),
+                body: String(format: T("Outside the office since %@ · %@ left before the automatic check-out (%@)"),
+                             outsideClock(since), outsideDuration(left), outsideClock(autoAt)))
+        case let .hour(fireAt, _, autoAt):
+            guard let recordId else { return }
+            let left = WorkTrailMachine.minutesLeft(from: fireAt, to: autoAt)
+            scheduleOutside(
+                id: outsideIds(recordId)[1], recordId: recordId, fireAt: fireAt, now: now,
+                title: T("Still outside the office"),
+                body: String(format: T("1 hour outside the office · %@ left · automatic check-out %@"),
+                             outsideDuration(left), outsideClock(autoAt)))
+        }
+    }
+
+    /// Back inside, an excuse on file, check-out, automatic check-out, logout: both alerts go, the
+    /// pending one and any still shown in Notification Center (it would quote a clock that stopped).
+    func cancelOutsideAlerts() {
+        guard let recordId = UserDefaults.standard.string(forKey: outsideRecordKey) else { return }
+        let ids = outsideIds(recordId)
+        center.removePendingNotificationRequests(withIdentifiers: ids)
+        center.removeDeliveredNotifications(withIdentifiers: ids)
+        UserDefaults.standard.removeObject(forKey: outsideRecordKey)
+    }
+
+    private func scheduleOutside(id: String, recordId: String, fireAt: Date, now: Date, title: String, body: String) {
+        // Another record's alerts (yesterday's, never cancelled because the app was not running)
+        // must not stay behind: only one record is ever tracked.
+        if let previous = UserDefaults.standard.string(forKey: outsideRecordKey), previous != recordId { cancelOutsideAlerts() }
+        UserDefaults.standard.set(recordId, forKey: outsideRecordKey)
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        // Same category as the server's 1h30 / 2h pushes: "File a permit" on the notification.
+        content.categoryIdentifier = Self.outsideOfficeCategory
+        content.threadIdentifier = "nexus.outside-office"
+        content.userInfo = ["type": "attendance_outside_local", "link": "/attendance", "recordId": recordId]
+        // Relative to the clock start, not a calendar date: the phone's clock and time zone do not
+        // matter, and a start already past (the "left" alert) fires in a second.
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, fireAt.timeIntervalSince(now)), repeats: false)
+        center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger)) { _ in }
+    }
+
+    /// "23:29" — office time, as the Live Activity and the server's pushes quote it.
+    private func outsideClock(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "Asia/Jakarta")
+        return f.string(from: d)
+    }
+
+    /// 150 → "2 jam 30 menit" / "2 h 30 min"; 60 → "1 jam" / "1 h"; 30 → "30 menit" / "30 min".
+    private func outsideDuration(_ minutes: Int) -> String {
+        let id = AppLanguage.shared.lang == .id
+        let h = minutes / 60, m = minutes % 60
+        let hours = id ? "\(h) jam" : "\(h) h"
+        let mins = id ? "\(m) menit" : "\(m) min"
+        if h == 0 { return mins }
+        return m == 0 ? hours : "\(hours) \(mins)"
+    }
+
     private func addNotification(id: String, title: String, body: String, date: Date, userInfo: [String: String]) async {
         let content = UNMutableNotificationContent()
         content.title = title
@@ -274,7 +366,8 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     nonisolated static let outsideOfficeCategory = "NEXUS_OUTSIDE_OFFICE"
     nonisolated static let filePermitAction = "FILE_PERMIT"
 
-    /// The 1h30 reminder and the 2h warning arrive with `aps.category = NEXUS_OUTSIDE_OFFICE`. The
+    /// The 1h30 reminder and the 2h warning arrive with `aps.category = NEXUS_OUTSIDE_OFFICE`, and the
+    /// phone's own alerts on leaving and an hour in carry it too (`outsideAlert`). The
     /// action opens the app (`.foreground`): a permit needs a photo and the person's location,
     /// neither of which can be supplied from the notification itself.
     func registerCategories() {

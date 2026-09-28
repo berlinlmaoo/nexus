@@ -188,7 +188,7 @@ struct LocationTrailView: View {
         }
     }
 
-    /// Only the moments that mean something: leaving and coming back. The 15-minute points are the
+    /// Only the moments that mean something: leaving and coming back. The route points are the
     /// line itself and would bury the map in pins.
     private var markers: [LocationTrailResponse.Point] {
         points.filter { $0.event == "exit" || $0.event == "enter" }

@@ -1544,10 +1544,14 @@ final class AppLanguage {
         "Yesterday": "Kemarin",
         // Live location while checked in (0.1.6)
         "File a permit": "Ajukan izin",
+        // The phone's own outside-the-office alerts (NotificationManager.outsideAlert).
+        "Still outside the office": "Masih di luar kantor",
+        "Outside the office since %@ · %@ left before the automatic check-out (%@)": "Kamu di luar kantor sejak %@ · sisa %@ sebelum check-out otomatis (%@)",
+        "1 hour outside the office · %@ left · automatic check-out %@": "Sudah 1 jam di luar kantor · sisa %@ · check-out otomatis %@",
         "Location during work hours": "Lokasi selama jam kerja",
         "NEXUS checks your location only during work hours, from check-in to check-out: about once an hour at the office, and your route when you leave it, so your manager can see where you worked. Before check-in and after check-out nothing is recorded.": "NEXUS mengecek lokasimu hanya selama jam kerja, dari check-in sampai check-out: kira-kira sejam sekali di kantor, dan rutemu saat kamu keluar kantor, supaya manager bisa lihat kamu kerja di mana. Sebelum check-in dan sesudah check-out tidak ada yang dicatat.",
         "To do that while the app is closed, open Settings › NEXUS › Location and choose Always.": "Supaya tetap tercatat saat aplikasi ditutup, buka Pengaturan › NEXUS › Lokasi lalu pilih Selalu.",
-        "On the next screen, choose \"Change to Always Allow\". At the office, one check about every hour; outside it, one point about every 15 minutes.": "Di layar berikutnya, pilih \"Ubah ke Selalu Izinkan\". Di kantor, satu kali cek kira-kira tiap jam; di luar kantor, satu titik kira-kira tiap 15 menit.",
+        "On the next screen, choose \"Change to Always Allow\". At the office, one check about every hour; outside it, your route while you're out of the office.": "Di layar berikutnya, pilih \"Ubah ke Selalu Izinkan\". Di kantor, satu kali cek kira-kira tiap jam; di luar kantor, rutemu selama kamu di luar kantor.",
         "Out-of-office activity: ": "Kegiatan di luar kantor: ",
         "Location off": "Lokasi mati",
         "View location trail": "Lihat jalur lokasi",

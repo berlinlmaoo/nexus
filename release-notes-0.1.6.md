@@ -8,9 +8,10 @@ LOKASI IKUT TERCATAT. CUMA SELAMA JAM KERJA.
 
 Dari check-in sampai check-out, NEXUS cek posisimu kira-kira sejam sekali.
 Seharian di kantor? Sekarang ada buktinya.
-Keluar area kantor, rutemu ikut tercatat.
+Keluar area kantor, rutemu ikut tercatat selama kamu di luar.
 Sebelum check-in dan sesudah check-out, tidak ada yang dicatat.
-Kelamaan di luar? Kamu diingatkan duluan, tombol Ajukan izin sudah siap.
+Begitu keluar, kamu langsung dikabari sisa waktunya sebelum check-out otomatis.
+Kelamaan di luar? Kamu diingatkan lagi, tombol Ajukan izin sudah siap.
 Lewat 2 jam 30 menit tanpa izin, kamu otomatis check-out offsite.
 
 IZIN DARI HP, SEKARANG LENGKAP BUKTINYA.

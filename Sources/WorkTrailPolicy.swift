@@ -12,8 +12,14 @@ import Foundation
 //     day shows that the person stayed, not only when they left. No continuous GPS: between checks
 //     only a coarse, cell/Wi-Fi-level stream runs, whose job is to keep the app alive for the next
 //     check; the check itself raises the accuracy for one fix and drops it again;
-//   • while outside, one point about every 15 minutes, plus one immediately on leaving and on
-//     coming back (no presence checks: the 15-minute points already say where the phone is);
+//   • while outside (owner, 28 Sep 2026), the route itself: a point every time the phone has moved
+//     50 m from the last one (never more often than every 10 s, so a car does not send one every
+//     few seconds), and a heartbeat every 5 minutes while it stands still — only from fixes good to
+//     65 m. Plus one immediately on leaving and on coming back. Uploads are batched, at most about
+//     every 2 minutes, except the exit and the enter, which go at once. No presence checks outside:
+//     the route already says where the phone is;
+//   • leaving is announced on the phone itself at once, and again an hour in, each with the time
+//     left before the automatic check-out (planOutsideAlerts); the server's 1h30 / 2h pushes follow;
 //   • the server has the last word: `tracking:false` stops everything.
 
 /// The office circle a check-in was made against.
@@ -54,8 +60,8 @@ struct WorkTrailState: Codable, Equatable {
     var fence: WorkTrailFence?
     var zone: WorkTrailZone = .unknown
     var outsideSince: Date?
-    /// When the last point was QUEUED (not sent). The 15-minute rhythm is about how often a
-    /// position is recorded; a slow network must not make the phone record more of them.
+    /// When the last point was QUEUED (not sent). The route's rhythm is about how often a position
+    /// is recorded; a slow network must not make the phone record more of them.
     var lastQueuedAt: Date?
     /// The server's own "I want the next point by then", e.g. right before the 1h30 reminder.
     var serverNextAt: Date?
@@ -92,6 +98,18 @@ struct WorkTrailState: Codable, Equatable {
     var serverOutsideSinceAt: Date?
     /// When `stage` and `serverNextAt` were last written by a trail reply.
     var serverStageAt: Date?
+    // The precise route outside (28 Sep 2026). Optional for the same reason as the fields above.
+    /// The last fix good enough for the route (≤ trailAccuracy). The standing-still heartbeat repeats it.
+    var lastGood: WorkTrailPoint?
+    /// The last point queued, for the "moved 50 m since" test (`pending` empties on every upload).
+    var lastQueued: WorkTrailPoint?
+    /// When a batch last went through. Route points wait for `uploadInterval` after it.
+    var lastUploadAt: Date?
+    // The phone's own outside alerts (planOutsideAlerts): what is scheduled with iOS right now.
+    /// Clock start of the episode the alerts were planned for; nil = none planned.
+    var alertFrom: Date?
+    var alertHourAt: Date?
+    var alertAutoAt: Date?
 
     var isActive: Bool { recordId != nil }
 }
@@ -100,7 +118,7 @@ struct WorkTrailState: Codable, Equatable {
 enum WorkTrailEffect: Equatable {
     /// Start region monitoring on this circle and ask for its current state.
     case armRegion(WorkTrailFence)
-    /// Continuous updates (outside only): background-capable, 100 m accuracy, ~50 m filter.
+    /// Continuous updates (outside only): background-capable, ~10 m accuracy, 50 m filter.
     case startContinuous
     case stopContinuous
     /// The precise window opened or closed: CoreLocation's accuracy should follow `setup.precise`.
@@ -122,20 +140,35 @@ struct WorkTrailReply: Equatable {
 }
 
 struct WorkTrailMachine {
-    /// The owner's rhythm while outside.
-    static let sendInterval: TimeInterval = 15 * 60
+    /// Outside, standing still: at a 50 m distance filter no fix arrives, so the last good one is
+    /// repeated this often — the server's "phone went quiet" is 30 minutes.
+    static let heartbeatInterval: TimeInterval = 5 * 60
+    /// Outside, moving: a point once the phone is this far from the last one queued.
+    static let trailSpacing: Double = 50
+    /// Outside, moving fast: never two moved-points closer together in time than this. Walking and
+    /// cycling never hit it (50 m takes them over 10 s); a car at 60 km/h gets one point per ~170 m
+    /// instead of one every 3 s — a few hundred points an hour at most, which is what the trail
+    /// screens and the upload are sized for.
+    static let minPointGap: TimeInterval = 10
+    /// Only a fix at least this good goes into the route (horizontalAccuracy, metres).
+    static let trailAccuracy: Double = 65
+    /// Route points are uploaded in batches, at most about this often. Exit / enter (and the first
+    /// point after a relaunch) go at once, and a full batch goes at once.
+    static let uploadInterval: TimeInterval = 120
     /// No shift is this long. A record nobody checked out of must not keep a phone's GPS armed
     /// overnight; after this the tracker stands down on its own (the server's cron closes the day).
     static let maxShift: TimeInterval = 16 * 3600
     /// The contract's per-request ceiling.
     static let batchLimit = 200
-    /// At 4 points an hour this is days of offline; beyond it the oldest go first, because a
-    /// phone that has been offline for days is not going to be helped by its oldest positions.
-    static let pendingCap = 1000
+    /// Hours of offline even at a car's rate (~360 an hour), a whole day of standing still or walking;
+    /// beyond it the oldest go first, because a phone that has been offline that long is not going
+    /// to be helped by its oldest positions. (The queue is written to disk on every change: 3000
+    /// points is well under a megabyte.)
+    static let pendingCap = 3000
     /// A fix older than this is not "where they are now" for an exit/enter.
     static let freshFix: TimeInterval = 120
-    /// A failed upload waits this long before the tick tries again. Event-driven flushes (a new
-    /// point) are not held back by it: a new point is exactly when retrying makes sense.
+    /// A failed upload waits this long before the tick (or a new route point) tries again. An exit,
+    /// an enter or a presence check is not held back by it: it goes at once.
     static let retryAfter: TimeInterval = 120
     /// A fix worse than this cannot decide inside vs outside for a ~100 m office circle.
     static let decisiveAccuracy: Double = 100
@@ -155,7 +188,7 @@ struct WorkTrailMachine {
 
     var state: WorkTrailState
     /// Set by `resume` when the app comes back from not running while outside: the first fresh
-    /// fix after that goes to the server at once, whatever the 15-minute rhythm says. Deliberately
+    /// fix after that goes to the server at once, whatever the route's rhythm says. Deliberately
     /// NOT part of the persisted state — it describes this process, not the shift, and a stale
     /// `true` on disk must never make a later launch send a point it has no reason to send.
     var sendNextFix = false
@@ -219,6 +252,13 @@ struct WorkTrailMachine {
             state.serverOutsideSince = nil
             state.serverOutsideSinceAt = nil
             state.serverStageAt = nil
+            state.lastGood = nil
+            state.lastQueued = nil
+            // The alerts of an earlier record are cancelled by the tracker (it cancels on every
+            // stop, and a new record is always preceded by the old one's check-out or a new day).
+            state.alertFrom = nil
+            state.alertHourAt = nil
+            state.alertAutoAt = nil
         }
         return [.armRegion(fence)]
     }
@@ -249,12 +289,13 @@ struct WorkTrailMachine {
     ///   • one new fix is asked for, which also settles a zone that went stale while nobody looked
     ///     (a region can report "inside" long after a fix saw the phone leave);
     ///   • while outside, that first fresh fix is sent at once, so the server's record of the
-    ///     trail resumes the moment the app does rather than up to 15 minutes later.
+    ///     trail resumes the moment the app does rather than at the next heartbeat.
     ///   • inside, the fix comes through the precise window (the keep-alive stream is coarse), and a
     ///     presence check that fell due while the app was not running is taken with it.
     mutating func resume(now: Date) -> [WorkTrailEffect] {
         guard state.isActive else { return [] }
         if let p = state.latest, now.timeIntervalSince(p.at) > Self.freshFix { state.latest = nil }
+        if let p = state.lastGood, now.timeIntervalSince(p.at) > Self.freshFix { state.lastGood = nil }
         sendNextFix = state.zone == .outside
         // A window left open by the process that died is not this one's: it starts again from now.
         state.preciseSince = nil
@@ -312,6 +353,7 @@ struct WorkTrailMachine {
         p.recordId = recordId
         p.event = .point
         state.latest = p
+        if Self.routeQuality(p) { state.lastGood = p }
         if let since = state.preciseSince, p.at >= since, Self.better(p, than: state.preciseBest) { state.preciseBest = p }
 
         // The fix itself may settle the zone faster than the region does: iOS reports a region
@@ -327,13 +369,43 @@ struct WorkTrailMachine {
             enqueue(p, now: now)
             return [.flush] + (state.zone == .outside ? [] : endPrecise(ifSatisfiedBy: p))
         }
+        guard state.zone == .outside else { return presence(p, now: now) }
+        // Outside: the route. A vague fix (> trailAccuracy) is not drawn — it would zig-zag the line.
+        guard Self.routeQuality(p) else { return [] }
         // Right after a resume the first fresh fix goes out without waiting for the rhythm.
-        if state.zone == .outside && (isDue(now) || sendNextFix) {
+        if sendNextFix {
             sendNextFix = false
             enqueue(p, now: now)
             return [.flush]
         }
-        return state.zone == .outside ? [] : presence(p, now: now)
+        guard isRoutePointDue(p, now: now) else { return [] }
+        enqueue(p, now: now)
+        return uploadIfDue(now)
+    }
+
+    /// Outside: does this (good) fix become a route point? Moved `trailSpacing` from the last point
+    /// (and not within `minPointGap` of it), or `heartbeatInterval` since it, or the server asked.
+    func isRoutePointDue(_ p: WorkTrailPoint, now: Date) -> Bool {
+        guard let lastAt = state.lastQueuedAt else { return true }
+        let since = now.timeIntervalSince(lastAt)
+        if since >= Self.heartbeatInterval { return true }
+        if let asked = state.serverNextAt, asked > lastAt, now >= asked { return true }
+        guard since >= Self.minPointGap else { return false }
+        guard let q = state.lastQueued else { return true }
+        return Self.distance(p.lat, p.lng, q.lat, q.lng) >= Self.trailSpacing
+    }
+
+    /// A route point was queued: upload now only if the last upload is `uploadInterval` old (or the
+    /// batch is full), and not straight after a failure. Otherwise the tick sends it with the next ones.
+    func uploadIfDue(_ now: Date) -> [WorkTrailEffect] {
+        if state.pending.count >= Self.batchLimit { return [.flush] }
+        return uploadAllowed(now) ? [.flush] : []
+    }
+
+    private func uploadAllowed(_ now: Date) -> Bool {
+        if let failed = state.lastFailureAt, now.timeIntervalSince(failed) < Self.retryAfter { return false }
+        if let last = state.lastUploadAt, now.timeIntervalSince(last) < Self.uploadInterval { return false }
+        return true
     }
 
     /// Inside or not known yet: the fix becomes the hourly presence check when one is due, and a
@@ -360,25 +432,26 @@ struct WorkTrailMachine {
         }
         var fx: [WorkTrailEffect] = []
         if state.isActive, state.zone == .outside, isDue(now) {
-            if var p = state.latest {
+            if var p = state.lastGood, state.latest.map({ $0.at <= p.at }) ?? true {
                 // Standing still outside delivers no fixes at a 50 m distance filter — and no fix
                 // means the phone has not moved more than 50 m from the last one. Re-sending that
                 // position with the current time is true to within the filter, and it is what keeps
-                // a person sitting in a café from looking like a phone that went silent.
+                // a person sitting in a café from looking like a phone that went silent. Only while
+                // no vaguer fix has come in since: that one would say the good one is no longer sure.
                 p.id = UUID().uuidString
                 p.at = now
                 p.event = .point
                 enqueue(p, now: now)
-                fx.append(.flush)
+                fx += uploadIfDue(now)
             } else {
+                // Continuous updates are running: the next good fix is the heartbeat (it is due).
                 fx.append(.requestFix)
             }
         }
         if state.isActive, state.zone != .outside {
             fx += presenceTick(now: now)
         }
-        if !fx.contains(.flush), !state.pending.isEmpty {
-            if let failed = state.lastFailureAt, now.timeIntervalSince(failed) < Self.retryAfter { return fx }
+        if !fx.contains(.flush), !state.pending.isEmpty, uploadAllowed(now) {
             fx.append(.flush)
         }
         return fx
@@ -435,6 +508,7 @@ struct WorkTrailMachine {
     mutating func sent(_ ids: Set<String>, recordId: String, reply: WorkTrailReply, now: Date) -> [WorkTrailEffect] {
         state.pending.removeAll { ids.contains($0.id) }
         state.lastFailureAt = nil
+        state.lastUploadAt = now
         // A reply about an older record says nothing about the one being tracked now.
         guard recordId == state.recordId else { return state.pending.isEmpty ? [] : [.flush] }
         if !reply.tracking {
@@ -445,6 +519,7 @@ struct WorkTrailMachine {
             var fx = stop(keepUnsent: false)
             state.pending = rest
             state.refusedRecordId = recordId
+            state.lastUploadAt = now
             if !rest.isEmpty { fx.append(.flush) }
             return fx
         }
@@ -465,9 +540,10 @@ struct WorkTrailMachine {
 
     // MARK: - helpers
 
+    /// Outside: the standing-still heartbeat is due (or the server's `nextAt` has come).
     func isDue(_ now: Date) -> Bool {
         guard let last = state.lastQueuedAt else { return true }
-        var due = last.addingTimeInterval(Self.sendInterval)
+        var due = last.addingTimeInterval(Self.heartbeatInterval)
         if let asked = state.serverNextAt, asked > last, asked < due { due = asked }
         return now >= due
     }
@@ -516,6 +592,12 @@ struct WorkTrailMachine {
         return q
     }
 
+    /// Good enough to be drawn as the route outside (and to be repeated as the heartbeat).
+    static func routeQuality(_ p: WorkTrailPoint) -> Bool {
+        guard let acc = p.accuracy else { return true }
+        return acc >= 0 && acc <= trailAccuracy
+    }
+
     static func usable(_ p: WorkTrailPoint) -> Bool {
         guard let acc = p.accuracy else { return true }
         return acc >= 0 && acc <= usableAccuracy
@@ -530,6 +612,7 @@ struct WorkTrailMachine {
         state.pending.append(p)
         if state.pending.count > Self.pendingCap { state.pending.removeFirst(state.pending.count - Self.pendingCap) }
         state.lastQueuedAt = now
+        state.lastQueued = p
     }
 
     /// Inside, outside, or nil when the fix is too vague to say. A margin of the fix's own accuracy
@@ -567,6 +650,9 @@ struct WorkOutsideStatus: Equatable {
     var outsideSince: Date?
     /// When the server will check the person out offsite if nothing changes.
     var autoCheckoutAt: Date?
+    /// When the clock of this episode started: `outsideSince`, or a later restart (an excuse
+    /// rejected or withdrawn). The phone's own alerts count from it. Not part of the display.
+    var clockFrom: Date? = nil
 
     static let inside = WorkOutsideStatus(stage: .inside, outsideSince: nil, autoCheckoutAt: nil)
 
@@ -664,7 +750,84 @@ extension WorkTrailMachine {
         let rank = max(serverRank, elapsed >= Self.warnAfter ? 2 : elapsed >= Self.remindAfter ? 1 : 0)
         let stage: WorkOutsideStatus.Stage = rank == 2 ? .warned : rank == 1 ? .reminded : .outside
         return WorkOutsideStatus(stage: stage, outsideSince: since,
-                                 autoCheckoutAt: warnedAutoAt ?? clockFrom.addingTimeInterval(Self.autoAfter))
+                                 autoCheckoutAt: warnedAutoAt ?? clockFrom.addingTimeInterval(Self.autoAfter),
+                                 clockFrom: clockFrom)
+    }
+}
+
+// MARK: - the phone's own outside alerts
+
+/// Local notifications the phone schedules for itself while outside (owner, 28 Sep 2026): one the
+/// moment it leaves, one an hour in, each with the time left before the automatic check-out. The
+/// server's pushes at 1h30 and 2h are not repeated here. The tracker turns each into a
+/// UNNotificationRequest with a fixed identifier per record, so re-planning replaces, never adds.
+enum WorkOutsideAlert: Equatable {
+    /// "Outside the office since HH:mm · 2 h 30 min left before the automatic check-out (HH:mm)".
+    /// `fireAt` is the clock start, or now when the phone learns of the episode late.
+    case left(fireAt: Date, since: Date, autoAt: Date)
+    /// "1 hour outside the office · 1 h 30 min left · automatic check-out HH:mm", at clock start + 1 h.
+    case hour(fireAt: Date, since: Date, autoAt: Date)
+    /// The hour alert is no longer right and its moment has passed: drop the pending one.
+    case cancelHour
+    /// Back inside, an excuse holds the clock, or the clock is over: drop both, pending and shown.
+    case cancelAll
+}
+
+extension WorkTrailMachine {
+    static let hourAlertAfter: TimeInterval = 60 * 60
+
+    /// What to change about the phone's own alerts, given the state now. Level-triggered like
+    /// `setup`: called on every fix, tick, reply and refresh; it remembers what it planned
+    /// (`alertFrom` …) and only answers with a change.
+    ///
+    ///   • inside, an excuse on file, auto checked out → cancel whatever was planned;
+    ///   • zone not known and the server has not said "outside" → nothing (a relaunch must not
+    ///     cancel alerts only to announce the same exit again a minute later);
+    ///   • a new episode → the "left" alert now (skipped when found out only after 1h30, the
+    ///     server's reminder has it by then) and the hour alert, unless its time has passed;
+    ///   • the same episode with a clock start or auto check-out time that moved (the server's
+    ///     `outsideSince` replacing the phone's exit time, a late warning) → the pending hour alert
+    ///     is replaced. The "left" alert is never sent twice for one episode.
+    /// A stop (check-out, logout, `tracking:false`, auto check-out, the shift cap) resets the state,
+    /// so nothing is answered here for it: the tracker cancels every alert on each stop itself.
+    mutating func planOutsideAlerts(now: Date) -> [WorkOutsideAlert] {
+        let s = state
+        let over = !s.isActive || s.zone == .inside || s.stage == Self.pausedStage || s.stage == "auto_checked_out"
+        let status = outsideStatus(now: now)
+        guard !over, status.stage != .inside,
+              let since = status.outsideSince, let autoAt = status.autoCheckoutAt else {
+            guard over, state.alertFrom != nil else { return [] }
+            state.alertFrom = nil
+            state.alertHourAt = nil
+            state.alertAutoAt = nil
+            return [.cancelAll]
+        }
+        let from = status.clockFrom ?? since
+        let hourAt = from.addingTimeInterval(Self.hourAlertAfter)
+        func moved(_ a: Date?, _ b: Date) -> Bool { a.map { abs($0.timeIntervalSince(b)) >= 60 } ?? true }
+
+        guard state.alertFrom != nil else {
+            state.alertFrom = from
+            state.alertHourAt = hourAt
+            state.alertAutoAt = autoAt
+            var out: [WorkOutsideAlert] = []
+            if now < from.addingTimeInterval(Self.remindAfter) { out.append(.left(fireAt: max(from, now), since: since, autoAt: autoAt)) }
+            if hourAt > now { out.append(.hour(fireAt: hourAt, since: since, autoAt: autoAt)) }
+            return out
+        }
+        guard moved(state.alertHourAt, hourAt) || moved(state.alertAutoAt, autoAt) else { return [] }
+        let wasPending = state.alertHourAt.map { $0 > now } ?? false
+        state.alertFrom = from
+        state.alertHourAt = hourAt
+        state.alertAutoAt = autoAt
+        if hourAt > now { return [.hour(fireAt: hourAt, since: since, autoAt: autoAt)] }
+        return wasPending ? [.cancelHour] : []
+    }
+
+    /// Whole minutes left from `from` to `autoAt`, rounded up: "sisa 2 jam 30 menit" at the exit.
+    static func minutesLeft(from: Date, to autoAt: Date) -> Int {
+        // Less a hair, so an exact 150 minutes computed with a rounding error stays 150, not 151.
+        max(0, Int((autoAt.timeIntervalSince(from) / 60 - 0.001).rounded(.up)))
     }
 }
 

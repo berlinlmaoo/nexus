@@ -1521,8 +1521,8 @@ struct RequestComposerSheet: View {
                                                                lat: coords?.lat, lng: coords?.lng,
                                                                progress: uploadProgress)
             // A request for today holds the outside-the-office clock on the server the moment it
-            // exists (PENDING counts), so the Live Activity's countdown goes now, not at the next
-            // trail reply up to 15 minutes later.
+            // exists (PENDING counts), so the Live Activity's countdown and the phone's own outside
+            // alerts go now, not at the next trail reply.
             if day == f.string(from: Date()) { WorkLocationTracker.shared.excuseFiledForToday() }
             await onCreated()
             dismiss()
