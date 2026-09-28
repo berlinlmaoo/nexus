@@ -177,7 +177,7 @@ fun PickDialog(title: String, rows: List<PickRow>, empty: String, onDismiss: () 
     val shown = if (t.isEmpty()) rows else rows.filter { t in it.title.lowercase() || t in it.subtitle.orEmpty().lowercase() }
     AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(q, { q = it }, singleLine = true, placeholder = { Text(stringResource(R.string.search)) }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(q, { q = it }, singleLine = true, placeholder = { Text(stringResource(R.string.search)) }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
             if (rows.isEmpty() && onCreate == null) Text(empty, fontSize = 13.sp, color = c.mutedFg)
             LazyColumn(Modifier.heightIn(max = 360.dp)) {
                 items(shown, key = { it.id }) { r ->
@@ -243,7 +243,7 @@ fun TeamDetailScreen(teamId: String, onBack: () -> Unit, onOpenProfile: (String)
         }
     }
 
-    Column(Modifier.fillMaxSize().background(c.background)) {
+    Column(Modifier.fillMaxSize().background(c.background).dismissKeyboardOnTapOrDrag()) {
         val t = team
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
@@ -359,7 +359,7 @@ fun TeamDetailScreen(teamId: String, onBack: () -> Unit, onOpenProfile: (String)
             "rename" -> {
                 var draft by remember { mutableStateOf(t.name) }
                 AlertDialog(onDismissRequest = { dialog = null }, title = { Text(stringResource(R.string.tm_rename)) },
-                    text = { OutlinedTextField(draft, { draft = it }, singleLine = true, label = { Text(stringResource(R.string.tm_name)) }) },
+                    text = { OutlinedTextField(draft, { draft = it }, singleLine = true, label = { Text(stringResource(R.string.tm_name)) }, keyboardOptions = AdminKeyboard.Done) },
                     confirmButton = { TextButton(onClick = { dialog = null; act("rename") { api.rename(t.id, draft) } }, enabled = draft.isNotBlank() && draft.trim() != t.name) { Text(stringResource(R.string.save)) } },
                     dismissButton = { TextButton(onClick = { dialog = null }) { Text(stringResource(R.string.cancel)) } })
             }
@@ -394,7 +394,7 @@ private fun DivisionsDialog(api: TeamsApi, divisions: List<Division>, onDismiss:
     AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(R.string.tm_divisions)) }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(name, { name = it }, singleLine = true, placeholder = { Text(stringResource(R.string.tm_new_division)) }, modifier = Modifier.weight(1f))
+                OutlinedTextField(name, { name = it }, singleLine = true, placeholder = { Text(stringResource(R.string.tm_new_division)) }, modifier = Modifier.weight(1f), keyboardOptions = AdminKeyboard.Done)
                 TextButton(onClick = { val n = name; run { api.createDivision(n); name = "" } }, enabled = !busy && name.isNotBlank()) { Text(stringResource(R.string.add)) }
             }
             if (divisions.isEmpty()) Text(stringResource(R.string.tm_no_divisions), fontSize = 12.sp, color = c.mutedFg)
@@ -418,7 +418,7 @@ private fun DivisionsDialog(api: TeamsApi, divisions: List<Division>, onDismiss:
     renaming?.let { d ->
         var draft by remember(d.id) { mutableStateOf(d.name) }
         AlertDialog(onDismissRequest = { renaming = null }, title = { Text(stringResource(R.string.tm_rename_division)) },
-            text = { OutlinedTextField(draft, { draft = it }, singleLine = true) },
+            text = { OutlinedTextField(draft, { draft = it }, singleLine = true, keyboardOptions = AdminKeyboard.Done) },
             confirmButton = { TextButton(onClick = { renaming = null; if (draft.isNotBlank() && draft.trim() != d.name) run { api.renameDivision(d.id, draft) } }) { Text(stringResource(R.string.save)) } },
             dismissButton = { TextButton(onClick = { renaming = null }) { Text(stringResource(R.string.cancel)) } })
     }

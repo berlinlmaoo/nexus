@@ -135,7 +135,7 @@ fun AttendanceAdminTab(isBoD: Boolean, onOpenMember: (String) -> Unit, onOpenOff
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.aa_allowance), fontSize = 13.sp, color = c.foreground, modifier = Modifier.weight(1f))
                 OutlinedTextField(quotaDraft, { quotaDraft = it.filter(Char::isDigit).take(2) }, singleLine = true, modifier = Modifier.width(80.dp),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                    keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done, keyboardType = KeyboardType.Number))
                 TextButton(onClick = { quotaDraft.toIntOrNull()?.takeIf { it in 0..31 }?.let { q -> run { api.setRedQuota(month.toString(), q) } } },
                     enabled = quotaDraft.toIntOrNull() != quota && quotaDraft.toIntOrNull() in 0..31) { Text(stringResource(R.string.save)) }
             }
@@ -187,7 +187,7 @@ fun AttendanceAdminTab(isBoD: Boolean, onOpenMember: (String) -> Unit, onOpenOff
         }, dismissButton = { TextButton(onClick = { adding = false }) { Text(stringResource(R.string.cancel)) } }) {
             Column {
                 DatePicker(st)
-                OutlinedTextField(name, { name = it }, singleLine = true, placeholder = { Text(stringResource(R.string.aa_holiday_name)) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+                OutlinedTextField(name, { name = it }, singleLine = true, placeholder = { Text(stringResource(R.string.aa_holiday_name)) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), keyboardOptions = AdminKeyboard.Done)
             }
         }
     }
@@ -217,7 +217,7 @@ fun MemberAttendanceAdminScreen(userId: String, onBack: () -> Unit, onOpenReflec
     LaunchedEffect(period, tick) { d = runCatching { api.dayoffs(userId, period) }.getOrNull(); quotaDraft = d?.quotaOverride?.toString().orEmpty() }
     val m = roster?.members?.firstOrNull { it.userId == userId }; val ws = roster?.workspaceId
     fun run(block: suspend () -> Unit) = scope.launch { try { block(); tick++ } catch (e: ApiError) { notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) } }
-    Column(Modifier.fillMaxSize().background(c.background)) {
+    Column(Modifier.fillMaxSize().background(c.background).dismissKeyboardOnTapOrDrag()) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
             Text(m?.displayName ?: "", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground, modifier = Modifier.weight(1f))
@@ -229,7 +229,7 @@ fun MemberAttendanceAdminScreen(userId: String, onBack: () -> Unit, onOpenReflec
                     Text(stringResource(R.string.aa_dayoff_line, x.used, x.quota) + if (x.quotaOverride != null) " · " + stringResource(R.string.aa_override) else "", fontSize = 13.sp, color = c.foreground)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(quotaDraft, { quotaDraft = it.filter(Char::isDigit).take(3) }, singleLine = true, placeholder = { Text("${x.defaultQuota}") },
-                            label = { Text(stringResource(R.string.aa_quota_override)) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
+                            label = { Text(stringResource(R.string.aa_quota_override)) }, keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done, keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
                         TextButton(onClick = { run { api.setDayoffQuota(userId, quotaDraft.toIntOrNull()) } }) { Text(stringResource(if (quotaDraft.isBlank()) R.string.aa_reset else R.string.save)) }
                     }
                     x.dayoffs.forEach { r ->
@@ -279,7 +279,7 @@ fun MemberAttendanceAdminScreen(userId: String, onBack: () -> Unit, onOpenReflec
                 granting = false
             }) { Text(stringResource(R.string.aa_grant)) }
         }, dismissButton = { TextButton(onClick = { granting = false }) { Text(stringResource(R.string.cancel)) } }) {
-            Column { DatePicker(st); OutlinedTextField(reason, { reason = it }, singleLine = true, placeholder = { Text(stringResource(R.string.tk_reason)) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) }
+            Column { DatePicker(st); OutlinedTextField(reason, { reason = it }, singleLine = true, placeholder = { Text(stringResource(R.string.tk_reason)) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), keyboardOptions = AdminKeyboard.Done) }
         }
     }
     val md = m; val wsid = ws
@@ -339,7 +339,7 @@ fun OfficesScreen(onBack: () -> Unit) {
     var tick by remember { mutableIntStateOf(0) }
     LaunchedEffect(tick) { data = runCatching { api.offices() }.getOrNull() }
     fun run(block: suspend () -> Unit) = scope.launch { try { block(); tick++ } catch (e: ApiError) { notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) } }
-    Column(Modifier.fillMaxSize().background(c.background)) {
+    Column(Modifier.fillMaxSize().background(c.background).dismissKeyboardOnTapOrDrag()) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
             Text(stringResource(R.string.aa_offices), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground, modifier = Modifier.weight(1f))
@@ -384,11 +384,11 @@ private fun OfficeDialog(o: Office?, onDismiss: () -> Unit, onDelete: (() -> Uni
     AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(if (o == null) R.string.aa_new_office else R.string.aa_edit_office)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                OutlinedTextField(name, { name = it.take(120) }, singleLine = true, label = { Text(stringResource(R.string.signup_name)) })
-                OutlinedTextField(address, { address = it.take(300) }, label = { Text(stringResource(R.string.aa_address)) })
+                OutlinedTextField(name, { name = it.take(120) }, singleLine = true, label = { Text(stringResource(R.string.signup_name)) }, keyboardOptions = AdminKeyboard.Done)
+                OutlinedTextField(address, { address = it.take(300) }, label = { Text(stringResource(R.string.aa_address)) }, keyboardOptions = AdminKeyboard.Done)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedTextField(lat, { lat = it }, singleLine = true, label = { Text("Lat") }, modifier = Modifier.weight(1f))
-                    OutlinedTextField(lng, { lng = it }, singleLine = true, label = { Text("Lng") }, modifier = Modifier.weight(1f))
+                    OutlinedTextField(lat, { lat = it }, singleLine = true, label = { Text("Lat") }, modifier = Modifier.weight(1f), keyboardOptions = AdminKeyboard.Done)
+                    OutlinedTextField(lng, { lng = it }, singleLine = true, label = { Text("Lng") }, modifier = Modifier.weight(1f), keyboardOptions = AdminKeyboard.Done)
                 }
                 TextButton(onClick = {
                     locating = true
@@ -398,8 +398,8 @@ private fun OfficeDialog(o: Office?, onDismiss: () -> Unit, onDelete: (() -> Uni
                     }
                 }, enabled = !locating) { Text(stringResource(if (locating) R.string.btn_locating else R.string.aa_use_my_location)) }
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedTextField(radius, { radius = it.filter(Char::isDigit).take(4) }, singleLine = true, label = { Text(stringResource(R.string.aa_radius)) }, modifier = Modifier.weight(1f))
-                    OutlinedTextField(grace, { grace = it.filter(Char::isDigit).take(3) }, singleLine = true, label = { Text(stringResource(R.string.aa_late_grace)) }, modifier = Modifier.weight(1f))
+                    OutlinedTextField(radius, { radius = it.filter(Char::isDigit).take(4) }, singleLine = true, label = { Text(stringResource(R.string.aa_radius)) }, modifier = Modifier.weight(1f), keyboardOptions = AdminKeyboard.Done)
+                    OutlinedTextField(grace, { grace = it.filter(Char::isDigit).take(3) }, singleLine = true, label = { Text(stringResource(R.string.aa_late_grace)) }, modifier = Modifier.weight(1f), keyboardOptions = AdminKeyboard.Done)
                 }
                 onDelete?.let { TextButton(onClick = it) { Text(stringResource(R.string.aa_archive), color = Nx.colors.danger) } }
             }
@@ -428,7 +428,7 @@ fun ReflectionsScreen(userId: String?, onBack: () -> Unit) {
     var summarizing by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(month) { data = null; try { data = api.reflections(userId, month.toString()); error = null } catch (e: ApiError) { error = e.describe(res) } }
-    Column(Modifier.fillMaxSize().background(c.background)) {
+    Column(Modifier.fillMaxSize().background(c.background).dismissKeyboardOnTapOrDrag()) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
             Text(stringResource(R.string.aa_reflections), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground)

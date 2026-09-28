@@ -187,11 +187,11 @@ fun GoogleLinkDialog(userId: String, name: String, current: String?, onDismiss: 
                 }
                 making -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(stringResource(R.string.gw_name_in_google), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg)
-                    OutlinedTextField(given, { given = it }, singleLine = true, label = { Text(stringResource(R.string.gw_first)) }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(family, { family = it }, singleLine = true, label = { Text(stringResource(R.string.gw_last)) }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(given, { given = it }, singleLine = true, label = { Text(stringResource(R.string.gw_first)) }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
+                    OutlinedTextField(family, { family = it }, singleLine = true, label = { Text(stringResource(R.string.gw_last)) }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
                     Text(stringResource(R.string.gw_address), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(local, { local = it.trim() }, singleLine = true, placeholder = { Text("nama.alamat") }, modifier = Modifier.weight(1f))
+                        OutlinedTextField(local, { local = it.trim() }, singleLine = true, placeholder = { Text("nama.alamat") }, modifier = Modifier.weight(1f), keyboardOptions = AdminKeyboard.Done)
                         Text(" @ ", color = c.mutedFg)
                         var open by remember { mutableStateOf(false) }
                         Box {
@@ -228,7 +228,7 @@ fun GoogleLinkDialog(userId: String, name: String, current: String?, onDismiss: 
                             Text(stringResource(R.string.gw_unlink, current), fontSize = 14.sp, color = c.danger)
                         }
                         problem?.let { Text(it, fontSize = 12.sp, color = c.danger, modifier = Modifier.padding(vertical = 6.dp)) }
-                        OutlinedTextField(query, { query = it }, singleLine = true, placeholder = { Text(stringResource(R.string.gw_search)) }, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
+                        OutlinedTextField(query, { query = it }, singleLine = true, placeholder = { Text(stringResource(R.string.gw_search)) }, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), keyboardOptions = AdminKeyboard.Done)
                         Text(stringResource(R.string.gw_accounts).uppercase(), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.mutedFg)
                     }
                     items(GoogleLogic.search(d.accounts, query), key = { it.email }) { a ->

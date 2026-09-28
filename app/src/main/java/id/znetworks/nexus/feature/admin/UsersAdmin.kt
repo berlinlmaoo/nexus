@@ -156,7 +156,7 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(q, { q = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text(stringResource(R.string.ad_search)) },
-                        shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f))
+                        shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f), keyboardOptions = AdminKeyboard.Done)
                     if (isBoD) IconButton(onClick = { inviting = true }) { Icon(Icons.Filled.PersonAdd, stringResource(R.string.ad_invite), tint = c.violetText) }
                 }
             }
@@ -209,7 +209,7 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
         AlertDialog(onDismissRequest = { inviting = false }, title = { Text(stringResource(R.string.ad_invite)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(email, { email = it }, singleLine = true, placeholder = { Text("name@company.com") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(email, { email = it }, singleLine = true, placeholder = { Text("name@company.com") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Roles.assignable(r.role).forEach { k -> FilterChip(newRole == k, { newRole = k }, { Text(Roles.label(k), fontSize = 12.sp) }) } }
                 }
             },
@@ -252,7 +252,7 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
     }
     fun patch(vararg f: Pair<String, JsonElement>) { if (m != null && ws != null) run { api.patchMember(m.id, ws, f.toMap()) } }
 
-    Column(Modifier.fillMaxSize().background(c.background)) {
+    Column(Modifier.fillMaxSize().background(c.background).dismissKeyboardOnTapOrDrag()) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
             Text(m?.displayName ?: "", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground, modifier = Modifier.weight(1f), maxLines = 1)
@@ -398,10 +398,10 @@ private fun AccountCard(m: WsMember, onPhoto: (ByteArray?) -> Unit, onSave: (Map
             Avatar(m.name, m.avatar, 56.dp); Spacer(Modifier.width(12.dp))
             TextButton(onClick = pick) { Text(stringResource(R.string.pf_change_photo)) }
         }
-        OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.signup_name)) }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(email, { email = it }, singleLine = true, label = { Text("Email") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.signup_name)) }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
+        OutlinedTextField(email, { email = it }, singleLine = true, label = { Text("Email") }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
         OutlinedTextField(password, { password = it }, singleLine = true, label = { Text(stringResource(R.string.reset_new_password)) }, textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace),
-            supportingText = { Text(stringResource(R.string.ad_password_hint)) }, modifier = Modifier.fillMaxWidth())
+            supportingText = { Text(stringResource(R.string.ad_password_hint)) }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
         // Only changed keys: re-sending an unchanged email can 409.
         val fields = buildMap<String, JsonElement> {
             if (name.trim() != m.name.orEmpty() && name.trim().length >= 2) put("name", JsonPrimitive(name.trim()))

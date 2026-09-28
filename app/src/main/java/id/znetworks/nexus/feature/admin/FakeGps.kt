@@ -297,7 +297,7 @@ fun FakeGpsTab() {
                 }
                 if (item.state == "open") {
                     OutlinedTextField(notes[item.recordId].orEmpty(), { notes = notes + (item.recordId to it.take(SuspectLogic.NOTE_MAX)) },
-                        placeholder = { Text(stringResource(if (item.isFake) R.string.fg_note_required else R.string.fg_note_optional)) }, modifier = Modifier.fillMaxWidth())
+                        placeholder = { Text(stringResource(if (item.isFake) R.string.fg_note_required else R.string.fg_note_optional)) }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = { review(item, "VALID") }, enabled = busy == null, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.fg_its_fine), maxLines = 1) }
                         OutlinedButton(onClick = { warning = item }, enabled = busy == null, modifier = Modifier.weight(1f)) {
@@ -397,7 +397,7 @@ private fun WarnDialog(item: SuspectItem, api: SuspectsApi, onDismiss: () -> Uni
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(R.string.fg_warn_body, longDate(item.date)), fontSize = 12.sp, color = c.mutedFg)
-                OutlinedTextField(message, { message = it.take(SuspectLogic.WARN_MAX) }, minLines = 4, maxLines = 8, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(message, { message = it.take(SuspectLogic.WARN_MAX) }, minLines = 4, maxLines = 8, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
                 Text("${message.trim().length}/${SuspectLogic.WARN_MAX}", fontSize = 11.sp, color = c.mutedFg, modifier = Modifier.align(Alignment.End))
                 error?.let { Text(it, fontSize = 12.sp, color = c.danger) }
             }

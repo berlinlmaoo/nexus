@@ -161,4 +161,18 @@ class AttendanceGuardTest {
         val shell = sources.entries.first { it.key.name == "SignedInShell.kt" }.value
         assertTrue(shell.contains(".padding(padding).consumeWindowInsets(padding)"))
     }
+
+    @Test fun controlRoomKeyboardAlwaysCloses() {
+        // Batch 2 B (Berlin 29 Sep): every Control Room text field has a keyboard action (Done), apart from the
+        // announcement body (new lines), and every admin screen root closes the keyboard on a tap or drag.
+        val admin = sources.filterKeys { it.parentFile.name == "admin" }
+        admin.forEach { (f, src) ->
+            Regex("""OutlinedTextField\(""").findAll(src).forEach { m ->
+                val call = src.substring(m.range.first, (m.range.first + 700).coerceAtMost(src.length)).substringBefore("\n        }")
+                val line = src.substring(m.range.first).substringBefore("\n")
+                if (!line.contains("an_body")) assertTrue("${f.name}: $line", call.contains("keyboardOptions"))
+            }
+            assertEquals(f.name, 0, Regex("""Column\(Modifier\.fillMaxSize\(\)\.background\(c\.background\)\) \{""").findAll(src).count())
+        }
+    }
 }

@@ -85,7 +85,7 @@ fun WorkspaceMembersCard(onOpenProfile: (String) -> Unit) {
         if (roles.isNotEmpty()) Column(Modifier.fillMaxWidth().background(c.muted.copy(alpha = 0.3f), RoundedCornerShape(12.dp)).padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(email, { email = it }, singleLine = true, placeholder = { Text(stringResource(R.string.wm_email)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), modifier = Modifier.weight(1f))
+                    keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done, keyboardType = KeyboardType.Email), modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
                 var open by remember { mutableStateOf(false) }
                 Box {

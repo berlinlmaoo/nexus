@@ -151,7 +151,7 @@ fun AuditTab(onOpen: (String) -> Unit) {
     }
     Column(Modifier.fillMaxSize()) {
         OutlinedTextField(q, { q = it }, singleLine = true, leadingIcon = { Icon(Icons.Filled.Search, null) }, placeholder = { Text(stringResource(R.string.au_search)) },
-            shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
+            shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), keyboardOptions = AdminKeyboard.Done)
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf(null to R.string.tk_all, "create" to R.string.au_create, "update" to R.string.au_update, "delete" to R.string.au_delete, "login" to R.string.au_login).forEach { (v, l) ->
                 FilterChip(action == v, { action = v }, { Text(stringResource(l)) })
@@ -201,7 +201,7 @@ fun AuditEntryScreen(id: String, onBack: () -> Unit, onOpenLink: (type: String, 
     var r by remember { mutableStateOf<AuditEntryResponse?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(id) { try { r = api.entry(id) } catch (e: ApiError) { error = e.describe(res) } }
-    Column(Modifier.fillMaxSize().background(c.background)) {
+    Column(Modifier.fillMaxSize().background(c.background).dismissKeyboardOnTapOrDrag()) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
             Text(stringResource(R.string.au_entry), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground)

@@ -225,7 +225,8 @@ Server routes read from nexus-prod `~/nexus` (e3091ab, cff1575, web 9f9313d); wh
 
 | Item | What exists | Commit |
 |---|---|---|
-| A Absen Monitor (was Fake GPS) | Tab renamed "Absen Monitor" (EN/ID); chips Fake GPS · No face (`counts.noFaceOpen`) · Worth a look · Reviewed; NOFACE badge/side in orange; each side with a selfie shows a face chip ("2 faces" / "no face" / "face: not checked"); the "No face in the selfie" signal translated; "Send warning…" on open and cleared cards (not on TK ones) → dialog prefilled per level and side as the web (editable, 3–500, counter) → `POST /api/attendance/suspects/{id}/warn` (id one encoded segment); warnings history on the card (who, when, message). FakeGpsTest | this step |
+| A Absen Monitor (was Fake GPS) | Tab renamed "Absen Monitor" (EN/ID); chips Fake GPS · No face (`counts.noFaceOpen`) · Worth a look · Reviewed; NOFACE badge/side in orange; each side with a selfie shows a face chip ("2 faces" / "no face" / "face: not checked"); the "No face in the selfie" signal translated; "Send warning…" on open and cleared cards (not on TK ones) → dialog prefilled per level and side as the web (editable, 3–500, counter) → `POST /api/attendance/suspects/{id}/warn` (id one encoded segment); warnings history on the card (who, when, message). FakeGpsTest | 9445075 |
+| B Control Room keyboard | Every admin text field has a Done key (33 fields; multi-line notes/reasons too, only the announcement body keeps Enter for new lines); every admin screen root (Control Room and its sub-screens) closes the keyboard on a tap on empty space or a finger drag, with the same drag rule as the daily reflection (a bring-into-view scroll never closes it). AttendanceGuardTest `controlRoomKeyboardAlwaysCloses` | this step |
 
 ## 29 Sep (Berlin, into 0.1.6; iOS f068bbf)
 

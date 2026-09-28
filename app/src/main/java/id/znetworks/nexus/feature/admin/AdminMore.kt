@@ -186,12 +186,12 @@ fun QuestsTab() {
         AlertDialog(onDismissRequest = { creating = false }, title = { Text(stringResource(R.string.qa_new)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(title, { title = it }, singleLine = true, label = { Text(stringResource(R.string.qa_title)) }, placeholder = { Text(stringResource(R.string.qa_title_ph)) }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(title, { title = it }, singleLine = true, label = { Text(stringResource(R.string.qa_title)) }, placeholder = { Text(stringResource(R.string.qa_title_ph)) }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
                     Column { listOf("task_count", "overdue_cleared", "priority_done", "has_overdue").forEach { t -> Row(verticalAlignment = Alignment.CenterVertically) {
                         FilterChip(type == t, { type = t }, { Text(questType(t, null) ?: t, fontSize = 12.sp) }) } } }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(count, { count = it.filter(Char::isDigit).take(3) }, singleLine = true, label = { Text("N") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
-                        OutlinedTextField(xp, { xp = it.filter(Char::isDigit).take(2) }, singleLine = true, label = { Text("XP (≤ 50)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
+                        OutlinedTextField(count, { count = it.filter(Char::isDigit).take(3) }, singleLine = true, label = { Text("N") }, keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done, keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
+                        OutlinedTextField(xp, { xp = it.filter(Char::isDigit).take(2) }, singleLine = true, label = { Text("XP (≤ 50)") }, keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done, keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
                     }
                     TextButton(onClick = { pickDate = true }) { Text(deadline?.let { stringResource(R.string.qa_until, it) } ?: stringResource(R.string.qa_add_deadline)) }
                 }
@@ -266,7 +266,7 @@ fun AnnouncementsTab() {
         AlertDialog(onDismissRequest = { creating = false }, title = { Text(stringResource(R.string.an_new)) },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(title, { title = it }, singleLine = true, label = { Text(stringResource(R.string.an_title)) }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(title, { title = it }, singleLine = true, label = { Text(stringResource(R.string.an_title)) }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
                     OutlinedTextField(body, { body = it }, minLines = 3, label = { Text(stringResource(R.string.an_body)) }, modifier = Modifier.fillMaxWidth())
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) { AnnounceRules.TONES.forEach { t -> FilterChip(tone == t, { tone = t }, { Text(t) }) } }
                     Text(stringResource(R.string.an_repeat), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg)

@@ -88,7 +88,7 @@ fun ControlRoomScreen(onBack: () -> Unit, nav: AdminNav, tabContent: @Composable
     var ready by remember { mutableStateOf(viewer.role != null) }
     LaunchedEffect(Unit) { viewer.load(); ready = true }
     var tab by rememberSaveable { mutableStateOf("users") }
-    Column(Modifier.fillMaxSize().background(c.background)) {
+    Column(Modifier.fillMaxSize().background(c.background).dismissKeyboardOnTapOrDrag()) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
             Text("Control Room", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground)
