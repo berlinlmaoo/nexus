@@ -194,8 +194,15 @@ checked in" has landed.
 |---|---|---|
 | T1 (TINGGI) approved request covering today still showed Check in | Button replaced by the iOS card "Your approved request covers today · <type> · No check-in needed" (APPROVED only; a forgotten or started check-out still shows) | c10ca62 |
 | T2 (TINGGI) a new build with the same versionName was never offered | Resolved by the release rule instead: every published APK raises versionName (Berlin). The versionCode offer/floor of c283de2 was taken out again; R5 DROPPED | c283de2, reverted e86b974 |
-| S2 (SEDANG) "outside" judged against the record's office only | Inside ANY active office is inside, as the server's `officesForRecord`: the workspace's active offices (`/api/attendance/offices`, once per record, persisted with the trail) join the record's fence; outside only when clear of every one. Moving from A to B raises no exit, alarm or countdown. The office they are in is shown: Work session notification "At <office> · …", Attendance card office tile while working. iOS: main session | this step |
+| S2 (SEDANG) "outside" judged against the record's office only | Inside ANY active office is inside, as the server's `officesForRecord`: the workspace's active offices (`/api/attendance/offices`, once per record, persisted with the trail) join the record's fence; outside only when clear of every one. Moving from A to B raises no exit, alarm or countdown. The office they are in is shown: Work session notification "At <office> · …", Attendance card office tile while working. iOS: main session | db36861 |
 | S3 (SEDANG) one refusal at the head of the queue held the check-out behind it | A replayed check-in answered 409 "You have already checked in today." (no code) is done: dropped silently, counts as landed, the next entry goes on. PENDING_CHECKOUT and "approved request covers today" stay refusals. iOS has the same (I3 for the main session) | ad9cf3b |
+| S1 (SEDANG) check-in place per record not ported (iOS a0f1de4) | `AttendancePlace` (server flag first, else distance > radius; away → first two address parts, else `%.5f` coordinates, never the office). Attendance card: once checked in the record decides (away → "Where you checked in" + address, helper "Away from the office · In/Out"; inside the radius → the office even for location-free). Board day sheet: "Away from the office · <address>" instead of the office. Trail header: the place line (server `placeLabel`) | 57d1166 |
+| R1 (RENDAH) done time from the phone clock | The record's checkInAt/checkOutAt, the phone clock only when the server sent none | 71f9703 |
+| R2 (RENDAH) "Done for today" differed from iOS | Server `workedMinutes` first; a check-out still queued shows "Check-out saved on this phone" | 57d1166 |
+| R3 (RENDAH) Indonesian extra-day-off wording | iOS 6144f2c wording ("Yang bersangkutan sudah dikabari." …) | 57d1166 |
+| R4 (RENDAH) ownerless queue entries replayed for anyone | Replay only the signed-in person's own entries; ownerless ones are dropped at sign-in (Android never shipped one) | 2b5f715 |
+
+**Audit status:** every finding (T1, T2, S1–S3, R1–R4) closed; 260 JVM tests green.
 
 ## Release rule (Berlin, 28 Sep 2026)
 
