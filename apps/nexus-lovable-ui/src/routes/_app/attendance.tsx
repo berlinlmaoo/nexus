@@ -707,7 +707,13 @@ function Attendance() {
                         </td>
                       );
                     })}
-                    <td className="px-4 py-2.5 text-right text-xs font-semibold tabular-nums text-muted-foreground" title={`Days worked (present, permit or WFH) out of this period's working days: ${periodDays.length} days − ${periodDays.length - workDaysOf(u.id)} day-off quota = ${workDaysOf(u.id)}`}>{presentCount(u.id)}/{workDaysOf(u.id)}</td>
+                    <td className="px-4 py-2.5 text-right text-xs font-semibold tabular-nums text-muted-foreground" title={`Days worked (present, permit or WFH) out of this period's working days: ${periodDays.length} days − ${periodDays.length - workDaysOf(u.id)} day-off quota = ${workDaysOf(u.id)}`}>{(() => {
+                      // Capped at the working days, the surplus shown beside it (owner, 28 Sep 2026): a day
+                      // cut from the quota for being >120 min late is still a day worked, so someone can
+                      // work more days than "period − quota" — 22/22 +3 reads right, 25/22 does not.
+                      const worked = presentCount(u.id), target = workDaysOf(u.id);
+                      return <>{Math.min(worked, target)}/{target}{worked > target && <span className="ml-1 text-emerald-600">+{worked - target}</span>}</>;
+                    })()}</td>
                   </tr>
                 ))}
                 {!history.isLoading && hiddenCount > 0 && (
