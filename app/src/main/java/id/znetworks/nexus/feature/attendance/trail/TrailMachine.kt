@@ -80,8 +80,10 @@ data class TrailState(
     val lastUploadAtMillis: Long? = null,
     /** The server's outsideSince (location-trail reply or GET today): the clock both sides agree on. */
     val serverOutsideSinceMillis: Long? = null,
-    /** A PENDING/APPROVED excuse covers today: the outside clock is paused. */
-    val excusedToday: Boolean = false,
+    /** When that was heard: only a word heard after this exit speaks for this episode. */
+    val serverOutsideSinceAtMillis: Long? = null,
+    /** When [stage] and [serverNextAtMillis] were last written by a trail reply. */
+    val serverStageAtMillis: Long? = null,
 ) {
     val isActive: Boolean get() = recordId != null
 }
@@ -192,20 +194,28 @@ class TrailMachine(var state: TrailState = TrailState()) {
                 recordId = recordId, checkInAtMillis = checkInAtMillis, fence = fence, zone = TrailZone.UNKNOWN,
                 outsideSinceMillis = null, lastQueuedAtMillis = null, lastQueued = null, serverNextAtMillis = null, latest = null,
                 pendingTag = null, stage = null, startedAtMillis = now, preciseSinceMillis = null, preciseBest = null,
-                presenceTriedAtMillis = null, serverOutsideSinceMillis = null, excusedToday = false,
+                presenceTriedAtMillis = null, serverOutsideSinceMillis = null, serverOutsideSinceAtMillis = null, serverStageAtMillis = null,
             )
         }
         return listOf(TrailEffect.Arm(fence))
     }
 
-    /** What GET today says about the outside clock (its outsideSince, and whether an excuse pauses it). */
-    fun noteToday(recordId: String, outsideSinceMillis: Long?, excused: Boolean) {
+    /**
+     * What GET today says (iOS heardToday): the server's outsideSince, if newer than what we had,
+     * and an excuse covering today. Only ever SETS the pause: an absent todayRequest does not mean
+     * no PENDING excuse exists; the next trail reply has the last word.
+     */
+    fun noteToday(recordId: String, outsideSinceMillis: Long?, excused: Boolean, heardAt: Long) {
         if (state.recordId != recordId) return
-        state = state.copy(
-            excusedToday = excused,
-            // Only while we agree the person is out: a stale value must not restart an ended episode.
-            serverOutsideSinceMillis = if (state.zone == TrailZone.OUTSIDE) outsideSinceMillis ?: state.serverOutsideSinceMillis else state.serverOutsideSinceMillis,
-        )
+        if (state.serverOutsideSinceAtMillis.let { it == null || heardAt >= it }) {
+            state = state.copy(serverOutsideSinceMillis = outsideSinceMillis, serverOutsideSinceAtMillis = heardAt)
+        }
+        if (excused) state = state.copy(stage = OutsideClock.PAUSED)
+    }
+
+    /** A request covering today was just filed here: the server pauses the clock at once (PENDING counts). */
+    fun excuseFiled() {
+        if (state.isActive) state = state.copy(stage = OutsideClock.PAUSED)
     }
 
     /**
@@ -258,7 +268,7 @@ class TrailMachine(var state: TrailState = TrailState()) {
         sendNextFix = false
         return if (inside) {
             // Back inside: the episode ends and the next one starts from nothing.
-            state = state.copy(outsideSinceMillis = null, serverOutsideSinceMillis = null, stage = null, serverNextAtMillis = null)
+            state = state.copy(outsideSinceMillis = null, serverOutsideSinceMillis = null, serverOutsideSinceAtMillis = null, stage = null, serverNextAtMillis = null, serverStageAtMillis = null)
             // First answer after a check-in is "inside": the normal case, nothing to report.
             if (previous == TrailZone.UNKNOWN) listOf(TrailEffect.StopContinuous)
             else listOf(TrailEffect.StopContinuous) + tag(TrailPoint.Event.enter, lastKnown, now)
@@ -403,7 +413,8 @@ class TrailMachine(var state: TrailState = TrailState()) {
             if (rest.isNotEmpty()) fx += TrailEffect.Flush
             return fx
         }
-        state = state.copy(stage = reply.stage, serverNextAtMillis = reply.nextAtMillis, serverOutsideSinceMillis = reply.outsideSinceMillis)
+        state = state.copy(stage = reply.stage, serverNextAtMillis = reply.nextAtMillis, serverStageAtMillis = now,
+            serverOutsideSinceMillis = reply.outsideSinceMillis, serverOutsideSinceAtMillis = now)
         return if (state.pending.isEmpty()) emptyList() else listOf(TrailEffect.Flush)
     }
 

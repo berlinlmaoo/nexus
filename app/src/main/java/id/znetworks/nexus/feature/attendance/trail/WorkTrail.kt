@@ -92,9 +92,10 @@ class WorkTrail(
                     machine.start(rec.id, checkIn, fence, now()).also {
                         if (machine.state.isActive) {
                             startedRecord = rec.id
-                            val excused = today.todayRequest?.status?.uppercase() in setOf("PENDING", "APPROVED")
+                            // iOS reads any todayRequest as an excuse holding the clock (PENDING counts on the server).
+                            val excused = today.todayRequest != null && today.todayRequest.status?.uppercase() !in setOf("REJECTED", "CANCELED", "CANCELLED")
                             val since = rec.outsideSince?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
-                            machine.noteToday(rec.id, since, excused)
+                            machine.noteToday(rec.id, since, excused, now())
                         }
                     }
                 }
@@ -103,6 +104,12 @@ class WorkTrail(
         }
         apply(fx)
         startedRecord?.let { ensureConsent(it) }
+    }
+
+    /** A request covering today was filed from this phone: the outside countdown stops now. */
+    fun excuseFiled() = scope.launch {
+        val fx = lock.withLock { machine.excuseFiled().let { persist(); emptyList<TrailEffect>() } }
+        apply(fx)
     }
 
     /** Logout: stop, and whatever was not uploaded goes with the session. */

@@ -4,7 +4,7 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (166 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (169 JVM tests, all green).
 Version 0.1.6 (versionCode 1), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 
 ## Done (Phase 1, attendance MVP)
@@ -55,6 +55,12 @@ action (`nexus://attendance?permit=today`, the same as the push). It is re-poste
 presentation changes (state change, or the minute tick crossing 90/120). Inside it is unchanged.
 AttendanceGuardTest now allows exactly one permit link per notification action, in Push.kt and
 WorkTrailService.kt only. Not seen on the phone yet: needs a real 90+ min outside run.
+
+Aligned with iOS 8a36fd2 (same day): `OutsideClock.present` is now a port of iOS `outsideStatus` —
+the server's outsideSince counts only when heard after this exit and not >30 min before it; a restart
+after a rejected/withdrawn excuse is read from the trail reply's `nextAt`; never a stage below the
+server's; `paused_permit`/`auto_checked_out` → normal look; GET today's `todayRequest` only ever SETS
+the pause; filing a request for today on the phone pauses the countdown at once.
 
 ## Local alerts and the precise route outside the office (UPDATES §10), 28 Sep 2026
 

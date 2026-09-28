@@ -237,6 +237,9 @@ class RequestsViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val loc = if (rules.needsLocation(cs.type) || cs.type == "PERMIT") cs.location else null
                 api.create(cs.type, cs.date.toString(), cs.reason, cs.attachment, loc?.lat, loc?.lng)
+                // A request for today holds the outside-the-office clock on the server the moment it
+                // exists (PENDING counts): the countdown in the notification goes now (iOS 8a36fd2).
+                if (cs.date == OfficeTime.today()) c.workTrail.excuseFiled()
                 _state.update { it.copy(composer = null) }
                 load()
                 onFiled()

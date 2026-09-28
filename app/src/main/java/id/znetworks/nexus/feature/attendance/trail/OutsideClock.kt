@@ -16,20 +16,50 @@ object OutsideClock {
 
     data class Outside(val sinceMillis: Long, val autoAtMillis: Long, val level: Level)
 
-    /** Null = the normal (inside) notification. */
+    const val PAUSED = "paused_permit"
+    /** A server outsideSince this much earlier than the phone's own exit is an older episode. */
+    const val SERVER_SINCE_SLACK_MS = 30 * 60_000L
+
+    /**
+     * Null = the normal (inside) notification. Port of iOS WorkTrailMachine.outsideStatus (8a36fd2):
+     *   • inside by the phone's reckoning, not tracking, an excuse holding the clock, or already
+     *     checked out by it → normal;
+     *   • the episode starts at the server's outsideSince when the server has heard of THIS exit
+     *     (same times as the pushes), else the phone's exit;
+     *   • the clock runs from that start, or from a later restart the server's nextAt reveals (an
+     *     excuse rejected or withdrawn mid-episode restarts it); never a stage below the server's;
+     *   • the automatic check-out is the server's own time once warned, else start + 150 min.
+     */
     fun present(s: TrailState, now: Long): Outside? {
-        if (!s.isActive || s.zone != TrailZone.OUTSIDE || s.excusedToday || s.stage == "paused_permit") return null
-        // The server's start wins so the phone and the server show the same time; ours until it answers.
-        val since = s.serverOutsideSinceMillis ?: s.outsideSinceMillis ?: return null
-        val elapsed = now - since
-        // Once warned the server names the exact moment (nextAt = autoAt); before that it is projected.
-        val autoAt = s.serverNextAtMillis?.takeIf { s.stage == "warned" } ?: (since + AUTO_MS)
-        val level = when {
-            elapsed >= WARN_MS || s.stage == "warned" -> Level.WARN
-            elapsed >= REMIND_MS || s.stage == "reminded" -> Level.REMIND
-            else -> Level.OUTSIDE
+        if (!s.isActive || s.zone == TrailZone.INSIDE) return null
+        if (s.stage == PAUSED || s.stage == "auto_checked_out") return null
+        val local = if (s.zone == TrailZone.OUTSIDE) s.outsideSinceMillis else null
+        var since = local
+        val server = s.serverOutsideSinceMillis
+        val heard = s.serverOutsideSinceAtMillis
+        if (server != null && heard != null && server <= now + 5 * 60_000L) {
+            since = if (local == null) server // zone not known here yet: the server's word is all there is
+            else if (heard >= local && server >= local - SERVER_SINCE_SLACK_MS) server else local
         }
-        return Outside(since, autoAt, level)
+        since ?: return null
+
+        var clockFrom = since
+        var serverRank = 0
+        var warnedAutoAt: Long? = null
+        val stageAt = s.serverStageAtMillis
+        val next = s.serverNextAtMillis
+        if (stageAt != null && stageAt >= since && next != null) {
+            when (s.stage) {
+                "outside" -> clockFrom = maxOf(since, next - REMIND_MS)
+                "reminded" -> { clockFrom = maxOf(since, next - WARN_MS); serverRank = 1 }
+                "warned" -> { warnedAutoAt = next; serverRank = 2 }
+            }
+        }
+        clockFrom = minOf(clockFrom, now)
+        val elapsed = now - clockFrom
+        val rank = maxOf(serverRank, if (elapsed >= WARN_MS) 2 else if (elapsed >= REMIND_MS) 1 else 0)
+        val level = when (rank) { 2 -> Level.WARN; 1 -> Level.REMIND; else -> Level.OUTSIDE }
+        return Outside(since, warnedAutoAt ?: (clockFrom + AUTO_MS), level)
     }
 
     const val HOUR_ALERT_MS = 60 * 60_000L
@@ -54,5 +84,5 @@ object OutsideClock {
     }
 
     /** One key per episode: the phone's own exit time (the server's may arrive later and differ). */
-    fun episode(s: TrailState): Long? = s.outsideSinceMillis
+    fun episode(s: TrailState): Long? = s.outsideSinceMillis ?: s.serverOutsideSinceMillis
 }
