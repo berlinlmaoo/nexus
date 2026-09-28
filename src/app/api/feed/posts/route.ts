@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { orgRoleOf } from "@/lib/org"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import { writeFile, mkdir } from "fs/promises"
@@ -18,6 +19,8 @@ export async function GET(request: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // The Wire is the company feed: members of the company workspace only.
+    if (!(await orgRoleOf(session.user.id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     const me = session.user.id
 
     // Open to every signed-in member. The Wire spent its beta behind a BoD gate, which meant the
@@ -74,6 +77,8 @@ export async function POST(request: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // The Wire is the company feed: members of the company workspace only.
+    if (!(await orgRoleOf(session.user.id))) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     const me = session.user.id
 
     // Anyone signed in may post; the rate limits below are what keep it civil, not the role.
