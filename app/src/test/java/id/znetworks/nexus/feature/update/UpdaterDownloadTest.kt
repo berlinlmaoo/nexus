@@ -53,6 +53,17 @@ class UpdaterDownloadTest {
         assertEquals("\"v2\"", req.headers["If-Range"])
     }
 
+    // Audit S7: the version is known before the body, so a cut download can be resumed.
+    @Test fun etagIsReportedBeforeTheBytes() = runTest {
+        server.enqueue(MockResponse.Builder().code(200).addHeader("ETag", "\"v2\"").body("APKBYTES").build())
+        val f = File(tmp.root, "a.apk")
+        var seen: String? = null
+        var bytesWhenSeen = -1L
+        api.download("/api/app/android/apk", f, null, onEtag = { seen = it; bytesWhenSeen = f.length() })
+        assertEquals("\"v2\"", seen)
+        assertEquals(0L, bytesWhenSeen)
+    }
+
     @Test fun aNewBuildMidDownloadReplacesTheFileNotSplices() = runTest {
         val f = File(tmp.root, "a.apk").apply { writeText("OLDPART") }
         // If-Range no longer matches: the server sends the whole new file with 200.

@@ -140,9 +140,10 @@ class ApkUpdater(
             // Range past the end (the server would answer 416).
             val complete = release.sizeBytes != null && apk.exists() && apk.length() == release.sizeBytes
             if (!complete) try {
-                val etag = api.download(release.downloadUrl ?: "/api/app/android/apk", apk, prefs.getString(etagKey, null)) { done, total ->
-                    _step.value = Step.Downloading(done, total)
-                }
+                val etag = api.download(release.downloadUrl ?: "/api/app/android/apk", apk, prefs.getString(etagKey, null),
+                    onProgress = { done, total -> _step.value = Step.Downloading(done, total) },
+                    // Stored before the bytes: a cut connection then resumes instead of starting over.
+                    onEtag = { tag -> prefs.edit().putString(etagKey, tag).commit() })
                 prefs.edit().putString(etagKey, etag).apply()
             } catch (e: ApiError) {
                 // Kept on disk: the next try continues where this one stopped.

@@ -132,6 +132,8 @@ class ApiClient(
         pathOrUrl: String,
         target: java.io.File,
         etag: String?,
+        /** Told the version as soon as the headers arrive, so a download cut mid-way can resume (audit S7). */
+        onEtag: (String?) -> Unit = {},
         onProgress: (Long, Long) -> Unit = { _, _ -> },
     ): String? {
         val url = if (pathOrUrl.startsWith("http")) pathOrUrl.toHttpUrl() else url(pathOrUrl)
@@ -149,6 +151,7 @@ class ApiClient(
                 it.header("Content-Range")?.substringAfter('/')?.toLongOrNull() ?: -1L
             } else it.body.contentLength()
             var done = if (partial) have else 0L
+            onEtag(it.header("ETag"))
             try {
                 it.body.byteStream().use { input ->
                     java.io.FileOutputStream(target, partial).use { out ->
