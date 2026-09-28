@@ -44,6 +44,11 @@ sealed interface CaptureFlow {
 
 data class Place(val name: String, val meters: Int, val inside: Boolean)
 
+/** The time the server wrote on the record for this tap (check-in or check-out), or null. */
+internal fun recordTimeMillis(kind: AttendanceKind, record: AttendanceRecord?): Long? =
+    (if (kind == AttendanceKind.CHECK_IN) record?.checkInAt else record?.checkOutAt)
+        ?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() }.getOrNull() }
+
 /** The next step a refusal points to (REQ-ATT-00b: no dead ends). */
 enum class FixHint { APP_SETTINGS, LOCATION_SETTINGS }
 
@@ -231,7 +236,8 @@ class AttendanceViewModel(app: Application) : AndroidViewModel(app) {
     private fun handleOutcome(kind: AttendanceKind, outcome: AttendanceOutcome) {
         when (outcome) {
             is AttendanceOutcome.Success -> {
-                val at = LocalNotifier.hhmm(System.currentTimeMillis())
+                // The server's time on the record (iOS), the phone's clock only when it sent none.
+                val at = LocalNotifier.hhmm(recordTimeMillis(kind, outcome.record) ?: System.currentTimeMillis())
                 val bannerText = when {
                     outcome.pendingApproval -> res.getString(R.string.banner_offsite_sent)
                     kind == AttendanceKind.CHECK_IN -> res.getString(R.string.banner_checkin_ok)
