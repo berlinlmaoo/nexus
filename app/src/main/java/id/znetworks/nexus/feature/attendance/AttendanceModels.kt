@@ -72,8 +72,12 @@ data class TodayRequest(
 )
 
 @Serializable
+data class WorkspaceRef(val id: String? = null, val name: String? = null, val slug: String? = null)
+
+@Serializable
 data class AttendanceToday(
     val attendanceDateKey: String? = null,
+    val workspace: WorkspaceRef? = null,
     val today: AttendanceRecord? = null,
     /** An EARLIER day still open: the next check-out closes it, and check-in is blocked until then. */
     val pendingCheckout: AttendanceRecord? = null,

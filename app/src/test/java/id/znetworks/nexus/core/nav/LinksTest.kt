@@ -20,6 +20,14 @@ class LinksTest {
         assertEquals(Target.Settings, Links.parse("nexus://settings"))
     }
 
+    @Test fun projectAndTaskLinks() {
+        assertEquals(Target.Task("T1"), Links.parse("/projects/P1/tasks/T1"))
+        assertEquals(Target.Task("T1"), Links.parse("/tasks/T1?reminder=due_1d&due=2026-09-30"))
+        assertEquals(Target.Project("P1"), Links.parse("https://nexus.znetworks.id/projects/P1"))
+        assertEquals(Target.Tab("projects"), Links.parse("/projects"))
+        assertEquals(Target.Tab("tasks"), Links.parse("/my-tasks"))
+    }
+
     @Test fun externalStaysExternal() {
         assertEquals(Target.External("https://apps.apple.com/x"), Links.parse("https://apps.apple.com/x"))
         // A look-alike host is not NEXUS.
@@ -27,8 +35,8 @@ class LinksTest {
     }
 
     @Test fun notificationPrecedence() {
-        assertEquals(Target.Web("/projects/p/tasks/t"), Links.forNotification("comment_added", "/attendance", "t", "p"))
-        assertEquals(Target.Web("/projects/p"), Links.forNotification("project_invite", null, null, "p"))
+        assertEquals(Target.Task("t"), Links.forNotification("comment_added", "/attendance", "t", "p"))
+        assertEquals(Target.Project("p"), Links.forNotification("project_invite", null, null, "p"))
         assertEquals(Target.Attendance(requestId = "x"), Links.forNotification("attendance_request_pending", "/attendance?request=x", null, null))
         assertEquals(Target.Attendance(), Links.forNotification("attendance_auto_offsite_checkout", null, null, null))
         // Unknown type, no link: Inbox, never a crash.

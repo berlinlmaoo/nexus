@@ -4,7 +4,7 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (130 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (134 JVM tests, all green).
 Version 0.1.6 (versionCode 1), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 
 ## Done (Phase 1, attendance MVP)
@@ -41,6 +41,14 @@ Server side for all of this is live (SERVER-REQUESTS R1–R4 DONE, server a79796
 | — | Period keys: 28th-at-midnight-WIB cut-off verified everywhere (iOS bug 8838eec not present) | a808e55 |
 | — | Firebase read from `app/google-services.json` (main session drops it in; git-ignored) | a884d5c |
 | — | In-app APK update: release check, resumable download with session, sha256 + package + signing cert + version verified, PackageInstaller, "Install unknown apps" guided once | fd00ad5 |
+
+## Phase 2 (tasks & projects), in progress since 28 Sep 2026
+
+| Part | What exists | Commit |
+|---|---|---|
+| 2.1 | Navigation (NavHost under the tab bar, tabs keep their state), link targets for projects/tasks, response cache (saved copy when nobody answers, per person, wiped on logout), session-aware images/avatars, Mission Control (search missions + tasks, folder tree, project cards with Cards/Done/Lanes/progress/next due from one fetch, create mission, create/edit/delete folder, move to folder) | this step |
+
+Still on the web until built: project detail, task detail, My tasks, dashboard, search, sign-up/reset/passkeys, What's New.
 
 ## iOS bug checklist (UPDATES §8), checked 28 Sep 2026
 

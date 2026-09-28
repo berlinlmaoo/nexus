@@ -61,6 +61,30 @@ class ApiClient(
 
     fun url(path: String): HttpUrl = baseUrl.resolve(path) ?: error("Bad path: $path")
 
+    /** Set by the container: where [getCached] keeps the last good answer per key and per person. */
+    var cache: ResponseCache? = null
+
+    /** A read's value, and when it came off the disk instead of the server (null = live). */
+    data class Cached<T>(val value: T, val savedAtMillis: Long?)
+
+    /**
+     * A read that falls back to the last good answer ONLY when nobody answered (API.md §1.11). A
+     * server refusal is still an error: a cache is no reason to paper over one.
+     */
+    suspend fun <T> getCached(path: String, key: String, serializer: KSerializer<T>): Cached<T> {
+        try {
+            val element = get(path, kotlinx.serialization.json.JsonElement.serializer())
+            val value = try { json.decodeFromJsonElement(serializer, element) } catch (e: Exception) { throw ApiError.Decoding(e) }
+            cache?.save(key, element.toString())
+            return Cached(value, null)
+        } catch (e: ApiError) {
+            if (!e.nobodyAnswered()) throw e
+            val hit = cache?.load(key) ?: throw e
+            val value = runCatching { json.decodeFromString(serializer, hit.body) }.getOrElse { throw e }
+            return Cached(value, hit.savedAtMillis)
+        }
+    }
+
     suspend fun <T> get(
         path: String,
         serializer: KSerializer<T>,

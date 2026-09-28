@@ -4,6 +4,7 @@ import android.content.Context
 import id.znetworks.nexus.core.net.ApiClient
 import id.znetworks.nexus.core.net.ClientIdentity
 import id.znetworks.nexus.core.net.LanRoute
+import id.znetworks.nexus.core.net.ResponseCache
 import id.znetworks.nexus.core.session.KeystoreSessionCipher
 import id.znetworks.nexus.core.session.Session
 import id.znetworks.nexus.core.session.SessionStore
@@ -73,6 +74,9 @@ class AppContainer(private val context: Context) {
 
     val auth = AuthRepository(api, sessionStore)
 
+    /** Last good answers per person for reads when nobody answers (API.md §1.11); wiped on logout. */
+    val responseCache = ResponseCache(File(context.cacheDir, "responses")) { sessionStore.current?.userId }.also { api.cache = it }
+
     val push = PushManager(context, api, identity, appScope)
 
     /** In-app update of the sideloaded APK (owner, 28 Sep 2026). */
@@ -124,6 +128,9 @@ class AppContainer(private val context: Context) {
                 }
                 todayCache.clear()
                 reflectionDrafts.clearAll()
+                // A cached roster or task list must not outlive the session that fetched it.
+                responseCache.clearAll()
+                id.znetworks.nexus.ui.components.ImageMemory.clear()
                 // Location stops with the session; unsent points go with it.
                 workTrail.stopForLogout()
             }

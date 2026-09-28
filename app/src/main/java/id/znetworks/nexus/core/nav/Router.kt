@@ -12,6 +12,10 @@ sealed interface Target {
     /** The Attendance screen, optionally focused on one request / offsite check-out, or the permit composer. */
     data class Attendance(val requestId: String? = null, val offsiteId: String? = null, val permitToday: Boolean = false) : Target
     data object Inbox : Target
+    /** A top-level tab by route ("tasks", "projects"). */
+    data class Tab(val route: String) : Target
+    data class Project(val id: String) : Target
+    data class Task(val id: String) : Target
     data class Announcement(val id: String) : Target
     data object Settings : Target
     /** A screen Android does not have yet: opened on the web instead of doing nothing. */
@@ -26,10 +30,8 @@ object Links {
      * link path → keyword fallback on `type`, finally Inbox. Unknown types never break routing.
      */
     fun forNotification(type: String?, link: String?, taskId: String?, projectId: String?): Target {
-        if (!taskId.isNullOrBlank()) {
-            return Target.Web(if (!projectId.isNullOrBlank()) "/projects/$projectId/tasks/$taskId" else "/tasks/$taskId")
-        }
-        if (!projectId.isNullOrBlank()) return Target.Web("/projects/$projectId")
+        if (!taskId.isNullOrBlank()) return Target.Task(taskId)
+        if (!projectId.isNullOrBlank()) return Target.Project(projectId)
         if (!link.isNullOrBlank()) {
             parse(link)?.let { return it }
         }
@@ -77,6 +79,12 @@ object Links {
                 else -> Target.Attendance()
             }
             p == "/inbox" -> Target.Inbox
+            p == "/projects" -> Target.Tab("projects")
+            p == "/tasks" || p == "/my-tasks" -> Target.Tab("tasks")
+            // The deeper id wins: /projects/<p>/tasks/<t> is the task.
+            Regex("^/projects/[^/]+/tasks/([^/]+)$").matches(p) -> Target.Task(path.trimEnd('/').substringAfterLast('/'))
+            Regex("^/tasks/([^/]+)$").matches(p) -> Target.Task(path.trimEnd('/').substringAfterLast('/'))
+            Regex("^/projects/([^/]+)$").matches(p) -> Target.Project(path.trimEnd('/').substringAfterLast('/'))
             p == "/dashboard" && q["announcement"] != null -> Target.Announcement(q["announcement"]!!)
             p == "/settings" -> Target.Settings
             // Everything else exists on the web: open it there rather than landing nowhere.

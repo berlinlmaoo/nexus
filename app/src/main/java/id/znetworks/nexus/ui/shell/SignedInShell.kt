@@ -59,6 +59,13 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.os.LocaleListCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import id.znetworks.nexus.feature.projects.ProjectsScreen
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
 import id.znetworks.nexus.core.nav.Target
@@ -78,12 +85,12 @@ import id.znetworks.nexus.ui.theme.Nx
 import id.znetworks.nexus.feature.update.startUpdate
 import kotlinx.coroutines.launch
 
-private enum class Tab(val label: Int, val icon: ImageVector, val webPath: String) {
-    HOME(R.string.tab_home, Icons.Filled.Home, "/attendance"),
-    TASKS(R.string.tab_tasks, Icons.Filled.Checklist, "/my-tasks"),
-    INBOX(R.string.tab_inbox, Icons.Filled.Inbox, "/inbox"),
-    PROJECTS(R.string.tab_projects, Icons.Filled.Folder, "/projects"),
-    MORE(R.string.tab_more, Icons.Filled.Menu, ""),
+private enum class Tab(val route: String, val label: Int, val icon: ImageVector, val webPath: String) {
+    HOME("home", R.string.tab_home, Icons.Filled.Home, "/attendance"),
+    TASKS("tasks", R.string.tab_tasks, Icons.Filled.Checklist, "/my-tasks"),
+    INBOX("inbox", R.string.tab_inbox, Icons.Filled.Inbox, "/inbox"),
+    PROJECTS("projects", R.string.tab_projects, Icons.Filled.Folder, "/projects"),
+    MORE("more", R.string.tab_more, Icons.Filled.Menu, ""),
 }
 
 /**
@@ -92,10 +99,18 @@ private enum class Tab(val label: Int, val icon: ImageVector, val webPath: Strin
  */
 @Composable
 fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () -> Unit) {
-    var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
+    val nav = rememberNavController()
     val context = LocalContext.current
     val container = (context.applicationContext as NexusApplication).container
     val pending by container.router.pending.collectAsStateWithLifecycle()
+    val backStack by nav.currentBackStackEntryAsState()
+    val route = backStack?.destination?.route
+
+    fun goTab(t: Tab) = nav.navigate(t.route) {
+        popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
 
     // Android 13+: without this, the refused-tap notice and push never show. Asked once.
     val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
@@ -106,13 +121,15 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
         container.announcements.refresh()
     }
 
-    // Links: switch to the owning tab; that screen claims the focus. Web, external and
-    // announcement targets are handled here and claimed at once.
+    // Links: switch to the owning screen; attendance focus is claimed by that screen itself.
     LaunchedEffect(pending) {
         when (val t = pending) {
-            is Target.Attendance -> tab = Tab.HOME
-            Target.Inbox -> { tab = Tab.INBOX; container.router.consumed(t) }
-            Target.Settings -> { tab = Tab.MORE; container.router.consumed(t) }
+            is Target.Attendance -> goTab(Tab.HOME)
+            Target.Inbox -> { goTab(Tab.INBOX); container.router.consumed(t) }
+            Target.Settings -> { goTab(Tab.MORE); container.router.consumed(t) }
+            is Target.Tab -> { Tab.entries.firstOrNull { it.route == t.route }?.let(::goTab); container.router.consumed(t) }
+            is Target.Project -> { container.router.consumed(t); nav.navigate("project/${t.id}") }
+            is Target.Task -> { container.router.consumed(t); nav.navigate("task/${t.id}") }
             is Target.Announcement -> { container.router.consumed(t); container.announcements.showOne(t.id) }
             is Target.Web -> { container.router.consumed(t); openWeb(context, t.path) }
             is Target.External -> { container.router.consumed(t); openUrl(context, t.url) }
@@ -128,9 +145,11 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
         containerColor = Nx.colors.background,
         bottomBar = {
             NavigationBar(containerColor = Nx.colors.card) {
+                val current = Tab.entries.firstOrNull { it.route == route }
+                    ?: Tab.entries.firstOrNull { t -> backStack?.destination?.hierarchy?.any { it.route == t.route } == true }
                 Tab.entries.forEach { t ->
                     NavigationBarItem(
-                        selected = t == tab, onClick = { tab = t },
+                        selected = t == current, onClick = { goTab(t) },
                         icon = { Icon(t.icon, contentDescription = null) },
                         label = { Text(stringResource(t.label)) },
                     )
@@ -138,23 +157,39 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             }
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            when (tab) {
-                // Attendance is the core: it is the Home tab until the full dashboard lands (Phase 2).
-                Tab.HOME -> AttendanceScreen()
-                Tab.INBOX -> InboxScreen()
-                Tab.MORE -> MoreScreen(session, gateState, onSignOut)
-                else -> EmptyState(
-                    icon = tab.icon,
-                    title = stringResource(R.string.not_on_android_title),
-                    message = stringResource(R.string.not_on_android_message),
-                    actionLabel = stringResource(R.string.open_on_web),
-                    onAction = { openWeb(context, tab.webPath) },
-                    modifier = Modifier.fillMaxSize(),
-                )
+        NavHost(nav, startDestination = Tab.HOME.route, modifier = Modifier.fillMaxSize().padding(padding)) {
+            // Attendance is the core: it is Home until the full dashboard lands (Phase 2).
+            composable(Tab.HOME.route) { AttendanceScreen() }
+            composable(Tab.TASKS.route) { NotYet(Tab.TASKS) }
+            composable(Tab.INBOX.route) { InboxScreen() }
+            composable(Tab.PROJECTS.route) {
+                ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") })
+            }
+            composable(Tab.MORE.route) { MoreScreen(session, gateState, onSignOut) }
+            // Not built yet on this step: the web page, and back.
+            composable("project/{id}") { e ->
+                val id = e.arguments?.getString("id").orEmpty()
+                LaunchedEffect(id) { openWeb(context, "/projects/$id"); nav.popBackStack() }
+            }
+            composable("task/{id}") { e ->
+                val id = e.arguments?.getString("id").orEmpty()
+                LaunchedEffect(id) { openWeb(context, "/tasks/$id"); nav.popBackStack() }
             }
         }
     }
+}
+
+@Composable
+private fun NotYet(tab: Tab) {
+    val context = LocalContext.current
+    EmptyState(
+        icon = tab.icon,
+        title = stringResource(R.string.not_on_android_title),
+        message = stringResource(R.string.not_on_android_message),
+        actionLabel = stringResource(R.string.open_on_web),
+        onAction = { openWeb(context, tab.webPath) },
+        modifier = Modifier.fillMaxSize(),
+    )
 }
 
 @Composable
