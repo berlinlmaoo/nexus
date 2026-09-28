@@ -522,7 +522,9 @@ function Attendance() {
                 {memberRows.map((u) => (
                   <tr key={u.id} className="border-b border-border last:border-0 hover:bg-muted/20">
                     <td className="sticky left-0 z-10 w-[15rem] min-w-[15rem] bg-card px-3 py-2.5 shadow-[1px_0_0_0_hsl(var(--border))] sm:w-[20rem] sm:min-w-[20rem] sm:px-4">
-                      <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+                      {/* Two lines at every width: who, then everything about them. One row squeezed the
+                          badges and pills on top of each other in the 20rem column (28 Sep 2026). */}
+                      <div className="flex min-w-0 flex-col gap-1.5">
                         {canManage ? (
                           <button
                             onClick={() => setDeductionsFor({ id: u.id, name: u.name ?? null })}
@@ -544,10 +546,11 @@ function Attendance() {
                             </div>
                           </>
                         )}
-                        <TrackingBadges rec={recMap.get(`${u.id}:${todayKey}`)} isToday className="sm:ml-1" />
+                        <div className="flex min-w-0 flex-wrap items-center gap-1 pl-1">
+                        <TrackingBadges rec={recMap.get(`${u.id}:${todayKey}`)} isToday />
                         {/* The person's whole record for this period: counts, XP log with reasons, requests. */}
                         <Link to="/people/$userId" params={{ userId: u.id }} search={{ period: monthKey }} title={`${u.name ?? "Crew"} — record for this period`}
-                          className="shrink-0 self-start rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground ring-1 ring-border transition hover:bg-accent hover:text-foreground sm:self-auto">Record</Link>
+                          className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground ring-1 ring-border transition hover:bg-accent hover:text-foreground">Record</Link>
                         {canManage && (() => {
                           const d = dayOffOf(u.id);
                           if (!d) return null;
@@ -563,7 +566,7 @@ function Attendance() {
                             : "bg-muted text-muted-foreground ring-border";
                           const pill = "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ring-1";
                           return (
-                            <div className="flex flex-wrap items-center gap-1 sm:ml-1">
+                            <>
                               <span title={`Day off left this period: ${d.remaining} of ${d.quota} (used ${d.used})${d.bonus && d.bonus.days > 0 ? `\nQuota ${d.baseQuota ?? d.quota - d.bonus.days} + ${d.bonus.days} extra (${d.bonus.grants.map((g) => `${g.days}: ${g.reason}`).join("; ")}) — expires on the 27th` : ""}`}
                                 className={cn(pill, quotaTone(d.remaining), d.bonus && d.bonus.days > 0 && "ring-emerald-300")}>
                                 {d.remaining}/{d.quota} DO{d.bonus && d.bonus.days > 0 && <span className="ml-0.5 text-emerald-600">+</span>}
@@ -591,9 +594,10 @@ function Attendance() {
                               >
                                 <Download className="inline h-3 w-3" />
                               </button>
-                            </div>
+                            </>
                           );
                         })()}
+                        </div>
                       </div>
                     </td>
                     {periodDays.map((pd) => {

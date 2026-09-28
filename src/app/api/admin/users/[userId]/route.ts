@@ -9,6 +9,8 @@ import { logAudit } from "@/lib/audit"
 import { createInAppNotification } from "@/lib/notification-service"
 import bcrypt from "bcryptjs"
 import { getUserOrgRole, isBodPlus } from "@/lib/feed"
+import { WORKSPACE_HIERARCHY } from "@/lib/rbac"
+import type { WorkspaceRole } from "@/generated/prisma/client"
 
 const SYSTEM_ROLES: SystemRole[] = ["ADMIN", "MEMBER"]
 
@@ -182,6 +184,27 @@ export async function PATCH(
 
     if (!existing) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
+
+    // targetTierGuard (audit 28 Sep 2026). The system role (ADMIN/MEMBER) is only ever given or
+    // taken by a system admin: `canAccessUserManagement` lets Managers through, and a Manager could
+    // PATCH themselves to ADMIN. And nobody but a system admin touches a system admin's account, or
+    // an account at or above their own workspace tier (One Above All excepted), except their own —
+    // otherwise a BoD could reset an OAA's email and password and sign in as them.
+    if (role !== undefined && role !== existing.role && !context.isSystemAdmin) {
+      return NextResponse.json({ error: "Hanya system admin yang bisa mengubah peran sistem." }, { status: 403 })
+    }
+    const isSelf = existing.id === session.user.id
+    if (!isSelf && !context.isSystemAdmin && (touchesAccount || hasWorkspaceEmail)) {
+      if (existing.role === "ADMIN") {
+        return NextResponse.json({ error: "Akun ini system admin — cuma sesama system admin yang bisa mengubahnya." }, { status: 403 })
+      }
+      const [callerRole, targetRole] = await Promise.all([getUserOrgRole(session.user.id), getUserOrgRole(existing.id)])
+      const callerTier = WORKSPACE_HIERARCHY[callerRole as WorkspaceRole] ?? 0
+      const targetTier = WORKSPACE_HIERARCHY[targetRole as WorkspaceRole] ?? 0
+      if (callerTier !== WORKSPACE_HIERARCHY.ONE_ABOVE_ALL && targetTier >= callerTier) {
+        return NextResponse.json({ error: "Kamu tidak bisa mengubah akun orang yang setara atau di atas level kamu." }, { status: 403 })
+      }
     }
 
     const data: {

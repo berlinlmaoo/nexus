@@ -588,8 +588,11 @@ export async function DELETE(req: NextRequest) {
     const currentMember = await getWorkspaceAndRole(session.user.id, requestedWorkspaceId)
     if (!currentMember) return NextResponse.json({ error: 'No workspace found' }, { status: 404 })
     const isSystemAdmin = await isSystemAdminUser(session.user.id)
-    if (!isSystemAdmin && currentMember.role !== 'BOD' && currentMember.role !== 'MANAGER' && currentMember.role !== 'ONE_ABOVE_ALL') {
-      return NextResponse.json({ error: 'Only owners and admins can remove members' }, { status: 403 })
+    // BoD and above only, as every other member change (audit 28 Sep 2026: Managers could remove
+    // anyone, One Above All included).
+    const tier = callerTier(currentMember.role, isSystemAdmin)
+    if (tier < WORKSPACE_HIERARCHY.BOD) {
+      return NextResponse.json({ error: 'Hanya BoD ke atas yang bisa mengeluarkan anggota.' }, { status: 403 })
     }
 
     const { searchParams } = new URL(req.url)
@@ -604,9 +607,9 @@ export async function DELETE(req: NextRequest) {
     if (targetMember.userId === session.user.id) {
       return NextResponse.json({ error: 'Cannot remove yourself' }, { status: 400 })
     }
-    // Prevent non-owners from removing owners
-    if (targetMember.role === 'BOD' && currentMember.role !== 'BOD') {
-      return NextResponse.json({ error: 'Only owners can remove other owners' }, { status: 403 })
+    // Only someone who outranks them (One Above All / system admin excepted).
+    if (tier !== 4 && callerTier(targetMember.role, false) >= tier) {
+      return NextResponse.json({ error: 'Kamu tidak bisa mengeluarkan anggota yang setara atau di atas level kamu.' }, { status: 403 })
     }
 
     await prisma.workspaceMember.delete({ where: { id: memberId } })
