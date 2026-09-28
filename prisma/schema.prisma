@@ -291,6 +291,27 @@ model AttendanceSuspectReview {
   @@index([workspaceId, attendanceDate])
 }
 
+/// A warning a BoD sent from Absen Monitor about one attendance record (POST
+/// /api/attendance/suspects/:recordId/warn). The message reaches the person as a personal
+/// Announcement (kind "warning"); this row is the history shown on the card. recordId is a bare
+/// column, not a relation: a record judged INVALID is deleted, and its warnings must outlive it.
+model AttendanceWarning {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  recordId       String
+  userId         String
+  attendanceDate DateTime
+  /// Record level when sent: "FAKE" | "NOFACE" | "CHECK"
+  level          String?
+  message        String
+  announcementId String?
+  createdById    String
+  createdAt      DateTime @default(now())
+
+  @@index([recordId])
+  @@index([workspaceId, attendanceDate])
+}
+
 /// A single session (JWT `sid`) ended by its own sign-out (POST /api/auth/app-logout, security audit
 /// 29 Sep 2026). Checked in the jwt callback; rows past `expiresAt` mean nothing and may be deleted.
 model RevokedSession {
@@ -1203,6 +1224,13 @@ model AttendanceRecord {
   checkInClient         String?
   locationPoints        AttendanceLocationPoint[]
 
+  // Face check on the selfies (face/ sidecar, cron/attendance-face-check). Faces found in each selfie;
+  // null = not checked yet (or no selfie on that side). -1 = the file could not be read (missing, not
+  // an image) — internal, the API reports it as null. faceCheckedAt = the last check of this record.
+  checkInFaceCount      Int?
+  checkOutFaceCount     Int?
+  faceCheckedAt         DateTime?
+
   notes                 String?
   status                AttendanceStatus @default(CHECKED_IN)
   correctedAt           DateTime?
@@ -1632,6 +1660,12 @@ model Announcement {
   // Audience: empty = EVERYONE (default). Non-empty = only these user ids see the pop-up.
   targetUserIds String[]          @default([])
   imageUrl    String?             // optional image shown in the pop-up (e.g. violation evidence photo)
+  // "announcement" (Control Room) | "warning" (a personal attendance warning from Absen Monitor) |
+  // "sp" (surat peringatan: a PDF attached, shown with an SP badge and an Open PDF button).
+  kind           String         @default("announcement")
+  // PDF under uploads/attachments/announcements/, served by /api/files (session required).
+  attachmentUrl  String?
+  attachmentName String?
   createdById String?
   createdAt   DateTime            @default(now())
   seenBy      AnnouncementSeen[]

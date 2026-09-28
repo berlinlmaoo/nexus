@@ -8,7 +8,7 @@ import { formatAttendanceDateKey, getAttendanceWorkspaceContext } from "@/lib/at
 import { processAbsenceDeductions } from "@/lib/attendance-absence"
 import { createInAppNotification } from "@/lib/notification-service"
 import { placeLabel } from "@/lib/attendance-place"
-import { recordLevel, side } from "@/lib/attendance-suspect"
+import { recordLevel, recordSides } from "@/lib/attendance-suspect"
 
 /**
  * POST /api/attendance/suspects/:recordId/review  { verdict: "VALID" | "INVALID", note }
@@ -56,21 +56,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ rec
     if (!record || record.workspaceId !== workspaceId) {
       return NextResponse.json({ error: "Absen tidak ditemukan.", code: "NOT_FOUND" }, { status: 404 })
     }
-    const checkIn = side({
-      at: record.checkInAt, lat: record.checkInLat, lng: record.checkInLng, accuracyM: record.checkInAccuracyM,
-      simulated: record.checkInSimulated, suspect: record.checkInSuspect, reason: record.checkInSuspectReason, impliedKmh: record.checkInImpliedKmh,
-      photoUrl: record.checkInPhotoUrl, address: record.checkInAddress, offline: record.checkInOffline,
-    })
-    const checkOut = side({
-      at: record.checkOutAt, lat: record.checkOutLat, lng: record.checkOutLng, accuracyM: record.checkOutAccuracyM,
-      simulated: record.checkOutSimulated, suspect: record.checkOutSuspect, reason: record.checkOutSuspectReason, impliedKmh: record.checkOutImpliedKmh,
-      photoUrl: record.checkOutPhotoUrl, address: record.checkOutAddress, offline: record.checkOutOffline,
-    })
+    const { checkIn, checkOut } = recordSides(record)
     const level = recordLevel([checkIn, checkOut])
     if (!level) return NextResponse.json({ error: "Absen ini tidak ditandai mencurigakan.", code: "NOT_FLAGGED" }, { status: 400 })
     if (verdict === "INVALID" && level !== "FAKE") {
       return NextResponse.json({
-        error: "Tidak sah hanya untuk bukti fake GPS (HP melaporkan lokasi palsu, atau perpindahan mustahil). Tanda ini lemah — bisa lokasi tersimpan (cache) atau HP yang tidak bergerak.",
+        error: level === "NOFACE"
+          ? "Tidak sah hanya untuk bukti fake GPS. Selfie tanpa wajah bukan bukti lokasi palsu — kirim peringatan saja (Send warning)."
+          : "Tidak sah hanya untuk bukti fake GPS (HP melaporkan lokasi palsu, atau perpindahan mustahil). Tanda ini lemah — bisa lokasi tersimpan (cache) atau HP yang tidak bergerak.",
         code: "NOT_PROOF",
       }, { status: 422 })
     }
