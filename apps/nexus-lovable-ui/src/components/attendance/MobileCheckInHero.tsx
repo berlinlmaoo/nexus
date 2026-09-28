@@ -7,6 +7,7 @@ import { AnimatePresence } from "framer-motion";
 import { celebrate } from "@/components/Celebration";
 import { ApiError, fmtTime, nexusApi, type AttendanceActionPayload, type NexusAttendanceToday } from "@/lib/nexus-api";
 import { getAttendanceFix, GeoError } from "@/lib/geo";
+import { recordPlace } from "@/lib/attendance-place";
 import { LivenessCapture } from "@/components/attendance/LivenessCapture";
 import { IosAppCheckInCard, isUseIosAppError, WebCheckInNote } from "@/components/attendance/IosAppCheckInCard";
 import { AttendanceButton, CoveredByRequestCard, placeLine, REFLECTION_MIN, successTitle, useAttendancePress, whereHint, workedLabel, type DayState } from "@/components/attendance/AttendanceButton";
@@ -29,7 +30,9 @@ export function MobileCheckInHero({ today, disabled, failed = false }: { today: 
   const checkedOut = Boolean(today?.today?.checkOutAt);
   const pending = today?.pendingCheckout ?? null;
   const forcePending = Boolean(pending);
-  const officeName = forcePending ? pending?.officeLocation?.name : today?.today?.officeLocation?.name;
+  // The day's place: the office, or the check-in address when it was made away from the office
+  // (owner, 28 Sep 2026: per record, not per person).
+  const officeName = forcePending ? recordPlace(pending).label || null : today?.today?.checkInAt ? recordPlace(today.today).label || null : today?.today?.officeLocation?.name;
   const shift = today?.myShift;
 
   const [now, setNow] = useState(() => new Date());

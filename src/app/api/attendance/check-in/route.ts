@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { logAudit } from "@/lib/audit"
+import { isCheckInAway, placeLabel } from "@/lib/attendance-place"
 import { buildAttendanceDerivedFields, formatAttendanceDateKey, getAttendanceDate, getAttendanceWorkspaceContext, assessLocationIntegrity, getMemberNoGeofence, resolveNearestOffice, resolveEffectiveAttendanceShift, serializeAttendanceRecord, isRestDayForMember } from "@/lib/attendance"
 import { isHoliday } from "@/lib/holidays"
 import { setLatePenalty, clearLatePenalty } from "@/lib/gamification"
@@ -375,6 +376,9 @@ export async function POST(request: NextRequest) {
       metadata: {
         officeLocationId: nearest.office.id,
         distanceMeters: record.checkInDistanceMeters,
+        // Away from the office (only location-free members can be): the audit names the place, not
+        // an office they were never in.
+        ...(isCheckInAway(record) ? { checkInAway: true, checkInPlace: placeLabel(record) } : {}),
       },
     })
 

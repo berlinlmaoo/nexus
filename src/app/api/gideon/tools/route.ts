@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { minutesLateAgainstShift, safeAttendanceTimezone, resolveShiftWindowAt, formatAttendanceDateKey } from '@/lib/attendance'
+import { isCheckInAway, placeLabel } from '@/lib/attendance-place'
 import { markdownToTipTap, extractTextFromTipTap } from '@/lib/tiptap-utils'
 import { getGideonUserId } from '@/lib/gideon-identity'
 import { authenticateGideonService } from '@/lib/gideon-service-auth'
@@ -480,6 +481,7 @@ async function getAttendanceDay(actor: User, input: Record<string, unknown>) {
       id: true, attendanceDate: true, checkInAt: true, checkOutAt: true, status: true,
       lateMinutes: true, earlyLeaveMinutes: true, workedMinutes: true,
       checkInStatus: true, checkOutStatus: true, correctedAt: true,
+      checkInDistanceMeters: true, checkInAddress: true, checkInLat: true, checkInLng: true,
       officeLocation: true,
     },
   })
@@ -803,6 +805,11 @@ async function getAttendanceDay(actor: User, input: Record<string, unknown>) {
     workedMinutes: record.workedMinutes,
     correctedAt: record.correctedAt,
     office: record.officeLocation?.name ?? null,
+    // Location-free members may check in anywhere; the record is still filed under the nearest office.
+    // checkInAway = outside that office's radius, and then place is the address they checked in at.
+    // Say THAT when asked where they were, not the office (owner, 28 Sep 2026).
+    checkInAway: isCheckInAway(record),
+    place: placeLabel(record) || null,
   }
 }
 

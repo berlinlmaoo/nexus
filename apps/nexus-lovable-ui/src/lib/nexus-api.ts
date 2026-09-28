@@ -379,16 +379,24 @@ export type NexusAttendanceToday = {
     checkOutReason?: string | null;
     checkOutReflection?: string | null;
     checkOutReflectionAt?: string | null;
-    officeLocation?: { name?: string | null } | null;
-    /** Where the check-in was made (server reverse geocode) — shown for location-free members. */
+    officeLocation?: { name?: string | null; radiusMeters?: number | null } | null;
+    /** Where the check-in was made (server reverse geocode) — shown instead of the office when away. */
     checkInAddress?: string | null;
+    checkInDistanceMeters?: number | null;
+    checkInLat?: number | null;
+    checkInLng?: number | null;
+    /** Checked in outside the office radius (location-free members). Servers from 28 Sep 2026. */
+    checkInAway?: boolean | null;
   } | null;
   // A previous day's check-in that was never checked out — must be closed before a new check-in.
   pendingCheckout?: {
     id: string;
     attendanceDate?: string | null;
     checkInAt?: string | null;
-    officeLocation?: { name?: string | null } | null;
+    officeLocation?: { name?: string | null; radiusMeters?: number | null } | null;
+    checkInAddress?: string | null;
+    checkInDistanceMeters?: number | null;
+    checkInAway?: boolean | null;
   } | null;
   todayRequest?: {
     id: string;
@@ -431,6 +439,10 @@ export type NexusAttendanceHistory = {
     checkInAddress?: string | null;
     checkInPhotoUrl?: string | null;
     checkInDistanceMeters?: number | null;
+    /** Checked in outside the office radius (location-free); null on synthetic rows. 28 Sep 2026+. */
+    checkInAway?: boolean | null;
+    /** The office the record is filed under (the nearest one at check-in). */
+    officeLocation?: { name?: string | null; radiusMeters?: number | null } | null;
     checkOutLat?: number | null;
     checkOutLng?: number | null;
     checkOutAddress?: string | null;
@@ -464,6 +476,10 @@ export type NexusAttendanceTrail = {
     checkOutAt: string | null;
     checkOutOffsite: boolean | null;
     locationTrackingState?: "on" | "denied" | "web" | null;
+    /** Servers from 28 Sep 2026: checked in away from the office, and the day's place as text. */
+    checkInAway?: boolean | null;
+    checkInAddress?: string | null;
+    placeLabel?: string | null;
     office: { name: string; lat: number; lng: number; radiusMeters: number } | null;
   };
   points: NexusTrailPoint[];

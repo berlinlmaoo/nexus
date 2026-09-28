@@ -473,6 +473,8 @@ const FIELD_LABELS: Record<string, string> = {
   xpRefunded: "XP refunded",
   approvalSource: "Reviewed as",
   distanceMeters: "Distance from office",
+  checkInAway: "Away from office",
+  checkInPlace: "Checked in at",
   mimeType: "File type",
   size: "Size",
   via: "Via",
@@ -803,7 +805,11 @@ function buildTitle(row: AuditRowLike, names?: AuditNames): string {
   if (type === "attendance_request") return attendanceRequestTitle(actor, action, entityName, meta, person)
 
   if (type === "attendance_record") {
-    if (action === "create" && entityName && /check-in$/i.test(entityName)) return `${actor} checked in`
+    if (action === "create" && entityName && /check-in$/i.test(entityName)) {
+      // Away from the office (location-free): say where, not which office (owner, 28 Sep 2026).
+      const place = meta.checkInAway === true ? str(meta.checkInPlace) : null
+      return place ? `${actor} checked in at ${place} (away from the office)` : `${actor} checked in`
+    }
     if (action === "update" && entityName && / check-out$/i.test(entityName) && !/hapus/i.test(entityName)) return `${actor} checked out`
     if (typeof meta.offsiteApproval === "string") {
       const who = person("targetUserId")

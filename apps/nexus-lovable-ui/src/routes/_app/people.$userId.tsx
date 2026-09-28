@@ -15,6 +15,7 @@ import { EmptyState, EmptyAction } from "@/components/EmptyState";
 import { celebrate } from "@/components/Celebration";
 import { StatusOverridePanel } from "@/components/attendance/StatusOverridePanel";
 import { recTone, sCls, toneFromLetter, toneLabel, type HistRow } from "@/lib/attendance-tone";
+import { recordPlace } from "@/lib/attendance-place";
 import { ApiError, fmtDate, fmtTime, nexusApi, ORG_ROLE_LABEL, ORG_ROLE_TONE, type NexusMemberRecord, type NexusRecordXp, type NexusRecordXpEntry } from "@/lib/nexus-api";
 import { cn } from "@/lib/utils";
 
@@ -247,6 +248,9 @@ function DayDetail({ data, day, rec, onClose }: { data: NexusMemberRecord; day: 
   }, [onClose]);
   const tone = rec ? recTone(rec) : toneFromLetter(day.tone);
   const entries = data.xp.entries.filter((e) => e.dateKey === day.date);
+  // Where the day was: the office, or the check-in address when it was made away from it.
+  const place = rec?.checkInAt ? recordPlace(rec) : null;
+  const where = place?.label || rec?.checkInAddress || null;
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/30 p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl border border-border bg-card p-5 shadow-pop" onClick={(e) => e.stopPropagation()}>
@@ -260,7 +264,7 @@ function DayDetail({ data, day, rec, onClose }: { data: NexusMemberRecord; day: 
         <dl className="mt-3 space-y-1.5 text-sm">
           {rec?.checkInAt && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">In / out</dt><dd className="font-semibold tabular-nums">{fmtTime(rec.checkInAt)} – {rec.checkOutAt ? fmtTime(rec.checkOutAt) : "no check-out"}</dd></div>}
           {day.lateMinutes > 0 && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Late</dt><dd className="font-semibold text-rose-600">{day.lateMinutes} min</dd></div>}
-          {rec?.checkInAddress && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Where</dt><dd className="truncate text-right font-semibold">{rec.checkInAddress}</dd></div>}
+          {where && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Where</dt><dd className="min-w-0 text-right"><div className="truncate font-semibold" title={rec?.checkInAddress ?? undefined}>{where}</div>{place?.away && <div className="text-[11px] text-muted-foreground">Away from the office</div>}</dd></div>}
           {rec?.requestType && <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Request</dt><dd className="font-semibold">{REQ_LABEL[rec.requestType] ?? rec.requestType}{rec.reviewedBy?.name ? ` · approved by ${rec.reviewedBy.name}` : ""}</dd></div>}
           {rec?.notes && <div className="rounded-xl bg-muted/40 p-2.5 text-sm"><div className="mb-0.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Reason</div><p className="whitespace-pre-wrap">{rec.notes}</p></div>}
           {!rec && !day.isFuture && <p className="text-muted-foreground">Nothing recorded — a rest day, a public holiday, before they joined, or still open today.</p>}

@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma"
+import { isCheckInAway } from "@/lib/attendance-place"
 
 export const ATTENDANCE_TIMEZONE = process.env.APP_TIMEZONE || "Asia/Jakarta"
 const DEFAULT_SILENT_CORRECTION_ADMINS = ["bagasputro.bp@gmail.com"]
@@ -1095,6 +1096,10 @@ export function serializeAttendanceRecord(record: AttendanceRecordWithRelations)
     checkOutPhotoUrl: record.checkOutPhotoUrl,
     checkInDistanceMeters: record.checkInDistanceMeters,
     checkOutDistanceMeters: record.checkOutDistanceMeters,
+    // true = checked in further from officeLocation than its radius (location-free members only);
+    // clients then show checkInAddress instead of the office name for that day. null = unknown
+    // (no check-in distance). Additive; see lib/attendance-place.ts.
+    checkInAway: isCheckInAway(record),
     checkOutOffsite: record.checkOutOffsite ?? false,
     checkOutApproval: record.checkOutApproval ?? null,
     checkOutReason: record.checkOutReason ?? null,

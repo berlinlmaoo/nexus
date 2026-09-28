@@ -243,6 +243,12 @@ export function LocationTrail({ recordId, compact = false, trackingState }: { re
             <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><LogIn className="h-3.5 w-3.5" /> Check-in</span>
             <span className="font-semibold tabular-nums">{fmtTime(record.checkInAt)}</span>
           </div>
+          {/* Where the day was (server placeLabel): the office, or the address when checked in away. */}
+          {record.checkInAt && (record.placeLabel || record.office?.name) && (
+            <p className="mt-0.5 truncate text-right text-xs text-muted-foreground" title={record.checkInAway ? record.checkInAddress ?? undefined : undefined}>
+              {record.checkInAway ? "Away from the office · " : ""}{record.placeLabel || record.office?.name}
+            </p>
+          )}
           <div className="mt-1 flex items-center justify-between gap-2">
             <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><LogOut className="h-3.5 w-3.5" /> Check-out</span>
             <span className="font-semibold tabular-nums">

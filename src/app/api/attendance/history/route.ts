@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth"
 import { AttendanceDayType, attendancePeriodKey, attendancePeriodRange, enumerateAttendanceDates, formatAttendanceDateKey, getAttendanceWorkspaceContext, isWorkdayForAttendanceDate, mapRequestTypeToAttendanceDayType, serializeAttendanceRecord, isRestDayForMember } from "@/lib/attendance"
 import { getOutageDateKeysForRange, isAutoDeduction } from "@/lib/attendance-absence"
 import { getHolidayKeys } from "@/lib/holidays"
+import { placeLabel } from "@/lib/attendance-place"
 import { attendanceHistoryQuerySchema } from "@/lib/validations"
 import { DEFAULT_DAY_OFF_QUOTA, dayOffQuotaByUser } from "@/lib/day-off-usage"
 // Letters, colours, summary rows and labels are shared with the live Google Sheet
@@ -625,6 +626,7 @@ export async function GET(request: NextRequest) {
           checkOutPhotoUrl: null,
           checkInDistanceMeters: null,
           checkOutDistanceMeters: null,
+          checkInAway: null,
           checkOutOffsite: false,
           checkOutApproval: null,
           checkOutReason: null,
@@ -730,6 +732,7 @@ export async function GET(request: NextRequest) {
             checkOutPhotoUrl: null,
             checkInDistanceMeters: null,
             checkOutDistanceMeters: null,
+            checkInAway: null,
             checkOutOffsite: false,
             checkOutApproval: null,
             checkOutReason: null,
@@ -893,6 +896,9 @@ export async function GET(request: NextRequest) {
         "is_corrected",
         "correction_reason",
         "notes",
+        // Appended (additive): where the day was: the check-in address when it was away from the
+        // office (location-free members), else the office. office_name above stays the office filed.
+        "check_in_place",
       ]
 
       const csv = [headers, ...rows.map((row) => [
@@ -922,6 +928,7 @@ export async function GET(request: NextRequest) {
         row.isCorrected ? "yes" : "no",
         row.correctionReason ?? "",
         row.notes ?? "",
+        row.recordKind === "ATTENDANCE" && row.checkInAt ? placeLabel(row) : "",
       ])]
         .map((row) => row.map((value) => escapeCsvValue(value)).join(","))
         .join("\n")
