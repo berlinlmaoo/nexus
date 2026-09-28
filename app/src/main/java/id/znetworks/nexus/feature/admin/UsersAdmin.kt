@@ -349,7 +349,8 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
             text = { Column { Roles.assignable(r?.role).forEach { k -> TextButton(onClick = { picking = null; patch("role" to JsonPrimitive(k)) }) { Text(Roles.label(k)) } } } },
             confirmButton = {}, dismissButton = { TextButton(onClick = { picking = null }) { Text(stringResource(R.string.cancel)) } })
         "approver" -> {
-            val candidates = r!!.members.filter { it.userId != m.userId && Roles.tier(it.role) >= 2 }.sortedBy { it.displayName.lowercase() }
+            // Anyone but the person (iOS, server): a loop is still refused below (makesCycle).
+            val candidates = r!!.members.filter { it.userId != m.userId }.sortedWith(compareBy({ -Roles.tier(it.role) }, { it.displayName.lowercase() }))
             AlertDialog(onDismissRequest = { picking = null }, title = { Text(stringResource(R.string.ad_approval)) },
                 text = {
                     LazyColumn(Modifier.heightIn(max = 380.dp)) {
