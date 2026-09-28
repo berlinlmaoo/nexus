@@ -57,6 +57,13 @@ class ApiClient(
         .callTimeout(0, TimeUnit.MILLISECONDS)
         .addInterceptor(IdentityInterceptor(identity))
         .apply { routeInterceptor?.let(::addInterceptor) }
+        // Audit R1: the cookie is an application header, and OkHttp keeps those across a redirect to
+        // another host. A network interceptor sees every hop (redirects included) and drops it there.
+        .addNetworkInterceptor { chain ->
+            val r = chain.request()
+            if (r.header("Cookie") != null && !mayCarrySession(r.url.host)) chain.proceed(r.newBuilder().removeHeader("Cookie").build())
+            else chain.proceed(r)
+        }
         .build()
 
     fun url(path: String): HttpUrl = baseUrl.resolve(path) ?: error("Bad path: $path")

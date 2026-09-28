@@ -201,6 +201,15 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 | B13 | **Fixed** (main session, 28 Sep: board showed only people who had checked in on a period's first day). The board now merges `roster` from `GET /api/attendance/history?scope=workspace` with the people in the rows, sorted A–Z as on iOS/web (the viewer is no longer pinned first); roster quota is used when a person has no row yet (history/BoardModel.kt `members`, BoardModelTest `rosterShowsEveryoneEvenWithoutRows`). |
 | B14 | **Fixed** (iOS 91d7e98, crew board freeze panes): (1) a drag over the names, the Score column or the date row now scrolls the board too (outer `scrollable` on the whole grid sharing the day-cell and row scroll states; history/BoardUi.kt `Grid`); (2) **not affected**: rows are a plain Column, never a lazy list inside the two-way scroll, so every row is always drawn. |
 
+## Security + parity audit of build 5 (docs/AUDIT.md 266af90): RILIS LAYAK, 8 RENDAH
+
+R2 (restrict the Firebase key) and R5 (server-side logout) are not the Android session's. No new build
+until the main session says; build 5 goes out for Berlin to test.
+
+| Finding | Fix | Commit |
+|---|---|---|
+| R1 session cookie followed a redirect to another host | A network interceptor drops `Cookie` on any hop (redirects included) whose host may not carry the session (ApiClientTest) | this step |
+
 ## Re-audit 28 Sep 2026 evening (docs/AUDIT.md, HEAD 8842c35, "RILIS BELUM LAYAK"): fixes
 
 Server findings (Manager → ADMIN, BoD edits OAA account, Manager removes members) fixed on the server

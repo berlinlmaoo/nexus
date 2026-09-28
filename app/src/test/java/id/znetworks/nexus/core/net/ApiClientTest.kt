@@ -54,6 +54,24 @@ class ApiClientTest {
         assertNull(server.takeRequest().headers["Cookie"])
     }
 
+    // Audit R1: a redirect to another host never carries the session cookie.
+    @Test fun redirectToAnotherHostDropsTheCookie() = runTest {
+        val other = MockWebServer().apply { start() }
+        try {
+            other.enqueue(MockResponse.Builder().code(200).body("{}").build())
+            server.enqueue(MockResponse.Builder().code(302).addHeader("Location", "http://127.0.0.1:${other.port}/elsewhere").build())
+            val c = ApiClient(
+                baseUrl = server.url("/").newBuilder().host("localhost").build(),
+                identity = ClientIdentity("0.1.0", 1, 34),
+                sessionProvider = { session },
+                mayCarrySession = { it == "localhost" },
+            )
+            c.get("/api/ping", Ping.serializer())
+            assertEquals("__Secure-authjs.session-token=tok123", server.takeRequest().headers["Cookie"])
+            assertNull(other.takeRequest().headers["Cookie"])
+        } finally { other.close() }
+    }
+
     @Test fun noCookieOnUnauthedCall() = runTest {
         reply(200, "{}")
         client().get("/api/app/version-policy", Ping.serializer(), authed = false)
