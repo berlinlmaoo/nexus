@@ -234,7 +234,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     NavigationBarItem(
                         selected = t == current, onClick = { goTab(t) },
                         icon = { Icon(t.icon, contentDescription = null) },
-                        label = { Text(stringResource(t.label)) },
+                        label = { TabLabel(stringResource(t.label)) },
                     )
                 }
             }
@@ -248,7 +248,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 androidx.compose.material3.NavigationRailItem(
                     selected = t == current, onClick = { goTab(t) },
                     icon = { Icon(t.icon, contentDescription = null) },
-                    label = { Text(stringResource(t.label)) },
+                    label = { TabLabel(stringResource(t.label)) },
                 )
             }
         }
@@ -401,6 +401,7 @@ private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut
     val theme by container.appearance.theme.collectAsStateWithLifecycle()
     var confirmLogout by rememberSaveable { mutableStateOf(false) }
     var pickLanguage by rememberSaveable { mutableStateOf(false) }
+    val setLanguage = rememberLanguageSetter()
     var pickTheme by rememberSaveable { mutableStateOf(false) }
     var deleting by rememberSaveable { mutableStateOf(false) }
     var logoutBlocked by rememberSaveable { mutableStateOf(false) }
@@ -636,10 +637,25 @@ private fun DeleteAccountDialog(onDone: () -> Unit, onCancel: () -> Unit) {
     )
 }
 
-private fun setLanguage(tag: String) = AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(tag))
+@Composable
+private fun rememberLanguageSetter(): (String) -> Unit {
+    val context = LocalContext.current
+    return { tag -> id.znetworks.nexus.core.i18n.AppLanguage.choose(context, tag) }
+}
 
 fun openWeb(context: Context, path: String) = openUrl(context, NexusConfig.PUBLIC_BASE + path)
 
 private fun openUrl(context: Context, url: String) {
     runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }
+
+/**
+ * A tab label on ONE line (Berlin, 29 Sep, point 3): "Kotak Masuk" used to wrap and push the bar up.
+ * The text shrinks to fit (12 → 9 sp) instead, so the bar keeps its height in every language.
+ */
+@Composable
+private fun TabLabel(text: String) = androidx.compose.foundation.text.BasicText(
+    text, maxLines = 1, softWrap = false,
+    style = androidx.compose.material3.LocalTextStyle.current.copy(color = androidx.compose.material3.LocalContentColor.current),
+    autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = 9.sp, maxFontSize = 12.sp, stepSize = 0.5.sp),
+)

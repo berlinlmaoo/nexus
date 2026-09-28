@@ -210,7 +210,8 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 
 | Point | Fix | Commit |
 |---|---|---|
-| 6 (bug) keyboard closed at every letter of the reflection → no check-out; gap above the keyboard | The "keep Check out in sight" bring-into-view scroll reaches nested scroll as *user input* in Compose, so the scroll-to-dismiss closed the keyboard on each keystroke. The keyboard is now put away only by a real finger drag (pointer past touch slop), a tap on empty space, Done or back. The gap: the shell's bar padding is now consumed (`consumeWindowInsets`), so `imePadding` adds only what the keyboard covers beyond the bottom bar — for every screen. Guarded in AttendanceGuardTest. Not yet seen on a device (needs a signed-in session) | this step |
+| 6 (bug) keyboard closed at every letter of the reflection → no check-out; gap above the keyboard | The "keep Check out in sight" bring-into-view scroll reaches nested scroll as *user input* in Compose, so the scroll-to-dismiss closed the keyboard on each keystroke. The keyboard is now put away only by a real finger drag (pointer past touch slop), a tap on empty space, Done or back. The gap: the shell's bar padding is now consumed (`consumeWindowInsets`), so `imePadding` adds only what the keyboard covers beyond the bottom bar — for every screen. Guarded in AttendanceGuardTest. Not yet seen on a device (needs a signed-in session) | 93353d4 |
+| 3 language + tab bar | English by default whatever the phone's language (iOS AppLanguage .en); Bahasa Indonesia by choice, kept (`AppLanguage`, applied before the first frame; a choice made in-app before this rule is kept). Tab labels on one line: text shrinks 12→9 sp to fit ("Kotak Masuk"), bar and rail keep their height. AppLanguageTest. The Tuning Room style for Language/Appearance/Logout/Delete comes with point 2 | this step |
 
 ## 29 Sep (Berlin, into 0.1.6; iOS f068bbf)
 
