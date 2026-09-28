@@ -221,7 +221,8 @@ Server findings (Manager → ADMIN, BoD edits OAA account, Manager removes membe
 | R8 (RENDAH) remove/re-rank offered where the server refuses | Tuning Room › Members never offers your own row; a BoD peer's rest days are read-only (iOS). Server remove rule now (c021fda): BoD below BoD, OAA anyone but self = `Roles.canEdit` | 65f3b8f |
 | R6 (RENDAH) unnamed roster people got the viewer's name | The viewer's name only on the viewer's own row; anyone else without name/email is "—" (BoardModelTest) | fd761d9 |
 | R9 (RENDAH) App tab without "Web only · date" / "Never signed in" | Each person not using the app says which, from `lastActiveAt` (iOS 74c6750) | 44cb0c6 |
-| R10 (RENDAH) audit entry: old values not struck, no links | "old → new" with the old value struck through; details linked to a task, project or person open it (iOS 3ae2630) | this step |
+| R10 (RENDAH) audit entry: old values not struck, no links | "old → new" with the old value struck through; details linked to a task, project or person open it (iOS 3ae2630) | e2f4655 |
+| R11 (RENDAH) update deadline not in More | During the grace window More shows "Update NEXUS by <date, time>. After that, this version can't take attendance." with Update, in place of the plain "available" row (iOS UpdateDeadlineRow) | this step |
 
 **New for 0.1.6 (Berlin, 28 Sep; iOS b186172): no sign-out while a workday runs.** Logout in More is
 refused while checked in and not checked out (live, or a check-in still queued offline; before today was

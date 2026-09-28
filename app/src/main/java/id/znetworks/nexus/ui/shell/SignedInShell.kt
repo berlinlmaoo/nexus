@@ -455,7 +455,18 @@ private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut
             )
             Spacer(Modifier.height(12.dp))
         }
-        gateState.available?.let { version ->
+        // A deadline outranks a mere "newer version": only one of the two rows is drawn (iOS UpdateDeadlineRow, audit R11).
+        val grace = gateState.grace
+        if (grace != null) {
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.update_grace_body, java.time.format.DateTimeFormatter.ofPattern("d MMM, HH:mm", java.util.Locale.getDefault())
+                    .format(grace.deadline.atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE)))) },
+                leadingContent = { Icon(Icons.Filled.SystemUpdate, null, tint = c.warning) },
+                colors = itemColors, modifier = shape,
+                trailingContent = { TextButton(onClick = { startUpdate(context, gateState.storeUrl) }) { Text(stringResource(R.string.update_action)) } },
+            )
+            Spacer(Modifier.height(12.dp))
+        } else gateState.available?.let { version ->
             // Soft "update available": Tuning Room only, never a nag (REQ-ATT-41).
             ListItem(
                 headlineContent = { Text(stringResource(R.string.update_available, version)) },
