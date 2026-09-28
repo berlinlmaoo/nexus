@@ -85,6 +85,10 @@ class AppContainer(private val context: Context) {
     val router = Router()
     val viewer = Viewer(api)
     val gideon = id.znetworks.nexus.feature.gideon.GideonChat(api, appScope)
+    val offline: id.znetworks.nexus.core.offline.OfflineSync by lazy {
+        id.znetworks.nexus.core.offline.DiskFiles.init(context.cacheDir)
+        id.znetworks.nexus.core.offline.OfflineSync(context, this)
+    }
     val shortcuts = id.znetworks.nexus.feature.home.ProjectShortcuts(context) { sessionStore.current?.userId }
     val uploads = id.znetworks.nexus.core.net.Uploads(context, api)
     val announcements = AnnouncementHost(InboxApi(api))
@@ -117,6 +121,8 @@ class AppContainer(private val context: Context) {
                 attendanceQueue.keepOnly(session.userId)
                 flushQueueSoon()
                 push.register()
+                offline.schedule()
+                offline.syncAll()
             }
 
             override fun onSignedOut(session: Session?, deliberate: Boolean) {
@@ -136,6 +142,7 @@ class AppContainer(private val context: Context) {
                 responseCache.clearAll()
                 viewer.reset()
                 gideon.reset()
+                offline.reset()
                 if (deliberate) shortcuts.clearAll()
                 id.znetworks.nexus.ui.components.ImageMemory.clear()
                 // Location stops with the session; unsent points go with it.

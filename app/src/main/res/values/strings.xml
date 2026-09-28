@@ -1124,4 +1124,11 @@
     <string name="gd_luna">Everyday.</string>
     <string name="gd_terra">Light. Short questions.</string>
     <string name="gd_experimental">Local model in the office. Slow, and can be wrong.</string>
+    <string name="off_title">Offline copy</string>
+    <string name="off_sub">Today, your tasks and projects, the board, requests and files are kept on this phone so NEXUS opens with no signal.</string>
+    <string name="off_data">Data saved: %1$s</string>
+    <string name="off_files">Files saved: %1$s · %2$s</string>
+    <string name="off_cellular">Download files on mobile data</string>
+    <string name="off_update">Update now</string>
+    <string name="off_updating">Updating…</string>
 </resources>

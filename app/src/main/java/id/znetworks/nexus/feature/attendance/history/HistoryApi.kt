@@ -113,8 +113,9 @@ class HistoryApi(private val api: ApiClient) {
         api.postJson("/api/attendance/override", OverrideBody(userId, date, action, note), OverrideBody.serializer(), OverrideResponse.serializer())
 
     /** [period] is the 28→27 period key `YYYY-MM`; `workspace` needs BoD or direct reports. */
+    /** Cached (saved copy offline), like iOS: the board opens with no signal. */
     suspend fun history(scope: String, period: String): HistoryResponse =
-        api.get("/api/attendance/history?scope=$scope&month=$period", HistoryResponse.serializer())
+        api.getCached("/api/attendance/history?scope=$scope&month=$period", "history-$scope-$period", HistoryResponse.serializer()).value
 
     suspend fun trail(recordId: String): TrailResponse =
         api.get("/api/attendance/records/$recordId/trail", TrailResponse.serializer())

@@ -91,7 +91,7 @@ open class RequestsApi(private val api: ApiClient) {
 
     /** `workspace` when the viewer can review (managers see direct reports only), else `me`. */
     open suspend fun list(scope: String): List<AttendanceRequest> =
-        api.get("/api/attendance/requests?scope=$scope", RequestsResponse.serializer()).requests
+        api.getCached("/api/attendance/requests?scope=$scope", "requests-$scope", RequestsResponse.serializer()).value.requests
 
     open suspend fun offsite(): List<OffsiteCheckout> =
         api.get("/api/attendance/offsite-checkouts?status=ALL", OffsiteResponse.serializer()).items

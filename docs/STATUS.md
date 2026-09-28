@@ -4,7 +4,7 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (230 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (231 JVM tests, all green).
 Version 0.1.6 (versionCode 1), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 
 ## Done (Phase 1, attendance MVP)
@@ -139,7 +139,10 @@ Done. PRESENCE IN / OUT are gone; `AttendanceButton` is one full-width control:
 | 3.7 | Reports (More): Me and My team (hidden for staff on `REPORT_SELF_ONLY`), attendance period 28→27 with prev/next, headline stats with arrows vs last period (good/bad per metric), completed per week, overdue now (opens the task), by project, attendance breakdown, XP with level/streak/penalties (server kinds); team list with search by name/email/team and flags (3+ overdue, late 3+, few reflections), tap → that person's report; `REPORT_OUT_OF_SCOPE` said plainly; `/reports[/<id>]` links | 1cfbca6 |
 | 3.8 | Leaderboard (Home quick action, `/leaderboard`): this period's ranking with shared places, you highlighted, tap → profile. Member profile (leaderboard, search members): header, Message (opens/creates the DM), level from the leaderboard, and the **member record** (`/api/members/<id>/record`, scoped like Reports; a 403 leaves those sections out): period prev/next, score worked/working (+surplus), counts, late, day-off and XP lines, streak board (tones, red dot for a deduction), XP log with load older and **BoD remove a deduction** (with note, refund route), requests with reviewer | 7cd5f92 |
 | 3.9 | Room Booking (upcoming 14 days / history 30 days, grouped by office day) and Team Calendar (month grid, per-team or all teams merged — the server needs one call per team), both read-only as iOS; Home quick actions and `/room-booking`, `/master-calendar` links open them | 5b9fe27 |
-| 3.10 | GIDEON: launcher on Home, history, model tiers (Astra/Luna/Terra/Experimental), questions with an image or a document (≤ 10 MB, the server's extensions), SSE answer parsed (text appended, error sentence, stop at done, bad frames skipped), 180 s read timeout, 413/415 sentences, clear chat. **Through the common client** (headers, cookie, LAN, 426), unlike iOS. The transcript lives in the container, so closing the screen does not lose the answer; wiped on logout | this step |
+| 3.10 | GIDEON: launcher on Home, history, model tiers (Astra/Luna/Terra/Experimental), questions with an image or a document (≤ 10 MB, the server's extensions), SSE answer parsed (text appended, error sentence, stop at done, bad frames skipped), 180 s read timeout, 413/415 sentences, clear chat. **Through the common client** (headers, cookie, LAN, 426), unlike iOS. The transcript lives in the container, so closing the screen does not lose the answer; wiped on logout | fba39b8 |
+| 3.11 | Offline warm-up, DATA + MEDIA (iOS OfflineSync): data pass (today + workspace board/requests for managers, my tasks, projects, XP, my board and requests, my submissions) on sign-in, on foreground when older than 30 min and hourly (WorkManager, any network); media pass (every project's board and tasks, then this period's selfies and task attachments ≤ 40 MB for ≤ 80 tasks per project) every 6 h on unmetered networks unless "files on mobile data" is on; files kept under `cache/offline` keyed by URL (1.5 GB cap, oldest first) and reused by images and file opening; crew board and requests now read through the response cache too. More › **Offline copy** card: when data/files were saved, size, update now, mobile-data toggle. Wiped with the session | this step |
+
+**Phase 3 is complete** (28 Sep 2026). Next: Phase 4 (Control Room).
 
 Still on the web until built: Phase 3 (chat, Threads, docs/pages, forms, profiles, tickets, Z Vault, reports, leaderboard, GIDEON, Control Room).
 

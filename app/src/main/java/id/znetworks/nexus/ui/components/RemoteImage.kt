@@ -57,7 +57,9 @@ fun RemoteImage(url: String?, modifier: Modifier, contentScale: ContentScale = C
         val api = (context.applicationContext as NexusApplication).container.api
         img = withContext(Dispatchers.IO) {
             runCatching {
-                val bytes = api.bytes(url)
+                // The offline copy first (warmed by OfflineSync), then the network, kept on disk after.
+                val bytes = id.znetworks.nexus.core.offline.DiskFiles.existing(url)?.readBytes()
+                    ?: api.bytes(url).also { b -> runCatching { id.znetworks.nexus.core.offline.DiskFiles.fileFor(url, "img")?.writeBytes(b) } }
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
                 var sample = 1

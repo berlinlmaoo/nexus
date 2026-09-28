@@ -436,6 +436,8 @@ private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut
             trailingContent = { TextButton(onClick = { deleting = true }) { Text(stringResource(R.string.delete), color = c.danger) } },
         )
         Spacer(Modifier.height(12.dp))
+        id.znetworks.nexus.core.offline.OfflineCard()
+        Spacer(Modifier.height(12.dp))
         Text("NEXUS ${container.identity.versionName} (${container.identity.versionCode})", fontSize = 11.sp, color = c.mutedFg)
     }
     if (confirmLogout) {

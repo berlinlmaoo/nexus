@@ -2,4 +2,5 @@
 <paths>
     <cache-path name="evidence" path="evidence/" />
     <cache-path name="shared" path="shared/" />
+    <cache-path name="offline" path="offline/" />
 </paths>

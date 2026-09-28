@@ -1118,4 +1118,11 @@
     <string name="gd_luna">Sehari-hari.</string>
     <string name="gd_terra">Ringan. Pertanyaan pendek.</string>
     <string name="gd_experimental">Model lokal di kantor. Lambat dan bisa keliru.</string>
+    <string name="off_title">Salinan offline</string>
+    <string name="off_sub">Hari ini, task dan project, papan, pengajuan dan file disimpan di HP ini supaya NEXUS tetap terbuka tanpa sinyal.</string>
+    <string name="off_data">Data tersimpan: %1$s</string>
+    <string name="off_files">File tersimpan: %1$s · %2$s</string>
+    <string name="off_cellular">Unduh file lewat data seluler</string>
+    <string name="off_update">Perbarui sekarang</string>
+    <string name="off_updating">Memperbarui…</string>
 </resources>

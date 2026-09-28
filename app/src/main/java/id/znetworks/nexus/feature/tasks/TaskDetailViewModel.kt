@@ -194,24 +194,9 @@ class TaskDetailViewModel(app: Application, handle: SavedStateHandle) : AndroidV
         viewModelScope.launch {
             _state.update { it.copy(opening = a.id) }
             try {
-                val ctx = getApplication<Application>()
-                val dir = File(ctx.cacheDir, "shared/att-${a.id}").apply { mkdirs() }
-                val file = File(dir, a.label.replace("/", "_"))
-                if (!file.exists() || file.length() == 0L || (a.size != null && file.length() != a.size)) {
-                    file.delete()
-                    withContext(Dispatchers.IO) { c.api.download(url, file, null) }
-                }
-                val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.files", file)
-                val mime = a.mimeType ?: ctx.contentResolver.getType(uri) ?: "*/*"
-                val intent = if (share) {
-                    Intent.createChooser(Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, uri)
-                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), null)
-                } else {
-                    Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                runCatching { ctx.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure {
+                // Same disk copy the offline pass warms: opens with no signal once fetched.
+                if (!id.znetworks.nexus.core.files.FileOpener.open(getApplication(), c.api, url, a.label, a.mimeType, share))
                     _state.update { it.copy(actionError = res.getString(R.string.td_no_viewer)) }
-                }
             } catch (e: ApiError) {
                 _state.update { it.copy(actionError = e.describe(res)) }
             }

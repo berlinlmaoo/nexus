@@ -17,11 +17,12 @@ class NexusApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        id.znetworks.nexus.core.offline.DiskFiles.init(cacheDir)
         LocalNotifier.ensureChannels(this)
         WorkTrailService.ensureChannel(this)
         PushManager.ensureChannels(this)
         // Every launch re-registers, as iOS does on every activation: tokens rotate.
-        if (container.sessionStore.current != null) container.push.register()
+        if (container.sessionStore.current != null) { container.push.register(); container.offline.schedule() }
         // Queued taps go out on app start after sign-in, and on every foreground (REQ-ATT-13).
         container.flushQueueSoon()
         // Version policy: forced at launch, then at most every 30 min on foreground (REQ-ATT-41).
@@ -36,6 +37,8 @@ class NexusApplication : Application() {
                     container.flushQueueSoon()
                     // A check-out made on the web, or an automatic one, must stop the trail here.
                     container.reconcileTrail()
+                    // The offline copy, when it is getting old (never in front of the person).
+                    container.offline.warmIfStale()
                 }
             }
         })
