@@ -81,4 +81,24 @@ class AttendanceGuardTest {
     @Test fun noSecretsInLogs() {
         assertEquals(sortedSetOf<String>(), filesMatching(Regex("""Log\.[divwe]\(.*(token|cookie|password|selfie)""", RegexOption.IGNORE_CASE)))
     }
+
+    @Test fun noConfettiAnywhere() {
+        // Berlin, 28 Sep (UPDATES §11): steps inside the button, a tick and a light haptic; confetti is out.
+        assertEquals(sortedSetOf<String>(), filesMatching(Regex("confetti|Konfetti|particle", RegexOption.IGNORE_CASE)))
+    }
+
+    @Test fun temporaryGooglePasswordStaysOnScreen() {
+        // Shown once to the BoD and copied as sensitive; never written to prefs, files or logs.
+        assertEquals(sortedSetOf("GoogleWorkspace.kt"), filesMatching(Regex("""temporaryPassword""")))
+        val gw = sources.entries.first { it.key.name == "GoogleWorkspace.kt" }.value
+        assertTrue(!Regex("""SharedPreferences|getSharedPreferences|writeText|Log\.""").containsMatchIn(gw))
+    }
+
+    @Test fun zoneIsJudgedAgainstEveryActiveOffice() {
+        // Audit S2: inside ANY active office is inside. A zone call against the record's fence alone
+        // would bring back the false "you left the office" alarm when moving to another office.
+        val machine = sources.entries.first { it.key.name == "TrailMachine.kt" }.value
+        assertEquals(0, Regex("""decisive\([^)]*,\s*(fence|it|state\.fence)\)""").findAll(machine).count())
+        assertTrue(machine.contains("state.fences"))
+    }
 }

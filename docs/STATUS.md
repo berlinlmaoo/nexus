@@ -210,6 +210,8 @@ checked in" has landed.
 
 **Audit status:** every finding (T1, T2, S1–S3, R1–R4) closed; 260 JVM tests green.
 
+AttendanceGuardTest also locks, since: no confetti anywhere (Berlin, UPDATES §11); the Google Workspace temporary password lives only on its screen (never prefs, files or logs); the trail judges inside/outside against every active office (no single-fence call can bring back the false "left the office" alarm). 271 JVM tests.
+
 Aligned with iOS 45ea4ea (the same change on iPhone): the office tile keeps the record's office and its
 helper says "Now at <office> · In … · Out …" after moving to another active office; the office in now is
 the nearest (edge distance) to the latest clear fix; the record's own office is removed from the list by
