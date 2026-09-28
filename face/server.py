@@ -32,6 +32,11 @@ MAX_SIDE = 640
 MAX_BODY = 4096
 
 _local = threading.local()
+# Memory, not speed, is the limit: a 12 MP selfie decodes to ~36 MB and the first backfill run got
+# the container OOM-killed at 768 MB with every request decoding at once. Two at a time, and
+# OpenCV's own thread pool off (the cron already sends requests in parallel).
+_slots = threading.BoundedSemaphore(int(os.environ.get("FACE_CONCURRENCY", "2")))
+cv2.setNumThreads(1)
 
 
 def detector():
@@ -105,10 +110,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(400, {"error": "bad path"})
             if not os.path.isfile(path):
                 return self._send(404, {"error": "file not found"})
-            img = cv2.imread(path, cv2.IMREAD_COLOR)  # applies EXIF orientation
-            if img is None:
-                return self._send(422, {"error": "not an image"})
-            faces, best = detect(img)
+            with _slots:
+                img = cv2.imread(path, cv2.IMREAD_COLOR)  # applies EXIF orientation
+                if img is None:
+                    return self._send(422, {"error": "not an image"})
+                faces, best = detect(img)
+                del img
             return self._send(200, {"faces": faces, "best": best})
         except Exception as e:  # noqa: BLE001 — any failure is "not checked", the cron retries
             print(f"detect failed: {e!r}", flush=True)

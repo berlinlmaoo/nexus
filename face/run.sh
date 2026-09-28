@@ -11,7 +11,7 @@ BASE="$HOME/nexus/var/uploads"
 docker rm -f nexus-face >/dev/null 2>&1 || true
 docker run -d --name nexus-face --restart unless-stopped \
   --network nexus_internal \
-  --memory 768m --cpus 2 \
+  --memory 1536m --cpus 2 \
   -v "$BASE:/app/public/uploads:ro" \
   nexus-face:latest >/dev/null
 echo "nexus-face started"
