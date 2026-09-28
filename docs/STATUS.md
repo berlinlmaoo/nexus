@@ -4,8 +4,9 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (236 JVM tests, all green).
-Version 0.1.6 (versionCode 1), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (295 JVM tests, all green).
+Version 0.1.6 (versionCode 3 in the tree; nothing published yet), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
+Phases 1–4 done, Phase 5 done except Wear OS (Berlin's decision); re-audit of 28 Sep: every finding closed.
 
 ## Done (Phase 1, attendance MVP)
 
