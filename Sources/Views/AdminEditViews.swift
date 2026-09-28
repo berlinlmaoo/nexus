@@ -99,6 +99,7 @@ struct AdminView: View {
         if viewer.canAnnounce {
             t.append(("Pengumuman", "announcements"))
             t.append((T("Extra day off"), "extra-dayoff"))
+            t.append((T("Fake GPS"), "suspects"))
             t.append(("GIDEON", "gideon"))
             t.append(("App", "app"))
         }
@@ -158,6 +159,7 @@ struct AdminView: View {
                 case "quests": AdminQuestsSection(workspaceId: workspaceId)
                 case "announcements": AdminAnnouncementsSection()
                 case "extra-dayoff": AdminExtraDayOffSection()
+                case "suspects": AdminSuspectSection()
                 case "gideon": AdminGideonUsageSection()
                 case "app": AdminAppInstallsSection()
                 default: AdminUsersSection(workspaceId: workspaceId)

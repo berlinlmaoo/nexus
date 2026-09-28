@@ -1531,6 +1531,21 @@ struct APIClient {
         return try await run(makeRequest(path, method: "DELETE"), decode: DayOffBonusRevoked.self)
     }
 
+    func suspectAttendance(periodKey: String?) async throws -> SuspectList {
+        let q = periodKey.map { "?periodKey=\($0.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? $0)" } ?? ""
+        return try await run(makeRequest("/api/attendance/suspects" + q), decode: SuspectList.self)
+    }
+
+    /// VALID for any flagged record; INVALID only for FAKE (the server refuses anything else with
+    /// its own sentence) and makes the day TK.
+    func reviewSuspectAttendance(recordId: String, verdict: String, note: String) async throws -> SuspectReviewed {
+        let id = recordId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? recordId
+        var req = makeRequest("/api/attendance/suspects/\(id)/review", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["verdict": verdict, "note": note])
+        return try await run(req, decode: SuspectReviewed.self)
+    }
+
     /// Active announcements this user has not dismissed yet — drives the pop-up.
     func activeAnnouncements() async throws -> [AdminAnnouncement] {
         (try await run(makeRequest("/api/announcements/active"), decode: AnnouncementsResponse.self)).announcements ?? []
