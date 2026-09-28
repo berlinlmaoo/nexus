@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
           OR: [{ checkInSuspect: true }, { checkOutSuspect: true }, { checkInSimulated: true }, { checkOutSimulated: true }],
         },
         include: {
-          user: { select: { id: true, name: true, image: true } },
+          user: { select: { id: true, name: true, avatar: true } },
           officeLocation: { select: { name: true, radiusMeters: true } },
         },
         orderBy: { attendanceDate: "desc" },
@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
     ])
     const reviewByRecord = new Map(reviews.map((r) => [r.recordId, r] as const))
     const peopleIds = new Set<string>([...reviews.map((r) => r.userId), ...reviews.map((r) => r.reviewedById)])
-    const people = await prisma.user.findMany({ where: { id: { in: [...peopleIds] } }, select: { id: true, name: true, image: true } })
+    const people = await prisma.user.findMany({ where: { id: { in: [...peopleIds] } }, select: { id: true, name: true, avatar: true } })
     const personById = new Map(people.map((p) => [p.id, p] as const))
 
     const reviewOut = (r: (typeof reviews)[number] | undefined) => r ? {
@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
         recordId: r.id, date: formatAttendanceDateKey(r.attendanceDate),
         state: rv ? (rv.verdict === "INVALID" ? "invalid" : "valid") : "open",
         level: recordLevel([checkIn, checkOut]),
-        user: { id: r.user.id, name: r.user.name, image: r.user.image },
+        user: { id: r.user.id, name: r.user.name, image: r.user.avatar },
         place: placeLabel(r),
         checkIn, checkOut,
         review: reviewOut(rv),
@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
       const snap = (rv.snapshot ?? {}) as { item?: Item }
       if (!snap.item) continue
       const person = personById.get(rv.userId)
-      items.push({ ...snap.item, state: "invalid", review: reviewOut(rv), user: { id: rv.userId, name: person?.name ?? snap.item.user?.name ?? null, image: person?.image ?? null } })
+      items.push({ ...snap.item, state: "invalid", review: reviewOut(rv), user: { id: rv.userId, name: person?.name ?? snap.item.user?.name ?? null, image: person?.avatar ?? null } })
     }
     const rank = (i: Item) => (i.state === "open" ? 0 : 1)
     items.sort((a, b) => rank(a) - rank(b) || b.date.localeCompare(a.date) || (a.user.name ?? "").localeCompare(b.user.name ?? ""))
