@@ -33,6 +33,23 @@ targets:
         # resource, or the build fails on a duplicate Info.plist.
         excludes:
           - Info.plist
+    preBuildScripts:
+      # A Swift dictionary LITERAL traps at runtime on a duplicate key, and the Indonesian table is only
+      # built when someone picks Bahasa — so a duplicate is a crash nobody sees until a user switches
+      # language. 0.1.5 shipped five (Tue/Wed/Thu/Sat/Sun) and crashed on every launch for those users.
+      # This fails the build instead, with the offending keys in the error.
+      - name: Check Localization keys
+        basedOnDependencyAnalysis: false
+        inputFiles:
+          - $(SRCROOT)/Sources/Localization.swift
+        script: |
+          F="$SRCROOT/Sources/Localization.swift"
+          DUP=$(grep -oE '"([^"\\]|\\.)*"[[:space:]]*:' "$F" | sed -E 's/[[:space:]]*:$//' | sort | uniq -d)
+          if [ -n "$DUP" ]; then
+            echo "error: Localization.swift has duplicate keys — the app would crash in Bahasa Indonesia:"
+            echo "$DUP" | sed 's/^/error:   /'
+            exit 1
+          fi
     dependencies:
       # Embeds the widget extension into the app. platformFilter keeps it OUT of the Mac Catalyst
       # build: ActivityKit does not exist on macOS, so a Mac archive that tries to embed this fails
