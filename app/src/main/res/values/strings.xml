@@ -1466,4 +1466,6 @@
     <string name="updater_confirm_body">Tap Install on the system screen to finish the update.</string>
     <string name="updater_continue">Continue installing</string>
     <string name="ch_hint_read">Pinch = zoom · only BoD can change approvers</string>
+    <string name="camera_off_title">Camera is off for NEXUS</string>
+    <string name="camera_off_body">To take a photo here, allow Camera for NEXUS in Settings, then try again. You can also pick a photo from the gallery.</string>
 </resources>

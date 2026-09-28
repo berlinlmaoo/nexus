@@ -78,6 +78,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
+import id.znetworks.nexus.ui.components.rememberCameraCapture
 import id.znetworks.nexus.core.net.ApiError
 import id.znetworks.nexus.feature.attendance.LocalNotifier
 import id.znetworks.nexus.feature.attendance.requests.AttachmentReader
@@ -248,9 +249,8 @@ private fun NewTicketDialog(s: TicketsState, vm: TicketsViewModel, onDismiss: ()
     var category by rememberSaveable { mutableStateOf("ATTENDANCE") }
     var subject by rememberSaveable { mutableStateOf("") }
     var body by rememberSaveable { mutableStateOf("") }
-    var cameraUri by rememberSaveable { mutableStateOf<String?>(null) }
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(TicketRules.MAX_PHOTOS)) { if (it.isNotEmpty()) vm.addPhotos(it) }
-    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok -> if (ok) cameraUri?.let { vm.addPhotos(listOf(Uri.parse(it))) } }
+    val camera = rememberCameraCapture("ticket") { vm.addPhotos(listOf(it)) }
     Dialog(onDismissRequest = { if (!s.filing) onDismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(Modifier.fillMaxSize().background(c.background).systemBarsPadding().imePadding()) {
             Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -280,11 +280,7 @@ private fun NewTicketDialog(s: TicketsState, vm: TicketsViewModel, onDismiss: ()
                     }
                 }
                 if (s.photos.size < TicketRules.MAX_PHOTOS) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = {
-                        val f = File(File(context.cacheDir, "evidence").apply { mkdirs() }, "ticket-${System.currentTimeMillis()}.jpg")
-                        val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", f)
-                        cameraUri = uri.toString(); runCatching { camera.launch(uri) }
-                    }) { Icon(Icons.Filled.PhotoCamera, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.camera)) }
+                    OutlinedButton(onClick = camera) { Icon(Icons.Filled.PhotoCamera, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.camera)) }
                     OutlinedButton(onClick = { gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
                         Icon(Icons.Filled.Image, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.gallery))
                     }

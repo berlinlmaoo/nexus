@@ -81,6 +81,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
+import id.znetworks.nexus.ui.components.rememberCameraCapture
 import id.znetworks.nexus.core.time.OfficeTime
 import id.znetworks.nexus.ui.components.EmptyState
 import id.znetworks.nexus.ui.theme.DisplayFont
@@ -480,11 +481,8 @@ private fun ComposerDialog(vm: RequestsViewModel, cs: ComposerState, onFiled: ()
     val c = Nx.colors
     val rules = vm.rules()
     var pickingDate by remember { mutableStateOf(false) }
-    var cameraUri by rememberSaveable { mutableStateOf<String?>(null) }
 
-    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        if (ok) cameraUri?.let { vm.attach(Uri.parse(it)) }
-    }
+    val camera = rememberCameraCapture("shot") { vm.attach(it) }
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(vm::attach) }
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(vm::attach) }
     val locationPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { vm.lockLocation() }
@@ -532,12 +530,7 @@ private fun ComposerDialog(vm: RequestsViewModel, cs: ComposerState, onFiled: ()
                     } else {
                         // Camera, gallery and files, as on iOS 0.1.6.
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = {
-                                val f = File(File(context.cacheDir, "evidence").apply { mkdirs() }, "shot-${System.currentTimeMillis()}.jpg")
-                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", f)
-                                cameraUri = uri.toString()
-                                camera.launch(uri)
-                            }, modifier = Modifier.weight(1f)) { Icon(Icons.Filled.CameraAlt, null, Modifier.size(16.dp)); Spacer(Modifier.size(4.dp)); Text(stringResource(R.string.camera), fontSize = 12.sp) }
+                            OutlinedButton(onClick = camera, modifier = Modifier.weight(1f)) { Icon(Icons.Filled.CameraAlt, null, Modifier.size(16.dp)); Spacer(Modifier.size(4.dp)); Text(stringResource(R.string.camera), fontSize = 12.sp) }
                             OutlinedButton(onClick = { gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                                 modifier = Modifier.weight(1f)) { Icon(Icons.Filled.Photo, null, Modifier.size(16.dp)); Spacer(Modifier.size(4.dp)); Text(stringResource(R.string.gallery), fontSize = 12.sp) }
                             OutlinedButton(onClick = { files.launch(arrayOf("image/*", "application/pdf")) },

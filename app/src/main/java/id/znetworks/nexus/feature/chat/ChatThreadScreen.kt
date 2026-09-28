@@ -87,6 +87,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
+import id.znetworks.nexus.ui.components.rememberCameraCapture
 import id.znetworks.nexus.core.net.ApiError
 import id.znetworks.nexus.feature.attendance.LocationProvider
 import id.znetworks.nexus.feature.attendance.requests.AttachmentReader
@@ -246,10 +247,9 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, vm: ChatT
     var attachMenu by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     var viewing by remember { mutableStateOf<String?>(null) }
-    var cameraUri by rememberSaveable { mutableStateOf<String?>(null) }
     val list = rememberLazyListState()
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { it?.let(vm::attach) }
-    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok -> if (ok) cameraUri?.let { vm.attach(Uri.parse(it)) } }
+    val camera = rememberCameraCapture("chat") { vm.attach(it) }
     val locationPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { vm.sendLocation() }
     val lastId = s.messages.lastOrNull()?.id
     LaunchedEffect(lastId) { if (s.messages.isNotEmpty()) list.animateScrollToItem(s.messages.size) }
@@ -374,9 +374,7 @@ fun ChatThreadScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, vm: ChatT
                         })
                         DropdownMenuItem(text = { Text(stringResource(R.string.camera)) }, leadingIcon = { Icon(Icons.Filled.PhotoCamera, null) }, onClick = {
                             attachMenu = false
-                            val f = File(File(context.cacheDir, "evidence").apply { mkdirs() }, "chat-${System.currentTimeMillis()}.jpg")
-                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", f)
-                            cameraUri = uri.toString(); runCatching { camera.launch(uri) }
+                            camera()
                         })
                         DropdownMenuItem(text = { Text(stringResource(R.string.chat_send_location)) }, leadingIcon = { Icon(Icons.Filled.LocationOn, null) }, onClick = {
                             attachMenu = false

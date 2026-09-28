@@ -105,4 +105,9 @@ class AttendanceGuardTest {
         assertEquals(0, Regex("""decisive\([^)]*,\s*(fence|it|state\.fence)\)""").findAll(machine).count())
         assertTrue(machine.contains("state.fences"))
     }
+
+    @Test fun everyPhotoGoesThroughTheCameraPermissionCheck() {
+        // Audit T5: ACTION_IMAGE_CAPTURE throws without CAMERA; only rememberCameraCapture launches it.
+        assertEquals(sortedSetOf("CameraCapture.kt"), filesMatching(Regex("""TakePicture\(""")))
+    }
 }

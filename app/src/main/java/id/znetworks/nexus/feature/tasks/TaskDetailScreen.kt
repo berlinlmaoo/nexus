@@ -88,6 +88,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import id.znetworks.nexus.R
+import id.znetworks.nexus.ui.components.rememberCameraCapture
 import id.znetworks.nexus.feature.attendance.LocalNotifier
 import id.znetworks.nexus.feature.projects.BoardLogic
 import id.znetworks.nexus.feature.projects.Pill
@@ -467,9 +468,8 @@ private fun FilesCard(s: TaskDetailState, vm: TaskDetailViewModel) {
     val c = Nx.colors
     val context = LocalContext.current
     var menu by remember { mutableStateOf(false) }
-    var cameraUri by rememberSaveable { mutableStateOf<String?>(null) }
     var deleting by remember { mutableStateOf<Attachment?>(null) }
-    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok -> if (ok) cameraUri?.let { vm.upload(Uri.parse(it)) } }
+    val camera = rememberCameraCapture("task") { vm.upload(it) }
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(vm::upload) }
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(vm::upload) }
     Card {
@@ -481,10 +481,7 @@ private fun FilesCard(s: TaskDetailState, vm: TaskDetailViewModel) {
                 DropdownMenu(menu, { menu = false }) {
                     DropdownMenuItem(text = { Text(stringResource(R.string.camera)) }, onClick = {
                         menu = false
-                        val f = File(File(context.cacheDir, "evidence").apply { mkdirs() }, "task-${System.currentTimeMillis()}.jpg")
-                        val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", f)
-                        cameraUri = uri.toString()
-                        runCatching { camera.launch(uri) }
+                        camera()
                     })
                     DropdownMenuItem(text = { Text(stringResource(R.string.gallery)) }, onClick = {
                         menu = false; gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
