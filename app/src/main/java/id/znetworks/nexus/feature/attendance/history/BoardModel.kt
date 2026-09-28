@@ -50,6 +50,13 @@ data class Score(val shown: Int, val target: Int, val surplus: Int) {
 }
 
 object BoardModel {
+    /** A member-record day: real records for everyone; id-less rows and empty past days for the BoD; never the future. */
+    fun dayOpens(row: HistoryRow?, canManage: Boolean, future: Boolean): Boolean = when {
+        future -> false
+        row != null -> row.id != null || canManage
+        else -> canManage
+    }
+
     /** Rows are drawn only under the period they were fetched for (audit T6). */
     fun rowsFor(period: String, rowsPeriod: String?, rows: List<HistoryRow>): List<HistoryRow> = if (rowsPeriod == period) rows else emptyList()
 

@@ -122,7 +122,23 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
     var today: AttendanceToday? = null
         private set
     val wide get() = today?.canManageAttendance == true || today?.canReviewAttendanceRequests == true
-    val canManage get() = today?.canManageAttendance == true
+    /** Set by a screen that knows the viewer's rights another way (the member record). */
+    var manageOverride: Boolean? = null
+    val canManage get() = manageOverride ?: (today?.canManageAttendance == true)
+    /** When set, a change made from the day sheet reloads that screen instead of the board. */
+    var onChanged: (() -> Unit)? = null
+    private fun reloadAfterChange() { onChanged?.invoke() ?: load() }
+
+    /**
+     * A day of one person (the member record, iOS MemberProfileView): everybody opens a real record;
+     * the BoD also opens id-less rows and an empty past day to set its status; never a future day.
+     */
+    fun selectDay(row: HistoryRow?, userId: String, name: String?, dateKey: String, future: Boolean): Boolean {
+        if (!BoardModel.dayOpens(row, canManage, future)) return false
+        if (row != null) { select(row); return true }
+        select(HistoryRow(attendanceDate = "${dateKey}T00:00:00.000Z", user = PersonRef(id = userId, name = name)))
+        return true
+    }
     private var loadedWide: Boolean? = null
 
     fun onToday(t: AttendanceToday?) {
@@ -174,7 +190,7 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val res = api.override(uid, r.dayKey, action)
                 _state.update { it.copy(busy = false, overrideDone = doneText(res), multiDayLeft = res.multiDayRequestsLeft?.takeIf { n -> n > 0 }) }
-                load()
+                reloadAfterChange()
             } catch (e: ApiError) {
                 _state.update { it.copy(busy = false, overrideError = e.describe(res)) }
             }
@@ -205,7 +221,7 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 api.deleteRecord(id, checkoutOnly)
                 _state.update { it.copy(busy = false, selected = null, message = res.getString(if (checkoutOnly) R.string.board_checkout_cleared else R.string.board_record_deleted)) }
-                load()
+                reloadAfterChange()
             } catch (e: ApiError) {
                 _state.update { it.copy(busy = false, message = e.describe(res)) }
             }
@@ -320,6 +336,13 @@ fun CrewBoardCard(vm: BoardViewModel) {
             }
         }
     }
+    BoardDaySheets(vm)
+}
+
+/** The day sheet, its trail and notices: the board's, reused by the member record (audit S6). */
+@Composable
+fun BoardDaySheets(vm: BoardViewModel) {
+    val s by vm.state.collectAsStateWithLifecycle()
     s.selected?.let { DayDetail(vm, it) }
     s.trailFor?.let { TrailDialog(vm, it, s.trail, s.trailError) }
     s.message?.let { msg ->

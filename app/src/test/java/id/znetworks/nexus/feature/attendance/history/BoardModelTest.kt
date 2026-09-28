@@ -96,4 +96,14 @@ class BoardModelTest {
         assertEquals(emptyList<HistoryRow>(), BoardModel.rowsFor("2026-08", "2026-09", rows))
         assertEquals(emptyList<HistoryRow>(), BoardModel.rowsFor("2026-09", null, rows))
     }
+
+    // Audit S6: the member record's days open like iOS MemberProfileView.
+    @Test fun memberRecordDaysOpenAsIos() {
+        assertEquals(true, BoardModel.dayOpens(HistoryRow(id = "r"), canManage = false, future = false))
+        assertEquals(false, BoardModel.dayOpens(HistoryRow(id = null), canManage = false, future = false))
+        assertEquals(true, BoardModel.dayOpens(HistoryRow(id = null), canManage = true, future = false))
+        assertEquals(false, BoardModel.dayOpens(null, canManage = false, future = false))
+        assertEquals(true, BoardModel.dayOpens(null, canManage = true, future = false))
+        assertEquals(false, BoardModel.dayOpens(HistoryRow(id = "r"), canManage = true, future = true))
+    }
 }

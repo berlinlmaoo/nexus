@@ -146,6 +146,19 @@ fun MemberProfileScreen(userId: String, onBack: () -> Unit, onOpenChat: (String)
     var removing by remember { mutableStateOf<XpEntry?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     var tick by remember { mutableStateOf(0) }
+    // The board's day sheet for this person's days (audit S6, iOS MemberProfileView).
+    val dayBoard: id.znetworks.nexus.feature.attendance.history.BoardViewModel = androidx.lifecycle.viewmodel.compose.viewModel(key = "member-days-$userId")
+    var dayRows by remember { mutableStateOf<Map<String, id.znetworks.nexus.feature.attendance.history.HistoryRow>>(emptyMap()) }
+    LaunchedEffect(rec) {
+        val r = rec ?: return@LaunchedEffect
+        dayBoard.manageOverride = r.viewer?.canManageAttendance == true
+        dayBoard.onChanged = { tick++ }
+        val rows = runCatching {
+            id.znetworks.nexus.feature.attendance.history.HistoryApi(container.api)
+                .history(if (r.person.isSelf) "me" else "workspace", r.period.key, r.person.id).records
+        }.getOrDefault(emptyList())
+        dayRows = rows.filter { it.user?.id == null || it.user.id == r.person.id }.associateBy { it.dayKey }
+    }
     LaunchedEffect(userId) { boardRow = runCatching { api.leaderboard().value.rows.firstOrNull { it.userId == userId } }.getOrNull() }
     var notAPeer by remember { mutableStateOf(false) }
     var ledger by remember { mutableStateOf<List<XpEntry>?>(null) }
@@ -244,7 +257,9 @@ fun MemberProfileScreen(userId: String, onBack: () -> Unit, onOpenChat: (String)
                     r.days.forEach { d ->
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(d.weekday?.take(2).orEmpty(), fontSize = 9.sp, color = c.mutedFg)
-                            Box(Modifier.size(24.dp).background(if (d.isFuture) Color.Transparent else toneColor(d.tone, c), RoundedCornerShape(6.dp))
+                            Box(Modifier.size(24.dp).clip(RoundedCornerShape(6.dp)).clickable(enabled = !d.isFuture) {
+                                    dayBoard.selectDay(dayRows[d.date], r.person.id, r.person.name, d.date, d.isFuture)
+                                }.background(if (d.isFuture) Color.Transparent else toneColor(d.tone, c), RoundedCornerShape(6.dp))
                                 .border(if (d.isToday) 1.5.dp else 1.dp, if (d.isToday) c.violet else c.border, RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
                                 Text("${d.day ?: ""}", fontSize = 9.sp, color = if (d.tone.isNullOrEmpty() || d.isFuture) c.mutedFg else Color.White, fontWeight = FontWeight.Bold)
                             }
@@ -293,6 +308,7 @@ fun MemberProfileScreen(userId: String, onBack: () -> Unit, onOpenChat: (String)
         }
     }
     notice?.let { AlertDialog(onDismissRequest = { notice = null }, text = { Text(it) }, confirmButton = { TextButton(onClick = { notice = null }) { Text("OK") } }) }
+    id.znetworks.nexus.feature.attendance.history.BoardDaySheets(dayBoard)
     removing?.let { e ->
         var note by remember { mutableStateOf("") }
         AlertDialog(onDismissRequest = { removing = null }, title = { Text(stringResource(R.string.pf_remove_q, e.signed)) },

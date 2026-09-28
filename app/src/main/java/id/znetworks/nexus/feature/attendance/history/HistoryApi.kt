@@ -126,8 +126,9 @@ class HistoryApi(private val api: ApiClient) {
     /** When the last [history] answer is a saved copy, when it was saved (audit S4); null = live. */
     var historySavedAtMillis: Long? = null
 
-    suspend fun history(scope: String, period: String): HistoryResponse =
-        api.getCached("/api/attendance/history?scope=$scope&month=$period", "history-$scope-$period", HistoryResponse.serializer())
+    suspend fun history(scope: String, period: String, userId: String? = null): HistoryResponse =
+        api.getCached("/api/attendance/history?scope=$scope&month=$period" + (userId?.takeIf { scope != "me" }?.let { "&userId=$it" } ?: ""),
+            "history-$scope-$period" + (userId?.takeIf { scope != "me" }?.let { "-$it" } ?: ""), HistoryResponse.serializer())
             .also { historySavedAtMillis = it.savedAtMillis }.value
 
     suspend fun trail(recordId: String): TrailResponse =
