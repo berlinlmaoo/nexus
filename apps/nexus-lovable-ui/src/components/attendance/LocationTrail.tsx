@@ -70,7 +70,10 @@ function TrailMap({ trail }: { trail: NexusAttendanceTrail }) {
   useEffect(() => {
     if (!divRef.current) return;
     const center: L.LatLngExpression = office ? [office.lat, office.lng] : points.length ? [points[0].lat, points[0].lng] : checks.length ? [checks[0].lat, checks[0].lng] : [-6.2088, 106.8456];
-    const map = L.map(divRef.current, { zoomControl: true, attributionControl: false }).setView(center, 16);
+    // Canvas, not one SVG element per dot: since 28 Sep 2026 the app records the route outside
+    // point by point (a point per 50 m), so a day with an outing is hundreds of points. The pins
+    // (Left / Back / Start / Last) stay DOM markers; tooltips work the same on canvas.
+    const map = L.map(divRef.current, { zoomControl: true, attributionControl: false, preferCanvas: true }).setView(center, 16);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
     const bounds = L.latLngBounds([]);
 

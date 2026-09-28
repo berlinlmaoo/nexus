@@ -336,7 +336,8 @@ export async function advanceOutsideClock(recordId: string, opts: { now?: Date; 
   })
   if (res.count !== 1) return result // someone else moved it first
 
-  const copy = outsidePushCopy(step.fire, { minutesOutside: step.minutesOutside, autoAt: step.autoAt, outsideSince: record.outsideSince, timeZone: tz })
+  // `now`: the time left in the text is counted from the tick that decided this step.
+  const copy = outsidePushCopy(step.fire, { minutesOutside: step.minutesOutside, autoAt: step.autoAt, outsideSince: record.outsideSince, timeZone: tz, now })
   // Sent regardless of do-not-disturb: this is not a nudge whose moment passes but the notice before
   // an automatic check-out. Staying silent would check someone out without telling them first.
   await createInAppNotification({
