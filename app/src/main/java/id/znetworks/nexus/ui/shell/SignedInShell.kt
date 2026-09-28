@@ -3,6 +3,7 @@ package id.znetworks.nexus.ui.shell
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.filled.WatchLater
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -11,6 +12,8 @@ import id.znetworks.nexus.feature.home.HomeScreen
 import id.znetworks.nexus.feature.chat.ChatThreadScreen
 import id.znetworks.nexus.feature.chat.MessagesScreen
 import id.znetworks.nexus.feature.threads.ThreadsScreen
+import id.znetworks.nexus.feature.docs.DocReaderScreen
+import id.znetworks.nexus.feature.docs.DocsScreen
 import id.znetworks.nexus.feature.forms.FormFillScreen
 import id.znetworks.nexus.feature.forms.SubmissionsScreen
 import id.znetworks.nexus.feature.forms.SubmissionDetailScreen
@@ -159,6 +162,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             is Target.Tickets -> { container.router.consumed(t); nav.navigate(t.ticketId?.let { "ticket/$it" } ?: "tickets") }
             is Target.Form -> { container.router.consumed(t); nav.navigate("form/${android.net.Uri.encode(t.idOrSlug)}") }
             is Target.Submissions -> { container.router.consumed(t); nav.navigate(t.submissionId?.let { "submission/$it" } ?: "submissions") }
+            is Target.Docs -> { container.router.consumed(t); nav.navigate(t.docId?.let { "doc/$it" } ?: "docs") }
             is Target.Chat -> { container.router.consumed(t); nav.navigate(t.conversationId?.let { "chat/$it" } ?: "messages") }
             is Target.Announcement -> { container.router.consumed(t); container.announcements.showOne(t.id) }
             is Target.Web -> { container.router.consumed(t); openWeb(context, t.path) }
@@ -202,7 +206,8 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     onOpenProject = { nav.navigate("project/$it") },
                     onOpenTask = { nav.navigate("task/$it") },
                     onOpenSettings = { goTab(Tab.MORE) },
-                    onOpenWeb = { openWeb(context, it) },
+                    // Quick actions built in the app open here; the rest on the web until built.
+                    onOpenWeb = { when (it) { "/messages" -> nav.navigate("messages"); "/threads" -> nav.navigate("threads"); else -> openWeb(context, it) } },
                 )
             }
             composable("account") { AccountScreen(onBack = { nav.popBackStack() }) }
@@ -218,6 +223,8 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 SubmissionDetailScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") },
                     onOpenFile = { url -> scope.launch { runCatching { FileOpener.open(context, container.api, url, url.substringAfterLast('/')) } } })
             }
+            composable("docs") { DocsScreen(onBack = { nav.popBackStack() }, onOpenDoc = { nav.navigate("doc/$it") }) }
+            composable("doc/{id}") { e -> DocReaderScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }) }
             composable("messages") { MessagesScreen(onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }
             composable("chat/{id}") { ChatThreadScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") }) }
             composable("search") {
@@ -225,7 +232,9 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     onBack = { nav.popBackStack() },
                     onOpenTask = { nav.navigate("task/$it") },
                     onOpenProject = { nav.navigate("project/$it") },
-                    onOpenWeb = { when (it) { "/messages" -> nav.navigate("messages"); "/threads" -> nav.navigate("threads"); else -> openWeb(context, it) } },
+                    onOpenWeb = { openWeb(context, it) },
+                    onOpenForm = { nav.navigate("form/${android.net.Uri.encode(it)}") },
+                    onOpenDoc = { nav.navigate("doc/$it") },
                 )
             }
             composable("attendance") { AttendanceScreen(onBack = { nav.popBackStack() }) }
@@ -234,12 +243,13 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable(Tab.PROJECTS.route) {
                 ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") })
             }
-            composable(Tab.MORE.route) { MoreScreen(session, gateState, onSignOut, onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } }, onOpenAccount = { nav.navigate("account") }, onOpenWhatsNew = { whatsNew = true }, onOpenTickets = { nav.navigate("tickets") }, onOpenSubmissions = { nav.navigate("submissions") }) }
+            composable(Tab.MORE.route) { MoreScreen(session, gateState, onSignOut, onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } }, onOpenAccount = { nav.navigate("account") }, onOpenWhatsNew = { whatsNew = true }, onOpenTickets = { nav.navigate("tickets") }, onOpenSubmissions = { nav.navigate("submissions") }, onOpenDocs = { nav.navigate("docs") }) }
             composable("project/{id}") { entry ->
                 ProjectDetailScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") },
                     onOpenSettings = { nav.navigate("project/${entry.arguments?.getString("id")}/settings") },
                     onOpenChat = { nav.navigate("chat/$it") },
-                    onOpenForm = { nav.navigate("form/${android.net.Uri.encode(it)}") })
+                    onOpenForm = { nav.navigate("form/${android.net.Uri.encode(it)}") },
+                    onOpenDoc = { nav.navigate("doc/$it") })
             }
             composable("project/{id}/settings") {
                 ProjectSettingsScreen(
@@ -274,7 +284,7 @@ private fun NotYet(tab: Tab) {
 }
 
 @Composable
-private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut: () -> Unit, onOpenAttendance: () -> Unit, onOpenAccount: () -> Unit, onOpenWhatsNew: () -> Unit, onOpenTickets: () -> Unit, onOpenSubmissions: () -> Unit) {
+private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut: () -> Unit, onOpenAttendance: () -> Unit, onOpenAccount: () -> Unit, onOpenWhatsNew: () -> Unit, onOpenTickets: () -> Unit, onOpenSubmissions: () -> Unit, onOpenDocs: () -> Unit) {
     val c = Nx.colors
     val context = LocalContext.current
     val container = (context.applicationContext as NexusApplication).container
@@ -316,6 +326,13 @@ private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut
             supportingContent = { Text(stringResource(R.string.form_more_sub)) },
             leadingContent = { Icon(Icons.Filled.Assignment, null, tint = c.violetText) },
             colors = itemColors, modifier = shape.clickable(onClick = onOpenSubmissions),
+        )
+        Spacer(Modifier.height(12.dp))
+        ListItem(
+            headlineContent = { Text("Knowledge Library") },
+            supportingContent = { Text(stringResource(R.string.docs_more_sub)) },
+            leadingContent = { Icon(Icons.Filled.MenuBook, null, tint = c.violetText) },
+            colors = itemColors, modifier = shape.clickable(onClick = onOpenDocs),
         )
         Spacer(Modifier.height(12.dp))
         if (WhatsNew.entries(container.identity.versionName).isNotEmpty()) {

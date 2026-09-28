@@ -966,4 +966,12 @@
     <string name="form_submissions_n">%1$d submissions</string>
     <string name="checked_in_away">Checked in away from the office</string>
     <string name="metric_checkin_place">Where you checked in</string>
+    <string name="docs_search">Search docs…</string>
+    <string name="docs_locked">The library is locked</string>
+    <string name="docs_empty">No docs in this workspace yet.</string>
+    <string name="docs_no_match">No matches. Try another keyword.</string>
+    <string name="docs_load_failed">Couldn\'t load the doc.</string>
+    <string name="docs_empty_doc">This doc is still empty.</string>
+    <string name="docs_none_in_project">No pages in this project yet.</string>
+    <string name="docs_more_sub">Company docs and guides</string>
 </resources>

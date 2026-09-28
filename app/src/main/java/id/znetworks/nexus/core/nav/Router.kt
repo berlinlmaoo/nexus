@@ -25,6 +25,8 @@ sealed interface Target {
     /** A form to fill (`/f/<slug-or-id>`), or my submissions. */
     data class Form(val idOrSlug: String) : Target
     data class Submissions(val submissionId: String?) : Target
+    /** The Knowledge Library, or one doc. */
+    data class Docs(val docId: String?) : Target
     data class Announcement(val id: String) : Target
     data object Settings : Target
     /** Signed-out screens: the invite email's "set your password" link and a sign-up with a workspace code. */
@@ -104,6 +106,8 @@ object Links {
             p == "/complaints" -> Target.Tickets(q["id"] ?: q["c"])
             Regex("^/f/([^/]+)$").matches(p) -> Target.Form(path.trimEnd('/').substringAfterLast('/'))
             p == "/submissions" -> Target.Submissions(q["id"])
+            p == "/docs" -> Target.Docs(null)
+            Regex("^/docs/([^/]+)$").matches(p) -> Target.Docs(path.trimEnd('/').substringAfterLast('/'))
             Regex("^/complaints/([^/]+)$").matches(p) -> Target.Tickets(path.trimEnd('/').substringAfterLast('/'))
             Regex("^/messages/([^/]+)$").matches(p) -> Target.Chat(path.trimEnd('/').substringAfterLast('/'))
             p == "/forgot-password" -> Target.ResetPassword(q["email"])

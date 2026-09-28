@@ -960,4 +960,12 @@
     <string name="form_submissions_n">%1$d kiriman</string>
     <string name="checked_in_away">Check-in di luar kantor</string>
     <string name="metric_checkin_place">Lokasi check-in</string>
+    <string name="docs_search">Cari docs…</string>
+    <string name="docs_locked">Library terkunci</string>
+    <string name="docs_empty">Belum ada docs di workspace ini.</string>
+    <string name="docs_no_match">Tidak ada yang cocok. Coba kata lain.</string>
+    <string name="docs_load_failed">Gagal memuat doc.</string>
+    <string name="docs_empty_doc">Doc ini masih kosong.</string>
+    <string name="docs_none_in_project">Belum ada page di project ini.</string>
+    <string name="docs_more_sub">Dokumen &amp; panduan perusahaan</string>
 </resources>
