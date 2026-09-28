@@ -32,4 +32,10 @@ class RolesTest {
         assertFalse(Roles.makesCycle(l, "staff", "boss"))
         assertEquals(listOf("new"), Roles.unplaced(l + m("new")).map { it.userId })
     }
+
+    @Test fun membershipSummaryAsIos() {
+        assertEquals("0 projects", UsersLogic.membershipSummary(UserMemberships()))
+        assertEquals("1 project · 2 teams", UsersLogic.membershipSummary(UserMemberships(listOf(MProject("p")), listOf(MTeam("a"), MTeam("b")))))
+        assertEquals("3 projects · 1 team", UsersLogic.membershipSummary(UserMemberships(listOf(MProject("p"), MProject("q"), MProject("r")), listOf(MTeam("a")))))
+    }
 }

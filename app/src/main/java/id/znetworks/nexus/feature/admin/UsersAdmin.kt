@@ -100,6 +100,15 @@ internal fun AdminCard(title: String? = null, content: @Composable () -> Unit) {
     }
 }
 
+object UsersLogic {
+    /** "3 projects · 2 teams", or "0 projects" when nowhere yet (iOS membershipSummary). */
+    fun membershipSummary(m: UserMemberships): String {
+        val p = m.projects.size; val t = m.teams.size
+        val proj = "$p project" + if (p == 1) "" else "s"
+        return if (t == 0) proj else "$proj · $t team" + if (t == 1) "" else "s"
+    }
+}
+
 /** Control Room › Users: the roster (A–Z), role counts as filters, search, add people, approval chart. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -115,7 +124,10 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
     var inviting by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
     var tick by remember { mutableIntStateOf(0) }
+    var memberships by remember { mutableStateOf<Map<String, UserMemberships>>(emptyMap()) }
     LaunchedEffect(tick) { try { roster = api.roster(); error = null } catch (e: ApiError) { error = e.describe(res) } }
+    // One call for everyone (BoD; others get an empty map and no summary line), never one per row.
+    LaunchedEffect(tick) { memberships = api.memberships() }
     val r = roster
     when {
         r == null && error == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -154,7 +166,18 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
                     Avatar(m.name, m.avatar, 34.dp); Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text(m.displayName, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(listOfNotNull(m.email, m.approver?.name?.let { stringResource(R.string.ad_approver_is, it) }).joinToString(" · "), fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        m.email?.let { Text(it, fontSize = 11.sp, color = c.mutedFg, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        // Only what is ON: most people use none, and "off" badges on every row hide the few.
+                        if (m.flexiTimeEnabled || m.noGeofenceMode || !m.googleWorkspaceEmail.isNullOrEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (m.flexiTimeEnabled) Text("⚡ Flexi", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.warning)
+                            if (m.noGeofenceMode) Text("📱 Mobile", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.violetText)
+                            if (!m.googleWorkspaceEmail.isNullOrEmpty()) Text("@", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = c.violetText)
+                        }
+                        // BoD without an approver is the top of the chain, not a gap.
+                        val approver = m.approver?.name?.takeIf { it.isNotEmpty() }
+                        if (approver != null) Text(stringResource(R.string.ad_approver_is, approver), fontSize = 10.sp, color = c.mutedFg, maxLines = 1)
+                        else if (m.role == "STAFF" || m.role == "MANAGER") Text(stringResource(R.string.ad_not_placed), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.warning)
+                        memberships[m.userId]?.let { Text(UsersLogic.membershipSummary(it), fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = c.mutedFg) }
                     }
                     Pill(Roles.label(m.role), if (Roles.tier(m.role) >= 3) c.violetText else c.mutedFg)
                 }

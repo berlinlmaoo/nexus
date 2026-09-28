@@ -1418,4 +1418,5 @@
     <string name="away_from_office">Away from the office</string>
     <string name="btn_checkout_saved_phone">Check-out saved on this phone</string>
     <string name="now_at">Now at %1$s</string>
+    <string name="ad_not_placed">Not placed on the Approval Chart</string>
 </resources>
