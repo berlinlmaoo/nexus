@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { ScrollText, X } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,7 +24,13 @@ export function UserXpLogModal({ user, layoutId, onClose }: { user: XpUser; layo
     initialPageParam: 0,
     retry: 1,
   });
-  const rows = log.data?.pages.flatMap((p) => p.rows) ?? [];
+  // A 0 XP row moved nothing: the "clear penalty" marker, or a deduction the BoD removed (shown struck
+  // through, with who removed it, on the person's record instead).
+  const rows = (log.data?.pages.flatMap((p) => p.rows) ?? []).filter((r) => r.amount !== 0);
+  // The full record (/people/:id) is for the person themself, the BoD, and a manager (whose view the
+  // server narrows to their direct reports) — not for every colleague who can read this public log.
+  const today = useQuery({ queryKey: ["attendance-today"], queryFn: nexusApi.attendanceToday, retry: 1, staleTime: 60_000 });
+  const canOpenRecord = today.data?.viewerId === user.id || Boolean(today.data?.canManageAttendance || today.data?.canReviewAttendanceRequests);
 
   return (
     <MorphPanel layoutId={layoutId} onClose={onClose}>
@@ -32,7 +39,7 @@ export function UserXpLogModal({ user, layoutId, onClose }: { user: XpUser; layo
         <Avatar userId={user.id} name={user.name ?? undefined} avatar={user.avatar ?? undefined} size={36} />
         <div className="min-w-0 flex-1">
           <div className="truncate text-base font-semibold">{user.name ?? "—"}</div>
-          <div className="text-[11px] text-muted-foreground">XP log — every gain & loss</div>
+          <div className="text-[11px] text-muted-foreground">XP log — every gain & loss{canOpenRecord && <> · <Link to="/people/$userId" params={{ userId: user.id }} className="font-semibold text-primary hover:underline">Full record →</Link></>}</div>
         </div>
         <button onClick={onClose} aria-label="Close" className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-accent"><X className="h-4 w-4" /></button>
       </div>

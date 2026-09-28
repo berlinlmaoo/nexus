@@ -89,6 +89,8 @@ model User {
   dayOffBonuses        DayOffBonus[] @relation("DayOffBonusUser")
   dayOffBonusesGranted DayOffBonus[] @relation("DayOffBonusGrantedBy")
   dayOffBonusesRevoked DayOffBonus[] @relation("DayOffBonusRevokedBy")
+  xpRefunds            XpRefund[] @relation("XpRefundUser")
+  xpRefundsGiven       XpRefund[] @relation("XpRefundBy")
   /// Orang-orang yang request absensinya masuk ke saya (Bagan Approval).
   attendanceReports WorkspaceMember[] @relation("AttendanceApprover")
   attendanceCorrectionsOnMe    AttendanceCorrection[] @relation("AttendanceCorrectionUser")
@@ -243,6 +245,7 @@ model Workspace {
   holidays             Holiday[]
   redDateQuotas        RedDateQuota[]
   dayOffBonuses        DayOffBonus[]
+  xpRefunds            XpRefund[]
   complaints           Complaint[]
   attendanceCorrections AttendanceCorrection[]
 }
@@ -1987,6 +1990,29 @@ model XpTransaction {
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+/// One XP deduction the BoD removed from a member record (owner, 28 Sep 2026; lib/xp-refund.ts).
+/// The ledger row stays with amount 0; this keeps what it was, who removed it and why. The unique
+/// transactionId is what makes removing idempotent. Not a relation to XpTransaction on purpose: a
+/// later whole-day clear deletes that row, and the removal must still show on the record.
+model XpRefund {
+  id                String    @id @default(cuid())
+  transactionId     String    @unique
+  userId            String
+  user              User      @relation("XpRefundUser", fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId       String
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  /// The removed row's reason and amount (negative) as they were.
+  reason            String
+  amount            Int
+  originalCreatedAt DateTime
+  refundedById      String?
+  refundedBy        User?     @relation("XpRefundBy", fields: [refundedById], references: [id], onDelete: SetNull)
+  note              String?
+  createdAt         DateTime  @default(now())
+
+  @@index([userId, originalCreatedAt])
 }
 
 model UserStreak {

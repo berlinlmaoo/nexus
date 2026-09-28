@@ -45,6 +45,7 @@ import { Route as AppProjectsIndexRouteImport } from './routes/_app/projects/ind
 import { Route as AppTasksTaskIdRouteImport } from './routes/_app/tasks.$taskId'
 import { Route as AppReportsUserIdRouteImport } from './routes/_app/reports.$userId'
 import { Route as AppProjectsProjectIdRouteImport } from './routes/_app/projects/$projectId'
+import { Route as AppPeopleUserIdRouteImport } from './routes/_app/people.$userId'
 import { Route as AppMessagesConversationIdRouteImport } from './routes/_app/messages.$conversationId'
 import { Route as AppFoldersFolderIdRouteImport } from './routes/_app/folders.$folderId'
 import { Route as AppDocsDocIdRouteImport } from './routes/_app/docs.$docId'
@@ -228,6 +229,11 @@ const AppProjectsProjectIdRoute = AppProjectsProjectIdRouteImport.update({
   path: '/projects/$projectId',
   getParentRoute: () => AppRoute,
 } as any)
+const AppPeopleUserIdRoute = AppPeopleUserIdRouteImport.update({
+  id: '/people/$userId',
+  path: '/people/$userId',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppMessagesConversationIdRoute =
   AppMessagesConversationIdRouteImport.update({
     id: '/$conversationId',
@@ -280,6 +286,7 @@ export interface FileRoutesByFullPath {
   '/docs/$docId': typeof AppDocsDocIdRoute
   '/folders/$folderId': typeof AppFoldersFolderIdRoute
   '/messages/$conversationId': typeof AppMessagesConversationIdRoute
+  '/people/$userId': typeof AppPeopleUserIdRoute
   '/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/reports/$userId': typeof AppReportsUserIdRoute
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
@@ -320,6 +327,7 @@ export interface FileRoutesByTo {
   '/docs/$docId': typeof AppDocsDocIdRoute
   '/folders/$folderId': typeof AppFoldersFolderIdRoute
   '/messages/$conversationId': typeof AppMessagesConversationIdRoute
+  '/people/$userId': typeof AppPeopleUserIdRoute
   '/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/reports/$userId': typeof AppReportsUserIdRoute
   '/tasks/$taskId': typeof AppTasksTaskIdRoute
@@ -362,6 +370,7 @@ export interface FileRoutesById {
   '/_app/docs/$docId': typeof AppDocsDocIdRoute
   '/_app/folders/$folderId': typeof AppFoldersFolderIdRoute
   '/_app/messages/$conversationId': typeof AppMessagesConversationIdRoute
+  '/_app/people/$userId': typeof AppPeopleUserIdRoute
   '/_app/projects/$projectId': typeof AppProjectsProjectIdRoute
   '/_app/reports/$userId': typeof AppReportsUserIdRoute
   '/_app/tasks/$taskId': typeof AppTasksTaskIdRoute
@@ -404,6 +413,7 @@ export interface FileRouteTypes {
     | '/docs/$docId'
     | '/folders/$folderId'
     | '/messages/$conversationId'
+    | '/people/$userId'
     | '/projects/$projectId'
     | '/reports/$userId'
     | '/tasks/$taskId'
@@ -444,6 +454,7 @@ export interface FileRouteTypes {
     | '/docs/$docId'
     | '/folders/$folderId'
     | '/messages/$conversationId'
+    | '/people/$userId'
     | '/projects/$projectId'
     | '/reports/$userId'
     | '/tasks/$taskId'
@@ -485,6 +496,7 @@ export interface FileRouteTypes {
     | '/_app/docs/$docId'
     | '/_app/folders/$folderId'
     | '/_app/messages/$conversationId'
+    | '/_app/people/$userId'
     | '/_app/projects/$projectId'
     | '/_app/reports/$userId'
     | '/_app/tasks/$taskId'
@@ -759,6 +771,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProjectsProjectIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/people/$userId': {
+      id: '/_app/people/$userId'
+      path: '/people/$userId'
+      fullPath: '/people/$userId'
+      preLoaderRoute: typeof AppPeopleUserIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/messages/$conversationId': {
       id: '/_app/messages/$conversationId'
       path: '/$conversationId'
@@ -841,6 +860,7 @@ interface AppRouteChildren {
   AppVaultRoute: typeof AppVaultRoute
   AppIndexRoute: typeof AppIndexRoute
   AppFoldersFolderIdRoute: typeof AppFoldersFolderIdRoute
+  AppPeopleUserIdRoute: typeof AppPeopleUserIdRoute
   AppProjectsProjectIdRoute: typeof AppProjectsProjectIdRoute
   AppTasksTaskIdRoute: typeof AppTasksTaskIdRoute
   AppProjectsIndexRoute: typeof AppProjectsIndexRoute
@@ -869,6 +889,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppVaultRoute: AppVaultRoute,
   AppIndexRoute: AppIndexRoute,
   AppFoldersFolderIdRoute: AppFoldersFolderIdRoute,
+  AppPeopleUserIdRoute: AppPeopleUserIdRoute,
   AppProjectsProjectIdRoute: AppProjectsProjectIdRoute,
   AppTasksTaskIdRoute: AppTasksTaskIdRoute,
   AppProjectsIndexRoute: AppProjectsIndexRoute,

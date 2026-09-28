@@ -166,6 +166,22 @@ export const dayOffBonusCreateSchema = z.object({
   reason: z.string().trim().min(3, "Alasan wajib diisi (minimal 3 karakter).").max(200, "Alasan maksimal 200 karakter."),
 })
 
+// Member record (GET /api/members/:userId/record). `userId` may be "me"; `period` is checked in
+// lib/member-record (parseRecordPeriod: YYYY-MM, not in the future).
+export const memberRecordQuerySchema = z.object({
+  userId: z.union([z.literal("me"), idString]),
+  period: z.string().trim().max(7).optional(),
+  only: z.enum(["xp"]).optional(),
+})
+
+// Remove one XP deduction (POST /api/gamification/xp-transactions/:id/refund).
+export const xpRefundBodySchema = z.object({
+  note: z.string().trim().max(200, "Catatan maksimal 200 karakter.").optional(),
+})
+
+/** An XpTransaction id in a path. */
+export { idString }
+
 export const dayOffBonusQuerySchema = z.object({
   periodKey: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Periode harus format YYYY-MM.").optional(),
   userId: idString.optional(),

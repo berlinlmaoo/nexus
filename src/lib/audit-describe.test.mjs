@@ -356,6 +356,13 @@ check("extra day off revoke names the person", {
   metadata: { reason: "dayoff_bonus_revoke", periodKey: "2026-10", days: 1, note: "Event", targetUserId: rina.id },
 }, (o) => assert.equal(o.title, "Bagas Putro revoked Rina Kartika’s 1 extra day off for the 2026-10 period"))
 
+check("xp deduction removed: who, how much, what and the day", {
+  action: "refund", entityType: "xp_transaction", entityId: "cmxp00000000000000000001", entityName: "Late check-in · 45 min", userId: bagas.id, user: bagas,
+  metadata: { targetUserId: rina.id, amount: -45, refunded: 45, reason: "attendance:late:2026-09-14", kind: "late", date: "2026-09-14", note: "Macet parah", refundId: "cmref0000000000000000001" },
+}, (o) => {
+  assert.ok(o.title.startsWith("Bagas Putro removed Rina Kartika’s -45 XP deduction (late check-in · 45 min"), o.title)
+})
+
 check("update user_profile, NEW shape", {
   action: "update", entityType: "user_profile", entityId: rina.id, entityName: "Rina K.", userId: rina.id, user: rina,
   metadata: { fields: ["name", "phoneNumber"], changes: { name: { from: "Rina Kartika", to: "Rina K." } } },

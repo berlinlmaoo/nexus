@@ -716,6 +716,44 @@ export type NexusUserXpLog = {
   scope?: "period" | "all";
 };
 
+/** One XP ledger row on a member record (GET /api/members/:id/record). `label` is ready to show; an
+ *  attendance penalty carries the day it is about in `dateKey`. A removed deduction keeps its
+ *  `originalAmount`, reads `amount` 0 and names who removed it. */
+export type NexusRecordXpEntry = {
+  id: string;
+  amount: number;
+  originalAmount: number;
+  createdAt: string;
+  reason: string;
+  kind: string;
+  label: string;
+  dateKey: string | null;
+  detail: string | null;
+  lateMinutes: number | null;
+  attendance: boolean;
+  removed: { at: string; by: { id: string; name: string | null } | null; note: string | null } | null;
+  canRemove: boolean;
+};
+export type NexusRecordXpTotals = { gained: number; lost: number; net: number; removed: number };
+export type NexusRecordXp = { entries: NexusRecordXpEntry[]; totals?: NexusRecordXpTotals; hasOlder: boolean; olderPeriod: string | null };
+export type NexusMemberRecord = {
+  person: { id: string; name: string | null; email: string | null; avatar: string | null; role: string; joinedAt: string; isSelf: boolean };
+  viewer: { scope: "ALL" | "DIRECT_REPORTS" | "SELF"; canManageAttendance: boolean; canRemoveXp: boolean };
+  period: { key: string; from: string; to: string; label: string; isCurrent: boolean; days: number; daysElapsed: number; previousKey: string; nextKey: string | null };
+  summary: {
+    score: { worked: number; working: number; surplus: number; totalWorked: number };
+    counts: { present: number; permit: number; leave: number; sick: number; dayOff: number; absent: number; lateDays: number; lateMinutes: number };
+    dayOff: { quota: number; baseQuota: number; bonusDays: number; bonusGrants: { days: number; reason: string }[]; used: number; usedRaw: number; remaining: number };
+    xp: NexusRecordXpTotals;
+  };
+  days: { date: string; day: number; weekday: string; tone: string; isToday: boolean; isFuture: boolean; lateMinutes: number; penaltyXp: number }[];
+  xp: NexusRecordXp;
+  requests: {
+    id: string; type: "LEAVE" | "SICK" | "PERMIT" | "DAY_OFF" | "RED_DATE"; status: string; startDate: string; endDate: string; days: number;
+    reason: string; reviewNote: string | null; createdAt: string; reviewedAt: string | null; reviewedBy: { id: string; name: string | null } | null; isAuto: boolean;
+  }[];
+};
+
 // Self "you lost XP" popup feed — the current user's own recent negative XP transactions.
 export type NexusXpPenalty = {
   id: string;
@@ -1947,6 +1985,16 @@ export const nexusApi = {
     return apiFetch<NexusUserXpLog>(`/api/gamification/xp-log?${qs.toString()}`);
   },
   adjustUserXp: (payload: { userId: string; amount: number; note?: string }) => apiFetch<{ ok: boolean; totalXp: number | null; currentLevel: number | null }>("/api/gamification/xp-adjust", { method: "POST", body: JSON.stringify(payload) }),
+  // Member record (/people/:userId): one attendance period of one person — days, counts, XP log,
+  // requests. `userId` may be "me". 403 outside the viewer's scope (staff = self, manager = direct reports).
+  memberRecord: (userId: string, period?: string) =>
+    apiFetch<NexusMemberRecord>(`/api/members/${encodeURIComponent(userId)}/record${period ? `?period=${encodeURIComponent(period)}` : ""}`),
+  memberRecordXp: (userId: string, period: string) =>
+    apiFetch<{ period: string; xp: NexusRecordXp }>(`/api/members/${encodeURIComponent(userId)}/record?period=${encodeURIComponent(period)}&only=xp`),
+  // BoD: remove ONE XP deduction (409 if removed before, 400 if it is not a deduction).
+  removeXpDeduction: (transactionId: string, note?: string) =>
+    apiFetch<{ ok: boolean; refund: { id: string; transactionId: string; userId: string; amount: number; refunded: number; label: string; dateKey: string | null }; totalXp: number | null }>(
+      `/api/gamification/xp-transactions/${encodeURIComponent(transactionId)}/refund`, { method: "POST", body: JSON.stringify(note ? { note } : {}) }),
   claimQuest: (questKey: string) => apiFetch<{ xp?: NexusXp }>("/api/gamification/quests/claim", { method: "POST", body: JSON.stringify({ questKey }) }),
   leaderboard: () => apiFetch<{ rows: NexusLeaderboardRow[]; period?: NexusLeaderboardPeriod }>("/api/gamification/leaderboard"),
   xpAuditLog: (params?: { sign?: "all" | "pos" | "neg"; scope?: "period" | "all"; userId?: string; offset?: number; limit?: number }) => {

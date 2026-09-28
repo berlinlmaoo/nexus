@@ -685,6 +685,8 @@ const NOUNS: Record<string, string> = {
   project_page: "project page",
   notificationPreference: "notification preferences",
   dayoff_bonus: "extra day off",
+  xp_transaction: "XP entry",
+  member_record: "member record",
 }
 
 const REQUEST_TYPE_NOUN: Record<string, string> = {
@@ -815,6 +817,18 @@ function buildTitle(row: AuditRowLike, names?: AuditNames): string {
     const date = formatAuditDate(meta.date)
     const what = str(meta.override)
     return `${actor} overrode ${who ? `${possessive(who)} attendance` : "an attendance day"}${date ? ` on ${date}` : ""}${what ? ` (${humanizeKey(what).toLowerCase()})` : ""}`
+  }
+
+  if (type === "xp_transaction" && action === "refund") {
+    const who = person("targetUserId")
+    const amount = typeof meta.amount === "number" ? meta.amount : null
+    const date = formatAuditDate(meta.date)
+    const what = entityName ? entityName.toLowerCase() : "XP"
+    return `${actor} removed ${who ? `${possessive(who)} ` : "a "}${amount !== null ? `${amount} XP ` : ""}deduction (${what}${date ? `, ${date}` : ""})`
+  }
+
+  if (type === "member_record" && action === "view") {
+    return `${actor} opened ${entityName ? `${possessive(entityName)} ` : "a "}member record`
   }
 
   if (type === "dayoff_bonus") {
