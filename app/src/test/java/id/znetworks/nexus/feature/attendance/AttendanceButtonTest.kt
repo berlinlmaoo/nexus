@@ -9,6 +9,17 @@ class AttendanceButtonTest {
 
     @Test fun readyIsCheckIn() = assertEquals(ButtonMode.CheckIn, mode())
 
+    @Test fun approvedRequestCoveringTodayHidesCheckIn() {
+        fun m(r: TodayRequest?, inn: Boolean = false, out: Boolean = false, force: Boolean = false) =
+            AttendanceButtonLogic.mode(inn, out, force, false, 0, 200, null, null, coveredBy = r)
+        assertEquals(ButtonMode.CoveredByRequest("SICK"), m(TodayRequest("r", "SICK", "APPROVED")))
+        assertEquals(ButtonMode.CoveredByRequest("LEAVE"), m(TodayRequest("r", "LEAVE", null)))
+        assertEquals(ButtonMode.CheckIn, m(TodayRequest("r", "PERMIT", "PENDING")))
+        // A forgotten check-out or a day already started still needs its check-out.
+        assertEquals(ButtonMode.CheckOut(0, 200, unlocked = false, waiting = false), m(TodayRequest("r", "PERMIT", "APPROVED"), force = true))
+        assertEquals(ButtonMode.CheckOut(0, 200, unlocked = false, waiting = false), m(TodayRequest("r", "PERMIT", "APPROVED"), inn = true))
+    }
+
     @Test fun checkedInIsCheckOutLockedUntil200Characters() {
         assertEquals(ButtonMode.CheckOut(120, 200, unlocked = false, waiting = false), mode(inn = true, count = 120))
         assertEquals(ButtonMode.CheckOut(200, 200, unlocked = true, waiting = false), mode(inn = true, count = 200))

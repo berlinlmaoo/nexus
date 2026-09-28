@@ -183,6 +183,15 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 | B13 | **Fixed** (main session, 28 Sep: board showed only people who had checked in on a period's first day). The board now merges `roster` from `GET /api/attendance/history?scope=workspace` with the people in the rows, sorted A–Z as on iOS/web (the viewer is no longer pinned first); roster quota is used when a person has no row yet (history/BoardModel.kt `members`, BoardModelTest `rosterShowsEveryoneEvenWithoutRows`). |
 | B14 | **Fixed** (iOS 91d7e98, crew board freeze panes): (1) a drag over the names, the Score column or the date row now scrolls the board too (outer `scrollable` on the whole grid sharing the day-cell and row scroll states; history/BoardUi.kt `Grid`); (2) **not affected**: rows are a plain Column, never a lazy list inside the two-way scroll, so every row is always drawn. |
 
+## Audit 28 Sep 2026 (docs/AUDIT.md, HEAD 4b50f89): fixes
+
+No KRITIS findings. Decisions from the main session: build number compared by versionCode; any
+active office counts as inside; a replayed check-in answered 409 "already checked in" has landed.
+
+| Finding | Fix | Commit |
+|---|---|---|
+| T1 (TINGGI) approved request covering today still showed Check in | Button replaced by the iOS card "Your approved request covers today · <type> · No check-in needed" (APPROVED only; a forgotten or started check-out still shows) | this step |
+
 ## Release rule (Berlin, 28 Sep 2026)
 
 Build 2 is **not** published. The Android release to all staff comes only after every feature is

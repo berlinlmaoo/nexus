@@ -76,6 +76,8 @@ sealed interface ButtonMode {
     /** [count]/[min] reflection characters; unlocks at [min]. [waiting]: an offsite check-out awaits approval. */
     data class CheckOut(val count: Int, val min: Int, val unlocked: Boolean, val waiting: Boolean) : ButtonMode
     data class DoneForToday(val workedMinutes: Int?) : ButtonMode
+    /** An approved request covers today: the server refuses a check-in, so there is nothing to press (iOS). */
+    data class CoveredByRequest(val type: String?) : ButtonMode
 }
 
 object AttendanceButtonLogic {
@@ -84,12 +86,17 @@ object AttendanceButtonLogic {
      * reflection reaches 200 characters; checked out → done. Same rules as the two buttons had.
      */
     fun mode(checkedIn: Boolean, checkedOut: Boolean, forcePending: Boolean, offsitePending: Boolean,
-             reflectionCount: Int, reflectionMin: Int, checkInAt: String?, checkOutAt: String?): ButtonMode = when {
+             reflectionCount: Int, reflectionMin: Int, checkInAt: String?, checkOutAt: String?,
+             coveredBy: TodayRequest? = null): ButtonMode = when {
         forcePending -> ButtonMode.CheckOut(reflectionCount, reflectionMin, reflectionCount >= reflectionMin, offsitePending)
         checkedOut && !offsitePending -> ButtonMode.DoneForToday(worked(checkInAt, checkOutAt))
         checkedIn -> ButtonMode.CheckOut(reflectionCount, reflectionMin, reflectionCount >= reflectionMin, offsitePending)
+        covers(coveredBy) -> ButtonMode.CoveredByRequest(coveredBy?.type)
         else -> ButtonMode.CheckIn
     }
+
+    /** The server sends `todayRequest` for APPROVED only; a status it may add later never hides the button. */
+    fun covers(r: TodayRequest?) = r != null && (r.status == null || r.status.equals("APPROVED", ignoreCase = true))
 
     fun worked(inAt: String?, outAt: String?): Int? {
         val a = inAt?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return null
@@ -141,7 +148,7 @@ fun AttendanceButton(
         else -> Color.White
     }
     val clickable = when (flow) {
-        null -> enabled && mode !is ButtonMode.DoneForToday && !lockedOut
+        null -> enabled && mode !is ButtonMode.DoneForToday && mode !is ButtonMode.CoveredByRequest && !lockedOut
         is CaptureFlow.Failed, is CaptureFlow.Done, is CaptureFlow.SavedOffline -> true
         else -> false
     }
@@ -214,6 +221,8 @@ private fun ModeLabel(mode: ButtonMode, fg: Color) = when (mode) {
         if (mode.unlocked && !mode.waiting) Icons.AutoMirrored.Filled.Logout else Icons.Filled.Lock, stringResource(R.string.btn_check_out), fg,
         trailing = if (!mode.unlocked && !mode.waiting) "${mode.count}/${mode.min}" else null,
     )
+    // Never drawn: the screen shows the covered-by-request card instead of the button.
+    is ButtonMode.CoveredByRequest -> Line(Icons.Filled.CheckCircle, stringResource(R.string.covered_title), fg)
     is ButtonMode.DoneForToday -> Line(Icons.Filled.CheckCircle,
         mode.workedMinutes?.let { stringResource(R.string.btn_done_worked, it / 60, it % 60) } ?: stringResource(R.string.btn_done), fg)
 }

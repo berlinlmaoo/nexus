@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Coffee
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.EventAvailable
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.WifiOff
@@ -212,8 +213,10 @@ fun AttendanceScreen(
                 if (s.locationOff) LocationOffBanner()
                 // One control that changes with the day (UPDATES §11); the press flow is drawn inside it.
                 val mode = AttendanceButtonLogic.mode(checkedIn, checkedOut, forcePending, offsitePending,
-                    vm.reflectionCount(s), AttendanceViewModel.REFLECTION_MIN, s.today?.today?.checkInAt, s.today?.today?.checkOutAt)
-                Box(Modifier.bringIntoViewRequester(buttonInView)) {
+                    vm.reflectionCount(s), AttendanceViewModel.REFLECTION_MIN, s.today?.today?.checkInAt, s.today?.today?.checkOutAt,
+                    coveredBy = s.today?.todayRequest.takeIf { q.count == 0 })
+                if (mode is ButtonMode.CoveredByRequest) CoveredByRequestCard(mode.type)
+                else Box(Modifier.bringIntoViewRequester(buttonInView)) {
                     AttendanceButton(mode, s.flow, enabled = !s.loading, onPress = ::press, onDismissFlow = vm::dismissFlow)
                 }
                 if (s.offsitePrompt) OffsitePrompt(s.offsiteReason, vm::onOffsiteReason, vm::cancelOffsite, vm::submitOffsite)
@@ -553,6 +556,22 @@ private fun LocationOffBanner() {
     ) {
         Text(stringResource(R.string.location_off_banner), fontSize = 12.sp, color = Nx.colors.foreground, modifier = Modifier.weight(1f))
         TextButton(onClick = { openAppSettings(context) }) { Text(stringResource(R.string.open_settings), color = w, fontWeight = FontWeight.Bold) }
+    }
+}
+
+@Composable
+private fun CoveredByRequestCard(type: String?) {
+    val c = Nx.colors
+    Column(
+        Modifier.fillMaxWidth().background(c.success.copy(alpha = 0.08f), RoundedCornerShape(18.dp))
+            .border(1.dp, c.success.copy(alpha = 0.25f), RoundedCornerShape(18.dp)).padding(horizontal = 14.dp, vertical = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(Icons.Filled.EventAvailable, null, tint = c.success, modifier = Modifier.size(26.dp))
+        Spacer(Modifier.height(6.dp))
+        Text(stringResource(R.string.covered_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = c.foreground, textAlign = TextAlign.Center)
+        Text((type?.let { id.znetworks.nexus.feature.attendance.requests.typeLabel(it) } ?: stringResource(R.string.covered_request)) + " · " + stringResource(R.string.covered_body),
+            fontSize = 12.sp, color = c.mutedFg, textAlign = TextAlign.Center)
     }
 }
 

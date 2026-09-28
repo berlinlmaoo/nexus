@@ -1411,4 +1411,7 @@
     <string name="folder_photo">Use a photo as the icon</string>
     <string name="folder_photo_chosen">Photo chosen ✓ (tap to change)</string>
     <string name="task_fields_not_saved">Task created, but %1$d custom field(s) weren\'t saved. Open the task to fill them in.</string>
+    <string name="covered_title">Your approved request covers today</string>
+    <string name="covered_request">Request</string>
+    <string name="covered_body">No check-in needed — it\'s already on your record.</string>
 </resources>

@@ -1405,4 +1405,7 @@
     <string name="folder_photo">Pakai foto sebagai ikon</string>
     <string name="folder_photo_chosen">Foto dipilih ✓ (ketuk untuk ganti)</string>
     <string name="task_fields_not_saved">Task dibuat, tapi %1$d custom field gagal disimpan. Buka task-nya untuk mengisi lagi.</string>
+    <string name="covered_title">Pengajuanmu yang disetujui mencakup hari ini</string>
+    <string name="covered_request">Pengajuan</string>
+    <string name="covered_body">Tidak perlu check-in — sudah tercatat di absensimu.</string>
 </resources>
