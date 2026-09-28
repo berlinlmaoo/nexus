@@ -217,7 +217,14 @@ Server findings (Manager → ADMIN, BoD edits OAA account, Manager removes membe
 | S6 (SEDANG) streak days on the member record not tappable | Each day opens the crew board's own day sheet (details, trail, selfies; for the BoD "Change status", clear check-out, delete), fed by that person's history rows (`history?…&userId=`); rights from `record.viewer.canManageAttendance`; a change reloads the record. Same opening rule as iOS (BoardModelTest) | 1b894d7 |
 | S7 (SEDANG) the APK download never really resumed | `download` reports the ETag as soon as the headers arrive and the updater stores it before the bytes, so a cut connection continues with Range + If-Range; a new build meanwhile still replaces the file whole (UpdaterDownloadTest) | 9fefc7e |
 | S8 (SEDANG) non-ApiError exceptions in the updater crashed the app | `run()` turns any failure (disk, PackageInstaller, SecurityException) into Failed and abandons the half-done session; a malformed absolute download URL is a failed download; `appScope` has an exception handler (logged, never a crash) | 0197481 |
-| S9 (SEDANG) approver picker offered only Managers and up | Everyone but the person, senior roles first (iOS, server); a choice that would close a loop is still disabled (makesCycle) | this step |
+| S9 (SEDANG) approver picker offered only Managers and up | Everyone but the person, senior roles first (iOS, server); a choice that would close a loop is still disabled (makesCycle) | 2df5852 |
+
+**New for 0.1.6 (Berlin, 28 Sep; iOS b186172): no sign-out while a workday runs.** Logout in More is
+refused while checked in and not checked out (live, or a check-in still queued offline; before today was
+read this launch, an active work session counts): "Check out first — You're checked in, so your workday
+and live location are still running…", with a button to Attendance. Checked again on the confirmation. A
+queued check-out ends the day. A 401 still ends the session. WorkdayRule in PresenceTest; guarded in
+AttendanceGuardTest (this step).
 
 ## Audit 28 Sep 2026 (docs/AUDIT.md, HEAD 4b50f89): fixes
 

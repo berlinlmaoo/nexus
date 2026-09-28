@@ -110,4 +110,13 @@ class AttendanceGuardTest {
         // Audit T5: ACTION_IMAGE_CAPTURE throws without CAMERA; only rememberCameraCapture launches it.
         assertEquals(sortedSetOf("CameraCapture.kt"), filesMatching(Regex("""TakePicture\(""")))
     }
+
+    @Test fun logoutIsHeldWhileAWorkdayRuns() {
+        // Berlin 28 Sep (iOS b186172): the person's own logout goes through workdayOpen(); a 401 still ends
+        // the session in AuthRepository (not from a screen).
+        val shell = sources.entries.first { it.key.name == "SignedInShell.kt" }.value
+        assertEquals(1, Regex("""onSignOut\(\)""").findAll(shell).count())
+        assertTrue(shell.contains("if (container.workdayOpen()) logoutBlocked = true else onSignOut()"))
+        assertEquals(sortedSetOf("MainActivity.kt"), filesMatching(Regex("""auth::signOut|auth\.signOut\(""")))
+    }
 }

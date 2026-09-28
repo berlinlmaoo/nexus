@@ -57,6 +57,22 @@ data class AttendanceSnapshot(
     val isPending: Boolean get() = pendingCount > 0
 }
 
+/**
+ * A workday is running on this phone (Berlin, 28 Sep 2026; iOS b186172): checked in, live or still
+ * queued, and not checked out, not even offline. Logout is refused then: it would stop the live
+ * location and wipe the queue, leaving a day nobody can close from this phone. A 401 still ends the
+ * session; only the person's own tap is held.
+ */
+object WorkdayRule {
+    fun open(queue: List<PendingAttendance>, today: id.znetworks.nexus.feature.attendance.AttendanceRecord?, tracking: Boolean, todayKnown: Boolean): Boolean {
+        if (queue.any { it.kind == AttendanceKind.CHECK_OUT }) return false
+        if (queue.any { it.kind == AttendanceKind.CHECK_IN }) return true
+        // Before today was read this launch, the work session restored from disk still knows.
+        if (!todayKnown) return tracking
+        return today != null && today.hasCheckedIn && !today.hasCheckedOut
+    }
+}
+
 object PresenceLogic {
     /** When the shift should end: flexi = check-in + 9 h; an end earlier than the start is tomorrow. */
     fun expectedOut(startMillis: Long?, shift: MyShift?): Long? {
@@ -108,15 +124,17 @@ class AttendancePresence(
 ) {
     private val prefs = context.getSharedPreferences("nexus.widget", Context.MODE_PRIVATE)
     private val lock = Mutex()
-    private var lastToday: AttendanceToday? = null
+    /** The last today the app read (null before the first read this launch). */
+    @Volatile var lastToday: AttendanceToday? = null
+        private set
     private var recent: List<DayDot> = emptyList()
     private var recentAt = 0L
     private var recentKey: String? = null
 
     fun refresh(today: AttendanceToday? = null) = scope.launch {
         if (!signedIn()) return@launch
+        if (today != null) lastToday = today
         lock.withLock {
-            if (today != null) lastToday = today
             val rec = lastToday?.today
             // The dots change with a check-in/out or a new day; otherwise at most every 15 min.
             val key = "${OfficeTime.today()}|${rec?.checkInAt}|${rec?.checkOutAt}"

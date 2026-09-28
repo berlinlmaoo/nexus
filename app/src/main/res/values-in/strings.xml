@@ -1464,4 +1464,6 @@
     <string name="camera_off_body">Untuk ambil foto di sini, izinkan Kamera untuk NEXUS di Settings, lalu coba lagi. Kamu juga bisa pilih foto dari galeri.</string>
     <string name="updater_not_published_yet">Versi yang dibutuhkan HP ini belum terbit. Coba lagi sebentar lagi; absen bisa lagi setelah versi itu terpasang.</string>
     <string name="updater_not_announced">File yang terunduh bukan versi yang diumumkan NEXUS, jadi tidak dipasang. Coba lagi nanti.</string>
+    <string name="logout_blocked_title">Check out dulu</string>
+    <string name="logout_blocked_body">Kamu sedang check in, jadi jam kerja dan lokasi live masih berjalan. Kamu tidak bisa keluar dari akun sebelum check out — check out dulu di layar Absensi, lalu keluar.</string>
 </resources>

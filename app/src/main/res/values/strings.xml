@@ -1470,4 +1470,6 @@
     <string name="camera_off_body">To take a photo here, allow Camera for NEXUS in Settings, then try again. You can also pick a photo from the gallery.</string>
     <string name="updater_not_published_yet">The version this phone needs isn\'t published yet. Try again in a little while; attendance works again once it is installed.</string>
     <string name="updater_not_announced">The downloaded file isn\'t the version NEXUS announced, so it wasn\'t installed. Try again later.</string>
+    <string name="logout_blocked_title">Check out first</string>
+    <string name="logout_blocked_body">You\'re checked in, so your workday and live location are still running. You can\'t sign out until you check out — check out on the Attendance screen, then sign out.</string>
 </resources>

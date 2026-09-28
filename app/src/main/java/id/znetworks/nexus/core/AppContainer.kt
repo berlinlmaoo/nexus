@@ -174,6 +174,10 @@ class AppContainer(private val context: Context) {
         })
     }
 
+    /** Logout is refused while this is true (the "Check out first" dialog). */
+    fun workdayOpen(): Boolean = id.znetworks.nexus.feature.widget.WorkdayRule.open(
+        attendanceQueue.state.value.entries, presence.lastToday?.today, workTrail.state.isActive, todayKnown = presence.lastToday != null)
+
     /** Re-reads today and lets the trail start or stop accordingly (foreground, queue replay, push). */
     fun reconcileTrail() {
         if (sessionStore.current == null) return
