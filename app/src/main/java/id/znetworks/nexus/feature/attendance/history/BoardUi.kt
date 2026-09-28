@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -339,7 +340,18 @@ private fun Grid(
         val idx = days.indexOf(today)
         if (idx > 3) with(density) { hScroll.scrollTo(((cell + gap) * (idx - 3)).roundToPx()) }
     }
-    Column(modifier) {
+    // A drag anywhere on the board moves it (iOS 91d7e98): over the names or the Score column it
+    // still scrolls the days sideways, and over the date row it still scrolls the rows. The day
+    // cells' own scrollers take their drags first; these catch what lands outside them.
+    val layout = androidx.compose.ui.platform.LocalLayoutDirection.current
+    val rev = { o: androidx.compose.foundation.gestures.Orientation -> androidx.compose.foundation.gestures.ScrollableDefaults.reverseDirection(layout, o, false) }
+    val whole = modifier
+        .scrollable(hScroll, androidx.compose.foundation.gestures.Orientation.Horizontal, reverseDirection = rev(androidx.compose.foundation.gestures.Orientation.Horizontal))
+        .then(if (compact) Modifier else Modifier.scrollable(vScroll, androidx.compose.foundation.gestures.Orientation.Vertical,
+            reverseDirection = rev(androidx.compose.foundation.gestures.Orientation.Vertical)))
+    // Rows are a plain Column, never a lazy list: every row is always drawn (iOS 91d7e98 had
+    // empty rows from a lazy container inside a two-way scroll).
+    Column(whole) {
         // Pinned header row.
         Row(verticalAlignment = Alignment.Bottom) {
             Spacer(Modifier.width(nameW))
