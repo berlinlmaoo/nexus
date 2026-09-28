@@ -219,6 +219,29 @@ struct AttendanceView: View {
     /// Raise it if the purple card grows taller and starts covering the dot again.
     private static let pinDrop: CGFloat = 90
 
+    /// The office drawn on the hero map: today's record's office, else the nearest one found before
+    /// check-in. nil when neither has coordinates.
+    private var mapOffice: (center: CLLocationCoordinate2D, radius: Double, name: String)? {
+        if let o = dispRec?.officeLocation, let la = o.latitude, let lo = o.longitude {
+            return (CLLocationCoordinate2D(latitude: la, longitude: lo), o.radiusMeters ?? 100, o.name ?? "")
+        }
+        if let n = nearby, let la = n.office.latitude, let lo = n.office.longitude {
+            return (CLLocationCoordinate2D(latitude: la, longitude: lo), Double(n.office.radiusMeters ?? 100), n.office.name)
+        }
+        return nil
+    }
+    /// Framed on the office: a few radii across, never tighter than ~300 m, so the circle and the
+    /// streets around it are readable instead of a whole district.
+    private func frameOffice() {
+        guard let o = mapOffice else { return }
+        let span = max(o.radius * 7, 300)
+        camera = .region(MKCoordinateRegion(center: o.center, latitudinalMeters: span, longitudinalMeters: span))
+    }
+    private var mapOfficeKey: String {
+        guard let o = mapOffice else { return "" }
+        return "\(o.center.latitude),\(o.center.longitude),\(o.radius)"
+    }
+
     private var hero: some View {
         ZStack {
             // The GPS dot sits at the map's centre, and the centre is exactly where the purple
@@ -231,13 +254,31 @@ struct AttendanceView: View {
             // the top of the purple card and the entire bottom row with it. Collapsing the map's
             // layout height back to 360 right here leaves the offset as a pure paint-time shift,
             // which is all it was ever meant to be.
-            Map(position: $camera) { UserAnnotation() }
+            Map(position: $camera) {
+                UserAnnotation()
+                // The office this day belongs to (or the nearest one before check-in) with its
+                // check-in circle, so the map answers "am I inside?" at a glance (owner, 28 Sep 2026).
+                if let o = mapOffice {
+                    MapCircle(center: o.center, radius: o.radius)
+                        .foregroundStyle(NX.violet.opacity(0.14))
+                        .stroke(NX.violet, lineWidth: 2)
+                    Annotation(o.name, coordinate: o.center, anchor: .center) {
+                        Image(systemName: "building.2.fill")
+                            .font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                            .frame(width: 24, height: 24)
+                            .background(NX.violet, in: Circle())
+                            .overlay(Circle().strokeBorder(.white, lineWidth: 2))
+                    }
+                }
+            }
                 .mapStyle(.standard(elevation: .flat))
                 .disabled(true)
                 .frame(height: 360 + Self.pinDrop * 2)
                 .offset(y: Self.pinDrop)
                 .frame(height: 360)
                 .clipped()
+                .onAppear { frameOffice() }
+                .onChange(of: mapOfficeKey) { _, _ in frameOffice() }
 
             VStack {
                 timeCard.padding(12)
