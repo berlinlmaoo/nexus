@@ -109,5 +109,17 @@
                 android:name="autoStoreLocales"
                 android:value="true" />
         </service>
+        <!-- Home-screen widget (PRD Phase 5): today's attendance and the last seven days. -->
+        <receiver
+            android:name=".feature.widget.AttendanceWidgetReceiver"
+            android:exported="true"
+            android:label="@string/wg_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/attendance_widget_info" />
+        </receiver>
     </application>
 </manifest>

@@ -35,6 +35,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import java.io.File
 
 /**
@@ -102,6 +105,14 @@ class AppContainer(private val context: Context) {
     /** Live location while checked in (PRD §2.9). */
     val workTrail = WorkTrail(context, api, appScope, signedIn = { sessionStore.current != null })
 
+    /** The home-screen widget's one funnel (iOS AttendancePresence). */
+    val presence by lazy {
+        id.znetworks.nexus.feature.widget.AttendancePresence(context, api, appScope,
+            queue = { attendanceQueue.state.value.entries },
+            hereName = { id.znetworks.nexus.feature.attendance.trail.TrailMachine.officeHere(workTrail.state)?.name },
+            signedIn = { sessionStore.current != null })
+    }
+
     /** In noBackupFilesDir, never cacheDir: an OS cache purge must never delete a check-in. */
     val attendanceQueue = AttendanceQueue(
         dir = File(context.noBackupFilesDir, "attendance-queue"),
@@ -115,6 +126,13 @@ class AppContainer(private val context: Context) {
     )
 
     init {
+        // Everything the widget shows moves with today, the queue, or the office the person is in.
+        workTrail.onToday = { presence.refresh(it) }
+        appScope.launch { attendanceQueue.state.map { it.entries.size }.distinctUntilChanged().drop(1).collect { presence.refresh() } }
+        appScope.launch {
+            workTrail.changes.map { id.znetworks.nexus.feature.attendance.trail.TrailMachine.officeHere(workTrail.state)?.name }
+                .distinctUntilChanged().drop(1).collect { presence.refresh() }
+        }
         auth.addListener(object : AuthRepository.SessionListener {
             override fun onSignedIn(session: Session) {
                 // Somebody else's taps are deleted; this person's own are sent now.
@@ -147,6 +165,8 @@ class AppContainer(private val context: Context) {
                 id.znetworks.nexus.ui.components.ImageMemory.clear()
                 // Location stops with the session; unsent points go with it.
                 workTrail.stopForLogout()
+                // The widget must not keep this person's hours on a phone handed to somebody else.
+                presence.stop()
             }
         })
     }

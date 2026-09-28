@@ -168,6 +168,12 @@ Done. PRESENCE IN / OUT are gone; `AttendanceButton` is one full-width control:
 
 Still on the web until built: Phase 3 (chat, Threads, docs/pages, forms, profiles, tickets, Z Vault, reports, leaderboard, GIDEON, Control Room).
 
+## Phase 5 (Berlin, 28 Sep 2026: build now; "close web check-in" is NOT ours — server, after adoption)
+
+| Part | What exists | Commit |
+|---|---|---|
+| 5.1 | **Home-screen widget** (Glance 1.2, as the iOS AttendanceWidget): small = state (working at <office/place> / done / not checked in / sending), a clock that counts by itself (platform Chronometer, no updates), until-time or "N taps still to send"; medium adds In/Out, time left or "Past 17:00 · check out", and the last 7 days as tone dots (server `history?compact=1`, P/L/I/C/S/D/A colours as iOS). One funnel (`AttendancePresence`): today read, queue size, office-now change; the dots re-fetched on a check-in/out or every 15 min. A snapshot from another day says "Open NEXUS to refresh"; wiped on sign-out. Tap opens Attendance | this step |
+
 ## iOS bug checklist (UPDATES §8), checked 28 Sep 2026
 
 Paths are under `app/src/main/java/id/znetworks/nexus/`.

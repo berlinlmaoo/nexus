@@ -1444,4 +1444,22 @@
     <string name="fc_date">Date %1$s</string>
     <string name="fc_n_tasks">%1$d tasks</string>
     <string name="fc_nothing_due">Nothing due on this date.</string>
+    <string name="wg_name">Attendance</string>
+    <string name="wg_description">Where you stand today, and the last seven days.</string>
+    <string name="wg_sending">Sending</string>
+    <string name="wg_working">Working</string>
+    <string name="wg_done">Done</string>
+    <string name="wg_not_in">Not checked in</string>
+    <string name="wg_until">Until %1$s</string>
+    <string name="wg_checked_in">Checked in</string>
+    <string name="wg_checked_out">Checked out</string>
+    <string name="wg_tap_to_check_in">Tap to check in</string>
+    <string name="wg_open_to_refresh">Open NEXUS to refresh</string>
+    <string name="wg_in_at">In %1$s</string>
+    <string name="wg_out_at">Out %1$s</string>
+    <string name="wg_past_check_out">Past %1$s · check out</string>
+    <plurals name="wg_to_send">
+        <item quantity="one">%1$d tap still to send</item>
+        <item quantity="other">%1$d taps still to send</item>
+    </plurals>
 </resources>

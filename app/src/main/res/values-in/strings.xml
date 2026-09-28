@@ -1438,4 +1438,22 @@
     <string name="fc_date">Tanggal %1$s</string>
     <string name="fc_n_tasks">%1$d task</string>
     <string name="fc_nothing_due">Nggak ada task jatuh tempo di tanggal ini.</string>
+    <string name="wg_name">Absensi</string>
+    <string name="wg_description">Posisi absenmu hari ini, dan 7 hari terakhir.</string>
+    <string name="wg_sending">Mengirim</string>
+    <string name="wg_working">Bekerja</string>
+    <string name="wg_done">Selesai</string>
+    <string name="wg_not_in">Belum check-in</string>
+    <string name="wg_until">Sampai %1$s</string>
+    <string name="wg_checked_in">Sudah check-in</string>
+    <string name="wg_checked_out">Sudah check-out</string>
+    <string name="wg_tap_to_check_in">Ketuk untuk check-in</string>
+    <string name="wg_open_to_refresh">Buka NEXUS untuk memperbarui</string>
+    <string name="wg_in_at">Masuk %1$s</string>
+    <string name="wg_out_at">Keluar %1$s</string>
+    <string name="wg_past_check_out">Lewat %1$s · check-out</string>
+    <plurals name="wg_to_send">
+        <item quantity="one">%1$d tap belum terkirim</item>
+        <item quantity="other">%1$d tap belum terkirim</item>
+    </plurals>
 </resources>

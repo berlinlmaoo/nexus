@@ -143,6 +143,7 @@ dependencies {
     // Passkeys (Credential Manager; the play-services provider for Android 13 and below).
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play)
+    implementation(libs.androidx.glance.appwidget)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

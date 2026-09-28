@@ -20,8 +20,10 @@ exif = "1.4.2"
 osmdroid = "6.1.20"
 firebaseMessaging = "25.1.3"
 credentials = "1.6.0"
+glance = "1.2.0"
 
 [libraries]
+androidx-glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "glance" }
 androidx-credentials = { module = "androidx.credentials:credentials", version.ref = "credentials" }
 androidx-credentials-play = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "credentials" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }

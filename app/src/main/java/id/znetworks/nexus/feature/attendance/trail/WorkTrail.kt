@@ -71,8 +71,12 @@ class WorkTrail(
      * Called whenever the app learns today's attendance (screen load, check-in/out, queue replay,
      * foreground). Idempotent: it only starts or stops something when the answer changed.
      */
+    /** Told every time today is read (the home-screen widget follows the same truth as the trail). */
+    var onToday: (AttendanceToday) -> Unit = {}
+
     fun sync(today: AttendanceToday?, queuedCheckOut: Boolean) = scope.launch {
         if (!signedIn() || today == null) return@launch
+        onToday(today)
         val fx: List<TrailEffect>
         var startedRecord: String? = null
         lock.withLock {
