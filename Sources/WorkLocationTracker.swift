@@ -161,6 +161,35 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
         reconcile()
         startTicker()
         ensurePermission(for: rec.id)
+        publishOutside()
+    }
+
+    /// A GET /api/attendance/today answer, after `sync` has had it: the server's `outsideSince` and
+    /// an approved excuse for today, so the Live Activity quotes the same times as the pushes.
+    /// `heardAt` is when the server said it (a copy restored from the offline cache is older).
+    func heard(today: AttendanceToday, at heardAt: Date) {
+        guard bootstrapped, let rec = today.today else { return }
+        machine.heardToday(recordId: rec.id, outsideSince: Self.parseISO(rec.outsideSince),
+                           excused: today.todayRequest != nil, heardAt: heardAt)
+        persist()
+        publishOutside()
+    }
+
+    /// A leave / sick / permit / day-off request covering today was just filed from this phone. The
+    /// server pauses the outside clock for it right away, so the Live Activity drops the countdown
+    /// now rather than at the next trail reply.
+    func excuseFiledForToday() {
+        guard bootstrapped, machine.state.isActive else { return }
+        machine.excuseFiled()
+        persist()
+        publishOutside()
+    }
+
+    /// Hands the Live Activity the outside-the-office state. Called on every fix, tick, reply and
+    /// attendance refresh — `LiveActivityController.updateOutside` only spends an update when what
+    /// it would draw changes (a new stage, a new start), and the countdown itself is the system's.
+    private func publishOutside() {
+        LiveActivityController.updateOutside(machine.outsideStatus(now: Date()))
     }
 
     /// Fetches today and feeds it through AttendancePresence, which calls `sync`. Used when the app
@@ -432,6 +461,7 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
         persist()
         apply(fx)
         if fx.isEmpty { disarm() }
+        publishOutside()
     }
 
     @objc private func appDidBecomeActive() {
@@ -471,6 +501,10 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
         let fx = machine.tick(now: Date())
         if !fx.isEmpty { persist(); apply(fx) }
         if !machine.state.isActive && machine.state.pending.isEmpty { stopTicker() }
+        // The reminder and warning stages arrive with time alone, no crossing and no fix: the
+        // minute ticker (which runs all the while outside — continuous updates keep the app alive)
+        // is what moves the Live Activity to them.
+        publishOutside()
     }
 
     // MARK: - upload
@@ -491,6 +525,7 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
                 let reply = try await APIClient.shared.postLocationTrail(recordId: batch.recordId, points: batch.points)
                 let fx = machine.sent(ids, recordId: batch.recordId, reply: reply, now: Date())
                 persist()
+                publishOutside()
                 // `.flush` is this loop itself; everything else (a stop) is carried out now.
                 apply(fx.filter { $0 != .flush })
             } catch APIError.http(let code, _) where [400, 403, 409, 410, 422].contains(code) {
@@ -583,6 +618,8 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
     private func handle(_ fx: [WorkTrailEffect]) {
         persist()
         apply(fx)
+        // A crossing (region event or a decisive fix) changes the Live Activity at once.
+        publishOutside()
     }
 
     // MARK: - persistence
@@ -628,6 +665,8 @@ final class WorkLocationTracker {
     func bootstrap() {}
     func sync(today: AttendanceToday?) {}
     func reconcileFromServer() async {}
+    func heard(today: AttendanceToday, at heardAt: Date) {}
+    func excuseFiledForToday() {}
     func stopForLogout() {}
     func prePromptAccepted() { WorkLocationPrompt.shared.isPresented = false }
     func prePromptDeclined() { WorkLocationPrompt.shared.isPresented = false }

@@ -25,7 +25,9 @@ enum AttendancePresence {
         refresh()
     }
 
-    static func refresh(today: AttendanceToday? = nil, userName name: String? = nil) {
+    /// `heardAt`: when the server gave `today` — pass the save time when it is a copy restored from
+    /// the offline cache. Defaults to now for a live answer.
+    static func refresh(today: AttendanceToday? = nil, userName name: String? = nil, heardAt: Date? = nil) {
         if let today { lastToday = today }
         if let name, !name.isEmpty { userName = name }
 
@@ -56,6 +58,9 @@ enum AttendancePresence {
         // check-in the server holds (live, replayed from the queue, or found on launch) and stops on
         // a check-out — including one still waiting in the queue, which the tracker reads itself.
         WorkLocationTracker.shared.sync(today: lastToday)
+        // Only an answer from the server, not the remembered one: the outside clock's start and an
+        // approved excuse for today, for the Live Activity's "outside the office" state.
+        if let today { WorkLocationTracker.shared.heard(today: today, at: heardAt ?? Date()) }
     }
 
     /// Logging out has to erase every trace outside the app. A widget left showing one person's

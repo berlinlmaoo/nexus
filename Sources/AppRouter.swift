@@ -236,6 +236,13 @@ final class AppRouter {
         // Not a screen: there is nothing behind the login screen to navigate to while signed out.
         if name.lowercased() == "register" { requestSignup(from: url); return }
         if name.lowercased() == "forgot-password" { requestPasswordReset(from: url); return }
+        // `nexus://attendance?permit=today` — the Live Activity's "File a permit" while outside the
+        // office: the same prefilled composer the outside pushes open.
+        if name.lowercased() == "attendance",
+           URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains(where: { $0.name == "permit" && $0.value == "today" }) == true {
+            open(.permitToday)
+            return
+        }
         guard let screen = NXScreen(rawValue: name) else { return }
         go(screen)
     }

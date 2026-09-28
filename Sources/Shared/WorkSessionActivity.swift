@@ -41,9 +41,56 @@ struct WorkSessionAttributes: ActivityAttributes {
         /// A queued check-in with nothing confirmed behind it. Drawn differently from a confirmed
         /// session that merely has a check-out waiting to send.
         var isUnconfirmed: Bool { checkInAt == nil && queuedSince != nil }
+
+        // Outside the office (work-hours location, 0.1.6). All optional, and decoded leniently
+        // below: a state encoded by a build without them — or carrying a stage this build does not
+        // know — must still decode, as the normal session look, rather than drop the whole update.
+
+        /// Where the outside-the-office clock stands. Mirrors WorkOutsideStatus.Stage in the app.
+        enum OutsideStage: String, Codable, Hashable { case inside, outside, reminded, warned }
+
+        /// Start of the episode, as the server's pushes quote it ("di luar kantor sejak 20:59").
+        var outsideSince: Date? = nil
+        /// When the server will check the person out offsite if nothing changes. The countdown.
+        var autoCheckoutAt: Date? = nil
+        /// Nil or `.inside`: the normal session look.
+        var stage: OutsideStage? = nil
+        /// The app's language ("en" / "id"). The extension cannot read the app's own UserDefaults,
+        /// where the in-app language switch lives, so it travels with the state. Nil = English.
+        var lang: String? = nil
+
+        /// Outside, with a countdown to draw. A queued tap still in flight takes precedence
+        /// (`isPending`): that is the more urgent thing to know.
+        var isOutside: Bool {
+            guard let stage, stage != .inside, outsideSince != nil, autoCheckoutAt != nil else { return false }
+            return !isPending
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case checkInAt, queuedSince, pendingCount, officeName, expectedOutAt
+            case outsideSince, autoCheckoutAt, stage, lang
+        }
     }
 
     /// Fixed for the life of the activity.
     var userName: String
+}
+
+extension WorkSessionAttributes.ContentState {
+    /// Written out so the fields added later are read with `decodeIfPresent` and a stage this build
+    /// does not know is read as nil, never as a failure. Kept in an extension so the memberwise
+    /// initialiser the app uses still exists.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        checkInAt = try c.decodeIfPresent(Date.self, forKey: .checkInAt)
+        queuedSince = try c.decodeIfPresent(Date.self, forKey: .queuedSince)
+        pendingCount = try c.decodeIfPresent(Int.self, forKey: .pendingCount) ?? 0
+        officeName = try c.decodeIfPresent(String.self, forKey: .officeName)
+        expectedOutAt = try c.decodeIfPresent(Date.self, forKey: .expectedOutAt)
+        outsideSince = try? c.decodeIfPresent(Date.self, forKey: .outsideSince)
+        autoCheckoutAt = try? c.decodeIfPresent(Date.self, forKey: .autoCheckoutAt)
+        stage = (try? c.decodeIfPresent(String.self, forKey: .stage)).flatMap(OutsideStage.init(rawValue:))
+        lang = try? c.decodeIfPresent(String.self, forKey: .lang)
+    }
 }
 #endif

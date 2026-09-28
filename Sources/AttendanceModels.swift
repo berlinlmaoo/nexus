@@ -64,6 +64,10 @@ struct AttendanceRecord: Decodable, Sendable {
     /// "on" | "denied" | nil — whether Always location was granted for this record (0.1.6).
     /// Optional so every server before it still decodes.
     let locationTrackingState: String?
+    /// Start of the outside-the-office episode the server is timing right now (reminder at 1h30,
+    /// automatic offsite check-out at 2h30), nil while inside. The Live Activity quotes it so the
+    /// phone and the pushes name the same time. Optional so every server before it still decodes.
+    let outsideSince: String?
 
     /// The office the check-in was made against. `serializeAttendanceRecord` has always sent the
     /// geofence too; only the name was decoded until the work-hours trail needed the circle itself.

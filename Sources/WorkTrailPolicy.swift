@@ -84,6 +84,14 @@ struct WorkTrailState: Codable, Equatable {
     /// When a presence check last raised the accuracy. A check that got nothing (deep indoors, no
     /// signal) waits `presenceRetry` before trying again instead of keeping the GPS on.
     var presenceTriedAt: Date?
+    // What the server last said about the outside clock, for the Live Activity (outsideStatus).
+    // Optional for the same reason as the fields above.
+    /// The server's `outsideSince` — from a trail reply or from GET /api/attendance/today — and when
+    /// the server said it. Nil since = the server does not count this record as outside.
+    var serverOutsideSince: Date?
+    var serverOutsideSinceAt: Date?
+    /// When `stage` and `serverNextAt` were last written by a trail reply.
+    var serverStageAt: Date?
 
     var isActive: Bool { recordId != nil }
 }
@@ -208,6 +216,9 @@ struct WorkTrailMachine {
             state.preciseSince = nil
             state.preciseBest = nil
             state.presenceTriedAt = nil
+            state.serverOutsideSince = nil
+            state.serverOutsideSinceAt = nil
+            state.serverStageAt = nil
         }
         return [.armRegion(fence)]
     }
@@ -439,6 +450,9 @@ struct WorkTrailMachine {
         }
         state.stage = reply.stage
         state.serverNextAt = reply.nextAt
+        state.serverStageAt = now
+        state.serverOutsideSince = reply.outsideSince
+        state.serverOutsideSinceAt = now
         return state.pending.isEmpty ? [] : [.flush]
     }
 
@@ -537,6 +551,120 @@ struct WorkTrailMachine {
         let a = sin(dLat / 2) * sin(dLat / 2)
             + cos(lat1 * .pi / 180) * cos(lat2 * .pi / 180) * sin(dLng / 2) * sin(dLng / 2)
         return 2 * r * atan2(sqrt(a), sqrt(1 - a))
+    }
+}
+
+// MARK: - the outside clock, as the Live Activity shows it
+
+/// "Outside the office since 20:59 · auto check-out 23:29" — what the work-session Live Activity
+/// draws while the person is out. The pushes at 1h30 and 2h are banners, and iOS never puts a banner
+/// into a Live Activity, so the Island and the Lock Screen have to be told separately, by the app.
+struct WorkOutsideStatus: Equatable {
+    /// `inside` is also "nothing to show": back inside, an excuse on file, or not tracking at all.
+    enum Stage: String { case inside, outside, reminded, warned }
+    var stage: Stage
+    /// Start of the episode — the time the server's pushes and the automatic check-out quote.
+    var outsideSince: Date?
+    /// When the server will check the person out offsite if nothing changes.
+    var autoCheckoutAt: Date?
+
+    static let inside = WorkOutsideStatus(stage: .inside, outsideSince: nil, autoCheckoutAt: nil)
+
+    /// Whether redrawing the Live Activity would change anything the person can see. The times are
+    /// shown to the minute and the countdown is drawn by the system, so the local exit time being
+    /// replaced by the server's a few seconds off is not worth one of ActivityKit's rationed updates.
+    func sameForDisplay(as other: WorkOutsideStatus) -> Bool {
+        func close(_ a: Date?, _ b: Date?) -> Bool {
+            switch (a, b) {
+            case (nil, nil): return true
+            case let (x?, y?): return abs(x.timeIntervalSince(y)) < 60
+            default: return false
+            }
+        }
+        return stage == other.stage && close(outsideSince, other.outsideSince) && close(autoCheckoutAt, other.autoCheckoutAt)
+    }
+}
+
+extension WorkTrailMachine {
+    // The server's clock (src/lib/attendance-outside.ts): reminder at 90 min, warning at 120, the
+    // automatic offsite check-out at the later of 150 min and warning + 30 min.
+    static let remindAfter: TimeInterval = 90 * 60
+    static let warnAfter: TimeInterval = 120 * 60
+    static let autoAfter: TimeInterval = 150 * 60
+    /// The trail reply's stage while a PENDING/APPROVED excuse for today holds the clock.
+    static let pausedStage = "paused_permit"
+    /// A server `outsideSince` more than this much earlier than the phone's own exit belongs to an
+    /// earlier episode (a GET /today answered before the person came back in and went out again).
+    static let serverSinceSlack: TimeInterval = 30 * 60
+
+    /// GET /api/attendance/today answered. `heardAt` is when the server said it — earlier than now
+    /// for a copy restored from the offline cache, which must not override a fresher trail reply.
+    /// `excused`: an APPROVED request covers today (`todayRequest`). A PENDING one is not in that
+    /// response; the trail reply's `paused_permit` carries it instead.
+    mutating func heardToday(recordId: String, outsideSince: Date?, excused: Bool, heardAt: Date) {
+        guard state.recordId == recordId else { return }
+        if state.serverOutsideSinceAt.map({ heardAt >= $0 }) ?? true {
+            state.serverOutsideSince = outsideSince
+            state.serverOutsideSinceAt = heardAt
+        }
+        // Only ever sets the pause: an absent todayRequest does not mean no PENDING excuse exists.
+        if excused { state.stage = Self.pausedStage }
+    }
+
+    /// The person just filed a request covering today from this phone. The server pauses the clock
+    /// for a PENDING one at once; the next trail reply confirms it (or, withdrawn, lifts it).
+    mutating func excuseFiled() {
+        guard state.isActive else { return }
+        state.stage = Self.pausedStage
+    }
+
+    /// What the Live Activity should show right now. Pure; called on every fix, tick and reply.
+    ///
+    ///   • inside by the phone's own reckoning, not tracking, an excuse holding the clock, or already
+    ///     checked out by it → `.inside` (the normal session look);
+    ///   • otherwise the episode starts at the server's `outsideSince` when the server has heard of
+    ///     this episode (so the phone quotes the same time as the pushes), else the phone's exit;
+    ///   • the clock runs from that start, or from a later restart the server's `nextAt` reveals (an
+    ///     excuse rejected or withdrawn mid-episode restarts it); 90 min → reminded, 120 → warned,
+    ///     and never a stage below the one the server reports;
+    ///   • the automatic check-out is the server's own time once it has warned, else start + 150 min.
+    func outsideStatus(now: Date) -> WorkOutsideStatus {
+        let s = state
+        guard s.isActive, s.zone != .inside else { return .inside }
+        if s.stage == Self.pausedStage || s.stage == "auto_checked_out" { return .inside }
+
+        let local = s.zone == .outside ? s.outsideSince : nil
+        var since = local
+        if let server = s.serverOutsideSince, let heard = s.serverOutsideSinceAt, server <= now.addingTimeInterval(300) {
+            if let local {
+                // Heard after this exit, and plausibly the same episode.
+                if heard >= local && server >= local.addingTimeInterval(-Self.serverSinceSlack) { since = server }
+            } else {
+                // Zone not known on the phone yet (a relaunch, While Using before the first fix):
+                // the server's word is the only one there is.
+                since = server
+            }
+        }
+        guard let since else { return .inside }
+
+        var clockFrom = since
+        var serverRank = 0
+        var warnedAutoAt: Date?
+        if let at = s.serverStageAt, at >= since, let next = s.serverNextAt {
+            switch s.stage {
+            case "outside":  clockFrom = max(since, next.addingTimeInterval(-Self.remindAfter))
+            case "reminded": clockFrom = max(since, next.addingTimeInterval(-Self.warnAfter)); serverRank = 1
+            case "warned":   warnedAutoAt = next; serverRank = 2
+            default: break
+            }
+        }
+        clockFrom = min(clockFrom, now)
+
+        let elapsed = now.timeIntervalSince(clockFrom)
+        let rank = max(serverRank, elapsed >= Self.warnAfter ? 2 : elapsed >= Self.remindAfter ? 1 : 0)
+        let stage: WorkOutsideStatus.Stage = rank == 2 ? .warned : rank == 1 ? .reminded : .outside
+        return WorkOutsideStatus(stage: stage, outsideSince: since,
+                                 autoCheckoutAt: warnedAutoAt ?? clockFrom.addingTimeInterval(Self.autoAfter))
     }
 }
 

@@ -1520,6 +1520,10 @@ struct RequestComposerSheet: View {
                                                                reason: reason.trimmingCharacters(in: .whitespaces), attachment: attach,
                                                                lat: coords?.lat, lng: coords?.lng,
                                                                progress: uploadProgress)
+            // A request for today holds the outside-the-office clock on the server the moment it
+            // exists (PENDING counts), so the Live Activity's countdown goes now, not at the next
+            // trail reply up to 15 minutes later.
+            if day == f.string(from: Date()) { WorkLocationTracker.shared.excuseFiledForToday() }
             await onCreated()
             dismiss()
         } catch {
