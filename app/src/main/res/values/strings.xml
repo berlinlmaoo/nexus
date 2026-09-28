@@ -257,10 +257,10 @@
     <!-- Work session / location -->
     <string name="channel_work_session">Work session</string>
     <string name="work_session_title">Work session</string>
-    <string name="work_session_inside">In the office · nothing is recorded</string>
-    <string name="work_session_outside">Outside the office · location recorded about every 15 min</string>
+    <string name="work_session_inside">At the office · location checked about once an hour</string>
+    <string name="work_session_outside">Outside the office · your route is recorded about every 15 min</string>
     <string name="trail_disclosure_title">Location during working hours</string>
-    <string name="trail_disclosure_body">NEXUS records your location only between check-in and check-out, even when the app is closed or not in use. Inside the office nothing is recorded. Outside it, one point about every 15 minutes, so a long absence from the office can be seen and covered by a permit. Your manager and the BoD can see the path for that day. A notification stays on while it runs, and it stops at check-out.\n\nIf you say no, your day shows \"location off\" on the board.</string>
+    <string name="trail_disclosure_body">During work hours, from check-in to check-out, NEXUS checks where you are about once an hour while you are at the office, and follows your route (about every 15 minutes) when you leave it, even when the app is closed or not in use. Nothing is recorded before check-in or after check-out. A long absence from the office can then be seen and covered by a permit. Your manager and the BoD can see that day\'s trail. A notification stays on while it runs.\n\nIf you say no, your day shows \"location off\" on the board.</string>
     <string name="trail_agree">Agree and continue</string>
     <string name="not_now">Not now</string>
     <string name="trail_always_title">Keep it running after a restart</string>
@@ -310,8 +310,8 @@
     <string name="trail_open">Location trail</string>
     <string name="trail_title">Location trail</string>
     <string name="trail_load_failed">Couldn\'t load the location trail</string>
-    <string name="trail_empty">No points outside the office</string>
-    <string name="trail_empty_sub">Nothing is recorded inside the office, so a day spent there has an empty trail. Location is only recorded by the NEXUS app on a phone.</string>
+    <string name="trail_empty">Nothing recorded</string>
+    <string name="trail_empty_sub">Nothing was recorded for this day. Between check-in and check-out the app checks about once an hour at the office, and follows the route when the person leaves it. Location is only recorded by the NEXUS app on a phone.</string>
     <string name="trail_location_off">Location was off for this day: the person declined location during working hours.</string>
     <string name="trail_span">Outside %1$s – %2$s · %3$s</string>
     <string name="trail_still_out">still out</string>
@@ -368,4 +368,7 @@
     <string name="reflections_summarize">Summarize so far</string>
     <string name="reflections_update_summary">Update the summary</string>
     <string name="you_are_here">You are here</string>
+    <string name="presence_checks">Presence checks</string>
+    <string name="presence_hours_at_office">%1$d of %2$d hours at the office</string>
+    <string name="presence_legend">✓ at the office · ✗ outside · ? unclear · – no check. About one check an hour while at the office; outside, the route above.</string>
 </resources>

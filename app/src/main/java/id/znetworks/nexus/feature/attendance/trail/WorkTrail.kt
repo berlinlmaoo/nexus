@@ -36,12 +36,15 @@ class WorkTrail(
     /** What the service must do with the GPS right now. */
     enum class Mode { OFF, WATCH_OFFICE, OUTSIDE }
 
+    /** The machine's setup, level-triggered: the service makes the GPS match it whenever it changes. */
+    data class Gps(val mode: Mode, val precise: Boolean)
+
     /** Set when this record still needs the prominent disclosure (once per record, never a nag). */
     private val _disclosureFor = MutableStateFlow<String?>(null)
     val disclosureFor: StateFlow<String?> = _disclosureFor.asStateFlow()
 
-    private val _mode = MutableStateFlow(Mode.OFF)
-    val mode: StateFlow<Mode> = _mode.asStateFlow()
+    private val _gps = MutableStateFlow(Gps(Mode.OFF, false))
+    val gps: StateFlow<Gps> = _gps.asStateFlow()
 
     /** One-shot fix requested (exit/enter with no fresh position). The service clears it. */
     val fixRequested = MutableStateFlow(false)
@@ -56,7 +59,7 @@ class WorkTrail(
     val state: TrailState get() = machine.state
 
     init {
-        _mode.value = modeFor(machine.state)
+        _gps.value = gpsFor()
     }
 
     // region inputs from the app
@@ -101,7 +104,7 @@ class WorkTrail(
         }
         prefs.edit().clear().apply()
         _disclosureFor.value = null
-        _mode.value = Mode.OFF
+        _gps.value = Gps(Mode.OFF, false)
         WorkTrailService.stop(context)
     }
 
@@ -174,6 +177,15 @@ class WorkTrail(
         apply(fx)
     }
 
+    /**
+     * The service (re)started: the app was killed, restarted by the system, or the phone rebooted.
+     * Nothing watched in between, so ask for a fresh fix; outside it goes out at once (iOS 13e7784).
+     */
+    fun resume() = scope.launch {
+        val fx = lock.withLock { machine.resume(now()).also { persist() } }
+        apply(fx)
+    }
+
     // endregion
 
     private fun apply(fx: List<TrailEffect>) {
@@ -181,18 +193,23 @@ class WorkTrail(
             when (e) {
                 TrailEffect.Flush -> scope.launch { flush() }
                 TrailEffect.RequestFix -> fixRequested.value = true
-                is TrailEffect.Arm, TrailEffect.StartContinuous, TrailEffect.StopContinuous -> Unit
-                TrailEffect.DisarmAll -> Unit
+                is TrailEffect.Arm, TrailEffect.StartContinuous, TrailEffect.StopContinuous,
+                TrailEffect.PreciseChanged, TrailEffect.DisarmAll -> Unit
             }
         }
-        _mode.value = modeFor(machine.state)
-        if (_mode.value == Mode.OFF && machine.state.pending.isEmpty()) WorkTrailService.stop(context)
+        // Whatever the effect list said, the GPS follows the state: a missed edge is put right here.
+        _gps.value = gpsFor()
+        if (_gps.value.mode == Mode.OFF && machine.state.pending.isEmpty()) WorkTrailService.stop(context)
     }
 
-    private fun modeFor(s: TrailState): Mode = when {
-        !s.isActive -> Mode.OFF
-        s.zone == TrailZone.OUTSIDE -> Mode.OUTSIDE
-        else -> Mode.WATCH_OFFICE
+    private fun gpsFor(): Gps {
+        val setup = machine.setup
+        val mode = when {
+            !setup.active -> Mode.OFF
+            setup.outside -> Mode.OUTSIDE
+            else -> Mode.WATCH_OFFICE
+        }
+        return Gps(mode, setup.precise)
     }
 
     private fun startService() {

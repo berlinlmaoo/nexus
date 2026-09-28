@@ -41,13 +41,15 @@ import kotlinx.coroutines.tasks.await
  * notification for the whole time it records. It only owns the GPS; every decision is
  * [TrailMachine]'s, via [WorkTrail]. Started from the foreground (Android 12+ forbids otherwise).
  *
- * Inside the office: a high-accuracy fix every few minutes, only to notice leaving (nothing is
- * sent). Outside: a fix a minute or every 50 m, and the machine decides what is queued.
+ * Inside the office: a low-power (Wi-Fi/cell) stream that notices leaving, and about once an
+ * hour a presence check: one high-accuracy request of at most 45 s. Outside: a fix a minute or
+ * every 50 m, and the machine decides what is queued (about every 15 min).
  */
 class WorkTrailService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var modeJob: Job? = null
     private var tickJob: Job? = null
+    private var preciseJob: Job? = null
     private var currentMode: WorkTrail.Mode? = null
     private val trail get() = (application as NexusApplication).container.workTrail
     private val fused by lazy { LocationServices.getFusedLocationProviderClient(this) }
@@ -72,12 +74,27 @@ class WorkTrailService : Service() {
             return START_NOT_STICKY
         }
         if (modeJob == null) {
-            modeJob = scope.launch { trail.mode.collect { applyMode(it) } }
+            // This process may be new (killed, restarted, rebooted): nothing watched in between.
+            trail.resume()
+            modeJob = scope.launch {
+                trail.gps.collect { g ->
+                    applyMode(g.mode)
+                    applyPrecise(g.precise)
+                }
+            }
             scope.launch { trail.fixRequested.collect { if (it) oneFix() } }
             tickJob = scope.launch {
+                var minutes = 0
                 while (true) {
                     delay(60_000)
                     trail.tick()
+                    // Level-triggered, as iOS 13e7784: re-assert the location request every 10 min,
+                    // so one that the system dropped silently is put back without waiting for a
+                    // zone change that may never come.
+                    if (++minutes % 10 == 0) {
+                        currentMode = null
+                        applyMode(trail.gps.value.mode)
+                    }
                 }
             }
         }
@@ -99,8 +116,9 @@ class WorkTrailService : Service() {
             return
         }
         val request = when (mode) {
-            WorkTrail.Mode.WATCH_OFFICE -> LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3 * 60_000L)
-                .setMinUpdateIntervalMillis(60_000L).build()
+            // Cheap between presence checks; usually still clear enough (Wi-Fi) to notice leaving.
+            WorkTrail.Mode.WATCH_OFFICE -> LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 5 * 60_000L)
+                .setMinUpdateIntervalMillis(2 * 60_000L).build()
             else -> LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 60_000L)
                 .setMinUpdateDistanceMeters(50f).setMinUpdateIntervalMillis(30_000L).build()
         }
@@ -113,13 +131,32 @@ class WorkTrailService : Service() {
         getSystemService(NotificationManager::class.java)?.notify(NOTIFICATION_ID, notification())
     }
 
+    /** The presence check's precise window: one high-accuracy request, at most 45 s, fresh only. */
+    @SuppressLint("MissingPermission")
+    private fun applyPrecise(precise: Boolean) {
+        if (!precise) {
+            preciseJob?.cancel()
+            preciseJob = null
+            return
+        }
+        if (preciseJob?.isActive == true || !hasFine()) return
+        preciseJob = scope.launch {
+            val loc = runCatching {
+                fused.getCurrentLocation(CurrentLocationRequest.Builder().setPriority(Priority.PRIORITY_HIGH_ACCURACY)
+                    .setMaxUpdateAgeMillis(0).setDurationMillis(TrailMachine.PRECISE_TIMEOUT_MS).build(), null).await()
+            }.getOrNull()
+            loc?.let { trail.onFix(it.toPoint()) }
+        }
+    }
+
     @SuppressLint("MissingPermission")
     private suspend fun oneFix() {
         trail.fixRequested.value = false
         if (!hasFine()) return
         val loc = runCatching {
+            // Fresh only: a cached fix from before a kill must not speak for "now".
             fused.getCurrentLocation(CurrentLocationRequest.Builder().setPriority(Priority.PRIORITY_HIGH_ACCURACY)
-                .setMaxUpdateAgeMillis(60_000).setDurationMillis(30_000).build(), null).await()
+                .setMaxUpdateAgeMillis(TrailMachine.FRESH_FIX_MS).setDurationMillis(30_000).build(), null).await()
         }.getOrNull()
         loc?.let { trail.onFix(it.toPoint()) }
     }

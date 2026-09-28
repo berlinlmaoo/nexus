@@ -251,10 +251,10 @@
     <!-- Sesi kerja / lokasi -->
     <string name="channel_work_session">Sesi kerja</string>
     <string name="work_session_title">Sesi kerja</string>
-    <string name="work_session_inside">Di kantor · tidak ada yang direkam</string>
-    <string name="work_session_outside">Di luar kantor · lokasi direkam sekitar tiap 15 menit</string>
+    <string name="work_session_inside">Di kantor · lokasi dicek sekitar sejam sekali</string>
+    <string name="work_session_outside">Di luar kantor · rute direkam sekitar tiap 15 menit</string>
     <string name="trail_disclosure_title">Lokasi selama jam kerja</string>
-    <string name="trail_disclosure_body">NEXUS merekam lokasimu hanya antara absen masuk dan absen pulang, termasuk saat aplikasi ditutup atau tidak dipakai. Di dalam kantor tidak ada yang direkam. Di luar kantor, satu titik sekitar tiap 15 menit, supaya ketidakhadiran lama dari kantor terlihat dan bisa ditutup dengan izin. Atasanmu dan BoD bisa melihat jejak hari itu. Notifikasi tetap tampil selama berjalan, dan berhenti saat absen pulang.\n\nKalau kamu menolak, harimu tampil \"lokasi mati\" di papan.</string>
+    <string name="trail_disclosure_body">Selama jam kerja, dari absen masuk sampai absen pulang, NEXUS mengecek posisimu sekitar sejam sekali saat kamu di kantor, dan mengikuti rutemu (sekitar tiap 15 menit) saat kamu keluar, termasuk saat aplikasi ditutup atau tidak dipakai. Tidak ada yang direkam sebelum absen masuk atau setelah absen pulang. Ketidakhadiran lama dari kantor jadi terlihat dan bisa ditutup dengan izin. Atasanmu dan BoD bisa melihat jejak hari itu. Notifikasi tetap tampil selama berjalan.\n\nKalau kamu menolak, harimu tampil \"lokasi mati\" di papan.</string>
     <string name="trail_agree">Setuju dan lanjut</string>
     <string name="not_now">Jangan sekarang</string>
     <string name="trail_always_title">Tetap jalan setelah HP restart</string>
@@ -304,8 +304,8 @@
     <string name="trail_open">Jejak lokasi</string>
     <string name="trail_title">Jejak lokasi</string>
     <string name="trail_load_failed">Jejak lokasi tidak bisa dimuat</string>
-    <string name="trail_empty">Tidak ada titik di luar kantor</string>
-    <string name="trail_empty_sub">Di dalam kantor tidak ada yang direkam, jadi hari yang dihabiskan di sana jejaknya kosong. Lokasi hanya direkam oleh aplikasi NEXUS di HP.</string>
+    <string name="trail_empty">Tidak ada yang tercatat</string>
+    <string name="trail_empty_sub">Tidak ada yang tercatat hari itu. Dari absen masuk sampai absen pulang, aplikasi mengecek kira-kira sejam sekali di kantor, dan mengikuti rutenya saat orangnya keluar kantor. Lokasi hanya direkam oleh aplikasi NEXUS di HP.</string>
     <string name="trail_location_off">Lokasi mati untuk hari ini: orangnya menolak lokasi selama jam kerja.</string>
     <string name="trail_span">Di luar %1$s – %2$s · %3$s</string>
     <string name="trail_still_out">masih di luar</string>
@@ -362,4 +362,7 @@
     <string name="reflections_summarize">Rangkum sejauh ini</string>
     <string name="reflections_update_summary">Perbarui ringkasan</string>
     <string name="you_are_here">Kamu di sini</string>
+    <string name="presence_checks">Cek kehadiran</string>
+    <string name="presence_hours_at_office">%1$d dari %2$d jam di kantor</string>
+    <string name="presence_legend">✓ di kantor · ✗ di luar · ? tidak jelas · – tidak ada cek. Kira-kira sekali cek per jam selama di kantor; di luar kantor, lihat rute di atas.</string>
 </resources>

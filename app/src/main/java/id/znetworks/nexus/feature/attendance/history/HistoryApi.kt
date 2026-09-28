@@ -57,7 +57,13 @@ data class TrailResponse(
     val record: TrailRecord? = null,
     val points: List<TrailPointDto> = emptyList(),
     val outsideSpans: List<TrailSpan> = emptyList(),
+    /** One entry per clock hour of the shift (server presenceHours); absent on older servers. */
+    val presence: List<PresenceHour> = emptyList(),
 )
+
+/** status: inside | outside | unclear | pending | gap (anything else draws as unclear). */
+@Serializable
+data class PresenceHour(val from: String, val to: String? = null, val label: String? = null, val status: String = "unclear", val at: String? = null)
 
 @Serializable
 data class TrailRecord(

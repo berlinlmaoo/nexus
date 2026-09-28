@@ -439,10 +439,14 @@ private fun TrailDialog(vm: BoardViewModel, r: HistoryRow, trail: TrailResponse?
                 else -> {
                     val office = trail.record?.office
                     val points = trail.points
+                    // Hourly checks inside the office are not movement: faint dots, off the line.
+                    val insideChecks = points.filter { it.event == "presence" && it.inside == true }
+                    val linePoints = points.filterNot { it.event == "presence" && it.inside == true }
                     OsmMap(
                         Modifier.fillMaxWidth().height(320.dp),
                         circle = office?.let { MapCircle(it.lat, it.lng, it.radiusMeters ?: 100.0) },
-                        path = points.map { it.lat to it.lng },
+                        path = linePoints.map { it.lat to it.lng },
+                        dots = insideChecks.map { it.lat to it.lng },
                         pins = points.filter { it.event == "exit" || it.event == "enter" }.map {
                             MapPin(it.lat, it.lng, "${if (it.event == "exit") "↗" else "↘"} ${hhmm(it.at)}")
                         },
@@ -451,6 +455,7 @@ private fun TrailDialog(vm: BoardViewModel, r: HistoryRow, trail: TrailResponse?
                         if ((trail.record?.locationTrackingState ?: r.locationTrackingState) == "denied") {
                             Text(stringResource(R.string.trail_location_off), color = c.warning, fontWeight = FontWeight.SemiBold)
                         }
+                        if (trail.presence.isNotEmpty()) PresenceCard(trail.presence)
                         if (points.isEmpty() && trail.outsideSpans.isEmpty()) {
                             // Inside all day, or nothing recorded: say which it can be.
                             EmptyState(Icons.Filled.Route, stringResource(R.string.trail_empty), stringResource(R.string.trail_empty_sub),
@@ -465,6 +470,42 @@ private fun TrailDialog(vm: BoardViewModel, r: HistoryRow, trail: TrailResponse?
                 }
             }
         }
+    }
+}
+
+/** "Presence checks": one chip per clock hour (iOS 64b1bfb, web LocationTrail.tsx). */
+@Composable
+private fun PresenceCard(hours: List<PresenceHour>) {
+    val c = Nx.colors
+    val decided = hours.filter { it.status != "pending" }
+    val atOffice = decided.count { it.status == "inside" }
+    Column(
+        Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(20.dp)).border(1.dp, c.border, RoundedCornerShape(20.dp)).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(stringResource(R.string.presence_checks).uppercase(Locale.getDefault()), fontSize = 10.sp, fontWeight = FontWeight.Bold,
+            color = c.mutedFg, letterSpacing = 1.sp)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            hours.forEach { h ->
+                val (glyph, fg, bg) = when (h.status) {
+                    "inside" -> Triple("✓", Color.White, c.success)
+                    "outside" -> Triple("✗", Color.White, Color(0xFFF97316))
+                    "pending" -> Triple("…", c.mutedFg, Color.Transparent)
+                    "gap" -> Triple("–", c.mutedFg, Color.Transparent)
+                    else -> Triple("?", c.mutedFg, c.mutedFg.copy(alpha = 0.15f))
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.size(26.dp).background(bg, CircleShape).border(1.dp, c.border, CircleShape), contentAlignment = Alignment.Center) {
+                        Text(glyph, color = fg, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                    Text(h.label ?: hhmm(h.from).take(2), fontSize = 10.sp, color = c.mutedFg, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+        if (decided.isNotEmpty()) {
+            Text(stringResource(R.string.presence_hours_at_office, atOffice, decided.size), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.foreground)
+        }
+        Text(stringResource(R.string.presence_legend), fontSize = 11.sp, color = c.mutedFg)
     }
 }
 

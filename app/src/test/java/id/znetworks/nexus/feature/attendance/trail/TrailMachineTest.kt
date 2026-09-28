@@ -19,11 +19,97 @@ class TrailMachineTest {
 
     private fun started() { m.start("r1", now, fence, now) }
 
-    @Test fun insideSendsNothing() {
+    @Test fun insideSendsOnlyTheHourlyPresenceCheck() {
         started()
-        repeat(60) { now += min; m.fix(inside(), now); m.tick(now) }
+        repeat(49) { now += min; m.fix(inside(), now); m.tick(now) }
         assertEquals(TrailZone.INSIDE, m.state.zone)
         assertTrue(m.state.pending.isEmpty())
+        repeat(60) { now += min; m.fix(inside(), now); m.tick(now) }
+        // 109 min after check-in: one check at ~50 min, one at ~100 min, nothing else.
+        assertEquals(listOf(TrailPoint.Event.presence, TrailPoint.Event.presence), m.state.pending.map { it.event })
+    }
+
+    @Test fun presenceWindowTakesAGoodFixOrTheBestAtTimeout() {
+        started(); m.fix(inside(), now)
+        now += 50 * min
+        // No fresh fix in hand: the tick opens the precise window.
+        assertTrue(TrailEffect.PreciseChanged in m.tick(now))
+        assertTrue(m.setup.precise)
+        // A vague (80 m) fix inside the window is kept as the best, not sent yet.
+        now += 5_000; m.fix(at(0.0002, acc = 80.0), now)
+        assertTrue(m.state.pending.isEmpty())
+        // Timeout: the best fix counts, the window closes.
+        now += 45_000; val fx = m.tick(now)
+        assertTrue(TrailEffect.PreciseChanged in fx)
+        assertFalse(m.setup.precise)
+        assertEquals(TrailPoint.Event.presence, m.state.pending.single().event)
+    }
+
+    @Test fun presenceWindowEndsEarlyOnAPreciseFix() {
+        started(); m.fix(inside(), now)
+        now += 50 * min; m.tick(now)
+        now += 3_000
+        val fx = m.fix(at(0.0002, acc = 12.0), now)
+        assertTrue(TrailEffect.PreciseChanged in fx)
+        assertEquals(TrailPoint.Event.presence, m.state.pending.single().event)
+        assertFalse(m.setup.precise)
+    }
+
+    @Test fun presenceWithNoFixRetriesAfter15Minutes() {
+        started(); m.fix(inside(), now)
+        now += 50 * min; m.tick(now)
+        now += 46_000; m.tick(now) // timed out with nothing
+        assertTrue(m.state.pending.isEmpty())
+        now += 10 * min; assertTrue(m.tick(now).isEmpty())
+        now += 5 * min; assertTrue(TrailEffect.PreciseChanged in m.tick(now))
+    }
+
+    @Test fun presenceFixOutsideBecomesTheExit() {
+        started(); m.fix(inside(), now)
+        now += 50 * min; m.tick(now)
+        now += 2_000
+        val fx = m.fix(outside(), now)
+        assertTrue(TrailEffect.StartContinuous in fx)
+        assertEquals(TrailPoint.Event.exit, m.state.pending.single().event)
+        assertFalse(m.setup.precise)
+    }
+
+    @Test fun cellLevelFixesAreNeverUsed() {
+        started()
+        m.fix(at(0.05, acc = 1500.0), now) // 5.5 km away but 1.5 km vague
+        assertEquals(TrailZone.UNKNOWN, m.state.zone)
+        assertNull(m.state.latest)
+    }
+
+    @Test fun staleFixIsIgnored() {
+        started()
+        val old = TrailPoint(recordId = "", lat = -6.205, lng = 106.8, accuracy = 10.0, atMillis = now - 3 * min)
+        assertTrue(m.fix(old, now).isEmpty())
+        assertEquals(TrailZone.UNKNOWN, m.state.zone)
+    }
+
+    @Test fun resumeOutsideSendsTheFirstFreshFixAtOnce() {
+        started(); m.fix(outside(), now)                      // exit queued
+        m.sent(m.state.pending.map { it.id }.toSet(), "r1", TrailReply(true, "outside", now, null), now)
+        // Killed; reopened 5 min later, well inside the 15-min rhythm.
+        now += 5 * min
+        val restored = TrailMachine(m.state)
+        val fx = restored.resume(now)
+        assertTrue(TrailEffect.RequestFix in fx)
+        assertNull(restored.state.latest) // the pre-kill fix is never re-sent stamped "now"
+        now += 10_000
+        assertTrue(TrailEffect.Flush in restored.fix(outside(), now))
+        assertEquals(TrailPoint.Event.point, restored.state.pending.single().event)
+        // And only the first: the next one waits for the rhythm again.
+        now += min
+        assertTrue(restored.fix(outside(), now).isEmpty())
+    }
+
+    @Test fun oldStateFileStillDecodes() {
+        val json = """{"recordId":"r1","zone":"INSIDE","pending":[{"id":"a","recordId":"r1","lat":1.0,"lng":2.0,"atMillis":5,"event":"exit"}]}"""
+        val s = id.znetworks.nexus.core.net.NexusJson.decodeFromString(TrailState.serializer(), json)
+        assertEquals("r1", s.recordId)
+        assertNull(s.preciseSinceMillis)
     }
 
     @Test fun leavingQueuesExitAtOnceThenEvery15Minutes() {

@@ -44,6 +44,8 @@ fun OsmMap(
     path: List<Pair<Double, Double>>,
     pins: List<MapPin>,
     pathColor: Int = AColor.parseColor("#7B68EE"),
+    /** Faint dots off the line: the hourly presence checks made inside the office. */
+    dots: List<Pair<Double, Double>> = emptyList(),
 ) {
     val context = LocalContext.current
     OsmSetup.ensure(context)
@@ -79,6 +81,14 @@ fun OsmMap(
             }
         }
         path.forEach { all += GeoPoint(it.first, it.second) }
+        dots.forEach { d ->
+            m.overlays += Polygon(m).apply {
+                points = Polygon.pointsAsCircle(GeoPoint(d.first, d.second), 5.0)
+                fillPaint.color = AColor.argb(115, 16, 185, 129)
+                outlinePaint.color = AColor.argb(200, 255, 255, 255)
+                outlinePaint.strokeWidth = 2f
+            }
+        }
         pins.forEach { p ->
             m.overlays += Marker(m).apply {
                 position = GeoPoint(p.lat, p.lng)
