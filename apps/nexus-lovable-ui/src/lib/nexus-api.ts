@@ -1155,11 +1155,14 @@ export type NexusSubmissionDetail = NexusMySubmission & {
   answers?: Array<{ id: string; label: string; type: string; value: unknown }>;
 };
 
-export type NexusAnnouncement = { id: string; title: string; body: string; tone: "info" | "success" | "warning"; imageUrl?: string | null; createdAt: string };
+// kind: "announcement" (Control Room) | "warning" (personal, from Absen Monitor) | "sp" (surat
+// peringatan with a PDF attached). targeted = addressed to the viewer personally, not to everyone.
+export type NexusAnnouncementKind = "announcement" | "warning" | "sp";
+export type NexusAnnouncement = { id: string; title: string; body: string; tone: "info" | "success" | "warning"; imageUrl?: string | null; createdAt: string; kind?: NexusAnnouncementKind; attachmentUrl?: string | null; attachmentName?: string | null; targeted?: boolean };
 // repeatUntil/repeatAtTime: while set, the notice goes out again every day until that date.
 // seenCount is per REPEAT — a repeat clears the seen rows so the pop-up comes back, which
 // makes the number mean "seen since it last went out" rather than an all-time total.
-export type NexusAdminAnnouncement = NexusAnnouncement & { active: boolean; seenCount: number; targetUserIds?: string[]; targetCount?: number; repeatUntil?: string | null; repeatAtTime?: string | null; lastRepeatedAt?: string | null };
+export type NexusAdminAnnouncement = NexusAnnouncement & { active: boolean; seenCount: number; targetUserIds?: string[]; targetCount?: number; targets?: Array<{ id: string; name: string | null }>; repeatUntil?: string | null; repeatAtTime?: string | null; lastRepeatedAt?: string | null };
 
 export type NexusFinanceLineItem = { id: string; name: string; order: number; monthly: number[]; total: number };
 export type NexusFinanceCategory = { id: string; kind: "OPEX" | "REVENUE"; name: string; order: number; lineItems: NexusFinanceLineItem[]; subtotalByMonth: number[]; subtotal: number };
@@ -1612,23 +1615,28 @@ async function parseResponse(res: Response) {
   return res.text();
 }
 
-/** GET /api/attendance/suspects — attendance flagged for its location (BoD). FAKE = proof, CHECK = weak signal. */
+/** GET /api/attendance/suspects — Absen Monitor (BoD). FAKE = proof of fake GPS, NOFACE = a selfie with no face, CHECK = weak signal. */
+export type NexusSuspectLevel = "FAKE" | "NOFACE" | "CHECK";
 export type NexusSuspectSide = {
   at: string | null; lat: number | null; lng: number | null; accuracyM: number | null
   simulated: boolean; suspect: boolean; reason: string | null; impliedKmh: number | null
   photoUrl: string | null; address: string | null; offline: boolean
-  level: "FAKE" | "CHECK" | null; signals: string[]
+  /** Faces found in the selfie; null = not checked yet. */
+  faceCount: number | null
+  level: NexusSuspectLevel | null; signals: string[]
 };
 export type NexusSuspectItem = {
-  recordId: string; date: string; state: "open" | "valid" | "invalid"; level: "FAKE" | "CHECK" | null
+  recordId: string; date: string; state: "open" | "valid" | "invalid"; level: NexusSuspectLevel | null
   user: { id: string; name: string | null; image: string | null }
   place: string | null
   checkIn: NexusSuspectSide | null; checkOut: NexusSuspectSide | null
   review: { verdict: "VALID" | "INVALID"; note: string | null; reviewedAt: string; reviewedBy: { id: string; name: string | null } } | null
+  /** Warnings sent from Absen Monitor, latest first. */
+  warnings?: Array<{ at: string; by: { name: string | null }; message: string }>
 };
 export type NexusSuspectList = {
   periodKey: string; periodLabel: string; periodStart: string; periodEnd: string; currentPeriodKey: string
-  counts: { fakeOpen: number; checkOpen: number; valid: number; invalid: number }
+  counts: { fakeOpen: number; noFaceOpen?: number; checkOpen: number; valid: number; invalid: number }
   items: NexusSuspectItem[]
 };
 
@@ -2190,6 +2198,8 @@ export const nexusApi = {
     apiFetch<NexusSuspectList>(`/api/attendance/suspects${periodKey ? `?periodKey=${encodeURIComponent(periodKey)}` : ""}`),
   reviewSuspectAttendance: (recordId: string, payload: { verdict: "VALID" | "INVALID"; note: string }) =>
     apiFetch<{ ok: boolean; recordId: string; verdict: string; date: string }>(`/api/attendance/suspects/${encodeURIComponent(recordId)}/review`, { method: "POST", body: JSON.stringify(payload) }),
+  warnSuspectAttendance: (recordId: string, message: string) =>
+    apiFetch<{ ok: boolean; announcementId: string }>(`/api/attendance/suspects/${encodeURIComponent(recordId)}/warn`, { method: "POST", body: JSON.stringify({ message }) }),
   dayOffBonuses: (periodKey?: string) =>
     apiFetch<NexusDayOffBonusList>(`/api/attendance/day-off-bonus${periodKey ? `?periodKey=${encodeURIComponent(periodKey)}` : ""}`),
   grantDayOffBonus: (payload: { userIds: string[]; periodKey: string; days: number; reason: string }) =>
@@ -2476,7 +2486,12 @@ export const nexusApi = {
   announcement: (id: string) => apiFetch<{ announcement: NexusAnnouncement & { authorName?: string | null } }>(`/api/announcements/${id}`),
   dismissAnnouncement: (id: string) => apiFetch<{ ok?: boolean }>(`/api/announcements/${id}/seen`, { method: "POST" }),
   announcements: () => apiFetch<{ announcements: NexusAdminAnnouncement[] }>("/api/announcements"),
-  createAnnouncement: (payload: { title: string; body: string; tone?: string; targetUserIds?: string[]; repeatDays?: number; repeatAtTime?: string }) => apiFetch<{ announcement: NexusAdminAnnouncement }>("/api/announcements", { method: "POST", body: JSON.stringify(payload) }),
+  uploadAnnouncementAttachment: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return apiFetch<{ url: string; name: string; size: number }>("/api/announcements/attachment", { method: "POST", body: fd });
+  },
+  createAnnouncement: (payload: { title: string; body: string; tone?: string; targetUserIds?: string[]; repeatDays?: number; repeatAtTime?: string; kind?: "announcement" | "sp"; attachmentUrl?: string; attachmentName?: string }) => apiFetch<{ announcement: NexusAdminAnnouncement }>("/api/announcements", { method: "POST", body: JSON.stringify(payload) }),
   updateAnnouncement: (id: string, payload: { title?: string; body?: string; tone?: string; active?: boolean }) => apiFetch<{ announcement: NexusAdminAnnouncement }>(`/api/announcements/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteAnnouncement: (id: string) => apiFetch<{ ok?: boolean }>(`/api/announcements/${id}`, { method: "DELETE" }),
 

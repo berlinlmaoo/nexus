@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Avatar } from "@/components/Avatar";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AtSign, CalendarDays, CalendarPlus, CalendarX2, ChevronDown, FolderKanban, GitBranch, Link2, Link2Off, Loader2, Megaphone, Plus, ScrollText, Search, Settings2, Shield, ShieldAlert, Trash2, Trophy, Users as UsersIcon, X, Zap, Smartphone } from "lucide-react";
+import { AtSign, CalendarDays, CalendarPlus, CalendarX2, ChevronDown, FileText, FolderKanban, GitBranch, Link2, Link2Off, Loader2, Megaphone, Paperclip, Plus, ScrollText, Search, Settings2, Shield, ShieldAlert, Trash2, Trophy, Users as UsersIcon, X, Zap, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { ApprovalChart } from "@/components/ApprovalChart";
 import { type NexusAdminAnnouncement, type NexusDayOffBonus } from "@/lib/nexus-api";
@@ -196,7 +196,7 @@ function Admin() {
           <button onClick={() => setView("users")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "users" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><UsersIcon className="h-3.5 w-3.5" /> Users</button>
           {canAnnounce && <button onClick={() => setView("approval")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "approval" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><GitBranch className="h-3.5 w-3.5" /> Bagan Approval</button>}
           {canManageShift && <button onClick={() => setView("extra-dayoff")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "extra-dayoff" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><CalendarPlus className="h-3.5 w-3.5" /> Extra day off</button>}
-          {canManageShift && <button onClick={() => setView("suspects")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "suspects" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><ShieldAlert className="h-3.5 w-3.5" /> Fake GPS</button>}
+          {canManageShift && <button onClick={() => setView("suspects")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "suspects" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><ShieldAlert className="h-3.5 w-3.5" /> Absen Monitor</button>}
           <button onClick={() => setView("audit")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "audit" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><ScrollText className="h-3.5 w-3.5" /> Audit log</button>
           <button onClick={() => setView("quests")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "quests" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Trophy className="h-3.5 w-3.5" /> Quests</button>
           {canAnnounce && <button onClick={() => setView("announcements")} className={cn("inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", view === "announcements" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}><Megaphone className="h-3.5 w-3.5" /> Announcements</button>}
@@ -1687,12 +1687,28 @@ function AnnouncementsAdmin() {
   // Repeat. 0 = post once, which is what every announcement did before this existed.
   const [repeatDays, setRepeatDays] = useState(0);
   const [repeatAtTime, setRepeatAtTime] = useState("09:00");
+  // SP (surat peringatan): a PDF attached makes the announcement kind "sp" — a red SP badge and an
+  // Open PDF button in the pop-up. Uploaded as soon as it is picked; Post sends only its URL.
+  const [spOn, setSpOn] = useState(false);
+  const [attachment, setAttachment] = useState<{ url: string; name: string; size: number } | null>(null);
+  const upload = useMutation({
+    mutationFn: (file: File) => nexusApi.uploadAnnouncementAttachment(file),
+    onSuccess: (r) => setAttachment(r),
+    onError: (e: unknown) => toast.error("Couldn't attach the PDF", { description: e instanceof ApiError ? e.message : "Try again." }),
+  });
   const membersQ = useQuery({ queryKey: ["members"], queryFn: nexusApi.members, staleTime: 300_000 });
   const members = useMemo(() => { const raw = membersQ.data; return (Array.isArray(raw) ? raw : raw?.members ?? []); }, [membersQ.data]);
   const filteredMembers = useMemo(() => members.filter((m) => (m.name ?? m.email ?? "").toLowerCase().includes(memberSearch.toLowerCase())).slice(0, 8), [members, memberSearch]);
   const toggleTarget = (id: string) => setTargetIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const invalidate = () => { qc.invalidateQueries({ queryKey: ["nexus", "announcements"] }); qc.invalidateQueries({ queryKey: ["announcements-active"] }); };
-  const create = useMutation({ mutationFn: () => nexusApi.createAnnouncement({ title: title.trim(), body: body.trim(), tone, targetUserIds: audience === "some" ? targetIds : [], repeatDays, repeatAtTime }), onSuccess: () => { setTitle(""); setBody(""); setTone("info"); setAudience("all"); setTargetIds([]); setMemberSearch(""); setRepeatDays(0); setRepeatAtTime("09:00"); invalidate(); } });
+  const create = useMutation({
+    mutationFn: () => nexusApi.createAnnouncement({
+      title: title.trim(), body: body.trim(), tone, targetUserIds: audience === "some" ? targetIds : [], repeatDays, repeatAtTime,
+      ...(spOn && attachment ? { kind: "sp" as const, attachmentUrl: attachment.url, attachmentName: attachment.name } : {}),
+    }),
+    onSuccess: () => { setTitle(""); setBody(""); setTone("info"); setAudience("all"); setTargetIds([]); setMemberSearch(""); setRepeatDays(0); setRepeatAtTime("09:00"); setSpOn(false); setAttachment(null); invalidate(); toast.success("Posted"); },
+    onError: (e: unknown) => toast.error("Couldn't post", { description: e instanceof ApiError ? e.message : "Try again." }),
+  });
   const toggle = useMutation({ mutationFn: ({ id, active }: { id: string; active: boolean }) => nexusApi.updateAnnouncement(id, { active }), onSuccess: invalidate });
   const del = useMutation({ mutationFn: (id: string) => nexusApi.deleteAnnouncement(id), onSuccess: invalidate });
   const rows = list.data?.announcements ?? [];
@@ -1713,7 +1729,7 @@ function AnnouncementsAdmin() {
                 <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Audience</span>
                 <div className="flex rounded-lg border border-border p-0.5">
                   {(["all", "some"] as const).map((a) => (
-                    <button key={a} onClick={() => setAudience(a)} className={cn("rounded-md px-2.5 py-1 text-xs font-bold transition-colors", audience === a ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}>{a === "all" ? "Everyone" : "Specific people"}</button>
+                    <button key={a} onClick={() => setAudience(a)} className={cn("rounded-md px-2.5 py-1 text-xs font-bold transition-colors", audience === a ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent")}>{a === "all" ? "Everyone" : "Selected people"}</button>
                   ))}
                 </div>
               </div>
@@ -1742,6 +1758,39 @@ function AnnouncementsAdmin() {
                       ))}
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+
+            {/* SP: attach a PDF (surat peringatan). Usually sent to selected people only. */}
+            <div className="space-y-2">
+              <label className="flex w-fit cursor-pointer items-center gap-2 text-sm font-semibold">
+                <input type="checkbox" checked={spOn} onChange={(e) => { setSpOn(e.target.checked); if (!e.target.checked) setAttachment(null); }} className="h-4 w-4 accent-rose-600" />
+                <Paperclip className="h-3.5 w-3.5 text-muted-foreground" /> Attach PDF (SP)
+              </label>
+              {spOn && (
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-rose-200 bg-rose-50/50 p-2.5 dark:border-rose-900 dark:bg-rose-950/20">
+                  {attachment ? (
+                    <>
+                      <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-black text-white">SP</span>
+                      <a href={attachment.url} target="_blank" rel="noreferrer" className="inline-flex min-w-0 items-center gap-1 truncate text-sm font-semibold text-foreground hover:underline"><FileText className="h-4 w-4 shrink-0 text-rose-600" />{attachment.name}</a>
+                      <span className="text-xs text-muted-foreground">{(attachment.size / 1024 / 1024).toFixed(2)} MB</span>
+                      <button onClick={() => setAttachment(null)} aria-label="Remove PDF" className="ml-auto rounded p-1 text-muted-foreground hover:bg-accent"><X className="h-3.5 w-3.5" /></button>
+                    </>
+                  ) : (
+                    <label className={cn("inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold hover:bg-accent", upload.isPending && "pointer-events-none opacity-60")}>
+                      {upload.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+                      {upload.isPending ? "Uploading…" : "Choose PDF (max 10 MB)"}
+                      <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        e.target.value = "";
+                        if (!f) return;
+                        if (f.size > 10 * 1024 * 1024) { toast.error("PDF is larger than 10 MB"); return; }
+                        upload.mutate(f);
+                      }} />
+                    </label>
+                  )}
+                  <span className="w-full text-xs text-muted-foreground">Shown with a red SP badge and an Open PDF button in the pop-up.{audience === "all" ? " This goes to everyone — pick Selected people for a personal SP." : ""}</span>
                 </div>
               )}
             </div>
@@ -1778,7 +1827,7 @@ function AnnouncementsAdmin() {
                 <option value="success">Success (green)</option>
                 <option value="warning">Warning (yellow)</option>
               </select>
-              <button onClick={() => create.mutate()} disabled={!title.trim() || !body.trim() || create.isPending || (audience === "some" && targetIds.length === 0)} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">
+              <button onClick={() => create.mutate()} disabled={!title.trim() || !body.trim() || create.isPending || (audience === "some" && targetIds.length === 0) || (spOn && !attachment)} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">
                 {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Megaphone className="h-4 w-4" />} Post
               </button>
               <span className="text-xs text-muted-foreground">{audience === "some" ? `Shows only to the ${targetIds.length} selected ${targetIds.length === 1 ? "person" : "people"}.` : "Shows once to every user."}</span>
@@ -1791,6 +1840,8 @@ function AnnouncementsAdmin() {
               <div key={a.id} className="flex items-start gap-3 rounded-2xl border border-border bg-card p-3.5 shadow-soft">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
+                    {a.kind === "sp" && <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-black text-white">SP</span>}
+                    {a.kind === "warning" && <span className="rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-black uppercase text-white">Warning</span>}
                     <span className="text-sm font-bold">{a.title}</span>
                     <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold uppercase", a.active ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground")}>{a.active ? "Active" : "Inactive"}</span>
                     {a.repeatUntil && new Date(a.repeatUntil) >= new Date(new Date().toDateString()) && (
@@ -1799,7 +1850,14 @@ function AnnouncementsAdmin() {
                     <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">{a.tone}</span>
                   </div>
                   <p className="mt-1 whitespace-pre-line text-xs text-muted-foreground">{a.body}</p>
-                  <p className="mt-1.5 text-[11px] text-muted-foreground">{fmtDate(a.createdAt)} · {a.targetCount ? `to ${a.targetCount} ${a.targetCount === 1 ? "person" : "people"}` : "to everyone"} · {a.seenCount} read</p>
+                  {a.attachmentUrl && (
+                    <a href={a.attachmentUrl} target="_blank" rel="noreferrer" className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"><FileText className="h-3.5 w-3.5" />{a.attachmentName ?? "PDF"}</a>
+                  )}
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    {fmtDate(a.createdAt)} · {a.targetCount
+                      ? `to ${a.targets?.length ? a.targets.slice(0, 4).map((t) => t.name ?? "?").join(", ") + (a.targets.length > 4 ? ` +${a.targets.length - 4}` : "") : `${a.targetCount} ${a.targetCount === 1 ? "person" : "people"}`}`
+                      : "to everyone"} · {a.seenCount} read
+                  </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
                   <button onClick={() => toggle.mutate({ id: a.id, active: !a.active })} className="rounded-lg border border-border px-2.5 py-1 text-xs font-semibold hover:bg-accent">{a.active ? "Deactivate" : "Activate"}</button>
