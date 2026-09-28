@@ -3,6 +3,109 @@
 Setiap audit ditulis sebagai bagian baru di paling atas. Path kode relatif ke
 `app/src/main/java/id/znetworks/nexus/` kecuali disebut lain.
 
+## Audit pra-rilis 29 Sep 2026: KEAMANAN + paritas (HEAD b122e0f, build 5)
+
+Pembanding: iOS `agents:~/nexus-ios` sampai 77818ba, server `nexus-prod:~/nexus` (read-only, tanpa POST,
+tanpa deploy). Tidak ada kode Android yang diubah. Nilai rahasia tidak pernah ditulis di sini (hanya nama
+file/variabel).
+
+**RILIS: LAYAK** (0 KRITIS, 0 TINGGI, 0 SEDANG, 8 RENDAH). Syarat administratif sebelum terbit: sha256 build 5
+dicatat di STATUS.md (R8).
+
+### A. Keamanan
+
+| Cek | Hasil | Bukti |
+|---|---|---|
+| Rahasia di repo + seluruh riwayat git (`git log -p --all`, 137 commit) | **Bersih.** Tidak ada `.jks`, `keystore.properties`, `google-services.json`, `firebase.properties` yang pernah di-commit. Nilai `storePassword`/`keyPassword`/`apiKey`/`applicationId`/`senderId` dari `~/.nexus-android-secrets/` dicari persis di riwayat: 0 kena. Tidak ada token, sandi tes, private key | `.gitignore:10-13` (`*.jks`, `*.keystore`, `keystore.properties`, `app/google-services.json`); `app/build.gradle.kts:25-44` baca keystore dari luar repo |
+| Rahasia di APK (`strings` classes.dex + resources.arsc + assets) | **Bersih.** Sandi keystore dan path keystore tidak ada. Satu-satunya kunci = Firebase `apiKey` (awalan `AIza`) + projectId/applicationId/senderId, disuntik ke BuildConfig: ini identitas klien Firebase, bukan rahasia (kirim push butuh kredensial server OAuth). Tidak ada URL privat/IP LAN/staging; host hanya `nexus.znetworks.id`, `lan.nexus.znetworks.id` + tile peta OSM. Email di dex hanya placeholder (`name@company.com`) | `app/build.gradle.kts:69-72`; lihat R2 |
+| Manifest APK (aapt2) | `debuggable` tidak ada (= false), `allowBackup=false`, `fullBackupContent` + `dataExtractionRules` mengecualikan semua domain, `networkSecurityConfig` = `cleartextTrafficPermitted="false"` tanpa `<trust-anchors>` user (hanya CA sistem), `usesCleartextTraffic` tidak diset | `AndroidManifest.xml:27-31`, `res/xml/network_security_config.xml`, `res/xml/backup_rules.xml`, `res/xml/data_extraction_rules.xml` |
+| Komponen exported | Hanya `MainActivity` (launcher + deep link) dan `AttendanceWidgetReceiver` (APPWIDGET_UPDATE, standar) tanpa permission. Sisanya dari library dan terlindung permission sistem: FirebaseInstanceIdReceiver (`c2dm.SEND`), SystemJobService (`BIND_JOB_SERVICE`), GlanceRemoteViewsService (`BIND_REMOTEVIEWS`), Diagnostics/ProfileInstall (`DUMP`), RevocationBoundService. Service FCM, WorkTrailService, boot receiver, InstallResultReceiver, FileProvider: `exported=false` | `AndroidManifest.xml:37-119` |
+| FileProvider | Hanya `cache/evidence/`, `cache/shared/`, `cache/offline/`; tidak ada `root-path`/`external-path`; `exported=false`, grant per intent | `res/xml/file_paths.xml` |
+| PendingIntent | Semua `FLAG_IMMUTABLE`, kecuali callback PackageInstaller yang memang wajib `FLAG_MUTABLE` dan intent-nya eksplisit ke receiver non-exported | `feature/update/ApkUpdater.kt:205-208`, `WorkTrailService.kt:187,235,267`, `push/Push.kt:216,223` |
+| Deep link / App Link | Tidak ada link yang memicu aksi tanpa tap: semua target hanya navigasi (form, vault `/v/`, pengajuan, dll.), kirim tetap lewat tombol. App Link hanya `/f/` dan `/v/` di host persis `nexus.znetworks.id` (`autoVerify`). Link ke host lain → browser eksternal tanpa cookie; tidak ada WebView sama sekali (grep `WebView`/`addJavascriptInterface` kosong). Lihat R3 (crash) | `core/nav/Router.kt:76-88`, `ui/shell/SignedInShell.kt:172-199,621-625` |
+| Sesi: Keystore AES-GCM | **Benar.** AES-256-GCM, kunci non-exportable di AndroidKeyStore (StrongBox bila ada), IV acak per seal, tag 128 bit, file di `noBackupFilesDir/session/session.bin`, tulis-lalu-rename; blob tak terbaca = keluar, bukan crash | `core/session/SessionStore.kt:27-100`, `core/AppContainer.kt:56-59` |
+| Cookie hanya ke host NEXUS | **Benar, exact match** (bukan suffix) `nexus.znetworks.id` / `lan.nexus.znetworks.id`, dicek di keempat jalur kirim; tanpa cookie jar. Lihat R1 (redirect) | `core/net/NexusConfig.kt:14-16`, `core/net/ApiClient.kt:116,145,198,238` |
+| Log di rilis | Hanya satu `Log.w` berisi nama kelas exception; tidak ada `println`/`printStackTrace`/HttpLoggingInterceptor, tidak ada token/PII | `core/AppContainer.kt:53` |
+| R8 | `isMinifyEnabled = true`, `isShrinkResources = true`; di dex hanya 15 nama kelas app yang tersisa (komponen manifest) | `app/build.gradle.kts:80-82` |
+| Updater APK in-app | **Benar.** Urutan: sha256 (bila server kirim) → package harus `id.znetworks.nexus` → set sertifikat penanda tangan arsip == yang terpasang (K1: GET_SIGNATURES di API 28-29) → versionCode arsip harus > yang berjalan (tanpa downgrade) → cocok dengan versionCode/Name yang diumumkan. File di `cacheDir/updates` (privat), unduhan hanya HTTPS (cleartext diblok NSC), cookie hanya ke host NEXUS | `feature/update/ApkUpdater.kt:141-164,180-188,239-253`, `core/net/ApiClient.kt:131-176` |
+| Antrean absen offline | **Benar.** `noBackupFilesDir/attendance-queue` (bukan cache, ikut dikecualikan backup), per owner (`ownerId`), hanya milik yang login yang dikirim, `keepOnly` saat orang lain login, `clearAll` saat logout sengaja, ditahan untuk orang yang sama saat 401 | `core/AppContainer.kt:120-129,141-158`, `feature/attendance/AttendanceQueue.kt:121,143,210-231` |
+
+#### Temuan keamanan (semua RENDAH)
+
+- **R1 RENDAH: header Cookie ikut redirect lintas host.** Cookie ditambahkan manual sebagai header aplikasi
+  (`core/net/ApiClient.kt:198-200`), dan OkHttp default mengikuti redirect (`ApiClient.kt:52-60`, tidak ada
+  `followRedirects(false)`); OkHttp hanya membuang `Authorization` saat redirect ke host lain, bukan `Cookie`.
+  Saat ini tidak bisa dieksploitasi: route API yang dipanggil app tidak pernah redirect ke host asing (dicek di
+  server: redirect hanya di `/api/auth/*`, `/api/sso/authorize` dengan allowlist, `/api/drive/auth`), APK
+  disajikan langsung oleh `/api/app/android/apk`. Saran: interceptor jaringan yang membuang Cookie bila host
+  bukan `isNexusHost`, atau `followRedirects(false)` untuk panggilan ber-sesi.
+- **R2 RENDAH: kunci Firebase tanpa pembatasan aplikasi Android.** GET read-only ke Identity Toolkit dengan
+  kunci dari `firebase.properties` (`apiKey`, awalan `AIza`) tanpa header paket Android diterima (jawaban
+  `CONFIGURATION_NOT_FOUND`, bukan "Android client application blocked"). Kunci ini memang publik by design
+  (ada di setiap APK) dan tidak bisa mengirim push, jadi bukan kebocoran; tapi sebaiknya di Google Cloud
+  Console proyek `nexus-znetworks-android` dibatasi ke aplikasi Android `id.znetworks.nexus` + SHA-256
+  `53:22:FE:…:AD:26` dan ke API Firebase Installations/FCM saja.
+- **R3 RENDAH: link dengan id berisi "/" bikin app crash.** Id dari query di-URL-decode
+  (`core/nav/Router.kt:146`) lalu ditempel mentah ke rute navigasi: `ticket/$it`, `submission/$it`, `chat/$it`
+  (`ui/shell/SignedInShell.kt:183,185,196`). `nexus://complaints?id=a%2Fb` → rute tak cocok →
+  `IllegalArgumentException` di `LaunchedEffect` → crash. Tidak ada kebocoran data; cukup `Uri.encode(id)`
+  seperti Form (`SignedInShell.kt:184`). Terkait: link relatif dari extra notifikasi yang tidak diawali "/"
+  (mis. `@host`) jadi `PUBLIC_BASE + path` (`Router.kt:140`, `SignedInShell.kt:621`) dan bisa membuka browser
+  ke host lain, tanpa cookie (dampak nol; app lain toh bisa membuka browser sendiri).
+- **R4 RENDAH: berkas di `cache/shared` dan `cache/evidence` tidak dihapus saat logout.** Ekspor XLSX absensi
+  kru (`feature/admin/AttendanceAdmin.kt:262`, `history/BoardUi.kt:241`), lampiran pengajuan
+  (`requests/RequestsUi.kt:420`), lampiran yang dibuka (`core/files/FileOpener.kt:21`) dan foto kamera
+  (`ui/components/CameraCapture.kt:40`) tertinggal setelah logout (`core/AppContainer.kt:149-173` hanya
+  menghapus `cache/offline` dan `responses`). Privat untuk app, tidak ter-backup, tidak terlihat di UI orang
+  berikut, tapi iOS menghapus berkas offline saat serah-terima HP. Saran: hapus `cache/shared` + `cache/evidence`
+  di `onSignedOut`.
+- **R5 RENDAH (sama dengan iOS, batas server): logout hanya lokal.** `AuthRepository.signOut()`
+  (`feature/auth/AuthRepository.kt:101-105`) menghapus token di HP; token JWT tetap sah di server sampai
+  kedaluwarsa atau `sessionVersion` dinaikkan. iOS `AuthStore.swift:104` sama. Bukan pemblokir.
+
+### B. Paritas iOS (28-29 Sep)
+
+| Fitur | iOS | Android | Status |
+|---|---|---|---|
+| Tidak bisa sign-out saat hari kerja jalan (b186172) | `AuthStore.swift:95-96` | `core/AppContainer.kt:183`, `feature/widget/AttendancePresence.kt:66-73` (WorkdayRule identik), dicek 2x `ui/shell/SignedInShell.kt:507,528`, teks server `signout.blocked.*` `:534-535` | SAMA |
+| Remote config `GET /api/app/config` (77818ba) | `RemoteConfig.swift:50-52,70` (fail-closed `?? true`, disimpan) | `AppContainer.kt:178-180` (`platform=android`, tanpa sesi, 8 s), `core/config/RemoteConfig.kt:41-45,71-75` (fail-closed, disimpan, jeda 5 mnt); field cocok server `src/lib/app-config.ts:18-35`. Android juga memakai `outsideHourAlertMinutes` (`WorkTrailService.kt:250`), iOS belum | SAMA (Android lebih lengkap) |
+| Check-in diblok tanpa lokasi Always + Precise (77818ba) | `WorkLocationTracker.swift:122-125`, `AttendanceView.swift` | `feature/attendance/trail/AlwaysLocation.kt:30-40` (tanpa FINE = PRECISE kurang; SDK ≥ 29 tanpa BACKGROUND = ALL_THE_TIME kurang), satu-satunya jalan ke check-in `AttendanceScreen.kt:151-158`, tanya ulang saat resume `SignedInShell.kt:209-214` | SAMA |
+| Tinjauan Fake GPS (c977091, AdminSuspectViews.swift) | BoD + flag `fakeGpsReview`; GET `/api/attendance/suspects?periodKey=`, POST `/suspects/{id}/review {verdict,note}` | `feature/admin/ControlRoom.kt:61-63,100`, `feature/admin/FakeGps.kt:99-111,131-134`; cocok server `suspects/[recordId]/review/route.ts:32-78` | SAMA |
+| Flag simulated/mock selalu dikirim | `APIClient.swift:2420`, `AttendanceQueue.swift:31,127,170` | `feature/attendance/AttendanceApi.kt:23,45,85` (field `simulated` selalu ada), replay pakai fix tersimpan `AttendanceQueue.kt:303,306`, di model disk `AttendanceModels.kt:157`, sumber `LocationProvider.kt:89-95`; server `check-in/route.ts:102`, `check-out/route.ts:51` | SAMA |
+| Multi-kantor inside + "Now at <office>" (45ea4ea) | `WorkTrailPolicy.swift`, `WorkLocationTracker.swift` | `trail/TrailMachine.kt:91-94,168-176,187-191`, alert/notifikasi/widget `:303,338`, `WorkTrailService.kt:176,184`, `AppContainer.kt:115`, label `AttendanceScreen.kt:459,466` | SAMA (R6) |
+| Antrean offline 409 already-checked-in (db9295c) | `AttendanceQueue.swift` +8 | `AttendanceQueue.kt:165-171,289-291`; teks server `check-in/route.ts:203` | SAMA |
+
+- **R6 RENDAH (paritas kecil):** label "Now at" di Android tidak mengecek bahwa sesi trail milik record yang
+  sedang ditampilkan (iOS: `recordId == dispRec.id`; Android hanya `rec.checkOutAt == null`,
+  `AttendanceScreen.kt:459`), dan `officeHere` hanya melihat `state.latest` (iOS: `latest` atau `lastGood`).
+- **R7 RENDAH:** `FakeGps.kt:133` menaruh `recordId` di path tanpa URL-encode (iOS meng-encode); nilainya cuid
+  dari server, dampak praktis nihil.
+
+Cek ulang perbaikan audit sebelumnya (ada di jalur yang benar-benar dijalankan):
+
+| Temuan | Status | Bukti |
+|---|---|---|
+| K1 update di Android 9-10 | BERES | `ApkUpdater.kt:155` → `verify()` `:183-184` → `signatureFlags` `:228-232`, fallback `p.signatures` `:274` |
+| T3 konfirmasi install tak hilang | BERES | `ApkUpdater.kt:90-97,108-118`, Continue/Cancel `feature/update/UpdateFlow.kt:102,108`, `reset()` abandon `ApkUpdater.kt:74-87` |
+| T4 bagan approval hanya BoD/OAA | BERES | `feature/admin/UsersAdmin.kt:143`, `ApprovalChart.kt:201,229,236` |
+| T5 kamera minta izin dulu | BERES | `ui/components/CameraCapture.kt:32-60`; semua pemanggil lewat `rememberCameraCapture` (Requests, Chat, Task, Tickets) |
+| T6 papan kru tidak campur periode | BERES | `history/BoardUi.kt:154-159` (cancel load lama), `:300` `rowsFor(period, …)` |
+
+### C. Build dan APK
+
+| Apa | Hasil |
+|---|---|
+| `./gradlew -q assembleRelease testDebugUnitTest` di clone bersih `/tmp/audit-clone` (HEAD b122e0f, `local.properties` disalin, rahasia dari `~/.nexus-android-secrets`) | **OK, exit code gradle 0** (`--no-daemon`; percobaan pertama mati karena daemon di-OOM-kill kernel saat build 5 sesi lain jalan bersamaan, bukan kesalahan kode). **300 tes JVM: 0 gagal, 0 error, 0 skip** |
+| APK diverifikasi | `NEXUS-0.1.6-5.apk` (build 5 sudah ada) |
+| `aapt2 dump badging` | package `id.znetworks.nexus`, versionCode **5**, versionName **0.1.6**, minSdk 26, targetSdk 36 |
+| `apksigner verify --print-certs` | lolos (skema v2), 1 signer `CN=NEXUS Android, O=Z Networks, L=Jakarta, C=ID`, SHA-256 sertifikat `5322fe4c…a6ad26` = kunci rilis, RSA 4096 |
+| sha256 APK | `4d75566d2e21e24d4ac93835e8cd7c1ba3875455168306c8de2bfb63c0943c38` = file `.sha256`. **Belum ada di STATUS.md** (R8) |
+| APK vs build bersih HEAD | 1454 entri zip, semuanya byte-identik (dex, manifest, arsc, lib, assets); `META-INF/version-control-info.textproto` = revisi b122e0f. Hanya blok tanda tangan/metadata zip yang beda |
+
+- **R8 RENDAH (dokumen):** STATUS.md belum mencatat build 5: bagian "APK ready" (`docs/STATUS.md:310-316`) masih
+  build 4 (`98b608ff…`), dan header `docs/STATUS.md:7-8` masih "295 JVM tests" dan "versionCode 3 in the tree"
+  (sebenarnya 300 dan 5). Catat sha256 build 5 di atas sebelum terbit.
+
 ## Audit ulang 28 Sep 2026, malam (HEAD 8842c35, kandidat rilis build 3)
 
 Pembanding: iOS `agents:~/nexus-ios` sampai db9295c (semua commit sejak 0.1.5, 6a8f36a → db9295c),
