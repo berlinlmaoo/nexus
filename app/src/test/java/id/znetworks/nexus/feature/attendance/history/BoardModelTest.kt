@@ -106,4 +106,11 @@ class BoardModelTest {
         assertEquals(true, BoardModel.dayOpens(null, canManage = true, future = false))
         assertEquals(false, BoardModel.dayOpens(HistoryRow(id = "r"), canManage = true, future = true))
     }
+
+    // Audit R6: an unnamed roster entry never gets the viewer's name.
+    @Test fun unnamedPeopleAreNotTheViewer() {
+        val m = BoardModel.members(emptyList(), "me-id", "Viewer", listOf(PersonRef(id = "x"), PersonRef(id = "me-id")))
+        assertEquals("—", m.first { it.id == "x" }.name)
+        assertEquals("Viewer", m.first { it.id == "me-id" }.name)
+    }
 }

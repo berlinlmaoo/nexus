@@ -90,7 +90,9 @@ object BoardModel {
             val person = rosterById[uid]
             BoardMember(
                 id = uid,
-                name = rs.firstNotNullOfOrNull { it.user?.name } ?: person?.name ?: person?.email ?: selfName,
+                name = rs.firstNotNullOfOrNull { it.user?.name } ?: person?.name ?: person?.email
+                    // The viewer's own name only on the viewer's own row (audit R6); anyone else unnamed is "—".
+                    ?: if (uid == viewerId || uid == "me") selfName else "—",
                 cells = rs.associate { it.dayKey to AttTone.of(it) },
                 rows = rs.associateBy { it.dayKey },
                 quota = rs.firstNotNullOfOrNull { it.user?.dayOffQuota } ?: person?.dayOffQuota ?: DEFAULT_QUOTA,

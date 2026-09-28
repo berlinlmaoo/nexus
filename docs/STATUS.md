@@ -218,7 +218,8 @@ Server findings (Manager → ADMIN, BoD edits OAA account, Manager removes membe
 | S7 (SEDANG) the APK download never really resumed | `download` reports the ETag as soon as the headers arrive and the updater stores it before the bytes, so a cut connection continues with Range + If-Range; a new build meanwhile still replaces the file whole (UpdaterDownloadTest) | 9fefc7e |
 | S8 (SEDANG) non-ApiError exceptions in the updater crashed the app | `run()` turns any failure (disk, PackageInstaller, SecurityException) into Failed and abandons the half-done session; a malformed absolute download URL is a failed download; `appScope` has an exception handler (logged, never a crash) | 0197481 |
 | S9 (SEDANG) approver picker offered only Managers and up | Everyone but the person, senior roles first (iOS, server); a choice that would close a loop is still disabled (makesCycle) | 2df5852 |
-| R8 (RENDAH) remove/re-rank offered where the server refuses | Tuning Room › Members never offers your own row; a BoD peer's rest days are read-only (iOS). Server remove rule now (c021fda): BoD below BoD, OAA anyone but self = `Roles.canEdit` | this step |
+| R8 (RENDAH) remove/re-rank offered where the server refuses | Tuning Room › Members never offers your own row; a BoD peer's rest days are read-only (iOS). Server remove rule now (c021fda): BoD below BoD, OAA anyone but self = `Roles.canEdit` | 65f3b8f |
+| R6 (RENDAH) unnamed roster people got the viewer's name | The viewer's name only on the viewer's own row; anyone else without name/email is "—" (BoardModelTest) | this step |
 
 **New for 0.1.6 (Berlin, 28 Sep; iOS b186172): no sign-out while a workday runs.** Logout in More is
 refused while checked in and not checked out (live, or a check-in still queued offline; before today was
