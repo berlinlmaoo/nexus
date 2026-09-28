@@ -133,7 +133,13 @@ export function buildFixtures(profile, world, media) {
   const ios = isNative(p)
   const modern = p.id === "ios-0.1.6" || android
   const fix = android ? androidFix : iosFix
-  const month = jktDate(0).slice(0, 7)
+  // The period key today falls in (28th → 27th, keyed by the month it ENDS in), which is what
+  // history?month= means — the calendar month failed from the 28th to the end of every month.
+  const month = (() => {
+    const [y, m, d] = jktDate(0).split("-").map(Number)
+    if (d <= 27) return `${y}-${String(m).padStart(2, "0")}`
+    return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`
+  })()
   const steps = []
   const add = (s) => steps.push(s)
 
