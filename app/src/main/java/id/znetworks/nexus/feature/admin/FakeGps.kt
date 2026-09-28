@@ -128,9 +128,11 @@ object SuspectLogic {
 }
 
 class SuspectsApi(private val api: ApiClient) {
-    suspend fun list(periodKey: String?) = api.get("/api/attendance/suspects" + (periodKey?.let { "?periodKey=$it" } ?: ""), SuspectList.serializer())
+    suspend fun list(periodKey: String?) = api.get("/api/attendance/suspects" + (periodKey?.let { "?periodKey=${java.net.URLEncoder.encode(it, "UTF-8")}" } ?: ""), SuspectList.serializer())
+    /** The id as one encoded path segment (audit R7, as iOS). */
+    fun reviewUrl(recordId: String) = api.url("/api/attendance/suspects").newBuilder().addPathSegment(recordId).addPathSegment("review").build()
     suspend fun review(recordId: String, verdict: String, note: String) =
-        api.send(Request.Builder().url(api.url("/api/attendance/suspects/$recordId/review"))
+        api.send(Request.Builder().url(reviewUrl(recordId))
             .post(buildJsonObject { put("verdict", verdict); put("note", note.trim()) }.toString().toJsonBody()).build(), JsonObject.serializer())
 }
 

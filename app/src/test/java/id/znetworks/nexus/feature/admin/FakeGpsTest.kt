@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import okhttp3.HttpUrl.Companion.toHttpUrl
 
 class FakeGpsTest {
     private val list = NexusJson.decodeFromString(SuspectList.serializer(), """{"periodKey":"2026-09","periodLabel":"28 Aug – 27 Sep","currentPeriodKey":"2026-09",
@@ -43,5 +44,13 @@ class FakeGpsTest {
     @Test fun fakeGpsTabIsBoDOnly() {
         assertTrue("suspects" in ControlRoomTabs.forRole(isBoD = true))
         assertFalse("suspects" in ControlRoomTabs.forRole(isBoD = false))
+    }
+
+    // Audit R7 (build 5): the record id is one encoded path segment.
+    @Test fun reviewUrlEncodesTheId() {
+        val api = SuspectsApi(id.znetworks.nexus.core.net.ApiClient("https://nexus.znetworks.id/".toHttpUrl(),
+            id.znetworks.nexus.core.net.ClientIdentity("0.1.6", 5, 36), { null }))
+        assertEquals("/api/attendance/suspects/a%2Fb%20c/review", api.reviewUrl("a/b c").encodedPath)
+        assertEquals("/api/attendance/suspects/cmg123/review", api.reviewUrl("cmg123").encodedPath)
     }
 }
