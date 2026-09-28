@@ -177,7 +177,7 @@ Still on the web until built: Phase 3 (chat, Threads, docs/pages, forms, profile
 | 5.2 | **LAN upload shortcut**: already there since Phase 1 (`core/net/LanRoute.kt`, the same `lan.nexus.znetworks.id` route as iOS LANRoute). Checked for Phase 5: every upload (task/vault single request, every 16 MiB chunk, avatar, folder icon, chat photo, forms) and every download goes through `ApiClient`'s one OkHttp client with the route interceptor; a request with a body keeps the 60 s timeout on the LAN and is never replayed once it may have left (LanRouteTest). Nothing to build | 6e88d2d |
 | 5.3 | **Tablet navigation rail**: from 600 dp wide (tablets, unfolded phones, landscape on large phones) the five tabs move from the bottom bar to a NavigationRail on the left, same items, same back-stack behaviour; phones unchanged. Not seen on a device yet (needs a signed-in session) | 1a548fe |
 | 5.4 | **Suspect-record review = Control Room › Fake GPS** (server f7f5f1c, iOS c977091; BoD/OAA tab after Extra day off): period switch (28→27), chips Fake GPS / Worth a look / Reviewed with the server's counts, a card per record (name, date, place, badge; check-in and check-out blocks with selfie, the server's signals in the app's language with the speed kept, offline mark, short address, ±accuracy, Map link), note (≤ 300), "It's fine" for any open record, "Not valid…" only for FAKE with a note of 3+ characters and one confirmation that says what happens (day deleted, TK, −150 XP after day off, person notified); server refusals (422 NOT_PROOF…) shown as sent. FakeGpsTest | 7aa6283, 17f59b4 |
-| 5.5 | **Wear OS (optional): needs Berlin's decision, not built.** A Wear OS app is installed on the watch itself, from the Play Store on the watch; a sideloaded phone APK (our only channel, /download/android) cannot carry it, so each watch would need adb over Wi-Fi. Until there is a Play listing (or Berlin wants an adb-installed build for a few people), the watch gets what the phone already posts: ordinary pushes (approvals, reminders) are mirrored by the Wear OS companion. Scope if built: today's status + 7 dots (as the widget) and approvals (as iOS Watch ApprovalsView), session from the phone over the Wear Data Layer | — |
+| 5.5 | **Wear OS: postponed (main session, 29 Sep) — not built until Berlin decides.** Background: A Wear OS app is installed on the watch itself, from the Play Store on the watch; a sideloaded phone APK (our only channel, /download/android) cannot carry it, so each watch would need adb over Wi-Fi. Until there is a Play listing (or Berlin wants an adb-installed build for a few people), the watch gets what the phone already posts: ordinary pushes (approvals, reminders) are mirrored by the Wear OS companion. Scope if built: today's status + 7 dots (as the widget) and approvals (as iOS Watch ApprovalsView), session from the phone over the Wear Data Layer | — |
 | — | "Close web check-in": not ours (server decision after adoption, Berlin) | — |
 
 ## iOS bug checklist (UPDATES §8), checked 28 Sep 2026
@@ -307,14 +307,17 @@ no R8 / serialization / missing-class errors in logcat. Nothing past login (no t
 
 ## APK ready (for the main session, R2) — publish only on Berlin's go
 
-**APK siap (untuk audit, BELUM terbit): versionCode 4, sha256 `98b608ffaa05c35a15785691cd8d9d76ba7b0877a71940cd55b5d18e143ceb8e`**
-`agents:~/nexus-android-release/NEXUS-0.1.6-4.apk` (+ `.sha256`) — versionName 0.1.6, versionCode 4, 23.9 MB,
-signed by the release key (SHA-256 53:22:FE:…:AD:26), with Firebase. Contains everything through the
-re-audit fixes, no-logout-during-workday and Fake GPS (commit 2050db4 + versionCode). **Not in it:** remote config (48ce87c) and check-in needs location all the time (6de0170): the next candidate needs a new build. Smoke-tested on the
-agents emulator (API 34): cold start to login, no crash, no R8/serialization errors, widget provider
-registered. Berlin's rule: published only after parity + a clean audit and his go, as **0.1.6**; later
-APKs raise versionName and versionCode.
+**APK siap (untuk audit ulang + audit keamanan, BELUM terbit): versionCode 5, sha256 `4d75566d2e21e24d4ac93835e8cd7c1ba3875455168306c8de2bfb63c0943c38`**
+`agents:~/nexus-android-release/NEXUS-0.1.6-5.apk` (+ `.sha256`) — versionName 0.1.6, versionCode 5, 23.9 MB,
+built from **b122e0f** (HEAD 83defc5 + versionCode 5), signed by the release key (SHA-256
+53:22:FE:…:AD:26), with Firebase; 300 JVM tests green. Contains everything up to remote config and
+"check-in needs location all the time". Smoke test on the agents emulator (API 34): three cold starts to
+login, no crash, no R8/serialization errors, widget provider registered. (One crash seen in the first run
+was a second process started while the APK was still being installed — empty DexPathList — and did not
+come back after install; not an app fault.) Berlin's rule: published only after parity + a clean audit and
+his go, as **0.1.6**; later APKs raise versionName and versionCode.
 
+Superseded, never published: `NEXUS-0.1.6-4.apk` (versionCode 4, sha256 `98b608ff…ceb8e`, before remote config).
 Superseded, never published: `NEXUS-0.1.6-3.apk` (versionCode 3, sha256 `e63ca19d…a326`, audited "not
 releasable"); `NEXUS-0.1.6-2.apk` (versionCode 2).
 Older: `NEXUS-0.1.6-1.apk` (versionCode 1, sha256 `5fabc061…2d97e`), before Phase 2.
