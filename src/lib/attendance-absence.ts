@@ -614,7 +614,7 @@ export interface AbsenceDeductionResult {
  * no monthly cap — over-quota goes "minus"). Idempotent: re-runs skip days already
  * covered by a request. Days before the start floor are never touched.
  */
-export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date; /** izinkan membuat penalti lebih tua dari PENALTY_LOOKBACK_DAYS */ backfill?: boolean }): Promise<AbsenceDeductionResult> {
+export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date; /** izinkan membuat penalti lebih tua dari PENALTY_LOOKBACK_DAYS */ backfill?: boolean; /** only these people (a BoD verdict on one record) */ userIds?: string[] }): Promise<AbsenceDeductionResult> {
   const floor = startFloor()
   // Default window: [yesterday - lookback, yesterday] (today isn't over yet, so never processed).
   const yesterday = new Date(getAttendanceDate().getTime() - ONE_DAY_MS)
@@ -647,7 +647,7 @@ export async function processAbsenceDeductions(opts?: { from?: Date; to?: Date; 
   for (const [workspaceId, office] of officeByWorkspace) {
     // BoD & One Above All tidak wajib absen → dikecualiin dari auto-potong day-off.
     const members = await prisma.workspaceMember.findMany({
-      where: { workspaceId, role: { notIn: ["BOD", "ONE_ABOVE_ALL"] } },
+      where: { workspaceId, role: { notIn: ["BOD", "ONE_ABOVE_ALL"] }, ...(opts?.userIds ? { userId: { in: opts.userIds } } : {}) },
       select: { userId: true, joinedAt: true, restDays: true, user: { select: { id: true, name: true, createdAt: true } } },
     })
     // Never penalize a member for workdays BEFORE they joined the workspace. The cron scans a 14-day

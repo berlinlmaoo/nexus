@@ -271,6 +271,26 @@ model RedDateQuota {
 /// Unused days expire with the period: nothing reads a row outside its own periodKey.
 /// Revoking keeps the row (revokedAt/revokedById) so the audit trail and the person's push still
 /// make sense afterwards. Hand-written SQL: dayoff_bonus.sql (CHECK days 1..31 lives there only).
+/// A BoD's verdict on an attendance record flagged for its location (owner, 28 Sep 2026). See
+/// lib/attendance-suspect.ts. No foreign key to the record on purpose: an INVALID verdict deletes the
+/// record (the day becomes TK), and this row — with the record and its trail in `snapshot` — is what
+/// remains as evidence.
+model AttendanceSuspectReview {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  userId         String
+  recordId       String   @unique
+  attendanceDate DateTime
+  /// "VALID" | "INVALID"
+  verdict        String
+  note           String?
+  reviewedById   String
+  reviewedAt     DateTime @default(now())
+  snapshot       Json
+
+  @@index([workspaceId, attendanceDate])
+}
+
 model DayOffBonus {
   id          String    @id @default(cuid())
   workspaceId String

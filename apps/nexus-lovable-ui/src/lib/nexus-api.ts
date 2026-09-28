@@ -1610,6 +1610,26 @@ async function parseResponse(res: Response) {
   return res.text();
 }
 
+/** GET /api/attendance/suspects — attendance flagged for its location (BoD). FAKE = proof, CHECK = weak signal. */
+export type NexusSuspectSide = {
+  at: string | null; lat: number | null; lng: number | null; accuracyM: number | null
+  simulated: boolean; suspect: boolean; reason: string | null; impliedKmh: number | null
+  photoUrl: string | null; address: string | null; offline: boolean
+  level: "FAKE" | "CHECK" | null; signals: string[]
+};
+export type NexusSuspectItem = {
+  recordId: string; date: string; state: "open" | "valid" | "invalid"; level: "FAKE" | "CHECK" | null
+  user: { id: string; name: string | null; image: string | null }
+  place: string | null
+  checkIn: NexusSuspectSide | null; checkOut: NexusSuspectSide | null
+  review: { verdict: "VALID" | "INVALID"; note: string | null; reviewedAt: string; reviewedBy: { id: string; name: string | null } } | null
+};
+export type NexusSuspectList = {
+  periodKey: string; periodLabel: string; periodStart: string; periodEnd: string; currentPeriodKey: string
+  counts: { fakeOpen: number; checkOpen: number; valid: number; invalid: number }
+  items: NexusSuspectItem[]
+};
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
@@ -2164,6 +2184,10 @@ export const nexusApi = {
   deleteDayoff: (id: string) =>
     apiFetch<{ message: string }>(`/api/attendance/dayoffs?id=${encodeURIComponent(id)}`, { method: "DELETE" }),
   // Extra day off for one attendance period (BoD grants; everyone can list their own).
+  suspectAttendance: (periodKey?: string) =>
+    apiFetch<NexusSuspectList>(`/api/attendance/suspects${periodKey ? `?periodKey=${encodeURIComponent(periodKey)}` : ""}`),
+  reviewSuspectAttendance: (recordId: string, payload: { verdict: "VALID" | "INVALID"; note: string }) =>
+    apiFetch<{ ok: boolean; recordId: string; verdict: string; date: string }>(`/api/attendance/suspects/${encodeURIComponent(recordId)}/review`, { method: "POST", body: JSON.stringify(payload) }),
   dayOffBonuses: (periodKey?: string) =>
     apiFetch<NexusDayOffBonusList>(`/api/attendance/day-off-bonus${periodKey ? `?periodKey=${encodeURIComponent(periodKey)}` : ""}`),
   grantDayOffBonus: (payload: { userIds: string[]; periodKey: string; days: number; reason: string }) =>
