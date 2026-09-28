@@ -40,6 +40,7 @@ const EXACT: Record<string, AndroidChannelId> = {
   attendance_checkout_reminder: "attendance_reminders",
   attendance_absent_recorded: "attendance_reminders",
   dayoff_quota_low: "attendance_reminders",
+  dayoff_bonus_granted: "attendance_reminders",
   red_date_quota_low: "attendance_reminders",
   attendance_override: "attendance_reminders",
 

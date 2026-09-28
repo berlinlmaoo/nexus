@@ -86,6 +86,9 @@ model User {
   attendanceCorrections AttendanceRecord[] @relation("AttendanceRecordCorrectedBy")
   attendanceRequests AttendanceRequest[] @relation("AttendanceRequestUser")
   reviewedAttendanceRequests AttendanceRequest[] @relation("AttendanceRequestReviewedBy")
+  dayOffBonuses        DayOffBonus[] @relation("DayOffBonusUser")
+  dayOffBonusesGranted DayOffBonus[] @relation("DayOffBonusGrantedBy")
+  dayOffBonusesRevoked DayOffBonus[] @relation("DayOffBonusRevokedBy")
   /// Orang-orang yang request absensinya masuk ke saya (Bagan Approval).
   attendanceReports WorkspaceMember[] @relation("AttendanceApprover")
   attendanceCorrectionsOnMe    AttendanceCorrection[] @relation("AttendanceCorrectionUser")
@@ -239,6 +242,7 @@ model Workspace {
   divisions            Division[]
   holidays             Holiday[]
   redDateQuotas        RedDateQuota[]
+  dayOffBonuses        DayOffBonus[]
   complaints           Complaint[]
   attendanceCorrections AttendanceCorrection[]
 }
@@ -256,6 +260,34 @@ model RedDateQuota {
   createdAt   DateTime  @default(now())
 
   @@unique([workspaceId, month])
+}
+
+/// Extra day off for ONE attendance period (owner, 28 Sep 2026 — first used for staff who worked a
+/// 3-day event). The allowance for (person, period) is WorkspaceMember.dayOffQuota (default 4) plus
+/// the days of every non-revoked row here for that period (lib/day-off-usage effectiveDayOffQuotas).
+/// Unused days expire with the period: nothing reads a row outside its own periodKey.
+/// Revoking keeps the row (revokedAt/revokedById) so the audit trail and the person's push still
+/// make sense afterwards. Hand-written SQL: dayoff_bonus.sql (CHECK days 1..31 lives there only).
+model DayOffBonus {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation("DayOffBonusUser", fields: [userId], references: [id], onDelete: Cascade)
+  /// "YYYY-MM" = the month the 28→27 period ENDS in (attendancePeriodKey).
+  periodKey   String
+  days        Int
+  reason      String
+  /// null only when the granting account was deleted since (the grant itself stays).
+  grantedById String?
+  grantedBy   User?     @relation("DayOffBonusGrantedBy", fields: [grantedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+  revokedAt   DateTime?
+  revokedById String?
+  revokedBy   User?     @relation("DayOffBonusRevokedBy", fields: [revokedById], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, periodKey])
+  @@index([userId, periodKey])
 }
 
 // Company-wide public holidays ("tanggal merah"). On these dates nobody is penalized for not

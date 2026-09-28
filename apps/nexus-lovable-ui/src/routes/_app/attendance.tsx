@@ -450,7 +450,9 @@ function Attendance() {
             icon={<Sparkles className="h-5 w-5" />}
             label="Day-off tokens"
             value={`${today.data?.dayOffUsedThisMonth ?? 0}/${today.data?.dayOffQuota ?? 4} used`}
-            helper="Tap to see your day-off usage log"
+            helper={(today.data?.dayOffAllowance?.bonus ?? 0) > 0
+              ? `Includes ${today.data!.dayOffAllowance!.bonus} extra (${today.data!.dayOffAllowance!.grants.map((g) => g.reason).join(", ")}) — expires on the 27th`
+              : "Tap to see your day-off usage log"}
             tone="amber"
             onClick={(origin) => setLogKind({ kind: "DAY_OFF", origin })}
           />
@@ -621,9 +623,9 @@ function Attendance() {
                           const pill = "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ring-1";
                           return (
                             <div className="flex flex-wrap items-center gap-1 sm:ml-1">
-                              <span title={`Sisa day off periode absensi ini: ${d.remaining} dari ${d.quota} (kepakai ${d.used})`}
-                                className={cn(pill, quotaTone(d.remaining))}>
-                                {d.remaining}/{d.quota} DO
+                              <span title={`Day off left this period: ${d.remaining} of ${d.quota} (used ${d.used})${d.bonus && d.bonus.days > 0 ? `\nQuota ${d.baseQuota ?? d.quota - d.bonus.days} + ${d.bonus.days} extra (${d.bonus.grants.map((g) => `${g.days}: ${g.reason}`).join("; ")}) — expires on the 27th` : ""}`}
+                                className={cn(pill, quotaTone(d.remaining), d.bonus && d.bonus.days > 0 && "ring-emerald-300")}>
+                                {d.remaining}/{d.quota} DO{d.bonus && d.bonus.days > 0 && <span className="ml-0.5 text-emerald-600">+</span>}
                               </span>
                               <span title={d.redDate.quota === 0
                                   ? "The BoD hasn't set this month's public-holiday allowance yet"

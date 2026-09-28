@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { notifyQuotaLow } from "@/lib/notification-service"
+import { DEFAULT_DAY_OFF_QUOTA, dayOffUsageKey, effectiveDayOffQuotas } from "@/lib/day-off-usage"
 import {
   attendancePeriodKey,
   attendancePeriodRange,
@@ -35,7 +36,8 @@ export async function POST(req: NextRequest) {
     if (!secret) return NextResponse.json({ error: "CRON_SECRET is not configured" }, { status: 503 })
     if (bearer !== secret) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const dayOffPeriod = attendancePeriodRange(attendancePeriodKey())
+    const dayOffPeriodKey = attendancePeriodKey()
+    const dayOffPeriod = attendancePeriodRange(dayOffPeriodKey)
     const monthStart = startOfAttendanceMonth(new Date())
     const monthEnd = endOfAttendanceMonth(new Date())
     const monthKey = formatAttendanceDateKey().slice(0, 7)
@@ -45,7 +47,14 @@ export async function POST(req: NextRequest) {
     })
 
     const redDateQuotas = new Map<string, number>()
+    // This period's day-off allowance per (workspace, person): base + extra days granted for it.
+    const dayOffAllowance = new Map<string, number>()
     for (const workspaceId of new Set(members.map((m) => m.workspaceId))) {
+      const inWs = members.filter((m) => m.workspaceId === workspaceId)
+      const allowance = await effectiveDayOffQuotas(workspaceId, inWs.map((m) => ({ userId: m.userId, periodKey: dayOffPeriodKey })))
+      for (const m of inWs) {
+        dayOffAllowance.set(`${workspaceId}|${m.userId}`, allowance.get(dayOffUsageKey(m.userId, dayOffPeriodKey))?.quota ?? m.dayOffQuota ?? DEFAULT_DAY_OFF_QUOTA)
+      }
       const row = await prisma.redDateQuota.findUnique({
         where: { workspaceId_month: { workspaceId, month: monthKey } },
         select: { quota: true },
@@ -70,7 +79,7 @@ export async function POST(req: NextRequest) {
       })
 
       const kinds: { kind: "dayoff" | "red_date"; type: string; quota: number; start: Date; end: Date; notifType: string }[] = [
-        { kind: "dayoff", type: "DAY_OFF", quota: member.dayOffQuota ?? 4 /* the default everywhere else (dayoffs/route.ts); 0 skipped 42 of 48 members */, start: dayOffPeriod.start, end: dayOffPeriod.end, notifType: "dayoff_quota_low" },
+        { kind: "dayoff", type: "DAY_OFF", quota: dayOffAllowance.get(`${member.workspaceId}|${member.userId}`) ?? member.dayOffQuota ?? DEFAULT_DAY_OFF_QUOTA /* default 4 like everywhere else; 0 skipped 42 of 48 members */, start: dayOffPeriod.start, end: dayOffPeriod.end, notifType: "dayoff_quota_low" },
         { kind: "red_date", type: "RED_DATE", quota: redDateQuotas.get(member.workspaceId) ?? 0, start: monthStart, end: monthEnd, notifType: "red_date_quota_low" },
       ]
 

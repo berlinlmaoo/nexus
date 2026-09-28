@@ -534,7 +534,8 @@ export async function loadAttendanceSheetGrid(workspace: SheetWorkspace, periodK
   const [found, quotas] = withDays.length
     ? await Promise.all([
         prisma.user.findMany({ where: { id: { in: withDays } }, select: { id: true, name: true } }),
-        dayOffQuotaByUser(workspace.id, withDays),
+        // TOTAL HARI KERJA = period days − this period's allowance (base + extra days granted for it).
+        dayOffQuotaByUser(workspace.id, withDays, periodKey),
       ])
     : [[], new Map<string, number>()]
   const users = found.map((u) => ({ ...u, dayOffQuota: quotas.get(u.id) }))
