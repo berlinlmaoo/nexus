@@ -8,6 +8,7 @@ import {
   type AttendanceDayType,
 } from "@/lib/attendance"
 import { classifyAttendanceDays } from "@/lib/attendance-days"
+import { dayOffQuotaByUser } from "@/lib/day-off-usage"
 import { deleteAppSetting, getAppSetting, setAppSetting } from "@/lib/app-setting"
 import {
   ATTENDANCE_EXPORT_COLORS,
@@ -17,6 +18,7 @@ import {
   attendanceExportFill,
   formatExportDateLabel,
   formatExportPeriod,
+  exportWorkingDays,
 } from "@/lib/attendance-export-format"
 import { getPrimaryWorkspaceDefaults } from "@/lib/workspace-defaults"
 
@@ -90,7 +92,7 @@ export type AttendanceSheetGrid = {
   firstDataRow: number
 }
 
-export type SheetPerson = { id: string; name: string }
+export type SheetPerson = { id: string; name: string; dayOffQuota?: number }
 export type SheetDay = { dateKey: string; dayType: AttendanceDayType }
 
 /** "2026-09" → "2026-09 (28 Aug–27 Sep)". English month abbreviations fixed here: ICU's en-GB now says "Sept". */
@@ -190,10 +192,10 @@ export function buildAttendanceSheetGrid(input: {
       rows[r][c] = { value: code || null, fill: attendanceExportFill(code), bold: Boolean(code), fontSize: 10, fontColor: C.cellFont, hAlign: "CENTER" }
       if (code && person) {
         counters[c - 1][code] = (counters[c - 1][code] ?? 0) + 1
-        counters[c - 1].TOTAL += 1
       }
     }
   })
+  people.forEach((p, i) => { counters[i].TOTAL = exportWorkingDays(dates.length, p.dayOffQuota) })
 
   // Summary
   ATTENDANCE_EXPORT_SUMMARY_ROWS.forEach((summary, i) => {
@@ -529,9 +531,13 @@ export async function loadAttendanceSheetGrid(workspace: SheetWorkspace, periodK
 
   const classified = await classifyAttendanceDays({ workspaceId: workspace.id, userIds, start, end })
   const withDays = userIds.filter((id) => (classified.get(id)?.length ?? 0) > 0)
-  const users = withDays.length
-    ? await prisma.user.findMany({ where: { id: { in: withDays } }, select: { id: true, name: true } })
-    : []
+  const [found, quotas] = withDays.length
+    ? await Promise.all([
+        prisma.user.findMany({ where: { id: { in: withDays } }, select: { id: true, name: true } }),
+        dayOffQuotaByUser(workspace.id, withDays),
+      ])
+    : [[], new Map<string, number>()]
+  const users = found.map((u) => ({ ...u, dayOffQuota: quotas.get(u.id) }))
   const days = new Map<string, SheetDay[]>()
   for (const [userId, list] of classified) days.set(userId, list.map((d) => ({ dateKey: d.dateKey, dayType: d.dayType })))
 
