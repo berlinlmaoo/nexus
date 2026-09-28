@@ -217,19 +217,77 @@ t("durations", () => {
   assert.equal(M.durationText(45), "45 menit")
 })
 t("push copy", () => {
-  const r = M.outsidePushCopy("reminder", { minutesOutside: 90, autoAt: null, outsideSince: at(0) })
+  const r = M.outsidePushCopy("reminder", { minutesOutside: 90, autoAt: at(150), outsideSince: at(0), now: at(90) })
   assert.equal(r.type, "attendance_outside_reminder")
   assert.equal(r.title, "Masih di luar kantor")
-  assert.equal(r.body, "Sudah 1 jam 30 menit di luar kantor. Balik ke kantor, atau ajukan izin kalau ada kegiatan di luar.")
-  const w = M.outsidePushCopy("warning", { minutesOutside: 120, autoAt: at(150), outsideSince: at(0) })
+  assert.equal(r.body, "Sudah 1 jam 30 menit di luar kantor · sisa 1 jam · check-out otomatis 11:30. Ajukan izin kalau ada kegiatan di luar.")
+  const w = M.outsidePushCopy("warning", { minutesOutside: 120, autoAt: at(150), outsideSince: at(0), now: at(120) })
   assert.equal(w.type, "attendance_outside_warning")
   assert.equal(w.title, "30 menit lagi")
-  assert.equal(w.body, "Sudah 2 jam di luar kantor. Kalau belum kembali jam 11:30, kamu otomatis check-out offsite.")
+  assert.equal(w.body, "Sudah 2 jam di luar kantor · sisa 30 menit · check-out otomatis 11:30.")
   const a = M.outsidePushCopy("auto", { minutesOutside: 0, autoAt: null, outsideSince: at(0), approverMode: "BOD_GROUP" })
   assert.equal(a.type, "attendance_auto_offsite_checkout")
   assert.equal(a.body, "Kamu di luar kantor sejak 09:00, jadi di-check-out offsite. Menunggu persetujuan BoD.")
   const m = M.outsidePushCopy("auto", { minutesOutside: 0, autoAt: null, outsideSince: at(0), approverMode: "DIRECT_MANAGER" })
   assert.match(m.body, /persetujuan atasanmu\.$/)
+})
+t("push copy: the owner's example, end to end through the clock (out at 20:59 → auto 23:29)", () => {
+  const since = at(719) // 20:59 WIB
+  const copyAt = (min) => {
+    const s = step({ now: at(min), outsideSince: since })
+    return M.outsidePushCopy(s.fire, { minutesOutside: s.minutesOutside, autoAt: s.autoAt, outsideSince: since, now: at(min) }).body
+  }
+  assert.equal(copyAt(719 + 90), "Sudah 1 jam 30 menit di luar kantor · sisa 1 jam · check-out otomatis 23:29. Ajukan izin kalau ada kegiatan di luar.")
+  const warned = step({ now: at(719 + 120), outsideSince: since, stage: "reminded", stageAt: at(719 + 90) })
+  assert.equal(warned.fire, "warning")
+  assert.equal(
+    M.outsidePushCopy("warning", { minutesOutside: warned.minutesOutside, autoAt: warned.autoAt, outsideSince: since, now: at(719 + 120) }).body,
+    "Sudah 2 jam di luar kantor · sisa 30 menit · check-out otomatis 23:29.",
+  )
+})
+t("push copy: time left rounds up (a late tick never says 59 menit)", () => {
+  const r = M.outsidePushCopy("reminder", { minutesOutside: 90, autoAt: at(150), outsideSince: at(0), now: new Date(at(90).getTime() + 25_000) })
+  assert.match(r.body, / · sisa 1 jam · check-out otomatis 11:30\. /)
+  const w = M.outsidePushCopy("warning", { minutesOutside: 121, autoAt: at(150), outsideSince: at(0), now: at(121) })
+  assert.match(w.body, /^Sudah 2 jam 1 menit di luar kantor · sisa 29 menit · check-out otomatis 11:30\.$/)
+})
+t("push copy: a late warning quotes its own auto time (warn + 30)", () => {
+  // Phone offline: the first proof of 3 h 20 min outside arrives at 12:20 → warned now, auto 12:50.
+  const s = step({ now: at(200), outsideSince: at(0) })
+  assert.equal(s.fire, "warning")
+  const w = M.outsidePushCopy("warning", { minutesOutside: s.minutesOutside, autoAt: s.autoAt, outsideSince: at(0), now: at(200) })
+  assert.equal(w.body, "Sudah 3 jam 20 menit di luar kantor · sisa 30 menit · check-out otomatis 12:50.")
+})
+t("push copy: after a rejected izin the clock restarted, the time outside did not", () => {
+  const s = step({ now: at(290), outsideSince: at(0), restartAt: at(200) })
+  assert.equal(s.fire, "reminder")
+  const r = M.outsidePushCopy("reminder", { minutesOutside: s.minutesOutside, autoAt: s.autoAt, outsideSince: at(0), now: at(290) })
+  assert.equal(r.body, "Sudah 4 jam 50 menit di luar kantor · sisa 1 jam · check-out otomatis 14:50. Ajukan izin kalau ada kegiatan di luar.")
+})
+t("push copy: no autoAt (never from the clock) still reads right", () => {
+  const r = M.outsidePushCopy("reminder", { minutesOutside: 90, autoAt: null, outsideSince: at(0), now: at(90) })
+  assert.equal(r.body, "Sudah 1 jam 30 menit di luar kantor. Ajukan izin kalau ada kegiatan di luar.")
+  const w = M.outsidePushCopy("warning", { minutesOutside: 120, autoAt: null, outsideSince: at(0), now: at(120) })
+  assert.equal(w.body, "Sudah 2 jam di luar kantor · sisa 30 menit · check-out otomatis 11:30.")
+})
+t("dense route (iOS 0.1.6: a point per 50 m): 3000 points through classify, spans and hours", () => {
+  // Out and back ten times over a 10-hour day, a point every 12 s — far past a real day's density.
+  const pts = []
+  for (let i = 0; i < 3000; i++) {
+    const phase = i % 300 // 0..299 in each hour: out for the first 200, back for the rest
+    const m = phase < 200 ? 400 + phase * 10 : 0
+    const p = { ...north(m), accuracy: 8, at: new Date(at(0).getTime() + i * 12_000), event: phase === 0 ? "exit" : phase === 200 ? "enter" : "point" }
+    pts.push(p)
+  }
+  const t0 = Date.now()
+  const classified = pts.map((p) => ({ at: p.at, cls: M.classifyPoint(p, [OFFICE]).cls, event: p.event }))
+  const spans = M.outsideSpans(classified)
+  const hours = M.presenceHours({ checkInAt: at(0), closedAt: at(600), now: at(700), points: classified, spans })
+  const ms = Date.now() - t0
+  assert.equal(spans.length, 10)
+  assert.ok(spans.every((s) => s.to !== null), "every outing closed by its enter")
+  assert.equal(hours.length, 10)
+  assert.ok(ms < 1000, `took ${ms} ms`)
 })
 t("auto reason", () => {
   assert.equal(M.autoCheckoutReason(at(0)), "Auto: di luar kantor lebih dari 2 jam 30 menit (sejak 09:00)")

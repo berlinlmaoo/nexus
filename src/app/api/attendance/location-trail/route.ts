@@ -11,6 +11,8 @@ import { MAX_POINTS_PER_REQUEST, parseTrailPoints } from "@/lib/attendance-outsi
  * Body: { recordId?: string, points: { lat, lng, accuracy?, at: ISO, event?: "exit"|"enter"|"point"|"presence" }[] }
  * ("presence" = the hourly check while inside, iOS 0.1.6+; an unknown event is stored as none, never refused.)
  * (at most 200 points). Idempotent on (user, at): the app may resend a batch whose reply it lost.
+ * Density (iOS 0.1.6, 28 Sep 2026): outside, a point per 50 m moved (at most one per 10 s) plus one per
+ * 5 min standing still, sent in batches about every 2 min; exit/enter at once. Inside, one an hour.
  *
  * Reply: { ok, tracking, outsideSince, stage, nextAt } (+ accepted/ignored counts). `tracking: false`
  * = no open record, or this person/record is not tracked (BoD, Custom/Mobile attendance, a web or

@@ -393,7 +393,7 @@ export function buildFixtures(profile, world, media) {
       },
     }),
     expect: { status: "2xx", check: (j) => firstError(need(isStr(j?.record?.id), "record.id missing"), need(isStr(j?.record?.checkInAt), "record.checkInAt missing")) },
-    after: (j, ctx) => { ctx.flags.checkedIn = true; ctx.flags.recordId = j?.record?.id },
+    after: (j, ctx) => { ctx.flags.checkedIn = true; ctx.flags.recordId = j?.record?.id; ctx.flags.checkInAt = j?.record?.checkInAt },
   })
   add({
     id: "today-after", title: "GET /api/attendance/today (after check-in)", as: "a", kind: "compat",
@@ -414,7 +414,7 @@ export function buildFixtures(profile, world, media) {
       needs: (ctx) => (ctx.flags.recordId ? null : "check-in did not succeed"),
       request: (ctx) => ({
         method: "POST", path: "/api/attendance/location-trail",
-        json: { recordId: ctx.flags.recordId, points: [{ lat: pos.lat, lng: pos.lng, at: new Date().toISOString(), event: "presence", accuracy: 12 }] },
+        json: { recordId: ctx.flags.recordId, points: [{ lat: pos.lat, lng: pos.lng, at: (ctx.flags.presenceAt = new Date().toISOString()), event: "presence", accuracy: 12 }] },
       }),
       expect: {
         status: 200,
@@ -437,6 +437,50 @@ export function buildFixtures(profile, world, media) {
           need(Array.isArray(j?.presence) && j.presence.length >= 1, "presence[] missing"),
           need((j?.presence ?? []).every((h) => isStr(h.from) && isStr(h.to) && isStr(h.label) && isStr(h.status)), "presence entry shape"),
           need(j?.presence?.[0]?.status === "inside", `first hour ${j?.presence?.[0]?.status} (check-in + check are inside)`),
+        ),
+      },
+    })
+    // The route outside as 0.1.6 now records it (28 Sep 2026): a full batch — exit, 198 points 50 m
+    // apart walking away, enter back at the office. Timestamps 40 ms apart, all after the presence
+    // point above (one inside point in the middle would split the outing in two) and within the
+    // server's check-in → now + 1 min window, so the record ends back inside.
+    const routeBatch = (ctx) => {
+      const from = Math.max(Date.parse(ctx.flags.presenceAt ?? "") || 0, Date.parse(ctx.flags.checkInAt ?? "") || 0) || Date.now() - 20_000
+      const pts = []
+      for (let i = 0; i < 200; i++) {
+        const last = i === 199
+        pts.push({
+          lat: last ? pos.lat : pos.lat + 0.0036 + i * 0.00045,
+          lng: pos.lng,
+          accuracy: 8,
+          at: new Date(from + 7 + i * 40).toISOString(),
+          event: i === 0 ? "exit" : last ? "enter" : "point",
+        })
+      }
+      return pts
+    }
+    add({
+      id: "trail-route", title: "POST location-trail: 200-point route batch (exit … enter)", as: "a", kind: "compat",
+      needs: (ctx) => (ctx.flags.recordId ? null : "check-in did not succeed"),
+      request: (ctx) => ({ method: "POST", path: "/api/attendance/location-trail", json: { recordId: ctx.flags.recordId, points: routeBatch(ctx) } }),
+      expect: {
+        status: 200,
+        check: (j) => firstError(
+          need(j?.tracking === true, `tracking=${j?.tracking}`),
+          need(j?.accepted === 200, `accepted=${j?.accepted} of 200`),
+          need(j?.stage === "inside", `stage=${j?.stage} (the batch ends with the enter)`),
+        ),
+      },
+    })
+    add({
+      id: "trail-route-read", title: "GET records/:id/trail → every route point + one closed outing", as: "a", kind: "compat",
+      needs: (ctx) => (ctx.flags.recordId ? null : "check-in did not succeed"),
+      request: (ctx) => ({ method: "GET", path: `/api/attendance/records/${ctx.flags.recordId}/trail` }),
+      expect: {
+        status: 200,
+        check: (j) => firstError(
+          need((j?.points ?? []).length >= 201, `points=${(j?.points ?? []).length} (presence + 200)`),
+          need((j?.outsideSpans ?? []).length === 1 && isStr(j.outsideSpans[0].to), `outsideSpans=${JSON.stringify(j?.outsideSpans)}`),
         ),
       },
     })

@@ -275,7 +275,7 @@ export function stageAfter(step: OutsideStep): ResponseStage {
  *   pending — the hour still running with nothing yet (open record only);
  *   gap     — nothing arrived: phone off, app ended by iOS, Always refused, or an app before 0.1.6.
  *
- * Every point counts, not only "presence": exit/enter and the 15-minute points say where the phone was
+ * Every point counts, not only "presence": exit/enter and the route points say where the phone was
  * just as well. Hours are clock hours in the office timezone ("10" = 10:00–10:59 on the office wall);
  * the first starts at the check-in, the last ends at the close (or now). At most PRESENCE_MAX_HOURS —
  * the app itself stops tracking 16 h after a check-in.
@@ -385,24 +385,49 @@ export function durationText(minutes: number): string {
 export const OUTSIDE_PUSH_CATEGORY = "NEXUS_OUTSIDE_OFFICE"
 export const OUTSIDE_PERMIT_LINK = "/attendance?permit=today"
 
+/**
+ * The push (and in-app notification) text for one step of the clock.
+ *
+ * Owner, 28 Sep 2026: the reminder and the warning say how long is left and when the automatic
+ * check-out happens — the same two facts the phone's own alerts (on leaving, and an hour in) and the
+ * Live Activity show:
+ *   "Sudah 1 jam 30 menit di luar kantor · sisa 1 jam · check-out otomatis 23:29. Ajukan izin kalau ada kegiatan di luar."
+ *   "Sudah 2 jam di luar kantor · sisa 30 menit · check-out otomatis 23:29."
+ * `now` is the moment the push is decided (the clock's own `now`); "sisa" is rounded UP to the minute,
+ * so a cron tick a few seconds late still reads "sisa 1 jam", never "59 menit".
+ */
 export function outsidePushCopy(
   fire: Fire,
-  o: { minutesOutside: number; autoAt: Date | null; outsideSince: Date; timeZone?: string; approverMode?: "DIRECT_MANAGER" | "BOD_GROUP" },
+  o: {
+    minutesOutside: number
+    autoAt: Date | null
+    outsideSince: Date
+    timeZone?: string
+    approverMode?: "DIRECT_MANAGER" | "BOD_GROUP"
+    now?: Date
+  },
 ): { type: string; title: string; body: string } {
   const tz = o.timeZone || "Asia/Jakarta"
+  const now = o.now ?? new Date()
+  const left = (autoAt: Date) => {
+    const minutes = Math.max(0, Math.ceil((autoAt.getTime() - now.getTime()) / MIN - 0.001))
+    return `sisa ${durationText(minutes)} · check-out otomatis ${clockText(autoAt, tz)}`
+  }
   if (fire === "reminder") {
     return {
       type: "attendance_outside_reminder",
       title: "Masih di luar kantor",
-      body: `Sudah ${durationText(o.minutesOutside)} di luar kantor. Balik ke kantor, atau ajukan izin kalau ada kegiatan di luar.`,
+      body: o.autoAt
+        ? `Sudah ${durationText(o.minutesOutside)} di luar kantor · ${left(o.autoAt)}. Ajukan izin kalau ada kegiatan di luar.`
+        : `Sudah ${durationText(o.minutesOutside)} di luar kantor. Ajukan izin kalau ada kegiatan di luar.`,
     }
   }
   if (fire === "warning") {
-    const deadline = clockText(o.autoAt ?? new Date(Date.now() + OUTSIDE_WARN_GRACE_MIN * MIN), tz)
+    const autoAt = o.autoAt ?? new Date(now.getTime() + OUTSIDE_WARN_GRACE_MIN * MIN)
     return {
       type: "attendance_outside_warning",
       title: "30 menit lagi",
-      body: `Sudah ${durationText(o.minutesOutside)} di luar kantor. Kalau belum kembali jam ${deadline}, kamu otomatis check-out offsite.`,
+      body: `Sudah ${durationText(o.minutesOutside)} di luar kantor · ${left(autoAt)}.`,
     }
   }
   const who = o.approverMode === "DIRECT_MANAGER" ? "atasanmu" : "BoD"
