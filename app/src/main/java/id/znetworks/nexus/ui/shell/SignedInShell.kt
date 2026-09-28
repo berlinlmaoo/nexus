@@ -20,6 +20,9 @@ import id.znetworks.nexus.feature.admin.AdminNav
 import id.znetworks.nexus.feature.admin.AdminUserScreen
 import id.znetworks.nexus.feature.admin.ApprovalChartScreen
 import id.znetworks.nexus.feature.admin.ControlRoomScreen
+import id.znetworks.nexus.feature.admin.MemberAttendanceAdminScreen
+import id.znetworks.nexus.feature.admin.OfficesScreen
+import id.znetworks.nexus.feature.admin.ReflectionsScreen
 import id.znetworks.nexus.feature.gideon.GideonScreen
 import id.znetworks.nexus.feature.agenda.RoomBookingScreen
 import id.znetworks.nexus.feature.agenda.TeamCalendarScreen
@@ -271,9 +274,13 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 ControlRoomScreen(onBack = { nav.popBackStack() }, nav = AdminNav(
                     openUser = { nav.navigate("admin-user/$it") }, openChart = { nav.navigate("admin-chart") },
                     openProfile = { nav.navigate("profile/$it") }, openWeb = { openWeb(context, it) }, openAudit = { nav.navigate("audit/$it") },
+                    openMemberAttendance = { nav.navigate("admin-att/$it") }, openOffices = { nav.navigate("admin-offices") },
                 ))
             }
             composable("admin-user/{id}") { e -> AdminUserScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenProfile = { nav.navigate("profile/$it") }) }
+            composable("admin-att/{id}") { e -> MemberAttendanceAdminScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenReflections = { nav.navigate("reflections/$it") }) }
+            composable("admin-offices") { OfficesScreen(onBack = { nav.popBackStack() }) }
+            composable("reflections/{id}") { e -> ReflectionsScreen(e.arguments?.getString("id"), onBack = { nav.popBackStack() }) }
             composable("admin-chart") { ApprovalChartScreen(onBack = { nav.popBackStack() }, onOpenUser = { nav.navigate("admin-user/$it") }) }
             composable("messages") { MessagesScreen(onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }
             composable("chat/{id}") { ChatThreadScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") }) }

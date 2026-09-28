@@ -4,7 +4,7 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (234 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (235 JVM tests, all green).
 Version 0.1.6 (versionCode 1), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 
 ## Done (Phase 1, attendance MVP)
@@ -148,7 +148,8 @@ Done. PRESENCE IN / OUT are gone; `AttendanceButton` is one full-width control:
 
 | Part | What exists | Commit |
 |---|---|---|
-| 4.1 | Control Room (More, MANAGER+ only; tabs as iOS, BoD-only ones for BoD/OAA; tabs not built yet open `/admin` on the web). **Users**: role counts as filters, search, A–Z, invite by email with roles strictly below yours, bring in signed-up users (absorbs their personal workspace); **user detail**: role, approver (loop guarded before the server refuses), flexi, location-free, rest days (< 7), work hours (default start/end, overnight ok), memberships, account (name/email/password, only changed keys), remove from workspace, delete account (BoD). **Approval chart**: approvers with their direct reports, the unplaced listed | this step |
+| 4.1 | Control Room (More, MANAGER+ only; tabs as iOS, BoD-only ones for BoD/OAA; tabs not built yet open `/admin` on the web). **Users**: role counts as filters, search, A–Z, invite by email with roles strictly below yours, bring in signed-up users (absorbs their personal workspace); **user detail**: role, approver (loop guarded before the server refuses), flexi, location-free, rest days (< 7), work hours (default start/end, overnight ok), memberships, account (name/email/password, only changed keys), remove from workspace, delete account (BoD). **Approval chart**: approvers with their direct reports, the unplaced listed | 7e42359 |
+| 4.2 | Control Room › **Absensi** (BoD/OAA): calendar month bar, public-holiday allowance (warns at 0) and holidays (add/remove), members list → member settings: day-off allowance per period (override / reset to 4), granted day-offs (grant with date+reason, remove), hours per weekday (whole map replaced, overnight ok, validated), export that member's month (xlsx, share sheet), their reflections. **Offices**: list, active toggle, edit (never the shift), add at my current position, archive. **Reflections** of a person by calendar month with GIDEON day notes, month summary and summarize (long timeout; a 503 is GIDEON's sentence) | this step |
 
 
 Still on the web until built: Phase 3 (chat, Threads, docs/pages, forms, profiles, tickets, Z Vault, reports, leaderboard, GIDEON, Control Room).
