@@ -205,6 +205,14 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
 
     // The location disclosure can come due from any screen (a queued check-in landing, a refresh).
     TrailConsentHost(container.workTrail)
+    // Taken away in the middle of a workday: asked again on every return to the app (iOS 77818ba).
+    var alwaysAgain by rememberSaveable { mutableStateOf(false) }
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+        if (container.remoteConfig.current.requireAlwaysLocation && container.workdayOpen() &&
+            id.znetworks.nexus.feature.attendance.trail.AlwaysLocation.missing(context) != null) alwaysAgain = true
+        onPauseOrDispose { }
+    }
+    if (alwaysAgain) id.znetworks.nexus.feature.attendance.trail.AlwaysLocationDialog(onDismiss = { alwaysAgain = false }) { alwaysAgain = false }
     AnnouncementDialog(container.announcements)
     // Once per version, after the location disclosure and announcements have had their turn.
     val version = container.identity.versionName

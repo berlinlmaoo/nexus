@@ -1503,4 +1503,7 @@
     <string name="set_title">Buat password kamu</string>
     <string name="set_sub">Akun NEXUS kamu sudah siap. Minta kode ke email kamu untuk membuat password-nya.</string>
     <string name="outside_minutes_title">Sudah %1$s di luar kantor</string>
+    <string name="always_title">Nyalakan lokasi “Izinkan sepanjang waktu”</string>
+    <string name="always_body">NEXUS butuh izin lokasi “Izinkan sepanjang waktu” dengan lokasi akurat menyala untuk check in. Lokasi hanya dipakai antara check-in dan check-out: sekitar sejam sekali di kantor, dan rutemu selama di luar kantor.</string>
+    <string name="always_button">Izinkan lokasi</string>
 </resources>

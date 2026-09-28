@@ -125,4 +125,12 @@ class AttendanceGuardTest {
         assertTrue(shell.contains("if (container.signOutBlocked()) logoutBlocked = true else onSignOut()"))
         assertEquals(sortedSetOf("MainActivity.kt"), filesMatching(Regex("""auth::signOut|auth\.signOut\(""")))
     }
+
+    @Test fun checkInNeedsLocationAllTheTime() {
+        // Berlin 28 Sep (iOS 77818ba): no check-in without "all the time" + precise while the server's flag is on.
+        val screen = sources.entries.first { it.key.name == "AttendanceScreen.kt" }.value
+        assertTrue(screen.contains("kind == AttendanceKind.CHECK_IN && config.requireAlwaysLocation && id.znetworks.nexus.feature.attendance.trail.AlwaysLocation.missing(context) != null"))
+        val shell = sources.entries.first { it.key.name == "SignedInShell.kt" }.value
+        assertTrue(shell.contains("container.workdayOpen() &&")) // asked again on every return mid-workday
+    }
 }

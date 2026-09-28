@@ -1509,4 +1509,7 @@
     <string name="set_title">Set your password</string>
     <string name="set_sub">Your NEXUS account is ready. Get a code at your email to set its password.</string>
     <string name="outside_minutes_title">%1$s outside the office</string>
+    <string name="always_title">Turn on location “Allow all the time”</string>
+    <string name="always_body">NEXUS needs location set to “Allow all the time” with precise location on to check you in. It is used only between check-in and check-out: about once an hour at the office, and your route while you are out of it.</string>
+    <string name="always_button">Allow location</string>
 </resources>

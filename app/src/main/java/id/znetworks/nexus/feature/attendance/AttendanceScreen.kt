@@ -145,8 +145,17 @@ fun AttendanceScreen(
     }
     val locationPerms = arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
     LaunchedEffect(Unit) { if (!hasFine(context)) locationLauncher.launch(locationPerms) }
+    // Check-in needs "Allow all the time" + precise (remote flag requireAlwaysLocation, iOS 77818ba).
+    var needAlways by remember { mutableStateOf(false) }
+    val config by (context.applicationContext as NexusApplication).container.remoteConfig.body.collectAsState()
     fun press(kind: AttendanceKind) {
+        if (kind == AttendanceKind.CHECK_IN && config.requireAlwaysLocation && id.znetworks.nexus.feature.attendance.trail.AlwaysLocation.missing(context) != null) {
+            needAlways = true; return
+        }
         if (hasFine(context)) vm.startCapture(kind) else { wantedKind = kind; locationLauncher.launch(locationPerms) }
+    }
+    if (needAlways) id.znetworks.nexus.feature.attendance.trail.AlwaysLocationDialog(onDismiss = { needAlways = false }) {
+        needAlways = false; vm.startCapture(AttendanceKind.CHECK_IN)
     }
 
     val capturing = s.capturing

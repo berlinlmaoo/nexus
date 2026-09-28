@@ -242,7 +242,15 @@ kept on disk, defaults = the server's current values, unknown keys ignored, a fa
 Used for: holding logout (`blockSignOutDuringWorkday`, dialog texts `signout.blocked.*`), the Fake GPS tab
 (`fakeGpsReview`), the local outside alert (`outsideHourAlertMinutes`, title follows it). Texts in the app's
 language (Android "in" = server "id"), else the server's English, else the app's own copy. **Rule from now
-on: a rule or sentence that may change is read from this config, not hard-coded.** RemoteConfigTest (this step).
+on: a rule or sentence that may change is read from this config, not hard-coded.** RemoteConfigTest (48ce87c).
+
+**Check-in needs location "Allow all the time" + precise (Berlin, 28 Sep; iOS 77818ba; flag
+`requireAlwaysLocation`).** Check in without ACCESS_FINE_LOCATION (precise) and, from Android 10,
+ACCESS_BACKGROUND_LOCATION opens a required dialog (title/text/button = server `location.always.*`, else
+the app's copy): the system dialog the first time for each permission (Android 11+ takes "all the time"
+to its setting page), Settings after a refusal; check-in starts by itself once all is granted, never
+before. Taken away mid-workday: the dialog comes back on every return to the app. Check-out is not held.
+AlwaysLocationTest, AttendanceGuardTest (this step).
 
 **Fake GPS (Berlin, 28 Sep; server f7f5f1c, iOS c977091).** The mock flag, the main evidence on Android:
 every fix sent is built from a real `Location` by `toFix()` with `simulated = isMock` (API 31+) /
