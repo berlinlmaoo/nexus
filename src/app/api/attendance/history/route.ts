@@ -71,24 +71,24 @@ async function buildAttendanceWorkbook({
   end,
   workspaceName,
   quotaByUser,
+  extraUsers = [],
 }: {
   rows: HistoryRow[]
   start: Date
   end: Date
   workspaceName: string
   quotaByUser?: Map<string, number>
+  /** People who belong on the sheet with no row in the range yet (the history roster). */
+  extraUsers?: Array<{ id: string; name: string | null; email?: string | null }>
 }) {
   const workbook = new ExcelJS.Workbook()
   workbook.creator = "NEXUS"
   workbook.created = new Date()
 
-  const users = Array.from(
-    rows.reduce((map, row) => {
-      map.set(row.user.id, row.user)
-      return map
-    }, new Map<string, HistoryRow["user"]>())
-      .values()
-  ).sort((left, right) => left.name.localeCompare(right.name))
+  const byId = new Map<string, { id: string; name: string }>()
+  for (const row of rows) byId.set(row.user.id, { id: row.user.id, name: row.user.name || row.user.email || "Crew" })
+  for (const u of extraUsers) if (!byId.has(u.id)) byId.set(u.id, { id: u.id, name: u.name || u.email || "Crew" })
+  const users = Array.from(byId.values()).sort((left, right) => left.name.localeCompare(right.name))
 
   const sheetName = start.toISOString().slice(0, 7).replace("-", "-")
   const sheet = workbook.addWorksheet(sheetName, {
@@ -812,6 +812,21 @@ export async function GET(request: NextRequest) {
       return true
     })
 
+    // Everyone the board should list, rows or not (owner, 28 Sep 2026): on the first day of a period
+    // most people have no row yet, and a board built only from rows showed a handful of names. Same
+    // people as the rows would cover — the manager's reports + self, or the workspace minus BoD/OAA —
+    // limited to members who had joined by the end of the range. Additive: older clients ignore it.
+    const rosterMembers = scope === "workspace" && !parsed.data.userId
+      ? await prisma.workspaceMember.findMany({
+          where: {
+            workspaceId: context.workspace.id,
+            joinedAt: { lte: new Date(range.end.getTime() + 24 * 60 * 60 * 1000) },
+            ...(teamScopeUserIds ? { userId: { in: teamScopeUserIds } } : exemptUserIds.length ? { userId: { notIn: exemptUserIds } } : {}),
+          },
+          select: { user: { select: { id: true, name: true, email: true, avatar: true } } },
+        })
+      : []
+
     if (parsed.data.format === "xlsx" && parsed.data.userId) {
       const fromRows = rows[0]?.user
       const person = fromRows
@@ -830,9 +845,10 @@ export async function GET(request: NextRequest) {
     }
 
     if (parsed.data.format === "xlsx") {
-      const exportUserIds = [...new Set(rows.map((r) => r.user.id))]
+      const exportUserIds = [...new Set([...rows.map((r) => r.user.id), ...rosterMembers.map((m) => m.user.id)])]
       const workbookBuffer = await buildAttendanceWorkbook({
         rows,
+        extraUsers: rosterMembers.map((m) => m.user),
         start: range.start,
         end: range.end,
         workspaceName: context.workspace.name,
@@ -947,20 +963,6 @@ export async function GET(request: NextRequest) {
     // Each person's weekly-rest quota rides on their rows, so every client computes the Score column
     // (days worked / period days minus quota) the same way — 4 for most people, 9 for some, plus any
     // extra day off granted for the requested period.
-    // Everyone the board should list, rows or not (owner, 28 Sep 2026): on the first day of a period
-    // most people have no row yet, and a board built only from rows showed a handful of names. Same
-    // people as the rows would cover — the manager's reports + self, or the workspace minus BoD/OAA —
-    // limited to members who had joined by the end of the range. Additive: older clients ignore it.
-    const rosterMembers = scope === "workspace" && !parsed.data.userId
-      ? await prisma.workspaceMember.findMany({
-          where: {
-            workspaceId: context.workspace.id,
-            joinedAt: { lte: new Date(range.end.getTime() + 24 * 60 * 60 * 1000) },
-            ...(teamScopeUserIds ? { userId: { in: teamScopeUserIds } } : exemptUserIds.length ? { userId: { notIn: exemptUserIds } } : {}),
-          },
-          select: { user: { select: { id: true, name: true, email: true, avatar: true } } },
-        })
-      : []
     const quotaByUserId = await dayOffQuotaByUser(
       context.workspace.id,
       [...new Set([...rows.map((r) => r.user.id), ...rosterMembers.map((m) => m.user.id)])],
