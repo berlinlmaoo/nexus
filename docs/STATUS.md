@@ -224,7 +224,13 @@ refused while checked in and not checked out (live, or a check-in still queued o
 read this launch, an active work session counts): "Check out first — You're checked in, so your workday
 and live location are still running…", with a button to Attendance. Checked again on the confirmation. A
 queued check-out ends the day. A 401 still ends the session. WorkdayRule in PresenceTest; guarded in
-AttendanceGuardTest (this step).
+AttendanceGuardTest (e0ead22).
+
+**Fake GPS (Berlin, 28 Sep; server f7f5f1c, iOS c977091).** The mock flag, the main evidence on Android:
+every fix sent is built from a real `Location` by `toFix()` with `simulated = isMock` (API 31+) /
+`isFromMockProvider`, and `simulated=1/0` goes on every check-in, check-out (incl. offsite) and offline
+replay; a mocked fix queued offline keeps the flag on disk. Locked by AttendanceApiTest,
+AttendanceQueueTest and AttendanceGuardTest (this step).
 
 ## Audit 28 Sep 2026 (docs/AUDIT.md, HEAD 4b50f89): fixes
 

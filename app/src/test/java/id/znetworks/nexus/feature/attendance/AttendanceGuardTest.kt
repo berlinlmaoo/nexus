@@ -80,6 +80,12 @@ class AttendanceGuardTest {
     @Test fun everyAttendanceSendCarriesTheMockLocationFlag() {
         val api = sources.entries.first { it.key.name == "AttendanceApi.kt" }.value
         assertTrue(api.contains("\"simulated\" to"))
+        // …and the flag comes from the platform: Location.isMock (API 31+) / isFromMockProvider, and
+        // every fix that is sent is built from a real Location by toFix() (Fake GPS, Berlin 28 Sep).
+        val provider = sources.entries.first { it.key.name == "LocationProvider.kt" }.value
+        assertTrue(provider.contains("simulated = isMockLocation()"))
+        assertTrue(provider.contains("isMock else isFromMockProvider"))
+        assertEquals(sortedSetOf("LocationProvider.kt"), filesMatching(Regex("""\bLocationFix\(""")).minus("AttendanceModels.kt").toSortedSet())
     }
 
     @Test fun noSecretsInLogs() {

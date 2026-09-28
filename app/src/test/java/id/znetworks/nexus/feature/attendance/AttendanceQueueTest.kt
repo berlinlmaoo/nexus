@@ -232,4 +232,11 @@ class AttendanceQueueTest {
         assertEquals(AttendanceQueue.FlushResult.DRAINED, q.flush())
         assertEquals(null, q.state.value.problem)
     }
+
+    // Fake GPS: a mocked fix queued offline keeps its flag on disk and is replayed with it.
+    @Test fun mockFlagSurvivesTheQueue() = runTest {
+        queue().enqueue("m", AttendanceKind.CHECK_IN, byteArrayOf(1), fix.copy(simulated = true), deviceAtMillis = 1, uptimeSec = 1)
+        val again = queue()
+        assertTrue(again.state.value.entries.single().fix.simulated)
+    }
 }

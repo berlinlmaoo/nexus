@@ -96,4 +96,18 @@ class AttendanceApiTest {
         assertEquals("09:00", t.myShift?.startTime)
         assertEquals(4, t.dayOffQuota)
     }
+
+    // Fake GPS (Berlin 28 Sep): the mock flag is the main evidence on Android, on every attendance send.
+    @Test fun mockFlagOnCheckOutAndReplays() = runTest {
+        fun simulatedField(body: String) = Regex("name=\"simulated\"\r\n(?:[^\r\n]*\r\n)*?\r\n([01])\r\n").find(body)?.groupValues?.get(1)
+        reply(200, """{"record":{"id":"r"}}""")
+        api.checkOut(byteArrayOf(1), fix, "r", offsite = false, reason = null, clientId = "c")
+        assertEquals("1", simulatedField(server.takeRequest().body!!.utf8()))
+        reply(200, """{"record":{"id":"r"}}""")
+        api.checkOut(byteArrayOf(1), fix, "r", offsite = false, reason = null, clientId = "c", replay = ReplayStamp(1, 1))
+        assertEquals("1", simulatedField(server.takeRequest().body!!.utf8()))
+        reply(200, """{"record":{"id":"r"}}""")
+        api.checkIn(byteArrayOf(1), fix.copy(simulated = false), "d", ReplayStamp(1, 1))
+        assertEquals("0", simulatedField(server.takeRequest().body!!.utf8()))
+    }
 }
