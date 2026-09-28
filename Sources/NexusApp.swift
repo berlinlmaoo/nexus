@@ -76,6 +76,7 @@ struct NexusApp: App {
                             // just as much. Throttled inside to once per 30 minutes; the launch check
                             // below is the forced one.
                             if phase == .active { Task { await versionGate.checkPolicy() } }
+                            if phase == .active { Task { await RemoteConfig.shared.refresh() } }
                             // On the way out, which is the only moment iOS will accept the request: an app
                             // in the foreground is not a candidate for either window.
                             if phase == .background { BackgroundRefresh.schedule() }
@@ -99,6 +100,7 @@ struct NexusApp: App {
             // Once per launch, forced: the floor may have moved while the app was closed, and
             // finding out here beats finding out from the first refused request.
             .task { await versionGate.checkPolicy(force: true) }
+            .task { await RemoteConfig.shared.refresh(force: true) }
         }
     }
 

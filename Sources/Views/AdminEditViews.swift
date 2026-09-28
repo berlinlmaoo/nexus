@@ -99,7 +99,7 @@ struct AdminView: View {
         if viewer.canAnnounce {
             t.append(("Pengumuman", "announcements"))
             t.append((T("Extra day off"), "extra-dayoff"))
-            t.append((T("Fake GPS"), "suspects"))
+            if RemoteConfig.shared.fakeGpsReview { t.append((T("Fake GPS"), "suspects")) }
             t.append(("GIDEON", "gideon"))
             t.append(("App", "app"))
         }

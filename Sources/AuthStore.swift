@@ -93,7 +93,7 @@ final class AuthStore {
     /// A 401 still ends the session through `logout()`; only the person's own tap is held.
     @discardableResult
     func signOutIfAllowed() -> Bool {
-        guard !AttendancePresence.workdayOpen else { return false }
+        guard !(RemoteConfig.shared.blockSignOutDuringWorkday && AttendancePresence.workdayOpen) else { return false }
         signOut()
         return true
     }

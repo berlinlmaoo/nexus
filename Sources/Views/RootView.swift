@@ -317,10 +317,10 @@ struct AccountFooter: View {
 extension View {
     /// "Check out first": shown when Logout is tapped during a running workday.
     func signOutBlockedAlert(isPresented: Binding<Bool>) -> some View {
-        alert(T("Check out first"), isPresented: isPresented) {
+        alert(RemoteConfig.shared.text("signout.blocked.title", T("Check out first")), isPresented: isPresented) {
             Button(T("OK"), role: .cancel) {}
         } message: {
-            Text(T("You're checked in, so your workday and live location are still running. You can't sign out until you check out — check out on the Attendance screen, then sign out."))
+            Text(RemoteConfig.shared.text("signout.blocked.body", T("You're checked in, so your workday and live location are still running. You can't sign out until you check out — check out on the Attendance screen, then sign out.")))
         }
     }
 }

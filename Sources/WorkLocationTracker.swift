@@ -53,6 +53,9 @@ final class WorkLocationPrompt {
 
     var isPresented = false
     var mode: Mode = .ask
+    /// Shown because check-in is refused without Always + Precise (remote flag requireAlwaysLocation),
+    /// not as the once-per-record explanation: the sheet then says it is required.
+    var required = false
 }
 
 #if !targetEnvironment(macCatalyst)
@@ -114,6 +117,31 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
 
     /// A work session is being tracked (restored from disk on launch, before anything is fetched).
     var isTracking: Bool { machine.state.isActive }
+
+    /// Location is "Always" with Precise Location on — what check-in requires (owner, 28 Sep 2026).
+    var locationReady: Bool {
+        let m = manager ?? CLLocationManager()
+        return m.authorizationStatus == .authorizedAlways && m.accuracyAuthorization == .fullAccuracy
+    }
+
+    /// Check-in was refused for the permission: the sheet, saying it is required. iOS still shows its
+    /// own dialog when it can (never asked, or While Using and never asked for Always); otherwise the
+    /// only way is Settings, which is also the only place Precise Location can be switched back on.
+    func requireAlways() {
+        guard !WorkLocationPrompt.shared.isPresented else { return }
+        let m = manager ?? CLLocationManager()
+        let alreadyAsked = UserDefaults.standard.bool(forKey: Self.alwaysAskedKey)
+        let mode: WorkLocationPrompt.Mode
+        switch m.authorizationStatus {
+        case .notDetermined: mode = .ask
+        case .authorizedWhenInUse: mode = alreadyAsked ? .settings : .ask
+        case .authorizedAlways: mode = .settings    // Always, but Precise Location is off
+        default: mode = .settings
+        }
+        WorkLocationPrompt.shared.required = true
+        WorkLocationPrompt.shared.mode = mode
+        WorkLocationPrompt.shared.isPresented = true
+    }
 
     // MARK: - entry points
 
@@ -320,6 +348,14 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
         WorkLocationPrompt.shared.isPresented = false
         promptPending = false
         guard let m = manager else { return }
+        WorkLocationPrompt.shared.required = false
+        if m.authorizationStatus == .notDetermined {
+            // Never asked at all: iOS offers While Using first; Always is asked for right after.
+            UserDefaults.standard.set(true, forKey: Self.alwaysAskedKey)
+            awaitingAlwaysAnswer = true
+            m.requestAlwaysAuthorization()
+            return
+        }
         switch WorkLocationPrompt.shared.mode {
         case .settings:
             if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
@@ -341,6 +377,7 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
     /// "Not now": Always was refused, in so many words.
     func prePromptDeclined() {
         WorkLocationPrompt.shared.isPresented = false
+        WorkLocationPrompt.shared.required = false
         promptPending = false
         if let id = machine.state.recordId { report("denied", recordId: id) }
         reconcile()
@@ -559,6 +596,9 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
 
     @objc private func appDidBecomeActive() {
         if awaitingAlwaysAnswer { settleAlwaysAnswer() }
+        // Taken away in the middle of a workday (Settings, or iOS's own "keep using Always?"): asked
+        // again on every return to the app until it is back (owner, 28 Sep 2026).
+        if machine.state.isActive, RemoteConfig.shared.requireAlwaysLocation, !locationReady { requireAlways() }
         // Puts back anything that should be running and is not — whatever the reason it is not.
         if machine.state.isActive { reconcile() }
         tick()
@@ -776,6 +816,8 @@ final class WorkPlace {
 final class WorkLocationTracker {
     static let shared = WorkLocationTracker()
     var isTracking: Bool { false }
+    var locationReady: Bool { true }
+    func requireAlways() {}
     func bootstrap() {}
     func sync(today: AttendanceToday?) {}
     func reconcileFromServer() async {}
@@ -800,7 +842,7 @@ struct WorkLocationPromptHost: View {
             .frame(width: 0, height: 0)
             .allowsHitTesting(false)
             .sheet(isPresented: $prompt.isPresented) {
-                WorkLocationPromptSheet(mode: prompt.mode)
+                WorkLocationPromptSheet(mode: prompt.mode, required: prompt.required)
                     .presentationDetents([.medium, .large])
                     .interactiveDismissDisabled()
             }
@@ -809,24 +851,27 @@ struct WorkLocationPromptHost: View {
 
 struct WorkLocationPromptSheet: View {
     let mode: WorkLocationPrompt.Mode
+    var required: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Image(systemName: "location.circle.fill")
                 .font(.system(size: 40, weight: .semibold)).foregroundStyle(NX.violetText)
-            Text(T("Location during work hours"))
+            Text(required ? RemoteConfig.shared.text("location.always.title", T("Turn on location “Always”")) : T("Location during work hours"))
                 .font(NXFont.display(20, .bold)).foregroundStyle(NX.foreground)
-            Text(T("NEXUS checks your location only during work hours, from check-in to check-out: about once an hour at the office, and your route when you leave it, so your manager can see where you worked. Before check-in and after check-out nothing is recorded."))
+            Text(required
+                 ? RemoteConfig.shared.text("location.always.body", T("NEXUS needs your location set to “Always” with Precise Location on to check you in. It is used only between check-in and check-out: about once an hour at the office, and your route while you are out of it."))
+                 : T("NEXUS checks your location only during work hours, from check-in to check-out: about once an hour at the office, and your route when you leave it, so your manager can see where you worked. Before check-in and after check-out nothing is recorded."))
                 .font(NXFont.text(14)).foregroundStyle(NX.foreground.opacity(0.85))
                 .fixedSize(horizontal: false, vertical: true)
             Text(mode == .settings
-                 ? T("To do that while the app is closed, open Settings › NEXUS › Location and choose Always.")
+                 ? T("Open Settings › NEXUS › Location, choose Always and turn on Precise Location.")
                  : T("On the next screen, choose \"Change to Always Allow\". At the office, one check about every hour; outside it, your route while you're out of the office."))
                 .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
             Button { WorkLocationTracker.shared.prePromptAccepted() } label: {
-                Text(mode == .settings ? T("Open Settings") : T("Continue"))
+                Text(mode == .settings ? RemoteConfig.shared.text("location.always.button", T("Open Settings")) : T("Continue"))
             }
             .buttonStyle(NexusPrimaryButton())
             Button { WorkLocationTracker.shared.prePromptDeclined() } label: {

@@ -643,7 +643,13 @@ struct AttendanceView: View {
             return
         }
         switch primary {
-        case .checkIn: startCapture(.checkIn)
+        case .checkIn:
+            // No check-in without location "Always" + Precise (owner, 28 Sep 2026; remote flag).
+            if RemoteConfig.shared.requireAlwaysLocation && !WorkLocationTracker.shared.locationReady {
+                WorkLocationTracker.shared.requireAlways()
+                return
+            }
+            startCapture(.checkIn)
         case .checkOut: startCapture(.checkOut)
         default: break
         }
