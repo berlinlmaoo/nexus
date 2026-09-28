@@ -27,6 +27,10 @@ struct CalendarResponse: Decodable, Sendable { let events: [CalendarEvent]? }
 // MARK: Admin (Control Room) — roster + org roles from /api/workspaces/members
 struct WorkspaceRoster: Decodable, Sendable {
     let role: String?
+    /// The caller belongs to the company workspace (Z Networks). Z Vault, the NAS and Threads are
+    /// the company's; anyone else (a personal workspace from signing up without a code) does not
+    /// see them (owner, 29 Sep 2026). Servers from 29 Sep 2026.
+    let isCompany: Bool?
     let workspaceId: String?
     let workspaceName: String?
     let members: [Member]?

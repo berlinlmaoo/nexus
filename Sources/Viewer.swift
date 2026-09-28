@@ -14,7 +14,12 @@ final class Viewer {
     static let shared = Viewer()
 
     private(set) var role: String?
+    /// See WorkspaceRoster.isCompany. Unknown until loaded: company-only screens stay hidden till then.
+    private(set) var isCompany: Bool?
     private var loading = false
+
+    /// Z Vault and Threads are drawn only for the company's own people. The server refuses the rest.
+    var isCompanyMember: Bool { isCompany == true }
 
     private init() {}
 
@@ -38,9 +43,11 @@ final class Viewer {
         guard role == nil, !loading else { return }
         loading = true
         defer { loading = false }
-        role = (try? await APIClient.shared.roster())?.role
+        let roster = try? await APIClient.shared.roster()
+        role = roster?.role
+        isCompany = roster?.isCompany
     }
 
     /// A new session must not inherit the last person's role.
-    func reset() { role = nil }
+    func reset() { role = nil; isCompany = nil }
 }

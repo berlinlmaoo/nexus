@@ -255,10 +255,17 @@ struct SidebarRoot: View {
     @State private var columns: NavigationSplitViewVisibility = .all
     @State private var shortcuts = ProjectShortcuts.shared
 
+    /// Company-only screens (Z Vault, Threads) left out for anyone outside the company workspace.
+    private var navGroups: [(title: String?, screens: [NXScreen])] {
+        NXScreen.groups.map { g in
+            (g.title, g.screens.filter { ($0 != .vault && $0 != .threads) || viewer.isCompanyMember })
+        }
+    }
+
     var body: some View {
         NavigationSplitView(columnVisibility: $columns) {
             List(selection: $selection) {
-                ForEach(Array(NXScreen.groups.enumerated()), id: \.offset) { index, group in
+                ForEach(Array(navGroups.enumerated()), id: \.offset) { index, group in
                     // Project shortcuts sit directly under the four top-level destinations, not at
                     // the bottom of the list. They are the rows reached most often, and a shortcut
                     // you have to scroll past everything else to reach is not a shortcut.
