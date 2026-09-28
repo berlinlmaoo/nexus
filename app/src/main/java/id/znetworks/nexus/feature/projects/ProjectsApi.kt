@@ -72,6 +72,10 @@ class ProjectsApi(private val api: ApiClient) {
 
     suspend fun deleteFolder(id: String) = delete("/api/project-folders/$id")
 
+    /** The folder calendar's project subset ([] = all of the folder's projects, now and later). */
+    suspend fun setFolderAggregate(id: String, projectIds: List<String>) =
+        patch("/api/project-folders/$id", JsonObject(mapOf("aggregateProjectIds" to kotlinx.serialization.json.JsonArray(projectIds.map { JsonPrimitive(it) }))))
+
     // region tasks
 
     suspend fun createTask(

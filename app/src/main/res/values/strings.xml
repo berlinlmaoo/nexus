@@ -1430,4 +1430,18 @@
     <string name="ch_no_approver">no approver</string>
     <string name="ch_alone">Not placed · %1$d · their requests go to every BoD</string>
     <string name="ch_pick_for">Approver for %1$s</string>
+    <string name="fc_open">Folder calendar</string>
+    <string name="fc_pick">Pick projects</string>
+    <string name="fc_counts">%1$d projects · %2$d tasks</string>
+    <string name="fc_loading">Loading tasks…</string>
+    <string name="fc_no_projects">This folder has no projects yet. Move a project here, or pick some via \'Pick projects\'.</string>
+    <string name="fc_pick_note">Pick which projects go into this folder\'s calendar.</string>
+    <string name="fc_pick_all_now">Right now it\'s showing EVERY project in the folder.</string>
+    <string name="fc_select_all">Select all</string>
+    <string name="fc_clear">Clear</string>
+    <string name="fc_folder_empty">This folder has no projects yet.</string>
+    <string name="fc_colors">Project colours</string>
+    <string name="fc_date">Date %1$s</string>
+    <string name="fc_n_tasks">%1$d tasks</string>
+    <string name="fc_nothing_due">Nothing due on this date.</string>
 </resources>

@@ -58,6 +58,8 @@ data class ProjectFolder(
     val position: Int? = null,
     val parentFolderId: String? = null,
     val workspaceId: String? = null,
+    /** The folder calendar's curated projects; empty = every project in the folder. */
+    val aggregateProjectIds: List<String>? = null,
 )
 
 @Serializable

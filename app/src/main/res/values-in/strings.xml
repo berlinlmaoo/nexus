@@ -1424,4 +1424,18 @@
     <string name="ch_no_approver">tanpa atasan</string>
     <string name="ch_alone">Belum ditaruh · %1$d · request-nya masuk ke semua BoD</string>
     <string name="ch_pick_for">Atasan untuk %1$s</string>
+    <string name="fc_open">Kalender folder</string>
+    <string name="fc_pick">Pilih project</string>
+    <string name="fc_counts">%1$d project · %2$d task</string>
+    <string name="fc_loading">Memuat task…</string>
+    <string name="fc_no_projects">Folder ini belum punya project. Pindahin project ke sini, atau pilih lewat \'Pilih project\'.</string>
+    <string name="fc_pick_note">Pilih project mana yang masuk calendar folder ini.</string>
+    <string name="fc_pick_all_now">Sekarang lagi nampilin SEMUA project di folder.</string>
+    <string name="fc_select_all">Pilih semua</string>
+    <string name="fc_clear">Kosongkan</string>
+    <string name="fc_folder_empty">Folder ini belum punya project.</string>
+    <string name="fc_colors">Warna project</string>
+    <string name="fc_date">Tanggal %1$s</string>
+    <string name="fc_n_tasks">%1$d task</string>
+    <string name="fc_nothing_due">Nggak ada task jatuh tempo di tanggal ini.</string>
 </resources>

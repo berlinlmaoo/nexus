@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CreateNewFolder
@@ -213,7 +214,7 @@ fun IconTile(icon: String?, fallback: String, size: Int = 44) {
 
 /** "Mission Control" (iOS ProjectsView): search, folder tree, project cards, create. */
 @Composable
-fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit, vm: ProjectsViewModel = viewModel()) {
+fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit, onOpenFolder: (String) -> Unit = {}, vm: ProjectsViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
     var menu by remember { mutableStateOf(false) }
@@ -268,7 +269,7 @@ fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit
                     val roots = s.folders.filter { it.parentFolderId == null || s.folders.none { f -> f.id == it.parentFolderId } }
                         .sortedWith(compareBy({ it.position ?: Int.MAX_VALUE }, { it.name.lowercase() }))
                     items(roots, key = { "f-" + it.id }) { f ->
-                        FolderNode(f, s, depth = 0, onOpenProject, onEdit = { folderEdit = it }, onDelete = vm::deleteFolder, onMove = vm::move)
+                        FolderNode(f, s, depth = 0, onOpenProject, onEdit = { folderEdit = it }, onDelete = vm::deleteFolder, onMove = vm::move, onCalendar = onOpenFolder)
                     }
                     val loose = s.projects.filter { p -> p.folderId == null || s.folders.none { it.id == p.folderId } }
                     if (roots.isNotEmpty() && loose.isNotEmpty()) item { Section(stringResource(R.string.projects_section_missions)) }
@@ -295,6 +296,7 @@ private fun Section(text: String) = Text(text.uppercase(Locale.getDefault()), fo
 private fun FolderNode(
     f: ProjectFolder, s: ProjectsState, depth: Int, onOpen: (String) -> Unit,
     onEdit: (ProjectFolder) -> Unit, onDelete: (ProjectFolder) -> Unit, onMove: (Project, String?) -> Unit,
+    onCalendar: (String) -> Unit = {},
 ) {
     val c = Nx.colors
     var open by rememberSaveable(f.id) { mutableStateOf(true) }
@@ -315,6 +317,8 @@ private fun FolderNode(
                 Spacer(Modifier.size(10.dp))
                 Text(f.name, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f))
                 Text("${projects.size}", fontSize = 12.sp, color = c.mutedFg)
+                // Every task due across this folder's projects (iOS FolderAggregateView).
+                IconButton(onClick = { onCalendar(f.id) }) { Icon(Icons.Filled.CalendarMonth, stringResource(R.string.fc_open), tint = c.violetText) }
                 IconButton(onClick = { menu = true }) { Text("⋯", color = c.mutedFg, fontSize = 18.sp) }
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
@@ -323,7 +327,7 @@ private fun FolderNode(
             }
         }
         if (open) {
-            children.forEach { FolderNode(it, s, depth + 1, onOpen, onEdit, onDelete, onMove) }
+            children.forEach { FolderNode(it, s, depth + 1, onOpen, onEdit, onDelete, onMove, onCalendar) }
             projects.forEach { MovableCard(it, s, onOpen, onMove) }
             if (children.isEmpty() && projects.isEmpty()) Text(stringResource(R.string.folder_empty), fontSize = 12.sp, color = c.mutedFg, modifier = Modifier.padding(start = 8.dp))
         }

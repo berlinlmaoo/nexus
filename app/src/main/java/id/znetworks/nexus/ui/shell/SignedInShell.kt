@@ -19,6 +19,7 @@ import id.znetworks.nexus.feature.docs.DocsScreen
 import id.znetworks.nexus.feature.admin.AdminNav
 import id.znetworks.nexus.feature.admin.AdminUserScreen
 import id.znetworks.nexus.feature.admin.TeamDetailScreen
+import id.znetworks.nexus.feature.projects.FolderCalendarScreen
 import id.znetworks.nexus.feature.admin.ApprovalChartScreen
 import id.znetworks.nexus.feature.admin.ControlRoomScreen
 import id.znetworks.nexus.feature.admin.AuditEntryScreen
@@ -280,6 +281,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 ))
             }
             composable("admin-user/{id}") { e -> AdminUserScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenProfile = { nav.navigate("profile/$it") }, onOpenTeam = { nav.navigate("admin-team/$it") }) }
+            composable("folder/{id}") { e -> FolderCalendarScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") }) }
             composable("admin-team/{id}") { e -> TeamDetailScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenProfile = { nav.navigate("profile/$it") }) }
             composable("admin-att/{id}") { e -> MemberAttendanceAdminScreen(e.arguments?.getString("id").orEmpty(), onBack = { nav.popBackStack() }, onOpenReflections = { nav.navigate("reflections/$it") }) }
             composable("admin-offices") { OfficesScreen(onBack = { nav.popBackStack() }) }
@@ -303,7 +305,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable(Tab.TASKS.route) { MyTasksScreen(onOpenTask = { nav.navigate("task/$it") }, onBrowseProjects = { goTab(Tab.PROJECTS) }) }
             composable(Tab.INBOX.route) { InboxScreen() }
             composable(Tab.PROJECTS.route) {
-                ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") })
+                ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") }, onOpenFolder = { nav.navigate("folder/$it") })
             }
             composable(Tab.MORE.route) { MoreScreen(session, gateState, onSignOut, onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } }, onOpenAccount = { nav.navigate("account") }, onOpenWhatsNew = { whatsNew = true }, onOpenTickets = { nav.navigate("tickets") }, onOpenSubmissions = { nav.navigate("submissions") }, onOpenDocs = { nav.navigate("docs") }, onOpenVault = { nav.navigate("vault?folder=&trash=") }, onOpenReports = { nav.navigate("reports") }, onOpenAdmin = { nav.navigate("admin") }) }
             composable("project/{id}") { entry ->
