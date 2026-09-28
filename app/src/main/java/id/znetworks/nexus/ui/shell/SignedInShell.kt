@@ -3,6 +3,7 @@ package id.znetworks.nexus.ui.shell
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.filled.WatchLater
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.SupportAgent
@@ -14,6 +15,8 @@ import id.znetworks.nexus.feature.chat.MessagesScreen
 import id.znetworks.nexus.feature.threads.ThreadsScreen
 import id.znetworks.nexus.feature.docs.DocReaderScreen
 import id.znetworks.nexus.feature.docs.DocsScreen
+import id.znetworks.nexus.feature.reports.PersonReportScreen
+import id.znetworks.nexus.feature.reports.ReportsScreen
 import id.znetworks.nexus.feature.vault.VaultPublicScreen
 import id.znetworks.nexus.feature.vault.VaultScreen
 import id.znetworks.nexus.feature.forms.FormFillScreen
@@ -167,6 +170,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             is Target.Docs -> { container.router.consumed(t); nav.navigate(t.docId?.let { "doc/$it" } ?: "docs") }
             is Target.Vault -> { container.router.consumed(t); nav.navigate("vault?folder=${t.folderId.orEmpty()}&trash=") }
             is Target.VaultShare -> { container.router.consumed(t); nav.navigate("vault-share/${t.slug}") }
+            is Target.Reports -> { container.router.consumed(t); nav.navigate(t.userId?.let { "report/$it/0" } ?: "reports") }
             is Target.Chat -> { container.router.consumed(t); nav.navigate(t.conversationId?.let { "chat/$it" } ?: "messages") }
             is Target.Announcement -> { container.router.consumed(t); container.announcements.showOne(t.id) }
             is Target.Web -> { container.router.consumed(t); openWeb(context, t.path) }
@@ -236,6 +240,13 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 VaultScreen(onBack = { nav.popBackStack() }, onOpenFolder = { nav.navigate("vault?folder=$it&trash=") }, onOpenTrash = { nav.navigate("vault?folder=&trash=1") })
             }
             composable("vault-share/{slug}") { e -> VaultPublicScreen(e.arguments?.getString("slug").orEmpty(), onBack = { nav.popBackStack() }) }
+            composable("reports") {
+                ReportsScreen(onBack = { nav.popBackStack() }, onOpenPerson = { id, off -> nav.navigate("report/$id/$off") }, onOpenTask = { nav.navigate("task/$it") })
+            }
+            composable("report/{id}/{offset}") { e ->
+                PersonReportScreen(e.arguments?.getString("id").orEmpty(), e.arguments?.getString("offset")?.toIntOrNull() ?: 0,
+                    onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") })
+            }
             composable("messages") { MessagesScreen(onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate("chat/$it") }) }
             composable("chat/{id}") { ChatThreadScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") }) }
             composable("search") {
@@ -254,7 +265,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable(Tab.PROJECTS.route) {
                 ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") })
             }
-            composable(Tab.MORE.route) { MoreScreen(session, gateState, onSignOut, onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } }, onOpenAccount = { nav.navigate("account") }, onOpenWhatsNew = { whatsNew = true }, onOpenTickets = { nav.navigate("tickets") }, onOpenSubmissions = { nav.navigate("submissions") }, onOpenDocs = { nav.navigate("docs") }, onOpenVault = { nav.navigate("vault?folder=&trash=") }) }
+            composable(Tab.MORE.route) { MoreScreen(session, gateState, onSignOut, onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } }, onOpenAccount = { nav.navigate("account") }, onOpenWhatsNew = { whatsNew = true }, onOpenTickets = { nav.navigate("tickets") }, onOpenSubmissions = { nav.navigate("submissions") }, onOpenDocs = { nav.navigate("docs") }, onOpenVault = { nav.navigate("vault?folder=&trash=") }, onOpenReports = { nav.navigate("reports") }) }
             composable("project/{id}") { entry ->
                 ProjectDetailScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") },
                     onOpenSettings = { nav.navigate("project/${entry.arguments?.getString("id")}/settings") },
@@ -295,7 +306,7 @@ private fun NotYet(tab: Tab) {
 }
 
 @Composable
-private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut: () -> Unit, onOpenAttendance: () -> Unit, onOpenAccount: () -> Unit, onOpenWhatsNew: () -> Unit, onOpenTickets: () -> Unit, onOpenSubmissions: () -> Unit, onOpenDocs: () -> Unit, onOpenVault: () -> Unit) {
+private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut: () -> Unit, onOpenAttendance: () -> Unit, onOpenAccount: () -> Unit, onOpenWhatsNew: () -> Unit, onOpenTickets: () -> Unit, onOpenSubmissions: () -> Unit, onOpenDocs: () -> Unit, onOpenVault: () -> Unit, onOpenReports: () -> Unit) {
     val c = Nx.colors
     val context = LocalContext.current
     val container = (context.applicationContext as NexusApplication).container
@@ -351,6 +362,13 @@ private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut
             supportingContent = { Text(stringResource(R.string.vault_more_sub)) },
             leadingContent = { Icon(Icons.Filled.Folder, null, tint = c.violetText) },
             colors = itemColors, modifier = shape.clickable(onClick = onOpenVault),
+        )
+        Spacer(Modifier.height(12.dp))
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.rp_title)) },
+            supportingContent = { Text(stringResource(R.string.rp_more_sub)) },
+            leadingContent = { Icon(Icons.Filled.BarChart, null, tint = c.violetText) },
+            colors = itemColors, modifier = shape.clickable(onClick = onOpenReports),
         )
         Spacer(Modifier.height(12.dp))
         if (WhatsNew.entries(container.identity.versionName).isNotEmpty()) {
