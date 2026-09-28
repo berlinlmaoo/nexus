@@ -6,6 +6,7 @@ import prisma from '@/lib/prisma'
 import { GIDEON_EMAIL } from '@/lib/gideon-identity'
 import bcrypt from 'bcryptjs'
 import { logAudit } from '@/lib/audit'
+import { canWriteGlobalAccount } from '@/lib/org'
 import { auditDiff } from '@/lib/audit-describe'
 import { isSystemAdminUser, WORKSPACE_HIERARCHY } from '@/lib/rbac'
 import { isLikelyPhoneNumber, normalizeIndonesianPhoneNumber } from '@/lib/phone-number'
@@ -498,7 +499,16 @@ export async function PATCH(req: NextRequest) {
         }
         normalized = normalizeIndonesianPhoneNumber(phoneNumber)
       }
-      await prisma.user.update({ where: { id: targetMember.userId }, data: { phoneNumber: normalized } })
+      // The number belongs to the whole account (WA identity, notifications), not to this workspace.
+      // Only checked when it actually changes: the member editor re-sends the unchanged number with
+      // every save (shift, rest days…), and those saves must keep working.
+      const currentPhone = await prisma.user.findUnique({ where: { id: targetMember.userId }, select: { phoneNumber: true } })
+      if ((currentPhone?.phoneNumber ?? null) !== normalized) {
+        if (!(await canWriteGlobalAccount(session.user.id, targetMember.userId))) {
+          return NextResponse.json({ error: 'Kamu tidak bisa mengubah nomor HP akun ini.' }, { status: 403 })
+        }
+        await prisma.user.update({ where: { id: targetMember.userId }, data: { phoneNumber: normalized } })
+      }
     }
 
     const updated = await prisma.workspaceMember.update({

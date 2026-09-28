@@ -5,6 +5,7 @@ import type { WorkspaceRole } from "@/generated/prisma/client"
 import prisma from "@/lib/prisma"
 import { getAdminSessionContext } from "@/lib/admin-access"
 import { logAudit } from "@/lib/audit"
+import { membershipChangeError } from "@/lib/org"
 import { isPrimaryWorkspace } from "@/lib/primary-team"
 
 const WORKSPACE_ROLES: WorkspaceRole[] = ["BOD", "MANAGER", "STAFF"]
@@ -81,6 +82,15 @@ export async function PATCH(
       return NextResponse.json({ error: "Z Networks workspace role is managed automatically" }, { status: 400 })
     }
 
+    const denied = await membershipChangeError(session.user.id, context.isSystemAdmin, target.workspaceId, {
+      targetUserId: target.userId,
+      currentRole: target.role,
+      newRole: role,
+    })
+    if (denied) {
+      return NextResponse.json({ error: denied }, { status: 403 })
+    }
+
     if (target.role === "BOD" && role !== "BOD" && await isLastWorkspaceOwner(target.workspaceId, target.id)) {
       return NextResponse.json({ error: "Cannot demote the last owner of a workspace" }, { status: 400 })
     }
@@ -146,6 +156,14 @@ export async function DELETE(
 
     if (isPrimaryWorkspace(target.workspace)) {
       return NextResponse.json({ error: "Z Networks membership is required for all users" }, { status: 400 })
+    }
+
+    const denied = await membershipChangeError(session.user.id, context.isSystemAdmin, target.workspaceId, {
+      targetUserId: target.userId,
+      currentRole: target.role,
+    })
+    if (denied) {
+      return NextResponse.json({ error: denied }, { status: 403 })
     }
 
     if (await isLastWorkspaceOwner(target.workspaceId, target.id)) {

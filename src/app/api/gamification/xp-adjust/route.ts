@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { ORG_WORKSPACE_ID, orgRoleOf } from "@/lib/org"
 import { awardXp } from "@/lib/gamification"
 
 const MAX_ABS = 1000
@@ -17,13 +18,12 @@ export async function POST(req: NextRequest) {
 
     const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { role: true, name: true } })
     const isSysAdmin = me?.role === "ADMIN"
-    const memberships = await prisma.workspaceMember.findMany({
-      where: { userId: session.user.id },
-      select: { workspaceId: true, role: true },
-    })
-    const isBoD = memberships.some((m) => m.role === "BOD" || m.role === "ONE_ABOVE_ALL")
+    // BoD+ of the COMPANY workspace only (every sign-up is One Above All of a personal workspace),
+    // and the target must be a member of the company workspace too.
+    const orgRole = await orgRoleOf(session.user.id)
+    const isBoD = orgRole === "BOD" || orgRole === "ONE_ABOVE_ALL"
     if (!isSysAdmin && !isBoD) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    const workspaceIds = memberships.map((m) => m.workspaceId)
+    const workspaceIds = [ORG_WORKSPACE_ID]
 
     const body = await req.json().catch(() => null)
     const userId = String(body?.userId ?? "").trim()

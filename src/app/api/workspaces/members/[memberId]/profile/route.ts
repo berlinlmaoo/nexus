@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
+import { canWriteGlobalAccount } from "@/lib/org"
 
 async function getWorkspaceAndRole(userId: string, workspaceId?: string) {
   return prisma.workspaceMember.findFirst({
@@ -53,6 +54,11 @@ export async function PATCH(
 
     if (currentMember.role !== "BOD" && currentMember.role !== "MANAGER" && currentMember.role !== "ONE_ABOVE_ALL") {
       return NextResponse.json({ error: "Only owners and admins can edit operatives" }, { status: 403 })
+    }
+
+    // The name belongs to the whole account (every workspace sees it), not to this workspace.
+    if (!(await canWriteGlobalAccount(session.user.id, targetMember.userId))) {
+      return NextResponse.json({ error: "Kamu tidak bisa mengubah nama akun ini." }, { status: 403 })
     }
 
     const updatedUser = await prisma.user.update({

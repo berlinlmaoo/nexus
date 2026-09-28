@@ -5,6 +5,7 @@ import type { WorkspaceRole } from "@/generated/prisma/client"
 import prisma from "@/lib/prisma"
 import { getAdminSessionContext } from "@/lib/admin-access"
 import { logAudit } from "@/lib/audit"
+import { membershipChangeError } from "@/lib/org"
 import { ensureUserInPrimaryWorkspaceTeam, isPrimaryWorkspace } from "@/lib/primary-team"
 import { syncTeamMemberAccess } from "@/lib/team-sync"
 
@@ -67,6 +68,16 @@ export async function POST(
 
     if (existing) {
       return NextResponse.json({ error: "User is already a member of this workspace" }, { status: 409 })
+    }
+
+    // Company-wide user management does not reach other workspaces: the caller must be BoD+ in the
+    // workspace being joined, and may only grant a role below their own there.
+    const denied = await membershipChangeError(session.user.id, context.isSystemAdmin, workspaceId, {
+      targetUserId: user.id,
+      newRole: role,
+    })
+    if (denied) {
+      return NextResponse.json({ error: denied }, { status: 403 })
     }
 
     const membership = await prisma.workspaceMember.create({

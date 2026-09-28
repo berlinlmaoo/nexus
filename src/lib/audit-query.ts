@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma'
+import { ORG_WORKSPACE_ID } from '@/lib/org'
 import type { Prisma } from '@/generated/prisma/client'
 import type { AuditIdKind, AuditIdSets, AuditNames } from '@/lib/audit-describe'
 
@@ -9,8 +10,8 @@ import type { AuditIdKind, AuditIdSets, AuditNames } from '@/lib/audit-describe'
  * Caller must hold an admin-tier role. Memberships are resolved deterministically (the old findFirst
  * picked an arbitrary membership, so a STAFF-in-A / BOD-in-B user got an unpredictable verdict).
  * Every workspace where they're BOD/MANAGER/ONE_ABOVE_ALL is collected — visibility is then scoped to
- * actors in exactly those workspaces (no cross-tenant audit-log leak). A system ADMIN or anyone who is
- * ONE_ABOVE_ALL somewhere sees everything.
+ * actors in exactly those workspaces (no cross-tenant audit-log leak). A system ADMIN or the company
+ * workspace's ONE_ABOVE_ALL sees everything.
  */
 export type AuditAccess =
   | { ok: false }
@@ -26,7 +27,10 @@ export async function resolveAuditAccess(userId: string): Promise<AuditAccess> {
   ])
 
   const isGlobalAdmin = user?.role === 'ADMIN'
-  const isAllSeeing = isGlobalAdmin || memberships.some((m) => m.role === 'ONE_ABOVE_ALL')
+  // All-seeing = system admin or One Above All of the COMPANY workspace. Being ONE_ABOVE_ALL of any
+  // other workspace is what every sign-up gets for their personal workspace, so it only scopes.
+  const isAllSeeing =
+    isGlobalAdmin || memberships.some((m) => m.workspaceId === ORG_WORKSPACE_ID && m.role === 'ONE_ABOVE_ALL')
   const adminWorkspaceIds = memberships
     .filter((m) => m.role === 'BOD' || m.role === 'MANAGER' || m.role === 'ONE_ABOVE_ALL')
     .map((m) => m.workspaceId)
