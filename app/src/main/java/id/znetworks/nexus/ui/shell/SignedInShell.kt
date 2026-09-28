@@ -191,6 +191,8 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             Target.TeamCalendar -> { container.router.consumed(t); nav.navigate("team-calendar") }
             Target.Admin -> { container.router.consumed(t); nav.navigate("admin") }
             Target.Leaderboard -> { container.router.consumed(t); nav.navigate("leaderboard") }
+            is Target.Profile -> { container.router.consumed(t); nav.navigate("profile/${t.userId}") }
+            is Target.Folder -> { container.router.consumed(t); nav.navigate("folder/${t.id}") }
             is Target.Chat -> { container.router.consumed(t); nav.navigate(t.conversationId?.let { "chat/$it" } ?: "messages") }
             is Target.Announcement -> { container.router.consumed(t); container.announcements.showOne(t.id) }
             is Target.Web -> { container.router.consumed(t); openWeb(context, t.path) }

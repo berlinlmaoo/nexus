@@ -16,6 +16,9 @@ class LinksTest {
     @Test fun otherScreensOpenOnTheWeb() {
         assertEquals(Target.Web("/peer-reports?x=1"), Links.parse("/peer-reports?x=1"))
         assertEquals(Target.Announcement("a1"), Links.parse("/dashboard?announcement=a1"))
+        assertEquals(Target.Tab("home"), Links.parse("/dashboard"))
+        assertEquals(Target.Profile("u1"), Links.parse("/people/u1"))
+        assertEquals(Target.Folder("f1"), Links.parse("https://nexus.znetworks.id/folders/f1"))
         assertEquals(Target.Inbox, Links.parse("/inbox"))
         assertEquals(Target.Settings, Links.parse("nexus://settings"))
     }
@@ -63,5 +66,6 @@ class LinksTest {
     @Test fun ticketLinks() {
         assertEquals(Target.Tickets("t1"), Links.parse("/complaints?id=t1"))
         assertEquals(Target.Tickets(null), Links.forNotification("complaint_reply", null, null, null))
+        assertEquals(Target.Tab("home"), Links.forNotification("announcement", null, null, null)) // never the browser
     }
 }

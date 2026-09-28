@@ -33,6 +33,8 @@ sealed interface Target {
     /** Reports: mine / my team, or one person's. */
     data class Reports(val userId: String?) : Target
     data object Leaderboard : Target
+    data class Profile(val userId: String) : Target
+    data class Folder(val id: String) : Target
     data object RoomBooking : Target
     data object TeamCalendar : Target
     /** Control Room (manager and above). */
@@ -62,7 +64,7 @@ object Links {
         val t = type.orEmpty().lowercase()
         return when {
             "attendance" in t || "offsite" in t || "checkout" in t -> Target.Attendance()
-            "announcement" in t -> Target.Web("/dashboard")
+            "announcement" in t -> Target.Tab("home")
             "message" in t -> Target.Chat(null)
             "complaint" in t -> Target.Tickets(null)
             else -> Target.Inbox
@@ -110,6 +112,9 @@ object Links {
             Regex("^/tasks/([^/]+)$").matches(p) -> Target.Task(path.trimEnd('/').substringAfterLast('/'))
             Regex("^/projects/([^/]+)$").matches(p) -> Target.Project(path.trimEnd('/').substringAfterLast('/'))
             p == "/dashboard" && q["announcement"] != null -> Target.Announcement(q["announcement"]!!)
+            p == "/dashboard" -> Target.Tab("home")
+            Regex("^/people/([^/]+)$").matches(p) -> Target.Profile(path.trimEnd('/').substringAfterLast('/'))
+            Regex("^/folders/([^/]+)$").matches(p) -> Target.Folder(path.trimEnd('/').substringAfterLast('/'))
             p == "/settings" -> Target.Settings
             p == "/messages" -> Target.Chat(q["c"])
             p == "/threads" || p == "/social" -> Target.Threads(q["post"])
