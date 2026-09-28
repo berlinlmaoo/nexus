@@ -83,6 +83,8 @@ class AppContainer(private val context: Context) {
     val updater = ApkUpdater(context, api, identity.versionCode)
 
     val router = Router()
+    val viewer = Viewer(api)
+    val uploads = id.znetworks.nexus.core.net.Uploads(context, api)
     val announcements = AnnouncementHost(InboxApi(api))
     val appearance = Appearance(context)
 
@@ -130,6 +132,7 @@ class AppContainer(private val context: Context) {
                 reflectionDrafts.clearAll()
                 // A cached roster or task list must not outlive the session that fetched it.
                 responseCache.clearAll()
+                viewer.reset()
                 id.znetworks.nexus.ui.components.ImageMemory.clear()
                 // Location stops with the session; unsent points go with it.
                 workTrail.stopForLogout()

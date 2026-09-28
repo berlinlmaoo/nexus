@@ -4,7 +4,7 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (138 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (144 JVM tests, all green).
 Version 0.1.6 (versionCode 1), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 
 ## Done (Phase 1, attendance MVP)
@@ -47,9 +47,10 @@ Server side for all of this is live (SERVER-REQUESTS R1–R4 DONE, server a79796
 | Part | What exists | Commit |
 |---|---|---|
 | 2.1 | Navigation (NavHost under the tab bar, tabs keep their state), link targets for projects/tasks, response cache (saved copy when nobody answers, per person, wiped on logout), session-aware images/avatars, Mission Control (search missions + tasks, folder tree, project cards with Cards/Done/Lanes/progress/next due from one fetch, create mission, create/edit/delete folder, move to folder) | 55a08ef |
-| 2.2 | Project detail: header, tabs Overview/Board/List, token search with "shown/total", subtasks under their parent (merged from the project's task list), board lanes with inline add, long-press "Move to" lane (optimistic, reloads), done toggle, FAB "New task" (title, lane, priority, deadline; opens the new task), 403 → "Project locked" empty state, saved copy offline | this step |
+| 2.2 | Project detail: header, tabs Overview/Board/List, token search with "shown/total", subtasks under their parent (merged from the project's task list), board lanes with inline add, long-press "Move to" lane (optimistic, reloads), done toggle, FAB "New task" (title, lane, priority, deadline; opens the new task), 403 → "Project locked" empty state, saved copy offline | d5ca76f |
+| 2.3 | Task detail (iOS TaskDetailView + extras): parent breadcrumb, title edited in place (commits on Done/focus loss), status/priority menus, start/due pickers with clear, assignee picker from project members, BoD quest banner + "Make it a quest" (workspace role via `Viewer`), description editor (BlockNote flattened), subtasks (progress, toggle, add with Enter, open), files (camera/gallery/files; ≤64 MiB single request, above that 16 MiB chunks under one uploadId, one progress bar; open or share through FileProvider; delete), dependencies (blocked by/blocking, picker from the project's tasks, duplicates never sent), time log (total, last 6), comments (draft kept until posted), activity (last 12), delete task; PROOF_REQUIRED and other server sentences shown as-is | this step |
 
-Still on the web until built: task detail, My tasks, dashboard, search, sign-up/reset/passkeys, What's New.
+Still on the web until built: custom fields on a task (2.7), My tasks, dashboard, search, sign-up/reset/passkeys, What's New.
 
 ## iOS bug checklist (UPDATES §8), checked 28 Sep 2026
 

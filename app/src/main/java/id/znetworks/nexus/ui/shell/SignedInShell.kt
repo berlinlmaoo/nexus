@@ -1,5 +1,6 @@
 package id.znetworks.nexus.ui.shell
 
+import id.znetworks.nexus.feature.tasks.TaskDetailScreen
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -171,9 +172,12 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 ProjectDetailScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") })
             }
             // Not built yet on this step: the web page, and back.
-            composable("task/{id}") { e ->
-                val id = e.arguments?.getString("id").orEmpty()
-                LaunchedEffect(id) { openWeb(context, "/tasks/$id"); nav.popBackStack() }
+            composable("task/{id}") {
+                TaskDetailScreen(
+                    onBack = { nav.popBackStack() },
+                    onOpenTask = { nav.navigate("task/$it") },
+                    onOpenProject = { nav.navigate("project/$it") },
+                )
             }
         }
     }
