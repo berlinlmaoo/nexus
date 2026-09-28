@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ViewKanban
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -51,6 +52,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -183,9 +185,12 @@ class ProjectDetailViewModel(app: Application, handle: SavedStateHandle) : Andro
 }
 
 @Composable
-fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, vm: ProjectDetailViewModel = viewModel()) {
+fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenSettings: () -> Unit = {}, vm: ProjectDetailViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
+    // Back from settings or a task: what changed there shows here.
+    var entered by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) { if (entered) vm.load() else entered = true }
     var tab by rememberSaveable { mutableStateOf(ProjectTab.BOARD) }
     var creating by rememberSaveable { mutableStateOf(false) }
     var createDue by remember { mutableStateOf<LocalDate?>(null) }
@@ -202,7 +207,8 @@ fun ProjectDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, vm: Pr
                 Spacer(Modifier.size(10.dp))
                 Text(s.detail?.name ?: "", fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                s.detail?.let { StatusChip(it.status); Spacer(Modifier.size(12.dp)) }
+                s.detail?.let { StatusChip(it.status) }
+                if (s.detail != null) IconButton(onClick = onOpenSettings) { Icon(Icons.Filled.Settings, stringResource(R.string.ps_title)) }
             }
             val tabs = s.tabs
             ScrollableTabRow(selectedTabIndex = tabs.indexOf(tab).coerceAtLeast(0), edgePadding = 12.dp, containerColor = c.background) {

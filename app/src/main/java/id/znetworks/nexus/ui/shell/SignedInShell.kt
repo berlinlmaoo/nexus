@@ -3,6 +3,7 @@ package id.znetworks.nexus.ui.shell
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.filled.WatchLater
 import id.znetworks.nexus.feature.home.HomeScreen
+import id.znetworks.nexus.feature.projects.ProjectSettingsScreen
 import id.znetworks.nexus.feature.tasks.MyTasksScreen
 import id.znetworks.nexus.feature.tasks.TaskDetailScreen
 import android.Manifest
@@ -184,8 +185,17 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                 ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") })
             }
             composable(Tab.MORE.route) { MoreScreen(session, gateState, onSignOut, onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } }) }
-            composable("project/{id}") {
-                ProjectDetailScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") })
+            composable("project/{id}") { entry ->
+                ProjectDetailScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") },
+                    onOpenSettings = { nav.navigate("project/${entry.arguments?.getString("id")}/settings") })
+            }
+            composable("project/{id}/settings") {
+                ProjectSettingsScreen(
+                    onBack = { nav.popBackStack() },
+                    // Deleted: out of the settings AND the project that no longer exists.
+                    onDeleted = { nav.popBackStack(); nav.popBackStack() },
+                    onOpenProject = { nav.navigate("project/$it") },
+                )
             }
             composable("task/{id}") {
                 TaskDetailScreen(

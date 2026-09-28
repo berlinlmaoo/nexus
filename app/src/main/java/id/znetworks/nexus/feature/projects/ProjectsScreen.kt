@@ -501,7 +501,7 @@ private fun FolderDialog(editing: ProjectFolder?, busy: Boolean, onDismiss: () -
 }
 
 @Composable
-private fun EmojiRow(options: List<String>, selected: String, onPick: (String) -> Unit) {
+internal fun EmojiRow(options: List<String>, selected: String, onPick: (String) -> Unit) {
     val c = Nx.colors
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         options.forEach { e ->
@@ -513,7 +513,7 @@ private fun EmojiRow(options: List<String>, selected: String, onPick: (String) -
 }
 
 @Composable
-private fun ColorRow(selected: String, onPick: (String) -> Unit) {
+internal fun ColorRow(selected: String, onPick: (String) -> Unit) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         PROJECT_COLORS.forEach { hex ->
             val col = parseColor(hex, Color.Gray)

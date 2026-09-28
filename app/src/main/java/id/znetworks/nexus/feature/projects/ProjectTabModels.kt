@@ -88,7 +88,25 @@ data class PnlDashboard(
 )
 
 @Serializable
-data class CustomFieldDef(val id: String, val name: String = "", val type: String? = null, val position: Int? = null, val options: JsonElement? = null)
+data class CustomFieldDef(
+    val id: String,
+    val name: String = "",
+    val type: String? = null,
+    val position: Int? = null,
+    val options: JsonElement? = null,
+    /** Only with `taskId`: string, string[] (MULTI_SELECT) or {label, mapUrl} (PLACE). */
+    val value: JsonElement? = null,
+) {
+    val kind: String get() = type.orEmpty().uppercase()
+    val choices: List<String> get() = optionList(options)
+}
+
+/** GET /api/workspaces/members: the caller's role and everyone in the workspace. */
+@Serializable
+data class RosterMember(val id: String? = null, val userId: String? = null, val name: String? = null, val email: String? = null, val avatar: String? = null, val role: String? = null)
+
+@Serializable
+data class Roster(val role: String? = null, val members: List<RosterMember> = emptyList())
 
 @Serializable
 data class CustomFieldsResponse(val fields: List<CustomFieldDef> = emptyList())

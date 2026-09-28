@@ -146,6 +146,7 @@ fun TaskDetailScreen(onBack: () -> Unit, onOpenTask: (String) -> Unit, onOpenPro
                         Header(t, vm, onOpenTask)
                         QuestBanner(t, s.isBoD, vm)
                         MetaCard(t, s, vm, onOpenProject)
+                        t.projectId?.let { pid -> TaskFieldsCard(pid, t.id, vm::showError) }
                         DescriptionCard(t, vm)
                         SubtasksCard(t, vm, onOpenTask)
                         FilesCard(s, vm)

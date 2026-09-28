@@ -109,6 +109,40 @@ class ProjectsApi(private val api: ApiClient) {
 
     suspend fun customFields(projectId: String) = api.get("/api/custom-fields?projectId=$projectId", CustomFieldsResponse.serializer()).fields.sortedBy { it.position ?: Int.MAX_VALUE }
 
+    // region settings, fields, members (API.md §2.4)
+
+    suspend fun taskFields(projectId: String, taskId: String) =
+        api.get("/api/custom-fields?projectId=$projectId&taskId=$taskId", CustomFieldsResponse.serializer()).fields.sortedBy { it.position ?: Int.MAX_VALUE }
+
+    /** string for TEXT/SELECT/STATUS/NUMBER/DATE, string[] for MULTI_SELECT, {label,mapUrl} for PLACE. */
+    suspend fun setFieldValue(fieldId: String, taskId: String, value: JsonElement) =
+        patch("/api/custom-fields", buildJsonObject { put("id", fieldId); put("taskId", taskId); put("value", value) })
+
+    suspend fun createField(projectId: String, name: String, type: String, options: List<String>) = post("/api/custom-fields", buildJsonObject {
+        put("projectId", projectId); put("name", name.trim()); put("type", type)
+        if (options.isNotEmpty()) putJsonArray("options") { options.forEach { add(JsonPrimitive(it)) } }
+    })
+
+    suspend fun deleteField(id: String) = delete("/api/custom-fields?id=$id")
+
+    suspend fun updateProject(id: String, fields: JsonObject) = patch("/api/projects/$id", fields)
+
+    suspend fun deleteProject(id: String) = delete("/api/projects/$id")
+
+    /** BoD+: returns the copy's id. */
+    suspend fun duplicateProject(id: String): String =
+        (api.send(Request.Builder().url(api.url("/api/projects/$id/duplicate")).post("".toJsonBody()).build(), JsonObject.serializer())["id"] as? JsonPrimitive)?.content.orEmpty()
+
+    suspend fun roster() = api.get("/api/workspaces/members", Roster.serializer())
+
+    suspend fun addMember(projectId: String, userId: String) = post("/api/projects/$projectId/members", buildJsonObject { put("userId", userId); put("role", "MEMBER") })
+
+    /** A JSON body on a DELETE (the route reads it). */
+    suspend fun removeMember(projectId: String, userId: String): JsonObject =
+        api.send(Request.Builder().url(api.url("/api/projects/$projectId/members")).delete(buildJsonObject { put("userId", userId) }.toString().toJsonBody()).build(), JsonObject.serializer())
+
+    suspend fun invite(projectId: String, email: String, role: String) = post("/api/projects/$projectId/invite", buildJsonObject { put("email", email.trim()); put("role", role) })
+
     // endregion
 
     private suspend fun post(path: String, body: JsonElement): JsonObject =

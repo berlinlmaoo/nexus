@@ -91,6 +91,7 @@ class TaskDetailViewModel(app: Application, handle: SavedStateHandle) : AndroidV
     }
 
     fun dismissError() = _state.update { it.copy(actionError = null) }
+    fun showError(msg: String) = _state.update { it.copy(actionError = msg) }
 
     // region edits
 
