@@ -187,7 +187,7 @@ fun UsersTab(isBoD: Boolean, onOpenUser: (String) -> Unit, onOpenChart: () -> Un
             },
             confirmButton = { TextButton(onClick = {
                 inviting = false
-                scope.launch { try { api.invite(email, newRole, r.workspaceId); notice = res.getString(R.string.ad_invited); tick++ } catch (e: ApiError) { notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) } }
+                scope.launch { try { val out = api.invite(email, newRole, r.workspaceId); notice = if (InviteResult.emailFailed(out)) res.getString(R.string.wm_added_no_email, InviteResult.email(out, email)) else res.getString(R.string.ad_invited); tick++ } catch (e: ApiError) { notice = (e as? ApiError.Http)?.serverMessage ?: e.describe(res) } }
             }, enabled = email.contains('@')) { Text(stringResource(R.string.ps_send_invite)) } },
             dismissButton = { TextButton(onClick = { inviting = false }) { Text(stringResource(R.string.cancel)) } })
     }
@@ -245,7 +245,7 @@ fun AdminUserScreen(userId: String, onBack: () -> Unit, onOpenProfile: (String) 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(Roles.label(m.role), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f))
                     // Only roles strictly below mine, and never above-or-equal members.
-                    if (canManage && Roles.tier(m.role) < Roles.tier(r.role)) TextButton(onClick = { picking = "role" }) { Text(stringResource(R.string.change)) }
+                    if (Roles.canEdit(r.role, m.role)) TextButton(onClick = { picking = "role" }) { Text(stringResource(R.string.change)) }
                 }
             }
             AdminCard(stringResource(R.string.ad_approval)) {

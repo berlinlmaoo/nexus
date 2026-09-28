@@ -51,6 +51,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
+import id.znetworks.nexus.feature.admin.WorkspaceMembersCard
 import id.znetworks.nexus.core.net.ApiError
 import id.znetworks.nexus.ui.components.describe
 import id.znetworks.nexus.ui.theme.DisplayFont
@@ -134,7 +135,7 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
 }
 
 @Composable
-fun AccountScreen(onBack: () -> Unit, vm: AccountViewModel = viewModel()) {
+fun AccountScreen(onBack: () -> Unit, onOpenProfile: (String) -> Unit = {}, vm: AccountViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
     val context = LocalContext.current
@@ -167,6 +168,7 @@ fun AccountScreen(onBack: () -> Unit, vm: AccountViewModel = viewModel()) {
                     }
                 }
             }
+            WorkspaceMembersCard(onOpenProfile)
             Section(stringResource(R.string.acct_password)) {
                 var current by rememberSaveable { mutableStateOf("") }
                 var new by rememberSaveable { mutableStateOf("") }

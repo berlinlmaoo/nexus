@@ -1357,4 +1357,10 @@
     <string name="tm_leave_q">Keluarkan %1$s dari %2$s?</string>
     <string name="tm_leave_nothing">Tim ini tidak menautkan project, jadi tidak ada akses yang hilang.</string>
     <string name="tm_leave_lose">Ikut hilang: akses ke %1$d project — %2$s</string>
+    <string name="wm_title">Anggota</string>
+    <string name="wm_email">Email anggota baru</string>
+    <string name="wm_invite">Undang</string>
+    <string name="wm_invited">Undangan terkirim ke %1$s — dia akan dapat email untuk bikin password.</string>
+    <string name="wm_added_no_email">%1$s sudah ditambahkan, tapi email undangannya gagal terkirim.</string>
+    <string name="wm_remove">Keluarkan</string>
 </resources>

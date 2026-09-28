@@ -3,6 +3,7 @@ package id.znetworks.nexus.feature.admin
 import id.znetworks.nexus.core.net.NexusJson
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AdminMoreTest {
@@ -10,6 +11,14 @@ class AdminMoreTest {
         assertFalse("repeatDays" in AnnounceRules.body("T", "B", "info", 0, "09:00"))
         val b = AnnounceRules.body(" T ", "B", "info", 3, "08:30")
         assertEquals("3", b["repeatDays"].toString()); assertEquals("\"08:30\"", b["repeatAtTime"].toString()); assertEquals("\"T\"", b["title"].toString())
+    }
+
+    @Test fun inviteEmailFailsOnlyOnExplicitFalse() {
+        fun o(s: String) = NexusJson.decodeFromString(kotlinx.serialization.json.JsonObject.serializer(), s)
+        assertTrue(InviteResult.emailFailed(o("""{"emailSent":false}""")))
+        assertFalse(InviteResult.emailFailed(o("""{"member":{"email":"a@z.id"}}""")))
+        assertEquals("a@z.id", InviteResult.email(o("""{"member":{"email":"a@z.id"}}"""), " typed@z.id "))
+        assertEquals("typed@z.id", InviteResult.email(o("{}"), " typed@z.id "))
     }
 
     @Test fun installsSplitByPlatformAndOldRowsAreIos() {

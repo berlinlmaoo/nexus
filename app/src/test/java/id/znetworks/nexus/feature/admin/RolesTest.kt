@@ -10,8 +10,13 @@ class RolesTest {
 
     @Test fun onlyRolesBelowMineAreAssignable() {
         assertEquals(listOf("MANAGER", "STAFF"), Roles.assignable("BOD"))
-        assertEquals(listOf("BOD", "MANAGER", "STAFF"), Roles.assignable("ONE_ABOVE_ALL"))
+        // Server canAssign: One Above All may give any role; below BoD nobody assigns anything.
+        assertEquals(Roles.ALL, Roles.assignable("ONE_ABOVE_ALL"))
+        assertEquals(emptyList<String>(), Roles.assignable("MANAGER"))
         assertEquals(emptyList<String>(), Roles.assignable("STAFF"))
+        assertEquals(emptyList<String>(), Roles.assignable(null))
+        assertTrue(Roles.canEdit("ONE_ABOVE_ALL", "ONE_ABOVE_ALL")); assertFalse(Roles.canEdit("BOD", "BOD"))
+        assertTrue(Roles.canEdit("BOD", "MANAGER")); assertFalse(Roles.canEdit("MANAGER", "STAFF"))
     }
 
     @Test fun rosterFilterSortsAToZ() {

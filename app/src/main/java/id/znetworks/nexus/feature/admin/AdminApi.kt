@@ -53,8 +53,11 @@ data class WsRoster(val workspaceId: String? = null, val workspaceName: String? 
 object Roles {
     val ALL = listOf("ONE_ABOVE_ALL", "BOD", "MANAGER", "STAFF")
     fun tier(r: String?) = when (r) { "ONE_ABOVE_ALL" -> 4; "BOD" -> 3; "MANAGER" -> 2; else -> 1 }
-    /** Only roles strictly below yours can be given (server rule for invites and role edits). */
-    fun assignable(mine: String?) = ALL.filter { tier(it) < tier(mine) }
+    private fun tierOrZero(r: String?) = if (r == null) 0 else tier(r)
+    /** Server canAssign: BoD and above only; roles strictly below yours, One Above All may give any. */
+    fun assignable(mine: String?) = tierOrZero(mine).let { t -> if (t < 3) emptyList() else ALL.filter { t == 4 || tier(it) < t } }
+    /** May [mine] change [target]'s role or remove them? Same rule as [assignable]. */
+    fun canEdit(mine: String?, target: String?) = tierOrZero(mine).let { t -> t >= 3 && (t == 4 || tier(target) < t) }
     fun label(r: String?) = when (r) { "ONE_ABOVE_ALL" -> "One Above All"; "BOD" -> "BoD"; "MANAGER" -> "Manager"; else -> "Staff" }
 
     /** Roster A–Z, filtered by role and by a name/email search. */

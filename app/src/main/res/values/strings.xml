@@ -1363,4 +1363,10 @@
     <string name="tm_leave_q">Remove %1$s from %2$s?</string>
     <string name="tm_leave_nothing">This team links no projects, so no access is lost.</string>
     <string name="tm_leave_lose">Also lost: access to %1$d project(s) — %2$s</string>
+    <string name="wm_title">Members</string>
+    <string name="wm_email">New member\'s email</string>
+    <string name="wm_invite">Invite</string>
+    <string name="wm_invited">Invite sent to %1$s — they\'ll get an email to set their password.</string>
+    <string name="wm_added_no_email">Added %1$s, but the invite email couldn\'t be sent.</string>
+    <string name="wm_remove">Remove</string>
 </resources>

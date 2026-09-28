@@ -238,7 +238,7 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     onOpenWeb = { when (it) { "/messages" -> nav.navigate("messages"); "/threads" -> nav.navigate("threads"); "/leaderboard" -> nav.navigate("leaderboard"); "/room-booking" -> nav.navigate("rooms"); "/master-calendar" -> nav.navigate("team-calendar"); else -> openWeb(context, it) } },
                 )
             }
-            composable("account") { AccountScreen(onBack = { nav.popBackStack() }) }
+            composable("account") { AccountScreen(onBack = { nav.popBackStack() }, onOpenProfile = { nav.navigate("profile/$it") }) }
             composable("threads?post={post}", arguments = listOf(androidx.navigation.navArgument("post") { nullable = true; defaultValue = null })) { e ->
                 ThreadsScreen(onBack = { nav.popBackStack() }, focusPostId = e.arguments?.getString("post"))
             }
