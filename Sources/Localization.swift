@@ -67,7 +67,10 @@ final class AppLanguage {
     /// somebody picks Bahasa Indonesia — so a duplicate key here is an invisible crash that waits
     /// for the language switch. Two of them were sitting in this file. Check before adding:
     ///
-    ///     grep -o '^ *"[^"]*":' Sources/Localization.swift | sort | uniq -d
+    ///     grep -oE '"[^"]*": "' Sources/Localization.swift | sort | uniq -d
+    ///
+    /// (Not only keys at the start of a line: the weekdays share one line, and the old line-start
+    /// grep missed the five of them that were listed twice until 28 Sep 2026.)
     static let indonesian: [String: String] = [
         // ── shell / navigation ────────────────────────────────────────────────
         "Home": "Beranda",
@@ -1076,11 +1079,8 @@ final class AppLanguage {
         "Works every day": "Kerja tiap hari",
         "Works every office day; a day off must be requested.": "Kerja tiap hari kantor; day off harus diajukan.",
         "No reminder, lateness or absence on these days. No day-off request needed.": "Tidak ada pengingat, telat, atau alpa di hari ini. Tidak perlu ajukan day off.",
-        "Tue": "Sel",
-        "Wed": "Rab",
-        "Thu": "Kam",
-        "Sat": "Sab",
-        "Sun": "Min",
+        // Tue/Wed/Thu/Sat/Sun were listed here a second time (they sit under "team calendar" above,
+        // on one line with Mon and Fri): a duplicate key in this literal traps the moment Bahasa is picked.
         // 0.1.5: screens that used to pass Indonesian literals as keys (they showed Indonesian in English mode).
         "Activate": "Aktifkan",
         "Active": "Aktif",
