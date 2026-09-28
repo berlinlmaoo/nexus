@@ -1456,4 +1456,7 @@
         <item quantity="one">%1$d tap belum terkirim</item>
         <item quantity="other">%1$d tap belum terkirim</item>
     </plurals>
+    <string name="updater_confirm_title">Selesaikan update NEXUS</string>
+    <string name="updater_confirm_body">Ketuk Install di layar sistem untuk menyelesaikan update.</string>
+    <string name="updater_continue">Lanjutkan instal</string>
 </resources>

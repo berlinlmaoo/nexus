@@ -1462,4 +1462,7 @@
         <item quantity="one">%1$d tap still to send</item>
         <item quantity="other">%1$d taps still to send</item>
     </plurals>
+    <string name="updater_confirm_title">Finish updating NEXUS</string>
+    <string name="updater_confirm_body">Tap Install on the system screen to finish the update.</string>
+    <string name="updater_continue">Continue installing</string>
 </resources>

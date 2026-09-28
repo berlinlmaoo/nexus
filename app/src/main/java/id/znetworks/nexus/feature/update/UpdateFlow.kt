@@ -67,6 +67,7 @@ fun UpdateFlowHost() {
                     }
                     ApkUpdater.Step.Verifying -> Text(stringResource(R.string.updater_verifying))
                     ApkUpdater.Step.Installing -> Text(stringResource(R.string.updater_installing))
+                    is ApkUpdater.Step.Confirm -> Text(stringResource(R.string.updater_confirm_body))
                     ApkUpdater.Step.NeedsPermission -> Text(stringResource(R.string.updater_permission))
                     is ApkUpdater.Step.UpToDate -> Text(stringResource(R.string.updater_up_to_date))
                     is ApkUpdater.Step.Failed -> Text(s.message ?: stringResource(
@@ -93,11 +94,14 @@ fun UpdateFlowHost() {
                     }
                 }) { Text(stringResource(R.string.updater_allow)) }
                 is ApkUpdater.Step.Failed -> TextButton(onClick = { c.appScope.launch { updater.run() } }) { Text(stringResource(R.string.try_again)) }
+                // Always a way on: the system confirmation again, from the app in front.
+                is ApkUpdater.Step.Confirm -> TextButton(onClick = { updater.continueInstall(context) }) { Text(stringResource(R.string.updater_continue)) }
                 else -> if (!busy) TextButton(onClick = updater::reset) { Text("OK") }
             }
         },
         dismissButton = {
-            if (!busy && s !is ApkUpdater.Step.UpToDate) TextButton(onClick = updater::reset) { Text(stringResource(R.string.cancel)) }
+            // Installing and Confirm can be cancelled too (the session is abandoned): never stuck.
+            if ((!busy || s is ApkUpdater.Step.Installing) && s !is ApkUpdater.Step.UpToDate) TextButton(onClick = updater::reset) { Text(stringResource(R.string.cancel)) }
         },
     )
 }

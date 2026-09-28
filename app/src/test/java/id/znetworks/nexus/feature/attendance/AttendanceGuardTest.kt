@@ -65,6 +65,10 @@ class AttendanceGuardTest {
         // …and it always runs the verdict (checksum, package, signing key, version) first.
         val updater = sources.entries.first { it.key.name == "ApkUpdater.kt" }.value
         assertTrue(updater.contains("verdict("))
+        // Audit T3: the system's confirmation is kept as a step (dialog button + notification), never
+        // fired and forgotten from the background.
+        assertTrue(updater.contains("confirmationNeeded(confirm, session)"))
+        assertTrue(updater.contains("abandonSession("))
     }
 
     @Test fun theQueueLivesOutsideBackups() {

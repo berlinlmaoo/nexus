@@ -54,6 +54,11 @@ class ApkUpdater(
         /** "Install unknown apps" is off for NEXUS: the guided trip to Settings is due. */
         data object NeedsPermission : Step
         data object Installing : Step
+        /**
+         * The system wants the person to confirm. Kept as a step (with the system's own intent) so a
+         * confirmation Android refused to show from the background is never lost (audit T3).
+         */
+        data class Confirm(val intent: Intent) : Step
         data class Failed(val reason: Reason, val message: String? = null) : Step
     }
 
@@ -67,7 +72,49 @@ class ApkUpdater(
     private val prefs = context.getSharedPreferences("nexus.updater", Context.MODE_PRIVATE)
 
     fun reset() {
+        abandon()
         _step.value = Step.Idle
+    }
+
+    /** The PackageInstaller session in flight, so "Cancel" never leaves one open. */
+    @Volatile private var sessionId: Int? = null
+
+    private fun abandon() {
+        val id = sessionId ?: return
+        sessionId = null
+        runCatching { context.packageManager.packageInstaller.abandonSession(id) }
+        runCatching { androidx.core.app.NotificationManagerCompat.from(context).cancel(CONFIRM_NOTIFICATION) }
+    }
+
+    /** The installer asked for confirmation: shown now if possible, and kept for the dialog/notification. */
+    internal fun confirmationNeeded(confirm: Intent, sessionFromInstaller: Int?) {
+        if (sessionFromInstaller != null) sessionId = sessionFromInstaller
+        _step.value = Step.Confirm(confirm)
+        // Android 10+ refuses to start an activity from the background without a word; a
+        // notification is how the person gets back to it.
+        val started = runCatching { context.startActivity(Intent(confirm).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+        if (!started || !appInForeground()) notifyConfirm(confirm)
+    }
+
+    /** From the dialog (the app is in front, so the system allows it). */
+    fun continueInstall(activityContext: Context) {
+        val s = _step.value as? Step.Confirm ?: return
+        runCatching { activityContext.startActivity(Intent(s.intent)) }
+    }
+
+    private fun appInForeground() = androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.currentState
+        .isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
+
+    private fun notifyConfirm(confirm: Intent) {
+        val pi = PendingIntent.getActivity(context, CONFIRM_NOTIFICATION, Intent(confirm).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val n = androidx.core.app.NotificationCompat.Builder(context, "system")
+            .setSmallIcon(id.znetworks.nexus.R.drawable.ic_stat_nexus)
+            .setContentTitle(context.getString(id.znetworks.nexus.R.string.updater_confirm_title))
+            .setContentText(context.getString(id.znetworks.nexus.R.string.updater_confirm_body))
+            .setContentIntent(pi).setAutoCancel(true)
+            .build()
+        runCatching { androidx.core.app.NotificationManagerCompat.from(context).notify(CONFIRM_NOTIFICATION, n) }
     }
 
     /** The whole flow, from check to the system's install prompt. */
@@ -139,6 +186,7 @@ class ApkUpdater(
             setSize(apk.length())
         }
         val id = installer.createSession(params)
+        sessionId = id
         installer.openSession(id).use { session ->
             apk.inputStream().use { input ->
                 session.openWrite("nexus.apk", 0, apk.length()).use { out ->
@@ -154,10 +202,12 @@ class ApkUpdater(
     }
 
     internal fun installFailed(message: String?) {
+        abandon()
         _step.value = Step.Failed(Reason.INSTALL, message)
     }
 
     companion object {
+        private const val CONFIRM_NOTIFICATION = 4301
         fun isNewer(candidate: Int, running: Int) = candidate > running
 
         /**
@@ -226,7 +276,8 @@ class InstallResultReceiver : BroadcastReceiver() {
                 @Suppress("DEPRECATION")
                 val confirm = if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
                 else intent.getParcelableExtra(Intent.EXTRA_INTENT)
-                confirm?.let { runCatching { context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+                val session = intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1).takeIf { it >= 0 }
+                if (confirm != null) updater.confirmationNeeded(confirm, session) else updater.installFailed(null)
             }
             PackageInstaller.STATUS_SUCCESS -> Unit // the app is replaced and restarted by the system
             else -> updater.installFailed(intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE))
