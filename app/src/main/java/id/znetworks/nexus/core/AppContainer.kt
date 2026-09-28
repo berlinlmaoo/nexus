@@ -44,6 +44,9 @@ import java.io.File
  * Manual dependency graph. Small enough that a DI framework would add build time and no safety;
  * revisit when the feature count makes wiring by hand error-prone.
  */
+/** Cache folders holding one person's files, emptied at sign-out (FileProvider paths "shared", "evidence"). */
+object SignOutFiles { val dirs = listOf("shared", "evidence") }
+
 class AppContainer(private val context: Context) {
     val identity = ClientIdentity.current()
 
@@ -170,6 +173,9 @@ class AppContainer(private val context: Context) {
                 workTrail.stopForLogout()
                 // The widget must not keep this person's hours on a phone handed to somebody else.
                 presence.stop()
+                // Exports, opened attachments, camera shots and request evidence (audit R4, build 5):
+                // private to the app, but they must not outlive the session on a phone handed over.
+                SignOutFiles.dirs.forEach { File(context.cacheDir, it).deleteRecursively() }
             }
         })
     }

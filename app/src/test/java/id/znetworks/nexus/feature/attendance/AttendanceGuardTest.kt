@@ -140,4 +140,14 @@ class AttendanceGuardTest {
         val block = shell.substringAfter("is Target.Project ->").substringBefore("is Target.Announcement ->")
         assertEquals(0, Regex("\\\$\\{t\\.[a-zA-Z]+\\}|\"[a-z-]+/\\\$it").findAll(block).count())
     }
+
+    @Test fun signOutEmptiesTheFileCaches() {
+        // Audit R4 (build 5): every cache folder the FileProvider shares from is emptied at sign-out,
+        // except the offline copy, which OfflineSync wipes itself.
+        val paths = File(root.parentFile, "res/xml").listFiles().orEmpty().filter { it.name.contains("path") }.joinToString { it.readText() }
+        val shared = Regex("""cache-path name="[^"]+" path="([^"/]+)/"""").findAll(paths).map { it.groupValues[1] }.toSet() - "offline"
+        assertEquals(shared, id.znetworks.nexus.core.SignOutFiles.dirs.toSet())
+        val container = sources.entries.first { it.key.name == "AppContainer.kt" }.value
+        assertTrue(container.contains("SignOutFiles.dirs.forEach { File(context.cacheDir, it).deleteRecursively() }"))
+    }
 }
