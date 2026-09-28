@@ -81,7 +81,8 @@ struct AttendanceRow: Decodable, Identifiable, Sendable {
     let checkInAt: String?
     let checkOutAt: String?
     let user: UserRef?
-    struct UserRef: Decodable, Sendable { let id: String?; let name: String?; let avatar: String? }
+    /// `dayOffQuota`: that person's weekly-rest quota (servers from 28 Sep 2026; absent → 4).
+    struct UserRef: Decodable, Sendable { let id: String?; let name: String?; let avatar: String?; let dayOffQuota: Int? }
     var idv: String { id ?? ((user?.id ?? "") + (attendanceDate ?? "")) }
 
     // The rest of what the history endpoint has always sent and the board never read — the

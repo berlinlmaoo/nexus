@@ -1125,6 +1125,8 @@ struct StreakBoardCard: View {
 
     struct Member: Identifiable {
         let id: String; let name: String; let cells: [String: AttTone]; let rowByDay: [String: AttendanceRow]
+        /// Weekly-rest quota from the server (4 for most people, 9 for some); 4 when an older server sends none.
+        var quota: Int = 4
         /// Days worked in the period: a check-in, an approved permit or WFH — everything green or blue.
         var workedDays: Int { cells.values.filter { $0 == .present || $0 == .permit || $0 == .wfh }.count }
     }
@@ -1137,7 +1139,8 @@ struct StreakBoardCard: View {
             var cells: [String: AttTone] = [:]
             var rowByDay: [String: AttendanceRow] = [:]
             for r in rs { if let k = Self.dayKey(r.attendanceDate) { cells[k] = AttTone.of(r); rowByDay[k] = r } }
-            return Member(id: uid, name: rs.first?.user?.name ?? T("You"), cells: cells, rowByDay: rowByDay)
+            return Member(id: uid, name: rs.first?.user?.name ?? T("You"), cells: cells, rowByDay: rowByDay,
+                          quota: rs.compactMap { $0.user?.dayOffQuota }.first ?? 4)
         }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
     /// The whole date, not the day number: the period spans two months and they share numbers.
@@ -1297,7 +1300,7 @@ struct StreakBoardCard: View {
             VStack(alignment: .trailing, spacing: gap) {
                 Text(T("Score")).font(.system(size: 8, weight: .semibold)).foregroundStyle(NX.mutedFg).frame(height: 14)
                 ForEach(members) { m in
-                    Text("\(m.workedDays)/\(Self.workingDays(periodDays.count))")
+                    Text("\(m.workedDays)/\(Self.workingDays(periodDays.count, dayOffQuota: m.quota))")
                         .font(NXFont.text(10, .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
                         .frame(height: cell, alignment: .trailing)
                 }
@@ -1380,7 +1383,7 @@ struct StreakBoardCard: View {
                 VStack(alignment: .trailing, spacing: gap) {
                     Text(T("Score")).font(.system(size: 9, weight: .semibold)).foregroundStyle(NX.mutedFg).frame(height: 16)
                     ForEach(members) { m in
-                        Text("\(m.workedDays)/\(StreakBoardCard.workingDays(periodDays.count))")
+                        Text("\(m.workedDays)/\(StreakBoardCard.workingDays(periodDays.count, dayOffQuota: m.quota))")
                             .font(NXFont.text(11, .semibold)).monospacedDigit().foregroundStyle(NX.mutedFg)
                             .frame(height: cell, alignment: .trailing)
                     }
