@@ -2122,6 +2122,19 @@ struct APIClient {
         _ = try await run(makeRequest(path, method: "DELETE"), decode: SuccessResponse.self)
         return true
     }
+    /// BoD status override from the crew board — POST /api/attendance/override. `action` is one of
+    /// PRESENT | PERMIT | LEAVE | SICK | DAY_OFF | CLEAR_PENALTY; `date` is the day key (yyyy-MM-dd).
+    /// Every action refunds that day's attendance XP penalties and any auto-cut day-off. A refusal
+    /// (403 not BoD, 409 the day is part of a multi-day request) surfaces as `.http` with the
+    /// server's own sentence.
+    func attendanceOverride(userId: String, date: String, action: String, note: String? = nil) async throws -> AttendanceOverrideResponse {
+        var req = makeRequest("/api/attendance/override", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body: [String: Any] = ["userId": userId, "date": date, "action": action]
+        if let note, !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { body["note"] = note }
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return try await run(req, decode: AttendanceOverrideResponse.self)
+    }
     func attendanceRequests(scope: String) async throws -> [AttendanceRequest] {
         (try await run(makeRequest("/api/attendance/requests?scope=\(enc(scope))"), decode: AttendanceRequestsResponse.self, cache: "attendance-requests-\(scope)")).requests
     }

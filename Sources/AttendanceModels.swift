@@ -125,6 +125,34 @@ struct AttendanceRow: Decodable, Identifiable, Sendable {
     }
 }
 
+extension AttendanceRow {
+    /// A stand-in for a board cell the server sent no row for (a workday with nothing on it), so a
+    /// BoD can still open the day and set its status. Built through the decoder because the row is
+    /// Decodable-only; every other field stays nil. `recordKind` "EMPTY" tells the sheet what it is.
+    static func emptyDay(userId: String, name: String, dateKey: String) -> AttendanceRow? {
+        let json: [String: Any] = [
+            "attendanceDate": dateKey,
+            "recordKind": "EMPTY",
+            "user": ["id": userId, "name": name],
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: json) else { return nil }
+        return try? JSONDecoder().decode(AttendanceRow.self, from: data)
+    }
+}
+
+/// POST /api/attendance/override — the BoD's "Change status" on one member-day.
+struct AttendanceOverrideResponse: Decodable, Sendable {
+    let ok: Bool?
+    let action: String?
+    let date: String?
+    /// True when a penalty (XP and/or an auto-cut day-off) was actually refunded.
+    let refunded: Bool?
+    let alreadyCovered: Bool?
+    let closedAttendance: Int?
+    /// PRESENT only: multi-day requests still covering this date (left alone on purpose).
+    let multiDayRequestsLeft: Int?
+}
+
 /// GET /api/attendance/requests?scope= — leave/sick/permit/day-off/red-date requests.
 /// Response is either `{requests:[…]}` or a bare array.
 struct AttendanceRequestsResponse: Decodable, Sendable {

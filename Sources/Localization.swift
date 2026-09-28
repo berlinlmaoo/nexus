@@ -1575,6 +1575,27 @@ final class AppLanguage {
         "This hour, not checked yet": "Jam ini, belum dicek",
         "No check": "Tidak ada cek",
         "Unclear": "Tidak jelas",
+        // Crew board: BoD "Change status" (web StatusOverridePanel, 28 Sep 2026)
+        "Nothing was recorded for this day yet.": "Belum ada yang tercatat untuk hari ini.",
+        "Heads up": "Perhatian",
+        "This date is still covered by %d multi-day request(s). If this day should really show as Present, adjust that request in Submissions.": "Tanggal ini masih tercakup %d pengajuan multi-hari. Kalau hari ini memang harus tampil Hadir, ubah pengajuan itu di bagian Pengajuan.",
+        "this staff member": "staf ini",
+        "Clear penalty": "Hapus penalti",
+        "Clear the penalty for %@ for %@?": "Hapus penalti %@ untuk %@?",
+        "Change %@ (%@) to %@?": "Ubah %@ (%@) jadi %@?",
+        "That day's auto XP & day-off deductions are restored too.": "Potongan XP & day off otomatis hari itu juga dikembalikan.",
+        "Deducted XP (late / forgot check-out / no-show) is refunded and any auto-deducted day-off is restored. The attendance status is NOT changed.": "XP yang terpotong (telat / lupa check-out / tidak hadir) dikembalikan dan day off yang terpotong otomatis dipulihkan. Status absensinya TIDAK diubah.",
+        "The day becomes an on-time check-in over the shift hours, and a single-day request covering it is canceled.": "Hari itu jadi check-in tepat waktu sepanjang jam shift, dan pengajuan satu hari yang mencakupnya dibatalkan.",
+        "A check-in already made that day is kept.": "Check-in yang sudah ada hari itu tetap disimpan.",
+        "An unfinished check-in (no check-out) that day is removed.": "Check-in yang belum selesai (tanpa check-out) hari itu dihapus.",
+        "Change status (BoD)": "Ubah status (BoD)",
+        "Clear penalty (restore XP & day-off)": "Hapus penalti (kembalikan XP & day off)",
+        "Every action restores that day's XP & day-off deductions and is written to the audit log.": "Setiap aksi mengembalikan potongan XP & day off hari itu dan dicatat di audit log.",
+        "Change to %@": "Ubah jadi %@",
+        "Penalty for %@ cleared — XP & day-off restored.": "Penalti %@ dihapus — XP & day off dikembalikan.",
+        "No penalty on %@ — this day stays safe from deductions.": "Tidak ada penalti di %@ — hari ini aman dari potongan.",
+        "Penalty restored.": "Penalti dikembalikan.",
+        "Couldn't change the status.": "Status gagal diubah.",
     ]
 }
 

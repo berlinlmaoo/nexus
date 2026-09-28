@@ -1159,6 +1159,22 @@ struct StreakBoardCard: View {
                           quota: rs.compactMap { $0.user?.dayOffQuota }.first ?? 4)
         }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
+    /// Whether a tap on this cell opens it, and with which row.
+    ///
+    /// Everybody opens a real record (one with an id). The BoD (canManageAttendance) also opens the
+    /// server's id-less rows — the synthetic ABSENT day and request-covered days — and an empty day
+    /// up to today, so a status can be set from the phone as on the web board. Future days stay
+    /// closed: the server refuses to override them. `nowKey` is today's yyyy-MM-dd in Jakarta.
+    ///
+    /// Split in two so `body` only does the cheap check per cell; the stand-in row for an empty day
+    /// (a JSON round-trip) is built on the tap, not for every empty cell on every render.
+    static func canOpen(_ m: Member, _ pd: PeriodDay, canManage: Bool, nowKey: String) -> Bool {
+        if let row = m.rowByDay[pd.key] { return row.id != nil || canManage }
+        return canManage && pd.key <= nowKey && m.id != "me"
+    }
+    static func openableRow(_ m: Member, _ pd: PeriodDay) -> AttendanceRow? {
+        m.rowByDay[pd.key] ?? AttendanceRow.emptyDay(userId: m.id, name: m.name, dateKey: pd.key)
+    }
     /// The whole date, not the day number: the period spans two months and they share numbers.
     private static func dayKey(_ iso: String?) -> String? {
         guard let iso, iso.count >= 10 else { return nil }
@@ -1225,7 +1241,7 @@ struct StreakBoardCard: View {
             await load()
         }
         .sheet(item: $selectedRow) { row in
-            RecordActionsSheet(row: row, canDelete: canManage) { await load() }
+            RecordActionsSheet(row: row, canDelete: canManage, canChangeStatus: canManage) { await load() }
         }
     }
 
@@ -1360,7 +1376,8 @@ struct StreakBoardCard: View {
     // because a lazy stack, unlike a plain one, will stretch to fill its container across its axis,
     // and that would blow the row spacing out.
     private var cells: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let nowKey = ProjDate.fmt("yyyy-MM-dd").string(from: Date())
+        return VStack(alignment: .leading, spacing: 0) {
             // Scroll targets for `scrollToToday`: zero-height and eager, so every day's id exists
             // even before its lazy column has been built.
             HStack(spacing: gap) {
@@ -1377,9 +1394,10 @@ struct StreakBoardCard: View {
                                 }
                             // Every cell with a record opens it — a manager reviewing their people
                             // and staff on their own board need the day's detail and its
-                            // location trail too. Only the BoD's delete buttons stay gated.
-                            if let row = m.rowByDay[pd.key], row.id != nil {
-                                Button { selectedRow = row } label: { fill }.buttonStyle(.plain)
+                            // location trail too. The BoD also opens id-less and empty days to
+                            // change their status; only the BoD's actions stay gated.
+                            if Self.canOpen(m, pd, canManage: canManage, nowKey: nowKey) {
+                                Button { selectedRow = Self.openableRow(m, pd) } label: { fill }.buttonStyle(.plain)
                             } else {
                                 fill
                             }
@@ -1423,12 +1441,13 @@ struct StreakBoardCard: View {
                 }
                 .navigationTitle(monthLabel).navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button(T("Close")) { dismiss() } } }
-                .sheet(item: $selectedRow) { row in RecordActionsSheet(row: row, canDelete: canManage) { await onChanged() } }
+                .sheet(item: $selectedRow) { row in RecordActionsSheet(row: row, canDelete: canManage, canChangeStatus: canManage) { await onChanged() } }
             }
         }
 
         private var grid: some View {
-            HStack(alignment: .top, spacing: 8) {
+            let nowKey = ProjDate.fmt("yyyy-MM-dd").string(from: Date())
+            return HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: gap) {
                     Color.clear.frame(height: 26)
                     ForEach(members) { m in
@@ -1462,11 +1481,9 @@ struct StreakBoardCard: View {
                                     .overlay(alignment: .leading) {
                                         if pd.startsMonth { Rectangle().fill(NX.border).frame(width: 1, height: cell).offset(x: -gap / 2) }
                                     }
-                                // Every cell with a record opens it — a manager reviewing their people
-                                // and staff on their own board need the day's detail and its
-                                // location trail too. Only the BoD's delete buttons stay gated.
-                                if let row = m.rowByDay[pd.key], row.id != nil {
-                                    Button { selectedRow = row } label: { fill }.buttonStyle(.plain)
+                                // Same rule as the card grid — see `canOpen`.
+                                if StreakBoardCard.canOpen(m, pd, canManage: canManage, nowKey: nowKey) {
+                                    Button { selectedRow = StreakBoardCard.openableRow(m, pd) } label: { fill }.buttonStyle(.plain)
                                 } else {
                                     fill
                                 }
@@ -1558,18 +1575,26 @@ private struct PinnedStrip<Content: View>: View {
 }
 
 /// BoD: tap a crew-board cell → see that day's check-in/out and clean up bad data — delete the whole
-/// record (accidental/"mabok" double check-in) or just the check-out (mis-tapped → reopen).
+/// record (accidental/"mabok" double check-in) or just the check-out (mis-tapped → reopen) — or
+/// change the day's status (Present / Permit / Leave / Sick / Day off, or just clear the penalty).
 struct RecordActionsSheet: View {
     let row: AttendanceRow
     /// The delete buttons are the BoD's (canManageAttendance). A manager reviewing their people,
     /// or somebody opening their own day, reads the same sheet without them — declared before
     /// `onDone` so the existing `RecordActionsSheet(row:) { … }` calls keep their trailing closure.
     var canDelete: Bool = true
+    /// The BoD's "Change status" panel (canManageAttendance), as on the web board's cell drawer.
+    var canChangeStatus: Bool = false
     let onDone: () async -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var busy = false
     @State private var confirmDelete = false
     @State private var err: String?
+    /// The override waiting for its confirmation (PRESENT … CLEAR_PENALTY).
+    @State private var pendingOverride: String?
+    @State private var overrideDone: String?
+    /// Multi-day requests the server left covering a day just set to Present — told, then closed.
+    @State private var multiDayLeft: Int?
     @State private var viewingPhoto: PhotoRef?
 
     private var dateLabel: String { AgendaRange.dayLabel(AgendaRange.dayKey(row.attendanceDate ?? "")) }
@@ -1647,6 +1672,10 @@ struct RecordActionsSheet: View {
                             }
                             .buttonStyle(.plain)
                         }
+                    } else if row.recordKind == "EMPTY" {
+                        // A board cell the server sent no row for, opened by the BoD to set a status.
+                        Text(T("Nothing was recorded for this day yet."))
+                            .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
                     } else if (row.attendanceDayType ?? "").uppercased() == "ABSENT" {
                         Text(T("No check-in was recorded that day and no request covered it."))
                             .font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
@@ -1681,10 +1710,20 @@ struct RecordActionsSheet: View {
                             .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
                     }
 
+                    if canChangeStatus, overrideUserId != nil, overrideDayKey != nil { changeStatusPanel }
+
+                    if let overrideDone { Text(overrideDone).font(NXFont.text(12, .semibold)).foregroundStyle(NX.success) }
                     if let err { Text(err).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger) }
                     if busy { ProgressView().tint(NX.violetText).frame(maxWidth: .infinity) }
                 }
                 .padding(16)
+                // On the content stack, not beside the ScrollView's cover and delete dialog: one
+                // presentation per view.
+                .alert(T("Heads up"), isPresented: Binding(get: { multiDayLeft != nil }, set: { if !$0 { multiDayLeft = nil } })) {
+                    Button("OK") { multiDayLeft = nil; dismiss() }
+                } message: {
+                    Text(String(format: T("This date is still covered by %d multi-day request(s). If this day should really show as Present, adjust that request in Submissions."), multiDayLeft ?? 0))
+                }
             }
             .background(NX.background.ignoresSafeArea())
             .navigationTitle(T("Attendance detail")).navigationBarTitleDisplayMode(.inline)
@@ -1694,6 +1733,112 @@ struct RecordActionsSheet: View {
                 Button(T("Delete"), role: .destructive) { Task { await del(part: nil) } }
                 Button(T("Cancel"), role: .cancel) {}
             } message: { Text(T("That day's check-in & check-out are deleted permanently, and the day is shielded from attendance deductions.")) }
+        }
+    }
+
+    // MARK: Change status (BoD) — web StatusOverridePanel
+
+    private static let overrideActions = ["PRESENT", "PERMIT", "LEAVE", "SICK", "DAY_OFF"]
+    private var overrideUserId: String? { row.user?.id }
+    /// yyyy-MM-dd, the same slice of attendanceDate the web sends.
+    private var overrideDayKey: String? {
+        guard let d = row.attendanceDate, d.count >= 10 else { return nil }
+        return String(d.prefix(10))
+    }
+    private var personName: String { row.user?.name ?? T("this staff member") }
+    private static func overrideLabel(_ action: String) -> String {
+        switch action {
+        case "PRESENT": return T("Present")
+        case "PERMIT":  return T("Permit")
+        case "LEAVE":   return T("Leave")
+        case "SICK":    return T("Sick")
+        case "DAY_OFF": return T("Day off")
+        default:        return T("Clear penalty")
+        }
+    }
+    private func overrideTitle(_ action: String) -> String {
+        action == "CLEAR_PENALTY"
+            ? String(format: T("Clear the penalty for %@ for %@?"), dateLabel, personName)
+            : String(format: T("Change %@ (%@) to %@?"), dateLabel, personName, Self.overrideLabel(action))
+    }
+    /// The exact consequence, per action — what the server does besides writing the status.
+    private func overrideConsequence(_ action: String) -> String {
+        let restored = T("That day's auto XP & day-off deductions are restored too.")
+        switch action {
+        case "CLEAR_PENALTY":
+            return T("Deducted XP (late / forgot check-out / no-show) is refunded and any auto-deducted day-off is restored. The attendance status is NOT changed.")
+        case "PRESENT":
+            return T("The day becomes an on-time check-in over the shift hours, and a single-day request covering it is canceled.") + " " + restored
+        case "PERMIT":
+            return T("A check-in already made that day is kept.") + " " + restored
+        default:
+            return T("An unfinished check-in (no check-out) that day is removed.") + " " + restored
+        }
+    }
+
+    private var changeStatusPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel(T("Change status (BoD)"))
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 8)], spacing: 8) {
+                ForEach(Self.overrideActions, id: \.self) { action in
+                    Button { pendingOverride = action } label: {
+                        Text(Self.overrideLabel(action))
+                            .font(NXFont.text(13, .bold)).foregroundStyle(NX.foreground)
+                            .frame(maxWidth: .infinity).padding(.vertical, 10)
+                            .background(NX.card, in: Capsule())
+                            .overlay(Capsule().strokeBorder(NX.border))
+                    }.buttonStyle(.plain).disabled(busy)
+                }
+            }
+            Button { pendingOverride = "CLEAR_PENALTY" } label: {
+                Label(T("Clear penalty (restore XP & day-off)"), systemImage: "scalemass")
+                    .font(NXFont.text(14, .bold)).foregroundStyle(NX.warning).frame(maxWidth: .infinity).padding(.vertical, 12)
+                    .background(NX.warning.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(NX.warning.opacity(0.35)))
+            }.buttonStyle(.plain).disabled(busy)
+            Text(T("Every action restores that day's XP & day-off deductions and is written to the audit log."))
+                .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
+        }
+        .padding(12)
+        .background(NX.violet.opacity(0.05), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(NX.violet.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+        // Its own view for the dialog: the sheet's stack already carries the delete confirmation.
+        .confirmationDialog(pendingOverride.map { overrideTitle($0) } ?? "",
+                            isPresented: Binding(get: { pendingOverride != nil }, set: { if !$0 { pendingOverride = nil } }),
+                            titleVisibility: .visible, presenting: pendingOverride) { action in
+            Button(action == "CLEAR_PENALTY" ? T("Clear penalty") : String(format: T("Change to %@"), Self.overrideLabel(action))) {
+                Task { await applyOverride(action) }
+            }
+            Button(T("Cancel"), role: .cancel) {}
+        } message: { action in Text(overrideConsequence(action)) }
+    }
+
+    private func applyOverride(_ action: String) async {
+        guard let uid = overrideUserId, let day = overrideDayKey else { return }
+        busy = true; err = nil; overrideDone = nil
+        do {
+            let r = try await APIClient.shared.attendanceOverride(userId: uid, date: day, action: action)
+            if action == "CLEAR_PENALTY" {
+                overrideDone = r.refunded == true
+                    ? String(format: T("Penalty for %@ cleared — XP & day-off restored."), dateLabel)
+                    : String(format: T("No penalty on %@ — this day stays safe from deductions."), dateLabel)
+            } else {
+                overrideDone = "\(personName) · \(dateLabel) → \(Self.overrideLabel(action))"
+                    + (r.refunded == true ? " · \(T("Penalty restored."))" : "")
+            }
+            await onDone()
+            if let n = r.multiDayRequestsLeft, n > 0 {
+                // The alert's OK closes the sheet.
+                multiDayLeft = n
+                busy = false
+                return
+            }
+            // Long enough to read the confirmation; still busy so nothing is tapped twice.
+            try? await Task.sleep(for: .milliseconds(1400))
+            dismiss()
+        } catch {
+            err = (error as? LocalizedError)?.errorDescription ?? T("Couldn't change the status.")
+            busy = false
         }
     }
 
