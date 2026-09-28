@@ -6,6 +6,7 @@ import android.provider.Settings
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -156,12 +158,19 @@ fun AttendanceButton(
                             else -> onDismissFlow()
                         }
                     }
-                    .semantics { liveRegion = LiveRegionMode.Polite }
-                    .padding(horizontal = 18.dp, vertical = 12.dp),
+                    .semantics { liveRegion = LiveRegionMode.Polite },
                 contentAlignment = Alignment.Center,
             ) {
+                // A locked check-out is grey that fills with red as the reflection grows (owner's
+                // pick, as on iOS): at 200 characters it is the red Check out.
+                if (flow == null && mode is ButtonMode.CheckOut && !mode.unlocked && !mode.waiting) {
+                    val fill by animateFloatAsState(mode.count.coerceAtMost(mode.min).toFloat() / mode.min, tween(250), label = "reflection-fill")
+                    Box(Modifier.matchParentSize()) {
+                        Box(Modifier.fillMaxHeight().fillMaxWidth(fill).background(OUT_ROSE.copy(alpha = 0.45f)))
+                    }
+                }
                 // A plain crossfade between steps: simple and smooth, no bounce.
-                AnimatedContent(flow?.let { it::class to it } ?: (mode::class to mode), transitionSpec = {
+                AnimatedContent(flow?.let { it::class to it } ?: (mode::class to mode), modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp), transitionSpec = {
                     fadeIn(tween(200)) togetherWith fadeOut(tween(150))
                 }, label = "attendance-label") { (_, state) ->
                     when (state) {
@@ -171,11 +180,8 @@ fun AttendanceButton(
                 }
             }
         }
-        // Reflection progress under a locked check-out.
+        // Why it is locked, right under it.
         if (flow == null && mode is ButtonMode.CheckOut && !mode.unlocked && !mode.waiting) {
-            Box(Modifier.fillMaxWidth().height(4.dp).clip(CircleShape).background(c.muted)) {
-                Box(Modifier.fillMaxWidth(mode.count.coerceAtMost(mode.min).toFloat() / mode.min).height(4.dp).background(c.warning, CircleShape))
-            }
             Text(stringResource(R.string.presence_out_locked), color = c.mutedFg, fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         }
         if (flow is CaptureFlow.Failed) {

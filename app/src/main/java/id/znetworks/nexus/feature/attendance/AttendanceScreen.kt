@@ -1,5 +1,11 @@
 package id.znetworks.nexus.feature.attendance
 
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import android.Manifest
@@ -156,16 +162,35 @@ fun AttendanceScreen(
     val reflectionOk = vm.reflectionOk(s)
     val c = Nx.colors
 
-    Column(Modifier.fillMaxSize().background(c.background)) {
+    Column(Modifier.fillMaxSize().background(c.background).imePadding()) {
     if (onBack != null) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
             Text(stringResource(R.string.home_attendance), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground)
         }
     }
+    // While typing the reflection the Check out button stays in sight above the keyboard.
+    var reflectionFocused by remember { mutableStateOf(false) }
+    val buttonInView = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+    LaunchedEffect(reflectionFocused, s.reflection) {
+        if (reflectionFocused) { kotlinx.coroutines.delay(250); buttonInView.bringIntoView() }
+    }
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    // A drag on the page puts the keyboard away (iOS: swipe to dismiss).
+    val dismissOnScroll = remember {
+        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+            override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                if (source == androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput && kotlin.math.abs(available.y) > 4f) focusManager.clearFocus()
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+        }
+    }
     PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load(); requests.load(); board.load() }, modifier = Modifier.fillMaxSize().weight(1f)) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+            Modifier.fillMaxSize().nestedScroll(dismissOnScroll).verticalScroll(rememberScrollState())
+                // A tap on empty space closes the keyboard too.
+                .pointerInput(Unit) { detectTapGestures { focusManager.clearFocus() } }
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             HeroMap(s)
@@ -181,13 +206,15 @@ fun AttendanceScreen(
             if (!s.canTakeAttendance) {
                 PhoneOnlyCard()
             } else {
-                if (needsReflection) ReflectionCard(s.reflection, vm.reflectionCount(s), reflectionOk, vm::onReflection)
+                if (needsReflection) ReflectionCard(s.reflection, vm.reflectionCount(s), reflectionOk, vm::onReflection) { reflectionFocused = it }
                 ReflectionsLink(onOpen = { showReflections = true })
                 if (s.locationOff) LocationOffBanner()
                 // One control that changes with the day (UPDATES §11); the press flow is drawn inside it.
                 val mode = AttendanceButtonLogic.mode(checkedIn, checkedOut, forcePending, offsitePending,
                     vm.reflectionCount(s), AttendanceViewModel.REFLECTION_MIN, s.today?.today?.checkInAt, s.today?.today?.checkOutAt)
-                AttendanceButton(mode, s.flow, enabled = !s.loading, onPress = ::press, onDismissFlow = vm::dismissFlow)
+                Box(Modifier.bringIntoViewRequester(buttonInView)) {
+                    AttendanceButton(mode, s.flow, enabled = !s.loading, onPress = ::press, onDismissFlow = vm::dismissFlow)
+                }
                 if (s.offsitePrompt) OffsitePrompt(s.offsiteReason, vm::onOffsiteReason, vm::cancelOffsite, vm::submitOffsite)
             }
 
@@ -322,7 +349,8 @@ private fun hhmmIso(iso: String?): String = iso?.let {
 // endregion
 
 @Composable
-private fun ReflectionCard(text: String, count: Int, ok: Boolean, onChange: (String) -> Unit) {
+private fun ReflectionCard(text: String, count: Int, ok: Boolean, onChange: (String) -> Unit, onFocus: (Boolean) -> Unit = {}) {
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
     val c = Nx.colors
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -337,11 +365,15 @@ private fun ReflectionCard(text: String, count: Int, ok: Boolean, onChange: (Str
             value = text, onValueChange = onChange, minLines = 5, maxLines = 12,
             placeholder = { Text(stringResource(R.string.reflection_placeholder)) },
             shape = RoundedCornerShape(12.dp),
+            // Done closes the keyboard (iOS 87ada44 "Selesai"); back, a tap outside and a scroll do too.
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { focus.clearFocus() }),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = if (ok) c.success else c.violet,
                 unfocusedBorderColor = if (ok) c.success.copy(alpha = 0.45f) else c.border,
             ),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().onFocusChanged { onFocus(it.isFocused) },
         )
         if (!ok) {
             Spacer(Modifier.height(6.dp))

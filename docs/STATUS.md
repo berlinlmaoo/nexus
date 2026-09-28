@@ -99,6 +99,10 @@ Done. PRESENCE IN / OUT are gone; `AttendanceButton` is one full-width control:
 - Owner's correction (28 Sep): NO confetti, no shake, no bounce — steps inside the button, a check
   mark, a light haptic, plain crossfades. Submitted data, clientId/idempotency and the queue are
   untouched (AttendanceGuardTest still passes).
+- Reflection (iOS 87ada44, 28 Sep): the keyboard's Done key, system back, a tap on empty space and a
+  drag on the page all close the keyboard; while typing, the Check out button is kept in sight above
+  the keyboard. The locked Check out is grey filling with red as the reflection grows (owner's pick);
+  the thin progress line under it is gone.
 
 ## Phase 2 (tasks & projects), in progress since 28 Sep 2026
 
