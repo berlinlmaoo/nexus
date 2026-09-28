@@ -4,7 +4,7 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (178 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (179 JVM tests, all green).
 Version 0.1.6 (versionCode 1), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 
 ## Done (Phase 1, attendance MVP)
@@ -76,6 +76,9 @@ against the text once it is there).
   as moving) or every 5 min standing still; outside points go up in batches about every 2 min
   (exit/enter and the first fix after a resume go at once). GPS outside: high accuracy, 30 s /
   20 m. Inside unchanged (hourly presence check).
+- Exit margin = the server's `classifyPoint`: outside only beyond radius + max(accuracy, **50 m**)
+  (was 30 m, the same bug iOS fixed in 81abc62: the phone said "outside" before the server's clock
+  started). Moving points outside are at least 10 s apart (a car: ~300 points/hour, not 1,000).
 - The work-session text and the prominent location disclosure now say "every ~50 m or 5 min".
   PRD REQ-ATT-34/36 still say 15 min (owner's document, not edited here).
 

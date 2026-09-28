@@ -137,7 +137,9 @@ class TrailMachineTest {
         now += 20_000
         assertTrue(m.fix(at(0.0055), now).isEmpty())            // ~55 m: queued, waits for the batch
         assertEquals(1, m.state.pending.size)
-        now += 20_000; m.fix(at(0.006), now)                    // another step
+        now += 5_000; m.fix(at(0.006), now)                     // a step, but 5 s after the last point: waits
+        assertEquals(1, m.state.pending.size)
+        now += 15_000; m.fix(at(0.006), now)                    // 20 s on: counts
         assertEquals(2, m.state.pending.size)
         now += 20_000
         assertTrue(m.fix(at(0.007, acc = 150.0), now).isEmpty()) // a vague fix is not movement
@@ -210,6 +212,16 @@ class TrailMachineTest {
         // A vague fix (300 m accuracy) decides nothing either.
         m.fix(at(0.005, acc = 300.0), now)
         assertEquals(TrailZone.INSIDE, m.state.zone)
+    }
+
+    @Test fun exitMarginIsTheServers50m() {
+        val fence = TrailFence(0.0, 0.0, 100.0)
+        fun p(m: Double, acc: Double) = TrailPoint(recordId = "", lat = m / 111_195.0, lng = 0.0, accuracy = acc, atMillis = 0)
+        // 140 m with a 10 m fix: beyond radius + 30 but not radius + 50 → not yet outside (was, before 81abc62).
+        assertNull(TrailMachine.decisive(p(140.0, 10.0), fence))
+        assertEquals(false, TrailMachine.decisive(p(155.0, 10.0), fence))
+        // A worse fix widens the margin: 155 m with 70 m accuracy is still undecided.
+        assertNull(TrailMachine.decisive(p(155.0, 70.0), fence))
     }
 
     @Test fun exitWithoutFreshFixAsksForOneAndTagsIt() {

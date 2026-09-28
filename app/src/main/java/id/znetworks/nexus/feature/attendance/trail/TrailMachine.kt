@@ -128,6 +128,10 @@ class TrailMachine(var state: TrailState = TrailState()) {
         const val SEND_INTERVAL_MS = 5 * 60_000L
         /** Outside, moving: a point once this far from the last one queued. */
         const val STEP_METERS = 50.0
+        /** ...but never closer than this after the last one: a car makes ~300 points an hour, not 1,000. */
+        const val STEP_MIN_GAP_MS = 10_000L
+        /** The server's exit margin beyond the radius (classifyPoint). */
+        const val OUTSIDE_MARGIN = 50.0
         /** Outside points wait for one upload about this often (exit/enter never wait). */
         const val UPLOAD_EVERY_MS = 120_000L
         const val MAX_SHIFT_MS = 16 * 3_600_000L
@@ -147,14 +151,16 @@ class TrailMachine(var state: TrailState = TrailState()) {
 
         /**
          * Inside, outside, or null when the fix is too vague. A margin of the fix's own accuracy on
-         * the way OUT keeps GPS jitter at the edge from inventing exits.
+         * the way OUT keeps GPS jitter at the edge from inventing exits. The margin is the SERVER's
+         * (radius + max(accuracy, 50 m), `classifyPoint` in lib/attendance-outside.ts): with a smaller
+         * one the phone said "outside" while the server's clock never started (iOS 81abc62).
          */
         fun decisive(p: TrailPoint, fence: TrailFence): Boolean? {
             val acc = p.accuracy ?: DECISIVE_ACCURACY
             if (acc < 0 || acc > DECISIVE_ACCURACY) return null
             val d = distance(p.lat, p.lng, fence.lat, fence.lng)
             if (d <= fence.radius) return true
-            if (d > fence.radius + max(acc, 30.0)) return false
+            if (d > fence.radius + max(acc, OUTSIDE_MARGIN)) return false
             return null
         }
 
@@ -432,6 +438,7 @@ class TrailMachine(var state: TrailState = TrailState()) {
     private fun moved(p: TrailPoint): Boolean {
         val last = state.lastQueued ?: return false
         if ((p.accuracy ?: DECISIVE_ACCURACY) > DECISIVE_ACCURACY) return false
+        if (p.atMillis - last.atMillis < STEP_MIN_GAP_MS) return false
         return distance(p.lat, p.lng, last.lat, last.lng) >= STEP_METERS
     }
 
