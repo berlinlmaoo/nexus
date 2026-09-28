@@ -232,6 +232,14 @@ final class AttendanceQueue {
                 // update cover is already coming up and `holdForUpdate` raises the popup on it.
                 holdForUpdate(why)
                 return
+            } catch APIError.transport(let message) where entry.kind == .checkIn
+                        && message.localizedCaseInsensitiveContains("already checked in") {
+                // Checked in some other way while this tap waited (the web, another phone): the day
+                // already has what it was for. Done, silently — retrying it five times would hold
+                // the check-out queued behind it and end with "refused" for nothing.
+                remove(entry.id)
+                lastError = nil
+                continue
             } catch {
                 bumpAttempts(entry.id, message: error.localizedDescription)
                 return
