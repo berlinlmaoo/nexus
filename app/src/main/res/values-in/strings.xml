@@ -1508,4 +1508,5 @@
     <string name="always_button">Izinkan lokasi</string>
     <string name="acct_email_password_help">Untuk memastikan ini kamu. Email lamamu akan diberi tahu soal perubahan ini.</string>
     <string name="company_only">Hanya untuk Z Networks. Ini bagian dari workspace perusahaan.</string>
+    <string name="hero_recenter">Tampilkan lokasiku</string>
 </resources>

@@ -2,6 +2,10 @@ package id.znetworks.nexus.feature.attendance
 
 import id.znetworks.nexus.feature.attendance.history.MapFrame
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.material.icons.filled.NearMe
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -201,8 +205,8 @@ fun AttendanceScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            HeroMap(s)
-            Hero(s, checkedIn, checkedOut, forcePending)
+            // iOS hero (Berlin, 29 Sep, point 1): the purple time card floats over the map.
+            HeroCard(s, checkedIn, checkedOut, forcePending)
             if (s.loading) LoadingRow()
             if (s.serverDown) DownCard(onRetry = { vm.load() })
             else s.error?.let { ErrorCard(it, onRetry = { vm.load() }) }
@@ -271,17 +275,59 @@ private fun problemText(p: QueueProblem): String = when (p) {
 
 // region hero
 
-/** The hero map (web MobileCheckInHero): where you are and the office circle. Display only. */
+/**
+ * The hero as on iOS: a 360 dp map with the purple time card floating on its top, the status chips on
+ * its bottom left and a recenter button on its bottom right. The map is drawn 180 dp taller and pushed
+ * down 90 dp (iOS pinDrop) so the dot at its centre lands below the card, not under it.
+ */
 @Composable
-private fun HeroMap(s: AttendanceUiState) {
+private fun HeroCard(s: AttendanceUiState, checkedIn: Boolean, checkedOut: Boolean, forcePending: Boolean) {
+    val c = Nx.colors
+    var onMe by remember { mutableStateOf(0) } // recenter: frame the map on the person again
+    Box(Modifier.fillMaxWidth().height(HERO_HEIGHT).clip(RoundedCornerShape(24.dp)).background(c.muted).border(1.dp, c.border, RoundedCornerShape(24.dp))) {
+        androidx.compose.runtime.key(onMe) {
+            HeroMap(s, Modifier.fillMaxWidth().requiredHeight(HERO_HEIGHT + PIN_DROP * 2).offset(y = PIN_DROP), centerOnMe = onMe > 0)
+        }
+        Column(Modifier.fillMaxSize()) {
+            Hero(s, Modifier.padding(12.dp))
+            Spacer(Modifier.weight(1f))
+            Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.Bottom) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val status = stringResource(when {
+                        forcePending -> R.string.status_finish_yesterday
+                        checkedOut -> R.string.status_done
+                        checkedIn -> R.string.status_clocked_in
+                        else -> R.string.status_ready
+                    })
+                    Text(status, color = c.mutedFg, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.background(c.card.copy(alpha = 0.85f), CircleShape).padding(horizontal = 12.dp, vertical = 7.dp))
+                    // Without it the exemption is invisible: the member only finds out by not being refused.
+                    if (s.today?.noGeofence == true) Text(stringResource(R.string.location_free), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.background(SKY, CircleShape).padding(horizontal = 12.dp, vertical = 7.dp))
+                }
+                if (s.here != null) Box(Modifier.size(40.dp).background(c.card, CircleShape).border(1.dp, c.border, CircleShape).clip(CircleShape).clickable { onMe++ },
+                    contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.NearMe, stringResource(R.string.hero_recenter), tint = c.foreground, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+    }
+}
+
+private val HERO_HEIGHT = 360.dp
+private val PIN_DROP = 90.dp
+
+/** The hero's map: where you are and the office circle. Display only. */
+@Composable
+private fun HeroMap(s: AttendanceUiState, mod: Modifier, centerOnMe: Boolean) {
     val here = s.here
     val rec = s.today?.today ?: s.today?.pendingCheckout
-    val c = Nx.colors
-    val mod = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(24.dp)).border(1.dp, c.border, RoundedCornerShape(24.dp))
     // Location-free members are not tied to an office: the map follows them (iOS 5ba2e93).
-    if (s.today?.noGeofence == true) {
+    if (s.today?.noGeofence == true || (centerOnMe && here != null)) {
         if (here == null) return
-        OsmMap(mod, circle = null, path = emptyList(), pins = emptyList(), frame = MapFrame.person(here.lat, here.lng), userDot = here.lat to here.lng)
+        val office = if (centerOnMe && s.today?.noGeofence != true) rec?.officeLocation?.takeIf { it.latitude != null && it.longitude != null } else null
+        OsmMap(mod, circle = office?.let { MapCircle(it.latitude!!, it.longitude!!, it.radiusMeters ?: 100.0) }, path = emptyList(), pins = emptyList(),
+            frame = MapFrame.person(here.lat, here.lng), userDot = here.lat to here.lng, circleColor = android.graphics.Color.rgb(123, 104, 238))
         return
     }
     // Today's record's office, else the nearest one before check-in, with its check-in circle and a
@@ -319,46 +365,32 @@ private fun ReflectionsLink(onOpen: () -> Unit) {
     }
 }
 
+/** The purple time card (iOS timeCard): short date, running clock, shift, IN / OUT. */
 @Composable
-private fun Hero(s: AttendanceUiState, checkedIn: Boolean, checkedOut: Boolean, forcePending: Boolean) {
-    val c = Nx.colors
+private fun Hero(s: AttendanceUiState, modifier: Modifier = Modifier) {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { now = System.currentTimeMillis(); delay(1_000) } }
     val zoned = Instant.ofEpochMilli(now).atZone(OfficeTime.ZONE)
     val rec = s.today?.today ?: s.today?.pendingCheckout
-    val status = stringResource(
-        when {
-            forcePending -> R.string.status_finish_yesterday
-            checkedOut -> R.string.status_done
-            checkedIn -> R.string.status_clocked_in
-            else -> R.string.status_ready
-        },
-    )
     Column(
-        Modifier.fillMaxWidth()
+        modifier.fillMaxWidth()
+            .shadow(14.dp, RoundedCornerShape(24.dp), ambientColor = Color(0xFFA78BFA), spotColor = Color(0xFFA78BFA))
             .background(Brush.linearGradient(listOf(Color(0xFFC4B5FD), Color(0xFF7C3AED))), RoundedCornerShape(24.dp))
+            .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(24.dp))
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy", Locale.getDefault()).format(zoned), color = Color.White.copy(alpha = 0.9f),
+        // Short date in Indonesian, as iOS ("Sel, 29 Sep").
+        Text(DateTimeFormatter.ofPattern("EEE, d MMM", Locale.forLanguageTag("id-ID")).format(zoned), color = Color.White.copy(alpha = 0.9f),
             fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth())
         Text(DateTimeFormatter.ofPattern("HH:mm:ss").format(zoned), color = Color.White, fontFamily = DisplayFont,
             fontWeight = FontWeight.Bold, fontSize = 46.sp)
         Text(shiftLabel(s.today?.myShift), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.background(Color.White.copy(alpha = 0.18f), CircleShape).padding(horizontal = 12.dp, vertical = 5.dp))
-        Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
             Text("IN ${hhmmIso(rec?.checkInAt)}", color = Color.White.copy(alpha = 0.9f), fontWeight = FontWeight.Bold, fontSize = 14.sp)
             Text("OUT ${hhmmIso(rec?.checkOutAt)}", color = Color.White.copy(alpha = 0.9f), fontWeight = FontWeight.Bold, fontSize = 14.sp)
-        }
-        Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(status, color = c.foreground, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.background(c.card.copy(alpha = 0.9f), CircleShape).padding(horizontal = 12.dp, vertical = 7.dp))
-            if (s.today?.noGeofence == true) {
-                Text(stringResource(R.string.location_free), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.background(SKY, CircleShape).padding(horizontal = 12.dp, vertical = 7.dp))
-            }
         }
     }
 }
