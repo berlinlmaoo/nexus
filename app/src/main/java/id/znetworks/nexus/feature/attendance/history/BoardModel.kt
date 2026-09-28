@@ -50,6 +50,9 @@ data class Score(val shown: Int, val target: Int, val surplus: Int) {
 }
 
 object BoardModel {
+    /** Rows are drawn only under the period they were fetched for (audit T6). */
+    fun rowsFor(period: String, rowsPeriod: String?, rows: List<HistoryRow>): List<HistoryRow> = if (rowsPeriod == period) rows else emptyList()
+
     const val DEFAULT_QUOTA = 4
 
     /** Working days: the period's calendar days minus that person's day-off quota (31 → 27 with 4). */

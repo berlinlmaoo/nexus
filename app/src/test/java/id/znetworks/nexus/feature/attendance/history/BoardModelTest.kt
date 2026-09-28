@@ -88,4 +88,12 @@ class BoardModelTest {
         assertFalse(rows[1].isRecord)
         assertEquals("2026-09-24", rows[0].dayKey)
     }
+
+    // Audit T6: another period's rows are never drawn under this period's dates.
+    @Test fun rowsShowOnlyUnderTheirOwnPeriod() {
+        val rows = listOf(HistoryRow(id = "r"))
+        assertEquals(rows, BoardModel.rowsFor("2026-09", "2026-09", rows))
+        assertEquals(emptyList<HistoryRow>(), BoardModel.rowsFor("2026-08", "2026-09", rows))
+        assertEquals(emptyList<HistoryRow>(), BoardModel.rowsFor("2026-09", null, rows))
+    }
 }

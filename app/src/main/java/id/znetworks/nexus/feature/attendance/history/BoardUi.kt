@@ -80,6 +80,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -91,6 +92,8 @@ import java.util.Locale
 data class BoardState(
     val offset: Int = 0,
     val rows: List<HistoryRow> = emptyList(),
+    /** The period [rows] and [roster] belong to: another period's rows are never drawn (audit T6). */
+    val rowsPeriod: String? = null,
     /** Everyone who belongs on the board, rows or not (scope=workspace). */
     val roster: List<id.znetworks.nexus.feature.attendance.requests.PersonRef> = emptyList(),
     val loading: Boolean = true,
@@ -130,14 +133,20 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
         load()
     }
 
-    fun load() = viewModelScope.launch {
-        _state.update { it.copy(loading = true, error = null) }
-        val period = BoardModel.periodKey(_state.value.offset)
-        try {
-            val r = api.history(if (wide) "workspace" else "me", period)
-            _state.update { it.copy(rows = r.records, roster = r.roster, loading = false) }
-        } catch (e: ApiError) {
-            _state.update { it.copy(loading = false, error = e.describe(res)) }
+    private var loadJob: Job? = null
+
+    /** The latest request wins: a slower answer for the period left behind is cancelled, not drawn. */
+    fun load() {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            _state.update { it.copy(loading = true, error = null) }
+            val period = BoardModel.periodKey(_state.value.offset)
+            try {
+                val r = api.history(if (wide) "workspace" else "me", period)
+                _state.update { it.copy(rows = r.records, roster = r.roster, rowsPeriod = period, loading = false) }
+            } catch (e: ApiError) {
+                _state.update { it.copy(loading = false, error = e.describe(res)) }
+            }
         }
     }
 
@@ -260,7 +269,10 @@ fun CrewBoardCard(vm: BoardViewModel) {
     val days = remember(period) { BoardModel.days(period) }
     val today = OfficeTime.today()
     val session = (context.applicationContext as NexusApplication).container.sessionStore.current
-    val members = remember(s.rows, s.roster) { BoardModel.members(s.rows, vm.today?.viewerId ?: session?.userId, session?.userName.orEmpty(), s.roster) }
+    // Only this period's rows: while another period's are still in the state they are not shown.
+    val rows = BoardModel.rowsFor(period, s.rowsPeriod, s.rows)
+    val roster = if (s.rowsPeriod == period) s.roster else emptyList()
+    val members = remember(rows, roster) { BoardModel.members(rows, vm.today?.viewerId ?: session?.userId, session?.userName.orEmpty(), roster) }
     var full by remember { mutableStateOf(false) }
 
     Column(
@@ -280,8 +292,8 @@ fun CrewBoardCard(vm: BoardViewModel) {
             if (vm.wide) IconButton(onClick = { vm.export { shareFile(context, it) } }, enabled = !s.busy) { Icon(Icons.Filled.Download, stringResource(R.string.board_export)) }
         }
         when {
-            s.loading && s.rows.isEmpty() -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }
-            s.error != null && s.rows.isEmpty() -> EmptyState(Icons.Filled.GridView, stringResource(R.string.board_load_failed), s.error!!,
+            s.loading && rows.isEmpty() -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }
+            s.error != null && rows.isEmpty() -> EmptyState(Icons.Filled.GridView, stringResource(R.string.board_load_failed), s.error!!,
                 stringResource(R.string.try_again), { vm.load() })
             members.isEmpty() -> EmptyState(Icons.Filled.GridView, stringResource(R.string.board_empty), stringResource(R.string.board_empty_sub),
                 stringResource(R.string.previous_period), { vm.shift(-1) })
