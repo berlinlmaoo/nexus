@@ -2,6 +2,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRe
 import { createPortal } from "react-dom";
 import { Camera, Loader2, RefreshCw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LivenessCapture } from "@/components/attendance/LivenessCapture";
 
 export interface SelfieCaptureHandle {
   open: () => void;
@@ -45,7 +46,7 @@ export const SelfieCapture = forwardRef<SelfieCaptureHandle, SelfieCaptureProps>
   const stop = useCallback(() => { setStream((s) => { s?.getTracks().forEach((t) => t.stop()); return null; }); }, []);
   useEffect(() => () => { stream?.getTracks().forEach((t) => t.stop()); }, [stream]);
 
-  const openCamera = useCallback(async () => {
+  const openPlainCamera = useCallback(async () => {
     if (!navigator.mediaDevices?.getUserMedia) { fileRef.current?.click(); return; }
     setOpening(true);
     try {
@@ -60,6 +61,12 @@ export const SelfieCapture = forwardRef<SelfieCaptureHandle, SelfieCaptureProps>
       setOpening(false);
     }
   }, []);
+
+  // The live face check first — the same one the phone layout uses (look straight, turn one way, the
+  // other, blink). The plain camera below is only the fallback for a browser that can't run it. Until
+  // 28 Sep 2026 the desktop card went straight to the plain shutter, so a laptop check-in skipped it.
+  const [liveness, setLiveness] = useState(false);
+  const openCamera = useCallback(() => { if (!disabled) setLiveness(true); }, [disabled]);
 
   useImperativeHandle(ref, () => ({ open: openCamera }), [openCamera]);
 
@@ -109,6 +116,15 @@ export const SelfieCapture = forwardRef<SelfieCaptureHandle, SelfieCaptureProps>
         </>
       )}
 
+      {liveness && typeof document !== "undefined" && createPortal(
+        <LivenessCapture
+          onCancel={() => setLiveness(false)}
+          onCapture={(f) => { setLiveness(false); onChange(f); onCapture?.(f); }}
+          onUnavailable={() => { setLiveness(false); void openPlainCamera(); }}
+        />,
+        document.body,
+      )}
+
       <input ref={fileRef} type="file" accept="image/*" capture="user" onChange={(e) => { const f = e.target.files?.[0] ?? null; onChange(f); if (f) onCapture?.(f); }} className="hidden" />
 
       {stream &&
@@ -124,7 +140,7 @@ export const SelfieCapture = forwardRef<SelfieCaptureHandle, SelfieCaptureProps>
                 <button onClick={capture} className={cn("grid h-16 w-16 place-items-center rounded-full bg-white text-black shadow-pop ring-4 ring-white/30 transition-transform active:scale-90")} aria-label="Take photo">
                   <Camera className="h-7 w-7" />
                 </button>
-                <button onClick={openCamera} className="inline-flex items-center gap-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-white/80 transition-colors hover:text-white" aria-label="Switch camera"><RefreshCw className="h-4 w-4" /></button>
+                <button onClick={openPlainCamera} className="inline-flex items-center gap-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-white/80 transition-colors hover:text-white" aria-label="Switch camera"><RefreshCw className="h-4 w-4" /></button>
               </div>
               <p className="text-xs text-white/60">Line up your face, then hit the shutter.</p>
             </div>
