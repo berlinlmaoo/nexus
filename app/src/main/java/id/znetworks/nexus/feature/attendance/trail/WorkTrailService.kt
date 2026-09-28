@@ -247,7 +247,8 @@ class WorkTrailService : Service() {
         val posted = if (episode != null && prefs.getLong("episode", -1) == episode) {
             prefs.getStringSet("posted", emptySet()).orEmpty().mapNotNull { runCatching { OutsideClock.Alert.valueOf(it) }.getOrNull() }.toSet()
         } else emptySet()
-        val step = OutsideClock.alertStep(trail.state, now, posted)
+        val minutes = (application as NexusApplication).container.remoteConfig.current.outsideHourAlertMinutes
+        val step = OutsideClock.alertStep(trail.state, now, posted, minutes * 60_000L)
         if (step.cancel) { nm.cancel(ALERT_ID); return }
         val alert = step.post ?: return
         val o = OutsideClock.present(trail.state, now) ?: return
@@ -257,7 +258,10 @@ class WorkTrailService : Service() {
             OutsideClock.Alert.HOUR -> {
                 val left = ((o.autoAtMillis - now) / 60_000L).coerceAtLeast(0).toInt()
                 val dur = if (left >= 60) getString(R.string.dur_hm, left / 60, left % 60) else getString(R.string.dur_m, left)
-                getString(R.string.outside_hour_title) to getString(R.string.outside_hour_body, dur, auto)
+                // The minute mark is the server's (remote config): the title says the real one.
+                val title = if (minutes == 60) getString(R.string.outside_hour_title) else getString(R.string.outside_minutes_title,
+                    if (minutes >= 60) getString(R.string.dur_hm, minutes / 60, minutes % 60) else getString(R.string.dur_m, minutes))
+                title to getString(R.string.outside_hour_body, dur, auto)
             }
         }
         val open = PendingIntent.getActivity(this, 2, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),

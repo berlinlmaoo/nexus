@@ -27,10 +27,13 @@ class NexusApplication : Application() {
         container.flushQueueSoon()
         // Version policy: forced at launch, then at most every 30 min on foreground (REQ-ATT-41).
         container.appScope.launch { container.versionGate.checkPolicy(force = true) }
+        // Remote config: forced at launch, then at most every 5 min on foreground.
+        container.appScope.launch { container.remoteConfig.refresh(force = true) }
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
                 // Back in the foreground: are we in the office? (API.md §1.2)
                 container.lanRoute.reprobe(force = true)
+                container.appScope.launch { container.remoteConfig.refresh() }
                 container.appScope.launch {
                     container.versionGate.checkPolicy(force = false)
                     // After the gate: a lifted lock lets the held taps go in the same pass.

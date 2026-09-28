@@ -496,7 +496,7 @@ private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut
             headlineContent = { Text(stringResource(R.string.logout), color = c.danger) },
             leadingContent = { Icon(Icons.AutoMirrored.Filled.Logout, null, tint = c.danger) },
             colors = itemColors, modifier = shape,
-            trailingContent = { TextButton(onClick = { if (container.workdayOpen()) logoutBlocked = true else confirmLogout = true }) { Text(stringResource(R.string.logout), color = c.danger) } },
+            trailingContent = { TextButton(onClick = { if (container.signOutBlocked()) logoutBlocked = true else confirmLogout = true }) { Text(stringResource(R.string.logout), color = c.danger) } },
         )
         Spacer(Modifier.height(24.dp))
         ListItem(
@@ -517,14 +517,14 @@ private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut
             title = { Text(stringResource(R.string.logout_confirm_title)) },
             text = { Text(stringResource(R.string.logout_confirm_message)) },
             // Checked again: a check-in could have landed while the dialog was open.
-            confirmButton = { TextButton(onClick = { confirmLogout = false; if (container.workdayOpen()) logoutBlocked = true else onSignOut() }) { Text(stringResource(R.string.logout), color = c.danger) } },
+            confirmButton = { TextButton(onClick = { confirmLogout = false; if (container.signOutBlocked()) logoutBlocked = true else onSignOut() }) { Text(stringResource(R.string.logout), color = c.danger) } },
             dismissButton = { TextButton(onClick = { confirmLogout = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
     if (logoutBlocked) AlertDialog(
         onDismissRequest = { logoutBlocked = false },
-        title = { Text(stringResource(R.string.logout_blocked_title)) },
-        text = { Text(stringResource(R.string.logout_blocked_body)) },
+        title = { Text(id.znetworks.nexus.core.config.configText("signout.blocked.title", R.string.logout_blocked_title)) },
+        text = { Text(id.znetworks.nexus.core.config.configText("signout.blocked.body", R.string.logout_blocked_body)) },
         confirmButton = { TextButton(onClick = { logoutBlocked = false; onOpenAttendance() }) { Text(stringResource(R.string.home_attendance)) } },
         dismissButton = { TextButton(onClick = { logoutBlocked = false }) { Text("OK") } },
     )

@@ -29,6 +29,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,9 +57,10 @@ import id.znetworks.nexus.ui.theme.Nx
 
 /** The Control Room tabs, iOS order; the BoD-only ones are added for BoD / One Above All. */
 object ControlRoomTabs {
-    fun forRole(isBoD: Boolean) = buildList {
+    /** [fakeGps]: the server's `fakeGpsReview` flag (remote config). */
+    fun forRole(isBoD: Boolean, fakeGps: Boolean = true) = buildList {
         addAll(listOf("users", "attendance", "audit", "quests"))
-        if (isBoD) addAll(listOf("announcements", "extra-dayoff", "suspects", "gideon", "app"))
+        if (isBoD) addAll(listOfNotNull("announcements", "extra-dayoff", "suspects".takeIf { fakeGps }, "gideon", "app"))
     }
 }
 
@@ -94,7 +96,8 @@ fun ControlRoomScreen(onBack: () -> Unit, nav: AdminNav, tabContent: @Composable
         if (!ready) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }; return@Column }
         // Manager and above only, as the web: anybody else gets a door they can see is locked.
         if (!viewer.canAdminister) { TabEmpty(Icons.Filled.AdminPanelSettings, stringResource(R.string.ad_no_access)); return@Column }
-        val tabs = ControlRoomTabs.forRole(viewer.isBoD)
+        val config by (LocalContext.current.applicationContext as NexusApplication).container.remoteConfig.body.collectAsState()
+        val tabs = ControlRoomTabs.forRole(viewer.isBoD, config.fakeGpsReview)
         // Pills that size to their text and scroll, not a segmented control that truncates.
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             tabs.forEach { id ->

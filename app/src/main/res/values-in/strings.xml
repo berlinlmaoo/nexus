@@ -1502,4 +1502,5 @@
     <string name="ai_never_signed_in">Belum pernah masuk</string>
     <string name="set_title">Buat password kamu</string>
     <string name="set_sub">Akun NEXUS kamu sudah siap. Minta kode ke email kamu untuk membuat password-nya.</string>
+    <string name="outside_minutes_title">Sudah %1$s di luar kantor</string>
 </resources>

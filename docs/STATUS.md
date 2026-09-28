@@ -236,6 +236,14 @@ and live location are still running…", with a button to Attendance. Checked ag
 queued check-out ends the day. A 401 still ends the session. WorkdayRule in PresenceTest; guarded in
 AttendanceGuardTest (e0ead22).
 
+**Remote config (Berlin, 28 Sep; iOS RemoteConfig.swift 77818ba).** `GET /api/app/config?platform=android`
+(public, no session, 426-exempt): fetched at launch (forced) and on every foreground (at most every 5 min),
+kept on disk, defaults = the server's current values, unknown keys ignored, a failed fetch changes nothing.
+Used for: holding logout (`blockSignOutDuringWorkday`, dialog texts `signout.blocked.*`), the Fake GPS tab
+(`fakeGpsReview`), the local outside alert (`outsideHourAlertMinutes`, title follows it). Texts in the app's
+language (Android "in" = server "id"), else the server's English, else the app's own copy. **Rule from now
+on: a rule or sentence that may change is read from this config, not hard-coded.** RemoteConfigTest (this step).
+
 **Fake GPS (Berlin, 28 Sep; server f7f5f1c, iOS c977091).** The mock flag, the main evidence on Android:
 every fix sent is built from a real `Location` by `toFix()` with `simulated = isMock` (API 31+) /
 `isFromMockProvider`, and `simulated=1/0` goes on every check-in, check-out (incl. offsite) and offline

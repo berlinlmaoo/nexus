@@ -73,11 +73,12 @@ object OutsideClock {
      */
     data class AlertStep(val post: Alert?, val cancel: Boolean)
 
-    fun alertStep(s: TrailState, now: Long, posted: Set<Alert>): AlertStep {
+    /** [hourAlertMs]: the server's `outsideHourAlertMinutes` (remote config), 60 min by default. */
+    fun alertStep(s: TrailState, now: Long, posted: Set<Alert>, hourAlertMs: Long = HOUR_ALERT_MS): AlertStep {
         val o = present(s, now) ?: return AlertStep(null, cancel = true)
         return when {
             // Found out late (phone off for an hour): only the hour one, it says everything.
-            now - o.sinceMillis >= HOUR_ALERT_MS -> AlertStep(if (Alert.HOUR in posted) null else Alert.HOUR, cancel = false)
+            now - o.sinceMillis >= hourAlertMs -> AlertStep(if (Alert.HOUR in posted) null else Alert.HOUR, cancel = false)
             Alert.LEFT !in posted -> AlertStep(Alert.LEFT, cancel = false)
             else -> AlertStep(null, cancel = false)
         }

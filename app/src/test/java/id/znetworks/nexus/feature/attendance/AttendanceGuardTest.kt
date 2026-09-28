@@ -122,7 +122,7 @@ class AttendanceGuardTest {
         // the session in AuthRepository (not from a screen).
         val shell = sources.entries.first { it.key.name == "SignedInShell.kt" }.value
         assertEquals(1, Regex("""onSignOut\(\)""").findAll(shell).count())
-        assertTrue(shell.contains("if (container.workdayOpen()) logoutBlocked = true else onSignOut()"))
+        assertTrue(shell.contains("if (container.signOutBlocked()) logoutBlocked = true else onSignOut()"))
         assertEquals(sortedSetOf("MainActivity.kt"), filesMatching(Regex("""auth::signOut|auth\.signOut\(""")))
     }
 }

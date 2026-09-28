@@ -174,7 +174,15 @@ class AppContainer(private val context: Context) {
         })
     }
 
-    /** Logout is refused while this is true (the "Check out first" dialog). */
+    /** Server-side flags, numbers and sentences (GET /api/app/config?platform=android). */
+    val remoteConfig = id.znetworks.nexus.core.config.RemoteConfig(context, fetch = {
+        api.get("/api/app/config?platform=android", id.znetworks.nexus.core.config.ConfigBody.serializer(), authed = false, callTimeoutMs = 8_000)
+    })
+
+    /** The person's own logout is held now: a workday runs and the server's flag says to hold it. */
+    fun signOutBlocked(): Boolean = remoteConfig.current.blockSignOutDuringWorkday && workdayOpen()
+
+    /** A workday is running on this phone (see WorkdayRule). */
     fun workdayOpen(): Boolean = id.znetworks.nexus.feature.widget.WorkdayRule.open(
         attendanceQueue.state.value.entries, presence.lastToday?.today, workTrail.state.isActive, todayKnown = presence.lastToday != null)
 
