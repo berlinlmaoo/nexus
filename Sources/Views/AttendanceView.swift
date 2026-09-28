@@ -46,6 +46,9 @@ struct AttendanceView: View {
     @State private var showOffsite = false
     @State private var offsiteReason = ""
     @State private var reflection = ""
+    /// Drives the keyboard's Done button: the reflection is multi-line, so Return adds a line and
+    /// nothing else ever put the keyboard away (owner, 28 Sep 2026).
+    @FocusState private var reflectionFocused: Bool
     @State private var showReflections = false
 
     /// The server rejects a check-out whose reflection is shorter than this (mirrors the web's
@@ -174,6 +177,8 @@ struct AttendanceView: View {
                 }
                 .padding(16)
             }
+            // Dragging the page down puts the keyboard away too.
+            .scrollDismissesKeyboard(.interactively)
             // On the ScrollView, not beside `.permissionAlert` further down: two alerts on one view
             // and one of them never shows.
             .heldAttendanceNotice(whileLocked: false)
@@ -785,6 +790,13 @@ struct AttendanceView: View {
             Text(T("Required before check-out. Tell us what you worked on today."))
                 .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
             TextField(T("Today I worked on…"), text: $reflection, axis: .vertical)
+                .focused($reflectionFocused)
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button(T("Done")) { reflectionFocused = false }.font(NXFont.text(15, .bold))
+                    }
+                }
                 .font(NXFont.text(14)).lineLimit(5...12)
                 .padding(10)
                 .background(NX.muted.opacity(0.5), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
