@@ -1687,6 +1687,38 @@ final class AppLanguage {
         "Goal milestone": "Milestone goal",
         "Daily streak": "Streak harian",
         "XP change": "Perubahan XP",
+        // Attendance button (one button for the day, press flow drawn inside it) — 28 Sep 2026
+        "At %@ · %@": "Di %@ · %@",
+        "At %@": "Di %@",
+        "Check-in failed": "Check-in gagal",
+        "Check-out failed": "Check-out gagal",
+        "Checking your selfie…": "Mengecek selfie…",
+        "Check-out saved on this phone": "Check-out tersimpan di HP ini",
+        "Check-out sent · waiting for approval": "Check-out terkirim · menunggu persetujuan",
+        "Check out the previous day": "Check-out hari sebelumnya",
+        "%d min late": "telat %d menit",
+        "Done for today": "Selesai hari ini",
+        "Finding your location…": "Mencari lokasimu…",
+        "%@ from %@": "%@ dari %@",
+        "%@ from %@ — outside the office area": "%@ dari %@ — di luar area kantor",
+        "Location found · ±%@": "Lokasi ketemu · ±%@",
+        "Location-free — clock in from anywhere": "Bebas lokasi — absen dari mana saja",
+        "Location-free · position recorded": "Bebas lokasi · posisi tercatat",
+        "No check-in needed — it's already on your record.": "Tidak perlu check-in — sudah tercatat di absensimu.",
+        "on time": "tepat waktu",
+        "Outside the office · with your reason": "Di luar kantor · dengan alasanmu",
+        "Reflection ready ✓": "Refleksi siap ✓",
+        "Request": "Pengajuan",
+        "Saved on this phone": "Tersimpan di HP ini",
+        "Sends itself when NEXUS is back": "Terkirim sendiri begitu NEXUS kembali",
+        "the office": "kantor",
+        "worked %@": "kerja %@",
+        "Write your reflection first · %d/%d": "Tulis refleksi dulu · %d/%d",
+        "Your approved request covers today": "Pengajuanmu yang disetujui mencakup hari ini",
+        "⚠️ You still have an earlier shift that was never checked out. Tap Check out to close it first — then you can check in again.":
+            "⚠️ Masih ada shift sebelumnya yang belum di-check-out. Ketuk Check out untuk menutupnya dulu — setelah itu kamu bisa check-in lagi.",
+        "⚠️ You still have an earlier shift that was never checked out. Write the daily reflection above first — Check out unlocks at 200 characters.":
+            "⚠️ Masih ada shift sebelumnya yang belum di-check-out. Tulis refleksi harian di atas dulu — Check out terbuka setelah 200 karakter.",
     ]
 }
 

@@ -59,6 +59,9 @@ struct AttendanceRecord: Decodable, Sendable {
     let checkInAt: String?
     let checkOutAt: String?
     let lateMinutes: Int?
+    /// Minutes worked once checked out, as the server counts them (the web's "Worked 8h 45m").
+    /// Optional so every server before it still decodes; the button falls back to out − in.
+    let workedMinutes: Int?
     let checkOutApproval: String?   // PENDING | APPROVED | REJECTED | null
     let officeLocation: OfficeRef?
     /// "on" | "denied" | nil — whether Always location was granted for this record (0.1.6).

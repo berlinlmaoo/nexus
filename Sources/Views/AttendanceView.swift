@@ -4,7 +4,8 @@ import MapKit
 import CoreLocation
 
 /// Native port of the web MobileCheckInHero: map hero + violet gradient time card (live clock,
-/// schedule, IN/OUT) + green "Presence In" / red "Presence Out" + offsite-reason flow.
+/// schedule, IN/OUT) + ONE attendance button that follows the day (green Check in → Check out,
+/// locked until the reflection is long enough → done) + offsite-reason flow.
 struct AttendanceView: View {
     @Environment(AuthStore.self) private var auth
     @State private var today: AttendanceToday?
@@ -57,23 +58,38 @@ struct AttendanceView: View {
 
     enum Action { case checkIn, checkOut }
     struct Banner: Identifiable { let id = UUID(); let text: String; let good: Bool }
-    /// Absen adalah satu-satunya ketukan di aplikasi ini yang tidak boleh berakhir dengan "sudah
-    /// belum ya?". Tahapannya digambar sebagai kartu di tengah layar — mencari lokasi, mengirim,
-    /// lalu hasilnya — supaya orang yang menekan tombol melihat prosesnya, bukan cuma tombol yang
-    /// redup sebentar lalu satu baris kecil di bawah.
+    /// Attendance is the one tap in this app that must never end in "did that work?". Every stage
+    /// of it is drawn IN the button that was pressed (owner request, 28 Sep 2026): the face check,
+    /// the position with the office it puts you in, the upload, then the result. Nothing here
+    /// changes what is sent; it only says, step by step, what is happening to it.
     enum Flow: Equatable {
+        case face(Action)                       // the selfie is being checked for a face
+        case selfieOK(Action)
         case locating(Action)
-        case sending(Action)
-        case done(Action, String)          // jam yang tercatat
-        case savedOffline(Action, String)  // jam yang akan dikreditkan
-        case failed(Action, String)
+        case located(Action, String, Bool)      // "At PATS Group HQ · 12 m", inside the geofence?
+        case sending(Action, String?)           // the place line stays under "Sending…"
+        case done(Action, String)               // the time recorded (HH:mm)
+        case savedOffline(Action, String)       // the time that will be credited
+        case failed(Action, String)             // the server's (or the phone's) sentence
         var action: Action {
             switch self {
-            case .locating(let a), .sending(let a), .done(let a, _), .savedOffline(let a, _), .failed(let a, _): return a
+            case .face(let a), .selfieOK(let a), .locating(let a), .located(let a, _, _), .sending(let a, _),
+                 .done(let a, _), .savedOffline(let a, _), .failed(let a, _): return a
             }
         }
-        var isBusy: Bool { if case .locating = self { return true }; if case .sending = self { return true }; return false }
+        var isBusy: Bool {
+            switch self {
+            case .face, .selfieOK, .locating, .located, .sending: return true
+            case .done, .savedOffline, .failed: return false
+            }
+        }
     }
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Bumped once per failure; `ShakeEffect` turns each step into one horizontal shake.
+    @State private var shakes: CGFloat = 0
+    /// The check-in time the press started from, kept so a check-out can say how long the day was
+    /// even when the record it closed (a forgotten previous day) is gone from `today` afterwards.
+    @State private var pressedFromCheckIn: String?
 
     private var rec: AttendanceRecord? { today?.today }
     /// A PREVIOUS day's open check-in the user forgot to close. While this exists the backend blocks a
@@ -118,14 +134,9 @@ struct AttendanceView: View {
                     if needsReflection { reflectionCard }
                     reflectionsLink
                     if locationOff { PermissionBanner(kind: .location) }
-                    presenceButtons
-                    // Say WHY the button is greyed out, right where the greyed-out button is.
-                    if needsReflection && !reflectionOK {
-                        Text(T("PRESENCE OUT unlocks once the daily reflection above reaches 200 characters."))
-                            .font(NXFont.text(11)).foregroundStyle(NX.mutedFg)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity)
-                    }
+                    // One button for the whole day. WHY it is greyed out (the reflection) is written
+                    // on the button itself, with the count.
+                    primaryControl
                     if showOffsite { offsitePrompt }
                     #endif
                     if forcePending { infoBanner(forcePendingMessage, tone: .warning) }
@@ -167,7 +178,6 @@ struct AttendanceView: View {
             // and one of them never shows.
             .heldAttendanceNotice(whileLocked: false)
         }
-        .overlay { flowOverlay.animation(.easeOut(duration: 0.18), value: flow) }
         .navigationTitle(T("Attendance"))
         .navigationBarTitleDisplayMode(.inline)
         .task {
@@ -366,6 +376,12 @@ struct AttendanceView: View {
         guard dispRec?.officeLocation?.name == nil, !loc.isDenied else { return }
         if offices.isEmpty { offices = (try? await APIClient.shared.attendanceOffices()) ?? [] }
         guard !offices.isEmpty, let fix = try? await loc.currentFix() else { return }
+        guard let best = nearestOffice(to: fix) else { return }
+        withAnimation(.easeInOut(duration: 0.25)) { nearby = best }
+        #endif
+    }
+
+    private func nearestOffice(to fix: LocationManager.Fix) -> (office: Office, distance: Double, inside: Bool)? {
         let here = CLLocation(latitude: fix.latitude, longitude: fix.longitude)
         var best: (office: Office, distance: Double)?
         for o in offices where (o.isActive ?? true) {
@@ -373,11 +389,32 @@ struct AttendanceView: View {
             let d = here.distance(from: CLLocation(latitude: la, longitude: lo))
             if best == nil || d < best!.distance { best = (o, d) }
         }
-        guard let best else { return }
-        withAnimation(.easeInOut(duration: 0.25)) {
-            nearby = (best.office, best.distance, best.distance <= Double(best.office.radiusMeters ?? 100))
+        guard let best else { return nil }
+        return (best.office, best.distance, best.distance <= Double(best.office.radiusMeters ?? 100))
+    }
+
+    /// The line the button shows once the phone has a position: which office it puts you in and how
+    /// far from its centre. A preview only — the server measures again and its answer is the one that
+    /// counts (a check-in outside is refused with its own sentence, a check-out outside asks for a
+    /// reason). Offices come from the list loaded before a check-in; for a check-out the list may not
+    /// be there, and the office on the open record is the one that matters anyway.
+    private func placeLine(for fix: LocationManager.Fix) -> (text: String, inside: Bool) {
+        if today?.noGeofence == true { return (T("Location-free · position recorded"), true) }
+        if let n = nearestOffice(to: fix) {
+            withAnimation(.easeInOut(duration: 0.25)) { nearby = n }
+            return n.inside
+                ? (String(format: T("At %@ · %@"), n.office.name, Self.distanceLabel(n.distance)), true)
+                : (String(format: T("%@ from %@ — outside the office area"), Self.distanceLabel(n.distance), n.office.name), false)
         }
-        #endif
+        let here = CLLocation(latitude: fix.latitude, longitude: fix.longitude)
+        if let o = dispRec?.officeLocation, let la = o.latitude, let lo = o.longitude {
+            let d = here.distance(from: CLLocation(latitude: la, longitude: lo))
+            let name = o.name ?? T("the office")
+            return d <= (o.radiusMeters ?? 100)
+                ? (String(format: T("At %@ · %@"), name, Self.distanceLabel(d)), true)
+                : (String(format: T("%@ from %@ — outside the office area"), Self.distanceLabel(d), name), false)
+        }
+        return (String(format: T("Location found · ±%@"), Self.distanceLabel(fix.accuracyM)), true)
     }
 
     static func humanize(_ raw: String) -> String {
@@ -386,19 +423,266 @@ struct AttendanceView: View {
             .joined(separator: " ")
     }
 
-    // MARK: presence buttons
+    // MARK: the one attendance button
 
-    private var presenceButtons: some View {
-        HStack(spacing: 12) {
-            presenceButton(title: "Presence In", system: "arrow.right.to.line", tint: Color(hex: "#10b981"),
-                           action: .checkIn, disabled: checkedIn || forcePending || pending)
-            presenceButton(title: "Presence Out", system: "arrow.left.to.line", tint: Color(hex: "#f43f5e"),
-                           action: .checkOut,
-                           disabled: (!checkedIn && !forcePending) || checkedOut || pending || !reflectionOK)
+    /// What the button is for, read off the day. `flow` draws over it while a press is running and
+    /// for a moment after. nil = there is nothing to press today (an approved request covers it).
+    private enum Primary: Equatable {
+        case loading
+        case checkIn
+        case checkOutLocked(Int)    // reflection characters so far
+        case checkOut
+        case waitingApproval
+        case done
+    }
+
+    private var primary: Primary? {
+        if loading && today == nil && queue.count == 0 { return .loading }
+        if pending { return .waitingApproval }
+        // The forgotten check-out comes first: the server will not take today's check-in until it
+        // is closed, and it needs the same reflection as any other check-out.
+        if forcePending || (checkedIn && !checkedOut) {
+            return reflectionOK ? .checkOut : .checkOutLocked(reflectionCount)
+        }
+        if checkedOut { return .done }
+        if today?.todayRequest != nil { return nil }
+        return .checkIn
+    }
+
+    /// Everything the button needs to draw one state. One struct for every state so SwiftUI keeps
+    /// the same button and animates its colour and label instead of swapping views.
+    private struct Look {
+        enum Icon: Equatable { case symbol(String), ring, spinner, check }
+        var key: String
+        var title: String
+        var subtitle: String? = nil
+        var icon: Icon
+        var fill: Color
+        var fg: Color = .white
+        /// 0…1 — the reflection gate fills the grey button towards red as the note grows.
+        var progress: Double? = nil
+        var enabled: Bool
+    }
+
+    private static let inGreen = Color(hex: "#10b981")
+    private static let outRed = Color(hex: "#f43f5e")
+
+    @ViewBuilder private var primaryControl: some View {
+        if flow == nil && primary == nil {
+            coveredByRequestCard
+        } else {
+            let look = flow.map { pressLook($0) } ?? stateLook(primary ?? .loading)
+            VStack(spacing: 8) {
+                attendanceButton(look)
+                if case .failed(_, let msg) = flow {
+                    VStack(spacing: 6) {
+                        Text(msg).font(NXFont.text(12, .semibold)).foregroundStyle(NX.danger)
+                            .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                        Button(T("Cancel")) { withAnimation { flow = nil } }
+                            .font(NXFont.text(12, .semibold)).foregroundStyle(NX.mutedFg)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .transition(.opacity)
+                }
+            }
         }
     }
 
-    /// What a Mac shows where the two big buttons are.
+    private func attendanceButton(_ l: Look) -> some View {
+        Button { pressed() } label: {
+            HStack(spacing: 10) {
+                buttonIcon(l.icon)
+                    .frame(width: 24, height: 24)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(l.title).font(NXFont.display(16, .bold))
+                        .lineLimit(2).minimumScaleFactor(0.85)
+                    if let sub = l.subtitle {
+                        Text(sub).font(NXFont.text(12, .semibold)).opacity(0.88)
+                            .lineLimit(2).minimumScaleFactor(0.85)
+                    }
+                }
+                .multilineTextAlignment(.leading)
+                .id(l.key)
+                .transition(reduceMotion
+                            ? .opacity
+                            : .asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
+            }
+            .foregroundStyle(l.fg)
+            .padding(.horizontal, 18).padding(.vertical, 12)
+            .frame(maxWidth: .infinity, minHeight: 62)
+            .background {
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous).fill(l.fill)
+                    if let p = l.progress {
+                        GeometryReader { g in
+                            Rectangle().fill(Self.outRed.opacity(0.22))
+                                .frame(width: g.size.width * min(1, max(0, p)))
+                        }
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .overlay {
+                // The celebration the web has always had, kept inside the button it belongs to.
+                if case .done = flow, !reduceMotion { ConfettiBurst().allowsHitTesting(false) }
+            }
+            .shadow(color: l.enabled || flow != nil ? l.fill.opacity(0.35) : .clear, radius: 12, y: 6)
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .buttonStyle(PressDownStyle(reduceMotion: reduceMotion))
+        .disabled(!l.enabled)
+        .modifier(ShakeEffect(animatableData: shakes))
+        .animation(reduceMotion ? .easeInOut(duration: 0.15) : .spring(response: 0.38, dampingFraction: 0.82), value: l.key)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(l.subtitle.map { "\(l.title). \($0)" } ?? l.title)
+        .accessibilityAddTraits(.isButton)
+    }
+
+    @ViewBuilder private func buttonIcon(_ icon: Look.Icon) -> some View {
+        switch icon {
+        case .symbol(let name):
+            Image(systemName: name).font(.system(size: 18, weight: .bold))
+        case .spinner:
+            ProgressView().tint(.white)
+        case .ring:
+            if reduceMotion { ProgressView().tint(.white) } else { SpinningRing() }
+        case .check:
+            DrawnCheck(animated: !reduceMotion)
+        }
+    }
+
+    private func pressed() {
+        if let flow {
+            switch flow {
+            case .failed(let a, _): startCapture(a)                 // retry = a fresh face check
+            case .done, .savedOffline: self.flow = nil              // tap to skip the result
+            default: break
+            }
+            return
+        }
+        switch primary {
+        case .checkIn: startCapture(.checkIn)
+        case .checkOut: startCapture(.checkOut)
+        default: break
+        }
+    }
+
+    private func stateLook(_ p: Primary) -> Look {
+        switch p {
+        case .loading:
+            return Look(key: "loading", title: T("Loading…"), icon: .spinner, fill: NX.mutedFg.opacity(0.45), enabled: false)
+        case .checkIn:
+            return Look(key: "in", title: T("Check in"), subtitle: whereHint,
+                        icon: .symbol("arrow.right.to.line"), fill: Self.inGreen, enabled: !busy)
+        case .checkOutLocked(let n):
+            return Look(key: "out-locked",
+                        title: forcePending ? T("Check out the previous day") : T("Check out"),
+                        subtitle: String(format: T("Write your reflection first · %d/%d"), n, reflectionMin),
+                        icon: .symbol("lock.fill"), fill: NX.muted, fg: NX.mutedFg,
+                        progress: Double(n) / Double(reflectionMin), enabled: false)
+        case .checkOut:
+            return Look(key: "out",
+                        title: forcePending ? T("Check out the previous day") : T("Check out"),
+                        subtitle: T("Reflection ready ✓"),
+                        icon: .symbol("arrow.left.to.line"), fill: Self.outRed, enabled: !busy)
+        case .waitingApproval:
+            return Look(key: "waiting", title: T("Check-out sent · waiting for approval"),
+                        icon: .symbol("hourglass"), fill: amberSurface, fg: amberTitle, enabled: false)
+        case .done:
+            return Look(key: "done", title: doneLine, subtitle: doneTimes,
+                        icon: .symbol("checkmark.seal.fill"), fill: NX.success.opacity(0.14), fg: NX.success, enabled: false)
+        }
+    }
+
+    private func pressLook(_ f: Flow) -> Look {
+        let isIn = f.action == .checkIn
+        switch f {
+        case .face:
+            return Look(key: "face", title: T("Checking your selfie…"), icon: .spinner, fill: NX.violet, enabled: false)
+        case .selfieOK:
+            return Look(key: "selfie", title: T("Selfie ✓"), icon: .check, fill: NX.violet, enabled: false)
+        case .locating:
+            return Look(key: "locating", title: T("Finding your location…"), icon: .ring, fill: NX.violet, enabled: false)
+        case .located(_, let place, let inside):
+            return Look(key: "located", title: place + (inside ? " ✓" : ""),
+                        icon: inside ? .check : .symbol("exclamationmark.triangle.fill"),
+                        fill: inside ? NX.violet : Color(hex: "#d97706"), enabled: false)
+        case .sending(_, let place):
+            return Look(key: "sending", title: T("Sending…"), subtitle: place, icon: .spinner, fill: NX.violet, enabled: false)
+        case .done(_, let at):
+            let when = (isIn ? rec?.checkInAt.flatMap(Self.hhmm) : nil) ?? at
+            var title = (isIn ? T("Checked in") : T("Checked out")) + " " + when
+            if let extra = successExtra(isIn) { title += " · " + extra }
+            return Look(key: "done-\(title)", title: title, icon: .check, fill: NX.success, enabled: true)
+        case .savedOffline:
+            return Look(key: "offline", title: T("Saved on this phone"),
+                        subtitle: T("Sends itself when NEXUS is back"),
+                        icon: .symbol("iphone.and.arrow.forward"), fill: Color(hex: "#d97706"), enabled: true)
+        case .failed:
+            return Look(key: "failed", title: T("Try again"),
+                        subtitle: isIn ? T("Check-in failed") : T("Check-out failed"),
+                        icon: .symbol("arrow.clockwise"), fill: NX.danger, enabled: !busy)
+        }
+    }
+
+    /// "on time" / "6 min late" after a check-in, "worked 8h 45m" after a check-out. Only once the
+    /// server's copy of the record is back — until then the time alone is the honest answer.
+    private func successExtra(_ isIn: Bool) -> String? {
+        if isIn {
+            guard let r = rec, r.hasCheckedIn else { return nil }
+            let late = r.lateMinutes ?? 0
+            return late > 0 ? String(format: T("%d min late"), late) : T("on time")
+        }
+        if let w = workedMinutes(rec), rec?.hasCheckedOut == true { return String(format: T("worked %@"), Self.duration(w)) }
+        guard let from = pressedFromCheckIn.flatMap(Self.parseISO) else { return nil }
+        let m = Int(Date().timeIntervalSince(from) / 60)
+        return m > 0 ? String(format: T("worked %@"), Self.duration(m)) : nil
+    }
+
+    private var doneLine: String {
+        if rec?.hasCheckedOut != true && queuedCheckOut { return T("Check-out saved on this phone") }
+        guard let w = workedMinutes(rec) else { return T("Done for today") }
+        return T("Done for today") + " · " + String(format: T("worked %@"), Self.duration(w))
+    }
+    private var doneTimes: String? {
+        guard let i = rec?.checkInAt.flatMap(Self.hhmm), let o = rec?.checkOutAt.flatMap(Self.hhmm) else { return nil }
+        return "In \(i) · Out \(o)"
+    }
+    private func workedMinutes(_ r: AttendanceRecord?) -> Int? {
+        if let w = r?.workedMinutes, w > 0 { return w }
+        guard let i = r?.checkInAt.flatMap(Self.parseISO), let o = r?.checkOutAt.flatMap(Self.parseISO), o > i else { return nil }
+        return Int(o.timeIntervalSince(i) / 60)
+    }
+    static func duration(_ m: Int) -> String { m >= 60 ? "\(m / 60)h \(m % 60)m" : "\(m)m" }
+
+    /// Under "Check in": where the phone last put you, so the answer to "am I inside?" comes before
+    /// the tap rather than after it.
+    private var whereHint: String? {
+        if today?.noGeofence == true { return T("Location-free — clock in from anywhere") }
+        guard let n = nearby else { return nil }
+        return n.inside
+            ? String(format: T("At %@"), n.office.name)
+            : String(format: T("%@ from %@"), Self.distanceLabel(n.distance), n.office.name)
+    }
+
+    /// The approved leave / sick / permit / day off that covers today: the server refuses a
+    /// check-in on such a day, so there is no button to press — only the reason there is none.
+    private var coveredByRequestCard: some View {
+        let type = today?.todayRequest?.type.map(Self.humanize) ?? T("Request")
+        return VStack(spacing: 6) {
+            Image(systemName: "calendar.badge.checkmark").font(.system(size: 24, weight: .semibold)).foregroundStyle(NX.success)
+            Text(T("Your approved request covers today")).font(NXFont.display(15, .bold)).foregroundStyle(NX.foreground)
+                .multilineTextAlignment(.center)
+            Text("\(type) · " + T("No check-in needed — it's already on your record."))
+                .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
+                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity).padding(.vertical, 16).padding(.horizontal, 14)
+        .background(NX.success.opacity(0.08), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(NX.success.opacity(0.25)))
+    }
+
+    /// What a Mac shows where the attendance button is.
     ///
     /// It says what to do and why, rather than greying out a button and leaving the person to work
     /// it out. The rest of the screen keeps working, so this is a redirection, not a dead end.
@@ -416,23 +700,6 @@ struct AttendanceView: View {
         .frame(maxWidth: .infinity).padding(.vertical, 22).padding(.horizontal, 18)
         .background(NX.violet.opacity(0.07), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(NX.violet.opacity(0.25)))
-    }
-
-    private func presenceButton(title: String, system: String, tint: Color, action: Action, disabled: Bool) -> some View {
-        Button { startCapture(action) } label: {
-            HStack(spacing: 8) {
-                if busy && pendingAction == action { ProgressView().tint(.white) } else { Image(systemName: system) }
-                Text(title).tracking(0.5)
-            }
-            .font(NXFont.display(15, .bold)).textCase(.uppercase)
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity).padding(.vertical, 16)
-            .background(tint, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .shadow(color: tint.opacity(0.4), radius: 12, y: 6)
-        }
-        .buttonStyle(.plain)
-        .disabled(disabled || busy || loading)
-        .opacity(disabled || loading ? 0.4 : 1)
     }
 
     // MARK: offsite + banners
@@ -477,8 +744,8 @@ struct AttendanceView: View {
     /// reflection gate — an instruction the UI actively contradicted. Say the real next step instead.
     private var forcePendingMessage: String {
         reflectionOK
-            ? T("⚠️ You still have an earlier shift that was never checked out. Tap PRESENCE OUT to close it first — then you can clock in again.")
-            : T("⚠️ You still have an earlier shift that was never checked out. Fill in the daily reflection above first — PRESENCE OUT unlocks after 200 characters.")
+            ? T("⚠️ You still have an earlier shift that was never checked out. Tap Check out to close it first — then you can check in again.")
+            : T("⚠️ You still have an earlier shift that was never checked out. Write the daily reflection above first — Check out unlocks at 200 characters.")
     }
 
     /// The daily reflection the server demands before it will accept a check-out. Without this the
@@ -584,91 +851,6 @@ struct AttendanceView: View {
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(amberBorder))
     }
 
-    /// Kartu proses absen di atas layar: cincin berputar saat mencari lokasi dan mengirim, centang
-    /// saat berhasil, ikon HP saat tersimpan offline. Latar diredupkan supaya tidak ada ketukan
-    /// kedua selama yang pertama belum selesai.
-    @ViewBuilder private var flowOverlay: some View {
-        if let flow {
-            let isIn = flow.action == .checkIn
-            ZStack {
-                Color.black.opacity(0.35).ignoresSafeArea()
-                    .onTapGesture { if !flow.isBusy { self.flow = nil } }
-                VStack(spacing: 14) {
-                    ZStack {
-                        Circle().fill(flowTint(flow).opacity(0.14)).frame(width: 72, height: 72)
-                        switch flow {
-                        case .locating, .sending:
-                            ProgressView().controlSize(.large).tint(flowTint(flow))
-                        case .done:
-                            Image(systemName: "checkmark").font(.system(size: 30, weight: .bold)).foregroundStyle(flowTint(flow))
-                        case .savedOffline:
-                            Image(systemName: "iphone.and.arrow.forward").font(.system(size: 28, weight: .bold)).foregroundStyle(flowTint(flow))
-                        case .failed:
-                            Image(systemName: "xmark").font(.system(size: 30, weight: .bold)).foregroundStyle(flowTint(flow))
-                        }
-                    }
-                    Text(flowTitle(flow)).font(NXFont.display(18, .bold)).foregroundStyle(NX.foreground)
-                        .multilineTextAlignment(.center)
-                    Text(flowBody(flow)).font(NXFont.text(13)).foregroundStyle(NX.mutedFg)
-                        .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-                    if flow.isBusy {
-                        // Dua tahap, digambar sebagai dua ruas: lokasi lalu kirim.
-                        HStack(spacing: 6) {
-                            Capsule().fill(flowTint(flow)).frame(height: 4)
-                            Capsule().fill({ if case .sending = flow { return flowTint(flow) } else { return NX.muted } }()).frame(height: 4)
-                        }
-                        .frame(width: 160)
-                        HStack(spacing: 14) {
-                            Text(T("Location")).font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
-                            Text(isIn ? T("Check in") : T("Check out")).font(NXFont.text(10, .semibold)).foregroundStyle(NX.mutedFg)
-                        }
-                    } else {
-                        Button { self.flow = nil } label: {
-                            Text(T("OK")).font(NXFont.text(14, .bold)).foregroundStyle(.white)
-                                .frame(maxWidth: .infinity).padding(.vertical, 11)
-                                .background(flowTint(flow), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(22)
-                .frame(maxWidth: 320)
-                .background(NX.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(NX.border))
-                .shadow(color: .black.opacity(0.25), radius: 30, y: 14)
-                .padding(24)
-            }
-            .transition(.opacity)
-        }
-    }
-
-    private func flowTint(_ f: Flow) -> Color {
-        switch f {
-        case .locating, .sending: return NX.violet
-        case .done: return f.action == .checkIn ? Color(hex: "#10b981") : Color(hex: "#f43f5e")
-        case .savedOffline: return NX.warning
-        case .failed: return NX.danger
-        }
-    }
-    private func flowTitle(_ f: Flow) -> String {
-        let isIn = f.action == .checkIn
-        switch f {
-        case .locating: return T("Getting your location…")
-        case .sending: return isIn ? T("Checking you in…") : T("Checking you out…")
-        case .done(_, let t): return (isIn ? T("Checked in") : T("Checked out")) + " · " + t
-        case .savedOffline: return isIn ? T("Check-in saved on this phone") : T("Check-out saved on this phone")
-        case .failed: return isIn ? T("Check-in failed") : T("Check-out failed")
-        }
-    }
-    private func flowBody(_ f: Flow) -> String {
-        switch f {
-        case .locating: return T("Hold on while the phone finds where you are.")
-        case .sending: return T("Sending your selfie and location to NEXUS.")
-        case .done: return f.action == .checkIn ? T("Have a good one. Don't forget to check out.") : T("Done for today. See you tomorrow.")
-        case .savedOffline(_, let t): return T("NEXUS can't be reached, so this is kept here with the time you tapped") + " (\(t)). " + T("It sends itself once NEXUS is back — keep the app installed.")
-        case .failed(_, let msg): return msg
-        }
-    }
     private static func clock(_ d: Date = Date()) -> String {
         let f = DateFormatter(); f.dateFormat = "HH:mm"; f.locale = Locale(identifier: "en_US_POSIX"); f.timeZone = TimeZone(identifier: "Asia/Jakarta")
         return f.string(from: d)
@@ -706,23 +888,50 @@ struct AttendanceView: View {
 
     // MARK: flow (unchanged logic)
 
-    private func startCapture(_ action: Action) { banner = nil; pendingAction = action; showCamera = true }
+    private func startCapture(_ action: Action) {
+        guard !busy else { return }
+        banner = nil; flow = nil; pendingAction = action; showCamera = true
+    }
+
+    /// Holds a finished step on the button long enough to be read. Short, and shorter still with
+    /// Reduce Motion; the steps themselves are real work, this only keeps the ticks from flashing by.
+    private func hold(_ f: Flow) async {
+        flow = f
+        Haptics.tap()
+        try? await Task.sleep(nanoseconds: reduceMotion ? 250_000_000 : 450_000_000)
+    }
+
+    private func fail(_ action: Action, _ msg: String) {
+        Haptics.warning()
+        flow = .failed(action, msg)
+        if !reduceMotion { withAnimation(.linear(duration: 0.45)) { shakes += 1 } }
+        AccessibilityNotification.Announcement(msg).post()
+    }
+
+    /// The result stays on the button for a moment, then the button becomes what the day needs next.
+    private func settle(after f: Flow, seconds: Double) async {
+        try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+        if flow == f { withAnimation { flow = nil } }
+    }
 
     private func submit(selfie: Data) async {
         guard let action = pendingAction else { return }
         busy = true; defer { busy = false }
+        pressedFromCheckIn = dispRec?.checkInAt
         // A selfie with no face in it is not an attendance photo. Checked on the phone, before the
         // location fix and before anything is uploaded, so a photo of the wall costs one retake and
         // never reaches the record.
+        flow = .face(action)
         switch await FaceGuard.check(selfie) {
         case .ok: break
         case .noFace:
-            flow = .failed(action, T("No face in the photo. Take the selfie with your face clearly visible, then try again."))
+            fail(action, T("No face in the photo. Take the selfie with your face clearly visible, then try again."))
             return
         case .unreadable:
-            flow = .failed(action, T("That photo couldn't be read. Take it again."))
+            fail(action, T("That photo couldn't be read. Take it again."))
             return
         }
+        await hold(.selfieOK(action))
         // One id for this tap, sent live AND reused if the tap ends up queued, so the two attempts
         // are the same event as far as the server is concerned.
         //
@@ -735,7 +944,9 @@ struct AttendanceView: View {
             let fix = try await loc.currentFix()
             pendingCoords = (fix.latitude, fix.longitude)
             pendingFix = fix
-            flow = .sending(action)
+            let place = placeLine(for: fix)
+            await hold(.located(action, place.text, place.inside))
+            flow = .sending(action, place.text)
             let outcome: AttendanceOutcome = try await {
                 switch action {
                 case .checkIn: return try await APIClient.shared.checkIn(lat: fix.latitude, lng: fix.longitude, selfie: selfie, fix: fix, clientId: tapId)
@@ -745,14 +956,14 @@ struct AttendanceView: View {
             switch outcome {
             case .success:
                 Haptics.success()
-                let at = Self.clock()
-                flow = .done(action, at)
-                banner = Banner(text: action == .checkIn ? T("Check-in successful ✓") : T("Check-out successful ✓"), good: true)
+                let done = Flow.done(action, Self.clock())
+                withAnimation { flow = done }
+                AccessibilityNotification.Announcement(action == .checkIn ? T("Checked in") : T("Checked out")).post()
                 if action == .checkOut { reflection = "" }
+                // The time is on the button at once; "on time" / "6 min late" / "worked 8h 45m"
+                // joins it when the server's copy of the record lands.
                 await load()
-                // Kartunya menutup sendiri; tombol OK ada untuk yang tidak mau menunggu.
-                try? await Task.sleep(nanoseconds: 1_600_000_000)
-                if flow == .done(action, at) { flow = nil }
+                Task { await settle(after: done, seconds: 2.6) }
             case .outsideRadius:
                 Haptics.warning()
                 flow = nil
@@ -760,8 +971,7 @@ struct AttendanceView: View {
             }
         } catch LocationManager.LocationError.denied {
             // Not a failure to retry: nothing will change until the switch in Settings does.
-            Haptics.warning()
-            flow = .failed(action, LocationManager.LocationError.denied.errorDescription ?? T("Location permission denied."))
+            fail(action, LocationManager.LocationError.denied.errorDescription ?? T("Location permission denied."))
             locationOff = true
             deniedPermission = .location
         } catch APIError.unauthorized { flow = nil; auth.logout() }
@@ -770,9 +980,7 @@ struct AttendanceView: View {
             // losing it: attendance is the one thing that cannot be re-created honestly later.
             // Only this error queues — anything the server actually answered must not be replayed.
             guard let fix = pendingCoords else {
-                Haptics.warning()
-                flow = .failed(action, T("No connection, and no location fix to save with."))
-                banner = Banner(text: T("No connection, and no location fix to save with."), good: false)
+                fail(action, T("No connection, and no location fix to save with."))
                 return
             }
             AttendanceQueue.shared.enqueue(
@@ -783,9 +991,11 @@ struct AttendanceView: View {
                 fix: pendingFix)
             Haptics.success()
             serverDown = true
-            flow = .savedOffline(action, Self.clock())
-            banner = Banner(text: T("Saved on this phone — sends itself when NEXUS is back."), good: true)
+            let saved = Flow.savedOffline(action, Self.clock())
+            withAnimation { flow = saved }
+            AccessibilityNotification.Announcement(T("Saved on this phone") + ". " + T("Sends itself when NEXUS is back")).post()
             if action == .checkOut { reflection = "" }
+            Task { await settle(after: saved, seconds: 4) }
         }
         catch APIError.upgradeRequired(let why) {
             // The server refused this BUILD before looking at the tap, so nothing was recorded.
@@ -794,8 +1004,7 @@ struct AttendanceView: View {
             // and taps again at 09:06 is late for a reason that was never theirs. The update cover
             // replaces this screen and the queue raises the "saved on this phone" popup on it.
             guard let fix = pendingCoords else {
-                Haptics.warning()
-                flow = .failed(action, why)
+                fail(action, why)
                 return
             }
             AttendanceQueue.shared.enqueue(
@@ -810,10 +1019,9 @@ struct AttendanceView: View {
             if action == .checkOut { reflection = "" }
         }
         catch {
-            Haptics.warning()
-            let msg = (error as? LocalizedError)?.errorDescription ?? T("Failed.")
-            flow = .failed(action, msg)
-            banner = Banner(text: msg, good: false)
+            // The server's own sentence ("You're outside the allowed attendance radius for …"),
+            // under the button, with the button itself turned into the retry.
+            fail(action, (error as? LocalizedError)?.errorDescription ?? T("Failed."))
         }
     }
 
@@ -822,20 +1030,19 @@ struct AttendanceView: View {
         busy = true; defer { busy = false }
         let tapId = UUID().uuidString
         let reason = offsiteReason.trimmingCharacters(in: .whitespaces)
-        flow = .sending(.checkOut)
+        flow = .sending(.checkOut, T("Outside the office · with your reason"))
         do {
             let outcome = try await APIClient.shared.checkOut(lat: coords.lat, lng: coords.lng, selfie: selfie,
                                                               reflection: reflection, offsite: true,
                                                               reason: reason,
                                                               fix: pendingFix, clientId: tapId)
             if case .success = outcome {
-                let at = Self.clock()
-                flow = .done(.checkOut, at)
+                Haptics.success()
                 banner = Banner(text: T("Checkout sent — waiting for BoD approval ⏳"), good: true)
                 reflection = ""
                 await load()
-                try? await Task.sleep(nanoseconds: 1_600_000_000)
-                if flow == .done(.checkOut, at) { flow = nil }
+                // The button itself now reads "Check-out sent · waiting for approval".
+                withAnimation { flow = nil }
             } else { flow = nil }
         } catch APIError.unauthorized { flow = nil; auth.logout() }
         catch APIError.offline {
@@ -851,10 +1058,11 @@ struct AttendanceView: View {
                 fix: pendingFix)
             Haptics.success()
             serverDown = true
-            flow = .savedOffline(.checkOut, Self.clock())
-            banner = Banner(text: T("Saved on this phone — sends itself when NEXUS is back."), good: true)
+            let saved = Flow.savedOffline(.checkOut, Self.clock())
+            withAnimation { flow = saved }
             reflection = ""
             showOffsite = false
+            Task { await settle(after: saved, seconds: 4) }
         }
         catch APIError.upgradeRequired(let why) {
             // Same as the live tap above: refused for the build, kept for the updated one.
@@ -872,9 +1080,7 @@ struct AttendanceView: View {
             showOffsite = false
         }
         catch {
-            let msg = (error as? LocalizedError)?.errorDescription ?? T("Failed.")
-            flow = .failed(.checkOut, msg)
-            banner = Banner(text: msg, good: false)
+            fail(.checkOut, (error as? LocalizedError)?.errorDescription ?? T("Failed."))
         }
     }
 
@@ -949,11 +1155,99 @@ struct AttendanceView: View {
     static func dateLabel(_ d: Date) -> String {
         let f = DateFormatter(); f.dateFormat = "EEE, d MMM"; f.timeZone = TimeZone(identifier: "Asia/Jakarta"); f.locale = Locale(identifier: "id_ID"); return f.string(from: d)
     }
-    static func hhmm(_ iso: String) -> String? {
+    static func parseISO(_ iso: String) -> Date? {
         let p = ISO8601DateFormatter(); p.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let date = p.date(from: iso) ?? { let q = ISO8601DateFormatter(); q.formatOptions = [.withInternetDateTime]; return q.date(from: iso) }()
-        guard let date else { return nil }
+        return p.date(from: iso) ?? { let q = ISO8601DateFormatter(); q.formatOptions = [.withInternetDateTime]; return q.date(from: iso) }()
+    }
+    static func hhmm(_ iso: String) -> String? {
+        guard let date = parseISO(iso) else { return nil }
         let o = DateFormatter(); o.dateFormat = "HH:mm"; o.timeZone = TimeZone(identifier: "Asia/Jakarta"); return o.string(from: date)
+    }
+}
+
+// MARK: - Pieces of the attendance button
+
+/// One horizontal shake per whole step of `animatableData` — the "no" of a failed press.
+private struct ShakeEffect: GeometryEffect {
+    var animatableData: CGFloat
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        ProjectionTransform(CGAffineTransform(translationX: 8 * sin(animatableData * .pi * 6), y: 0))
+    }
+}
+
+/// The button sinks a little under the finger. Nothing moves with Reduce Motion.
+private struct PressDownStyle: ButtonStyle {
+    let reduceMotion: Bool
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
+            .brightness(configuration.isPressed ? -0.04 : 0)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+/// "Finding your location…": an open ring turning while the phone waits for a fix.
+private struct SpinningRing: View {
+    @State private var turning = false
+    var body: some View {
+        ZStack {
+            Circle().stroke(.white.opacity(0.25), lineWidth: 3)
+            Circle().trim(from: 0, to: 0.3)
+                .stroke(.white, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .rotationEffect(.degrees(turning ? 360 : 0))
+        }
+        .padding(2)
+        .onAppear { withAnimation(.linear(duration: 0.9).repeatForever(autoreverses: false)) { turning = true } }
+    }
+}
+
+/// A tick that draws itself; with Reduce Motion it is simply there.
+private struct DrawnCheck: View {
+    let animated: Bool
+    @State private var drawn: CGFloat = 0
+    var body: some View {
+        ZStack {
+            Circle().fill(.white.opacity(0.22))
+            CheckShape().trim(from: 0, to: animated ? drawn : 1)
+                .stroke(.white, style: StrokeStyle(lineWidth: 2.6, lineCap: .round, lineJoin: .round))
+                .padding(6)
+        }
+        .onAppear { if animated { withAnimation(.easeOut(duration: 0.35)) { drawn = 1 } } }
+    }
+    private struct CheckShape: Shape {
+        func path(in r: CGRect) -> Path {
+            var p = Path()
+            p.move(to: CGPoint(x: r.minX + r.width * 0.12, y: r.midY + r.height * 0.02))
+            p.addLine(to: CGPoint(x: r.minX + r.width * 0.40, y: r.maxY - r.height * 0.14))
+            p.addLine(to: CGPoint(x: r.maxX - r.width * 0.08, y: r.minY + r.height * 0.16))
+            return p
+        }
+    }
+}
+
+/// A small burst of confetti out of the button on a confirmed check-in or check-out. Only drawn
+/// when Reduce Motion is off (the caller checks); it fades by itself and never takes a tap.
+private struct ConfettiBurst: View {
+    @State private var out = false
+    private static let colors: [Color] = [Color(hex: "#10b981"), Color(hex: "#f59e0b"), Color(hex: "#7c3aed"),
+                                          Color(hex: "#f43f5e"), Color(hex: "#0ea5e9"), .white]
+    var body: some View {
+        GeometryReader { g in
+            ZStack {
+                ForEach(0..<18, id: \.self) { i in
+                    let angle = Double(i) / 18 * 2 * .pi + (i.isMultiple(of: 2) ? 0.2 : -0.1)
+                    let reach = Double(40 + (i * 37) % 50)
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .fill(Self.colors[i % Self.colors.count])
+                        .frame(width: 5, height: i.isMultiple(of: 3) ? 9 : 6)
+                        .rotationEffect(.degrees(out ? Double(i * 47) : 0))
+                        .offset(x: out ? cos(angle) * reach * 1.8 : 0, y: out ? sin(angle) * reach : 0)
+                        .opacity(out ? 0 : 1)
+                        .position(x: g.size.width / 2, y: g.size.height / 2)
+                }
+            }
+        }
+        .onAppear { withAnimation(.easeOut(duration: 1.1)) { out = true } }
     }
 }
 
