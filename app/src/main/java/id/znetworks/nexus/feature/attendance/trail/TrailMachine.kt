@@ -72,6 +72,10 @@ data class TrailState(
     val preciseBest: TrailPoint? = null,
     /** When a presence check last raised the accuracy; one that got nothing waits 15 min. */
     val presenceTriedAtMillis: Long? = null,
+    /** The server's outsideSince (location-trail reply or GET today): the clock both sides agree on. */
+    val serverOutsideSinceMillis: Long? = null,
+    /** A PENDING/APPROVED excuse covers today: the outside clock is paused. */
+    val excusedToday: Boolean = false,
 ) {
     val isActive: Boolean get() = recordId != null
 }
@@ -177,10 +181,20 @@ class TrailMachine(var state: TrailState = TrailState()) {
                 recordId = recordId, checkInAtMillis = checkInAtMillis, fence = fence, zone = TrailZone.UNKNOWN,
                 outsideSinceMillis = null, lastQueuedAtMillis = null, serverNextAtMillis = null, latest = null,
                 pendingTag = null, stage = null, startedAtMillis = now, preciseSinceMillis = null, preciseBest = null,
-                presenceTriedAtMillis = null,
+                presenceTriedAtMillis = null, serverOutsideSinceMillis = null, excusedToday = false,
             )
         }
         return listOf(TrailEffect.Arm(fence))
+    }
+
+    /** What GET today says about the outside clock (its outsideSince, and whether an excuse pauses it). */
+    fun noteToday(recordId: String, outsideSinceMillis: Long?, excused: Boolean) {
+        if (state.recordId != recordId) return
+        state = state.copy(
+            excusedToday = excused,
+            // Only while we agree the person is out: a stale value must not restart an ended episode.
+            serverOutsideSinceMillis = if (state.zone == TrailZone.OUTSIDE) outsideSinceMillis ?: state.serverOutsideSinceMillis else state.serverOutsideSinceMillis,
+        )
     }
 
     /**
@@ -232,7 +246,8 @@ class TrailMachine(var state: TrailState = TrailState()) {
         // The exit/enter point replaces the point a resume was waiting for.
         sendNextFix = false
         return if (inside) {
-            state = state.copy(outsideSinceMillis = null)
+            // Back inside: the episode ends and the next one starts from nothing.
+            state = state.copy(outsideSinceMillis = null, serverOutsideSinceMillis = null, stage = null, serverNextAtMillis = null)
             // First answer after a check-in is "inside": the normal case, nothing to report.
             if (previous == TrailZone.UNKNOWN) listOf(TrailEffect.StopContinuous)
             else listOf(TrailEffect.StopContinuous) + tag(TrailPoint.Event.enter, lastKnown, now)
@@ -375,7 +390,7 @@ class TrailMachine(var state: TrailState = TrailState()) {
             if (rest.isNotEmpty()) fx += TrailEffect.Flush
             return fx
         }
-        state = state.copy(stage = reply.stage, serverNextAtMillis = reply.nextAtMillis)
+        state = state.copy(stage = reply.stage, serverNextAtMillis = reply.nextAtMillis, serverOutsideSinceMillis = reply.outsideSinceMillis)
         return if (state.pending.isEmpty()) emptyList() else listOf(TrailEffect.Flush)
     }
 

@@ -46,6 +46,9 @@ class WorkTrail(
     private val _gps = MutableStateFlow(Gps(Mode.OFF, false))
     val gps: StateFlow<Gps> = _gps.asStateFlow()
 
+    /** Bumped after every state change, so the notification follows at once (not on the next tick). */
+    val changes = MutableStateFlow(0L)
+
     /** One-shot fix requested (exit/enter with no fresh position). The service clears it. */
     val fixRequested = MutableStateFlow(false)
 
@@ -86,7 +89,14 @@ class WorkTrail(
                 else -> {
                     val fence = TrailFence(lat, lng, office.radiusMeters ?: 100.0)
                     val checkIn = rec.checkInAt?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
-                    machine.start(rec.id, checkIn, fence, now()).also { if (machine.state.isActive) startedRecord = rec.id }
+                    machine.start(rec.id, checkIn, fence, now()).also {
+                        if (machine.state.isActive) {
+                            startedRecord = rec.id
+                            val excused = today.todayRequest?.status?.uppercase() in setOf("PENDING", "APPROVED")
+                            val since = rec.outsideSince?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+                            machine.noteToday(rec.id, since, excused)
+                        }
+                    }
                 }
             }
             persist()
@@ -197,6 +207,7 @@ class WorkTrail(
                 TrailEffect.PreciseChanged, TrailEffect.DisarmAll -> Unit
             }
         }
+        changes.value = changes.value + 1
         // Whatever the effect list said, the GPS follows the state: a missed edge is put right here.
         _gps.value = gpsFor()
         if (_gps.value.mode == Mode.OFF && machine.state.pending.isEmpty()) WorkTrailService.stop(context)

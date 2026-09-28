@@ -30,6 +30,8 @@ data class AttendanceRecord(
     val checkOutApproval: String? = null,
     val officeLocation: OfficeRef? = null,
     val locationTrackingState: String? = null,
+    /** Start of the current outside-the-office episode (server), null when inside. */
+    val outsideSince: String? = null,
 ) {
     val hasCheckedIn: Boolean get() = !checkInAt.isNullOrBlank()
     val hasCheckedOut: Boolean get() = !checkOutAt.isNullOrBlank()

@@ -12,6 +12,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
@@ -27,6 +28,7 @@ import com.google.android.gms.location.Priority
 import id.znetworks.nexus.MainActivity
 import id.znetworks.nexus.NexusApplication
 import id.znetworks.nexus.R
+import id.znetworks.nexus.feature.attendance.LocalNotifier
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -83,11 +85,14 @@ class WorkTrailService : Service() {
                 }
             }
             scope.launch { trail.fixRequested.collect { if (it) oneFix() } }
+            // Stage changes (left, back, excuse filed, server reply) show at once; the tick covers 90/120 min.
+            scope.launch { trail.changes.collect { refreshNotification() } }
             tickJob = scope.launch {
                 var minutes = 0
                 while (true) {
                     delay(60_000)
                     trail.tick()
+                    refreshNotification()
                     // Level-triggered, as iOS 13e7784: re-assert the location request every 10 min,
                     // so one that the system dropped silently is put back without waiting for a
                     // zone change that may never come.
@@ -128,7 +133,7 @@ class WorkTrailService : Service() {
             trail.permissionLost()
             stopSelf()
         }
-        getSystemService(NotificationManager::class.java)?.notify(NOTIFICATION_ID, notification())
+        refreshNotification()
     }
 
     /** The presence check's precise window: one high-accuracy request, at most 45 s, fresh only. */
@@ -161,24 +166,62 @@ class WorkTrailService : Service() {
         loc?.let { trail.onFix(it.toPoint()) }
     }
 
+    /** What the notification shows now; re-posted only when this changes (the chronometer ticks itself). */
+    private var shown: Any? = null
+
+    private fun refreshNotification() {
+        val key = listOf(currentMode, OutsideClock.present(trail.state, System.currentTimeMillis()), trail.state.checkInAtMillis)
+        if (key == shown) return
+        getSystemService(NotificationManager::class.java)?.notify(NOTIFICATION_ID, notification())
+    }
+
     private fun notification(): Notification {
+        val now = System.currentTimeMillis()
+        val outside = OutsideClock.present(trail.state, now)
+        shown = listOf(currentMode, outside, trail.state.checkInAtMillis)
         val since = trail.state.checkInAtMillis
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        // No check-out action, ever (REQ-ATT-01/40): only opening the app.
-        return NotificationCompat.Builder(this, CHANNEL_WORK_SESSION)
+        // No check-out action, ever (REQ-ATT-01/40): only opening the app, and outside the permit composer.
+        val b = NotificationCompat.Builder(this, CHANNEL_WORK_SESSION)
             .setSmallIcon(R.drawable.ic_stat_nexus)
-            .setContentTitle(getString(R.string.work_session_title))
-            .setContentText(getString(if (currentMode == WorkTrail.Mode.OUTSIDE) R.string.work_session_outside else R.string.work_session_inside))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setShowWhen(since != null)
-            .setUsesChronometer(since != null)
-            .apply { if (since != null) setWhen(since) }
             .setContentIntent(open)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .build()
+        if (outside == null) {
+            b.setColor(VIOLET)
+                .setContentTitle(getString(R.string.work_session_title))
+                .setContentText(getString(if (currentMode == WorkTrail.Mode.OUTSIDE) R.string.work_session_outside else R.string.work_session_inside))
+                .setShowWhen(since != null)
+                .setUsesChronometer(since != null)
+                .apply { if (since != null) setWhen(since) }
+        } else {
+            val auto = LocalNotifier.hhmm(outside.autoAtMillis)
+            val text = when (outside.level) {
+                OutsideClock.Level.OUTSIDE -> getString(R.string.outside_auto_at, auto)
+                OutsideClock.Level.REMIND -> getString(R.string.outside_remind, auto)
+                OutsideClock.Level.WARN -> getString(R.string.outside_warn, auto)
+            }
+            b.setColor(AMBER)
+                .setContentTitle(getString(R.string.outside_since, LocalNotifier.hhmm(outside.sinceMillis)))
+                .setContentText(text)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+                // Counts down to the automatic check-out by itself; no per-minute re-posting.
+                .setShowWhen(true)
+                .setUsesChronometer(true)
+                .setChronometerCountDown(true)
+                .setWhen(outside.autoAtMillis)
+            if (outside.level != OutsideClock.Level.OUTSIDE) {
+                // Same destination as the push's "File a permit" action.
+                val permit = Intent(Intent.ACTION_VIEW, Uri.parse("nexus://attendance?permit=today"), this, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
+                b.addAction(0, getString(R.string.file_a_permit),
+                    PendingIntent.getActivity(this, 1, permit, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
+            }
+        }
+        return b.build()
     }
 
     private fun hasFine() = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
@@ -192,6 +235,8 @@ class WorkTrailService : Service() {
     companion object {
         const val CHANNEL_WORK_SESSION = "work_session"
         private const val NOTIFICATION_ID = 4201
+        private const val VIOLET = 0xFF7B68EE.toInt()
+        private const val AMBER = 0xFFF59E0B.toInt()
 
         fun ensureChannel(context: Context) {
             if (Build.VERSION.SDK_INT < 26) return

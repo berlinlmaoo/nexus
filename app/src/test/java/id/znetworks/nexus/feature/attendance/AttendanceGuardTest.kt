@@ -38,9 +38,13 @@ class AttendanceGuardTest {
 
     @Test fun nothingButTheAppOpensAttendance() {
         // No notification action, shortcut or widget may check in/out (REQ-ATT-40): the only
-        // notification action anywhere is the permit composer.
+        // notification action anywhere is the permit composer (the outside-office push, and the
+        // Work session notification once 90 min outside, UPDATES §9). One permit link per action.
         val actions = filesMatching(Regex("""addAction\("""))
-        assertEquals(sortedSetOf("Push.kt"), actions)
-        assertTrue(sources.entries.first { it.key.name == "Push.kt" }.value.contains("nexus://attendance?permit=today"))
+        assertEquals(sortedSetOf("Push.kt", "WorkTrailService.kt"), actions)
+        for (name in actions) {
+            val src = sources.entries.first { it.key.name == name }.value
+            assertEquals(name, Regex("""addAction\(""").findAll(src).count(), Regex("""nexus://attendance\?permit=today""").findAll(src).count())
+        }
     }
 }

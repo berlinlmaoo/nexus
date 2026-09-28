@@ -541,4 +541,8 @@
     <string name="td_write_comment">Tulis komentar…</string>
     <string name="td_send">Kirim</string>
     <string name="td_activity">Aktivitas</string>
+    <string name="outside_since">Di luar kantor sejak %1$s</string>
+    <string name="outside_auto_at">Auto check-out %1$s</string>
+    <string name="outside_remind">Ajukan izin atau balik ke kantor · Auto check-out %1$s</string>
+    <string name="outside_warn">Peringatan terakhir: auto check-out offsite jam %1$s kalau belum balik atau ajukan izin</string>
 </resources>

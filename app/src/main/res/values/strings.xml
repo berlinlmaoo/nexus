@@ -547,4 +547,8 @@
     <string name="td_write_comment">Write a comment…</string>
     <string name="td_send">Send</string>
     <string name="td_activity">Activity</string>
+    <string name="outside_since">Outside the office since %1$s</string>
+    <string name="outside_auto_at">Auto check-out %1$s</string>
+    <string name="outside_remind">File a permit or head back to the office · Auto check-out %1$s</string>
+    <string name="outside_warn">Last warning: automatic offsite check-out at %1$s unless you\'re back or file a permit</string>
 </resources>
