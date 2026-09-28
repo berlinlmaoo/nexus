@@ -508,7 +508,9 @@ struct AdminExtraDayOffSection: View {
             let n = r.grants?.count ?? selected.count
             let d = r.days ?? days
             let notified = r.notified ?? n
-            let who = notified == n ? T("Everyone was notified.") : String(format: T("%d of %d notified."), notified, n)
+            // Only the people who got the days are notified; "Everyone" read as if the whole office was.
+            let who = notified < n ? String(format: T("%d of %d notified."), notified, n)
+                : n == 1 ? T("They were notified.") : String(format: T("All %d were notified."), n)
             notice = String(format: T("%d %@ got %d extra %@ off · %@. %@"),
                             n, Self.peopleWord(n), d, Self.dayWord(d), r.periodLabel ?? periodLabel(periodKey), who)
             selected.removeAll(); reason = ""; days = 1
