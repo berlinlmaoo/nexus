@@ -110,6 +110,7 @@ fun ControlRoomScreen(onBack: () -> Unit, nav: AdminNav, tabContent: @Composable
                 "attendance" -> AttendanceAdminTab(viewer.isBoD, nav.openMemberAttendance, nav.openOffices)
                 "audit" -> AuditTab(nav.openAudit)
                 "quests" -> QuestsTab()
+                "extra-dayoff" -> ExtraDayOffTab(viewer.isBoD)
                 "announcements" -> AnnouncementsTab()
                 "gideon" -> GideonUsageTab()
                 "app" -> AppInstallsTab()
