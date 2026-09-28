@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
 import { fmtDate, nexusApi, ORG_ROLE_LABEL, ORG_ROLE_TONE, assignableRoles, canEditTier, type OrgRole, type NexusWorkspaceMember } from "@/lib/nexus-api";
-import { Settings as SettingsIcon, User, Bell, Lock, Palette, Webhook, Zap, CreditCard, Loader2, Trash2, ImagePlus, Users, UserPlus, ShieldCheck, KeyRound, Copy, Check, X, Plug, Sparkles, AlertTriangle, Globe, Terminal, Monitor, MessageCircle, AtSign } from "lucide-react";
+import { Settings as SettingsIcon, User, Bell, Lock, Palette, Webhook, Zap, Loader2, Trash2, ImagePlus, Users, UserPlus, ShieldCheck, KeyRound, Copy, Check, X, Plug, Sparkles, AlertTriangle, Globe, Terminal, Monitor, MessageCircle, AtSign } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { passkeysSupported, registerPasskey } from "@/lib/passkey";
@@ -19,7 +19,6 @@ const sections = [
   { id: "webhooks", label: "Webhooks", icon: Webhook },
   { id: "mcp", label: "Claude (MCP)", icon: Plug },
   { id: "whatsapp", label: "WhatsApp", icon: MessageCircle },
-  { id: "billing", label: "Billing", icon: CreditCard },
 ];
 
 function Settings() {
