@@ -188,7 +188,7 @@ export function getAndroidVersionPolicy(now = Date.now()): AndroidVersionPolicy 
 
 // The Android update download is exempt for every client: a build below the minimum must still be
 // able to fetch the APK that replaces it (both routes require a session of their own).
-const EXEMPT = new Set(["/api/app/version-policy", "/api/health", "/api/app/android/apk", "/api/app/android/release"])
+const EXEMPT = new Set(["/api/app/version-policy", "/api/app/config", "/api/health", "/api/app/android/apk", "/api/app/android/release"])
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"])
 
 export interface UpgradeRequired {
