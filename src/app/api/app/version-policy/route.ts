@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { NextResponse } from "next/server"
 import { APP_STORE_URL, latestIosVersion } from "@/lib/app-store"
 import { getAndroidVersionPolicy, getIosVersionPolicy } from "@/lib/version-policy"
+import { readAndroidRelease } from "@/lib/android-release"
 
 /**
  * GET /api/app/version-policy — public, no auth. What the iOS app needs to decide on its own
@@ -26,14 +27,16 @@ import { getAndroidVersionPolicy, getIosVersionPolicy } from "@/lib/version-poli
  *                 graceUntil/nextMinimum only inside that 3-day window, same meaning as iOS's.
  */
 export async function GET() {
-  const [policy, latest] = await Promise.all([getIosVersionPolicy(), latestIosVersion(1000)])
+  const [policy, latest, release] = await Promise.all([getIosVersionPolicy(), latestIosVersion(1000), readAndroidRelease().catch(() => "missing" as const)])
   return NextResponse.json(
     {
       minSupported: policy.minSupported,
       latest: latest ?? policy.highestSeen,
       storeUrl: APP_STORE_URL,
       ...(policy.graceUntil ? { graceUntil: policy.graceUntil, nextMinimum: policy.nextMinimum } : {}),
-      android: getAndroidVersionPolicy(),
+      // + the published APK (current.json): latestName/latestBuild let an app see a newer BUILD of the
+      // same version (owner, 29 Sep 2026: builds stay 0.1.6 while it is tested) — additive fields.
+      android: { ...getAndroidVersionPolicy(), ...(typeof release === "object" ? { latestName: release.versionName, latestBuild: release.versionCode } : {}) },
     },
     { headers: { "Cache-Control": "public, max-age=60" } },
   )
