@@ -1,5 +1,6 @@
 package id.znetworks.nexus.feature.attendance
 
+import id.znetworks.nexus.feature.attendance.history.MapFrame
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -259,16 +260,31 @@ private fun problemText(p: QueueProblem): String = when (p) {
 /** The hero map (web MobileCheckInHero): where you are and the office circle. Display only. */
 @Composable
 private fun HeroMap(s: AttendanceUiState) {
-    val office = s.today?.today?.officeLocation?.takeIf { it.latitude != null && it.longitude != null }
-    val circle = office?.let { MapCircle(it.latitude!!, it.longitude!!, it.radiusMeters ?: 100.0) }
-        ?: s.nearest?.let { MapCircle(it.lat, it.lng, it.radius) }
     val here = s.here
-    if (circle == null && here == null) return
+    val rec = s.today?.today ?: s.today?.pendingCheckout
+    val c = Nx.colors
+    val mod = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(24.dp)).border(1.dp, c.border, RoundedCornerShape(24.dp))
+    // Location-free members are not tied to an office: the map follows them (iOS 5ba2e93).
+    if (s.today?.noGeofence == true) {
+        if (here == null) return
+        OsmMap(mod, circle = null, path = emptyList(), pins = emptyList(), frame = MapFrame.person(here.lat, here.lng), userDot = here.lat to here.lng)
+        return
+    }
+    // Today's record's office, else the nearest one before check-in, with its check-in circle and a
+    // pin, framed a few radii across (≥ 300 m) so "am I inside?" reads at a glance (iOS 4bb25f8).
+    val office = rec?.officeLocation?.takeIf { it.latitude != null && it.longitude != null }
+        ?.let { MapCircle(it.latitude!!, it.longitude!!, it.radiusMeters ?: 100.0) to it.name.orEmpty() }
+        ?: s.nearest?.let { MapCircle(it.lat, it.lng, it.radius) to it.name }
+    if (office == null && here == null) return
+    val circle = office?.first
     OsmMap(
-        Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(24.dp)).border(1.dp, Nx.colors.border, RoundedCornerShape(24.dp)),
+        mod,
         circle = circle,
         path = emptyList(),
-        pins = listOfNotNull(here?.let { MapPin(it.lat, it.lng, stringResource(R.string.you_are_here)) }),
+        pins = listOfNotNull(circle?.let { MapPin(it.lat, it.lng, office.second) }),
+        frame = circle?.let { MapFrame.office(it.lat, it.lng, it.radius) } ?: here?.let { MapFrame.person(it.lat, it.lng) },
+        userDot = here?.let { it.lat to it.lng },
+        circleColor = android.graphics.Color.rgb(123, 104, 238),
     )
 }
 
@@ -416,8 +432,13 @@ private fun Metrics(s: AttendanceUiState, forcePending: Boolean) {
         s.today?.todayRequest?.type != null -> "${humanize(s.today.todayRequest.type)} ${humanize(s.today.todayRequest.status.orEmpty())}".trim()
         else -> stringResource(R.string.status_ready)
     }
-    val officeName = rec?.officeLocation?.name
-    val officeValue = officeName ?: s.nearest?.name ?: stringResource(if (s.locationOff) R.string.location_is_off else R.string.finding_you)
+    val free = s.today?.noGeofence == true
+    // Location-free: where they checked in (the server's address), not an office they were never at.
+    val officeName = if (free) null else rec?.officeLocation?.name
+    val officeValue = if (free) {
+        rec?.checkInAddress?.let(::shortAddress)?.takeIf { it.isNotBlank() }
+            ?: stringResource(if (rec?.checkInAt != null) R.string.checked_in_away else R.string.location_free)
+    } else officeName ?: s.nearest?.name ?: stringResource(if (s.locationOff) R.string.location_is_off else R.string.finding_you)
     val officeHelper = when {
         rec?.checkInAt != null -> "In ${hhmmIso(rec.checkInAt)} · Out ${hhmmIso(rec.checkOutAt)}"
         s.nearest != null -> if (s.nearest.inside) stringResource(R.string.inside_office)
@@ -428,7 +449,7 @@ private fun Metrics(s: AttendanceUiState, forcePending: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Metric(Icons.Filled.Coffee, stringResource(R.string.metric_today), todayValue, null, c.success, Modifier.weight(1f))
-            Metric(Icons.Filled.LocationOn, stringResource(if (officeName != null) R.string.metric_office else R.string.metric_where),
+            Metric(Icons.Filled.LocationOn, stringResource(when { free && rec?.checkInAt != null -> R.string.metric_checkin_place; officeName != null -> R.string.metric_office; else -> R.string.metric_where }),
                 officeValue, officeHelper, if (s.nearest?.inside == true || officeName != null) c.success else c.warning, Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -571,3 +592,6 @@ private fun HeldNotice(q: AttendanceQueue.State, onDismiss: () -> Unit) {
 }
 
 // endregion
+
+/** The first two parts of a server address ("Jl. Sudirman 5, Senayan, Jakarta…" → "Jl. Sudirman 5, Senayan"). */
+internal fun shortAddress(a: String): String = a.split(',').map { it.trim() }.filter { it.isNotEmpty() }.take(2).joinToString(", ")

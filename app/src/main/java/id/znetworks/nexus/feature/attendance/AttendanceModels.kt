@@ -32,6 +32,8 @@ data class AttendanceRecord(
     val locationTrackingState: String? = null,
     /** Start of the current outside-the-office episode (server), null when inside. */
     val outsideSince: String? = null,
+    /** Where the check-in was made, reverse-geocoded by the server (older servers omit it). */
+    val checkInAddress: String? = null,
 ) {
     val hasCheckedIn: Boolean get() = !checkInAt.isNullOrBlank()
     val hasCheckedOut: Boolean get() = !checkOutAt.isNullOrBlank()

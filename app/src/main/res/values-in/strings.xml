@@ -958,4 +958,6 @@
     <string name="form_proofs">Bukti</string>
     <string name="form_none_in_project">Belum ada form di project ini.</string>
     <string name="form_submissions_n">%1$d kiriman</string>
+    <string name="checked_in_away">Check-in di luar kantor</string>
+    <string name="metric_checkin_place">Lokasi check-in</string>
 </resources>

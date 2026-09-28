@@ -964,4 +964,6 @@
     <string name="form_proofs">Proofs</string>
     <string name="form_none_in_project">No forms in this project yet.</string>
     <string name="form_submissions_n">%1$d submissions</string>
+    <string name="checked_in_away">Checked in away from the office</string>
+    <string name="metric_checkin_place">Where you checked in</string>
 </resources>
