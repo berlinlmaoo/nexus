@@ -110,11 +110,11 @@ export function taskAssignedEmail(data: {
     subject: `You've been assigned: ${data.taskTitle}`,
     html: wrapHtml(
       "Task Assigned to You",
-      paragraph(`Hi ${data.recipientName},`) +
-        paragraph(`<strong>${data.assignedBy}</strong> assigned you a task:`) +
-        metaRow("Task", data.taskTitle) +
-        metaRow("Project", data.projectName) +
-        button("View Task", link(`tasks/${data.taskId}`))
+      paragraph(`Hi ${escapeHtml(data.recipientName)},`) +
+        paragraph(`<strong>${escapeHtml(data.assignedBy)}</strong> assigned you a task:`) +
+        metaRow("Task", escapeHtml(data.taskTitle)) +
+        metaRow("Project", escapeHtml(data.projectName)) +
+        button("View Task", escapeHtml(link(`tasks/${encodeURIComponent(data.taskId)}`)))
     ),
   }
 }
@@ -130,9 +130,9 @@ export function taskDueSoonEmail(data: {
     subject: `Due soon: ${data.taskTitle}`,
     html: wrapHtml(
       "Task Due Soon",
-      paragraph(`Hi ${data.recipientName},`) +
-        paragraph(`Your task <strong>${data.taskTitle}</strong> is due on <strong>${data.dueDate}</strong>.`) +
-        button("View Task", link(`tasks/${data.taskId}`))
+      paragraph(`Hi ${escapeHtml(data.recipientName)},`) +
+        paragraph(`Your task <strong>${escapeHtml(data.taskTitle)}</strong> is due on <strong>${escapeHtml(data.dueDate)}</strong>.`) +
+        button("View Task", escapeHtml(link(`tasks/${encodeURIComponent(data.taskId)}`)))
     ),
   }
 }
@@ -149,12 +149,12 @@ export function commentMentionEmail(data: {
     subject: `${data.mentionedBy} mentioned you in ${data.taskTitle}`,
     html: wrapHtml(
       "You Were Mentioned",
-      paragraph(`Hi ${data.recipientName},`) +
-        paragraph(`<strong>${data.mentionedBy}</strong> mentioned you in a comment on <strong>${data.taskTitle}</strong>:`) +
+      paragraph(`Hi ${escapeHtml(data.recipientName)},`) +
+        paragraph(`<strong>${escapeHtml(data.mentionedBy)}</strong> mentioned you in a comment on <strong>${escapeHtml(data.taskTitle)}</strong>:`) +
         `<div style="margin:16px 0;padding:12px 16px;background:#f4f4f5;border-radius:6px;border-left:3px solid #18181b;">
-          <p style="margin:0;font-size:13px;color:#3f3f46;line-height:1.5;">${data.commentSnippet}</p>
+          <p style="margin:0;font-size:13px;color:#3f3f46;line-height:1.5;">${escapeHtml(data.commentSnippet)}</p>
         </div>` +
-        button("View Comment", link(`tasks/${data.taskId}`))
+        button("View Comment", escapeHtml(link(`tasks/${encodeURIComponent(data.taskId)}`)))
     ),
   }
 }
@@ -171,11 +171,11 @@ export function projectInviteEmail(data: {
     subject: `You're invited to ${data.projectName}`,
     html: wrapHtml(
       "Project Invitation",
-      paragraph(`Hi ${data.recipientName},`) +
-        paragraph(`<strong>${data.invitedBy}</strong> invited you to join the project:`) +
-        metaRow("Project", data.projectName) +
-        metaRow("Role", data.role) +
-        button("Open Project", link(`projects/${data.projectId}`))
+      paragraph(`Hi ${escapeHtml(data.recipientName)},`) +
+        paragraph(`<strong>${escapeHtml(data.invitedBy)}</strong> invited you to join the project:`) +
+        metaRow("Project", escapeHtml(data.projectName)) +
+        metaRow("Role", escapeHtml(data.role)) +
+        button("Open Project", escapeHtml(link(`projects/${encodeURIComponent(data.projectId)}`)))
     ),
   }
 }
@@ -190,10 +190,10 @@ export function signupOtpEmail(data: {
     subject: `Your NEXUS verification code: ${data.otpCode}`,
     html: wrapHtml(
       "Verify Your Email",
-      paragraph(`Hi ${data.recipientName},`) +
+      paragraph(`Hi ${escapeHtml(data.recipientName)},`) +
         paragraph("Use the verification code below to complete your NEXUS registration.") +
         `<div style="margin:20px 0;padding:18px 20px;background:#f4f4f5;border:1px solid #e4e4e7;border-radius:10px;text-align:center;">
-          <p style="margin:0;font-size:28px;line-height:1;font-weight:800;letter-spacing:0.24em;color:#18181b;">${data.otpCode}</p>
+          <p style="margin:0;font-size:28px;line-height:1;font-weight:800;letter-spacing:0.24em;color:#18181b;">${escapeHtml(data.otpCode)}</p>
         </div>` +
         paragraph(`This code expires in ${data.expiresInMinutes} minutes. If you did not request access, you can ignore this email.`)
     ),
@@ -210,10 +210,10 @@ export function emailChangeOtpEmail(data: {
     subject: `Your NEXUS email-change code: ${data.otpCode}`,
     html: wrapHtml(
       "Confirm Your New Email",
-      paragraph(`Hi ${data.recipientName},`) +
+      paragraph(`Hi ${escapeHtml(data.recipientName)},`) +
         paragraph("Someone (hopefully you) asked to change the email on a NEXUS account to this address. Use the code below to confirm it.") +
         `<div style="margin:20px 0;padding:18px 20px;background:#f4f4f5;border:1px solid #e4e4e7;border-radius:10px;text-align:center;">
-          <p style="margin:0;font-size:28px;line-height:1;font-weight:800;letter-spacing:0.24em;color:#18181b;">${data.otpCode}</p>
+          <p style="margin:0;font-size:28px;line-height:1;font-weight:800;letter-spacing:0.24em;color:#18181b;">${escapeHtml(data.otpCode)}</p>
         </div>` +
         paragraph(`This code expires in ${data.expiresInMinutes} minutes. If you did not request this, you can ignore this email — the account's email will not change.`)
     ),
@@ -230,10 +230,10 @@ export function passwordResetOtpEmail(data: {
     subject: `Your NEXUS password reset code: ${data.otpCode}`,
     html: wrapHtml(
       "Reset Your Password",
-      paragraph(`Hi ${data.recipientName},`) +
+      paragraph(`Hi ${escapeHtml(data.recipientName)},`) +
         paragraph("Use the verification code below to authorize a password reset for your NEXUS account.") +
         `<div style="margin:20px 0;padding:18px 20px;background:#f4f4f5;border:1px solid #e4e4e7;border-radius:10px;text-align:center;">
-          <p style="margin:0;font-size:28px;line-height:1;font-weight:800;letter-spacing:0.24em;color:#18181b;">${data.otpCode}</p>
+          <p style="margin:0;font-size:28px;line-height:1;font-weight:800;letter-spacing:0.24em;color:#18181b;">${escapeHtml(data.otpCode)}</p>
         </div>` +
         paragraph(`This code expires in ${data.expiresInMinutes} minutes. If you did not request a password reset, you can ignore this email.`)
     ),
@@ -253,19 +253,19 @@ export function statusUpdateEmail(data: {
     subject: `Status update: ${data.projectName}`,
     html: wrapHtml(
       "Project Status Update",
-      paragraph(`Hi ${data.recipientName},`) +
-        paragraph(`<strong>${data.updatedBy}</strong> posted a status update for <strong>${data.projectName}</strong>:`) +
-        metaRow("Status", data.status) +
+      paragraph(`Hi ${escapeHtml(data.recipientName)},`) +
+        paragraph(`<strong>${escapeHtml(data.updatedBy)}</strong> posted a status update for <strong>${escapeHtml(data.projectName)}</strong>:`) +
+        metaRow("Status", escapeHtml(data.status)) +
         `<div style="margin:16px 0;padding:12px 16px;background:#f4f4f5;border-radius:6px;">
-          <p style="margin:0;font-size:13px;color:#3f3f46;line-height:1.5;">${data.summary}</p>
+          <p style="margin:0;font-size:13px;color:#3f3f46;line-height:1.5;">${escapeHtml(data.summary)}</p>
         </div>` +
-        button("View Project", link(`projects/${data.projectId}`))
+        button("View Project", escapeHtml(link(`projects/${encodeURIComponent(data.projectId)}`)))
     ),
   }
 }
 
 // Workspace and display names are typed by users. These two templates go to people who may never
-// have opened NEXUS, so they escape what they interpolate (the older templates don't).
+// have opened NEXUS; every template escapes what it interpolates into HTML.
 function escapeHtml(s: string): string {
   return String(s)
     .replace(/&/g, "&amp;")
