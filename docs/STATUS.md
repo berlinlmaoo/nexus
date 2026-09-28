@@ -210,7 +210,8 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 | Change | What exists | Commit |
 |---|---|---|
 | Logout revokes the token on the server | A manual logout (and delete account) sends `POST /api/auth/app-logout` with that session's cookie, fire and forget, after the push device is deleted (it needs the same cookie); the phone signs out at once regardless: offline, a 404 while the route is new, or any error change nothing, and a 401 there never touches the current session (AuthRepositoryTest) | 0fdbdee |
-| Email change needs the current password | Account › Email: a required "Current password" field (sign-in button off while empty), help "To make sure this is you. Your old email will be told about this change."; sent as `currentPassword` to `/api/user/email/request`, never trimmed, never kept in restorable state, cleared once the code is sent (AccountApiTest) | this step |
+| Email change needs the current password | Account › Email: a required "Current password" field (sign-in button off while empty), help "To make sure this is you. Your old email will be told about this change."; sent as `currentPassword` to `/api/user/email/request`, never trimmed, never kept in restorable state, cleared once the code is sent (AccountApiTest) | 38be2f2 |
+| Old tokens get 401 once (server sessionVersion) — checked | Every send path (JSON, text/SSE, downloads) goes through one `classify`: a 401 on a session call ends that session exactly once (not deliberate: no server revoke), concurrent 401s end it once, background jobs cannot crash (appScope handler); queued taps are kept for the same person and replayed after the next sign-in, never under another session. Session storage (Keystore + noBackupFilesDir) unchanged. AuthRepositoryTest, AttendanceQueueTest | this step |
 
 ## Security + parity audit of build 5 (docs/AUDIT.md 266af90): RILIS LAYAK, 8 RENDAH
 

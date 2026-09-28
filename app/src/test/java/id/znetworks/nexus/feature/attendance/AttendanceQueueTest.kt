@@ -239,4 +239,21 @@ class AttendanceQueueTest {
         val again = queue()
         assertTrue(again.state.value.entries.single().fix.simulated)
     }
+
+    // Berlin 29 Sep: old tokens without sessionVersion get 401 once. The queued taps wait for the same
+    // person's next sign-in and go out then; nobody else's session ever sends them.
+    @Test fun a401KeepsTheQueueForTheSamePersonsNextSignIn() = runTest {
+        val q = queue()
+        q.add("in", AttendanceKind.CHECK_IN, 1)
+        sender.answers += ApiError.Unauthorized
+        assertEquals(AttendanceQueue.FlushResult.SIGNED_OUT, q.flush())
+        user = null
+        q.holdForSignIn("u1")
+        assertEquals(AttendanceQueue.FlushResult.SIGNED_OUT, q.flush())   // signed out: nothing sent
+        user = "u1"; q.keepOnly("u1")                                       // signs in again
+        sender.answers += ok
+        assertEquals(AttendanceQueue.FlushResult.DRAINED, q.flush())
+        assertEquals(listOf("in:in", "in:in"), sender.calls)
+        assertEquals(0, q.state.value.count)
+    }
 }
