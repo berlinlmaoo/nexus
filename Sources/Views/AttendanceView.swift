@@ -1075,7 +1075,14 @@ struct StreakBoardCard: View {
     // `body`, and constructing a DateFormatter there is about the most expensive thing you can do:
     // the month header alone built two of them every pass. Same calendar (gregorian), same zone
     // (Asia/Jakarta) and the same patterns, so both strings come out byte-identical.
-    private var monthDate: Date { ProjDate.cal.date(byAdding: .month, value: monthOffset, to: Date()) ?? Date() }
+    /// The attendance PERIOD, not the calendar month: from the 28th, today already belongs to next
+    /// month's period (28 Sep → "2026-10", 28 Sep–27 Oct), as on the server and the web. Until 28 Sep
+    /// 2026 this took the calendar month, so on the 28th the board still showed the period that had ended.
+    private var monthDate: Date {
+        let now = Date()
+        let base = ProjDate.cal.component(.day, from: now) >= 28 ? (ProjDate.cal.date(byAdding: .month, value: 1, to: now) ?? now) : now
+        return ProjDate.cal.date(byAdding: .month, value: monthOffset, to: base) ?? base
+    }
     private var monthKey: String { ProjDate.fmt("yyyy-MM").string(from: monthDate) }
     private var monthLabel: String { ProjDate.fmt("MMMM yyyy").string(from: monthDate) }
     /// The attendance PERIOD this board covers: the 28th of the previous month through the 27th of

@@ -40,10 +40,9 @@ struct AdminUserDetailView: View {
         guard let uid = member.userId else { return [] }
         return members.filter { $0.approverId == uid }
     }
-    private var monthKey: String {
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM"; f.locale = Locale(identifier: "en_US_POSIX")
-        return f.string(from: Date())
-    }
+    /// The attendance period key (28th cut-off) — both the xlsx export and the day-off allowance behind
+    /// this sheet are per period, not per calendar month.
+    private var monthKey: String { OfflineSync.monthKey() }
 
     var body: some View {
         ScrollView {
