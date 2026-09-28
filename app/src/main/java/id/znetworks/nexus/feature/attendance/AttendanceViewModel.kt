@@ -12,6 +12,7 @@ import id.znetworks.nexus.core.net.ApiError
 import id.znetworks.nexus.core.net.meansOriginUnreachable
 import id.znetworks.nexus.core.net.nobodyAnswered
 import id.znetworks.nexus.feature.attendance.liveness.FaceGuard
+import id.znetworks.nexus.feature.attendance.liveness.LiveSelfie
 import id.znetworks.nexus.feature.push.LocalReminders
 import id.znetworks.nexus.ui.components.describe
 import kotlinx.coroutines.Job
@@ -153,10 +154,11 @@ class AttendanceViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(flow = null) }
     }
 
-    fun onSelfie(selfie: ByteArray) {
+    /** The only way a selfie enters attendance: from the face check (every path, offsite included). */
+    fun onSelfie(selfie: LiveSelfie) {
         val kind = _state.value.capturing ?: return
         _state.update { it.copy(capturing = null) }
-        viewModelScope.launch { submit(kind, selfie) }
+        viewModelScope.launch { submit(kind, selfie.jpeg) }
     }
 
     private suspend fun submit(kind: AttendanceKind, selfie: ByteArray) {

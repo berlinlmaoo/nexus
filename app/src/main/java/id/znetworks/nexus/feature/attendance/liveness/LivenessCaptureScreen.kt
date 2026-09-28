@@ -92,12 +92,20 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 
 /**
+ * An attendance selfie that came out of the face check. Only [FaceCheck] builds one (the source
+ * guard test in AttendanceGuardTest fails the build otherwise), and the attendance screen only
+ * accepts this type: no attendance path can submit a photo that skipped liveness (REQ-ATT-01,
+ * UPDATES 28 Sep §6).
+ */
+class LiveSelfie(val jpeg: ByteArray)
+
+/**
  * The dedicated full-screen face check that takes the attendance selfie itself (REQ-ATT-02). No
  * other code path produces a check-in/out photo (REQ-ATT-01): the attendance screen only accepts
  * bytes from [onCaptured].
  */
 @Composable
-fun LivenessCaptureScreen(onCaptured: (ByteArray) -> Unit, onCancel: () -> Unit) {
+fun LivenessCaptureScreen(onCaptured: (LiveSelfie) -> Unit, onCancel: () -> Unit) {
     val context = LocalContext.current
     var granted by remember { mutableStateOf(hasCamera(context)) }
     var askedOnce by remember { mutableStateOf(false) }
@@ -116,7 +124,7 @@ fun LivenessCaptureScreen(onCaptured: (ByteArray) -> Unit, onCancel: () -> Unit)
 }
 
 @Composable
-private fun FaceCheck(onCaptured: (ByteArray) -> Unit, onCancel: () -> Unit) {
+private fun FaceCheck(onCaptured: (LiveSelfie) -> Unit, onCancel: () -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val engine = remember { LivenessEngine() }
@@ -173,7 +181,7 @@ private fun FaceCheck(onCaptured: (ByteArray) -> Unit, onCancel: () -> Unit) {
                     // person holds still again and a new one is taken.
                     val ok = jpeg != null && runBlocking { FaceGuard.check(jpeg) } == FaceGuard.Verdict.OK
                     if (ok) {
-                        ContextCompat.getMainExecutor(context).execute { done = true; onCaptured(jpeg!!) }
+                        ContextCompat.getMainExecutor(context).execute { done = true; onCaptured(LiveSelfie(jpeg!!)) }
                     } else {
                         engine.retryCapture()
                         stateFlow.value = engine.state
