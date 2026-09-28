@@ -529,7 +529,7 @@ async function resolveWorkspace(): Promise<SheetWorkspace | null> {
 export async function loadAttendanceSheetGrid(workspace: SheetWorkspace, periodKey: string, now: Date) {
   const { start, end } = attendancePeriodRange(periodKey)
   const [members, recordUsers, requestUsers] = await Promise.all([
-    prisma.workspaceMember.findMany({ where: { workspaceId: workspace.id }, select: { userId: true, role: true } }),
+    prisma.workspaceMember.findMany({ where: { workspaceId: workspace.id }, select: { userId: true, role: true, joinedAt: true } }),
     prisma.attendanceRecord.findMany({
       where: { workspaceId: workspace.id, attendanceDate: { gte: start, lte: end } },
       select: { userId: true },
@@ -545,7 +545,11 @@ export async function loadAttendanceSheetGrid(workspace: SheetWorkspace, periodK
   const userIds = [...new Set([...members, ...recordUsers, ...requestUsers].map((x) => x.userId))].filter((id) => !exempt.has(id))
 
   const classified = await classifyAttendanceDays({ workspaceId: workspace.id, userIds, start, end })
-  const withDays = userIds.filter((id) => (classified.get(id)?.length ?? 0) > 0)
+  // Everyone who had joined by the end of the period is on the sheet (owner, 28 Sep 2026) — not only
+  // people with a classified day: on the first day of a period that was a handful of names.
+  const endPlus = new Date(end.getTime() + 24 * 60 * 60 * 1000)
+  const joined = new Set(members.filter((m) => !exempt.has(m.userId) && m.joinedAt && m.joinedAt <= endPlus).map((m) => m.userId))
+  const withDays = userIds.filter((id) => (classified.get(id)?.length ?? 0) > 0 || joined.has(id))
   const [found, quotas] = withDays.length
     ? await Promise.all([
         prisma.user.findMany({ where: { id: { in: withDays } }, select: { id: true, name: true } }),
@@ -683,11 +687,18 @@ export async function syncAttendanceSheet(opts: {
 
       stage = "write"
       const requests: sheets_v4.Schema$Request[] = []
+      // Tab order = period, newest first (sheetId is YYYYMM), for every tab — written or not — so a run
+      // that rewrites one old period cannot shuffle the rest (28 Sep 2026: Oct, Sep, Apr, May, Jun…).
+      const order = [...new Set([...tabs.map((t) => t.sheetId), ...grids.map((g) => g.sheetId)])].sort((a, b) => b - a)
       grids.forEach((grid, index) => {
         const existing = tabs.find((t) => t.sheetId === grid.sheetId) ?? tabs.find((t) => t.title === grid.tabTitle) ?? null
         base.tabs[index].newTab = !existing
-        requests.push(...buildTabRequests(grid, existing, { index }))
+        requests.push(...buildTabRequests(grid, existing, { index: order.indexOf(grid.sheetId) }))
       })
+      for (const t of tabs) {
+        if (grids.some((g) => g.sheetId === t.sheetId)) continue
+        requests.push({ updateSheetProperties: { properties: { sheetId: t.sheetId, index: order.indexOf(t.sheetId) }, fields: "index" } })
+      }
       await api.batchUpdate(state.spreadsheetId, requests)
 
       let dirty = false
