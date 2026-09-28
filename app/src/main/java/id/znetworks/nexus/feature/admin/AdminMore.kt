@@ -1,5 +1,8 @@
 package id.znetworks.nexus.feature.admin
 
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -84,7 +87,13 @@ import java.time.ZoneOffset
                                     val xpReward: Int = 0, val deadline: String? = null, val taskIds: List<String> = emptyList())
 @Serializable data class AdminQuests(val quests: List<AdminQuest> = emptyList())
 @Serializable data class Announcement(val id: String, val title: String = "", val body: String = "", val tone: String? = null, val active: Boolean = false,
-                                      val createdAt: String? = null, val seenCount: Int = 0, val repeatUntil: String? = null, val repeatAtTime: String? = null, val targetCount: Int? = null)
+                                      val createdAt: String? = null, val seenCount: Int = 0, val repeatUntil: String? = null, val repeatAtTime: String? = null, val targetCount: Int? = null,
+                                      /** Batch 2: "announcement" | "warning" | "sp", the SP's PDF, and who it went to (empty = everyone). */
+                                      val kind: String? = null, val imageUrl: String? = null, val attachmentUrl: String? = null, val attachmentName: String? = null,
+                                      val targets: List<AnnounceTarget> = emptyList(), val targetUserIds: List<String> = emptyList())
+@Serializable data class AnnounceTarget(val id: String, val name: String? = null)
+/** `POST /api/announcements/attachment` → 201. */
+@Serializable data class AnnounceAttachment(val url: String, val name: String? = null, val size: Long? = null)
 @Serializable data class Announcements(val announcements: List<Announcement> = emptyList())
 @Serializable data class UsageUser(val id: String, val name: String? = null, val avatar: String? = null, val asked: Int = 0, val answered: Int = 0, val toolCalls: Int = 0, val lastUsed: String? = null)
 @Serializable data class UsageTotals(val people: Int = 0, val asked: Int = 0, val toolCalls: Int = 0)
@@ -104,10 +113,34 @@ object AnnounceRules {
     val TONES = listOf("info", "success", "warning")
     const val MAX_XP = 50
 
-    /** Repeat keys only when repeating, as iOS: the server requires repeatAtTime once repeatDays > 0. */
-    fun body(title: String, body: String, tone: String, repeatDays: Int, at: String) = buildJsonObject {
+    const val PDF_MAX_BYTES = 10L * 1024 * 1024
+
+    /**
+     * Repeat keys only when repeating, as iOS: the server requires repeatAtTime once repeatDays > 0.
+     * Batch 2: [targets] only when not everyone; a PDF makes it an SP (kind "sp"), as iOS 78bfe37.
+     */
+    fun body(title: String, body: String, tone: String, repeatDays: Int, at: String,
+             targets: List<String> = emptyList(), pdf: AnnounceAttachment? = null) = buildJsonObject {
         put("title", title.trim()); put("body", body.trim()); put("tone", tone)
         if (repeatDays > 0) { put("repeatDays", repeatDays); put("repeatAtTime", at) }
+        if (targets.isNotEmpty()) put("targetUserIds", kotlinx.serialization.json.JsonArray(targets.distinct().map { kotlinx.serialization.json.JsonPrimitive(it) }))
+        pdf?.let { put("attachmentUrl", it.url); put("attachmentName", it.name ?: "SP.pdf"); put("kind", "sp") }
+    }
+
+    /** Why Post is off (iOS): a title, a body, and at least one person when not everyone. */
+    /** The roster to pick from (iOS): people with an account, name or email search, A–Z, at most 60 rows. */
+    fun rosterRows(members: List<WsMember>, search: String): List<WsMember> {
+        val q = search.trim().lowercase()
+        return members.filter { it.userId.isNotBlank() && (q.isEmpty() || it.displayName.lowercase().contains(q) || it.email.orEmpty().lowercase().contains(q)) }
+            .distinctBy { it.userId }.sortedBy { it.displayName.lowercase() }.take(60)
+    }
+
+    enum class Missing { TITLE, BODY, PEOPLE }
+    fun missing(title: String, body: String, everyone: Boolean, picked: Set<String>) = when {
+        title.isBlank() -> Missing.TITLE
+        body.isBlank() -> Missing.BODY
+        !everyone && picked.isEmpty() -> Missing.PEOPLE
+        else -> null
     }
 }
 
@@ -121,8 +154,15 @@ class AdminMoreApi(private val api: ApiClient) {
     })
     suspend fun deleteQuest(id: String) = send("DELETE", "/api/gamification/quests/admin?id=$id", null)
     suspend fun announcements() = api.get("/api/announcements", Announcements.serializer()).announcements
-    suspend fun announce(title: String, body: String, tone: String, repeatDays: Int, at: String) =
-        send("POST", "/api/announcements", AnnounceRules.body(title, body, tone, repeatDays, at))
+    suspend fun announce(title: String, body: String, tone: String, repeatDays: Int, at: String, targets: List<String> = emptyList(), pdf: AnnounceAttachment? = null) =
+        send("POST", "/api/announcements", AnnounceRules.body(title, body, tone, repeatDays, at, targets, pdf))
+    /** The SP's PDF (≤ 10 MB; the server answers 413 / 415 otherwise). */
+    suspend fun uploadAttachment(name: String, pdf: ByteArray): AnnounceAttachment {
+        val body = okhttp3.MultipartBody.Builder().setType(okhttp3.MultipartBody.FORM)
+            .addFormDataPart("file", name.replace("\"", ""), pdf.toRequestBody("application/pdf".toMediaType()))
+            .build()
+        return api.send(Request.Builder().url(api.url("/api/announcements/attachment")).post(body).build(), AnnounceAttachment.serializer())
+    }
     suspend fun setActive(id: String, active: Boolean) = send("PATCH", "/api/announcements/$id", buildJsonObject { put("active", active) })
     suspend fun deleteAnnouncement(id: String) = send("DELETE", "/api/announcements/$id", null)
     suspend fun gideonUsage() = api.get("/api/gideon/usage", GideonUsage.serializer())
@@ -233,6 +273,7 @@ fun AnnouncementsTab() {
     val scope = rememberCoroutineScope()
     var list by remember { mutableStateOf<List<Announcement>?>(null) }
     var creating by remember { mutableStateOf(false) }
+    var pdf by remember { mutableStateOf<Pair<String, String>?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     var tick by remember { mutableIntStateOf(0) }
     LaunchedEffect(tick) { list = runCatching { api.announcements() }.getOrDefault(emptyList()) }
@@ -245,47 +286,29 @@ fun AnnouncementsTab() {
         l?.forEach { a ->
             AdminCard {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    when (a.kind) { "sp" -> { Pill("SP", c.danger); Spacer(Modifier.width(6.dp)) }; "warning" -> { Pill(stringResource(R.string.an_kind_warning), c.warning); Spacer(Modifier.width(6.dp)) } }
                     Text(a.title, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.foreground, modifier = Modifier.weight(1f))
                     Pill(stringResource(if (a.active) R.string.an_active else R.string.an_inactive), if (a.active) c.success else c.mutedFg)
                     IconButton(onClick = { run { api.deleteAnnouncement(a.id) } }) { Icon(Icons.Filled.Close, stringResource(R.string.delete), tint = c.danger) }
                 }
                 Text(a.body, fontSize = 13.sp, color = c.foreground, maxLines = 4)
+                a.attachmentUrl?.let { url ->
+                    TextButton(onClick = { pdf = url to (a.attachmentName ?: "SP.pdf") }) {
+                        Icon(Icons.Filled.Description, null, tint = c.danger, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp))
+                        Text(a.attachmentName ?: "SP.pdf", color = c.danger, maxLines = 1)
+                    }
+                }
+                Text(if (a.targets.isEmpty() && a.targetUserIds.isEmpty()) stringResource(R.string.an_to_everyone)
+                    else stringResource(R.string.an_to_people, a.targets.mapNotNull { it.name }.ifEmpty { listOf("${a.targetCount ?: a.targetUserIds.size}") }.joinToString(", ")),
+                    fontSize = 11.sp, color = c.mutedFg, maxLines = 2)
                 Text(listOfNotNull(chatTime(a.createdAt), stringResource(R.string.an_read_by, a.seenCount),
                     a.repeatUntil?.let { stringResource(R.string.an_repeats, it.take(10), a.repeatAtTime.orEmpty()) }).joinToString(" · "), fontSize = 11.sp, color = c.mutedFg)
                 TextButton(onClick = { run { api.setActive(a.id, !a.active) } }) { Text(stringResource(if (a.active) R.string.an_deactivate else R.string.an_activate)) }
             }
         }
     }
-    if (creating) {
-        var title by rememberSaveable { mutableStateOf("") }
-        var body by rememberSaveable { mutableStateOf("") }
-        var tone by rememberSaveable { mutableStateOf("info") }
-        var repeat by rememberSaveable { mutableIntStateOf(0) }
-        var at by rememberSaveable { mutableStateOf("09:00") }
-        var pickTime by remember { mutableStateOf(false) }
-        AlertDialog(onDismissRequest = { creating = false }, title = { Text(stringResource(R.string.an_new)) },
-            text = {
-                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(title, { title = it }, singleLine = true, label = { Text(stringResource(R.string.an_title)) }, modifier = Modifier.fillMaxWidth(), keyboardOptions = AdminKeyboard.Done)
-                    OutlinedTextField(body, { body = it }, minLines = 3, label = { Text(stringResource(R.string.an_body)) }, modifier = Modifier.fillMaxWidth())
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) { AnnounceRules.TONES.forEach { t -> FilterChip(tone == t, { tone = t }, { Text(t) }) } }
-                    Text(stringResource(R.string.an_repeat), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = c.mutedFg)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        AnnounceRules.REPEAT.forEach { d -> FilterChip(repeat == d, { repeat = d }, { Text(if (d == 0) stringResource(R.string.an_once) else stringResource(R.string.an_plus_days, d)) }) }
-                    }
-                    if (repeat > 0) {
-                        TextButton(onClick = { pickTime = true }) { Text(stringResource(R.string.an_time_wib, at)) }
-                        Text(stringResource(R.string.an_repeat_note), fontSize = 11.sp, color = c.mutedFg)
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = { creating = false; run { api.announce(title, body, tone, repeat, at) } }, enabled = title.isNotBlank() && body.isNotBlank()) { Text(stringResource(R.string.th_post)) } },
-            dismissButton = { TextButton(onClick = { creating = false }) { Text(stringResource(R.string.cancel)) } })
-        if (pickTime) {
-            val st = rememberTimePickerState(at.substringBefore(':').toInt(), at.substringAfter(':').toInt(), is24Hour = true)
-            AlertDialog(onDismissRequest = { pickTime = false }, text = { TimePicker(st) }, confirmButton = { TextButton(onClick = { at = "%02d:%02d".format(st.hour, st.minute); pickTime = false }) { Text("OK") } })
-        }
-    }
+    if (creating) AnnouncementComposer(api, onDismiss = { creating = false }, onPosted = { creating = false; tick++ })
+    pdf?.let { (url, name) -> id.znetworks.nexus.ui.components.PdfViewerDialog(url, name) { pdf = null } }
     notice?.let { AlertDialog(onDismissRequest = { notice = null }, text = { Text(it) }, confirmButton = { TextButton(onClick = { notice = null }) { Text("OK") } }) }
 }
 

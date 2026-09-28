@@ -1,5 +1,10 @@
 package id.znetworks.nexus.feature.inbox
 
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.filled.Description
 import android.app.Application
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
@@ -219,8 +224,18 @@ fun AnnouncementDialog(host: AnnouncementHost) {
     val c = Nx.colors
     val context = LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    val tone = when (a.tone) { "success" -> c.success; "warning" -> c.warning; else -> c.violetText }
+    // Batch 2 (29 Sep, web AnnouncementModal / iOS 78bfe37): an SP is red with an "SP" badge and its PDF;
+    // an Absen Monitor warning is amber and shows the selfie it is about, whole.
+    val kind = a.kind ?: "announcement"
+    val tone = when {
+        kind == "sp" -> c.danger
+        kind == "warning" -> c.warning
+        a.tone == "success" -> c.success
+        a.tone == "warning" -> c.warning
+        else -> c.violetText
+    }
     var img by remember(a.id) { mutableStateOf<ImageBitmap?>(null) }
+    var pdfOpen by remember(a.id) { mutableStateOf(false) }
     LaunchedEffect(a.imageUrl) {
         val url = a.imageUrl ?: return@LaunchedEffect
         val api = (context.applicationContext as NexusApplication).container.api
@@ -228,11 +243,37 @@ fun AnnouncementDialog(host: AnnouncementHost) {
     }
     AlertDialog(
         onDismissRequest = {},
-        title = { Text("📣 " + a.title.orEmpty(), color = tone) },
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(stringResource(when (kind) { "sp" -> R.string.an_eyebrow_sp; "warning" -> R.string.an_eyebrow_warning; else -> R.string.an_eyebrow }).uppercase(),
+                    fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp, color = tone)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (kind == "sp") {
+                        Text("SP", fontSize = 12.sp, fontWeight = FontWeight.Black, color = androidx.compose.ui.graphics.Color.White,
+                            modifier = Modifier.background(c.danger, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
+                        Spacer(Modifier.width(8.dp))
+                    } else if (kind == "announcement") { Text("📣 ") }
+                    else Text("⚠️ ")
+                    Text(a.title.orEmpty(), color = if (kind == "announcement") tone else c.foreground)
+                }
+            }
+        },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                img?.let { Image(it, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp)) }
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                img?.let {
+                    Image(it, null, contentScale = if (kind == "warning") ContentScale.Fit else ContentScale.Crop,
+                        modifier = Modifier.fillMaxWidth().heightIn(max = if (kind == "warning") 280.dp else 220.dp).background(c.muted, RoundedCornerShape(12.dp)))
+                }
                 Text(a.body.orEmpty())
+                a.attachmentUrl?.let {
+                    OutlinedButton(onClick = { pdfOpen = true }, modifier = Modifier.fillMaxWidth(),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, c.danger.copy(alpha = 0.4f))) {
+                        Icon(Icons.Filled.Description, null, tint = c.danger, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.an_open_pdf), color = c.danger, fontWeight = FontWeight.Bold)
+                    }
+                    a.attachmentName?.let { n -> Text(n, fontSize = 11.sp, color = c.mutedFg, maxLines = 1, modifier = Modifier.align(Alignment.CenterHorizontally)) }
+                }
                 a.authorName?.let { Text("— $it", fontSize = 12.sp, color = c.mutedFg) }
             }
         },
@@ -242,4 +283,7 @@ fun AnnouncementDialog(host: AnnouncementHost) {
             }
         },
     )
+    if (pdfOpen) a.attachmentUrl?.let { url ->
+        id.znetworks.nexus.ui.components.PdfViewerDialog(url, a.attachmentName ?: "SP.pdf") { pdfOpen = false }
+    }
 }

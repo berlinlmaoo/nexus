@@ -32,6 +32,12 @@ data class Announcement(
     val imageUrl: String? = null,
     val createdAt: String? = null,
     val authorName: String? = null,
+    /** "announcement" | "warning" (Absen Monitor) | "sp" (warning letter with a PDF) — Batch 2. */
+    val kind: String? = null,
+    val attachmentUrl: String? = null,
+    val attachmentName: String? = null,
+    /** Sent to selected people (this viewer among them), not everyone. */
+    val targeted: Boolean? = null,
 )
 
 @Serializable

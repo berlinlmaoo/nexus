@@ -1578,4 +1578,32 @@
         <item quantity="one">%d face</item>
         <item quantity="other">%d faces</item>
     </plurals>
+    <string name="pdf_failed">Couldn\'t open the PDF.</string>
+    <string name="pdf_open_in">Open in another app</string>
+    <string name="an_eyebrow">Announcement</string>
+    <string name="an_eyebrow_warning">Warning</string>
+    <string name="an_eyebrow_sp">Warning letter</string>
+    <string name="an_open_pdf">Open PDF</string>
+    <string name="an_kind_warning">Warning</string>
+    <string name="an_to_everyone">To everyone</string>
+    <string name="an_to_people">To: %1$s</string>
+    <string name="an_f_title">TITLE</string>
+    <string name="an_f_body">BODY</string>
+    <string name="an_f_audience">AUDIENCE</string>
+    <string name="an_f_pdf">PDF (SP)</string>
+    <string name="an_f_tone">TONE</string>
+    <string name="an_everyone">Everyone</string>
+    <string name="an_selected">Selected people</string>
+    <string name="an_search">Search name or email…</string>
+    <string name="an_n_selected">%1$d selected</string>
+    <string name="an_attach_pdf">Attach PDF (SP)</string>
+    <string name="an_uploading">Uploading…</string>
+    <string name="an_pdf_too_big">The PDF must be 10 MB or smaller.</string>
+    <string name="an_pdf_not_pdf">That file isn\'t a PDF.</string>
+    <string name="an_pdf_unreadable">Couldn\'t read that file.</string>
+    <string name="an_posting">Posting…</string>
+    <string name="an_missing_title">Add a title to post.</string>
+    <string name="an_missing_body">Add the announcement body to post.</string>
+    <string name="an_missing_people">Pick at least one person.</string>
+    <string name="an_tab">Announcements</string>
 </resources>

@@ -35,6 +35,19 @@ class UiPreviewActivity : ComponentActivity() {
                     when (screen) {
                         "account" -> AccountScreen(onBack = {})
                         "board" -> SubmissionBoardView(sampleBoard, onOpen = {})
+                        "composer" -> id.znetworks.nexus.feature.admin.AnnouncementComposer(
+                            id.znetworks.nexus.feature.admin.AdminMoreApi((application as id.znetworks.nexus.NexusApplication).container.api), onDismiss = {}, onPosted = {})
+                        "sp", "warning" -> {
+                            val host = androidx.compose.runtime.remember {
+                                id.znetworks.nexus.feature.inbox.AnnouncementHost(id.znetworks.nexus.feature.inbox.InboxApi((application as id.znetworks.nexus.NexusApplication).container.api)).also {
+                                    it.queue.value = listOf(if (screen == "sp") id.znetworks.nexus.feature.inbox.Announcement("a", "Surat Peringatan 1", "Please read the attached letter.", kind = "sp",
+                                        attachmentUrl = "/api/files/attachments/announcements/x.pdf", attachmentName = "SP1-Ana.pdf", authorName = "BoD")
+                                    else id.znetworks.nexus.feature.inbox.Announcement("w", "Attendance warning", "Your check-out selfie on 27 September doesn't show your face.", kind = "warning"))
+                                }
+                            }
+                            id.znetworks.nexus.feature.inbox.AnnouncementDialog(host)
+                        }
+                        "pdf" -> id.znetworks.nexus.ui.components.PdfPages(samplePdf()) {}
                         else -> MoreScreen(Session("t", "c", "u", "Berlin Preview", "preview@example.com"), onLogout = {}, open = {}, onOpenWhatsNew = {})
                     }
                 }
@@ -51,4 +64,19 @@ class UiPreviewActivity : ComponentActivity() {
         ),
         statusColumns = listOf("On Progress", "Done"),
     )
+
+    /** A two-page PDF drawn on the device, for the in-app viewer. */
+    private fun samplePdf(): java.io.File {
+        val f = java.io.File(cacheDir, "sample.pdf")
+        val doc = android.graphics.pdf.PdfDocument()
+        repeat(2) { i ->
+            val page = doc.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, i + 1).create())
+            val p = android.graphics.Paint().apply { textSize = 28f }
+            page.canvas.drawText("SURAT PERINGATAN — page ${i + 1}", 60f, 100f, p)
+            page.canvas.drawRect(60f, 140f, 535f, 400f, android.graphics.Paint().apply { color = android.graphics.Color.rgb(230, 80, 80) })
+            doc.finishPage(page)
+        }
+        f.outputStream().use { doc.writeTo(it) }; doc.close()
+        return f
+    }
 }

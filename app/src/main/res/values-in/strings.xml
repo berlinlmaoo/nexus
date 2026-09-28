@@ -1572,4 +1572,32 @@
         <item quantity="one">%d wajah</item>
         <item quantity="other">%d wajah</item>
     </plurals>
+    <string name="pdf_failed">PDF gagal dibuka.</string>
+    <string name="pdf_open_in">Buka di aplikasi lain</string>
+    <string name="an_eyebrow">Pengumuman</string>
+    <string name="an_eyebrow_warning">Peringatan</string>
+    <string name="an_eyebrow_sp">Surat peringatan</string>
+    <string name="an_open_pdf">Buka PDF</string>
+    <string name="an_kind_warning">Peringatan</string>
+    <string name="an_to_everyone">Untuk semua orang</string>
+    <string name="an_to_people">Untuk: %1$s</string>
+    <string name="an_f_title">JUDUL</string>
+    <string name="an_f_body">ISI</string>
+    <string name="an_f_audience">PENERIMA</string>
+    <string name="an_f_pdf">PDF (SP)</string>
+    <string name="an_f_tone">NADA</string>
+    <string name="an_everyone">Semua orang</string>
+    <string name="an_selected">Orang tertentu</string>
+    <string name="an_search">Cari nama atau email…</string>
+    <string name="an_n_selected">%1$d dipilih</string>
+    <string name="an_attach_pdf">Lampirkan PDF (SP)</string>
+    <string name="an_uploading">Mengunggah…</string>
+    <string name="an_pdf_too_big">PDF maksimal 10 MB.</string>
+    <string name="an_pdf_not_pdf">File itu bukan PDF.</string>
+    <string name="an_pdf_unreadable">File itu tidak bisa dibaca.</string>
+    <string name="an_posting">Memposting…</string>
+    <string name="an_missing_title">Tambahkan judul untuk memposting.</string>
+    <string name="an_missing_body">Tambahkan isi pengumuman untuk memposting.</string>
+    <string name="an_missing_people">Pilih minimal satu orang.</string>
+    <string name="an_tab">Pengumuman</string>
 </resources>

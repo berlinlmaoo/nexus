@@ -4,7 +4,7 @@
 `docs/UPDATES-2026-09-28.md` is done; see "28 Sep" below.
 
 Repo `agents:~/nexus-android`; every change is committed, and nothing is half-finished.
-Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (314 JVM tests, all green).
+Build: `./gradlew assembleDebug assembleRelease testDebugUnitTest` (322 JVM tests, all green).
 Version 0.1.6 (versionCode 7 in the tree), applicationId `id.znetworks.nexus`, minSdk 26, target 36.
 **Build 7 ready, NOT published** (`~/nexus-android-release/NEXUS-0.1.6-7.apk`, sha256 `f10f4887e2eba6f83521e3584206b35cc04d09b92cb6417b22574612d66b1873`, from 1e3e706, 314 tests; versionCode 7, versionName 0.1.6, signer 5322fe4c…ad26): UI points 1–7 vs iOS + update offered by build number (latestName/latestBuild). Emulator smoke: 3 cold launches drawn, no crash from this install (the one crash in the log is the known stale BOOT_COMPLETED to the uninstalled previous uid).
 Build 6 (sha256 `ec06a64e…1934`, from 91dded1, 308 tests) — see "APK ready".
@@ -226,7 +226,8 @@ Server routes read from nexus-prod `~/nexus` (e3091ab, cff1575, web 9f9313d); wh
 | Item | What exists | Commit |
 |---|---|---|
 | A Absen Monitor (was Fake GPS) | Tab renamed "Absen Monitor" (EN/ID); chips Fake GPS · No face (`counts.noFaceOpen`) · Worth a look · Reviewed; NOFACE badge/side in orange; each side with a selfie shows a face chip ("2 faces" / "no face" / "face: not checked"); the "No face in the selfie" signal translated; "Send warning…" on open and cleared cards (not on TK ones) → dialog prefilled per level and side as the web (editable, 3–500, counter) → `POST /api/attendance/suspects/{id}/warn` (id one encoded segment); warnings history on the card (who, when, message). FakeGpsTest | 9445075 |
-| B Control Room keyboard | Every admin text field has a Done key (33 fields; multi-line notes/reasons too, only the announcement body keeps Enter for new lines); every admin screen root (Control Room and its sub-screens) closes the keyboard on a tap on empty space or a finger drag, with the same drag rule as the daily reflection (a bring-into-view scroll never closes it). AttendanceGuardTest `controlRoomKeyboardAlwaysCloses` | this step |
+| B Control Room keyboard | Every admin text field has a Done key (33 fields; multi-line notes/reasons too, only the announcement body keeps Enter for new lines); every admin screen root (Control Room and its sub-screens) closes the keyboard on a tap on empty space or a finger drag, with the same drag rule as the daily reflection (a bring-into-view scroll never closes it). AttendanceGuardTest `controlRoomKeyboardAlwaysCloses` | 6407216 |
+| C Announcements: targeted + SP PDF | Control Room tab "Announcements" (ID "Pengumuman"; "Attendance" tab no longer hard-coded Indonesian). Composer as iOS CreateAnnouncementSheet: full screen, TITLE/BODY/AUDIENCE (Everyone · Selected people: roster search by name/email, A–Z, ≤ 60 rows, check rows, "N selected")/PDF (SP) (pick a PDF → `POST /api/announcements/attachment`, ≤ 10 MB checked before upload, 413/415 said in words; attached = kind "sp")/TONE/REPEAT; Post says why it is off; a refused post stays open with the server's reason. List: SP / Warning badges, the PDF (opens in the viewer), "To: names" or "To everyone". Pop-up: SP = red "WARNING LETTER" eyebrow + SP badge + "Open PDF" (+ file name); warning = amber with the selfie shown whole. In-app PDF viewer (`PdfViewerDialog`: downloaded with the session into the shared cache that sign-out empties, pages drawn with PdfRenderer, "Open in another app"). AnnouncementBatch2Test; composer, SP pop-up and PDF pages checked on the emulator (debug preview) | this step |
 
 ## 29 Sep (Berlin, into 0.1.6; iOS f068bbf)
 
