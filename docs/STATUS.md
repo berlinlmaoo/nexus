@@ -191,7 +191,8 @@ active office counts as inside; a replayed check-in answered 409 "already checke
 | Finding | Fix | Commit |
 |---|---|---|
 | T1 (TINGGI) approved request covering today still showed Check in | Button replaced by the iOS card "Your approved request covers today · <type> · No check-in needed" (APPROVED only; a forgotten or started check-out still shows) | c10ca62 |
-| T2 (TINGGI) a new build with the same versionName was never offered | "Update available" compares `versionCode` from `/api/app/android/release` (launch/foreground/sign-in, signed in only) and shows "0.1.6 (3)"; the gate also reads `minBuild/latestBuild/nextMinimumBuild` when the server sends them (build floor persisted, lifted only by that build). Server fields asked in SERVER-REQUESTS **R5 (OPEN)** | this step |
+| T2 (TINGGI) a new build with the same versionName was never offered | "Update available" compares `versionCode` from `/api/app/android/release` (launch/foreground/sign-in, signed in only) and shows "0.1.6 (3)"; the gate also reads `minBuild/latestBuild/nextMinimumBuild` when the server sends them (build floor persisted, lifted only by that build). Server fields asked in SERVER-REQUESTS **R5 (OPEN)** | c283de2 |
+| S3 (SEDANG) one refusal at the head of the queue held the check-out behind it | A replayed check-in answered 409 "You have already checked in today." (no code) is done: dropped silently, counts as landed, the next entry goes on. PENDING_CHECKOUT and "approved request covers today" stay refusals. iOS has the same (I3 for the main session) | this step |
 
 ## Release rule (Berlin, 28 Sep 2026)
 

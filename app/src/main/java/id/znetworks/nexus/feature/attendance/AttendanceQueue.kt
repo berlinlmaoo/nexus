@@ -159,6 +159,13 @@ class AttendanceQueue(
                     }
                     e === ApiError.Unauthorized -> return FlushResult.SIGNED_OUT
                     e.meansOriginUnreachable() -> return FlushResult.UNREACHABLE
+                    // The day already has its check-in (web, another phone, an earlier replay):
+                    // this tap's job is done. Dropped without a word, and the check-out behind it goes on.
+                    alreadyCheckedIn(entry.kind, e) -> {
+                        remove(entry.id)
+                        onCheckInLanded()
+                        continue
+                    }
                     else -> {
                         bumpAttempts(entry.id, e)
                         return FlushResult.STOPPED
@@ -270,6 +277,15 @@ class AttendanceQueue(
     }
 
     companion object {
+        /**
+         * Check-in 409 "You have already checked in today." (no `code`): the only 409 that means the
+         * tap landed. PENDING_CHECKOUT (a code) and "an approved … request already covers today"
+         * are real refusals and keep their attempts and message.
+         */
+        fun alreadyCheckedIn(kind: AttendanceKind, e: ApiError): Boolean =
+            kind == AttendanceKind.CHECK_IN && e is ApiError.Http && e.status == 409 && e.code == null &&
+                e.serverMessage.orEmpty().contains("already checked in", ignoreCase = true)
+
         const val MAX_ATTEMPTS = 5
         /** Sent to the server as-is (the approver reads it), so English like the iOS source string. */
         const val OFFSITE_REPLAY_REASON =

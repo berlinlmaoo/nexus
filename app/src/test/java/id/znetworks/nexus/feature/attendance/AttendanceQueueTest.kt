@@ -182,4 +182,29 @@ class AttendanceQueueTest {
         q.flush()
         assertEquals(0, q.state.value.count)
     }
+
+    // Audit S3: a replayed check-in the server already has is done; the check-out behind it goes on.
+    @Test fun alreadyCheckedInDropsSilentlyAndCheckOutFollows() = runTest {
+        val q = queue()
+        q.add("in", AttendanceKind.CHECK_IN, 1)
+        q.add("out", AttendanceKind.CHECK_OUT, 2)
+        sender.answers += ApiError.Http(409, "You have already checked in today.", null, null)
+        sender.answers += ok
+        assertEquals(AttendanceQueue.FlushResult.DRAINED, q.flush())
+        assertEquals(listOf("in:in", "out:out:offsite=false:"), sender.calls)
+        assertEquals(0, q.state.value.count)
+        assertEquals(null, q.state.value.problem)
+        assertFalse(tmp.root.resolve("in.jpg").exists())
+    }
+
+    @Test fun otherConflictsStayRefusals() = runTest {
+        val q = queue()
+        q.add("in", AttendanceKind.CHECK_IN, 1)
+        sender.answers += ApiError.Http(409, "Kamu belum check-out di hari sebelumnya.", "PENDING_CHECKOUT", null)
+        assertEquals(AttendanceQueue.FlushResult.STOPPED, q.flush())
+        assertEquals(1, q.state.value.entries[0].attempts)
+        assertFalse(AttendanceQueue.alreadyCheckedIn(AttendanceKind.CHECK_IN,
+            ApiError.Http(409, "Attendance cannot be recorded because an approved sick request already covers today.", null, null)))
+        assertFalse(AttendanceQueue.alreadyCheckedIn(AttendanceKind.CHECK_OUT, ApiError.Http(409, "You have already checked in today.", null, null)))
+    }
 }
