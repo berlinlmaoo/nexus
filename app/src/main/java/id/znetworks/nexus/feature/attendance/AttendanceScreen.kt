@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.material3.IconButton
@@ -188,18 +190,12 @@ fun AttendanceScreen(
         if (reflectionFocused) { kotlinx.coroutines.delay(250); buttonInView.bringIntoView() }
     }
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
-    // A drag on the page puts the keyboard away (iOS: swipe to dismiss).
-    val dismissOnScroll = remember {
-        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
-            override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
-                if (source == androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput && kotlin.math.abs(available.y) > 4f) focusManager.clearFocus()
-                return androidx.compose.ui.geometry.Offset.Zero
-            }
-        }
-    }
+    // A finger dragging the page puts the keyboard away (iOS: swipe to dismiss). Read from the pointer
+    // itself, never from scroll events: the bring-into-view scroll above arrives as "user input" in
+    // Compose, and closing the keyboard on it closed it at every letter typed (Berlin, 29 Sep, point 6).
     PullToRefreshBox(isRefreshing = false, onRefresh = { vm.load(); requests.load(); board.load() }, modifier = Modifier.fillMaxSize().weight(1f)) {
         Column(
-            Modifier.fillMaxSize().nestedScroll(dismissOnScroll).verticalScroll(rememberScrollState())
+            Modifier.fillMaxSize().dismissKeyboardOnDrag { focusManager.clearFocus() }.verticalScroll(rememberScrollState())
                 // A tap on empty space closes the keyboard too.
                 .pointerInput(Unit) { detectTapGestures { focusManager.clearFocus() } }
                 .padding(16.dp),
@@ -637,3 +633,17 @@ private fun HeldNotice(q: AttendanceQueue.State, onDismiss: () -> Unit) {
 
 /** The first two parts of a server address ("Jl. Sudirman 5, Senayan, Jakarta…" → "Jl. Sudirman 5, Senayan"). */
 internal fun shortAddress(a: String): String = a.split(',').map { it.trim() }.filter { it.isNotEmpty() }.take(2).joinToString(", ")
+
+/** Calls [dismiss] once per gesture whose finger travels past the touch slop; never consumes the events. */
+internal fun Modifier.dismissKeyboardOnDrag(dismiss: () -> Unit): Modifier = pointerInput(Unit) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+        var travelled = 0f
+        while (true) {
+            val change = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+            travelled += (change.position - change.previousPosition).getDistance()
+            if (travelled > viewConfiguration.touchSlop) { dismiss(); break }
+            if (!change.pressed) break
+        }
+    }
+}

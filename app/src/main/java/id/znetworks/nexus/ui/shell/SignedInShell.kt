@@ -61,6 +61,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -239,7 +240,9 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             }
         },
     ) { padding ->
-      androidx.compose.foundation.layout.Row(Modifier.fillMaxSize().padding(padding)) {
+      // The bars' padding is consumed here: a screen's imePadding then adds only what the keyboard
+      // covers beyond the bottom bar, not the bar again (the gap above the keyboard, point 6).
+      androidx.compose.foundation.layout.Row(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
         if (rail) androidx.compose.material3.NavigationRail(containerColor = Nx.colors.card) {
             Tab.entries.forEach { t ->
                 androidx.compose.material3.NavigationRailItem(

@@ -206,6 +206,12 @@ Paths are under `app/src/main/java/id/znetworks/nexus/`.
 | B13 | **Fixed** (main session, 28 Sep: board showed only people who had checked in on a period's first day). The board now merges `roster` from `GET /api/attendance/history?scope=workspace` with the people in the rows, sorted A–Z as on iOS/web (the viewer is no longer pinned first); roster quota is used when a person has no row yet (history/BoardModel.kt `members`, BoardModelTest `rosterShowsEveryoneEvenWithoutRows`). |
 | B14 | **Fixed** (iOS 91d7e98, crew board freeze panes): (1) a drag over the names, the Score column or the date row now scrolls the board too (outer `scrollable` on the whole grid sharing the day-cell and row scroll states; history/BoardUi.kt `Grid`); (2) **not affected**: rows are a plain Column, never a lazy list inside the two-way scroll, so every row is always drawn. |
 
+## UI vs iOS (Berlin GO, 29 Sep; list in the main session's android-ui/LIST.md, points 1–7)
+
+| Point | Fix | Commit |
+|---|---|---|
+| 6 (bug) keyboard closed at every letter of the reflection → no check-out; gap above the keyboard | The "keep Check out in sight" bring-into-view scroll reaches nested scroll as *user input* in Compose, so the scroll-to-dismiss closed the keyboard on each keystroke. The keyboard is now put away only by a real finger drag (pointer past touch slop), a tap on empty space, Done or back. The gap: the shell's bar padding is now consumed (`consumeWindowInsets`), so `imePadding` adds only what the keyboard covers beyond the bottom bar — for every screen. Guarded in AttendanceGuardTest. Not yet seen on a device (needs a signed-in session) | this step |
+
 ## 29 Sep (Berlin, into 0.1.6; iOS f068bbf)
 
 | Change | What exists | Commit |

@@ -150,4 +150,15 @@ class AttendanceGuardTest {
         val container = sources.entries.first { it.key.name == "AppContainer.kt" }.value
         assertTrue(container.contains("SignOutFiles.dirs.forEach { File(context.cacheDir, it).deleteRecursively() }"))
     }
+
+    @Test fun typingTheReflectionNeverClosesTheKeyboard() {
+        // Berlin 29 Sep (point 6): a scroll-based dismiss closed the keyboard at every letter (the
+        // bring-into-view scroll counts as user input). Only a finger drag may close it; the shell's
+        // padding is consumed so imePadding leaves no gap above the keyboard.
+        val screen = sources.entries.first { it.key.name == "AttendanceScreen.kt" }.value
+        assertTrue(!screen.contains("NestedScrollSource.UserInput"))
+        assertTrue(screen.contains(".dismissKeyboardOnDrag {"))
+        val shell = sources.entries.first { it.key.name == "SignedInShell.kt" }.value
+        assertTrue(shell.contains(".padding(padding).consumeWindowInsets(padding)"))
+    }
 }
