@@ -44,7 +44,9 @@ enum AttendancePresence {
             checkInAt: checkInAt,
             checkOutAt: checkOutAt,
             // The day's place: the address when checked in away from the office (location-free).
-            officeName: record?.placeLabel,
+            // Checked in and now standing in an office (possibly not the record's): that office.
+            officeName: (WorkPlace.shared.recordId != nil && WorkPlace.shared.recordId == record?.id
+                         ? WorkPlace.shared.officeName : nil) ?? record?.placeLabel,
             expectedOutAt: expectedOut(from: start, shift: lastToday?.myShift),
             recentDays: lastRecent,
             pendingCount: queue.count,

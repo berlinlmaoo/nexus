@@ -62,6 +62,17 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
     static let shared = WorkLocationTracker()
 
     private static let regionId = "nexus.worktrail.office"
+    /// The workspace's other active offices (owner, 28 Sep 2026): inside any of them is at the office.
+    private static let otherRegionPrefix = "nexus.worktrail.other."
+    private static func otherRegionId(_ f: WorkTrailFence) -> String {
+        otherRegionPrefix + String(format: "%.5f,%.5f,%.0f", f.lat, f.lng, f.radius)
+    }
+    private static func isOurRegion(_ id: String) -> Bool { id == regionId || id.hasPrefix(otherRegionPrefix) }
+    /// What each watched circle last said (this process only). Inside one office is inside, even
+    /// while another office's circle says "not here".
+    private var regionInside: [String: Bool] = [:]
+    /// The record the workspace's offices were fetched for.
+    private var officesLoadedFor: String?
     /// iOS asks for Always exactly once per install; after that only Settings can grant it.
     private static let alwaysAskedKey = "nexus.worktrail.always-asked"
     /// "recordId|on" or "recordId|denied": what the server was last told for which record, so the
@@ -157,17 +168,51 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
             if machine.state.isActive { stop(keepUnsent: true) }
             return
         }
-        let fence = WorkTrailFence(lat: lat, lng: lng, radius: office.radiusMeters ?? 100)
+        let fence = WorkTrailFence(lat: lat, lng: lng, radius: office.radiusMeters ?? 100, name: office.name)
         let fx = machine.start(recordId: rec.id, checkInAt: Self.parseISO(rec.checkInAt), fence: fence, now: Date())
         guard machine.state.isActive else { return }   // too old to start (shift cap)
         persist()
         apply(fx)
+        loadOtherOffices(for: rec.id)
+        publishPlace()
         // `start` is a no-op for a record already being tracked, so on its own it would never put
         // back a setup that went missing. This does, every time today's attendance is refreshed.
         reconcile()
         startTicker()
         ensurePermission(for: rec.id)
         publishOutside()
+    }
+
+    /// The workspace's active offices, once per record: being in any of them is being at the office
+    /// (the server's rule), so moving to another office raises no alarm and shows where you are.
+    private func loadOtherOffices(for recordId: String) {
+        guard officesLoadedFor != recordId else { return }
+        officesLoadedFor = recordId
+        Task { @MainActor in
+            guard let list = try? await APIClient.shared.attendanceOffices() else {
+                self.officesLoadedFor = nil   // tried again at the next refresh
+                return
+            }
+            let fences = list.compactMap { o -> WorkTrailFence? in
+                guard o.isActive ?? true, let la = o.latitude, let lo = o.longitude else { return nil }
+                return WorkTrailFence(lat: la, lng: lo, radius: Double(o.radiusMeters ?? 100), name: o.name)
+            }
+            guard self.machine.state.recordId == recordId, self.machine.setOtherOffices(fences) else { return }
+            self.persist()
+            self.reconcile()
+            self.publishPlace()
+        }
+    }
+
+    /// Which office the phone is in now, for the attendance card, the Live Activity and the widget.
+    private func publishPlace() {
+        let office = machine.currentOffice()
+        let place = WorkPlace.shared
+        let recordId = office == nil ? nil : machine.state.recordId
+        guard place.officeName != office?.name || place.recordId != recordId else { return }
+        place.officeName = office?.name
+        place.recordId = recordId
+        AttendancePresence.refresh()
     }
 
     /// A GET /api/attendance/today answer, after `sync` has had it: the server's `outsideSince` and
@@ -397,6 +442,24 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
         } else {
             for region in m.monitoredRegions where region.identifier == Self.regionId { m.stopMonitoring(for: region) }
         }
+        // The other active offices. iOS allows 20 regions per app; the record's office takes one.
+        // Their state is not asked for: only a crossing (or a fix) says something about them.
+        var wantOthers: [String: WorkTrailFence] = [:]
+        if status == .authorizedAlways, CLLocationManager.isMonitoringAvailable(for: CLCircularRegion.self) {
+            for f in want.others.prefix(19) { wantOthers[Self.otherRegionId(f)] = f }
+        }
+        for region in m.monitoredRegions where region.identifier.hasPrefix(Self.otherRegionPrefix) && wantOthers[region.identifier] == nil {
+            m.stopMonitoring(for: region)
+            regionInside[region.identifier] = nil
+        }
+        let watching = Set(m.monitoredRegions.map(\.identifier))
+        for (id, f) in wantOthers where !watching.contains(id) {
+            let radius = min(max(f.radius, 100), m.maximumRegionMonitoringDistance)
+            let region = CLCircularRegion(center: CLLocationCoordinate2D(latitude: f.lat, longitude: f.lng), radius: radius, identifier: id)
+            region.notifyOnEntry = true
+            region.notifyOnExit = true
+            m.startMonitoring(for: region)
+        }
 
         let target: Updates
         if want.continuous && status == .authorizedAlways {
@@ -470,8 +533,12 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
         // Every way tracking ends (check-out, logout, `tracking:false`, the automatic check-out, the
         // shift cap) comes through here: the outside alerts go with it, pending and shown.
         NotificationManager.shared.cancelOutsideAlerts()
+        regionInside = [:]
+        officesLoadedFor = nil
+        WorkPlace.shared.officeName = nil
+        WorkPlace.shared.recordId = nil
         guard let m = manager else { return }
-        for region in m.monitoredRegions where region.identifier == Self.regionId { m.stopMonitoring(for: region) }
+        for region in m.monitoredRegions where Self.isOurRegion(region.identifier) { m.stopMonitoring(for: region) }
         m.stopUpdatingLocation()
         m.stopMonitoringSignificantLocationChanges()
         if m.authorizationStatus == .authorizedAlways { m.allowsBackgroundLocationUpdates = false }
@@ -602,22 +669,28 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
 
     nonisolated func locationManager(_ m: CLLocationManager, didDetermineState state: CLRegionState, for region: CLRegion) {
         MainActor.assumeIsolated {
-            guard region.identifier == Self.regionId, state != .unknown else { return }
-            handle(machine.determined(inside: state == .inside, lastKnown: Self.point(m.location), now: Date()))
+            guard Self.isOurRegion(region.identifier), state != .unknown else { return }
+            regionInside[region.identifier] = state == .inside
+            // Another office's "not here" says nothing about the office the phone may be in.
+            if region.identifier != Self.regionId && state != .inside { return }
+            handle(machine.determined(inside: regionInside.values.contains(true), lastKnown: Self.point(m.location), now: Date()))
         }
     }
 
     nonisolated func locationManager(_ m: CLLocationManager, didEnterRegion region: CLRegion) {
         MainActor.assumeIsolated {
-            guard region.identifier == Self.regionId else { return }
+            guard Self.isOurRegion(region.identifier) else { return }
+            regionInside[region.identifier] = true
             handle(machine.determined(inside: true, lastKnown: Self.point(m.location), now: Date()))
         }
     }
 
     nonisolated func locationManager(_ m: CLLocationManager, didExitRegion region: CLRegion) {
         MainActor.assumeIsolated {
-            guard region.identifier == Self.regionId else { return }
-            handle(machine.determined(inside: false, lastKnown: Self.point(m.location), now: Date()))
+            guard Self.isOurRegion(region.identifier) else { return }
+            regionInside[region.identifier] = false
+            // Left one office while still inside another (they overlap): not leaving.
+            handle(machine.determined(inside: regionInside.values.contains(true), lastKnown: Self.point(m.location), now: Date()))
         }
     }
 
@@ -643,6 +716,7 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
         apply(fx)
         // A crossing (region event or a decisive fix) changes the Live Activity at once.
         publishOutside()
+        publishPlace()
     }
 
     // MARK: - persistence
@@ -678,7 +752,20 @@ final class WorkLocationTracker: NSObject, CLLocationManagerDelegate {
     private static func parseISO(_ s: String?) -> Date? { WorkTrailWire.parseISO(s) }
 }
 
-#else
+#endif
+
+/// The office the phone is standing in right now while checked in: any active office, not only the
+/// record's (owner, 28 Sep 2026). nil when outside, unknown, or not tracking. Observed by the
+/// attendance card; read by AttendancePresence for the Live Activity and the widget.
+@MainActor @Observable
+final class WorkPlace {
+    static let shared = WorkPlace()
+    var officeName: String?
+    /// The record it belongs to, so another day's card never shows it.
+    var recordId: String?
+}
+
+#if targetEnvironment(macCatalyst)
 
 /// The Mac never takes attendance (see AttendanceView), so it never tracks either. Same surface,
 /// so every call site compiles unchanged and does nothing.

@@ -1558,6 +1558,7 @@ final class AppLanguage {
         "Where you checked in": "Lokasi check-in",
         "Checked in away from the office": "Check-in di luar kantor",
         "Away from the office": "Di luar kantor",
+        "Now at %@": "Sekarang di %@",
         "Location-free": "Bebas lokasi",
         "Score": "Skor",
         "Location trail": "Jalur lokasi",

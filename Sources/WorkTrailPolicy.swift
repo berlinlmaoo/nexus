@@ -22,11 +22,13 @@ import Foundation
 //     left before the automatic check-out (planOutsideAlerts); the server's 1h30 / 2h pushes follow;
 //   • the server has the last word: `tracking:false` stops everything.
 
-/// The office circle a check-in was made against.
+/// An office circle: the one a check-in was made against, or another active office of the workspace.
 struct WorkTrailFence: Codable, Equatable {
     let lat: Double
     let lng: Double
     let radius: Double
+    /// For "Now at <office>". Optional: states saved by earlier builds have none.
+    var name: String? = nil
 }
 
 /// One position that is going to, or already went to, the server.
@@ -58,6 +60,9 @@ struct WorkTrailState: Codable, Equatable {
     var recordId: String?
     var checkInAt: Date?
     var fence: WorkTrailFence?
+    /// The workspace's other active offices (owner, 28 Sep 2026). Inside any of them is at the office,
+    /// as the server judges it (`officesForRecord`): moving to another office is not leaving.
+    var others: [WorkTrailFence]?
     var zone: WorkTrailZone = .unknown
     var outsideSince: Date?
     /// When the last point was QUEUED (not sent). The route's rhythm is about how often a position
@@ -213,13 +218,39 @@ struct WorkTrailMachine {
         var keepAlive: Bool = false
         /// A precise fix is wanted right now (never while outside: continuous updates are precise).
         var precise: Bool = false
+        /// The other active offices, monitored too so walking into or out of one of them is seen.
+        var others: [WorkTrailFence] = []
     }
 
     var setup: Setup {
         guard state.isActive, let fence = state.fence else { return Setup(region: nil, continuous: false) }
         let outside = state.zone == .outside
         return Setup(region: fence, continuous: outside, keepAlive: !outside,
-                     precise: !outside && state.preciseSince != nil)
+                     precise: !outside && state.preciseSince != nil, others: state.others ?? [])
+    }
+
+    /// Every office that counts as inside: the record's first, then the other active ones.
+    var fences: [WorkTrailFence] { (state.fence.map { [$0] } ?? []) + (state.others ?? []) }
+
+    /// The workspace's active offices arrived (fetched after a check-in). True when that changed
+    /// anything. The record's own office is dropped from the list: it is `fence` already.
+    mutating func setOtherOffices(_ list: [WorkTrailFence]) -> Bool {
+        guard state.isActive, let own = state.fence else { return false }
+        let others = list.filter { Self.distance($0.lat, $0.lng, own.lat, own.lng) > 1 || abs($0.radius - own.radius) > 1 }
+        guard others != (state.others ?? []) else { return false }
+        state.others = others
+        return true
+    }
+
+    /// The office the phone is in now: the one nearest the freshest fix good enough to tell, while
+    /// the zone is inside. nil outside or before the zone is known.
+    func currentOffice() -> WorkTrailFence? {
+        guard state.isActive, state.zone == .inside else { return nil }
+        let fixes = [state.latest, state.lastGood].compactMap { $0 }
+            .filter { ($0.accuracy ?? Self.decisiveAccuracy) <= Self.decisiveAccuracy }
+        guard let p = fixes.max(by: { $0.at < $1.at }) else { return state.fence }
+        return fences.min { Self.distance(p.lat, p.lng, $0.lat, $0.lng) - $0.radius
+                          < Self.distance(p.lat, p.lng, $1.lat, $1.lng) - $1.radius } ?? state.fence
     }
 
     // MARK: - lifecycle
@@ -317,8 +348,8 @@ struct WorkTrailMachine {
         // as it stays there. Believing that would switch continuous updates off and leave the
         // phone outside with nothing watching it. The fix's answer is taken instead (it always
         // agrees with itself, so this recurses once at most).
-        if let lk = lastKnown, now.timeIntervalSince(lk.at) <= Self.freshFix, let fence = state.fence,
-           let fixSays = Self.decisive(lk, fence: fence), fixSays != inside {
+        if let lk = lastKnown, now.timeIntervalSince(lk.at) <= Self.freshFix,
+           let fixSays = Self.decisive(lk, fences: fences), fixSays != inside {
             return determined(inside: fixSays, lastKnown: lk, now: now)
         }
         let previous = state.zone
@@ -359,7 +390,7 @@ struct WorkTrailMachine {
         // The fix itself may settle the zone faster than the region does: iOS reports a region
         // crossing late and only after a margin, while a clear fix is unambiguous. (This is also how
         // a presence check that finds the phone outside reveals a region exit iOS never reported.)
-        if let fence = state.fence, let inside = Self.decisive(p, fence: fence), (inside ? WorkTrailZone.inside : .outside) != state.zone {
+        if let inside = Self.decisive(p, fences: fences), (inside ? WorkTrailZone.inside : .outside) != state.zone {
             let fx = determined(inside: inside, lastKnown: p, now: now)
             return state.zone == .outside ? fx : fx + presence(p, now: now)
         }
@@ -621,6 +652,20 @@ struct WorkTrailMachine {
     /// a smaller one the phone announced "you're outside" 30–50 m past the edge while the server's
     /// clock never started (28 Sep 2026).
     static let outsideMargin: Double = 50
+    /// Across offices, as the server's `classifyPoint`: inside one of them is inside; outside only
+    /// when clear of every one; anything else (near an edge, or a vague fix) says nothing.
+    static func decisive(_ p: WorkTrailPoint, fences: [WorkTrailFence]) -> Bool? {
+        guard !fences.isEmpty else { return nil }
+        var clearOfAll = true
+        for f in fences {
+            switch decisive(p, fence: f) {
+            case .some(true): return true
+            case .some(false): continue
+            case .none: clearOfAll = false
+            }
+        }
+        return clearOfAll ? false : nil
+    }
     static func decisive(_ p: WorkTrailPoint, fence: WorkTrailFence) -> Bool? {
         let acc = p.accuracy ?? decisiveAccuracy
         guard acc >= 0, acc <= decisiveAccuracy else { return nil }

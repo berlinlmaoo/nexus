@@ -428,6 +428,11 @@ struct AttendanceView: View {
     private var officeHelper: String {
         if dispRec?.checkInAt != nil || dispRec?.checkOutAt != nil {
             let times = "In \(dispRec?.checkInAt.flatMap(Self.hhmm) ?? "--:--") · Out \(dispRec?.checkOutAt.flatMap(Self.hhmm) ?? "--:--")"
+            // Moved to another office since checking in: say which one (any active office counts).
+            if dispRec?.checkOutAt == nil, let id = dispRec?.id, WorkPlace.shared.recordId == id,
+               let here = WorkPlace.shared.officeName, here != dispRec?.officeLocation?.name {
+                return "\(String(format: T("Now at %@"), here)) · \(times)"
+            }
             return recordAway == true ? "\(T("Away from the office")) · \(times)" : times
         }
         if let n = nearby {
