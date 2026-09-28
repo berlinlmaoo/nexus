@@ -23,6 +23,7 @@ import id.znetworks.nexus.feature.attendance.TodayCache
 import id.znetworks.nexus.feature.auth.AuthRepository
 import id.znetworks.nexus.core.nav.Router
 import id.znetworks.nexus.feature.push.PushManager
+import id.znetworks.nexus.feature.update.ApkUpdater
 import id.znetworks.nexus.feature.inbox.AnnouncementHost
 import id.znetworks.nexus.feature.inbox.InboxApi
 import id.znetworks.nexus.ui.theme.AppTheme
@@ -73,6 +74,9 @@ class AppContainer(private val context: Context) {
     val auth = AuthRepository(api, sessionStore)
 
     val push = PushManager(context, api, identity, appScope)
+
+    /** In-app update of the sideloaded APK (owner, 28 Sep 2026). */
+    val updater = ApkUpdater(context, api, identity.versionCode)
 
     val router = Router()
     val announcements = AnnouncementHost(InboxApi(api))

@@ -385,4 +385,19 @@
     <string name="override_penalty_restored">Penalti dikembalikan.</string>
     <string name="override_heads_up">Perhatian</string>
     <string name="override_multi_day">Tanggal ini masih tercakup %1$d pengajuan multi-hari. Kalau hari ini memang harus tampil Hadir, ubah pengajuan itu di bagian Pengajuan.</string>
+    <string name="updater_title">Perbarui NEXUS</string>
+    <string name="updater_checking">Mengecek versi baru…</string>
+    <string name="updater_downloading">Mengunduh %1$s dari %2$s…</string>
+    <string name="updater_verifying">Mengecek hasil unduhan…</string>
+    <string name="updater_installing">Membuka installer… konfirmasi dengan \"Update\".</string>
+    <string name="updater_permission">Supaya bisa memperbarui dirinya, NEXUS butuh izin \"Instal aplikasi tak dikenal\". Di layar berikutnya nyalakan \"Izinkan dari sumber ini\", lalu kembali: update lanjut sendiri. Ini cuma ditanya sekali.</string>
+    <string name="updater_allow">Buka pengaturan</string>
+    <string name="updater_up_to_date">Kamu sudah pakai versi terbaru.</string>
+    <string name="updater_nothing">Belum ada versi baru yang dirilis.</string>
+    <string name="updater_network">Unduhan terhenti. Coba lagi: unduhan lanjut dari posisi terakhir.</string>
+    <string name="updater_checksum">File yang terunduh tidak cocok dengan yang dirilis, jadi dihapus. Coba lagi.</string>
+    <string name="updater_wrong_app">File itu bukan build NEXUS yang ditandatangani Z Networks, jadi tidak dipasang.</string>
+    <string name="updater_not_newer">File yang dirilis tidak lebih baru dari versi yang kamu punya.</string>
+    <string name="updater_install_failed">Update tidak terpasang.</string>
+    <string name="updater_signed_out">Login dulu, atau unduh update dari website NEXUS.</string>
 </resources>

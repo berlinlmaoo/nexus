@@ -16,6 +16,8 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Sideloaded, owner-approved (24 Sep 2026); re-check before any Play release. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- In-app update of the sideloaded APK (owner, 28 Sep 2026): "Install unknown apps" for NEXUS. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Not required: a phone without them installs and reads attendance, and says why it
          cannot take it (REQ-ATT-39). -->
@@ -74,6 +76,10 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <receiver
+            android:name=".feature.update.InstallResultReceiver"
+            android:exported="false" />
 
         <!-- Camera shots for request evidence, and downloaded attachments handed to a viewer. -->
         <provider

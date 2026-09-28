@@ -391,4 +391,19 @@
     <string name="override_penalty_restored">Penalty restored.</string>
     <string name="override_heads_up">Heads up</string>
     <string name="override_multi_day">This date is still covered by %1$d multi-day request(s). If this day should really show as Present, adjust that request in Submissions.</string>
+    <string name="updater_title">Update NEXUS</string>
+    <string name="updater_checking">Checking for the new version…</string>
+    <string name="updater_downloading">Downloading %1$s of %2$s…</string>
+    <string name="updater_verifying">Checking the download…</string>
+    <string name="updater_installing">Opening the installer… confirm with \"Update\".</string>
+    <string name="updater_permission">To update itself, NEXUS needs \"Install unknown apps\". On the next screen turn on \"Allow from this source\", then come back: the update continues by itself. This is asked only once.</string>
+    <string name="updater_allow">Open settings</string>
+    <string name="updater_up_to_date">You already have the newest version.</string>
+    <string name="updater_nothing">No new version has been published yet.</string>
+    <string name="updater_network">The download stopped. Try again: it continues where it left off.</string>
+    <string name="updater_checksum">The downloaded file did not match the published one, so it was deleted. Try again.</string>
+    <string name="updater_wrong_app">That file is not a NEXUS build signed by Z Networks, so it was not installed.</string>
+    <string name="updater_not_newer">The published file is not newer than the version you have.</string>
+    <string name="updater_install_failed">The update was not installed.</string>
+    <string name="updater_signed_out">Sign in first, or download the update from the NEXUS website.</string>
 </resources>

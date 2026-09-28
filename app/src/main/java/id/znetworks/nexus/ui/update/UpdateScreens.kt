@@ -101,7 +101,7 @@ fun UpdateRequiredScreen(
             }
             Spacer(Modifier.height(24.dp))
             Button(
-                onClick = { openUpdate(context, state.required?.storeUrl ?: state.storeUrl) },
+                onClick = { id.znetworks.nexus.feature.update.startUpdate(context, state.required?.storeUrl ?: state.storeUrl) },
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = c.violet, contentColor = Color.White),
                 modifier = Modifier.fillMaxWidth().height(52.dp),
@@ -131,7 +131,7 @@ fun GraceNoticeDialog(grace: VersionGate.Grace, storeUrl: String?, onDismiss: ()
         title = { Text(stringResource(R.string.update_soon_title)) },
         text = { Text(stringResource(R.string.update_grace_body, date)) },
         confirmButton = {
-            TextButton(onClick = { onDismiss(); openUpdate(context, storeUrl) }) { Text(stringResource(R.string.update_download)) }
+            TextButton(onClick = { onDismiss(); id.znetworks.nexus.feature.update.startUpdate(context, storeUrl) }) { Text(stringResource(R.string.update_download)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.later)) } },
     )

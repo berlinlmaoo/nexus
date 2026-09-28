@@ -3,6 +3,7 @@ package id.znetworks.nexus
 import android.content.Intent
 import android.os.Bundle
 import id.znetworks.nexus.core.nav.Links
+import id.znetworks.nexus.feature.update.UpdateFlowHost
 import id.znetworks.nexus.feature.inbox.InboxApi
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -41,6 +42,8 @@ class MainActivity : AppCompatActivity() {
             // A sign-in re-reads the policy at once, as on iOS.
             LaunchedEffect(current?.userId) { if (current != null) gate.checkPolicy(force = true) }
 
+            // The in-app update's progress, over the lock screen or the app.
+            NexusTheme(theme) { UpdateFlowHost() }
             when {
                 // The lock wins over everything, signed in or not.
                 gateState.required != null -> NexusTheme(theme) {

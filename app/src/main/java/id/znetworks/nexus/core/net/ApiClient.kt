@@ -99,6 +99,54 @@ class ApiClient(
     }
 
     /**
+     * Streams a file to [target] with the session, resuming a partial download: if [target] already
+     * holds bytes and [etag] names the same version, a `Range` + `If-Range` request continues it; a
+     * server answering 200 instead (new build published meanwhile) replaces it whole, so two builds
+     * are never spliced. Returns the ETag of what is now on disk. Reports (bytesDone, bytesTotal).
+     */
+    suspend fun download(
+        pathOrUrl: String,
+        target: java.io.File,
+        etag: String?,
+        onProgress: (Long, Long) -> Unit = { _, _ -> },
+    ): String? {
+        val url = if (pathOrUrl.startsWith("http")) pathOrUrl.toHttpUrl() else url(pathOrUrl)
+        val session = sessionProvider()
+        val have = if (target.exists() && etag != null) target.length() else 0L
+        val req = Request.Builder().url(url).header("Accept", "*/*").apply {
+            if (session != null && mayCarrySession(url.host)) header("Cookie", "${session.cookieName}=${session.token}")
+            if (have > 0) { header("Range", "bytes=$have-"); header("If-Range", etag!!) }
+        }.build()
+        val res = try { http.newCall(req).await() } catch (e: IOException) { throw ApiError.Transport(e) }
+        res.use {
+            if (!it.isSuccessful) throw classify(it.code, runCatching { it.body.string() }.getOrNull(), session)
+            val partial = it.code == 206
+            val total = if (partial) {
+                it.header("Content-Range")?.substringAfter('/')?.toLongOrNull() ?: -1L
+            } else it.body.contentLength()
+            var done = if (partial) have else 0L
+            try {
+                it.body.byteStream().use { input ->
+                    java.io.FileOutputStream(target, partial).use { out ->
+                        val buf = ByteArray(64 * 1024)
+                        while (true) {
+                            val n = input.read(buf)
+                            if (n < 0) break
+                            out.write(buf, 0, n)
+                            done += n
+                            onProgress(done, total)
+                        }
+                    }
+                }
+            } catch (e: IOException) {
+                // What arrived stays on disk for the next attempt to resume.
+                throw ApiError.Transport(e)
+            }
+            return it.header("ETag")
+        }
+    }
+
+    /**
      * Sends [request] and decodes a 2xx body with [serializer]. [authed] = false is for the calls
      * made without a session (login, sign-up, version policy): their 401 is an answer, not an
      * expired session, and must never sign anybody out.

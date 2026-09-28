@@ -75,7 +75,7 @@ import id.znetworks.nexus.ui.components.describe
 import id.znetworks.nexus.ui.theme.AppTheme
 import id.znetworks.nexus.ui.theme.DisplayFont
 import id.znetworks.nexus.ui.theme.Nx
-import id.znetworks.nexus.ui.update.openUpdate
+import id.znetworks.nexus.feature.update.startUpdate
 import kotlinx.coroutines.launch
 
 private enum class Tab(val label: Int, val icon: ImageVector, val webPath: String) {
@@ -180,7 +180,7 @@ private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut
                 headlineContent = { Text(stringResource(R.string.update_available, version)) },
                 leadingContent = { Icon(Icons.Filled.SystemUpdate, null, tint = c.violetText) },
                 colors = itemColors, modifier = shape,
-                trailingContent = { TextButton(onClick = { openUpdate(context, gateState.storeUrl) }) { Text(stringResource(R.string.update_action)) } },
+                trailingContent = { TextButton(onClick = { startUpdate(context, gateState.storeUrl) }) { Text(stringResource(R.string.update_action)) } },
             )
             Spacer(Modifier.height(12.dp))
         }
