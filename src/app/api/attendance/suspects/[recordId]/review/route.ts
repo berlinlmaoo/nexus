@@ -48,7 +48,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ rec
     const record = await prisma.attendanceRecord.findUnique({
       where: { id: recordId },
       include: {
-        user: { select: { id: true, name: true, image: true } },
+        user: { select: { id: true, name: true, avatar: true } },
         officeLocation: { select: { name: true, radiusMeters: true } },
         locationPoints: { orderBy: { at: "asc" }, select: { lat: true, lng: true, accuracy: true, at: true, event: true, inside: true } },
       },
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ rec
     const dateKey = formatAttendanceDateKey(record.attendanceDate)
     const item = {
       recordId: record.id, date: dateKey, state: "invalid", level,
-      user: { id: record.user.id, name: record.user.name, image: record.user.image },
+      user: { id: record.user.id, name: record.user.name, image: record.user.avatar },
       place: placeLabel(record), checkIn, checkOut, review: null,
     }
 
