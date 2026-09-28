@@ -1402,4 +1402,6 @@
     <string name="pf_not_a_peer">Profil tidak tersedia — orang itu tidak ada di workspace yang sama denganmu.</string>
     <string name="pf_this_period">Periode ini</string>
     <string name="pf_no_points_moved">Belum ada poin yang bergerak periode ini.</string>
+    <string name="folder_photo">Pakai foto sebagai ikon</string>
+    <string name="folder_photo_chosen">Foto dipilih ✓ (ketuk untuk ganti)</string>
 </resources>

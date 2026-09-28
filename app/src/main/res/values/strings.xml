@@ -1408,4 +1408,6 @@
     <string name="pf_not_a_peer">Profile unavailable — that person isn\'t in a workspace you share.</string>
     <string name="pf_this_period">This period</string>
     <string name="pf_no_points_moved">No points moved this period.</string>
+    <string name="folder_photo">Use a photo as the icon</string>
+    <string name="folder_photo_chosen">Photo chosen ✓ (tap to change)</string>
 </resources>

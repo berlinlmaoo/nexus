@@ -7,6 +7,9 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
@@ -48,12 +51,19 @@ class ProjectsApi(private val api: ApiClient) {
     suspend fun moveProject(projectId: String, folderId: String?) =
         patch("/api/projects/$projectId", JsonObject(mapOf("folderId" to (folderId?.let { JsonPrimitive(it) } ?: JsonNull))))
 
-    suspend fun createFolder(workspaceId: String, name: String, icon: String?, color: String?, parentFolderId: String?) {
+    /** Returns the new folder's id (needed to upload its photo icon). */
+    suspend fun createFolder(workspaceId: String, name: String, icon: String?, color: String?, parentFolderId: String?): String? =
         post("/api/project-folders", buildJsonObject {
             put("workspaceId", workspaceId); put("name", name.trim())
             icon?.let { put("icon", it) }; color?.let { put("color", it) }; parentFolderId?.let { put("parentFolderId", it) }
-        })
-    }
+        })["id"]?.let { (it as? JsonPrimitive)?.content }
+
+    /** Photo icon (multipart `folderId` + `file`, ≤ 5 MB); the folder's icon becomes its `/…` path. */
+    suspend fun uploadFolderIcon(folderId: String, jpeg: ByteArray) =
+        api.send(Request.Builder().url(api.url("/api/upload/folder-icon")).post(MultipartBody.Builder().setType(MultipartBody.FORM)
+            .addFormDataPart("folderId", folderId)
+            .addFormDataPart("file", "icon.jpg", jpeg.toRequestBody("image/jpeg".toMediaType()))
+            .build()).build(), JsonObject.serializer())
 
     suspend fun updateFolder(id: String, name: String, icon: String?, color: String?) =
         patch("/api/project-folders/$id", buildJsonObject {

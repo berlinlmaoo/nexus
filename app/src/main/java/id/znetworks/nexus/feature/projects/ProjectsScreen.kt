@@ -160,9 +160,13 @@ class ProjectsViewModel(app: Application) : AndroidViewModel(app) {
         if (id.isNotBlank()) onDone(id)
     }
 
-    fun saveFolder(editing: ProjectFolder?, name: String, icon: String, color: String, onDone: () -> Unit) = act {
-        if (editing == null) api.createFolder(workspaceId() ?: throw IllegalStateException(), name, icon, color, null)
-        else api.updateFolder(editing.id, name, icon, color)
+    fun saveFolder(editing: ProjectFolder?, name: String, icon: String, color: String, photo: ByteArray?, onDone: () -> Unit) = act {
+        val id = if (editing == null) api.createFolder(workspaceId() ?: throw IllegalStateException(), name, icon, color, null)
+        else { api.updateFolder(editing.id, name, icon, color); editing.id }
+        // The folder is saved by now: a refused picture keeps it and says why, not a silent close.
+        if (photo != null && id != null) {
+            try { api.uploadFolderIcon(id, photo) } catch (e: ApiError) { load(); onDone(); throw e }
+        }
         load(); onDone()
     }
 
@@ -277,8 +281,8 @@ fun ProjectsScreen(onOpenProject: (String) -> Unit, onOpenTask: (String) -> Unit
     if (creating) CreateProjectDialog(s.folders, busy = s.busy, onDismiss = { creating = false }) { name, icon, color, folder ->
         vm.createProject(name, icon, color, folder) { id -> creating = false; onOpenProject(id) }
     }
-    if (folderCreate || folderEdit != null) FolderDialog(folderEdit, busy = s.busy, onDismiss = { folderCreate = false; folderEdit = null }) { name, icon, color ->
-        vm.saveFolder(folderEdit, name, icon, color) { folderCreate = false; folderEdit = null }
+    if (folderCreate || folderEdit != null) FolderDialog(folderEdit, busy = s.busy, onDismiss = { folderCreate = false; folderEdit = null }) { name, icon, color, photo ->
+        vm.saveFolder(folderEdit, name, icon, color, photo) { folderCreate = false; folderEdit = null }
     }
     s.message?.let { AlertDialog(onDismissRequest = vm::dismissMessage, text = { Text(it) }, confirmButton = { TextButton(onClick = vm::dismissMessage) { Text("OK") } }) }
 }
@@ -476,7 +480,10 @@ private fun CreateProjectDialog(folders: List<ProjectFolder>, busy: Boolean, onD
 }
 
 @Composable
-private fun FolderDialog(editing: ProjectFolder?, busy: Boolean, onDismiss: () -> Unit, onSave: (String, String, String) -> Unit) {
+private fun FolderDialog(editing: ProjectFolder?, busy: Boolean, onDismiss: () -> Unit, onSave: (String, String, String, ByteArray?) -> Unit) {
+    var photo by remember { mutableStateOf<ByteArray?>(null) }
+    var unreadable by remember { mutableStateOf(false) }
+    val pick = id.znetworks.nexus.feature.auth.rememberAvatarPicker { jpeg -> unreadable = jpeg == null; if (jpeg != null) photo = jpeg }
     var name by rememberSaveable(editing?.id) { mutableStateOf(editing?.name.orEmpty()) }
     var icon by rememberSaveable(editing?.id) { mutableStateOf(editing?.icon?.takeIf { !it.startsWith("/") } ?: FOLDER_ICONS.first()) }
     var color by rememberSaveable(editing?.id) { mutableStateOf(editing?.color ?: PROJECT_COLORS.first()) }
@@ -486,12 +493,14 @@ private fun FolderDialog(editing: ProjectFolder?, busy: Boolean, onDismiss: () -
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(name, { name = it }, singleLine = true, label = { Text(stringResource(R.string.folder_name)) }, modifier = Modifier.fillMaxWidth())
-                EmojiRow(FOLDER_ICONS, icon) { icon = it }
+                EmojiRow(FOLDER_ICONS, if (photo == null) icon else "") { icon = it; photo = null }
+                TextButton(onClick = pick) { Text(stringResource(if (photo != null) R.string.folder_photo_chosen else R.string.folder_photo)) }
+                if (unreadable) Text(stringResource(R.string.chat_photo_unreadable), fontSize = 12.sp, color = Nx.colors.danger)
                 ColorRow(color) { color = it }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(name, icon, color) }, enabled = name.isNotBlank() && !busy) {
+            TextButton(onClick = { onSave(name, icon, color, photo) }, enabled = name.isNotBlank() && !busy) {
                 if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                 else Text(stringResource(if (editing == null) R.string.folder_create else R.string.save))
             }
