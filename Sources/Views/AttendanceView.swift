@@ -298,10 +298,18 @@ struct AttendanceView: View {
             FunMetricCard(icon: nearby?.inside == true && dispRec?.officeLocation?.name == nil ? "checkmark.circle.fill" : "mappin.circle.fill",
                           label: officeLabel, value: officeValue, helper: officeHelper, tint: officeTint)
             FunMetricCard(icon: "sparkles", label: T("Day-off tokens"), value: Self.quotaValue(today?.dayOffUsedThisMonth, today?.dayOffQuota),
-                          helper: T("This month's day-off allowance"), tint: NX.warning)
+                          helper: dayOffHelper, tint: NX.warning)
             FunMetricCard(icon: "calendar", label: T("Public holidays"), value: Self.quotaValue(today?.redDateUsedThisMonth, today?.redDateQuota),
                           helper: T("This month's public-holiday allowance"), tint: Color(hex: "#fb7185"))
         }
+    }
+
+    /// The quota above already counts extra days the BoD granted for this period; this says so,
+    /// so a number that grew overnight is not a mystery. Older servers send no breakdown.
+    private var dayOffHelper: String {
+        let base = T("This month's day-off allowance")
+        guard let bonus = today?.dayOffAllowance?.bonus, bonus > 0 else { return base }
+        return "\(base) · " + String(format: T("incl. %d extra"), bonus)
     }
 
     /// Allowances belong to each person and come from the API. When the server doesn't send one,

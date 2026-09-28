@@ -1483,6 +1483,29 @@ struct APIClient {
         try await run(makeRequest("/api/gideon/usage"), decode: GideonUsage.self)
     }
 
+    /// Extra day off (Control Room, BoD and above). One period, grantable periods and the grants
+    /// in it, newest first, revoked ones included. nil = the period today is in.
+    func dayOffBonuses(periodKey: String?) async throws -> DayOffBonusList {
+        let q = periodKey.map { "?periodKey=\(enc($0))" } ?? ""
+        return try await run(makeRequest("/api/attendance/day-off-bonus" + q), decode: DayOffBonusList.self)
+    }
+
+    /// Gives each person `days` extra day-off days for `periodKey` only. All or nothing on the
+    /// server: a refusal (NOT_MEMBERS, BONUS_LIMIT, PERIOD_*) comes back as its Indonesian sentence.
+    func grantDayOffBonus(userIds: [String], periodKey: String, days: Int, reason: String) async throws -> DayOffBonusCreated {
+        var req = makeRequest("/api/attendance/day-off-bonus", method: "POST")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["userIds": userIds, "periodKey": periodKey,
+                                                                   "days": days, "reason": reason])
+        return try await run(req, decode: DayOffBonusCreated.self)
+    }
+
+    /// Revokes one grant. Idempotent server-side: a second tap answers `alreadyRevoked`.
+    func revokeDayOffBonus(id: String) async throws -> DayOffBonusRevoked {
+        let path = "/api/attendance/day-off-bonus/" + (id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id)
+        return try await run(makeRequest(path, method: "DELETE"), decode: DayOffBonusRevoked.self)
+    }
+
     /// Active announcements this user has not dismissed yet — drives the pop-up.
     func activeAnnouncements() async throws -> [AdminAnnouncement] {
         (try await run(makeRequest("/api/announcements/active"), decode: AnnouncementsResponse.self)).announcements ?? []

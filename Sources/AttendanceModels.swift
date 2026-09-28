@@ -39,6 +39,18 @@ struct AttendanceToday: Decodable, Sendable {
         let remaining: Int?
     }
     let annualLeave: AnnualLeave?
+
+    /// How `dayOffQuota` is made up for the period today is in: the person's base quota plus extra
+    /// days the BoD granted for that period only (28 Sep 2026). `dayOffQuota` already includes the
+    /// bonus; this only explains it. Optional so an older server still decodes.
+    struct DayOffAllowance: Decodable, Sendable {
+        let period: String?
+        let base: Int?
+        let bonus: Int?
+        let grants: [Grant]?
+        struct Grant: Decodable, Sendable { let days: Int?; let reason: String? }
+    }
+    let dayOffAllowance: DayOffAllowance?
 }
 
 struct AttendanceRecord: Decodable, Sendable {
