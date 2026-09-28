@@ -148,6 +148,7 @@ fun TaskCard(
                 }
             }
         }
+        FieldChipRow(t.customFieldValues)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
             PriorityChip(t.priority)
             DueLabel(t.dueDate, t.isDone)
