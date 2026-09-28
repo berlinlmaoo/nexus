@@ -38,7 +38,8 @@ export function validateNasPath(path: string): boolean {
   // Normalize and check for traversal
   const normalized = path.replace(/\\/g, "/")
   if (normalized.includes("..") || normalized.includes("//")) return false
-  return ALLOWED_PATHS.some((allowed) => normalized.startsWith(allowed))
+  // Whole path segments only: "/volume1" must not also allow "/volume10".
+  return ALLOWED_PATHS.some((allowed) => normalized === allowed || normalized.startsWith(allowed + "/"))
 }
 
 // ── Auth ─────────────────────────────────────────────

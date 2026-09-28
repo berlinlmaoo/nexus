@@ -82,3 +82,12 @@ export async function membershipChangeError(
   }
   return null
 }
+
+/** System admin, or BoD / One Above All of the company workspace. */
+export async function isAdminOrOrgBodPlus(userId: string): Promise<boolean> {
+  const [user, role] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
+    orgRoleOf(userId),
+  ])
+  return user?.role === "ADMIN" || role === "BOD" || role === "ONE_ABOVE_ALL"
+}

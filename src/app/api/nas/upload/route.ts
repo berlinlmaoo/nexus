@@ -2,14 +2,19 @@ export const dynamic = "force-dynamic"
 
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { isAdminOrOrgBodPlus } from "@/lib/org"
 import { getNasSession, nasUpload, invalidateListCache, NasError } from "@/lib/nas"
 
 const MAX_UPLOAD_SIZE = 100 * 1024 * 1024 // 100MB
 
 export async function POST(request: Request) {
   const session = await auth()
-  if (!session?.user) {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+  // The NAS is the company's file server: system admin or company BoD+ only.
+  if (!(await isAdminOrOrgBodPlus(session.user.id))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
   try {

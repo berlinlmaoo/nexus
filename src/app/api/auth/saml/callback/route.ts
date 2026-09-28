@@ -5,7 +5,11 @@ import prisma from "@/lib/prisma"
 import { logAudit } from "@/lib/audit"
 import crypto from "crypto"
 
+// SSO / SAML / SCIM are not used (their tables are empty): every handler answers 404 until someone needs them.
+const SSO_DISABLED = true
+
 export async function POST(req: NextRequest) {
+  if (SSO_DISABLED) return NextResponse.json({ error: "Not found" }, { status: 404 })
   try {
     const formData = await req.formData()
     const samlResponse = formData.get("SAMLResponse") as string

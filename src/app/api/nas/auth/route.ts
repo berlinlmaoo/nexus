@@ -2,12 +2,17 @@ export const dynamic = "force-dynamic"
 
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { isAdminOrOrgBodPlus } from "@/lib/org"
 import { nasLogin, nasLogout, NasError } from "@/lib/nas"
 
 export async function POST(request: Request) {
   const session = await auth()
-  if (!session?.user) {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+  // The NAS is the company's file server: system admin or company BoD+ only.
+  if (!(await isAdminOrOrgBodPlus(session.user.id))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
   try {
@@ -27,8 +32,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "NAS credentials not configured" }, { status: 500 })
     }
 
+    // Only proves the configured credentials work. The Synology session id is a bearer credential for
+    // the whole NAS and never leaves the server: the session is closed again right away.
     const result = await nasLogin(account, passwd)
-    return NextResponse.json({ sid: result.sid })
+    await nasLogout(result.sid)
+    return NextResponse.json({ success: true })
   } catch (error) {
     console.error("NAS auth error:", error)
     if (error instanceof NasError) {
