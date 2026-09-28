@@ -51,6 +51,14 @@ class BoardModelTest {
         assertEquals(Score(10, 27, 0), BoardModel.score(10, 31, 4))
     }
 
+    @Test fun overrideResponseDecodes() {
+        val r = NexusJson.decodeFromString(OverrideResponse.serializer(),
+            """{"ok":true,"action":"PERMIT","date":"2026-09-26","refunded":true,"multiDayRequestsLeft":1,"new":"x"}""")
+        assertTrue(r.ok); assertEquals(true, r.refunded); assertEquals(1, r.multiDayRequestsLeft)
+        assertEquals("""{"userId":"u","date":"2026-09-26","action":"PERMIT"}""",
+            NexusJson.encodeToString(OverrideBody.serializer(), OverrideBody("u", "2026-09-26", "PERMIT")).replace(",\"note\":null", ""))
+    }
+
     @Test fun historyDecodesServerShape() {
         val rows = NexusJson.decodeFromString(HistoryResponse.serializer(),
             """{"scope":"me","records":[{"id":"a","attendanceDate":"2026-09-24T00:00:00.000Z","recordKind":"ATTENDANCE","checkInAt":"2026-09-24T02:00:00.000Z","officeLocation":{"id":"o","name":"HQ","latitude":-6.2,"longitude":106.8,"radiusMeters":150,"workdays":[1,2]}},

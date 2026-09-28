@@ -366,4 +366,23 @@
     <string name="presence_hours_at_office">%1$d dari %2$d jam di kantor</string>
     <string name="presence_legend">✓ di kantor · ✗ di luar · ? tidak jelas · – tidak ada cek. Kira-kira sekali cek per jam selama di kantor; di luar kantor, lihat rute di atas.</string>
     <string name="board_score">Skor</string>
+    <string name="board_nothing_recorded">Belum ada yang tercatat untuk hari ini.</string>
+    <string name="override_title">Ubah status (BoD)</string>
+    <string name="override_clear_penalty">Hapus penalti</string>
+    <string name="override_clear_full">Hapus penalti (kembalikan XP &amp; day off)</string>
+    <string name="override_footer">Setiap aksi mengembalikan potongan XP &amp; day off hari itu dan dicatat di audit log.</string>
+    <string name="override_restored_too">Potongan XP &amp; day off otomatis hari itu juga dikembalikan.</string>
+    <string name="override_clear_consequence">XP yang terpotong (telat / lupa check-out / tidak hadir) dikembalikan dan day off yang terpotong otomatis dipulihkan. Status absensinya TIDAK diubah.</string>
+    <string name="override_present_consequence">Hari itu jadi check-in tepat waktu sepanjang jam shift, dan pengajuan satu hari yang mencakupnya dibatalkan.</string>
+    <string name="override_permit_consequence">Check-in yang sudah ada hari itu tetap disimpan.</string>
+    <string name="override_absence_consequence">Check-in yang belum selesai (tanpa check-out) hari itu dihapus.</string>
+    <string name="override_this_person">staf ini</string>
+    <string name="override_confirm_clear">Hapus penalti %1$s untuk %2$s?</string>
+    <string name="override_confirm_change">Ubah %1$s (%2$s) jadi %3$s?</string>
+    <string name="override_change_to">Ubah jadi %1$s</string>
+    <string name="override_done_clear">Penalti %1$s dihapus — XP &amp; day off dikembalikan.</string>
+    <string name="override_done_none">Tidak ada penalti di %1$s — hari ini aman dari potongan.</string>
+    <string name="override_penalty_restored">Penalti dikembalikan.</string>
+    <string name="override_heads_up">Perhatian</string>
+    <string name="override_multi_day">Tanggal ini masih tercakup %1$d pengajuan multi-hari. Kalau hari ini memang harus tampil Hadir, ubah pengajuan itu di bagian Pengajuan.</string>
 </resources>

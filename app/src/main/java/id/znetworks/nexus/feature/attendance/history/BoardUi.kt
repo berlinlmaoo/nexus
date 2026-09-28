@@ -69,6 +69,7 @@ import id.znetworks.nexus.core.net.ApiError
 import id.znetworks.nexus.core.time.OfficeTime
 import id.znetworks.nexus.feature.attendance.AttendanceToday
 import id.znetworks.nexus.feature.attendance.requests.AttachmentChip
+import id.znetworks.nexus.feature.attendance.requests.PersonRef
 import id.znetworks.nexus.ui.components.EmptyState
 import id.znetworks.nexus.ui.components.describe
 import id.znetworks.nexus.ui.theme.DisplayFont
@@ -96,6 +97,10 @@ data class BoardState(
     val trailError: String? = null,
     val busy: Boolean = false,
     val message: String? = null,
+    /** The override just applied (shown in the day sheet), and the multi-day warning. */
+    val overrideDone: String? = null,
+    val multiDayLeft: Int? = null,
+    val overrideError: String? = null,
 )
 
 class BoardViewModel(app: Application) : AndroidViewModel(app) {
@@ -132,14 +137,36 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun select(r: HistoryRow?) = _state.update { it.copy(selected = r) }
+    fun select(r: HistoryRow?) = _state.update { it.copy(selected = r, overrideDone = null, overrideError = null) }
 
-    /** A tapped board cell. Returns whether a day sheet opened. */
+    /**
+     * A tapped board cell. Returns whether a day sheet opened. Everyone opens days that have a row;
+     * the BoD also opens empty past days up to today (to change their status), never future ones,
+     * and never the unnamed "me" group.
+     */
     fun selectCell(m: BoardMember, day: LocalDate): Boolean {
-        val row = m.rows[day.toString()] ?: return false
-        select(row)
+        val row = m.rows[day.toString()]
+        if (row != null) { select(row); return true }
+        if (!canManage || day.isAfter(OfficeTime.today()) || m.id == "me") return false
+        select(HistoryRow(attendanceDate = "${day}T00:00:00.000Z", user = PersonRef(id = m.id, name = m.name)))
         return true
     }
+
+    fun applyOverride(r: HistoryRow, action: String, doneText: (OverrideResponse) -> String) {
+        val uid = r.user?.id ?: return
+        _state.update { it.copy(busy = true, overrideError = null, overrideDone = null) }
+        viewModelScope.launch {
+            try {
+                val res = api.override(uid, r.dayKey, action)
+                _state.update { it.copy(busy = false, overrideDone = doneText(res), multiDayLeft = res.multiDayRequestsLeft?.takeIf { n -> n > 0 }) }
+                load()
+            } catch (e: ApiError) {
+                _state.update { it.copy(busy = false, overrideError = e.describe(res)) }
+            }
+        }
+    }
+
+    fun clearOverrideNotes() = _state.update { it.copy(overrideDone = null, overrideError = null, multiDayLeft = null) }
 
     fun openTrail(r: HistoryRow) {
         _state.update { it.copy(trailFor = r, trail = null, trailError = null) }
@@ -416,11 +443,14 @@ private fun DayDetail(vm: BoardViewModel, r: HistoryRow) {
                     OutlinedButton(onClick = { vm.openTrail(r) }, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Filled.Route, null, Modifier.size(18.dp)); Spacer(Modifier.size(6.dp)); Text(stringResource(R.string.trail_open))
                     }
+                } else if (r.recordKind == null && r.requestType == null && r.attendanceDayType == null) {
+                    Text(stringResource(R.string.board_nothing_recorded), color = c.mutedFg)
                 } else {
                     r.requestType?.let { Fact(stringResource(R.string.req_type), it + (r.requestStatus?.let { s -> " · $s" } ?: "")) }
                     r.reviewedBy?.name?.let { Fact(stringResource(R.string.detail_approver), it) }
                     r.supportingDocumentUrl?.let { AttachmentChip(it, r.supportingDocumentName, r.requestType) }
                 }
+                if (vm.canManage && r.user?.id != null) ChangeStatusPanel(vm, r)
                 // BoD record actions, confirmed and audited server-side.
                 if (vm.canManage && r.isRecord) {
                     Spacer(Modifier.height(8.dp))
@@ -437,6 +467,91 @@ private fun DayDetail(vm: BoardViewModel, r: HistoryRow) {
             text = { Text(stringResource(if (checkoutOnly) R.string.board_clear_checkout_body else R.string.board_delete_record_body)) },
             confirmButton = { TextButton(onClick = { confirm = null; vm.deleteRecord(r, checkoutOnly) }) { Text(stringResource(R.string.confirm), color = Nx.colors.danger) } },
             dismissButton = { TextButton(onClick = { confirm = null }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
+}
+
+private val OVERRIDE_ACTIONS = listOf("PRESENT", "PERMIT", "LEAVE", "SICK", "DAY_OFF")
+
+@Composable
+private fun overrideLabel(action: String) = stringResource(
+    when (action) {
+        "PRESENT" -> R.string.tone_present
+        "PERMIT" -> R.string.req_permit
+        "LEAVE" -> R.string.req_leave
+        "SICK" -> R.string.req_sick
+        "DAY_OFF" -> R.string.tone_dayoff
+        else -> R.string.override_clear_penalty
+    },
+)
+
+/** The exact consequence of each action, said before it happens (iOS overrideConsequence). */
+@Composable
+private fun overrideConsequence(action: String): String {
+    val restored = stringResource(R.string.override_restored_too)
+    return when (action) {
+        "CLEAR_PENALTY" -> stringResource(R.string.override_clear_consequence)
+        "PRESENT" -> stringResource(R.string.override_present_consequence) + " " + restored
+        "PERMIT" -> stringResource(R.string.override_permit_consequence) + " " + restored
+        else -> stringResource(R.string.override_absence_consequence) + " " + restored
+    }
+}
+
+/** BoD "Change status" (web StatusOverridePanel, iOS 461cb65), each behind a confirm. */
+@Composable
+private fun ChangeStatusPanel(vm: BoardViewModel, r: HistoryRow) {
+    val s by vm.state.collectAsStateWithLifecycle()
+    val c = Nx.colors
+    var pending by remember { mutableStateOf<String?>(null) }
+    val person = r.user?.name ?: stringResource(R.string.override_this_person)
+    val date = runCatching { DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault()).format(LocalDate.parse(r.dayKey)) }.getOrDefault(r.dayKey)
+    Column(
+        Modifier.fillMaxWidth().background(c.accentBg, RoundedCornerShape(16.dp)).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(stringResource(R.string.override_title).uppercase(Locale.getDefault()), fontSize = 10.sp, fontWeight = FontWeight.Bold,
+            color = c.accentFg, letterSpacing = 1.sp)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            OVERRIDE_ACTIONS.forEach { a ->
+                OutlinedButton(onClick = { pending = a }, enabled = !s.busy) { Text(overrideLabel(a), fontSize = 12.sp) }
+            }
+        }
+        TextButton(onClick = { pending = "CLEAR_PENALTY" }, enabled = !s.busy) { Text(stringResource(R.string.override_clear_full)) }
+        Text(stringResource(R.string.override_footer), fontSize = 11.sp, color = c.mutedFg)
+        if (s.busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+        s.overrideDone?.let { Text(it, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.success) }
+        s.overrideError?.let { Text(it, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = c.danger) }
+    }
+    pending?.let { action ->
+        val label = overrideLabel(action)
+        val doneClear = stringResource(R.string.override_done_clear, date)
+        val doneNone = stringResource(R.string.override_done_none, date)
+        val restoredNote = stringResource(R.string.override_penalty_restored)
+        AlertDialog(
+            onDismissRequest = { pending = null },
+            title = {
+                Text(if (action == "CLEAR_PENALTY") stringResource(R.string.override_confirm_clear, date, person)
+                else stringResource(R.string.override_confirm_change, date, person, label))
+            },
+            text = { Text(overrideConsequence(action)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    pending = null
+                    vm.applyOverride(r, action) { res ->
+                        if (action == "CLEAR_PENALTY") (if (res.refunded == true) doneClear else doneNone)
+                        else "$person · $date → $label" + (if (res.refunded == true) " · $restoredNote" else "")
+                    }
+                }) { Text(if (action == "CLEAR_PENALTY") stringResource(R.string.override_clear_penalty) else stringResource(R.string.override_change_to, label)) }
+            },
+            dismissButton = { TextButton(onClick = { pending = null }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
+    s.multiDayLeft?.let { n ->
+        AlertDialog(
+            onDismissRequest = vm::clearOverrideNotes,
+            title = { Text(stringResource(R.string.override_heads_up)) },
+            text = { Text(stringResource(R.string.override_multi_day, n)) },
+            confirmButton = { TextButton(onClick = vm::clearOverrideNotes) { Text("OK") } },
         )
     }
 }

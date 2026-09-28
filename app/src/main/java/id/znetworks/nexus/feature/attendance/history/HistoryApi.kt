@@ -86,7 +86,28 @@ data class TrailPointDto(val lat: Double, val lng: Double, val accuracy: Double?
 @Serializable
 data class TrailSpan(val from: String, val to: String? = null)
 
+@Serializable
+data class OverrideBody(val userId: String, val date: String, val action: String, val note: String? = null)
+
+@Serializable
+data class OverrideResponse(
+    val ok: Boolean = false,
+    val action: String? = null,
+    val date: String? = null,
+    val refunded: Boolean? = null,
+    val alreadyCovered: Boolean? = null,
+    val closedAttendance: Boolean? = null,
+    val multiDayRequestsLeft: Int? = null,
+)
+
 class HistoryApi(private val api: ApiClient) {
+    /**
+     * BoD "Change status" on one member-day (web StatusOverridePanel, iOS 461cb65). Every action
+     * refunds that day's auto day-off cut and XP penalties; a multi-day request conflict is a 409.
+     */
+    suspend fun override(userId: String, date: String, action: String, note: String? = null): OverrideResponse =
+        api.postJson("/api/attendance/override", OverrideBody(userId, date, action, note), OverrideBody.serializer(), OverrideResponse.serializer())
+
     /** [period] is the 28→27 period key `YYYY-MM`; `workspace` needs BoD or direct reports. */
     suspend fun history(scope: String, period: String): List<HistoryRow> =
         api.get("/api/attendance/history?scope=$scope&month=$period", HistoryResponse.serializer()).records

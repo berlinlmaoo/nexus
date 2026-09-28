@@ -372,4 +372,23 @@
     <string name="presence_hours_at_office">%1$d of %2$d hours at the office</string>
     <string name="presence_legend">✓ at the office · ✗ outside · ? unclear · – no check. About one check an hour while at the office; outside, the route above.</string>
     <string name="board_score">Score</string>
+    <string name="board_nothing_recorded">Nothing was recorded for this day yet.</string>
+    <string name="override_title">Change status (BoD)</string>
+    <string name="override_clear_penalty">Clear penalty</string>
+    <string name="override_clear_full">Clear penalty (restore XP &amp; day-off)</string>
+    <string name="override_footer">Every action restores that day\'s XP &amp; day-off deductions and is written to the audit log.</string>
+    <string name="override_restored_too">That day\'s auto XP &amp; day-off deductions are restored too.</string>
+    <string name="override_clear_consequence">Deducted XP (late / forgot check-out / no-show) is refunded and any auto-deducted day-off is restored. The attendance status is NOT changed.</string>
+    <string name="override_present_consequence">The day becomes an on-time check-in over the shift hours, and a single-day request covering it is canceled.</string>
+    <string name="override_permit_consequence">A check-in already made that day is kept.</string>
+    <string name="override_absence_consequence">An unfinished check-in (no check-out) that day is removed.</string>
+    <string name="override_this_person">this staff member</string>
+    <string name="override_confirm_clear">Clear the penalty for %1$s for %2$s?</string>
+    <string name="override_confirm_change">Change %1$s (%2$s) to %3$s?</string>
+    <string name="override_change_to">Change to %1$s</string>
+    <string name="override_done_clear">Penalty for %1$s cleared — XP &amp; day-off restored.</string>
+    <string name="override_done_none">No penalty on %1$s — this day stays safe from deductions.</string>
+    <string name="override_penalty_restored">Penalty restored.</string>
+    <string name="override_heads_up">Heads up</string>
+    <string name="override_multi_day">This date is still covered by %1$d multi-day request(s). If this day should really show as Present, adjust that request in Submissions.</string>
 </resources>
