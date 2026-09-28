@@ -32,6 +32,7 @@ sealed interface Target {
     data class VaultShare(val slug: String) : Target
     /** Reports: mine / my team, or one person's. */
     data class Reports(val userId: String?) : Target
+    data object Leaderboard : Target
     data class Announcement(val id: String) : Target
     data object Settings : Target
     /** Signed-out screens: the invite email's "set your password" link and a sign-up with a workspace code. */
@@ -114,6 +115,7 @@ object Links {
             p == "/docs" -> Target.Docs(null)
             p == "/vault" -> Target.Vault(q["folder"] ?: q["id"])
             p == "/reports" -> Target.Reports(null)
+            p == "/leaderboard" -> Target.Leaderboard
             Regex("^/reports/([^/]+)$").matches(p) -> Target.Reports(path.trimEnd('/').substringAfterLast('/'))
             Regex("^/v/([^/]+)$").matches(p) -> Target.VaultShare(path.trimEnd('/').substringAfterLast('/'))
             Regex("^/docs/([^/]+)$").matches(p) -> Target.Docs(path.trimEnd('/').substringAfterLast('/'))

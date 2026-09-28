@@ -128,6 +128,7 @@ fun SearchScreen(
     onOpenWeb: (String) -> Unit,
     onOpenForm: (String) -> Unit = { onOpenWeb("/f/$it") },
     onOpenDoc: (String) -> Unit = { onOpenWeb("/docs/$it") },
+    onOpenPerson: (String) -> Unit = {},
     vm: SearchViewModel = viewModel(),
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
@@ -157,7 +158,7 @@ fun SearchScreen(
                 // Docs and forms open on the web until Phase 3 builds them here.
                 group(R.string.search_docs, r.docs) { d -> Hit(Icons.Filled.Description, c.violetText, d.title, null) { onOpenDoc(d.id) } }
                 group(R.string.search_forms, r.forms) { f -> Hit(Icons.Filled.Assignment, c.blue, f.name, null) { onOpenForm(f.id) } }
-                group(R.string.search_members, r.members) { m -> Hit(Icons.Filled.Person, c.danger, m.name ?: m.email ?: "—", m.email, null) }
+                group(R.string.search_members, r.members) { m -> Hit(Icons.Filled.Person, c.danger, m.name ?: m.email ?: "—", m.email) { onOpenPerson(m.id) } }
             }
         }
     }
