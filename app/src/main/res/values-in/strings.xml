@@ -1479,7 +1479,7 @@
     <string name="fg_empty_fake_sub">Tidak ada HP yang melaporkan lokasi palsu dan tidak ada perpindahan yang mustahil.</string>
     <string name="fg_empty_check_sub">Tidak ada tanda lemah periode ini.</string>
     <string name="fg_empty_reviewed_sub">Keputusan periode ini muncul di sini.</string>
-    <string name="fg_intro">Check-in dan check-out yang lokasinya terlihat palsu. Tidak sah hanya bisa dengan bukti — HP-nya sendiri melaporkan aplikasi fake GPS, atau perpindahan yang mustahil — dan membuat hari itu TK. Orangnya diberi tahu.</string>
+    <string name="fg_intro">Check-in dan check-out yang janggal: lokasi dipalsukan, atau selfie tanpa wajah. Tidak valid hanya bisa dengan bukti fake GPS — HP-nya sendiri melaporkan aplikasi fake GPS, atau lompatan yang mustahil — dan membuat hari itu jadi TK. Kirim peringatan hanya memberi tahu orangnya.</string>
     <string name="fg_invalid_tk">Tidak sah · TK</string>
     <string name="fg_its_fine">Aman</string>
     <string name="fg_not_valid_more">Tidak sah…</string>
@@ -1547,4 +1547,29 @@
     <string name="sub_col_empty">Kosong</string>
     <string name="sub_submitted_at">Diajukan %1$s</string>
     <string name="sub_fallback_title">Pengajuan</string>
+    <string name="fg_tab">Absen Monitor</string>
+    <string name="fg_noface">Tanpa wajah</string>
+    <string name="fg_empty_noface">Semua selfie menampakkan wajah</string>
+    <string name="fg_empty_noface_sub">Tidak ada selfie check-in atau check-out tanpa wajah di periode ini. Selfie dicek beberapa menit setelah masuk.</string>
+    <string name="fg_sig_noface">Tidak ada wajah di selfie (tembok, lantai, kamera tertutup)</string>
+    <string name="fg_face_unchecked">wajah: belum dicek</string>
+    <string name="fg_noface_chip">tanpa wajah</string>
+    <string name="fg_send_warning_more">Kirim peringatan…</string>
+    <string name="fg_send_warning">Kirim peringatan</string>
+    <string name="fg_warn_title">Kirim peringatan ke %1$s</string>
+    <string name="fg_warn_body">Dia dapat notifikasi push dan pop-up pribadi berisi pesan ini dan selfie-nya. Absennya tanggal %1$s tidak berubah.</string>
+    <string name="fg_warn_sent">Peringatan terkirim ke %1$s. Dia dapat push dan pop-up.</string>
+    <string name="fg_warn_checkin">check-in</string>
+    <string name="fg_warn_checkout">check-out</string>
+    <string name="fg_warn_noface">Selfie %1$s kamu tanggal %2$s tidak menampakkan wajah. Selfie absen wajib menampakkan wajah dengan jelas — lain kali bisa dihitung tidak hadir.</string>
+    <string name="fg_warn_fake">%1$s kamu tanggal %2$s berasal dari lokasi palsu (aplikasi fake GPS / mock location, atau lompatan yang mustahil). Absen wajib dari tempat kamu sebenarnya — lain kali bisa dihitung tidak hadir.</string>
+    <string name="fg_warn_check">Lokasi %1$s kamu tanggal %2$s terlihat janggal (koordinat sama seperti sebelumnya, atau lompatan yang tidak wajar). Pastikan lokasi aktif dan baru saat absen — lain kali bisa dihitung tidak hadir.</string>
+    <plurals name="fg_warnings_sent">
+        <item quantity="one">Peringatan terkirim</item>
+        <item quantity="other">%d peringatan terkirim</item>
+    </plurals>
+    <plurals name="fg_faces">
+        <item quantity="one">%d wajah</item>
+        <item quantity="other">%d wajah</item>
+    </plurals>
 </resources>

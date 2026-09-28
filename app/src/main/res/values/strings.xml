@@ -1485,7 +1485,7 @@
     <string name="fg_empty_fake_sub">No phone reported a mock location and nobody jumped impossibly far.</string>
     <string name="fg_empty_check_sub">No weak signals this period.</string>
     <string name="fg_empty_reviewed_sub">Verdicts given this period show here.</string>
-    <string name="fg_intro">Check-ins and check-outs whose location looks faked. Not valid is only possible with proof — the phone itself reported a fake-GPS app, or an impossible jump — and turns the day into TK. The person is told.</string>
+    <string name="fg_intro">Abnormal check-ins and check-outs: a faked location, or a selfie without a face. Not valid is only possible with proof of fake GPS — the phone itself reported a fake-GPS app, or an impossible jump — and turns the day into TK. Send warning only tells the person.</string>
     <string name="fg_invalid_tk">Not valid · TK</string>
     <string name="fg_its_fine">It\'s fine</string>
     <string name="fg_not_valid_more">Not valid…</string>
@@ -1553,4 +1553,29 @@
     <string name="sub_col_empty">Empty</string>
     <string name="sub_submitted_at">Submitted %1$s</string>
     <string name="sub_fallback_title">Submission</string>
+    <string name="fg_tab">Absen Monitor</string>
+    <string name="fg_noface">No face</string>
+    <string name="fg_empty_noface">Every selfie shows a face</string>
+    <string name="fg_empty_noface_sub">No check-in or check-out selfie without a face this period. Selfies are checked a few minutes after they arrive.</string>
+    <string name="fg_sig_noface">No face in the selfie (a wall, the floor, a covered camera)</string>
+    <string name="fg_face_unchecked">face: not checked</string>
+    <string name="fg_noface_chip">no face</string>
+    <string name="fg_send_warning_more">Send warning…</string>
+    <string name="fg_send_warning">Send warning</string>
+    <string name="fg_warn_title">Send warning to %1$s</string>
+    <string name="fg_warn_body">They get a push notification and a personal pop-up with this message and the selfie. Their attendance for %1$s does not change.</string>
+    <string name="fg_warn_sent">Warning sent to %1$s. They get a push and a pop-up.</string>
+    <string name="fg_warn_checkin">check-in</string>
+    <string name="fg_warn_checkout">check-out</string>
+    <string name="fg_warn_noface">Your %1$s selfie on %2$s doesn\'t show your face. Attendance selfies must show your face clearly — next time it may count as absent.</string>
+    <string name="fg_warn_fake">Your %1$s on %2$s came from a fake location (a fake-GPS / mock-location app, or an impossible jump). Attendance must be taken where you really are — next time it may count as absent.</string>
+    <string name="fg_warn_check">Your %1$s location on %2$s looked unusual (the same coordinates as before, or an unlikely jump). Make sure location is on and fresh when you check in — next time it may count as absent.</string>
+    <plurals name="fg_warnings_sent">
+        <item quantity="one">Warning sent</item>
+        <item quantity="other">%d warnings sent</item>
+    </plurals>
+    <plurals name="fg_faces">
+        <item quantity="one">%d face</item>
+        <item quantity="other">%d faces</item>
+    </plurals>
 </resources>

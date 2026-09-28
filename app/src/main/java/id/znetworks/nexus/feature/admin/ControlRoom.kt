@@ -67,7 +67,7 @@ object ControlRoomTabs {
 @Composable
 private fun tabLabel(id: String) = when (id) {
     "users" -> "Users"; "attendance" -> "Absensi"; "audit" -> "Audit"; "quests" -> "Quests"; "announcements" -> "Pengumuman"
-    "extra-dayoff" -> stringResource(R.string.ad_extra_dayoff); "suspects" -> stringResource(R.string.fg_fake); "gideon" -> "GIDEON"; else -> "App"
+    "extra-dayoff" -> stringResource(R.string.ad_extra_dayoff); "suspects" -> stringResource(R.string.fg_tab); "gideon" -> "GIDEON"; else -> "App"
 }
 
 /** Everything a tab screen may ask the shell for. */

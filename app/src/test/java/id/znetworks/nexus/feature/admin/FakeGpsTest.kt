@@ -19,8 +19,8 @@ class FakeGpsTest {
 
     @Test fun tabsSplitByStateAndLevel() {
         assertEquals(listOf("a"), SuspectLogic.filter(list.items, 0).map { it.recordId })
-        assertEquals(listOf("b"), SuspectLogic.filter(list.items, 1).map { it.recordId })
-        assertEquals(listOf("c"), SuspectLogic.filter(list.items, 2).map { it.recordId })
+        assertEquals(listOf("b"), SuspectLogic.filter(list.items, 2).map { it.recordId })
+        assertEquals(listOf("c"), SuspectLogic.filter(list.items, 3).map { it.recordId })
         assertEquals(1, list.counts.fakeOpen); assertEquals(true, list.items[0].checkIn!!.simulated)
     }
 
@@ -52,5 +52,37 @@ class FakeGpsTest {
             id.znetworks.nexus.core.net.ClientIdentity("0.1.6", 5, 36), { null }))
         assertEquals("/api/attendance/suspects/a%2Fb%20c/review", api.reviewUrl("a/b c").encodedPath)
         assertEquals("/api/attendance/suspects/cmg123/review", api.reviewUrl("cmg123").encodedPath)
+    }
+
+    // Batch 2 (29 Sep, server e3091ab): Absen Monitor — NOFACE, face counts, warnings.
+    private val batch2 = NexusJson.decodeFromString(SuspectList.serializer(), """{"periodKey":"2026-09",
+        "counts":{"fakeOpen":0,"noFaceOpen":1,"checkOpen":0,"valid":0,"invalid":1},
+        "items":[
+          {"recordId":"n","date":"2026-09-27","state":"open","level":"NOFACE","user":{"id":"u1","name":"Ana"},
+           "checkIn":{"photoUrl":"/a.jpg","faceCount":1,"signals":[]},
+           "checkOut":{"photoUrl":"/b.jpg","faceCount":0,"level":"NOFACE","signals":["No face in the selfie (a wall, the floor, a covered camera)"]},
+           "warnings":[{"at":"2026-09-28T02:00:00.000Z","by":{"name":"Boss"},"message":"Show your face"}]},
+          {"recordId":"x","date":"2026-09-26","state":"invalid","level":"FAKE","user":{"id":"u2"},"checkIn":{"faceCount":null,"level":"FAKE"}}
+        ]}""")
+
+    @Test fun noFaceTabFaceCountsAndWarnings() {
+        assertEquals(listOf("n"), SuspectLogic.filter(batch2.items, 1).map { it.recordId })
+        assertEquals(1, batch2.counts.noFaceOpen)
+        val n = batch2.items[0]
+        assertEquals(0, n.checkOut!!.faceCount); assertEquals(1, n.checkIn!!.faceCount); assertEquals(null, batch2.items[1].checkIn!!.faceCount)
+        assertEquals("Boss", n.warnings.single().by?.name)
+        assertEquals(SuspectLogic.Signal.NOFACE to null, SuspectLogic.signal(n.checkOut!!.signals.single()))
+        // The prefill names the side without a face; FAKE/CHECK the side carrying the level.
+        assertEquals(SuspectLogic.Which.CHECK_OUT, SuspectLogic.warnSide(n))
+        assertEquals(SuspectLogic.Which.CHECK_IN, SuspectLogic.warnSide(batch2.items[1]))
+        assertTrue(SuspectLogic.canWarn(n)); assertFalse(SuspectLogic.canWarn(batch2.items[1]))
+        assertFalse(SuspectLogic.warningValid("  ok ")); assertTrue(SuspectLogic.warningValid("Show your face"))
+        assertFalse(SuspectLogic.warningValid("x".repeat(501)))
+    }
+
+    @Test fun warnUrlEncodesTheId() {
+        val api = SuspectsApi(id.znetworks.nexus.core.net.ApiClient("https://nexus.znetworks.id/".toHttpUrl(),
+            id.znetworks.nexus.core.net.ClientIdentity("0.1.6", 5, 36), { null }))
+        assertEquals("/api/attendance/suspects/a%2Fb/warn", api.warnUrl("a/b").encodedPath)
     }
 }
