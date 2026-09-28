@@ -1551,6 +1551,7 @@ final class AppLanguage {
         "Out-of-office activity: ": "Kegiatan di luar kantor: ",
         "Location off": "Lokasi mati",
         "View location trail": "Lihat jalur lokasi",
+        "Score": "Skor",
         "Location trail": "Jalur lokasi",
         "Couldn't load the location trail": "Jalur lokasi gagal dimuat",
         "Always location was refused on this phone, so NEXUS could only record while the app was open. Gaps in this trail are expected.": "Izin lokasi \"Selalu\" ditolak di HP ini, jadi NEXUS hanya bisa mencatat selama aplikasinya terbuka. Wajar kalau jalur ini ada yang bolong.",
