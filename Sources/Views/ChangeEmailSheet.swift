@@ -29,8 +29,11 @@ struct EmailChangeWait: LocalizedError {
 
 extension APIClient {
     /// Sends a 6-digit code to the NEW address. Nothing changes on the account until `verify`.
-    func requestEmailChange(to email: String) async throws -> EmailChangeSent {
-        try await postEmailChange("/api/user/email/request", body: ["email": email], decode: EmailChangeSent.self)
+    /// `currentPassword` is required by servers from 29 Sep 2026 (a stolen phone must not be enough
+    /// to move the account to another address).
+    func requestEmailChange(to email: String, currentPassword: String) async throws -> EmailChangeSent {
+        try await postEmailChange("/api/user/email/request", body: ["email": email, "currentPassword": currentPassword],
+                                  decode: EmailChangeSent.self)
     }
 
     /// Commits the change. The server checks the code was requested by THIS account and that the
@@ -117,10 +120,11 @@ struct ChangeEmailSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     private enum Step { case address, code }
-    private enum Field { case email, code }
+    private enum Field { case email, password, code }
 
     @State private var step: Step = .address
     @State private var newEmail = ""
+    @State private var currentPassword = ""
     /// The exact string the code was requested for. /verify must be sent the same address, so it
     /// is frozen here rather than read back from a field somebody could still be editing.
     @State private var sentTo = ""
@@ -211,12 +215,26 @@ struct ChangeEmailSheet: View {
                     .textContentType(.emailAddress)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                    .submitLabel(.send)
-                    .onSubmit { Task { await send() } }
+                    .submitLabel(.next)
+                    .onSubmit { focus = .password }
                     .focused($focus, equals: .email)
                     .disabled(busy)
                     .padding(12)
                     .background(NX.muted, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            VStack(alignment: .leading, spacing: 7) {
+                SectionLabel(T("Current password"))
+                SecureField("", text: $currentPassword)
+                    .font(NXFont.text(16))
+                    .textContentType(.password)
+                    .submitLabel(.send)
+                    .onSubmit { Task { await send() } }
+                    .focused($focus, equals: .password)
+                    .disabled(busy)
+                    .padding(12)
+                    .background(NX.muted, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                Text(T("To confirm it's you. Your old email is told about the change."))
+                    .font(NXFont.text(12)).foregroundStyle(NX.mutedFg)
             }
             cooldownAware { left in
                 Button { Task { await send() } } label: {
@@ -229,7 +247,7 @@ struct ChangeEmailSheet: View {
                     }
                 }
                 .buttonStyle(NexusPrimaryButton())
-                .disabled(busy || left > 0 || trimmed.isEmpty)
+                .disabled(busy || left > 0 || trimmed.isEmpty || currentPassword.isEmpty)
             }
         }
     }
@@ -322,7 +340,7 @@ struct ChangeEmailSheet: View {
         busy = true
         defer { busy = false }
         do {
-            let res = try await APIClient.shared.requestEmailChange(to: address)
+            let res = try await APIClient.shared.requestEmailChange(to: address, currentPassword: currentPassword)
             sentTo = address
             code = ""
             cooldownUntil = Date().addingTimeInterval(TimeInterval(res.resendInSeconds ?? 60))

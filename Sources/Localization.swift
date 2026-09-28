@@ -1559,6 +1559,7 @@ final class AppLanguage {
         "Checked in away from the office": "Check-in di luar kantor",
         "Away from the office": "Di luar kantor",
         "Check out first": "Check out dulu",
+        "To confirm it's you. Your old email is told about the change.": "Untuk memastikan ini kamu. Email lamamu akan diberi tahu soal perubahan ini.",
         "Turn on location “Always”": "Nyalakan lokasi “Selalu”",
         "NEXUS needs your location set to “Always” with Precise Location on to check you in. It is used only between check-in and check-out: about once an hour at the office, and your route while you are out of it.": "NEXUS butuh izin lokasi “Selalu” dengan Lokasi Akurat menyala untuk check in. Lokasi hanya dipakai antara check-in dan check-out: sekitar sejam sekali di kantor, dan rutemu selama di luar kantor.",
         "Open Settings › NEXUS › Location, choose Always and turn on Precise Location.": "Buka Pengaturan › NEXUS › Lokasi, pilih Selalu dan nyalakan Lokasi Akurat.",

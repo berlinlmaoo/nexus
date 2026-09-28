@@ -84,6 +84,13 @@ final class AuthStore {
 
     /// The person tapped Logout, or deleted the account: everything goes, queued check-ins too.
     func signOut() {
+        // Ends this session on the server too (security audit, 29 Sep 2026): until now a copied token
+        // stayed valid for its 30 days after the person signed out. Built before the Keychain is
+        // cleared, sent without waiting: signing out never depends on the network.
+        if Keychain.load() != nil {
+            let req = APIClient.shared.makeRequest("/api/auth/app-logout", method: "POST")
+            Task.detached { _ = try? await URLSession.shared.data(for: req) }
+        }
         AttendanceQueue.shared.clearAll()
         logout()
     }
