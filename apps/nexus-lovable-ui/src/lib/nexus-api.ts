@@ -397,6 +397,8 @@ export type NexusAttendanceToday = {
 };
 
 export type NexusAttendanceHistory = {
+  /** Everyone the board lists (workspace scope), rows or not — servers from 28 Sep 2026. */
+  roster?: Array<{ id: string; name: string | null; email?: string | null; avatar?: string | null; dayOffQuota?: number }>;
   rows?: Array<{
     id?: string;
     recordKind?: string;
@@ -1804,8 +1806,8 @@ export const nexusApi = {
   summarizeReflections: (userId: string | undefined, month: string) => apiFetch<NexusReflectionMonthly & { cached?: boolean }>("/api/attendance/reflections/summarize", { method: "POST", body: JSON.stringify({ userId, month }) }),
   // Backend returns { scope, records: [...] }; older callers expect { rows }. Normalize both → { rows }.
   attendanceHistory: async (query = "scope=workspace"): Promise<NexusAttendanceHistory> => {
-    const data = await apiFetch<{ records?: NexusAttendanceHistory["rows"]; rows?: NexusAttendanceHistory["rows"] }>(`/api/attendance/history?${query}`);
-    return { rows: data?.records ?? data?.rows ?? [] };
+    const data = await apiFetch<{ records?: NexusAttendanceHistory["rows"]; rows?: NexusAttendanceHistory["rows"]; roster?: NexusAttendanceHistory["roster"] }>(`/api/attendance/history?${query}`);
+    return { rows: data?.records ?? data?.rows ?? [], roster: data?.roster ?? [] };
   },
   // Where someone was while checked in. 403 outside the viewer's scope (manager = direct reports, BoD = all).
   attendanceTrail: (recordId: string) => apiFetch<NexusAttendanceTrail>(`/api/attendance/records/${encodeURIComponent(recordId)}/trail`),
