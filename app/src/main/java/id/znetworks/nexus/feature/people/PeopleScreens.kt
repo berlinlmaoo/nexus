@@ -144,6 +144,9 @@ fun MemberProfileScreen(userId: String, onBack: () -> Unit, onOpenChat: (String)
     var older by remember { mutableStateOf<List<XpEntry>>(emptyList()) }
     var olderKey by remember { mutableStateOf<String?>(null) }
     var removing by remember { mutableStateOf<XpEntry?>(null) }
+    /** Deductions being given back right now: their Remove is hidden, so one tap is one request (audit R7). */
+    var inFlight by remember { mutableStateOf(setOf<String>()) }
+    var openRequest by remember { mutableStateOf<RecRequest?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     var tick by remember { mutableStateOf(0) }
     // The board's day sheet for this person's days (audit S6, iOS MemberProfileView).
@@ -282,7 +285,7 @@ fun MemberProfileScreen(userId: String, onBack: () -> Unit, onOpenChat: (String)
                             }
                             Text(e.signed, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = if (e.shown >= 0) c.success else c.danger,
                                 textDecoration = if (e.removed != null) TextDecoration.LineThrough else null)
-                            if (e.canRemove && e.removed == null && r.viewer?.canRemoveXp == true) TextButton(onClick = { removing = e }) { Text(stringResource(R.string.pf_remove), fontSize = 12.sp) }
+                            if (e.canRemove && e.removed == null && r.viewer?.canRemoveXp == true && e.id !in inFlight) TextButton(onClick = { removing = e }) { Text(stringResource(R.string.pf_remove), fontSize = 12.sp) }
                         }
                     }
                     olderKey?.let { k -> TextButton(onClick = {
@@ -294,7 +297,7 @@ fun MemberProfileScreen(userId: String, onBack: () -> Unit, onOpenChat: (String)
                 Text(stringResource(R.string.pf_requests), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = c.foreground)
                 if (r.requests.isEmpty()) Text(stringResource(if (isMe) R.string.pf_no_requests_me else R.string.pf_no_requests), fontSize = 12.sp, color = c.mutedFg)
                 r.requests.forEach { q ->
-                    Column {
+                    Column(Modifier.fillMaxWidth().clickable { openRequest = q }.padding(vertical = 2.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(if (q.isAuto) stringResource(R.string.pf_auto_cut) else requestLabel(q.type), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f))
                             Pill(statusLabel(q.status), when (q.status) { "APPROVED" -> c.success; "REJECTED" -> c.danger; else -> c.warning })
@@ -309,13 +312,32 @@ fun MemberProfileScreen(userId: String, onBack: () -> Unit, onOpenChat: (String)
     }
     notice?.let { AlertDialog(onDismissRequest = { notice = null }, text = { Text(it) }, confirmButton = { TextButton(onClick = { notice = null }) { Text("OK") } }) }
     id.znetworks.nexus.feature.attendance.history.BoardDaySheets(dayBoard)
+    // A request in full: the reason the row cuts off, and the reviewer's note (iOS, audit R7).
+    openRequest?.let { q ->
+        AlertDialog(onDismissRequest = { openRequest = null },
+            title = { Text(if (q.isAuto) stringResource(R.string.pf_auto_cut) else requestLabel(q.type)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(statusLabel(q.status), fontWeight = FontWeight.SemiBold)
+                    Text(listOfNotNull(q.startDate?.take(10), q.endDate?.take(10)?.takeIf { it != q.startDate?.take(10) }).joinToString(" – "), fontSize = 13.sp)
+                    q.reason?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 13.sp) }
+                    q.reviewedBy?.name?.let { Text(stringResource(R.string.pf_reviewed_by, it) + (q.reviewNote?.takeIf { n -> n.isNotBlank() }?.let { n -> " — $n" } ?: ""), fontSize = 12.sp) }
+                }
+            },
+            confirmButton = { TextButton(onClick = { openRequest = null }) { Text("OK") } })
+    }
     removing?.let { e ->
         var note by remember { mutableStateOf("") }
         AlertDialog(onDismissRequest = { removing = null }, title = { Text(stringResource(R.string.pf_remove_q, e.signed)) },
             text = { Column { Text(stringResource(R.string.pf_remove_body), fontSize = 13.sp); OutlinedTextField(note, { note = it }, singleLine = true, placeholder = { Text(stringResource(R.string.tk_decision_note)) }) } },
             confirmButton = { TextButton(onClick = {
                 removing = null
-                scope.launch { try { api.removeXp(e.id, note); tick++ } catch (x: ApiError) { notice = (x as? ApiError.Http)?.serverMessage ?: x.describe(res) } }
+                if (e.id in inFlight) return@TextButton
+                inFlight = inFlight + e.id
+                scope.launch {
+                    try { api.removeXp(e.id, note); tick++ } catch (x: ApiError) { notice = (x as? ApiError.Http)?.serverMessage ?: x.describe(res) }
+                    inFlight = inFlight - e.id
+                }
             }) { Text(stringResource(R.string.pf_remove)) } },
             dismissButton = { TextButton(onClick = { removing = null }) { Text(stringResource(R.string.cancel)) } })
     }
