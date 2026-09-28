@@ -4,6 +4,24 @@ import android.app.Application
 import android.content.Context
 import android.os.Build
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.outlined.Circle
+import id.znetworks.nexus.core.i18n.AppLanguage
+import id.znetworks.nexus.core.offline.OfflineCard
+import id.znetworks.nexus.feature.update.startUpdate
+import id.znetworks.nexus.ui.theme.AppTheme
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -136,17 +154,22 @@ class AccountViewModel(app: Application) : AndroidViewModel(app) {
 }
 
 @Composable
-fun AccountScreen(onBack: () -> Unit, onOpenProfile: (String) -> Unit = {}, vm: AccountViewModel = viewModel()) {
+fun AccountScreen(onBack: () -> Unit, onOpenProfile: (String) -> Unit = {}, onLogout: () -> Unit = {}, onDeleteAccount: () -> Unit = {}, vm: AccountViewModel = viewModel()) {
     val s by vm.state.collectAsStateWithLifecycle()
     val c = Nx.colors
     val context = LocalContext.current
     Column(Modifier.fillMaxSize().background(c.background)) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
-            Text(stringResource(R.string.acct_title), fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = c.foreground, modifier = Modifier.weight(1f))
-            if (s.busy) CircularProgressIndicator(Modifier.size(18.dp).padding(end = 4.dp), strokeWidth = 2.dp)
+            Text(stringResource(R.string.mt_tuning), fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = c.foreground,
+                textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+            // Same width as the back button, so the title stays centred (iOS inline title).
+            Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                if (s.busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            }
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            UpdateRow()
             ProfileCard()
             Section(stringResource(R.string.acct_email)) {
                 var newEmail by rememberSaveable { mutableStateOf("") }
@@ -176,6 +199,9 @@ fun AccountScreen(onBack: () -> Unit, onOpenProfile: (String) -> Unit = {}, vm: 
                     }
                 }
             }
+            AppearanceCard()
+            LanguageCard()
+            OfflineCard()
             WorkspaceMembersCard(onOpenProfile)
             Section(stringResource(R.string.acct_password)) {
                 var current by rememberSaveable { mutableStateOf("") }
@@ -214,6 +240,23 @@ fun AccountScreen(onBack: () -> Unit, onOpenProfile: (String) -> Unit = {}, vm: 
                     Icon(Icons.Filled.Key, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.acct_add_passkey))
                 }
             }
+            // Logout, then Delete set apart below it, so the permanent action is never where a thumb lands by habit (iOS).
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.card).border(1.dp, c.border, RoundedCornerShape(18.dp))
+                .clickable(onClick = onLogout).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.AutoMirrored.Filled.Logout, null, tint = c.danger, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(stringResource(R.string.logout), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.danger)
+            }
+            Row(Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.card).border(1.dp, c.danger.copy(alpha = 0.3f), RoundedCornerShape(18.dp))
+                .clickable(onClick = onDeleteAccount).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Delete, null, tint = c.danger, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(stringResource(R.string.delete_account), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.danger, modifier = Modifier.weight(1f))
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = c.mutedFg, modifier = Modifier.size(18.dp))
+            }
+            val identity = (context.applicationContext as NexusApplication).container.identity
+            Text("${stringResource(R.string.set_footer)} · ${identity.versionName} (${identity.versionCode})", fontSize = 11.sp, color = c.mutedFg.copy(alpha = 0.7f),
+                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
         }
     }
     (s.error ?: s.info)?.let { AlertDialog(onDismissRequest = vm::dismiss, text = { Text(it) }, confirmButton = { TextButton(onClick = vm::dismiss) { Text("OK") } }) }
@@ -229,6 +272,89 @@ private fun Section(title: String, content: @Composable () -> Unit) {
     Column(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(18.dp)).border(1.dp, c.border, RoundedCornerShape(18.dp)).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(title, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = c.foreground)
+        content()
+    }
+}
+
+/** Tuning Room's one mention of an optional update; a deadline outranks a mere "newer version" (iOS, audit R11). */
+@Composable
+private fun UpdateRow() {
+    val c = Nx.colors
+    val context = LocalContext.current
+    val gate by (context.applicationContext as NexusApplication).container.versionGate.state.collectAsStateWithLifecycle()
+    val grace = gate.grace
+    val text = when {
+        grace != null -> stringResource(R.string.update_grace_body, DateTimeFormatter.ofPattern("d MMM, HH:mm", Locale.getDefault())
+            .format(grace.deadline.atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE)))
+        gate.available != null -> stringResource(R.string.update_available, gate.available!!)
+        else -> return
+    }
+    val tint = if (grace != null) c.warning else c.violetText
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(tint.copy(alpha = 0.1f)).border(1.dp, tint.copy(alpha = 0.3f), RoundedCornerShape(18.dp))
+        .padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Filled.SystemUpdate, null, tint = tint, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(text, fontSize = 13.sp, color = c.foreground, modifier = Modifier.weight(1f))
+        TextButton(onClick = { startUpdate(context, gate.storeUrl) }) { Text(stringResource(R.string.update_action), fontWeight = FontWeight.Bold) }
+    }
+}
+
+/** iOS AppearanceCard: three buttons, the chosen one filled. */
+@Composable
+private fun AppearanceCard() {
+    val c = Nx.colors
+    val appearance = (LocalContext.current.applicationContext as NexusApplication).container.appearance
+    val theme by appearance.theme.collectAsStateWithLifecycle()
+    SettingsCard(stringResource(R.string.set_appearance_caps)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            AppTheme.entries.forEach { t ->
+                val on = theme == t
+                Column(Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).background(if (on) c.violet else c.muted.copy(alpha = 0.5f))
+                    .clickable { appearance.set(t) }.padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val fg = if (on) Color.White else c.mutedFg
+                    Icon(when (t) { AppTheme.SYSTEM -> Icons.Filled.PhoneAndroid; AppTheme.LIGHT -> Icons.Filled.LightMode; AppTheme.DARK -> Icons.Filled.DarkMode }, null, tint = fg, modifier = Modifier.size(20.dp))
+                    Text(stringResource(themeLabel(t)), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = fg, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+private fun themeLabel(t: AppTheme) = when (t) {
+    AppTheme.SYSTEM -> R.string.theme_system
+    AppTheme.LIGHT -> R.string.theme_light
+    AppTheme.DARK -> R.string.theme_dark
+}
+
+/** iOS LanguageCard: flag rows with a check; applies at once, no restart. */
+@Composable
+private fun LanguageCard() {
+    val c = Nx.colors
+    val context = LocalContext.current
+    val current = if (id.znetworks.nexus.core.config.ConfigBody.lang(LocalConfiguration.current.locales[0]) == "id") AppLanguage.INDONESIAN else AppLanguage.ENGLISH
+    SettingsCard(stringResource(R.string.set_language_caps), stringResource(R.string.set_language_hint)) {
+        listOf(Triple(AppLanguage.ENGLISH, "🇬🇧", "English"), Triple(AppLanguage.INDONESIAN, "🇮🇩", "Bahasa Indonesia")).forEach { (tag, flag, label) ->
+            val on = current == tag
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (on) c.violet.copy(alpha = 0.1f) else Color.Transparent)
+                .clickable { if (!on) AppLanguage.choose(context, tag) }.padding(horizontal = 11.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(flag, fontSize = 20.sp)
+                Spacer(Modifier.width(10.dp))
+                Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, modifier = Modifier.weight(1f))
+                Icon(if (on) Icons.Filled.CheckCircle else Icons.Outlined.Circle, null, tint = if (on) c.violetText else c.mutedFg.copy(alpha = 0.4f), modifier = Modifier.size(20.dp))
+            }
+        }
+    }
+}
+
+/** The iOS `.nexusCard()` with a small violet caps label. */
+@Composable
+private fun SettingsCard(label: String, hint: String? = null, content: @Composable () -> Unit) {
+    val c = Nx.colors
+    Column(Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(18.dp)).border(1.dp, c.border, RoundedCornerShape(18.dp)).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp, color = c.violetText)
+        hint?.let { Text(it, fontSize = 11.sp, color = c.mutedFg) }
         content()
     }
 }

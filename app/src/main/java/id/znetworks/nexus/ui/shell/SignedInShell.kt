@@ -1,6 +1,26 @@
 package id.znetworks.nexus.ui.shell
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material.icons.filled.ChatBubble
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.MeetingRoom
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.ConfirmationNumber
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.WatchLater
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.AdminPanelSettings
@@ -36,6 +56,7 @@ import id.znetworks.nexus.feature.reports.ReportsScreen
 import id.znetworks.nexus.feature.vault.VaultPublicScreen
 import id.znetworks.nexus.feature.vault.VaultScreen
 import id.znetworks.nexus.feature.forms.FormFillScreen
+import id.znetworks.nexus.feature.forms.FormsScreen
 import id.znetworks.nexus.feature.forms.SubmissionsScreen
 import id.znetworks.nexus.feature.forms.SubmissionDetailScreen
 import id.znetworks.nexus.core.files.FileOpener
@@ -279,7 +300,14 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
                     onOpenWeb = { when (it) { "/messages" -> nav.navigate("messages"); "/threads" -> nav.navigate("threads"); "/leaderboard" -> nav.navigate("leaderboard"); "/room-booking" -> nav.navigate("rooms"); "/master-calendar" -> nav.navigate("team-calendar"); else -> openWeb(context, it) } },
                 )
             }
-            composable("account") { AccountScreen(onBack = { nav.popBackStack() }, onOpenProfile = { nav.navigate("profile/$it") }) }
+            composable("account") {
+                val logout = rememberLogout(onSignOut) { nav.navigate("attendance") { launchSingleTop = true } }
+                // deleteAccount() already runs the full logout; the root then shows the login screen.
+                var deleting by rememberSaveable { mutableStateOf(false) }
+                AccountScreen(onBack = { nav.popBackStack() }, onOpenProfile = { nav.navigate("profile/$it") }, onLogout = logout, onDeleteAccount = { deleting = true })
+                if (deleting) DeleteAccountDialog(onDone = { deleting = false }, onCancel = { deleting = false })
+            }
+            composable("forms") { FormsScreen(onBack = { nav.popBackStack() }, onOpenForm = { nav.navigate("form/${android.net.Uri.encode(it)}") }) }
             composable("threads?post={post}", arguments = listOf(androidx.navigation.navArgument("post") { nullable = true; defaultValue = null })) { e ->
                 CompanyOnly(onBack = { nav.popBackStack() }) {
                     ThreadsScreen(onBack = { nav.popBackStack() }, focusPostId = e.arguments?.getString("post"))
@@ -354,7 +382,10 @@ fun SignedInShell(session: Session, gateState: VersionGate.State, onSignOut: () 
             composable(Tab.PROJECTS.route) {
                 ProjectsScreen(onOpenProject = { nav.navigate("project/$it") }, onOpenTask = { nav.navigate("task/$it") }, onOpenFolder = { nav.navigate("folder/$it") })
             }
-            composable(Tab.MORE.route) { MoreScreen(session, gateState, onSignOut, onOpenAttendance = { nav.navigate("attendance") { launchSingleTop = true } }, onOpenAccount = { nav.navigate("account") }, onOpenWhatsNew = { whatsNew = true }, onOpenTickets = { nav.navigate("tickets") }, onOpenSubmissions = { nav.navigate("submissions") }, onOpenDocs = { nav.navigate("docs") }, onOpenVault = { nav.navigate("vault?folder=&trash=") }, onOpenReports = { nav.navigate("reports") }, onOpenAdmin = { nav.navigate("admin") }) }
+            composable(Tab.MORE.route) {
+                val logout = rememberLogout(onSignOut) { nav.navigate("attendance") { launchSingleTop = true } }
+                MoreScreen(session, logout, open = { r -> nav.navigate(r) { launchSingleTop = true } }, onOpenWhatsNew = { whatsNew = true })
+            }
             composable("project/{id}") { entry ->
                 ProjectDetailScreen(onBack = { nav.popBackStack() }, onOpenTask = { nav.navigate("task/$it") },
                     onOpenSettings = { nav.navigate("project/${entry.arguments?.getString("id")}/settings") },
@@ -417,153 +448,124 @@ private fun NotYet(tab: Tab) {
     )
 }
 
+/**
+ * More (Berlin 29 Sep, UI point 2; iOS RootView MoreView): a launcher grid in sections, two columns,
+ * each tile a tinted icon square over its title; the account card and Logout underneath. Settings
+ * (language, appearance, offline, update, delete account) live in Tuning Room, as on iOS.
+ */
 @Composable
-private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut: () -> Unit, onOpenAttendance: () -> Unit, onOpenAccount: () -> Unit, onOpenWhatsNew: () -> Unit, onOpenTickets: () -> Unit, onOpenSubmissions: () -> Unit, onOpenDocs: () -> Unit, onOpenVault: () -> Unit, onOpenReports: () -> Unit, onOpenAdmin: () -> Unit) {
+private fun MoreScreen(session: Session, onLogout: () -> Unit, open: (String) -> Unit, onOpenWhatsNew: () -> Unit) {
     val c = Nx.colors
-    val context = LocalContext.current
-    val container = (context.applicationContext as NexusApplication).container
-    val theme by container.appearance.theme.collectAsStateWithLifecycle()
-    var confirmLogout by rememberSaveable { mutableStateOf(false) }
-    var pickLanguage by rememberSaveable { mutableStateOf(false) }
-    val setLanguage = rememberLanguageSetter()
-    var pickTheme by rememberSaveable { mutableStateOf(false) }
-    var deleting by rememberSaveable { mutableStateOf(false) }
-    var logoutBlocked by rememberSaveable { mutableStateOf(false) }
-    val itemColors = ListItemDefaults.colors(containerColor = c.card)
-    val shape = Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(16.dp))
-
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Text(session.userName.ifBlank { session.userEmail }, fontFamily = DisplayFont, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = c.foreground)
-        Text(session.userEmail, color = c.mutedFg)
-        Spacer(Modifier.height(20.dp))
-        ListItem(
-            headlineContent = { Text(stringResource(R.string.home_attendance)) },
-            supportingContent = { Text(stringResource(R.string.more_attendance_sub)) },
-            leadingContent = { Icon(Icons.Filled.WatchLater, null, tint = c.success) },
-            colors = itemColors, modifier = shape.clickable(onClick = onOpenAttendance),
-        )
-        Spacer(Modifier.height(12.dp))
-        ListItem(
-            headlineContent = { Text(stringResource(R.string.acct_title)) },
-            supportingContent = { Text(stringResource(R.string.acct_sub)) },
-            leadingContent = { Icon(Icons.Filled.Key, null, tint = c.violetText) },
-            colors = itemColors, modifier = shape.clickable(onClick = onOpenAccount),
-        )
-        Spacer(Modifier.height(12.dp))
-        ListItem(
-            headlineContent = { Text(stringResource(R.string.tk_title)) },
-            supportingContent = { Text(stringResource(R.string.tk_more_sub)) },
-            leadingContent = { Icon(Icons.Filled.SupportAgent, null, tint = c.violetText) },
-            colors = itemColors, modifier = shape.clickable(onClick = onOpenTickets),
-        )
-        Spacer(Modifier.height(12.dp))
-        ListItem(
-            headlineContent = { Text(stringResource(R.string.form_my_submissions)) },
-            supportingContent = { Text(stringResource(R.string.form_more_sub)) },
-            leadingContent = { Icon(Icons.Filled.Assignment, null, tint = c.violetText) },
-            colors = itemColors, modifier = shape.clickable(onClick = onOpenSubmissions),
-        )
-        Spacer(Modifier.height(12.dp))
-        ListItem(
-            headlineContent = { Text("Knowledge Library") },
-            supportingContent = { Text(stringResource(R.string.docs_more_sub)) },
-            leadingContent = { Icon(Icons.Filled.MenuBook, null, tint = c.violetText) },
-            colors = itemColors, modifier = shape.clickable(onClick = onOpenDocs),
-        )
-        Spacer(Modifier.height(12.dp))
-        // Company only (iOS 14b086f): hidden until known, and outside Z Networks.
-        if (rememberIsCompany() == true) {
-            ListItem(
-                headlineContent = { Text("Z Vault") },
-                supportingContent = { Text(stringResource(R.string.vault_more_sub)) },
-                leadingContent = { Icon(Icons.Filled.Folder, null, tint = c.violetText) },
-                colors = itemColors, modifier = shape.clickable(onClick = onOpenVault),
-            )
-            Spacer(Modifier.height(12.dp))
+    val container = (LocalContext.current.applicationContext as NexusApplication).container
+    // Company only (iOS 14b086f): hidden until known, and outside Z Networks.
+    val company = rememberIsCompany() == true
+    // Control Room is drawn for MANAGER and above only (the server re-checks every call).
+    val canAdmin by androidx.compose.runtime.produceState(container.viewer.canAdminister) { container.viewer.load(); value = container.viewer.canAdminister }
+    Column(Modifier.fillMaxSize().background(c.background)) {
+        Text(stringResource(R.string.more_title), fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = c.foreground,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp))
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(22.dp)) {
+            MoreSection(stringResource(R.string.more_sec_home), listOfNotNull(
+                MoreItem(R.string.mt_messages, Icons.Filled.Forum, c.blue) { open("messages") },
+                if (company) MoreItem(R.string.mt_threads, Icons.Filled.ChatBubble, c.violetText) { open("threads") } else null,
+                MoreItem(R.string.mt_submissions, Icons.Filled.Inbox, c.warning) { open("submissions") },
+                MoreItem(R.string.mt_calendar, Icons.Filled.CalendarMonth, c.violetText) { open("team-calendar") },
+                MoreItem(R.string.mt_rooms, Icons.Filled.MeetingRoom, c.coral) { open("rooms") },
+            ))
+            MoreSection(stringResource(R.string.more_sec_missions), listOf(
+                MoreItem(R.string.mt_leaderboard, Icons.Filled.EmojiEvents, c.warning) { open("leaderboard") },
+                MoreItem(R.string.mt_reports, Icons.Filled.BarChart, c.success) { open("reports") },
+            ))
+            MoreSection(stringResource(R.string.more_sec_knowledge), listOfNotNull(
+                if (company) MoreItem(R.string.mt_vault, Icons.Filled.Storage, c.violetText) { open("vault?folder=&trash=") } else null,
+                MoreItem(R.string.mt_forms, Icons.Filled.Description, c.blue) { open("forms") },
+            ))
+            MoreSection(stringResource(R.string.more_sec_pulse), listOf(
+                MoreItem(R.string.mt_attendance, Icons.Filled.WatchLater, c.success) { open("attendance") },
+            ))
+            MoreSection(stringResource(R.string.more_sec_system), listOfNotNull(
+                MoreItem(R.string.mt_ticket, Icons.Filled.ConfirmationNumber, c.blue) { open("tickets") },
+                MoreItem(R.string.mt_whats_new, Icons.Filled.AutoAwesome, c.violetText, onOpenWhatsNew),
+                MoreItem(R.string.mt_tuning, Icons.Filled.Settings, c.mutedFg) { open("account") },
+                if (canAdmin) MoreItem(R.string.mt_control, Icons.Filled.Shield, c.danger) { open("admin") } else null,
+            ))
+            AccountFooter(session, onOpenProfile = { open("account") }, onLogout = onLogout)
         }
-        ListItem(
-            headlineContent = { Text(stringResource(R.string.rp_title)) },
-            supportingContent = { Text(stringResource(R.string.rp_more_sub)) },
-            leadingContent = { Icon(Icons.Filled.BarChart, null, tint = c.violetText) },
-            colors = itemColors, modifier = shape.clickable(onClick = onOpenReports),
-        )
-        Spacer(Modifier.height(12.dp))
-        // Control Room is drawn for MANAGER and above only (the server re-checks every call).
-        val canAdmin by androidx.compose.runtime.produceState(container.viewer.canAdminister) { container.viewer.load(); value = container.viewer.canAdminister }
-        if (canAdmin) {
-            ListItem(
-                headlineContent = { Text("Control Room") },
-                supportingContent = { Text(stringResource(R.string.ad_more_sub)) },
-                leadingContent = { Icon(Icons.Filled.AdminPanelSettings, null, tint = c.violetText) },
-                colors = itemColors, modifier = shape.clickable(onClick = onOpenAdmin),
-            )
-            Spacer(Modifier.height(12.dp))
-        }
-        if (WhatsNew.entries(container.identity.versionName).isNotEmpty()) {
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.wn_title)) },
-                supportingContent = { Text(stringResource(R.string.wn_version, container.identity.versionName)) },
-                leadingContent = { Icon(Icons.Filled.AutoAwesome, null, tint = c.violetText) },
-                colors = itemColors, modifier = shape.clickable(onClick = onOpenWhatsNew),
-            )
-            Spacer(Modifier.height(12.dp))
-        }
-        // A deadline outranks a mere "newer version": only one of the two rows is drawn (iOS UpdateDeadlineRow, audit R11).
-        val grace = gateState.grace
-        if (grace != null) {
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.update_grace_body, java.time.format.DateTimeFormatter.ofPattern("d MMM, HH:mm", java.util.Locale.getDefault())
-                    .format(grace.deadline.atZone(id.znetworks.nexus.core.time.OfficeTime.ZONE)))) },
-                leadingContent = { Icon(Icons.Filled.SystemUpdate, null, tint = c.warning) },
-                colors = itemColors, modifier = shape,
-                trailingContent = { TextButton(onClick = { startUpdate(context, gateState.storeUrl) }) { Text(stringResource(R.string.update_action)) } },
-            )
-            Spacer(Modifier.height(12.dp))
-        } else gateState.available?.let { version ->
-            // Soft "update available": Tuning Room only, never a nag (REQ-ATT-41).
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.update_available, version)) },
-                leadingContent = { Icon(Icons.Filled.SystemUpdate, null, tint = c.violetText) },
-                colors = itemColors, modifier = shape,
-                trailingContent = { TextButton(onClick = { startUpdate(context, gateState.storeUrl) }) { Text(stringResource(R.string.update_action)) } },
-            )
-            Spacer(Modifier.height(12.dp))
-        }
-        ListItem(
-            headlineContent = { Text(stringResource(R.string.settings_language)) },
-            supportingContent = { Text(stringResource(R.string.settings_language_current)) },
-            leadingContent = { Icon(Icons.Filled.Translate, null) },
-            colors = itemColors, modifier = shape,
-            trailingContent = { TextButton(onClick = { pickLanguage = true }) { Text(stringResource(R.string.change)) } },
-        )
-        Spacer(Modifier.height(12.dp))
-        ListItem(
-            headlineContent = { Text(stringResource(R.string.settings_appearance)) },
-            supportingContent = { Text(stringResource(themeLabel(theme))) },
-            leadingContent = { Icon(Icons.Filled.DarkMode, null) },
-            colors = itemColors, modifier = shape,
-            trailingContent = { TextButton(onClick = { pickTheme = true }) { Text(stringResource(R.string.change)) } },
-        )
-        Spacer(Modifier.height(12.dp))
-        ListItem(
-            headlineContent = { Text(stringResource(R.string.logout), color = c.danger) },
-            leadingContent = { Icon(Icons.AutoMirrored.Filled.Logout, null, tint = c.danger) },
-            colors = itemColors, modifier = shape,
-            trailingContent = { TextButton(onClick = { if (container.signOutBlocked()) logoutBlocked = true else confirmLogout = true }) { Text(stringResource(R.string.logout), color = c.danger) } },
-        )
-        Spacer(Modifier.height(24.dp))
-        ListItem(
-            headlineContent = { Text(stringResource(R.string.delete_account), color = c.danger) },
-            supportingContent = { Text(stringResource(R.string.delete_account_sub)) },
-            leadingContent = { Icon(Icons.Filled.DeleteForever, null, tint = c.danger) },
-            colors = itemColors, modifier = shape,
-            trailingContent = { TextButton(onClick = { deleting = true }) { Text(stringResource(R.string.delete), color = c.danger) } },
-        )
-        Spacer(Modifier.height(12.dp))
-        id.znetworks.nexus.core.offline.OfflineCard()
-        Spacer(Modifier.height(12.dp))
-        Text("NEXUS ${container.identity.versionName} (${container.identity.versionCode})", fontSize = 11.sp, color = c.mutedFg)
     }
+}
+
+private class MoreItem(val title: Int, val icon: androidx.compose.ui.graphics.vector.ImageVector, val tint: androidx.compose.ui.graphics.Color, val onClick: () -> Unit)
+
+/** Section label + a two-column grid of tiles (iOS MoreSection + LazyVGrid). */
+@Composable
+private fun MoreSection(title: String, items: List<MoreItem>) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(title, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp, color = Nx.colors.mutedFg, modifier = Modifier.padding(start = 4.dp))
+        items.chunked(2).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.height(androidx.compose.foundation.layout.IntrinsicSize.Max)) {
+                row.forEach { MoreTile(it, Modifier.weight(1f).fillMaxHeight()) }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/** iOS MoreTile: 46dp tinted square (14% fill, radius 14) and a semibold title, on a white card (radius 18). */
+@Composable
+private fun MoreTile(item: MoreItem, modifier: Modifier) {
+    val c = Nx.colors
+    val shape = RoundedCornerShape(18.dp)
+    Column(modifier.shadow(3.dp, shape, ambientColor = c.foreground.copy(alpha = 0.08f), spotColor = c.foreground.copy(alpha = 0.08f))
+        .clip(shape).background(c.card).border(1.dp, c.border, shape).clickable(onClick = item.onClick)
+        .defaultMinSize(minHeight = 110.dp).padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(Modifier.size(46.dp).background(item.tint.copy(alpha = 0.14f), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
+            Icon(item.icon, null, tint = item.tint, modifier = Modifier.size(22.dp))
+        }
+        Text(stringResource(item.title), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 2)
+    }
+}
+
+/** iOS AccountFooter: avatar + name + email (opens Tuning Room), then Logout. */
+@Composable
+private fun AccountFooter(session: Session, onOpenProfile: () -> Unit, onLogout: () -> Unit) {
+    val c = Nx.colors
+    val container = (LocalContext.current.applicationContext as NexusApplication).container
+    // The session stores no photo: the profile has it.
+    val avatar by androidx.compose.runtime.produceState<String?>(null) {
+        value = runCatching { id.znetworks.nexus.feature.auth.ProfileApi(container.api).profile().avatar }.getOrNull()
+    }
+    val name = session.userName.ifBlank { session.userEmail }
+    val shape = RoundedCornerShape(18.dp)
+    Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth().clip(shape).background(c.card).border(1.dp, c.border, shape).clickable(onClick = onOpenProfile).padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            id.znetworks.nexus.ui.components.Avatar(name, avatar, size = 46.dp)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = c.foreground, maxLines = 1)
+                Text(session.userEmail, fontSize = 12.sp, color = c.mutedFg, maxLines = 1)
+            }
+        }
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(c.danger.copy(alpha = 0.1f)).clickable(onClick = onLogout).padding(vertical = 13.dp),
+            horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.AutoMirrored.Filled.Logout, null, tint = c.danger, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.logout), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = c.danger)
+        }
+    }
+}
+
+/**
+ * The person's own Logout, from More and from Tuning Room: confirmed, and refused while a workday
+ * runs (Berlin 28 Sep, iOS b186172). The returned lambda starts it; the dialogs are drawn here.
+ */
+@Composable
+private fun rememberLogout(onSignOut: () -> Unit, onOpenAttendance: () -> Unit): () -> Unit {
+    val c = Nx.colors
+    val container = (LocalContext.current.applicationContext as NexusApplication).container
+    var confirmLogout by rememberSaveable { mutableStateOf(false) }
+    var logoutBlocked by rememberSaveable { mutableStateOf(false) }
     if (confirmLogout) {
         AlertDialog(
             onDismissRequest = { confirmLogout = false },
@@ -581,43 +583,9 @@ private fun MoreScreen(session: Session, gateState: VersionGate.State, onSignOut
         confirmButton = { TextButton(onClick = { logoutBlocked = false; onOpenAttendance() }) { Text(stringResource(R.string.home_attendance)) } },
         dismissButton = { TextButton(onClick = { logoutBlocked = false }) { Text("OK") } },
     )
-    if (pickLanguage) {
-        AlertDialog(
-            onDismissRequest = { pickLanguage = false },
-            title = { Text(stringResource(R.string.settings_language)) },
-            text = {
-                Column {
-                    // Applies immediately, no restart; also shows in Android 13+'s per-app language setting.
-                    TextButton(onClick = { pickLanguage = false; setLanguage("en") }) { Text("English") }
-                    TextButton(onClick = { pickLanguage = false; setLanguage("in") }) { Text("Bahasa Indonesia") }
-                }
-            },
-            confirmButton = { TextButton(onClick = { pickLanguage = false }) { Text(stringResource(R.string.cancel)) } },
-        )
-    }
-    if (pickTheme) {
-        AlertDialog(
-            onDismissRequest = { pickTheme = false },
-            title = { Text(stringResource(R.string.settings_appearance)) },
-            text = {
-                Column {
-                    AppTheme.entries.forEach { t ->
-                        TextButton(onClick = { pickTheme = false; container.appearance.set(t) }) { Text(stringResource(themeLabel(t))) }
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = { pickTheme = false }) { Text(stringResource(R.string.cancel)) } },
-        )
-    }
-    // deleteAccount() already runs the full logout; the root then shows the login screen.
-    if (deleting) DeleteAccountDialog(onDone = { deleting = false }, onCancel = { deleting = false })
+    return { if (container.signOutBlocked()) logoutBlocked = true else confirmLogout = true }
 }
 
-private fun themeLabel(t: AppTheme) = when (t) {
-    AppTheme.SYSTEM -> R.string.theme_system
-    AppTheme.LIGHT -> R.string.theme_light
-    AppTheme.DARK -> R.string.theme_dark
-}
 
 /**
  * Deactivates and anonymises (history stays as "Deleted account"). The person types DELETE first,
@@ -659,12 +627,6 @@ private fun DeleteAccountDialog(onDone: () -> Unit, onCancel: () -> Unit) {
         },
         dismissButton = { TextButton(onClick = onCancel, enabled = !busy) { Text(stringResource(R.string.cancel)) } },
     )
-}
-
-@Composable
-private fun rememberLanguageSetter(): (String) -> Unit {
-    val context = LocalContext.current
-    return { tag -> id.znetworks.nexus.core.i18n.AppLanguage.choose(context, tag) }
 }
 
 fun openWeb(context: Context, path: String) = openUrl(context, NexusConfig.PUBLIC_BASE + path)
