@@ -185,11 +185,10 @@ class TrailMachine(var state: TrailState = TrailState()) {
          * record's own while the zone is inside. Null outside or before the zone is known.
          */
         fun officeHere(state: TrailState): TrailFence? {
-            if (state.zone != TrailZone.INSIDE) return null
-            val p = state.latest
-            val here = p?.let { pt -> state.fences.minByOrNull { distance(pt.lat, pt.lng, it.lat, it.lng) - it.radius }
-                ?.takeIf { distance(pt.lat, pt.lng, it.lat, it.lng) <= it.radius } }
-            return here ?: state.fence
+            if (!state.isActive || state.zone != TrailZone.INSIDE) return null
+            // The nearest office (edge distance) to the latest fix clear enough to tell (iOS currentOffice).
+            val p = state.latest?.takeIf { (it.accuracy ?: DECISIVE_ACCURACY) <= DECISIVE_ACCURACY } ?: return state.fence
+            return state.fences.minByOrNull { distance(p.lat, p.lng, it.lat, it.lng) - it.radius } ?: state.fence
         }
 
         fun usable(p: TrailPoint): Boolean {
@@ -249,7 +248,9 @@ class TrailMachine(var state: TrailState = TrailState()) {
 
     /** The workspace's active offices (the record's own is dropped: it is [TrailState.fence]). */
     fun offices(all: List<TrailFence>) {
-        val others = all.filter { it != state.fence }.distinct()
+        val own = state.fence ?: return
+        // The record's own office by place, not equality (the two lists may name it differently).
+        val others = all.filter { distance(it.lat, it.lng, own.lat, own.lng) > 1 || kotlin.math.abs(it.radius - own.radius) > 1 }.distinct()
         if (others != state.others) state = state.copy(others = others)
     }
 

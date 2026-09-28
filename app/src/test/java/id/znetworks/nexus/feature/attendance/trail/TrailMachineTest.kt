@@ -294,6 +294,9 @@ class TrailMachineTest {
         assertFalse(TrailEffect.StartContinuous in fx)
         assertTrue(m.state.pending.none { it.event == TrailPoint.Event.exit })
         assertEquals("Studio", TrailMachine.officeHere(m.state)?.name)
+        // A vague fix names no new office: the last clear answer stands in for the record's.
+        m.state = m.state.copy(latest = m.state.latest!!.copy(accuracy = 500.0))
+        assertEquals("HQ", TrailMachine.officeHere(m.state)?.name)
         // Between the two, clear of both: outside, and no office is named.
         now += 10 * min
         m.fix(at(0.0025), now)

@@ -1417,4 +1417,5 @@
     <string name="work_session_at">At %1$s · location checked about once an hour</string>
     <string name="away_from_office">Away from the office</string>
     <string name="btn_checkout_saved_phone">Check-out saved on this phone</string>
+    <string name="now_at">Now at %1$s</string>
 </resources>

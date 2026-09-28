@@ -445,14 +445,16 @@ private fun Metrics(s: AttendanceUiState, forcePending: Boolean, hereName: Strin
     val checkedIn = rec?.checkInAt != null
     val away = if (checkedIn) rec?.checkedInAway else null
     val free = if (checkedIn && away != null) away else s.today?.noGeofence == true
-    // While working: the active office they are in now (moved from A to B = B), else the record's.
-    val officeName = if (free) null else hereName ?: rec?.officeLocation?.name
+    val officeName = if (free) null else rec?.officeLocation?.name
+    // Moved to another active office since checking in: the helper says which one (iOS 45ea4ea).
+    val movedTo = hereName?.takeIf { !free && rec?.checkOutAt == null && it != officeName }
     val officeValue = if (free) {
         (if (checkedIn) rec?.placeLabel else null)?.takeIf { it.isNotBlank() }
             ?: rec?.checkInAddress?.let(::shortAddress)?.takeIf { it.isNotBlank() }
             ?: stringResource(if (checkedIn) R.string.checked_in_away else R.string.location_free)
     } else officeName ?: s.nearest?.name ?: stringResource(if (s.locationOff) R.string.location_is_off else R.string.finding_you)
     val officeHelper = when {
+        movedTo != null -> stringResource(R.string.now_at, movedTo) + " · In ${hhmmIso(rec?.checkInAt)} · Out ${hhmmIso(rec?.checkOutAt)}"
         checkedIn && away == true -> stringResource(R.string.away_from_office) + " · In ${hhmmIso(rec?.checkInAt)} · Out ${hhmmIso(rec?.checkOutAt)}"
         rec?.checkInAt != null -> "In ${hhmmIso(rec.checkInAt)} · Out ${hhmmIso(rec.checkOutAt)}"
         s.nearest != null -> if (s.nearest.inside) stringResource(R.string.inside_office)

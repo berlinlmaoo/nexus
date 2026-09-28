@@ -1411,4 +1411,5 @@
     <string name="work_session_at">Di %1$s · lokasi dicek sekitar sejam sekali</string>
     <string name="away_from_office">Di luar kantor</string>
     <string name="btn_checkout_saved_phone">Check-out tersimpan di HP ini</string>
+    <string name="now_at">Sekarang di %1$s</string>
 </resources>

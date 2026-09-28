@@ -204,6 +204,11 @@ checked in" has landed.
 
 **Audit status:** every finding (T1, T2, S1–S3, R1–R4) closed; 260 JVM tests green.
 
+Aligned with iOS 45ea4ea (the same change on iPhone): the office tile keeps the record's office and its
+helper says "Now at <office> · In … · Out …" after moving to another active office; the office in now is
+the nearest (edge distance) to the latest clear fix; the record's own office is removed from the list by
+place, not by equality.
+
 ## Release rule (Berlin, 28 Sep 2026)
 
 Build 2 is **not** published. The Android release to all staff comes only after every feature is
